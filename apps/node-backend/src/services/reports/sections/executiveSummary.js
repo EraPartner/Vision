@@ -10,6 +10,7 @@ import {
   fmtCurrency,
   fmtMonthLabel,
   fmtPct,
+  kpiGrid,
   signClass,
 } from '../sectionHelpers.js';
 import { filterMonthsByPeriod } from '../dataFetcher.js';
@@ -29,35 +30,18 @@ export function renderExecutiveSummary(data, { currency, period }) {
   const avgMonthlySpending = months.length > 0 ? Math.abs(totalSpending) / months.length : 0;
   const avgMonthlyIncome = months.length > 0 ? totalIncome / months.length : 0;
 
-  const kpis = [
+  const kpiHtml = kpiGrid([
     { label: 'Total Income', value: fmtCurrency(totalIncome, currency), cls: 'pos', sub: `${months.length} month${months.length !== 1 ? 's' : ''}` },
-    { label: 'Total Expenses', value: fmtCurrency(Math.abs(totalSpending), currency), cls: 'neg', sub: null },
-    { label: 'Net Position', value: fmtCurrency(netAmount, currency), cls: signClass(netAmount), sub: null },
-    { label: 'Transactions', value: txCount.toLocaleString(), cls: '', sub: `avg ${Math.round(txCount / Math.max(months.length, 1))}/mo` },
-  ];
+    { label: 'Total Expenses', value: fmtCurrency(Math.abs(totalSpending), currency), cls: 'neg' },
+    { label: 'Net Position', value: fmtCurrency(netAmount, currency), cls: signClass(netAmount) },
+    { label: 'Transactions', value: txCount.toLocaleString(), sub: `avg ${Math.round(txCount / Math.max(months.length, 1))}/mo` },
+  ]);
 
-  const kpiHtml = kpis.map(k => `
-    <div class="kpi-card">
-      <div class="kpi-label">${escapeHtml(k.label)}</div>
-      <div class="kpi-value ${k.cls}">${escapeHtml(k.value)}</div>
-      ${k.sub ? `<div class="kpi-sub">${escapeHtml(k.sub)}</div>` : ''}
-    </div>`).join('');
-
-  const avgHtml = `
-    <div class="kpi-grid kpi-grid-3" style="margin-top:0">
-      <div class="kpi-card">
-        <div class="kpi-label">Avg Monthly Income</div>
-        <div class="kpi-value pos">${escapeHtml(fmtCurrency(avgMonthlyIncome, currency))}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Avg Monthly Expenses</div>
-        <div class="kpi-value neg">${escapeHtml(fmtCurrency(avgMonthlySpending, currency))}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Avg Monthly Net</div>
-        <div class="kpi-value ${signClass(avgMonthlyIncome - avgMonthlySpending)}">${escapeHtml(fmtCurrency(avgMonthlyIncome - avgMonthlySpending, currency))}</div>
-      </div>
-    </div>`;
+  const avgHtml = kpiGrid([
+    { label: 'Avg Monthly Income', value: fmtCurrency(avgMonthlyIncome, currency), cls: 'pos' },
+    { label: 'Avg Monthly Expenses', value: fmtCurrency(avgMonthlySpending, currency), cls: 'neg' },
+    { label: 'Avg Monthly Net', value: fmtCurrency(avgMonthlyIncome - avgMonthlySpending, currency), cls: signClass(avgMonthlyIncome - avgMonthlySpending) },
+  ], { cols: 3, style: 'margin-top:0' });
 
   // Per-month table (most recent first, max 24 rows to fit on page)
   const tableRows = [...months].reverse().slice(0, 24).map(m => {
@@ -149,7 +133,7 @@ export function renderExecutiveSummary(data, { currency, period }) {
       <div class="section-title">Executive Summary</div>
       <div class="section-subtitle">Period overview — income, expenses &amp; net position</div>
       <hr class="section-divider">
-      <div class="kpi-grid">${kpiHtml}</div>
+      ${kpiHtml}
       ${avgHtml}
       ${tableHtml}
       ${filterImpactHtml}

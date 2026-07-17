@@ -11,6 +11,7 @@ function makeRes({ needDrain = false } = {}) {
     _written: written,
     writableNeedDrain: needDrain,
     writableEnded: false,
+    writeHead: vi.fn(),
     write: vi.fn((chunk) => { written.push(chunk); return !needDrain; }),
     end: vi.fn(() => { emitter.writableEnded = true; }),
     once: (event, cb) => emitter.once(event, cb),
@@ -63,6 +64,17 @@ describe('createSseWriter', () => {
     // counted in subsequent assertions.
     res.write.mockClear();
     res._written.length = 0;
+  });
+
+  it('commits the SSE response headers on construction', () => {
+    const headerRes = makeRes();
+    createSseWriter(makeReq(), headerRes);
+    expect(headerRes.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    }));
   });
 
   it('writes a leading flush-padding comment on construction', () => {

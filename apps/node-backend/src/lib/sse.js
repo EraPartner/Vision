@@ -28,6 +28,10 @@ const SSE_FLUSH_PADDING = `:${' '.repeat(2048)}\n\n`;
 /**
  * Create a backpressure-aware SSE writer bound to a req/res pair.
  *
+ * Commits the SSE response headers (200 + text/event-stream) on creation, so
+ * callers must finish all envelope-style validation *before* constructing the
+ * writer — after this point errors can only ride the SSE `error` frame.
+ *
  * Lifecycle:
  * - Tracks client disconnects via the res 'close' event.
  * - write() is a no-op when the client has disconnected.
@@ -68,8 +72,15 @@ export function createSseWriter(req, res) {
   // covers both client disconnects and normal end-of-response.
   if (typeof res?.on === 'function') res.on('close', onClose);
 
-  // Flush headers and a padding comment so the client starts seeing bytes
-  // immediately. SSE comments (lines starting with `:`) are ignored by spec.
+  // Commit the SSE headers, then flush them plus a padding comment so the
+  // client starts seeing bytes immediately. SSE comments (lines starting
+  // with `:`) are ignored by spec.
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
   if (typeof res.flushHeaders === 'function') res.flushHeaders();
   res.write(SSE_FLUSH_PADDING);
 

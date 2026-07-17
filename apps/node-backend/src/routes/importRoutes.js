@@ -7,9 +7,8 @@ import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImport
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
-import { createSseWriter } from '../lib/sse.js';
 import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
-import { progressToPercent } from '../lib/importProgress.js';
+import { streamImport } from '../lib/importProgress.js';
 import {
   listBatches,
   getBatch,
@@ -217,58 +216,25 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
     throw new ValidationError('Missing required parameter: bank_name');
   }
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-
-  const writer = createSseWriter(req, res);
-
-  try {
-    const pipelineResult = await runImportPipeline({
+  await streamImport(req, res, {
+    filePath: req.file.path,
+    errorLogMessage: 'Streaming CSV import error',
+    run: (onProgress) => runImportPipeline({
       filePath: req.file.path,
       adapterName: bankName,
       filename: req.file.originalname,
       sizeBytes: req.file.size,
-      onProgress: async (ev) => { await writer.write('progress', progressToPercent(ev)); },
-    });
-
-    if (pipelineResult.requiresReview) {
-      if (!writer.closed) {
-        await writer.write('review_required', {
-          batch_id: pipelineResult.batchId,
-          match_source_counts: pipelineResult.matchSourceCounts,
-          percent: 70,
-        });
-        writer.end();
-      }
-    } else if (!writer.closed) {
-      const result = {
-        total_processed: pipelineResult.total,
-        imported: pipelineResult.imported,
-        duplicates: pipelineResult.duplicates,
-        errors: pipelineResult.errors,
-        batch_id: pipelineResult.batchId,
-        auto_linked_count: pipelineResult.autoLinkedCount || 0,
-      };
-      await writer.write('complete', {
-        ...result,
-        status: result.errors > 0 ? 'completed_with_errors' : 'completed',
-        percent: 100,
-      });
-      writer.end();
-    }
-  } catch (err) {
-    logger.error('Streaming CSV import error', { error: err.message });
-    if (!writer.closed) {
-      await writer.write('error', { detail: 'Import failed' });
-      writer.end();
-    }
-  } finally {
-    cleanup(req.file.path);
-  }
+      onProgress,
+    }),
+    buildComplete: (pipelineResult) => ({
+      total_processed: pipelineResult.total,
+      imported: pipelineResult.imported,
+      duplicates: pipelineResult.duplicates,
+      errors: pipelineResult.errors,
+      batch_id: pipelineResult.batchId,
+      auto_linked_count: pipelineResult.autoLinkedCount || 0,
+    }),
+  });
 });
 
 // (Removed dead GET /api/import/supported-banks — it had zero frontend callers

@@ -5,7 +5,7 @@
  * dividends YTD, return %, inflation-adjusted value; plus top-holdings mini-table.
  */
 
-import { escapeHtml, fmtCurrency, fmtPct, signClass } from '../sectionHelpers.js';
+import { escapeHtml, fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
 
 /**
  * @param {object | null} data  fetchPortfolioData result
@@ -48,28 +48,18 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
   const glClass  = signClass(totalGainLoss);
   const retClass = signClass(returnPct);
 
-  const kpiCards = [
-    { label: 'Total Value',    value: fmtCurrency(totalValue,    currency), sub: null },
-    { label: 'Total Invested', value: fmtCurrency(totalInvested, currency), sub: null },
-    { label: 'Unrealised P/L', value: fmtCurrency(totalGainLoss, currency), sub: fmtPct(returnPct, true), cls: glClass },
+  const kpiCards = kpiGrid([
+    { label: 'Total Value',    value: fmtCurrency(totalValue,    currency) },
+    { label: 'Total Invested', value: fmtCurrency(totalInvested, currency) },
+    { label: 'Unrealised P/L', value: fmtCurrency(totalGainLoss, currency), sub: fmtPct(returnPct, true), cls: glClass, subCls: glClass },
     { label: 'Dividends',      value: fmtCurrency(totalDividends, currency), sub: 'period total' },
-  ].map(k => `
-    <div class="kpi-card">
-      <div class="kpi-label">${escapeHtml(k.label)}</div>
-      <div class="kpi-value ${k.cls ?? ''}">${k.value}</div>
-      ${k.sub ? `<div class="kpi-sub ${k.cls ?? ''}">${escapeHtml(k.sub)}</div>` : ''}
-    </div>`).join('');
+  ]);
 
-  const kpiCards2 = [
+  const kpiCards2 = kpiGrid([
     { label: 'Return %',              value: fmtPct(returnPct, true), cls: retClass },
-    { label: 'Inflation-Adj. Value',  value: fmtCurrency(inflAdj, currency), sub: null },
+    { label: 'Inflation-Adj. Value',  value: fmtCurrency(inflAdj, currency) },
     { label: 'Holdings',              value: String(breakdown.length), sub: 'active investments' },
-  ].map(k => `
-    <div class="kpi-card">
-      <div class="kpi-label">${escapeHtml(k.label)}</div>
-      <div class="kpi-value ${k.cls ?? ''}">${k.value}</div>
-      ${k.sub ? `<div class="kpi-sub">${escapeHtml(k.sub)}</div>` : ''}
-    </div>`).join('');
+  ], { cols: 3 });
 
   // Top 5 holdings mini-table
   const top5 = [...breakdown]
@@ -93,8 +83,8 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
       <div class="section-title">Portfolio Overview</div>
       <div class="section-subtitle">Key performance indicators for the selected period</div>
       <hr class="section-divider">
-      <div class="kpi-grid">${kpiCards}</div>
-      <div class="kpi-grid kpi-grid-3">${kpiCards2}</div>
+      ${kpiCards}
+      ${kpiCards2}
       ${top5.length ? `
         <table class="data-table">
           <thead><tr>

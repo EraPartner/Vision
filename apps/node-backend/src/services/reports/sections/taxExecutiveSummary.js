@@ -4,7 +4,7 @@
  * KPI grid: total taxes, fees, net taxable result, dividend WHT, TOB, capital gains, effective rate.
  */
 
-import { fmtCurrency, fmtPct, signClass } from '../sectionHelpers.js';
+import { fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
 
 /**
  * @param {object | null} data  fetchTaxData result
@@ -65,42 +65,18 @@ export function renderTaxExecutiveSummary(data, { currency }) {
       <div class="section-subtitle">Taxes and fees for tax year ${taxYear}</div>
       <hr class="section-divider">
       ${noteHtml}${profileHtml}${fxWarningHtml}
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-label">Total Taxes Paid</div>
-          <div class="kpi-value neg">${fmtCurrency(totalTaxes, currency)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Total Fees</div>
-          <div class="kpi-value neg">${fmtCurrency(feesTotal, currency)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Total Cost</div>
-          <div class="kpi-value neg">${fmtCurrency(totalCosts, currency)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Dividends Received</div>
-          <div class="kpi-value">${fmtCurrency(dividendsReceived, currency)}</div>
-        </div>
-      </div>
-      <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr); margin-top: 8px;">
-        <div class="kpi-card">
-          <div class="kpi-label">TOB (Transaction Tax)</div>
-          <div class="kpi-value" style="font-size:18px;">${fmtCurrency(tobTotal, currency)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Dividend WHT</div>
-          <div class="kpi-value" style="font-size:18px;">${fmtCurrency(dividendWHTTotal, currency)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Capital Gains Tax</div>
-          <div class="kpi-value" style="font-size:18px;">${fmtCurrency(sellTaxTotal, currency)}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Effective WHT Rate</div>
-          <div class="kpi-value" style="font-size:18px;">${fmtPct(effectiveRate, false)}</div>
-        </div>
-      </div>
+      ${kpiGrid([
+        { label: 'Total Taxes Paid', value: fmtCurrency(totalTaxes, currency), cls: 'neg' },
+        { label: 'Total Fees', value: fmtCurrency(feesTotal, currency), cls: 'neg' },
+        { label: 'Total Cost', value: fmtCurrency(totalCosts, currency), cls: 'neg' },
+        { label: 'Dividends Received', value: fmtCurrency(dividendsReceived, currency) },
+      ])}
+      ${kpiGrid([
+        { label: 'TOB (Transaction Tax)', value: fmtCurrency(tobTotal, currency), valueStyle: 'font-size:18px;' },
+        { label: 'Dividend WHT', value: fmtCurrency(dividendWHTTotal, currency), valueStyle: 'font-size:18px;' },
+        { label: 'Capital Gains Tax', value: fmtCurrency(sellTaxTotal, currency), valueStyle: 'font-size:18px;' },
+        { label: 'Effective WHT Rate', value: fmtPct(effectiveRate, false), valueStyle: 'font-size:18px;' },
+      ], { style: 'margin-top: 8px;' })}
       <table class="data-table" style="margin-top:16px;">
         <thead><tr>
           <th>Tax Component</th>

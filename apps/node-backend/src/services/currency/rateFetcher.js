@@ -375,7 +375,20 @@ export function buildHistoricalRateIndex(rows) {
   return byCurrency;
 }
 
-export function findNearestRateInIndex(index, currencyCode, dateStr) {
+/**
+ * Shared skeleton for the index searchers: EUR shortcut, then binary search
+ * of the per-currency date-sorted entries. On an exact date hit the rate is
+ * returned directly; otherwise `resolve(prev, next)` — called with the
+ * nearest entry on each side (null when absent) — decides the boundary
+ * semantics (nearest vs on-or-before).
+ *
+ * @param {Map<string, {date: string, rate: number}[]>} index
+ * @param {string} currencyCode
+ * @param {string} dateStr
+ * @param {(prev: {date: string, rate: number} | null, next: {date: string, rate: number} | null) => number | undefined} resolve
+ * @returns {number | undefined}
+ */
+function searchRateIndex(index, currencyCode, dateStr, resolve) {
   if (currencyCode === 'EUR') return 1.0;
   const entries = index.get(currencyCode);
   if (!entries || entries.length === 0) return undefined;
@@ -390,14 +403,18 @@ export function findNearestRateInIndex(index, currencyCode, dateStr) {
     else hi = mid - 1;
   }
 
-  const prev = hi >= 0 ? entries[hi] : null;
-  const next = lo < entries.length ? entries[lo] : null;
-  if (!prev) return next?.rate;
-  if (!next) return prev?.rate;
+  return resolve(hi >= 0 ? entries[hi] : null, lo < entries.length ? entries[lo] : null);
+}
 
-  const prevDist = Math.abs(new Date(prev.date).getTime() - new Date(dateStr).getTime());
-  const nextDist = Math.abs(new Date(next.date).getTime() - new Date(dateStr).getTime());
-  return prevDist <= nextDist ? prev.rate : next.rate;
+export function findNearestRateInIndex(index, currencyCode, dateStr) {
+  return searchRateIndex(index, currencyCode, dateStr, (prev, next) => {
+    if (!prev) return next?.rate;
+    if (!next) return prev.rate;
+
+    const prevDist = Math.abs(new Date(prev.date).getTime() - new Date(dateStr).getTime());
+    const nextDist = Math.abs(new Date(next.date).getTime() - new Date(dateStr).getTime());
+    return prevDist <= nextDist ? prev.rate : next.rate;
+  });
 }
 
 /**
@@ -406,20 +423,7 @@ export function findNearestRateInIndex(index, currencyCode, dateStr) {
  * Returns undefined when no rate exists on or before the date.
  */
 export function findRateOnOrBeforeInIndex(index, currencyCode, dateStr) {
-  if (currencyCode === 'EUR') return 1.0;
-  const entries = index.get(currencyCode);
-  if (!entries || entries.length === 0) return undefined;
-
-  let lo = 0;
-  let hi = entries.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const midDate = entries[mid].date;
-    if (midDate === dateStr) return entries[mid].rate;
-    if (midDate < dateStr) lo = mid + 1;
-    else hi = mid - 1;
-  }
-  return hi >= 0 ? entries[hi].rate : undefined;
+  return searchRateIndex(index, currencyCode, dateStr, (prev) => (prev ? prev.rate : undefined));
 }
 
 // ─── Historical rate point lookup ─────────────────────────────────────────────

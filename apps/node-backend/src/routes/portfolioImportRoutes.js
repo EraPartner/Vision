@@ -7,9 +7,8 @@
 import { Router } from 'express';
 import { logger } from '../config/logger.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
-import { createSseWriter } from '../lib/sse.js';
 import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
-import { progressToPercent } from '../lib/importProgress.js';
+import { streamImport } from '../lib/importProgress.js';
 import {
   runPortfolioImportPipeline,
   commitPortfolioImport,
@@ -187,17 +186,22 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
     throw err;
   }
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-  const writer = createSseWriter(req, res);
-  const brokerage = parseBrokerageParams({ ...req.query, ...req.body });
-
+  // Validate before streamImport commits the SSE headers, so rejections still
+  // travel through the envelope error handler (previously this ran after
+  // writeHead, corrupting the response and leaking the upload on a bad
+  // account_id).
+  let brokerage;
   try {
-    const result = await runPortfolioImportPipeline({
+    brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+  } catch (err) {
+    cleanup(req.file.path);
+    throw err;
+  }
+
+  await streamImport(req, res, {
+    filePath: req.file.path,
+    errorLogMessage: 'Streaming portfolio import error',
+    run: (onProgress) => runPortfolioImportPipeline({
       filePath: req.file.path,
       adapterName: built.adapterName,
       customConfig: built.customConfig,
@@ -207,43 +211,17 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
       sizeBytes: req.file.size,
       isBrokerage: brokerage.isBrokerage,
       accountId: brokerage.accountId,
-      onProgress: async (ev) => { await writer.write('progress', progressToPercent(ev)); },
-    });
-
-    if (result.requiresReview) {
-      if (!writer.closed) {
-        await writer.write('review_required', {
-          batch_id: result.batchId,
-          match_source_counts: result.matchSourceCounts,
-          percent: 70,
-        });
-        writer.end();
-      }
-    } else if (!writer.closed) {
-      await writer.write('complete', {
-        batch_id: result.batchId,
-        total_processed: result.total,
-        skipped: result.skipped,
-        imported: result.imported,
-        duplicates: result.duplicates,
-        errors: result.errors,
-        status: result.errors > 0 ? 'completed_with_errors' : 'completed',
-        percent: 100,
-      });
-      writer.end();
-    }
-  } catch (err) {
-    logger.error('Streaming portfolio import error', { error: err.message });
-    if (!writer.closed) {
-      // Expected validation failures (zero-row batch, bad config) carry a safe,
-      // actionable message; anything else stays generic to avoid leaking internals.
-      const detail = err instanceof ValidationError ? err.message : 'Import failed';
-      await writer.write('error', { detail });
-      writer.end();
-    }
-  } finally {
-    cleanup(req.file.path);
-  }
+      onProgress,
+    }),
+    buildComplete: (result) => ({
+      batch_id: result.batchId,
+      total_processed: result.total,
+      skipped: result.skipped,
+      imported: result.imported,
+      duplicates: result.duplicates,
+      errors: result.errors,
+    }),
+  });
 });
 
 // --- Saved portfolio parser configs (CRUD) ------------------------------------

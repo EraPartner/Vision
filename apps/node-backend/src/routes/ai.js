@@ -292,13 +292,6 @@ router.post('/chat/stream', async (req, res) => {
     messageLen: parsed.message.length,
   });
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-
   const writer = createSseWriter(req, res);
   const abortController = new AbortController();
   res.on('close', () => {

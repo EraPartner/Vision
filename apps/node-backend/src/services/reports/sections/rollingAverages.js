@@ -8,6 +8,7 @@
 import {
   escapeHtml,
   fmtCurrency,
+  kpiGrid,
   signClass,
 } from '../sectionHelpers.js';
 
@@ -50,28 +51,12 @@ export function renderRollingAverages(data, { currency }) {
   const varSc = signClass(-variance); // positive variance = spending more = bad
   const projSc = projected > avgMonthly ? 'neg' : projected < avgMonthly ? 'pos' : '';
 
-  const kpiHtml = `
-    <div class="kpi-grid" style="margin-bottom:28px">
-      <div class="kpi-card">
-        <div class="kpi-label">Avg Daily Spend (6mo)</div>
-        <div class="kpi-value">${escapeHtml(fmtCurrency(past.avg_daily_spending ?? 0, currency))}</div>
-        <div class="kpi-sub">${past.months_counted ?? 0} months</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Avg Monthly Spend (6mo)</div>
-        <div class="kpi-value">${escapeHtml(fmtCurrency(avgMonthly, currency))}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">This Month So Far</div>
-        <div class="kpi-value">${escapeHtml(fmtCurrency(current.total_spending ?? 0, currency))}</div>
-        <div class="kpi-sub">${current.days_elapsed ?? 0} of ${current.days_in_month ?? 30} days</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Projected This Month</div>
-        <div class="kpi-value ${projSc}">${escapeHtml(fmtCurrency(projected, currency))}</div>
-        <div class="kpi-sub"><span class="badge ${paceBadgeClass}">${escapeHtml(paceLabel)}</span></div>
-      </div>
-    </div>`;
+  const kpiHtml = kpiGrid([
+    { label: 'Avg Daily Spend (6mo)', value: fmtCurrency(past.avg_daily_spending ?? 0, currency), sub: `${past.months_counted ?? 0} months` },
+    { label: 'Avg Monthly Spend (6mo)', value: fmtCurrency(avgMonthly, currency) },
+    { label: 'This Month So Far', value: fmtCurrency(current.total_spending ?? 0, currency), sub: `${current.days_elapsed ?? 0} of ${current.days_in_month ?? 30} days` },
+    { label: 'Projected This Month', value: fmtCurrency(projected, currency), cls: projSc, subHtml: `<span class="badge ${paceBadgeClass}">${escapeHtml(paceLabel)}</span>` },
+  ], { style: 'margin-bottom:28px' });
 
   const statsHtml = `
     <div style="max-width:400px">
