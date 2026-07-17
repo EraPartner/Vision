@@ -1,12 +1,10 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { Globe, Star } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useInvestmentsQuery } from "@/hooks/portfolio/useInvestments";
-import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 
@@ -929,7 +927,6 @@ function heatStyle(pct: number | undefined): CSSProperties {
 export default function MarketOverviewPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const isOnline = useOnlineStatus();
   const { data: investmentsData } = useInvestmentsQuery();
   const [region, setRegion] = useState<Region>("worldwide");
   const [sector, setSector] = useState<string>("overview");
@@ -978,15 +975,7 @@ export default function MarketOverviewPage() {
     [groups],
   );
 
-  const { data } = useQuery({
-    queryKey: ["market-overview", region, sector],
-    queryFn: () => apiClient.getMarketQuotes<OverviewQuote>(symbols, { detail: "basic" }),
-    enabled: isOnline && symbols.length > 0,
-    staleTime: 60_000,
-    refetchInterval: isOnline ? 60_000 : false,
-    refetchOnWindowFocus: false,
-    retry: isOnline ? 1 : false,
-  });
+  const { data } = useMarketQuotesQuery<OverviewQuote>(["market-overview", region, sector], symbols, { staleTime: 60_000 });
 
   const pctMap = useMemo(
     () => new Map((data?.quotes ?? []).map((q) => [q.symbol, q.changePercent])),

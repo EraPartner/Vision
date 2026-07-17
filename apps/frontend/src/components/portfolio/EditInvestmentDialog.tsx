@@ -13,6 +13,7 @@ import { isUnitBased } from '@/utils/assetClass';
 import type { PriceProvider } from '@/types/api';
 import { PriceProviderFields, PRICE_PROVIDERS } from './PriceProviderFields';
 import { priceProviderPayload } from './priceProviderPayload';
+import { INVESTMENT_CURRENCIES } from '@/utils/currency';
 
 interface Props {
   investment: InvestmentSummary;
@@ -134,7 +135,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
               <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
                 <SelectTrigger id="edit-inv-currency"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['EUR', 'USD', 'GBP', 'CHF', 'SAR', 'BTC'].map((c) => (
+                  {INVESTMENT_CURRENCIES.map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
                 </SelectContent>

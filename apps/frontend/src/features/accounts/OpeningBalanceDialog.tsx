@@ -21,6 +21,7 @@ import { Coins, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { invalidateTransactionLists } from '@/hooks/useTransactions';
+import { invalidateAccountDerived } from '@/hooks/useAccounts';
 import { toYmd } from '@/components/shared/dateUtils';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
@@ -61,9 +62,7 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
       }),
     onSuccess: (result) => {
       // Account balance/drift and every net-worth view derive from the ledger.
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['net-worth'] });
-      queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });
+      invalidateAccountDerived(queryClient);
       // The anchor is a real ledger row, so the transaction lists must refetch
       // for it to appear.
       invalidateTransactionLists(queryClient);

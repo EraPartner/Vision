@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useCreateAccount } from "@/hooks/useAccounts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { AccountType, AccountOwner, AccountLiquidityClass, AccountTaxWrapper } from "@/types/api";
+import { SUPPORTED_CURRENCIES as CURRENCIES } from "@/utils/currency";
 
 export type AccountFormValues = {
     name: string;
@@ -34,11 +35,6 @@ const ACCOUNT_TYPES: AccountType[] = [
 const OWNERS: AccountOwner[] = ["me", "partner", "joint"];
 const LIQUIDITY: AccountLiquidityClass[] = ["liquid", "semi_liquid", "illiquid"];
 const TAX_WRAPPERS: AccountTaxWrapper[] = ["none", "pension", "tax_advantaged"];
-const CURRENCIES = [
-    "EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK",
-    "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "TRY", "SAR", "AED", "INR",
-    "BRL", "MXN", "ZAR", "SGD", "HKD", "NZD", "KRW", "THB", "MYR", "PHP",
-];
 
 // Flag fields that flagsForType pre-fills. Once the user edits one of these
 // directly, a later type change must not clobber their choice — ADR-089

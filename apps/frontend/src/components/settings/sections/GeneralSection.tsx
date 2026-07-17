@@ -5,12 +5,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
-
-const CURRENCIES = [
-    'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK',
-    'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'TRY', 'SAR', 'AED', 'INR',
-    'BRL', 'MXN', 'ZAR', 'SGD', 'HKD', 'NZD', 'KRW', 'THB', 'MYR', 'PHP',
-];
+import { SUPPORTED_CURRENCIES as CURRENCIES } from '@/utils/currency';
 
 const DATE_FORMATS = [
     { value: 'DD/MM/YYYY', labelKey: 'settings.dateFormat.ddmmyyyy' },

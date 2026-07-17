@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type CSSProperties } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -7,7 +7,7 @@ import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { formatDateWithAppSettings, formatDateTimeWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowDown, ArrowUp, GitCompareArrows, Plus, X } from "lucide-react";
 import { LineChart, getChartColor, type LineSeries } from "@/components/charts";
-import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
+import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -25,17 +25,10 @@ import { ScorecardGradeBadge } from "@/components/research/ResearchScorecard";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import type {
-  ResearchChartPoint, ResearchFundamentals, ResearchMeta, ResearchRange, ResearchScorecard,
+  ResearchChartPoint, ResearchFundamentals, ResearchMeta, ResearchScorecard,
   ScorecardSeverity,
 } from "@/types/research";
-
-const RANGES: { label: string; range: ResearchRange }[] = [
-  { label: "1M", range: "1mo" },
-  { label: "3M", range: "3mo" },
-  { label: "6M", range: "6mo" },
-  { label: "1Y", range: "1y" },
-  { label: "5Y", range: "5y" },
-];
+import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 
 const MAX_SYMBOLS = 6;
 
@@ -193,22 +186,15 @@ export default function ResearchComparePage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const [symbols, setSymbols] = useState<string[]>([]);
-  const [searchText, setSearchText] = useState("");
   const [selectedRange, setSelectedRange] = useState(RANGES[3]); // 1Y
   const [sortMetric, setSortMetric] = useState<FundamentalsMetricKey | null>(null);
-  const debouncedSearch = useDebounce(searchText.trim(), SEARCH_DEBOUNCE_MS);
+  const { searchText, setSearchText, debouncedSearch, searchResult, isFetching: isSearching } = useSymbolSearch();
 
   const fmtPct = useCallback((val: number | null | undefined) =>
     val == null || isNaN(val) ? "—" : `${val >= 0 ? "+" : ""}${(val * 100).toFixed(2)}%`, []);
   const fmtRatio = useCallback((val: number | null | undefined) =>
     val == null || isNaN(val) ? "—" : val.toFixed(2), []);
 
-  const { data: searchResult, isFetching: isSearching } = useQuery({
-    queryKey: ["research-search", debouncedSearch],
-    queryFn: () => apiClient.searchResearch(debouncedSearch),
-    enabled: debouncedSearch.length >= 1,
-    staleTime: 60_000,
-  });
   const searchItems = searchResult?.data.items ?? [];
 
   const addSymbol = (symbol: string) => {
@@ -387,19 +373,14 @@ export default function ResearchComparePage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base">{t('research.compare.rebased')}</CardTitle>
-                  <div className="flex gap-1">
-                    {RANGES.map((r) => (
-                      <Button
-                        key={r.label}
-                        variant={selectedRange.range === r.range ? "default" : "ghost"}
-                        size="sm"
-                        className="h-7 px-2.5 text-xs"
-                        onClick={() => setSelectedRange(r)}
-                      >
-                        {r.label}
-                      </Button>
-                    ))}
-                  </div>
+                  <SegmentedButtons
+                    options={RANGES}
+                    getKey={(r) => r.label}
+                    getLabel={(r) => r.label}
+                    isSelected={(r) => selectedRange.range === r.range}
+                    onSelect={setSelectedRange}
+                    buttonClassName="h-7 px-2.5 text-xs"
+                  />
                 </div>
               </CardHeader>
               <CardContent>

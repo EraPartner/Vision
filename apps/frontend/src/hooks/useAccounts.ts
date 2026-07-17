@@ -14,7 +14,7 @@ import {
 // Account CRUD changes balances/in_net_worth flags, so the net-worth views must
 // refetch too — NetWorthPage keeps both queries at a 2-minute staleTime, so a
 // missed invalidation shows a stale total for up to 2 minutes.
-function invalidateAccountDerived(queryClient: QueryClient) {
+export function invalidateAccountDerived(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: ['accounts'] });
     queryClient.invalidateQueries({ queryKey: ['net-worth'] });
     queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });

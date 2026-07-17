@@ -2,6 +2,25 @@
  * Currency utility functions
  */
 
+/**
+ * Canonical list of currencies offered in currency dropdowns (account
+ * creation/editing and the default-currency setting). Order matters: subset
+ * consumers slice a prefix of it (e.g. the report export dialog takes the
+ * first 12), so add new currencies with that in mind.
+ */
+export const SUPPORTED_CURRENCIES = [
+    'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK',
+    'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'TRY', 'SAR', 'AED', 'INR',
+    'BRL', 'MXN', 'ZAR', 'SGD', 'HKD', 'NZD', 'KRW', 'THB', 'MYR', 'PHP',
+];
+
+/**
+ * Currencies an investment can be denominated in (shared by the add/edit
+ * investment forms). Deliberately not a subset of SUPPORTED_CURRENCIES: it
+ * includes BTC.
+ */
+export const INVESTMENT_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SAR', 'BTC'];
+
 type CurrencyFormatDefaults = {
   defaultCurrency: string;
   locale: string;

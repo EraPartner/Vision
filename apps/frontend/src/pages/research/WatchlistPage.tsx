@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api";
@@ -44,14 +45,7 @@ export default function WatchlistPage() {
   });
 
   const symbols = data?.items?.map((i) => i.symbol).filter(Boolean).join(",") || "";
-  const { data: quotesData, isError: quotesError } = useQuery({
-    queryKey: ["watchlist-quotes", symbols],
-    queryFn: () => symbols ? apiClient.getMarketQuotes(symbols, { detail: "basic" }) : Promise.resolve({ quotes: [] }),
-    enabled: !!symbols && isOnline,
-    refetchInterval: isOnline ? 60_000 : false,
-    refetchOnWindowFocus: false,
-    retry: isOnline ? 1 : false,
-  });
+  const { data: quotesData, isError: quotesError } = useMarketQuotesQuery(["watchlist-quotes", symbols], symbols);
   const quotesUnavailable = !isOnline || quotesError;
 
   const priceMap = new Map(quotesData?.quotes?.map((q) => [q.symbol, q]) || []);

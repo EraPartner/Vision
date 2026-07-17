@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { getAssetClassLabel } from '@/types/portfolio';
 import type { AssetClass } from '@/types/portfolio';
 import type { PriceProvider } from '@/types/api';
+import { defaultProviderFor } from './defaultProviderFor';
 
 const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
   stock: TrendingUp,
@@ -13,12 +14,6 @@ const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
   savings: PiggyBank,
   bond: PiggyBank,
 };
-
-function defaultProviderFor(key: AssetClass): PriceProvider {
-  if (key === 'crypto') return 'binance';
-  if (['stock', 'etf', 'metals'].includes(key)) return 'yahoo';
-  return 'manual';
-}
 
 interface AssetTypeSelectorProps {
   visibleAssetClasses: AssetClass[];

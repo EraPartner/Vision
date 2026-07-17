@@ -24,14 +24,7 @@ import { toast } from "sonner";
 import type { WatchlistItem } from "@/types/watchlist";
 
 import { apiClient } from "@/lib/api";
-
-const RANGES = [
-  { label: "1M", range: "1mo", interval: "1d" },
-  { label: "3M", range: "3mo", interval: "1d" },
-  { label: "6M", range: "6mo", interval: "1d" },
-  { label: "1Y", range: "1y", interval: "1wk" },
-  { label: "5Y", range: "5y", interval: "1mo" },
-];
+import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 
 interface WatchlistChartDialogProps {
   item: WatchlistItem | null;

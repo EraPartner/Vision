@@ -8,11 +8,11 @@ import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { AssetClass } from '@/types/portfolio';
 import { ASSET_CLASS_LABELS, getAssetClassLabel } from '@/types/portfolio';
-import type { PriceProvider } from '@/types/api';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { AssetTypeSelector } from './AssetTypeSelector';
+import { defaultProviderFor } from './defaultProviderFor';
 import { InvestmentFormFields } from './InvestmentFormFields';
 import type { InvestmentForm } from './InvestmentFormFields';
 import { PRICE_PROVIDERS } from './PriceProviderFields';
@@ -172,8 +172,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         reset();
         if (allowedAssetClasses && allowedAssetClasses.length === 1) {
           const key = allowedAssetClasses[0];
-          const defaultProvider = key === 'crypto' ? 'binance' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
-          setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
+          setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProviderFor(key) }));
           setStep('details');
         } else {
           setStep('type');

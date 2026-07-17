@@ -19,6 +19,7 @@ import { formatDateWithAppSettings } from '@/components/shared/dateUtils';
 import { todayYmd } from '@/lib/timezone';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
+import { SUPPORTED_CURRENCIES } from '@/utils/currency';
 
 interface Quote {
   symbol: string;
@@ -297,7 +298,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                   >
                     <SelectTrigger id="new-currency"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {['EUR', 'USD', 'GBP', 'CHF'].map(c => (
+                      {SUPPORTED_CURRENCIES.slice(0, 4).map(c => (
                         <SelectItem key={c} value={c}>{c}</SelectItem>
                       ))}
                     </SelectContent>

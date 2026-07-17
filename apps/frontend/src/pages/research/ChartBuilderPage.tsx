@@ -8,6 +8,7 @@ import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,18 +18,12 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
-import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
+import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { apiClient } from "@/lib/api";
 import { sma, ema, bollinger, rsi, macd } from "@/lib/research/indicators";
 import type { MacroProvider, MacroSeriesItem, ResearchChartPoint, ResearchRange } from "@/types/research";
+import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 
-const RANGES: { label: string; range: ResearchRange }[] = [
-  { label: "1M", range: "1mo" },
-  { label: "3M", range: "3mo" },
-  { label: "6M", range: "6mo" },
-  { label: "1Y", range: "1y" },
-  { label: "5Y", range: "5y" },
-];
 const PROVIDERS = ["", "yahoo", "twelve_data", "finnhub", "fmp", "alpha_vantage"];
 const MAX_SERIES = 5;
 const STORAGE_KEY = "research.chartBuilder.v1";
@@ -113,14 +108,7 @@ export default function ChartBuilderPage() {
   }, [state]);
 
   // Symbol search picker.
-  const [searchText, setSearchText] = useState("");
-  const debouncedSearch = useDebounce(searchText.trim(), SEARCH_DEBOUNCE_MS);
-  const { data: searchResult } = useQuery({
-    queryKey: ["research-search", debouncedSearch],
-    queryFn: () => apiClient.searchResearch(debouncedSearch),
-    enabled: debouncedSearch.length >= 1,
-    staleTime: 60_000,
-  });
+  const { searchText, setSearchText, debouncedSearch, searchResult } = useSymbolSearch();
   // Macro search runs alongside the ticker search; results merge into one
   // dropdown, tagged "Economic" (ADR-082). Keyless providers always respond;
   // FRED contributes only when its key is configured.
@@ -387,13 +375,13 @@ export default function ChartBuilderPage() {
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-1.5">
             <Label className="text-xs">{t("research.builder.range")}</Label>
-            <div className="flex gap-1">
-              {RANGES.map((r) => (
-                <Button key={r.label} size="sm" variant={range === r.range ? "default" : "ghost"} className="h-8 px-2.5 text-xs" onClick={() => patch({ range: r.range })}>
-                  {r.label}
-                </Button>
-              ))}
-            </div>
+            <SegmentedButtons
+              options={RANGES}
+              getKey={(r) => r.label}
+              getLabel={(r) => r.label}
+              isSelected={(r) => range === r.range}
+              onSelect={(r) => patch({ range: r.range })}
+            />
           </div>
           <div className="flex items-center gap-2">
             <Switch id="log" checked={logLeft} onCheckedChange={(v) => patch({ logLeft: v })} />
