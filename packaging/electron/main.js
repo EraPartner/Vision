@@ -8,7 +8,8 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const http = require('http');
-const https = require('https');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const { createBundle, encryptBundle, openBundle, isBundleEncrypted } = require('./backup/bundle');
 // Async i18n loader for main process dialogs. Populated during launch() before
 // any t() use. Until then, t() falls back to the key itself — which only
@@ -226,6 +227,9 @@ const BACKUP_KDF_P = 1;
 const BACKUP_RETENTION_KEEP = 7;
 const BACKUP_RETENTION_GRACE_MS = 10 * 60 * 1000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+// Overall deadline for the small GitHub API/checksum fetches (the previous
+// hand-rolled https.get helpers had no timeout at all and could hang forever).
+const GITHUB_FETCH_TIMEOUT_MS = 30 * 1000;
 
 // Prod-only CSP. Dev leaves Vite HMR unrestricted (app.isPackaged gate below).
 // 'unsafe-inline' on style-src kept — Tailwind/inline styles still in use.
@@ -2047,28 +2051,19 @@ function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, de
   fs.writeFileSync(scriptPath, `${script}\n`, { mode: 0o755 });
 }
 
-function readGitHubRelease() {
-  return new Promise((resolve, reject) => {
-    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
-    const opts = {
-      headers: {
-        'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}`,
-        'Accept': 'application/vnd.github+json',
-      },
-    };
-    https.get(url, opts, (res) => {
-      let body = '';
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (err) {
-          reject(err);
-        }
-      });
-      res.on('error', reject);
-    }).on('error', reject);
+async function readGitHubRelease() {
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}`,
+      'Accept': 'application/vnd.github+json',
+    },
+    signal: AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
   });
+  // No status check, matching the previous implementation: a non-200 GitHub
+  // error body still parses as JSON and flows into the "no update asset"
+  // handling in the callers.
+  return await res.json();
 }
 
 function pickSourceLauncherZip(release) {
@@ -2082,28 +2077,16 @@ function pickChecksumAsset(release, zipName) {
   return assets.find((a) => (a?.name || '').toLowerCase() === wanted) || null;
 }
 
-function fetchUrlBody(url) {
-  return new Promise((resolve, reject) => {
-    const opts = { headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` } };
-    const handle = (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fetchUrlBody(res.headers.location).then(resolve, reject);
-        res.resume();
-        return;
-      }
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}`));
-        res.resume();
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => resolve(body));
-      res.on('error', reject);
-    };
-    https.get(url, opts, handle).on('error', reject);
+// fetch follows redirects itself (GitHub asset URLs 302 to a CDN).
+async function fetchUrlBody(url) {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
+    signal: AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
   });
+  if (res.status !== 200) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return await res.text();
 }
 
 function computeFileSha256(filePath) {
@@ -2149,25 +2132,16 @@ async function prepareShellUpdateInstaller() {
   fs.mkdirSync(extractDir, { recursive: true });
 
   try {
-    await new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(zipPath);
-      const req = https.get(sourceLauncherAsset.browser_download_url, {
-        headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
-      }, (res) => {
-        if (res.statusCode !== 200) {
-          file.close(() => {});
-          reject(new Error(`Download failed (${res.statusCode})`));
-          return;
-        }
-        res.pipe(file);
-        file.on('finish', () => file.close(resolve));
-      });
-      req.setTimeout(UPDATE_DOWNLOAD_TIMEOUT_MS, () => {
-        req.destroy(new Error('Update download timed out'));
-      });
-      req.on('error', (err) => { file.close(() => {}); reject(err); });
-      file.on('error', (err) => { req.destroy(err); reject(err); });
+    // fetch (unlike the previous bare https.get) follows the 302 GitHub
+    // serves for browser_download_url before handing out the CDN asset.
+    const download = await fetch(sourceLauncherAsset.browser_download_url, {
+      headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
+      signal: AbortSignal.timeout(UPDATE_DOWNLOAD_TIMEOUT_MS),
     });
+    if (download.status !== 200 || !download.body) {
+      throw new Error(`Download failed (${download.status})`);
+    }
+    await pipeline(Readable.fromWeb(download.body), fs.createWriteStream(zipPath));
 
     const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
     if (!checksumAsset?.browser_download_url) {
