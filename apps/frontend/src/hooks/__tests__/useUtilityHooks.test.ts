@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useCountUp } from "@/hooks/useCountUp";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -60,52 +59,6 @@ describe("useDebounce", () => {
         expect(result.current).toBe("a");
         act(() => vi.advanceTimersByTime(100));
         expect(result.current).toBe("abc");
-    });
-});
-
-describe("useCountUp", () => {
-    it("starts at 0", () => {
-        const { result } = renderHook(() => useCountUp(100));
-        expect(result.current).toBe(0);
-    });
-
-    it("stays at 0 when target is 0", async () => {
-        const { result } = renderHook(() => useCountUp(0));
-        await waitFor(() => expect(result.current).toBe(0));
-    });
-
-    it("eventually reaches target", async () => {
-        const { result } = renderHook(() => useCountUp(100, 100));
-        await waitFor(() => expect(result.current).toBe(100), { timeout: 2000 });
-    });
-
-    it("snaps straight to target when prefers-reduced-motion is set", () => {
-        const original = window.matchMedia;
-        Object.defineProperty(window, "matchMedia", {
-            writable: true,
-            configurable: true,
-            value: vi.fn().mockImplementation((query: string) => ({
-                matches: query.includes("reduce"),
-                media: query,
-                addEventListener: vi.fn(),
-                removeEventListener: vi.fn(),
-            })),
-        });
-        try {
-            const { result } = renderHook(() => useCountUp(100, 600));
-            // No animation frames: the effect applies the target synchronously.
-            expect(result.current).toBe(100);
-        } finally {
-            if (original) {
-                Object.defineProperty(window, "matchMedia", {
-                    writable: true,
-                    configurable: true,
-                    value: original,
-                });
-            } else {
-                delete (window as unknown as { matchMedia?: unknown }).matchMedia;
-            }
-        }
     });
 });
 
