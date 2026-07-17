@@ -11,6 +11,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 import { logger } from '../config/logger.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
@@ -366,16 +367,11 @@ export async function updatePattern(patternId, updates) {
     if (!validation.valid) throw new ValidationError(validation.error);
   }
 
-  const fields = [];
-  const values = [];
-  let idx = 1;
-
-  for (const [col, val] of Object.entries(updates)) {
-    if (['pattern', 'pattern_kind', 'case_sensitive', 'priority', 'is_active', 'notes'].includes(col)) {
-      fields.push(`${col} = $${idx++}`);
-      values.push(val);
-    }
-  }
+  // Shared clause builder (lib/sqlClauses.js); `allowed` keeps the writable-
+  // column whitelist, undefined values are skipped (JSON bodies never carry any).
+  const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses(updates, {
+    allowed: ['pattern', 'pattern_kind', 'case_sensitive', 'priority', 'is_active', 'notes'],
+  });
   if (!fields.length) return;
 
   values.push(patternId);

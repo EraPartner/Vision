@@ -4,6 +4,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 export const categoryRepository = {
   async getAll({ limit = 50, offset = 0, general = null, detail = null, search = null, active = true } = {}) {
@@ -88,14 +89,15 @@ export const categoryRepository = {
   },
 
   async update(id, { general, detail, description, is_active }) {
-    const setClauses = [];
-    const params = [];
-    let paramIdx = 1;
-
-    if (general !== undefined && general !== null) { setClauses.push(`general = $${paramIdx++}`); params.push(general.toUpperCase().trim()); }
-    if (detail !== undefined && detail !== null) { setClauses.push(`detail = $${paramIdx++}`); params.push(detail.toUpperCase().trim()); }
-    if (description !== undefined) { setClauses.push(`description = $${paramIdx++}`); params.push(description); }
-    if (is_active !== undefined && is_active !== null) { setClauses.push(`is_active = $${paramIdx++}`); params.push(is_active); }
+    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    // null general/detail/is_active mean "leave unchanged" (pre-mapped to
+    // undefined); description accepts an explicit null write.
+    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses({
+      general: general != null ? general.toUpperCase().trim() : undefined,
+      detail: detail != null ? detail.toUpperCase().trim() : undefined,
+      description,
+      is_active: is_active ?? undefined,
+    });
 
     if (setClauses.length === 0) return this.getById(id);
 
