@@ -96,7 +96,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-74 | R4: electron hand-rolled HTTP helpers vs `fetch` (latent redirect bug) + semver comparator | `packaging/electron/main.js` | ~60–125 | Low | n/a | OPEN |
 | SIMP-75 | R4: `CryptoPage` is an unparameterized copy of the parameterized `StocksPage` | `pages/portfolio/CryptoPage.tsx` | ~200 (or ~35 minimal) | Medium | n/a | FIXED (#103) |
 | SIMP-76 | R4: SIMP-56/57 stragglers — from-market dialog never adopted `PortfolioTxnFormFields`; EditInvestmentDialog init/reset dup | `AddInvestmentFromMarketDialog.tsx`, `EditInvestmentDialog.tsx` | ~125–145 | Medium | n/a | FIXED (#103) |
-| SIMP-77 | R4: multi-select combobox trio + pivot-hook twins | `shared/*Combobox.tsx`, `hooks/use{Recipient,Tag}Pivot.ts` | ~170 | Low | n/a | OPEN |
+| SIMP-77 | R4: multi-select combobox trio + pivot-hook twins | `shared/*Combobox.tsx`, `hooks/use{Recipient,Tag}Pivot.ts` | ~170 | Low | n/a | FIXED (#103) |
 | SIMP-78 | R4: config-driven micro-dedups (research quotes query ×4, RANGES ×4, symbol search ×3, segmented buttons ×6, CURRENCIES ×7, misc) | see finding | ~120–140 | Low | n/a | OPEN |
 | SIMP-79 | R4: small JSX/logic collapses (admin cards, CommandPalette groups, dialogs, belgianTax, account form mapping, SelectSettingRow hoist) | see finding | ~150 | Low | n/a | OPEN |
 | SIMP-80 | R4: backend service batch (SSE dup + drifted error detail, report KPI cards + escaping, plannedTxRepo update dup, rateFetcher binary search) | see finding | ~140–150 | Low | n/a | OPEN |
