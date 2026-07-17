@@ -274,10 +274,11 @@ router.put('/', async (req, res) => {
 
   for (const key of Object.keys(settings)) assertSettingKeyLength(key, true);
 
-  const validated = Object.create(null);
+  const validatedEntries = new Map();
   for (const [key, value] of Object.entries(settings)) {
-    validated[key] = validateSettingValue(key, value);
+    validatedEntries.set(key, validateSettingValue(key, value));
   }
+  const validated = Object.fromEntries(validatedEntries);
 
   await settingsRepository.setMany(validated);
   res.ok({ saved: Object.keys(validated).length });
