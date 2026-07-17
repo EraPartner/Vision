@@ -12,6 +12,7 @@ import type { InvestmentSummary } from '@/types/portfolio';
 import { isUnitBased } from '@/utils/assetClass';
 import type { PriceProvider } from '@/types/api';
 import { PriceProviderFields, PRICE_PROVIDERS } from './PriceProviderFields';
+import { priceProviderPayload } from './priceProviderPayload';
 
 interface Props {
   investment: InvestmentSummary;
@@ -23,7 +24,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
   const { updateInvestment } = usePortfolio();
   const [open, setOpen] = useState(false);
 
-  const [form, setForm] = useState({
+  const initialForm = () => ({
     name: investment.name,
     symbol: investment.symbol || '',
     // Edit the investment's NATIVE currency. On an InvestmentSummary `currency`
@@ -48,31 +49,13 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     priceProviderHistoryPricePath: investment.price_provider_history_price_path || 'price',
   });
 
+  const [form, setForm] = useState(initialForm);
+
   const unitBased = isUnitBased(investment.assetClass);
 
   const priceProviders = PRICE_PROVIDERS(t);
 
-  const reset = () => {
-    setForm({
-      name: investment.name,
-      symbol: investment.symbol || '',
-      currency: investment.originalCurrency || investment.currency || 'EUR', // native, not display
-      currentPrice: investment.currentPrice != null
-        ? String(investment.currentPrice)
-        : investment.current_price != null
-          ? String(investment.current_price)
-          : '',
-      priceProvider: (investment.price_provider || 'manual') as PriceProvider,
-      priceProviderId: investment.price_provider_id || '',
-      priceProviderUrl: investment.price_provider_url || '',
-      priceProviderLatestUrl: investment.price_provider_latest_url || '',
-      priceProviderLatestPath: investment.price_provider_latest_path || '',
-      priceProviderHistoryUrl: investment.price_provider_history_url || '',
-      priceProviderHistoryPath: investment.price_provider_history_path || 'points',
-      priceProviderHistoryTsPath: investment.price_provider_history_ts_path || 'timestamp_ms',
-      priceProviderHistoryPricePath: investment.price_provider_history_price_path || 'price',
-    });
-  };
+  const reset = () => setForm(initialForm());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,15 +74,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
         current_price: form.priceProvider === 'manual' && form.currentPrice
           ? parseDecimal(form.currentPrice)
           : undefined,
-        price_provider: form.priceProvider,
-        price_provider_id: form.priceProviderId.trim() || undefined,
-        price_provider_url: form.priceProviderUrl.trim() || undefined,
-        price_provider_latest_url: form.priceProviderLatestUrl.trim() || undefined,
-        price_provider_latest_path: form.priceProviderLatestPath.trim() || undefined,
-        price_provider_history_url: form.priceProviderHistoryUrl.trim() || undefined,
-        price_provider_history_path: form.priceProviderHistoryPath.trim() || undefined,
-        price_provider_history_ts_path: form.priceProviderHistoryTsPath.trim() || undefined,
-        price_provider_history_price_path: form.priceProviderHistoryPricePath.trim() || undefined,
+        ...priceProviderPayload(form),
       });
       toast.success(t('invEdit.toast.updated', { name: form.name.trim() }));
       setOpen(false);

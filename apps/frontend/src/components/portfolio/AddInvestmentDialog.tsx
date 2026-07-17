@@ -16,6 +16,7 @@ import { AssetTypeSelector } from './AssetTypeSelector';
 import { InvestmentFormFields } from './InvestmentFormFields';
 import type { InvestmentForm } from './InvestmentFormFields';
 import { PRICE_PROVIDERS } from './PriceProviderFields';
+import { priceProviderPayload } from './priceProviderPayload';
 import { todayYmd } from '@/lib/timezone';
 
 type Props = {
@@ -128,15 +129,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
           cadastral_income: form.cadastralIncome ? parseDecimal(form.cadastralIncome) : undefined,
           municipality_tax_rate: form.municipalityTaxRate ? parseDecimal(form.municipalityTaxRate) : undefined,
           notes: form.notes.trim() || undefined,
-          price_provider: form.priceProvider,
-          price_provider_id: form.priceProviderId.trim() || undefined,
-          price_provider_url: form.priceProviderUrl.trim() || undefined,
-          price_provider_latest_url: form.priceProviderLatestUrl.trim() || undefined,
-          price_provider_latest_path: form.priceProviderLatestPath.trim() || undefined,
-          price_provider_history_url: form.priceProviderHistoryUrl.trim() || undefined,
-          price_provider_history_path: form.priceProviderHistoryPath.trim() || undefined,
-          price_provider_history_ts_path: form.priceProviderHistoryTsPath.trim() || undefined,
-          price_provider_history_price_path: form.priceProviderHistoryPricePath.trim() || undefined,
+          ...priceProviderPayload(form),
           });
         if (!investment) return;
         investmentId = investment.id;

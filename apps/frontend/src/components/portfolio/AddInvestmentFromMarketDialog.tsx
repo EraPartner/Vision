@@ -11,13 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus } from 'lucide-react';
 import { isUnitBased } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
+import { useAccounts } from '@/hooks/useAccounts';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
-import { TXN_TYPE_LABELS } from '@/types/portfolio';
+import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
-import { DatePicker } from '@/components/shared/DatePicker';
-import { formatDateWithAppSettings, parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
+import { formatDateWithAppSettings } from '@/components/shared/dateUtils';
 import { todayYmd } from '@/lib/timezone';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
 interface Quote {
   symbol: string;
@@ -57,7 +58,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   const assetClass = getAssetClass(quote.type);
   const unitBased = isUnitBased(assetClass);
 
-  const [newInvestmentForm, setNewInvestmentForm] = useState({
+  const makeNewInvestmentForm = () => ({
     name: quote.name,
     symbol: quote.symbol,
     currency: quote.currency ?? 'EUR',
@@ -65,7 +66,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     notes: t('addInvFromMarket.notesDefault', { date: todayLabel }),
   });
 
-  const [transactionForm, setTransactionForm] = useState({
+  const makeTransactionForm = () => ({
     type: 'buy' as PortfolioTxnType,
     date: today,
     amount: '',
@@ -73,35 +74,28 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     pricePerUnit: quote.price.toString(),
     fees: '',
     taxes: '',
+    fxRateToEur: '',
     note: '',
+    accountId: '',
     isRecurring: false,
     recurrenceInterval: 'monthly' as RecurrenceInterval,
     recurrenceEndDate: '',
   });
 
+  const [newInvestmentForm, setNewInvestmentForm] = useState(makeNewInvestmentForm);
+  const [transactionForm, setTransactionForm] = useState(makeTransactionForm);
+
   const reset = () => {
     setStep('choose');
-    setNewInvestmentForm({
-      name: quote.name,
-      symbol: quote.symbol,
-      currency: quote.currency ?? 'EUR',
-      currentPrice: quote.price.toString(),
-      notes: t('addInvFromMarket.notesDefault', { date: todayLabel }),
-    });
-    setTransactionForm({
-      type: 'buy',
-      date: today,
-      amount: '',
-      units: '',
-      pricePerUnit: quote.price.toString(),
-      fees: '',
-      taxes: '',
-      note: '',
-      isRecurring: false,
-      recurrenceInterval: 'monthly',
-      recurrenceEndDate: '',
-    });
+    setNewInvestmentForm(makeNewInvestmentForm());
+    setTransactionForm(makeTransactionForm());
   };
+
+  // Per-account positioning (ADR-091): tag the lot to an account (optional).
+  const { data: accountsData } = useAccounts({ active: 'true' });
+  // Trades = transfers (ADR-090): when the chosen account has a cash sleeve,
+  // the trade's cash leg settles in that account (same rule as AddPortfolioTxnDialog).
+  const selectedTradeAccount = (accountsData?.items ?? []).find((a) => String(a.id) === transactionForm.accountId);
 
   const handleCreateInvestment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,9 +121,18 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     }
   };
 
-  const computedAmount = transactionForm.units && transactionForm.pricePerUnit
-    ? (parseDecimal(transactionForm.units) * parseDecimal(transactionForm.pricePerUnit)).toFixed(2)
-    : '';
+  const amountInput = parsePositive(transactionForm.amount);
+  const unitsInput = parsePositive(transactionForm.units);
+  const priceInput = parsePositive(transactionForm.pricePerUnit);
+  const isBuySell = ['buy', 'sell'].includes(transactionForm.type);
+  // Backend requires a consistent 2-of-3 (amount / units / price) only for
+  // unit-based buy/sell; other types just need an amount.
+  const deriveUnits = isBuySell && unitBased;
+
+  const unitMath = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput, derive: deriveUnits });
+  const { derivedAmount } = unitMath;
+
+  const buySellIsValid = !deriveUnits || unitMath.isConsistent;
 
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,27 +144,34 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
       return;
     }
 
-    const isBuySell = ['buy', 'sell'].includes(transactionForm.type);
-    const amountInput = parsePositive(transactionForm.amount);
-    const unitsInput = parsePositive(transactionForm.units);
-    const priceInput = parsePositive(transactionForm.pricePerUnit);
-
     let amount = amountInput;
     let units = unitsInput;
     let pricePerUnit = priceInput;
-    if (isBuySell && unitBased) {
-      // Backend requires a consistent 2-of-3 (amount / units / price) for
-      // unit-based buy/sell — validate here instead of surfacing a raw 400.
-      const math = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput });
-      if (!math.isConsistent || math.effectiveAmount === undefined) {
+    if (deriveUnits) {
+      // Validate the 2-of-3 here instead of surfacing a raw 400.
+      if (!unitMath.isConsistent || unitMath.effectiveAmount === undefined) {
         toast.error(t('addPortTxn.error.twoOfThreeRequired'));
         return;
       }
-      amount = math.effectiveAmount;
-      units = math.effectiveUnits;
-      pricePerUnit = math.effectivePrice;
+      amount = unitMath.effectiveAmount;
+      units = unitMath.effectiveUnits;
+      pricePerUnit = unitMath.effectivePrice;
     } else if (amount === undefined) {
       toast.error(t('addPortTxn.error.amountRequired'));
+      return;
+    }
+
+    // NaN fallback, not the default 0 — garbage in these fields must block the
+    // submit instead of silently posting €0 fees/taxes or fx_rate_to_eur = 0.
+    const feesValue = transactionForm.fees ? parseDecimal(transactionForm.fees, NaN) : undefined;
+    const taxesValue = transactionForm.taxes ? parseDecimal(transactionForm.taxes, NaN) : undefined;
+    const fxRateValue = transactionForm.fxRateToEur ? parseDecimal(transactionForm.fxRateToEur, NaN) : undefined;
+    if (
+      (feesValue !== undefined && (!Number.isFinite(feesValue) || feesValue < 0)) ||
+      (taxesValue !== undefined && (!Number.isFinite(taxesValue) || taxesValue < 0)) ||
+      (fxRateValue !== undefined && (!Number.isFinite(fxRateValue) || fxRateValue <= 0))
+    ) {
+      toast.error(t('addPortTxn.error.invalidNumber'));
       return;
     }
 
@@ -173,15 +183,18 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         amount,
         units,
         price_per_unit: pricePerUnit,
-        fees: transactionForm.fees ? parseDecimal(transactionForm.fees) : undefined,
-        taxes: transactionForm.taxes ? parseDecimal(transactionForm.taxes) : undefined,
+        fees: feesValue,
+        taxes: taxesValue,
+        fx_rate_to_eur: fxRateValue,
         currency: existingInvestment.currency,
         note: transactionForm.note.trim() || undefined,
+        ...(transactionForm.accountId ? { account_id: Number(transactionForm.accountId) } : {}),
+        ...(selectedTradeAccount?.has_cash_sleeve ? { cash_account_id: Number(transactionForm.accountId) } : {}),
         is_recurring: transactionForm.isRecurring,
         recurrence_interval: transactionForm.isRecurring ? transactionForm.recurrenceInterval : undefined,
         recurrence_end_date: transactionForm.isRecurring && transactionForm.recurrenceEndDate ? transactionForm.recurrenceEndDate : undefined,
       });
-      toast.success(t('addPortTxn.toast.recorded', { type: TXN_TYPE_LABELS[transactionForm.type], name: quote.symbol }));
+      toast.success(t('addPortTxn.toast.recorded', { type: getTxnTypeLabel(t, transactionForm.type), name: quote.symbol }));
       reset();
       setOpen(false);
     } catch {
@@ -194,7 +207,8 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     : ['buy', 'sell', 'fee', 'tax'];
 
   const showUnits = unitBased && ['buy', 'sell'].includes(transactionForm.type);
-  const showFeesTaxes = ['buy', 'sell'].includes(transactionForm.type);
+  const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(transactionForm.type);
+  const showRecurring = ['buy', 'sell', 'dividend'].includes(transactionForm.type);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
@@ -255,30 +269,30 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label htmlFor="new-name">{t('addInv.label.name')}</Label>
-                <Input 
-                  id="new-name" 
-                  value={newInvestmentForm.name} 
+                <Input
+                  id="new-name"
+                  value={newInvestmentForm.name}
                   onChange={(e) => setNewInvestmentForm(f => ({ ...f, name: e.target.value }))}
-                  maxLength={100} 
-                  required 
+                  maxLength={100}
+                  required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="new-symbol">{t('addInv.label.ticker')}</Label>
-                  <Input 
-                    id="new-symbol" 
-                    value={newInvestmentForm.symbol} 
+                  <Input
+                    id="new-symbol"
+                    value={newInvestmentForm.symbol}
                     onChange={(e) => setNewInvestmentForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))}
-                    maxLength={20} 
+                    maxLength={20}
                     className="font-mono"
                     readOnly
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-currency">{t('addInv.label.currency')}</Label>
-                  <Select 
-                    value={newInvestmentForm.currency} 
+                  <Select
+                    value={newInvestmentForm.currency}
                     onValueChange={(v) => setNewInvestmentForm(f => ({ ...f, currency: v }))}
                   >
                     <SelectTrigger id="new-currency"><SelectValue /></SelectTrigger>
@@ -292,23 +306,23 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
               </div>
               <div className="space-y-2">
                 <Label htmlFor="new-price">{t('addInv.label.currentPrice')}</Label>
-                <Input 
-                  id="new-price" 
-                  type="number" 
-                  step="0.0001" 
-                  min="0" 
-                  value={newInvestmentForm.currentPrice} 
+                <Input
+                  id="new-price"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={newInvestmentForm.currentPrice}
                   onChange={(e) => setNewInvestmentForm(f => ({ ...f, currentPrice: e.target.value }))}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="new-notes">{t('addInv.label.notes')}</Label>
-                <Textarea 
-                  id="new-notes" 
-                  rows={2} 
-                  value={newInvestmentForm.notes} 
+                <Textarea
+                  id="new-notes"
+                  rows={2}
+                  value={newInvestmentForm.notes}
                   onChange={(e) => setNewInvestmentForm(f => ({ ...f, notes: e.target.value }))}
-                  maxLength={500} 
+                  maxLength={500}
                 />
               </div>
             </div>
@@ -323,116 +337,39 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
 
         {step === 'transaction' && existingInvestment && (
           <form onSubmit={handleAddTransaction} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t('addPortTxn.type')}</Label>
-                <Select 
-                  value={transactionForm.type} 
-                  onValueChange={(v) => setTransactionForm(f => ({ ...f, type: v as PortfolioTxnType }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {allowedTypes.map(t => (
-                      <SelectItem key={t} value={t}>{TXN_TYPE_LABELS[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="txn-date">{t('addPortTxn.date')}</Label>
-                <DatePicker
-                  value={transactionForm.date ? parseLocalDateFromYmd(transactionForm.date) : undefined}
-                  onChange={(date) => setTransactionForm(f => ({ ...f, date: date ? toYmd(date) : '' }))}
-                  placeholder={t('plannedPage.link.pickDate')}
-                />
-              </div>
-
-              {showUnits && (
-                <>
-                    <div className="space-y-2">
-                      <Label htmlFor="txn-units">{t('addPortTxn.units')}</Label>
-                      <Input 
-                        id="txn-units" 
-                        type="number" 
-                        step="0.000001" 
-                        min="0" 
-                        placeholder="10" 
-                        value={transactionForm.units} 
-                        onChange={(e) => setTransactionForm(f => ({ ...f, units: e.target.value }))} 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="txn-ppu">{t('addPortTxn.pricePerUnit')}</Label>
-                      <Input 
-                        id="txn-ppu" 
-                        type="number" 
-                        step="0.0001" 
-                        min="0" 
-                        placeholder={quote.price.toString()} 
-                        value={transactionForm.pricePerUnit} 
-                        onChange={(e) => setTransactionForm(f => ({ ...f, pricePerUnit: e.target.value }))} 
-                      />
-                    </div>
-                  </>
-                )}
-
-              <div className={`space-y-2 ${showUnits ? 'col-span-2' : ''}`}>
-                <Label htmlFor="txn-amount">
-                  {t('addPortTxn.totalAmount', { currency: existingInvestment.currency })}
-                  {computedAmount && <span className="text-muted-foreground ml-1 text-xs">= {computedAmount}</span>}
-                </Label>
-                <Input 
-                  id="txn-amount" 
-                  type="number" 
-                  step="0.01" 
-                  min="0" 
-                  placeholder={computedAmount || '0.00'} 
-                  value={transactionForm.amount} 
-                  onChange={(e) => setTransactionForm(f => ({ ...f, amount: e.target.value }))} 
-                />
-              </div>
-
-              {showFeesTaxes && (
-                <>
-                    <div className="space-y-2">
-                    <Label htmlFor="txn-fees">{t('addPortTxn.fees')}</Label>
-                    <Input 
-                      id="txn-fees" 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
-                      placeholder="0.00" 
-                      value={transactionForm.fees} 
-                      onChange={(e) => setTransactionForm(f => ({ ...f, fees: e.target.value }))} 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="txn-taxes">{t('addPortTxn.taxes')}</Label>
-                    <Input 
-                      id="txn-taxes" 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
-                      placeholder="0.00" 
-                      value={transactionForm.taxes} 
-                      onChange={(e) => setTransactionForm(f => ({ ...f, taxes: e.target.value }))} 
-                    />
-                  </div>
-                </>
+            <PortfolioTxnFormFields
+              idPrefix="market-txn"
+              form={transactionForm}
+              setForm={setTransactionForm}
+              currency={existingInvestment.currency}
+              t={t}
+              typeField={(
+                <div className="space-y-2">
+                  <Label>{t('addPortTxn.type')}</Label>
+                  <Select
+                    value={transactionForm.type}
+                    onValueChange={(v) => setTransactionForm(f => ({ ...f, type: v as PortfolioTxnType }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {allowedTypes.map(txnType => (
+                        <SelectItem key={txnType} value={txnType}>{getTxnTypeLabel(t, txnType)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="txn-note">{t('addPortTxn.note')}</Label>
-              <Textarea 
-                id="txn-note" 
-                placeholder={t('addPortTxn.note')} 
-                rows={2} 
-                value={transactionForm.note} 
-                onChange={(e) => setTransactionForm(f => ({ ...f, note: e.target.value }))} 
-                maxLength={300} 
-              />
-            </div>
+              accounts={accountsData?.items ?? []}
+              showUnits={showUnits}
+              showFeesTaxes={showFeesTaxes}
+              showRecurring={showRecurring}
+              derivedAmount={derivedAmount}
+              isBuySell={deriveUnits}
+              buySellIsValid={buySellIsValid}
+              isGift={false}
+              lockAmountWhenGift={false}
+              withPlaceholders
+            />
 
             <DialogFooter className="sm:justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('choose')}>
