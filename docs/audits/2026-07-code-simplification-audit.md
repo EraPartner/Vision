@@ -82,7 +82,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-60 | R4: 24 dead `apiClient` members + 22 dead backing functions | `lib/api.ts`, `lib/api/*.ts` | ~115–145 | Low | n/a | FIXED (#103) |
 | SIMP-61 | R4: dead frontend exports batch (motion variants, chartStyles, tag hooks, tax compat consts) | `lib/motion.ts`, `shared/chartStyles.ts`, `hooks/useTags.ts`, `lib/belgianTax/constants.ts` | ~150 | None–low | n/a | FIXED (#103) |
 | SIMP-62 | R4: shared-utils dead module `downsample.js` chain + `index.d.ts` barrel drift | `packages/shared-utils/src/*` | ~95 + ~60 test | Low | n/a | FIXED (#103) |
-| SIMP-63 | R4: dead backend functions `validatePagination`, `downgradeMigrations` | `middleware/validation.js`, `database/migrate.js` | ~34 + ~10 test | None | n/a | OPEN |
+| SIMP-63 | R4: dead backend functions `validatePagination`, `downgradeMigrations` | `middleware/validation.js`, `database/migrate.js` | ~34 + ~10 test | None | n/a | FIXED (#103) |
 | SIMP-64 | R4: dead electron surface (`electronServices` API, `applyDockerImageUpdate`, legacy `runBackup`) | `packaging/electron/{main,preload}.js` | ~113 | Low | n/a | OPEN |
 | SIMP-65 | R4: dead deps, orphaned overrides, dead config (`config.py`, `env.DEBUG`, `DB_*` injections) | root/frontend/electron `package.json`, `config/` | ~90 + 7 deps/overrides | None–low | n/a | OPEN |
 | SIMP-66 | R4: toolchain version-drift hazards (typescript ^7 vs pinned 6.0.3; vite pinned below declared floor) | root + app `package.json` | correctness | Medium | n/a | OPEN |

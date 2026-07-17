@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   validateId, sanitizeString, validateNumber,
-  validateDateString, validatePagination,
+  validateDateString,
   sanitizeUpdateFields, validateIntArray, validateIdParam,
   assertOptionalId,
 } from '../src/middleware/validation.js';
@@ -92,24 +92,6 @@ describe('Validation Middleware', () => {
     it('should accept null/empty', () => {
       expect(validateDateString(null)).toEqual({ valid: true, value: null });
       expect(validateDateString('')).toEqual({ valid: true, value: null });
-    });
-  });
-
-  describe('validatePagination', () => {
-    it('should return defaults for invalid input', () => {
-      expect(validatePagination('abc', 'def')).toEqual({ limit: 50, offset: 0 });
-    });
-
-    it('should clamp limit to max 5000', () => {
-      expect(validatePagination('10000', '0')).toEqual({ limit: 5000, offset: 0 });
-    });
-
-    it('should accept valid pagination', () => {
-      expect(validatePagination('20', '10')).toEqual({ limit: 20, offset: 10 });
-    });
-
-    it('should handle negative offset', () => {
-      expect(validatePagination('50', '-5')).toEqual({ limit: 50, offset: 0 });
     });
   });
 

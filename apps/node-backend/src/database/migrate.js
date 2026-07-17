@@ -289,24 +289,3 @@ export async function runMigrations(options = {}) {
     )
   }
 }
-
-/**
- * Downgrade by one step or to a specific revision.
- * @param {string} [target='-1']
- */
-export async function downgradeMigrations(target = '-1') {
-  logger.warn({ target }, 'alembic downgrade start')
-  const { stdout, stderr } = await execFileAsync(
-    ALEMBIC_BIN,
-    ['-c', ALEMBIC_CONFIG, 'downgrade', target],
-    {
-      cwd: REPO_ROOT,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
-      timeout: DEFAULT_TIMEOUT_MS,
-      maxBuffer: 32 * 1024 * 1024
-    }
-  )
-  if (stdout) logger.info({ output: stdout.trim() }, 'alembic stdout')
-  if (stderr) logger.info({ output: stderr.trim() }, 'alembic stderr')
-  logger.info('alembic downgrade ok')
-}

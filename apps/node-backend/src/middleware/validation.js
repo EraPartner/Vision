@@ -179,18 +179,6 @@ export function assertYmd(value, fieldName = 'date') {
 }
 
 /**
- * Validate pagination parameters.
- */
-export function validatePagination(limit, offset) {
-  const l = parseInt(limit, 10);
-  const o = parseInt(offset, 10);
-  return {
-    limit: isNaN(l) || l < 1 ? 50 : Math.min(l, 5000),
-    offset: isNaN(o) || o < 0 ? 0 : o,
-  };
-}
-
-/**
  * Express middleware to validate :id route params.
  */
 export function validateIdParam(req, res, next) {
