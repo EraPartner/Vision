@@ -4,6 +4,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { buildExclusionClauses } from '../services/filterBuilder.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 import { toDecimal, toNumber } from '../lib/money.js';
@@ -133,15 +134,11 @@ export async function getMonthlyFinancialSummary(
     return { months, summary: buildMonthlySummary(months) };
   }
 
-  const params = [];
-  // Canonical exclusion semantics (match buildExclusionClauses + every other
-  // surface): 3-level category COALESCE and alias-aware recipient exclusion.
-  const categoryExcludeClause = validIds.length > 0
-    ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-    : '';
-  const recipientExcludeClause = validRecipientIds.length > 0
-    ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-    : '';
+  // Canonical exclusion clauses (services/filterBuilder.buildExclusionClauses):
+  // 3-level category COALESCE and alias-aware recipient exclusion.
+  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+  const params = excl.params;
+  const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
   const allTimeStart = allTime
     ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', CURRENT_DATE))`
@@ -176,8 +173,7 @@ export async function getMonthlyFinancialSummary(
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
       ${includeTransfers ? '' : 'AND t.is_transfer = false'}
-      ${categoryExcludeClause}
-      ${recipientExcludeClause}
+      ${exclusionWhere}
     ),
     daily AS (
       SELECT
@@ -201,8 +197,7 @@ export async function getMonthlyFinancialSummary(
     ORDER BY m.month_start, d.date
   `;
   logger.debug('Monthly summary SQL executing', {
-    categoryExcludeClause: categoryExcludeClause || '(none)',
-    recipientExcludeClause: recipientExcludeClause || '(none)',
+    exclusionWhere: exclusionWhere || '(none)',
     paramCount: params.length,
   });
 

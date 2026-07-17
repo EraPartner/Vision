@@ -119,7 +119,7 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     await getMonthlyFinancialSummary([5, 7], 'EUR', [], false);
 
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('NOT IN ($1,$2)');
+    expect(sql).toContain('NOT IN ($1, $2)');
     expect(params).toEqual([5, 7]);
   });
 

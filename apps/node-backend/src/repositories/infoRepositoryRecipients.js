@@ -11,6 +11,7 @@
 import { query } from '../database/connection.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { toWireDate } from '../lib/dateFormat.js';
+import { buildExclusionClauses } from '../services/filterBuilder.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
@@ -28,19 +29,15 @@ export const recipientInsightsRepository = {
    * - month-over-month comparison alerts ("You spent X% more at …")
    */
   async getRecipientInsights(targetCurrency = 'EUR', { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
-    // Same exclusion semantics as the dashboard / statistics endpoints: drop
-    // hidden categories (by effective category) and excluded recipients (rolled
-    // up to the primary recipient). Built once and reused by both queries below
-    // since neither carries any other bound parameters.
-    const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-    const params = [];
-    const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-      : '';
-    const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(pr.id, r.id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-      : '';
+    // Canonical exclusion semantics (services/filterBuilder.buildExclusionClauses,
+    // shared with the dashboard / statistics endpoints): drop hidden categories
+    // (by effective category) and excluded recipients (rolled up to the primary
+    // recipient via COALESCE(r.primary_recipient_id, t.recipient_id)). Built once
+    // and reused by both queries below since neither carries any other bound
+    // parameters. The queries' own r/pr joins satisfy the helper's join contract.
+    const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+    const params = excl.params;
+    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
     const topRawResult = await query(`
       SELECT
@@ -57,8 +54,7 @@ export const recipientInsightsRepository = {
       WHERE t.amount < 0
         AND t.is_active = true
         AND t.is_transfer = false
-        ${catExclude}
-        ${recExclude}
+        ${exclusionWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.currency
     `, params);
 
@@ -125,8 +121,7 @@ export const recipientInsightsRepository = {
           OR t.date <= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')::date
                        + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)
         )
-        ${catExclude}
-        ${recExclude}
+        ${exclusionWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.currency
     `, params);
 
@@ -171,19 +166,13 @@ export const recipientInsightsRepository = {
   },
 
   async getRecipientByYear(targetCurrency = 'EUR', excludedRecipientIds = [], excludedCategoryIds = []) {
-    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-    const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-
-    const params = [];
-    const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-      : '';
+    // Canonical exclusion clauses (services/filterBuilder.buildExclusionClauses).
     // Category exclusion (incl. hidden categories) must apply here too, or the
     // year-filtered Top Recipients view contradicts the "All years" view (which
-    // does exclude them). 3-level alias-aware COALESCE matches the canonical resolver.
-    const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-      : '';
+    // does exclude them).
+    const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+    const params = excl.params;
+    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
     // every expense row to JS. amount < 0 is pinned, so ABS distributes over the
@@ -203,8 +192,7 @@ export const recipientInsightsRepository = {
       WHERE t.is_active = true
         AND t.amount < 0
         AND t.is_transfer = false
-        ${recExclude}
-        ${catExclude}
+        ${exclusionWhere}
       GROUP BY EXTRACT(YEAR FROM t.date)::int, COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `;
 
@@ -243,12 +231,10 @@ export const recipientInsightsRepository = {
   },
 
   async getRecipientPivot(excludedRecipientIds = [], targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, recipientIds = null } = {}) {
-    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-
-    const params = [];
-    const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(pr.id, r.id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-      : '';
+    // Canonical recipient exclusion (services/filterBuilder.buildExclusionClauses).
+    const excl = buildExclusionClauses({ excludedRecipientIds });
+    const params = excl.params;
+    const recExclude = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
     const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";
 

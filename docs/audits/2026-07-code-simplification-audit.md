@@ -67,7 +67,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-45 | `recharts` is a full dependency for exactly one component | `features/ai-chat/ToolResultCard.tsx` | 1 dep | Medium | Yes — still 1 file | KEEP (#92) |
 | SIMP-46 | 1.1 MB checked-in pg_dump for demo DB | `packaging/electron/demo-db/01-demo.sql` | ~1.1 MB | Medium | Yes | KEEP (#92) |
 | SIMP-47 | 507 dead i18n keys (14% of surface) + no unused-key validator pass | `i18n/source/*.json` + 4 generated locale files | ~3,042 data lines | Low | Yes — samples verified | FIXED (#92) |
-| SIMP-48 | Exclusion-clause builder copy-pasted ~8× while tested canonical helper sits unused | `infoRepo.*`/`infoRepository*.js`, `services/filterBuilder.js` | ~110–130 | Low–medium | Yes — 0 prod call sites there too | PARTIAL — see Round 4 preamble |
+| SIMP-48 | Exclusion-clause builder copy-pasted ~8× while tested canonical helper sits unused | `infoRepo.*`/`infoRepository*.js`, `services/filterBuilder.js` | ~110–130 | Low–medium | Yes — 0 prod call sites there too | FIXED (#103) |
 | SIMP-49 | Period-pivot + recipient-rollup shaping duplicated across info repos | `infoRepositoryRecipients/Tags/Statistics.js` | ~65 | Low | Yes | FIXED (#92) |
 | SIMP-50 | Small service dedups: asset-class dispatch ×4, `aggregateByDate` ×2, cumulative-avg ×2, transfer-leg UPDATE ×3 | `snapshotBuilder.js`, `infoRepo.forecast.js`, `transferReconciliationService.js` | ~50 | Low | Yes | FIXED partial (#92) |
 | SIMP-51 | Backend hygiene: dead `IMPORT_PIPELINE_V2` env key, duplicate net-worth query, per-account await loop, double export | `config/env.js:108`, `infoRepositoryNetWorth.js`, `portfolioPerformanceSnapshotService.js` | ~20 + perf | Low | Yes — env key present | FIXED (#92) |

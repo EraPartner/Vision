@@ -14,6 +14,7 @@ import {
 } from './infoRepositoryHelpers.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import { ValidationError } from '../middleware/errorHandler.js';
+import { buildExclusionClauses } from '../services/filterBuilder.js';
 
 // Sum converted rows into a sorted per-day net series (SIMP-50).
 function aggregateByDate(rows) {
@@ -61,36 +62,12 @@ export async function getCashflowComparison(
   const currentDay = Number(todayYmd.slice(8, 10));
   const HISTORY_MONTHS = 24;
 
-  const validCatIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-  const validRecIds = excludedRecipientIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-
-  let categoryExclusionJoin = '';
-  let categoryExclusionWhere = '';
-  const excludeParams = [];
-  let paramIdx = 1;
-
-  if (validCatIds.length > 0 || validRecIds.length > 0) {
-    categoryExclusionJoin = `
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-    `;
-  }
-
-  if (validCatIds.length > 0) {
-    const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
-    categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
-    `;
-    excludeParams.push(...validCatIds);
-  }
-
-  if (validRecIds.length > 0) {
-    const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
-    categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
-    `;
-    excludeParams.push(...validRecIds);
-  }
+  // Canonical exclusion clauses (services/filterBuilder.js). The joins are only
+  // needed when a clause actually references r/pr, so they stay conditional.
+  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
+  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+  const excludeParams = excl.params;
 
   // Aggregate in SQL per (date, currency) rather than streaming every row to
   // Node. batchConvertGroupsWithHistoricalRateFallback converts by (currency,
@@ -246,34 +223,11 @@ export async function getCashflowForecastData(
     throw new ValidationError('historyMonths must be an integer in [1, 120]');
   }
 
-  const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-  const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-
-  let categoryExclusionJoin = '';
-  let categoryExclusionWhere = '';
-  const excludeParams = [];
-  let paramIdx = 1;
-
-  if (validCatIds.length > 0 || validRecIds.length > 0) {
-    categoryExclusionJoin = `
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-    `;
-  }
-  if (validCatIds.length > 0) {
-    const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
-    categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
-    `;
-    excludeParams.push(...validCatIds);
-  }
-  if (validRecIds.length > 0) {
-    const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
-    categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
-    `;
-    excludeParams.push(...validRecIds);
-  }
+  // Canonical exclusion clauses (services/filterBuilder.js); joins stay conditional.
+  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
+  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+  const excludeParams = excl.params;
 
   // GROUP BY (date, currency) in SQL — aggregateByDate re-buckets by date and
   // conversion is per (currency, date), so this is identical to the old per-row
@@ -363,34 +317,11 @@ export async function getCashflowForecastDataRolling(
     throw new ValidationError('daysForward must be an integer in [1, 365]');
   }
 
-  const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-  const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-
-  let categoryExclusionJoin = '';
-  let categoryExclusionWhere = '';
-  const excludeParams = [];
-  let paramIdx = 1;
-
-  if (validCatIds.length > 0 || validRecIds.length > 0) {
-    categoryExclusionJoin = `
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-    `;
-  }
-  if (validCatIds.length > 0) {
-    const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
-    categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
-    `;
-    excludeParams.push(...validCatIds);
-  }
-  if (validRecIds.length > 0) {
-    const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
-    categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
-    `;
-    excludeParams.push(...validRecIds);
-  }
+  // Canonical exclusion clauses (services/filterBuilder.js); joins stay conditional.
+  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
+  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
+  const excludeParams = excl.params;
 
   // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
   // GROUP BY (date, currency) — identical to the old per-row stream (aggregateByDate re-buckets by date).
@@ -459,29 +390,11 @@ export async function getCashflowForecastDataByCategory(
     throw new ValidationError('historyMonths must be an integer in [1, 120]');
   }
 
-  const validCatIds = (excludedCategoryIds || []).filter(
-    (id) => Number.isInteger(id) && id > 0 && id < 2147483647,
-  );
-  const validRecIds = (excludedRecipientIds || []).filter(
-    (id) => Number.isInteger(id) && id > 0 && id < 2147483647,
-  );
-
-  const excludeParams = [];
-  let paramIdx = 1;
-
-  let catExclusionWhere = '';
-  let recExclusionWhere = '';
-
-  if (validCatIds.length > 0) {
-    const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
-    catExclusionWhere = `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})`;
-    excludeParams.push(...validCatIds);
-  }
-  if (validRecIds.length > 0) {
-    const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
-    recExclusionWhere = `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`;
-    excludeParams.push(...validRecIds);
-  }
+  // Canonical exclusion clauses (services/filterBuilder.js). The r/pr joins are
+  // unconditional here (the effective-category COALESCE needs them anyway).
+  const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+  const excludeParams = excl.params;
+  const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
   // Aggregate per (date, currency, effective category) in SQL — aggregateByDateAndCategory
   // re-buckets by (date, category) and conversion is per (currency, date), so SUM-then-convert
@@ -512,7 +425,7 @@ export async function getCashflowForecastDataByCategory(
     WHERE t.is_active = true
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${historyMonths} months'
       AND t.date <  date_trunc('month', CURRENT_DATE)
-      ${catExclusionWhere} ${recExclusionWhere}
+      ${exclusionWhere}
     ${groupByCols}
   `;
   const sqlCurrent = `
@@ -521,7 +434,7 @@ export async function getCashflowForecastDataByCategory(
     WHERE t.is_active = true
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
-      ${catExclusionWhere} ${recExclusionWhere}
+      ${exclusionWhere}
     ${groupByCols}
   `;
 
