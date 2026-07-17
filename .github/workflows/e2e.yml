@@ -6,8 +6,8 @@
 # journeys and a11y are still caught — just off the PR critical path.
 #
 # This workflow is modeled on ci.yml's docker-verify / test-live-api-contracts
-# jobs and reuses the same stub .env + `docker compose up -d` invocation (see
-# the "Create stub .env" step below).
+# jobs and shares their compose bring-up via .github/actions/compose-up (stub
+# .env + plain `docker compose up -d` + /health poll).
 name: E2E (scheduled)
 
 on:
@@ -46,39 +46,24 @@ jobs:
       - name: Install Playwright browser (chromium)
         run: cd apps/frontend && bunx playwright install --with-deps chromium
 
-      - name: Create stub .env for Docker Compose
-        run: |
-          # VISION_DEV=true enables the app's sanctioned dev/test bypass (skips
-          # rate limiting) so the suite's rapid full-page navigation across every
-          # route doesn't trip the 30/min per-route limiters (e.g. exchange-rates)
-          # and surface as false "network drift" 429s. Test-env only — production
-          # defaults are untouched; this suite exercises UI/a11y/contracts, not
-          # rate limiting.
-          printf 'POSTGRES_PASSWORD=ci_test_password\nDATABASE_URL=postgresql://ftm_user:ci_test_password@db:5432/financial_transactions\nSECRET_KEY=ci_test_secret_key_minimum_32_chars_!\nLOG_LEVEL=warn\nENABLE_LOGGING=true\nVISION_DEV=true\n' > .env
-
-      # Use a plain `up -d` (NOT `up -d --build`). On the ubuntu-24.04 runner's
-      # Docker Compose, `up -d --build` fails env_file resolution and aborts with
-      # "env file .../.env not found" — even though the stub .env exists at the
-      # repo root. The exact internal cause is unconfirmed (it does not reproduce
-      # on newer local Compose), but ci.yml's docker-verify and test-live-api-
-      # contracts jobs use the same stub .env with a plain `up -d` and pass, so
-      # we mirror that proven invocation. Compose still builds the `app` image
-      # implicitly here (fresh runner → no cached image), so current source runs.
-      - name: Start the stack (Docker Compose)
-        run: docker compose -f docker-compose.yml up -d
-
-      - name: Wait for backend health
-        run: |
-          for i in $(seq 1 60); do
-            if curl -fsS http://localhost:3002/health >/dev/null; then
-              echo "Backend healthy after ${i} attempt(s)."
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Backend did not become healthy in time."
-          docker compose -f docker-compose.yml logs --no-color | tail -100
-          exit 1
+      # No image artifact here — compose builds the `app` image implicitly
+      # (fresh runner → no cached image), so current source runs.
+      #
+      # SECRET_KEY: the backend requires one; any 32+ char test value works.
+      # VISION_DEV=true enables the app's sanctioned dev/test bypass (skips
+      # rate limiting) so the suite's rapid full-page navigation across every
+      # route doesn't trip the 30/min per-route limiters (e.g. exchange-rates)
+      # and surface as false "network drift" 429s. Test-env only — production
+      # defaults are untouched; this suite exercises UI/a11y/contracts, not
+      # rate limiting.
+      - name: Bring up the compose stack
+        uses: ./.github/actions/compose-up
+        with:
+          extra-env: |
+            SECRET_KEY=ci_test_secret_key_minimum_32_chars_!
+            VISION_DEV=true
+          health-attempts: "60"
+          health-interval: "2"
 
       - name: Run E2E + a11y suites
         run: cd apps/frontend && bun run test:e2e

@@ -103,7 +103,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-81 | R4: test-suite dedup round 2 (transactions preamble ×6, `withTransaction` ×17, logger ×23, contracts `it.each` completion, 10 re-inlined sites) | `apps/node-backend/tests/**`, `contracts.test.ts` | ~530–610 test | Low | n/a | FIXED (#103) |
 | SIMP-82 | R4: e2e — `smoke.spec.ts` subsumed by a11y suite; duplicated create flows | `apps/frontend/e2e/*` | ~80–100 | Low | n/a | FIXED (#103) |
 | SIMP-83 | R4: electron IPC handler boilerplate + `electron-builder-demo.json` re-declaration | `packaging/electron/main.js`, `electron-builder-demo.json` | ~55–75 | Medium | n/a | FIXED (#103) |
-| SIMP-84 | R4: CI compose bring-up ×3 → composite action; no-op compose logging blocks | `.github/workflows/*`, `docker-compose.*.yml` | ~40–50 | Low | n/a | OPEN |
+| SIMP-84 | R4: CI compose bring-up ×3 → composite action; no-op compose logging blocks | `.github/workflows/*`, `docker-compose.*.yml` | ~40–50 | Low | n/a | FIXED (#103) |
 
 ---
 
