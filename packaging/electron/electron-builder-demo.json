@@ -1,28 +1,16 @@
 {
+  "extends": "./electron-builder-base.json",
   "appId": "com.vaultvoyager.vision-demo",
   "productName": "Vision Demo",
   "directories": {
-    "buildResources": "build",
     "output": "dist-demo"
   },
   "mac": {
     "target": [
       { "target": "dir", "arch": ["arm64"] }
-    ],
-    "category": "public.app-category.finance",
-    "icon": "build/icon.icns",
-    "identity": null,
-    "hardenedRuntime": false,
-    "gatekeeperAssess": false
+    ]
   },
-  "files": [
-    "main.js",
-    "preload.js",
-    "backup/**/*",
-    "assets/**/*"
-  ],
   "extraResources": [
-    { "from": "i18n", "to": "i18n" },
     { "from": "resources-demo", "to": "resources" }
   ]
 }

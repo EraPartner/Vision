@@ -1,0 +1,21 @@
+{
+  "directories": {
+    "buildResources": "build"
+  },
+  "mac": {
+    "category": "public.app-category.finance",
+    "icon": "build/icon.icns",
+    "identity": null,
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false
+  },
+  "files": [
+    "main.js",
+    "preload.js",
+    "backup/**/*",
+    "assets/**/*"
+  ],
+  "extraResources": [
+    { "from": "i18n", "to": "i18n" }
+  ]
+}

@@ -2814,20 +2814,45 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
   return { success: true, file: bundlePath, frontendState };
 }
 
-// ── IPC: renderer can request a Docker image update ──────────────────────────
-ipcMain.handle('update:pull-image', async () => {
-  if (!workDir) return { success: false, error: 'workDir not set' };
-  try {
-    const wasNew = await pullLatestImage(workDir);
-    if (wasNew) {
-      await restartAppContainer(workDir, overrideFiles);
-      await pollHealth().catch(() => {});
+// ── IPC handler registration ─────────────────────────────────────────────────
+// Wraps ipcMain.handle() with the guard/boilerplate shared by most channels:
+//   • requireMainSender — reject calls that don't originate from the main
+//     window's webContents. `senderFailure` is the exact value returned on
+//     rejection; the shapes differ per channel and are load-bearing for the
+//     renderer bridge (electron.ts), so divergent channels pass their own.
+//   • requireWorkDir — precondition for handlers that shell out to Docker.
+//   • wrapErrors — uniform catch → { success: false, error: String(err) }.
+// Handlers with non-uniform failure shapes (update:check-github,
+// update:pre-update-backup, recovery:open-logs) keep plain ipcMain.handle.
+function registerHandler(channel, fn, {
+  requireMainSender = false,
+  senderFailure = { success: false, error: 'Unauthorized sender' },
+  requireWorkDir = false,
+  wrapErrors = false,
+} = {}) {
+  ipcMain.handle(channel, async (event, ...args) => {
+    if (requireMainSender && (!mainWindow || event.sender !== mainWindow.webContents)) {
+      return senderFailure;
     }
-    return { success: true, wasNew };
-  } catch (err) {
-    return { success: false, error: String(err) };
+    if (requireWorkDir && !workDir) return { success: false, error: 'workDir not set' };
+    if (!wrapErrors) return fn(event, ...args);
+    try {
+      return await fn(event, ...args);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+}
+
+// ── IPC: renderer can request a Docker image update ──────────────────────────
+registerHandler('update:pull-image', async () => {
+  const wasNew = await pullLatestImage(workDir);
+  if (wasNew) {
+    await restartAppContainer(workDir, overrideFiles);
+    await pollHealth().catch(() => {});
   }
-});
+  return { success: true, wasNew };
+}, { requireWorkDir: true, wrapErrors: true });
 
 ipcMain.handle('update:check-github', async () => {
   try {
@@ -2837,16 +2862,12 @@ ipcMain.handle('update:check-github', async () => {
   }
 });
 
-ipcMain.handle('update:install-shell', async () => {
+registerHandler('update:install-shell', async () => {
   if (app.isPackaged && !useRepoMode) {
     return { success: false, error: 'Shell update not available in embedded mode — use Docker image update instead.' };
   }
-  try {
-    return await installPreparedShellUpdate();
-  } catch (err) {
-    return { success: false, error: String(err) };
-  }
-});
+  return await installPreparedShellUpdate();
+}, { wrapErrors: true });
 
 ipcMain.handle('update:get-mode', () => ({
   mode: getUpdateMode(),
@@ -3091,11 +3112,7 @@ ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
   }
 });
 
-ipcMain.handle('backup:restore', async (event, filePath, opts) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
-  if (!workDir) return { success: false, error: 'workDir not set' };
+registerHandler('backup:restore', async (event, filePath, opts) => {
   if (typeof filePath !== 'string' || !filePath) {
     return { success: false, error: 'Invalid restore path' };
   }
@@ -3151,32 +3168,25 @@ ipcMain.handle('backup:restore', async (event, filePath, opts) => {
   } finally {
     startHealthWatchdog();
   }
-});
+}, { requireMainSender: true, requireWorkDir: true });
 
 // ── IPC: backup:run ───────────────────────────────────────────────────────────
 // frontendStateJson is the serialised { keys: { … } } localStorage snapshot,
 // collected by the renderer before invoking this handler.  Optional — when null
 // (e.g. automated backup on quit) the bundle is created without frontend-state.json.
 let backupInFlight = false;
-ipcMain.handle('backup:run', async (event, destDir, frontendStateJson = null) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
-  if (!workDir) return { success: false, error: 'workDir not set' };
+registerHandler('backup:run', async (event, destDir, frontendStateJson = null) => {
   const destError = validateBackupDest(destDir);
   if (destError) return { success: false, error: destError };
   const resolvedDest = path.resolve(destDir);
   if (backupInFlight) return { success: false, error: 'A backup is already in progress' };
   backupInFlight = true;
   try {
-    const result = await runBundleBackup(resolvedDest, frontendStateJson);
-    return result;
-  } catch (err) {
-    return { success: false, error: String(err) };
+    return await runBundleBackup(resolvedDest, frontendStateJson);
   } finally {
     backupInFlight = false;
   }
-});
+}, { requireMainSender: true, requireWorkDir: true, wrapErrors: true });
 
 ipcMain.handle('backup:select-dir', async () => {
   const defaultPath = getDefaultICloudBackupDir() || app.getPath('documents');
@@ -3190,12 +3200,9 @@ ipcMain.handle('backup:select-dir', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('backup:save-settings', async (event, { backupDir, backupOnQuit }) => {
-  // Same sender check as backup:restore — a compromised non-main frame must
-  // not be able to repoint where the quit-time backup writes.
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
+// Sender check matters here like on backup:restore — a compromised non-main
+// frame must not be able to repoint where the quit-time backup writes.
+registerHandler('backup:save-settings', async (event, { backupDir, backupOnQuit }) => {
   // Validate the destination NOW: the quit-time backup (will-quit handler)
   // writes wherever this setting points, with no further checks.
   if (backupDir) {
@@ -3216,7 +3223,7 @@ ipcMain.handle('backup:save-settings', async (event, { backupDir, backupOnQuit }
     console.warn('backup:save-settings: could not persist to DB, kept in local settings.json', err.message);
   }
   return { success: true };
-});
+}, { requireMainSender: true });
 
 ipcMain.handle('backup:get-encryption-status', async () => {
   return { success: true, ...(await getBackupPassphraseStatus()) };
@@ -3301,15 +3308,14 @@ function sendToApp(channel, payload) {
   }
 }
 
-ipcMain.handle('app:renderer-ready', (event) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+registerHandler('app:renderer-ready', () => {
   rendererReady = true;
   while (pendingAppMessages.length > 0) {
     const [channel, payload] = pendingAppMessages.shift();
     mainWindow.webContents.send(channel, payload);
   }
   return { success: true };
-});
+}, { requireMainSender: true, senderFailure: { success: false } });
 
 function menuAction(action, payload) {
   sendToApp('menu:action', { action, payload });
@@ -3498,15 +3504,14 @@ function setupDockMenu() {
 // Dock badge — count of planned payments due, pushed by the renderer (it owns
 // the query + the user's dismissals). Input is clamped server-side so a
 // compromised renderer can at most show a number.
-ipcMain.handle('app:set-badge', (event, count) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+registerHandler('app:set-badge', (event, count) => {
   if (process.platform !== 'darwin' || !app.dock) return { success: false };
   const n = Number(count);
   if (!Number.isFinite(n)) return { success: false };
   const clamped = Math.max(0, Math.min(999, Math.floor(n)));
   app.dock.setBadge(clamped > 0 ? String(clamped) : '');
   return { success: true };
-});
+}, { requireMainSender: true, senderFailure: { success: false } });
 
 // System accent color — RRGGBBAA hex from macOS, or null when unavailable.
 function readSystemAccentColor() {
@@ -3519,16 +3524,14 @@ function readSystemAccentColor() {
   }
 }
 
-ipcMain.handle('app:get-accent-color', (event) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+registerHandler('app:get-accent-color', () => {
   return readSystemAccentColor();
-});
+}, { requireMainSender: true, senderFailure: null });
 
 // Renderer mirrors the active theme's primary colors here so the next boot
 // splash matches the chosen palette (see splashDataUrl / readSplashTheme).
 // Validated on write and again on read — the values land in splash HTML/CSS.
-ipcMain.handle('theme:persist-splash', async (event, colors) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+registerHandler('theme:persist-splash', async (event, colors) => {
   if (!colors || !isValidHslComponents(colors.background) || !isValidHslComponents(colors.foreground)) {
     return { success: false };
   }
@@ -3541,7 +3544,7 @@ ipcMain.handle('theme:persist-splash', async (event, colors) => {
     console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
     return { success: false };
   }
-});
+}, { requireMainSender: true, senderFailure: { success: false } });
 
 function subscribeAccentColorChanges() {
   if (process.platform !== 'darwin') return;

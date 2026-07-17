@@ -25,11 +25,9 @@
     "undici": "^7.28.0"
   },
   "build": {
+    "extends": "./electron-builder-base.json",
     "appId": "com.vaultvoyager.vision",
     "productName": "Vision",
-    "directories": {
-      "buildResources": "build"
-    },
     "mac": {
       "target": [
         {
@@ -44,24 +42,9 @@
             "arm64"
           ]
         }
-      ],
-      "category": "public.app-category.finance",
-      "icon": "build/icon.icns",
-      "identity": null,
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      ]
     },
-    "files": [
-      "main.js",
-      "preload.js",
-      "backup/**/*",
-      "assets/**/*"
-    ],
     "extraResources": [
-      {
-        "from": "i18n",
-        "to": "i18n"
-      },
       {
         "from": "resources",
         "to": "resources"
