@@ -17,7 +17,6 @@ vi.mock('../src/config/logger.js', () => ({
 }));
 
 const ENV_KEYS = [
-  'DEBUG',
   'SERVER_HOST',
   'HOSTNAME',
   'PORT',
@@ -89,11 +88,6 @@ describe('Configuration Management', () => {
       expect(settings.admin.authToken).toBe('');
     });
 
-    it('should have debug enabled by default', async () => {
-      const { getSettings } = await importConfigFresh();
-      const settings = getSettings();
-      expect(settings.debug).toBe(true);
-    });
   });
 
   describe('Environment Overrides', () => {
@@ -155,11 +149,6 @@ describe('Configuration Management', () => {
       expect(getSettings().admin.authToken).toBe('super-secret-token');
     });
 
-    it('should override debug from env', async () => {
-      process.env.DEBUG = 'false';
-      const { getSettings } = await importConfigFresh();
-      expect(getSettings().debug).toBe(false);
-    });
   });
 
   describe('Environment Priority', () => {

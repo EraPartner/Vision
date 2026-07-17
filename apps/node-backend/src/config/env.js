@@ -55,8 +55,6 @@ const csvEnv = (defaultValue) =>
   });
 
 const envSchema = z.object({
-  DEBUG: booleanEnv(true),
-
   SERVER_HOST: optionalStringEnv,
   HOSTNAME: optionalStringEnv,
   PORT: intEnv(3002),

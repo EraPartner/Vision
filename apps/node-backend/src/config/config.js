@@ -51,8 +51,6 @@ function defaultOllamaUrl() {
 }
 
 const settings = deepFreeze({
-  debug: env.DEBUG,
-
   server: {
     host: env.SERVER_HOST || env.HOSTNAME || 'localhost',
     port: env.PORT,
