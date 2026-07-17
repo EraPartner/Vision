@@ -85,7 +85,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-63 | R4: dead backend functions `validatePagination`, `downgradeMigrations` | `middleware/validation.js`, `database/migrate.js` | ~34 + ~10 test | None | n/a | FIXED (#103) |
 | SIMP-64 | R4: dead electron surface (`electronServices` API, `applyDockerImageUpdate`, legacy `runBackup`) | `packaging/electron/{main,preload}.js` | ~113 | Low | n/a | FIXED (#103) |
 | SIMP-65 | R4: dead deps, orphaned overrides, dead config (`config.py`, `env.DEBUG`, `DB_*` injections) | root/frontend/electron `package.json`, `config/` | ~90 + 7 deps/overrides | None–low | n/a | FIXED (#103) |
-| SIMP-66 | R4: toolchain version-drift hazards (typescript ^7 vs pinned 6.0.3; vite pinned below declared floor) | root + app `package.json` | correctness | Medium | n/a | OPEN |
+| SIMP-66 | R4: toolchain version-drift hazards (typescript ^7 vs pinned 6.0.3; vite pinned below declared floor) | root + app `package.json` | correctness | Medium | n/a | FIXED (#103) |
 | SIMP-67 | R4: 13 currency-formatter stragglers bypass shared hooks (incl. RebalancePage locale bug) | see finding | ~90–110 | Low | n/a | OPEN |
 | SIMP-68 | R4: `buildSetClauses`/`buildInsert` — 7 unmigrated hand-rolled sites | 6 repositories + `recipientPatternService.js` | ~35 | Low | n/a | OPEN |
 | SIMP-69 | R4: `shared-utils/category` stranded — 4 inline reimplementations live on | `RecipientsPage`, `DashboardPage`, `dataImportService.js` | ~30–35 (or delete ~120) | Low | n/a | OPEN |
