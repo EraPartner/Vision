@@ -585,31 +585,4 @@ export function isApproximatedTaxYear(year: number): boolean {
     return !TABLES[year];
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Backwards-compatible top-level constants (latest year).
-// New code should prefer `getTaxTable(year)` for year-aware values.
-// ──────────────────────────────────────────────────────────────────────────────
-
-const LATEST = TABLES[LATEST_TAX_YEAR];
-
-export const BELGIAN_TAX_BRACKETS = LATEST.brackets;
-export const EMPLOYEE_SS_RATE = LATEST.employeeSSRate;
-export const LUMP_SUM_PROFESSIONAL_EXPENSE_RATE = LATEST.employeeProfessionalExpenseRate;
-export const LUMP_SUM_PROFESSIONAL_EXPENSE_CAP = LATEST.employeeProfessionalExpenseCap;
-export const DIRECTOR_PROFESSIONAL_EXPENSE_RATE = LATEST.directorProfessionalExpenseRate;
-export const DIRECTOR_PROFESSIONAL_EXPENSE_CAP = LATEST.directorProfessionalExpenseCap;
-export const BASIC_PERSONAL_EXEMPTION = LATEST.basicPersonalExemption;
-export const DEPENDENT_CHILD_EXEMPTION_INCREASES = LATEST.dependentChildExemptionIncreases;
-export const EXTRA_CHILD_EXEMPTION_FROM_FIFTH = LATEST.extraChildExemptionFromFifth;
-export const OTHER_DEPENDENT_EXEMPTION = LATEST.otherDependentExemption;
-export const PENSION_SAVINGS_CAP_STANDARD = LATEST.pensionSavingsCapStandard;
-export const PENSION_SAVINGS_CAP_ALTERNATIVE = LATEST.pensionSavingsCapAlternative;
-export const LIFE_INSURANCE_CAP = LATEST.lifeInsuranceCap;
-export const CHARITABLE_DONATION_MIN = LATEST.charitableDonationMin;
-export const CHILDCARE_DAILY_CAP = LATEST.childcareDailyCap;
-/** @deprecated use `CHILDCARE_DAILY_CAP` (year-aware via getTaxTable) */
-export const CHILDCARE_DAILY_CAP_2025 = LATEST.childcareDailyCap;
-export const BELGIAN_DIVIDEND_EXEMPTION = LATEST.dividendExemption;
-export const BELGIAN_DIVIDEND_WHT_RATE = LATEST.dividendWHTRate;
-
-export const DEFAULT_COMMUNAL_SURCHARGE: Record<BelgianRegion, number> = LATEST.defaultCommunalSurcharge;
+export const DEFAULT_COMMUNAL_SURCHARGE: Record<BelgianRegion, number> = TABLES[LATEST_TAX_YEAR].defaultCommunalSurcharge;

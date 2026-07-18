@@ -22,6 +22,20 @@ export function formatDateToYmd(date) {
 }
 
 /**
+ * Epoch-milliseconds → 'YYYY-MM-DD' in UTC. Deliberately named to stay
+ * distinct from formatDateToYmd's LOCAL extraction: provider timestamps and
+ * UTC-midnight day-grid arithmetic (Date.UTC ± 86_400_000) live on the UTC
+ * calendar, so extracting with local getters would shift the day near
+ * midnight. Do NOT use this for pg-read DATE values — those are local-midnight
+ * Dates and belong to formatDateToYmd.
+ * @param {number} ms
+ * @returns {string}
+ */
+export function epochMsToUtcYmd(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
  * Null-safe wire formatter for DATE columns. pg reads DATE as a local-midnight
  * Date object; JSON-serializing that raw emits an ISO timestamp of the
  * PREVIOUS day east of UTC. Route/repo emit boundaries pass DATE values

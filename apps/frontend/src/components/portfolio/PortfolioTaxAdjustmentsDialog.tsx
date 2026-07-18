@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { numberFormatToLocale } from '@/utils/currency';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { usePortfolioTaxAdjustments } from '@/hooks/usePortfolioTaxAdjustments';
 import { usePortfolioTaxClassifications, type EtfStructure, type TaxClassificationEntry } from '@/hooks/usePortfolioTaxClassifications';
 import { getAssetClassLabel, type InvestmentSummary } from '@/types/portfolio';
@@ -38,12 +37,10 @@ interface Props {
 export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
   const { t } = useLanguage();
   const { profile } = useBelgianTaxProfile();
-  const { appSettings } = useAppSettings();
   const { getAdjustment, saveManyForYear, isLoading } = usePortfolioTaxAdjustments();
   const { getClassification, setMany: setClassifications, isLoading: classificationsLoading } = usePortfolioTaxClassifications();
   const [open, setOpen] = useState(false);
 
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const sorted = useMemo(() => [...investments].sort((a, b) => a.name.localeCompare(b.name)), [investments]);
 
   type ClassDraftRow = {
@@ -93,13 +90,8 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
     );
   }, [sorted, draft]);
 
-  const fmt = (val: number) =>
-    new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: appSettings.defaultCurrency || 'EUR',
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(val);
+  // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+  const fmt = useCurrencyFormatter();
 
   async function handleSave() {
     const payload: Record<number, { taxes: number; fees: number }> = {};

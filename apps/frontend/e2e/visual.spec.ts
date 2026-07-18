@@ -5,37 +5,19 @@ import { test, expect } from "@playwright/test";
 // uploaded as artifacts for review. Switch CI to compare mode once baselines
 // are committed to the repo.
 
-test("dashboard screenshot", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("heading", { name: /dashboard/i }).waitFor();
-    await expect(page).toHaveScreenshot("dashboard.png", { fullPage: true });
-});
+const SHOTS: Array<{ name: string; path: string; heading: RegExp; file: string }> = [
+    { name: "dashboard", path: "/", heading: /dashboard/i, file: "dashboard.png" },
+    { name: "transactions", path: "/transactions", heading: /transactions/i, file: "transactions.png" },
+    { name: "import", path: "/import", heading: /import & export/i, file: "import.png" },
+    { name: "planned payments", path: "/planned", heading: /planned payments/i, file: "planned.png" },
+    { name: "portfolio overview", path: "/portfolio", heading: /portfolio overview/i, file: "portfolio.png" },
+];
 
-test("transactions screenshot", async ({ page }) => {
-    await page.goto("/transactions");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("heading", { name: /transactions/i }).waitFor();
-    await expect(page).toHaveScreenshot("transactions.png", { fullPage: true });
-});
-
-test("import screenshot", async ({ page }) => {
-    await page.goto("/import");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("heading", { name: /import & export/i }).waitFor();
-    await expect(page).toHaveScreenshot("import.png", { fullPage: true });
-});
-
-test("planned payments screenshot", async ({ page }) => {
-    await page.goto("/planned");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("heading", { name: /planned payments/i }).waitFor();
-    await expect(page).toHaveScreenshot("planned.png", { fullPage: true });
-});
-
-test("portfolio overview screenshot", async ({ page }) => {
-    await page.goto("/portfolio");
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("heading", { name: /portfolio overview/i }).waitFor();
-    await expect(page).toHaveScreenshot("portfolio.png", { fullPage: true });
-});
+for (const { name, path, heading, file } of SHOTS) {
+    test(`${name} screenshot`, async ({ page }) => {
+        await page.goto(path);
+        await page.waitForLoadState("networkidle");
+        await page.getByRole("heading", { name: heading }).waitFor();
+        await expect(page).toHaveScreenshot(file, { fullPage: true });
+    });
+}

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
 import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
 const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
@@ -19,12 +20,7 @@ vi.mock('../../src/repositories/watchlistRepository.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
+  logger: mockLogger(),
 }));
 
 import { watchlistRepository } from '../../src/repositories/watchlistRepository.js';
@@ -194,6 +190,78 @@ describe('Watchlist Routes', () => {
         expect.objectContaining({ target_price: 123.45 }),
       );
     });
+
+    it('accepts boundary-length name (200) and symbol (20)', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      const name = 'n'.repeat(200);
+      const symbol = 'S'.repeat(20);
+      const req = { body: { ...validBody, name, symbol } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ name, symbol }),
+      );
+    });
+
+    it('accepts target_price at the exact NUMERIC(18,6) cap and rejects one past it', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      const MAX_PRICE = 999_999_999_999;
+
+      await routeHandlers['post:/']({ body: { ...validBody, target_price: MAX_PRICE } }, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ target_price: MAX_PRICE }),
+      );
+
+      await expect(
+        routeHandlers['post:/']({ body: { ...validBody, target_price: MAX_PRICE + 1 } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects an over-length price_provider_id (VARCHAR(200))', async () => {
+      const req = { body: { ...validBody, price_provider_id: 'p'.repeat(201) } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('trims and uppercases a padded lower-case currency', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      const req = { body: { ...validBody, currency: ' usd ' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+      );
+    });
+
+    it('rejects an empty-string currency (explicit key must carry a real code)', async () => {
+      const req = { body: { ...validBody, currency: '' } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('accepts the metals asset_class', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      const req = { body: { ...validBody, asset_class: 'metals' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ asset_class: 'metals' }),
+      );
+    });
+
+    it('accepts a zero added_price (only target_price has the >0 rule) and coerces strings', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+
+      await routeHandlers['post:/']({ body: { ...validBody, added_price: 0 } }, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ added_price: 0 }),
+      );
+
+      await routeHandlers['post:/']({ body: { ...validBody, added_price: '12.5' } }, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ added_price: 12.5 }),
+      );
+    });
+
+    it('rejects a non-numeric added_price', async () => {
+      const req = { body: { ...validBody, added_price: 'soon' } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
   });
 
   describe('PATCH /:id field validation', () => {
@@ -225,6 +293,73 @@ describe('Watchlist Routes', () => {
       const req = { params: { id: '1' }, body: { name: '   ' } };
       await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
       expect(watchlistRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a null name on PATCH', async () => {
+      const req = { params: { id: '1' }, body: { name: null } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('coerces a numeric-string target_price on PATCH', async () => {
+      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      const req = { params: { id: '1' }, body: { target_price: '50.5' } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(watchlistRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ target_price: 50.5 }),
+      );
+    });
+
+    it('rejects a zero target_price on PATCH', async () => {
+      const req = { params: { id: '1' }, body: { target_price: 0 } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('uppercases currency on PATCH', async () => {
+      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      const req = { params: { id: '1' }, body: { currency: 'gbp' } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(watchlistRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ currency: 'GBP' }),
+      );
+    });
+
+    it('passes a null currency through untouched on PATCH', async () => {
+      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      const req = { params: { id: '1' }, body: { currency: null } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(watchlistRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ currency: null }),
+      );
+    });
+
+    it('rejects an over-length symbol on PATCH', async () => {
+      const req = { params: { id: '1' }, body: { symbol: 'A'.repeat(21) } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('passes unvalidated fields through to the repository untouched', async () => {
+      // The repository allow-list (not the route) is what drops unknown keys —
+      // the route must forward them so notes/other allow-listed columns update.
+      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      const req = { params: { id: '1' }, body: { notes: 'hold', unknown_field: 'kept' } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(watchlistRepository.update).toHaveBeenCalledWith(
+        1,
+        { notes: 'hold', unknown_field: 'kept' },
+      );
+    });
+
+    it('allows an explicit null added_price on PATCH (only non-null values are frozen)', async () => {
+      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      const req = { params: { id: '1' }, body: { added_price: null } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(watchlistRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ added_price: null }),
+      );
     });
 
     it('rejects added_price on PATCH instead of silently accepting-then-dropping it', async () => {

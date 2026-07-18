@@ -5,14 +5,11 @@ import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { themes, type ThemeVariant } from '@/styles/themes';
 import { isElectronMac } from '@/lib/api/electron';
 import { useSettingsStore, type VisualEffectsTier } from '@/stores/settingsStore';
 import { useLargeDisplay } from '@/hooks/useVisualEffectsTier';
-import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
+import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
 
 interface VariantMeta {
     value: ThemeVariant;
@@ -123,17 +120,18 @@ export const AppearanceSection = memo(function AppearanceSection() {
 
             {/* Color mode */}
             <SettingsGroup label={t('settings.group.colorMode')}>
-                <SettingRow title={t('settings.appearance.mode')} description={t('settings.appearance.modeHint')} layout="stack">
-                    <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="light">{t('settings.appearance.modes.light')}</SelectItem>
-                            <SelectItem value="dark">{t('settings.appearance.modes.dark')}</SelectItem>
-                            <SelectItem value="system">{t('settings.appearance.modes.system')}</SelectItem>
-                            <SelectItem value="schedule">{t('settings.appearance.modes.schedule')}</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </SettingRow>
+                <SelectSettingRow
+                    title={t('settings.appearance.mode')}
+                    description={t('settings.appearance.modeHint')}
+                    value={mode}
+                    onValueChange={(v) => setMode(v as typeof mode)}
+                    options={[
+                        { value: 'light', label: t('settings.appearance.modes.light') },
+                        { value: 'dark', label: t('settings.appearance.modes.dark') },
+                        { value: 'system', label: t('settings.appearance.modes.system') },
+                        { value: 'schedule', label: t('settings.appearance.modes.schedule') },
+                    ]}
+                />
 
                 {mode === 'schedule' && (
                     <SettingRow title={t('settings.appearance.modes.schedule')} layout="stack">
@@ -171,22 +169,24 @@ export const AppearanceSection = memo(function AppearanceSection() {
 
             {/* Visual effects */}
             <SettingsGroup label={t('settings.group.visualEffects')}>
-                <SettingRow title={t('settings.appearance.visualEffects')} description={t('settings.appearance.visualEffectsHint')} layout="stack">
-                    <Select value={tierInUse} onValueChange={(v) => handleTierChange(v as VisualEffectsTier)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="reduced">{t('settings.appearance.visualEffects.reduced')}</SelectItem>
-                            <SelectItem value="standard">{t('settings.appearance.visualEffects.standard')}</SelectItem>
-                            <SelectItem value="enhanced">{t('settings.appearance.visualEffects.enhanced')}</SelectItem>
-                        </SelectContent>
-                    </Select>
+                <SelectSettingRow
+                    title={t('settings.appearance.visualEffects')}
+                    description={t('settings.appearance.visualEffectsHint')}
+                    value={tierInUse}
+                    onValueChange={(v) => handleTierChange(v as VisualEffectsTier)}
+                    options={[
+                        { value: 'reduced', label: t('settings.appearance.visualEffects.reduced') },
+                        { value: 'standard', label: t('settings.appearance.visualEffects.standard') },
+                        { value: 'enhanced', label: t('settings.appearance.visualEffects.enhanced') },
+                    ]}
+                >
                     {capped && tierInUse === 'reduced' && (
                         <p className="mt-2 text-xs font-medium text-primary">{t('settings.appearance.visualEffectsAutoNote')}</p>
                     )}
                     {capped && tierInUse !== 'reduced' && (
                         <p className="mt-2 text-xs font-medium text-warning">{t('settings.appearance.visualEffectsOverrideNote')}</p>
                     )}
-                </SettingRow>
+                </SelectSettingRow>
 
                 <SettingRow
                     title={t('settings.appearance.autoAdaptDisplay')}
@@ -203,32 +203,32 @@ export const AppearanceSection = memo(function AppearanceSection() {
 
             {/* Accessibility — colorblind-safe gain/loss palette (loss: orange vs red) */}
             <SettingsGroup label={t('settings.group.accessibility')}>
-                <SettingRow
+                <SelectSettingRow
                     title={t('settings.appearance.gainLossColors')}
                     description={t('settings.appearance.gainLossColorsHint')}
-                    layout="stack"
-                >
-                    <Select
-                        value={(appSettings.colorblindGainLoss ?? true) ? 'colorblind' : 'classic'}
-                        onValueChange={(v) => updateAppSettings({ colorblindGainLoss: v === 'colorblind' })}
-                    >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="colorblind">
+                    value={(appSettings.colorblindGainLoss ?? true) ? 'colorblind' : 'classic'}
+                    onValueChange={(v) => updateAppSettings({ colorblindGainLoss: v === 'colorblind' })}
+                    options={[
+                        {
+                            value: 'colorblind',
+                            label: (
                                 <span className="flex items-center gap-2">
                                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: 'hsl(24 90% 62%)' }} aria-hidden />
                                     {t('settings.appearance.gainLossColors.colorblind')}
                                 </span>
-                            </SelectItem>
-                            <SelectItem value="classic">
+                            ),
+                        },
+                        {
+                            value: 'classic',
+                            label: (
                                 <span className="flex items-center gap-2">
                                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: 'hsl(358 82% 62%)' }} aria-hidden />
                                     {t('settings.appearance.gainLossColors.classic')}
                                 </span>
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-                </SettingRow>
+                            ),
+                        },
+                    ]}
+                />
             </SettingsGroup>
         </SettingsSection>
     );

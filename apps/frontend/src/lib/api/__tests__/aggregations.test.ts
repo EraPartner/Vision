@@ -5,10 +5,7 @@ import { server } from "@/test/msw/server";
 
 import {
   getAggregationMonthlySummary,
-  getAggregationCategoryBreakdown,
   getAggregationRecipientInsights,
-  getAggregationCashflowComparison,
-  getAggregationAverageVsCurrent,
   getAggregationBankBalances,
   getCashflowForecastMethods,
   getCashflowForecastRolling,
@@ -69,13 +66,6 @@ describe("aggregations — monthly summary branch coverage", () => {
 });
 
 describe("aggregations — simple wrappers", () => {
-  it("getAggregationCategoryBreakdown forwards currency", async () => {
-    const ref = { url: "" };
-    captureUrl("/api/aggregations/category-breakdown", ref, { categories: [] });
-    await getAggregationCategoryBreakdown({ currency: "USD" });
-    expect(ref.url).toContain("currency=USD");
-  });
-
   it("getAggregationRecipientInsights uses the shared exclusion query", async () => {
     const ref = { url: "" };
     captureUrl("/api/aggregations/recipient-insights", ref, { topMerchants: [], monthOverMonth: [] });
@@ -88,21 +78,6 @@ describe("aggregations — simple wrappers", () => {
     captureUrl("/api/aggregations/recipient-insights", ref, { topMerchants: [], monthOverMonth: [] });
     await getAggregationRecipientInsights();
     expect(ref.url.endsWith("/api/aggregations/recipient-insights")).toBe(true);
-  });
-
-  it("getAggregationCashflowComparison uses the shared exclusion query", async () => {
-    const ref = { url: "" };
-    captureUrl("/api/aggregations/cashflow-comparison", ref, {});
-    await getAggregationCashflowComparison({ excluded_recipient_ids: [4], currency: "EUR" });
-    expect(ref.url).toContain("excluded_recipient_ids=4");
-    expect(ref.url).toContain("currency=EUR");
-  });
-
-  it("getAggregationAverageVsCurrent forwards currency", async () => {
-    const ref = { url: "" };
-    captureUrl("/api/aggregations/average-vs-current", ref, {});
-    await getAggregationAverageVsCurrent({ currency: "EUR" });
-    expect(ref.url).toContain("currency=EUR");
   });
 
   it("getAggregationBankBalances forwards currency", async () => {

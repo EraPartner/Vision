@@ -3,9 +3,10 @@
  * Mirrors validation-related tests from Python test suite.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { createMockResponse as mockResponse } from './helpers/routeHarness.js';
 import {
   validateId, sanitizeString, validateNumber,
-  validateDateString, validatePagination,
+  validateDateString,
   sanitizeUpdateFields, validateIntArray, validateIdParam,
   assertOptionalId,
 } from '../src/middleware/validation.js';
@@ -95,24 +96,6 @@ describe('Validation Middleware', () => {
     });
   });
 
-  describe('validatePagination', () => {
-    it('should return defaults for invalid input', () => {
-      expect(validatePagination('abc', 'def')).toEqual({ limit: 50, offset: 0 });
-    });
-
-    it('should clamp limit to max 5000', () => {
-      expect(validatePagination('10000', '0')).toEqual({ limit: 5000, offset: 0 });
-    });
-
-    it('should accept valid pagination', () => {
-      expect(validatePagination('20', '10')).toEqual({ limit: 20, offset: 10 });
-    });
-
-    it('should handle negative offset', () => {
-      expect(validatePagination('50', '-5')).toEqual({ limit: 50, offset: 0 });
-    });
-  });
-
   describe('sanitizeUpdateFields', () => {
     it('should only allow whitelisted columns for transactions', () => {
       const result = sanitizeUpdateFields('transactions', {
@@ -198,9 +181,3 @@ describe('Validation Middleware', () => {
     });
   });
 });
-
-function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn() };
-  res.status.mockReturnValue(res);
-  return res;
-}

@@ -14,11 +14,53 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { EXCHANGE_RATES_QUERY_KEY } from "@/hooks/useExchangeRates";
 
-export default function ExchangeRatesPage() {
+// Hoisted out of the page component so React keeps the table subtree mounted
+// across page re-renders instead of remounting a fresh inline component type.
+function RatesTable({
+    rows,
+    showFallbackNote,
+}: {
+    rows: { currency: string; rate: number }[];
+    showFallbackNote?: boolean;
+}) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
+
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead>
+                    <tr className="border-b text-muted-foreground">
+                        <th className="text-left py-2 px-3 font-medium">{t('exchangeRates.col.currency')}</th>
+                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.unitToEur')}</th>
+                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.eurToUnit')}</th>
+                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.hundredInEur')}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map(({ currency, rate }) => (
+                        <tr key={currency} className="border-b border-border/50 hover:bg-muted/50">
+                            <td className="py-2 px-3 font-mono font-medium">{currency}</td>
+                            <td className="py-2 px-3 text-right font-mono">{rate.toFixed(6)}</td>
+                            <td className="py-2 px-3 text-right font-mono">{(1 / rate).toFixed(4)}</td>
+                            <td className="py-2 px-3 text-right">{formatCurrency(100 * rate, defaultCurrency, locale)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            {showFallbackNote && (
+                <p className="text-xs text-muted-foreground mt-3 px-3">{t('exchangeRates.fallbackNote')}</p>
+            )}
+        </div>
+    );
+}
+
+export default function ExchangeRatesPage() {
+    const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
     const queryClient = useQueryClient();
 
     // Share the one exchange-rates cache entry — same flat key, queryFn, and
@@ -71,39 +113,31 @@ export default function ExchangeRatesPage() {
         .filter(([k]) => k !== "EUR")
         .sort(([a], [b]) => a.localeCompare(b));
 
-    const RatesTable = ({
-        rows,
-        showFallbackNote,
-    }: {
-        rows: { currency: string; rate: number }[];
-        showFallbackNote?: boolean;
-    }) => (
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="border-b text-muted-foreground">
-                        <th className="text-left py-2 px-3 font-medium">{t('exchangeRates.col.currency')}</th>
-                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.unitToEur')}</th>
-                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.eurToUnit')}</th>
-                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.hundredInEur')}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map(({ currency, rate }) => (
-                        <tr key={currency} className="border-b border-border/50 hover:bg-muted/50">
-                            <td className="py-2 px-3 font-mono font-medium">{currency}</td>
-                            <td className="py-2 px-3 text-right font-mono">{rate.toFixed(6)}</td>
-                            <td className="py-2 px-3 text-right font-mono">{(1 / rate).toFixed(4)}</td>
-                            <td className="py-2 px-3 text-right">{formatCurrency(100 * rate, defaultCurrency, locale)}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            {showFallbackNote && (
-                <p className="text-xs text-muted-foreground mt-3 px-3">{t('exchangeRates.fallbackNote')}</p>
-            )}
-        </div>
-    );
+    // The three summary cards differ only in icon/title/value/subtext.
+    const summaryCards = [
+        {
+            icon: Database,
+            title: t('exchangeRates.storedRates'),
+            value: data?.total_rates ?? 0,
+            sub: t('exchangeRates.storedRatesDesc'),
+        },
+        {
+            icon: Globe,
+            title: t('exchangeRates.fallbackCurrencies'),
+            value: fallbackEntries.length,
+            sub: t('exchangeRates.fallbackCurrenciesDesc'),
+        },
+        {
+            icon: RefreshCw,
+            title: t('exchangeRates.latestFetch'),
+            value: rateDate ?? "—",
+            sub: fetchedAt
+                ? t('exchangeRates.fetchedAt', {
+                    date: formatDateTimeStringWithAppSettings(fetchedAt, appSettings.dateFormat, locale),
+                })
+                : t('exchangeRates.noDataFetched'),
+        },
+    ];
 
     return (
         <div className="space-y-6">
@@ -136,45 +170,19 @@ export default function ExchangeRatesPage() {
 
             {/* Summary cards */}
             <div className="grid gap-4 sm:grid-cols-3">
-                <Card className="glass-regular premium-frame">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Database className="h-4 w-4" /> {t('exchangeRates.storedRates')}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold">{data?.total_rates ?? 0}</p>
-                        <p className="text-xs text-muted-foreground">{t('exchangeRates.storedRatesDesc')}</p>
-                    </CardContent>
-                </Card>
-                <Card className="glass-regular premium-frame">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Globe className="h-4 w-4" /> {t('exchangeRates.fallbackCurrencies')}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold">{fallbackEntries.length}</p>
-                        <p className="text-xs text-muted-foreground">{t('exchangeRates.fallbackCurrenciesDesc')}</p>
-                    </CardContent>
-                </Card>
-                <Card className="glass-regular premium-frame">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <RefreshCw className="h-4 w-4" /> {t('exchangeRates.latestFetch')}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold">{rateDate ?? "—"}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {fetchedAt
-                                ? t('exchangeRates.fetchedAt', {
-                                    date: formatDateTimeStringWithAppSettings(fetchedAt, appSettings.dateFormat, locale),
-                                })
-                                : t('exchangeRates.noDataFetched')}
-                        </p>
-                    </CardContent>
-                </Card>
+                {summaryCards.map(({ icon: Icon, title, value, sub }) => (
+                    <Card key={title} className="glass-regular premium-frame">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                <Icon className="h-4 w-4" /> {title}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-2xl font-bold">{value}</p>
+                            <p className="text-xs text-muted-foreground">{sub}</p>
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
 
             <Tabs defaultValue="live" className="space-y-4">

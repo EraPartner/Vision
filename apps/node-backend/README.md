@@ -9,7 +9,7 @@ apps/node-backend/
 ├── src/
 │   ├── main.js                          # Express app entry point (mirrors main.py)
 │   ├── config/
-│   │   ├── config.js                    # Settings management (mirrors config/config.py)
+│   │   ├── config.js                    # Settings management
 │   │   └── logger.js                    # Structured logging (mirrors config/logging_config.py)
 │   ├── database/
 │   │   └── connection.js                # PostgreSQL pool (mirrors database/connection.py)

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { CardSheen } from "@/components/shared/CardSheen";
 import {
     Card,
@@ -11,7 +11,8 @@ import { TrendingUp } from "lucide-react";
 import { BarChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency } from "@/utils/currency";
+import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 
 interface MonthlyTrendsRow {
@@ -39,23 +40,9 @@ interface ChartRow {
 export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChartProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
-
-    const compactFormat = useMemo(
-        () =>
-            new Intl.NumberFormat(locale, {
-                style: "currency",
-                currency: defaultCurrency,
-                notation: "compact",
-                maximumFractionDigits: 1,
-            }),
-        [locale, defaultCurrency],
-    );
-    const formatCompactCurrency = useCallback(
-        (value: number) => compactFormat.format(value),
-        [compactFormat],
-    );
+    // Shared chart formatter (SIMP-67): locale/currency resolution and the
+    // length-aware compact tick format come from useChartCurrencyFormatter.
+    const { formatCompact, locale, currency: defaultCurrency } = useChartCurrencyFormatter();
 
     const chartData: ReadonlyArray<ChartRow> = useMemo(
         () =>
@@ -113,7 +100,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
                     height={320}
                     barRadius={8}
                     maxBarSize={40}
-                    valueTickFormat={formatCompactCurrency}
+                    valueTickFormat={(v) => formatCompact(v).display}
                     tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                 />
             </div>

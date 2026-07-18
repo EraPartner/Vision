@@ -6,6 +6,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 export const recipientBankAccountRepository = {
   async getById(id) {
@@ -55,23 +56,13 @@ export const recipientBankAccountRepository = {
 
     const existing = await this.getByAccountNumber(accountNumber);
     if (existing) {
-      // Enrich with missing metadata
-      const updates = [];
-      const params = [];
-      let paramIdx = 1;
-
-      if (bankName && !existing.bank_name) {
-        updates.push(`bank_name = $${paramIdx++}`);
-        params.push(bankName);
-      }
-      if (address && existing.address !== address) {
-        updates.push(`address = $${paramIdx++}`);
-        params.push(address);
-      }
-      if (accountLabel && !existing.account_label) {
-        updates.push(`account_label = $${paramIdx++}`);
-        params.push(accountLabel);
-      }
+      // Enrich with missing metadata. Shared clause builder (lib/sqlClauses.js)
+      // skips undefined, so the enrichment conditions map to the field bag.
+      const { clauses: updates, params, nextIdx: paramIdx } = buildSetClauses({
+        bank_name: bankName && !existing.bank_name ? bankName : undefined,
+        address: address && existing.address !== address ? address : undefined,
+        account_label: accountLabel && !existing.account_label ? accountLabel : undefined,
+      });
 
       if (updates.length > 0) {
         updates.push(`updated_at = NOW()`);
@@ -120,13 +111,10 @@ export const recipientBankAccountRepository = {
   },
 
   async update(id, { bankName, address, accountLabel }) {
-    const updates = [];
-    const params = [];
-    let paramIdx = 1;
-
-    if (bankName !== undefined) { updates.push(`bank_name = $${paramIdx++}`); params.push(bankName); }
-    if (address !== undefined) { updates.push(`address = $${paramIdx++}`); params.push(address); }
-    if (accountLabel !== undefined) { updates.push(`account_label = $${paramIdx++}`); params.push(accountLabel); }
+    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    const { clauses: updates, params, nextIdx: paramIdx } = buildSetClauses({
+      bank_name: bankName, address, account_label: accountLabel,
+    });
 
     if (updates.length === 0) return this.getById(id);
 

@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  withTransaction: vi.fn(),
-}));
+import { mockConnection } from './helpers/repoMocks.js';
+vi.mock('../src/database/connection.js', () => mockConnection());
 
 import { query } from '../src/database/connection.js';
 import tagRepository from '../src/repositories/tagRepository.js';

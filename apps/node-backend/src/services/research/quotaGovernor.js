@@ -20,6 +20,8 @@
  * governed instead by cache TTLs and providerHealthService.
  */
 
+import { epochMsToUtcYmd } from '../../lib/dateFormat.js';
+
 const ONE_MINUTE_MS = 60_000;
 
 /** Documented free-tier ceilings. Absent provider = unmetered by this governor. */
@@ -39,7 +41,7 @@ export const PROVIDER_LIMITS = Object.freeze({
  * @returns {string}
  */
 export function dayKeyUtc(ms) {
-  return new Date(ms).toISOString().slice(0, 10);
+  return epochMsToUtcYmd(ms);
 }
 
 /**

@@ -10,6 +10,7 @@
  * Express 5 async-throw to errorHandler.js for the {ok:false,...} shape.
  */
 
+import { z } from 'zod';
 import investmentRepository, { pickInvestmentCreateFields } from '../repositories/investmentRepository.js';
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
 import { fetchHistoricalPrices, fetchLivePricesDetailed, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
@@ -43,57 +44,81 @@ async function validateProviderUrls(body) {
   }
 }
 
-// Numeric investment fields forwarded to typed columns. Bounds keep garbage
-// out of the valuation and Belgian property-tax math: without them a
-// non-numeric string surfaced as a pg cast error (500 instead of 400) while
-// negatives, 1e15, and JSON "Infinity" inserted cleanly. Both rate fields are
-// percentages in the UI. Mirrors the routes/watchlist.js guards.
-const INVESTMENT_NUMERIC_BOUNDS = [
-  { field: 'current_price', min: 0, max: 1e12 },
-  { field: 'interest_rate', min: -100, max: 100 },
-  { field: 'cadastral_income', min: 0, max: 1e12 },
-  { field: 'municipality_tax_rate', min: 0, max: 100 },
-];
+/* ── Zod body schema ───────────────────────────────────────────────────────
+ * Bodies are validated with zod (schema → safeParse → ValidationError), the
+ * idiom established in settings.js/reports.js. The schema is LOOSE: fields
+ * without a typed guard (notes, price_provider_*, ...) pass through untouched
+ * and the repository allow-list decides what is written, exactly as before.
+ * Bridges reuse the shared middleware guards so accepted shapes
+ * (Number() coercion, bounds, widths) stay identical to the pre-zod behavior. */
+
+// Numeric fields forwarded to typed columns. Bounds keep garbage out of the
+// valuation and Belgian property-tax math: without them a non-numeric string
+// surfaced as a pg cast error (500 instead of 400) while negatives, 1e15, and
+// JSON "Infinity" inserted cleanly. Both rate fields are percentages in the UI.
+// null passes through (explicit clear, null-to-clear PATCH semantics); a
+// cleared '' form field means "no value", not 0 — and ''::numeric is a pg cast
+// error (500) if forwarded raw.
+const boundedNumberField = (field, min, max) => z.unknown().transform((value, ctx) => {
+  if (value === null || value === '') return null;
+  const result = validateNumber(value, { min, max, fieldName: field });
+  if (!result.valid) {
+    ctx.addIssue({ code: 'custom', message: result.error });
+    return z.NEVER;
+  }
+  return result.value;
+}).optional();
 
 // VARCHAR column widths (migration 0001). Provider-/market-prefilled values can
 // exceed the frontend maxLength cap (which only clamps typed input) and reach
-// the column as a raw 22001 500 instead of a clean 400.
-const INVESTMENT_STRING_MAX_LENGTHS = [
-  { field: 'name', max: 200 },
-  { field: 'symbol', max: 20 },
-  { field: 'location', max: 300 },
-  { field: 'municipality', max: 200 },
-];
+// the column as a raw 22001 500 instead of a clean 400. Values within the width
+// pass through untouched (assertMaxLength never trims or stringifies).
+const maxLenField = (field, max) => z.unknown().transform((value, ctx) => {
+  try {
+    return assertMaxLength(value, max, field);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+}).optional();
 
-function validateInvestmentStringLengths(body) {
-  if (!body || typeof body !== 'object') return;
-  for (const { field, max } of INVESTMENT_STRING_MAX_LENGTHS) {
-    if (field in body) assertMaxLength(body[field], max, field);
+// ISO-4217 shape guard: a free-typed "euro"/"€"/over-long currency otherwise
+// reached the VARCHAR column as a raw 400/500. Absent/empty passes through
+// untouched so the column default ('EUR') applies; a valid code is normalised
+// to uppercase.
+const currencyField = z.unknown().transform((value, ctx) => {
+  if (value === null || value === '') return value;
+  try {
+    return assertCurrency(value);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
   }
-  // ISO-4217 shape guard: a free-typed "euro"/"€"/over-long currency otherwise
-  // reached the VARCHAR column as a raw 400/500. Absent/empty leaves the column
-  // default ('EUR') in place; a valid code is normalised to uppercase.
-  if (body.currency !== undefined && body.currency !== null && body.currency !== '') {
-    body.currency = assertCurrency(body.currency);
-  }
-}
+}).optional();
 
-function validateInvestmentNumericFields(body) {
-  if (!body || typeof body !== 'object') return;
-  for (const { field, min, max } of INVESTMENT_NUMERIC_BOUNDS) {
-    if (!(field in body)) continue;
-    const value = body[field];
-    if (value === null) continue; // explicit clear (null-to-clear PATCH semantics)
-    if (value === '') {
-      // A cleared form field means "no value", not 0 — and ''::numeric is a pg
-      // cast error (500) if forwarded raw.
-      body[field] = null;
-      continue;
-    }
-    const result = validateNumber(value, { min, max, fieldName: field });
-    if (!result.valid) throw new ValidationError(result.error);
-    body[field] = result.value;
+const investmentBodySchema = z.looseObject({
+  current_price: boundedNumberField('current_price', 0, 1e12),
+  interest_rate: boundedNumberField('interest_rate', -100, 100),
+  cadastral_income: boundedNumberField('cadastral_income', 0, 1e12),
+  municipality_tax_rate: boundedNumberField('municipality_tax_rate', 0, 100),
+  name: maxLenField('name', 200),
+  symbol: maxLenField('symbol', 20),
+  location: maxLenField('location', 300),
+  municipality: maxLenField('municipality', 200),
+  currency: currencyField,
+});
+
+function parseInvestmentBody(body) {
+  // Non-object bodies skipped field validation pre-zod; keep that boundary.
+  if (!body || typeof body !== 'object') return body;
+  const result = investmentBodySchema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
   }
+  return result.data;
 }
 
 // ── In-memory response caches ────────────────────────────────────────────────
@@ -251,19 +276,18 @@ export async function listInvestments(req, res) {
 }
 
 export async function createInvestment(req, res) {
-  validateInvestmentNumericFields(req.body);
-  validateInvestmentStringLengths(req.body);
-  const { name, asset_class } = req.body;
+  const body = parseInvestmentBody(req.body);
+  const { name, asset_class } = body;
 
   if (!name || !asset_class) {
     throw new ValidationError('name and asset_class are required');
   }
 
-  await validateProviderUrls(req.body);
+  await validateProviderUrls(body);
 
   let inv;
   try {
-    inv = await investmentRepository.create(pickInvestmentCreateFields(req.body));
+    inv = await investmentRepository.create(pickInvestmentCreateFields(body));
   } catch (err) {
     translateRepoError(err);
   }
@@ -375,13 +399,12 @@ export async function getInvestment(req, res) {
 }
 
 export async function updateInvestment(req, res) {
-  validateInvestmentNumericFields(req.body);
-  validateInvestmentStringLengths(req.body);
-  await validateProviderUrls(req.body);
+  const body = parseInvestmentBody(req.body);
+  await validateProviderUrls(body);
 
   let inv;
   try {
-    inv = await investmentRepository.update(parseRequestId(req), req.body);
+    inv = await investmentRepository.update(parseRequestId(req), body);
   } catch (err) {
     translateRepoError(err);
   }

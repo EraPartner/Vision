@@ -112,6 +112,95 @@ describe('updateInvestment — numeric field guards', () => {
   });
 });
 
+// Pins for the zod swap (ZOD-04): exact boundary values, string-width caps,
+// currency coercion, and unvalidated-field passthrough must survive byte-identical.
+describe('createInvestment — numeric boundary pins', () => {
+  it('accepts values exactly at the bounds', async () => {
+    await createInvestment(createReq({
+      current_price: 1e12, cadastral_income: 0,
+      interest_rate: -100, municipality_tax_rate: 100,
+    }), mockRes());
+    expect(investmentRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      current_price: 1e12, cadastral_income: 0, interest_rate: -100, municipality_tax_rate: 100,
+    }));
+  });
+
+  it('rejects values just past the bounds', async () => {
+    await expect(createInvestment(createReq({ current_price: 1e12 + 1 }), mockRes()))
+      .rejects.toBeInstanceOf(ValidationError);
+    await expect(createInvestment(createReq({ interest_rate: 100.01 }), mockRes()))
+      .rejects.toBeInstanceOf(ValidationError);
+    await expect(createInvestment(createReq({ interest_rate: -100.01 }), mockRes()))
+      .rejects.toBeInstanceOf(ValidationError);
+    await expect(createInvestment(createReq({ municipality_tax_rate: -0.01 }), mockRes()))
+      .rejects.toBeInstanceOf(ValidationError);
+    await expect(createInvestment(createReq({ cadastral_income: -0.01 }), mockRes()))
+      .rejects.toBeInstanceOf(ValidationError);
+    expect(investmentRepository.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('createInvestment — string width and currency pins', () => {
+  it('accepts strings exactly at the column width and rejects one char over', async () => {
+    const widths = [['name', 200], ['symbol', 20], ['location', 300], ['municipality', 200]];
+    for (const [field, max] of widths) {
+      await createInvestment(createReq({ [field]: 'x'.repeat(max) }), mockRes());
+      await expect(createInvestment(createReq({ [field]: 'x'.repeat(max + 1) }), mockRes()))
+        .rejects.toBeInstanceOf(ValidationError);
+    }
+    expect(investmentRepository.create).toHaveBeenCalledTimes(widths.length);
+  });
+
+  it('uppercases a valid currency and rejects non-ISO shapes', async () => {
+    await createInvestment(createReq({ currency: 'usd' }), mockRes());
+    expect(investmentRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: 'USD' }),
+    );
+    await expect(createInvestment(createReq({ currency: 'euro' }), mockRes()))
+      .rejects.toBeInstanceOf(ValidationError);
+    await expect(createInvestment(createReq({ currency: '€' }), mockRes()))
+      .rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("passes empty/null/absent currency through untouched (column default applies)", async () => {
+    await createInvestment(createReq({ currency: '' }), mockRes());
+    expect(investmentRepository.create.mock.calls[0][0].currency).toBe('');
+    await createInvestment(createReq({ currency: null }), mockRes());
+    expect(investmentRepository.create.mock.calls[1][0].currency).toBeNull();
+    await createInvestment(createReq({}), mockRes());
+    expect('currency' in investmentRepository.create.mock.calls[2][0]).toBe(false);
+  });
+
+  it('forwards unvalidated fields untouched (loose body)', async () => {
+    await createInvestment(createReq({
+      notes: '  keep me  ', price_provider_id: 'AAPL', maturity_date: '2030-01-01', is_active: true,
+    }), mockRes());
+    expect(investmentRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      notes: '  keep me  ', price_provider_id: 'AAPL', maturity_date: '2030-01-01', is_active: true,
+    }));
+  });
+});
+
+describe('updateInvestment — string field pins', () => {
+  const req = (body) => ({ params: { id: '1' }, body });
+
+  it('forwards a null string field (explicit clear) and a non-string value within width unchanged', async () => {
+    await updateInvestment(req({ symbol: null, location: 12345 }), mockRes());
+    expect(investmentRepository.update).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ symbol: null, location: 12345 }),
+    );
+  });
+
+  it("maps a cleared '' numeric field to null on update too", async () => {
+    await updateInvestment(req({ cadastral_income: '' }), mockRes());
+    expect(investmentRepository.update).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ cadastral_income: null }),
+    );
+  });
+});
+
 describe('parseDefaultListOptions — pagination clamp', () => {
   it('clamps an oversized limit down to the per-route maxLimit', () => {
     expect(parseDefaultListOptions({ limit: '999999' }).limit).toBe(1000);

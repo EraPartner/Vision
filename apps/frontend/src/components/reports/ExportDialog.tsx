@@ -37,6 +37,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
+import { SUPPORTED_CURRENCIES } from '@/utils/currency';
 import {
   downloadFinancialReport,
   downloadPortfolioReport,
@@ -90,10 +91,8 @@ const SECTIONS_BY_TYPE: Record<ReportType, SectionDef[]> = {
   tax:       TAX_SECTIONS,
 };
 
-const CURRENCIES = [
-  'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD',
-  'SEK', 'NOK', 'DKK', 'PLN', 'CZK',
-];
+// First 12 of the canonical list: EUR..CZK (unchanged dropdown contents).
+const CURRENCIES = SUPPORTED_CURRENCIES.slice(0, 12);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

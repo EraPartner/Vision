@@ -8,7 +8,8 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const http = require('http');
-const https = require('https');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const { createBundle, encryptBundle, openBundle, isBundleEncrypted } = require('./backup/bundle');
 // Async i18n loader for main process dialogs. Populated during launch() before
 // any t() use. Until then, t() falls back to the key itself — which only
@@ -226,6 +227,9 @@ const BACKUP_KDF_P = 1;
 const BACKUP_RETENTION_KEEP = 7;
 const BACKUP_RETENTION_GRACE_MS = 10 * 60 * 1000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+// Overall deadline for the small GitHub API/checksum fetches (the previous
+// hand-rolled https.get helpers had no timeout at all and could hang forever).
+const GITHUB_FETCH_TIMEOUT_MS = 30 * 1000;
 
 // Prod-only CSP. Dev leaves Vite HMR unrestricted (app.isPackaged gate below).
 // 'unsafe-inline' on style-src kept — Tailwind/inline styles still in use.
@@ -907,67 +911,6 @@ async function isEncryptedBackupFile(filePath) {
       try { await handle.close(); } catch { /* ignore */ }
     }
   }
-}
-
-async function encryptBackupFile(sqlFilePath) {
-  const passphrase = await getBackupPassphrase();
-  if (!passphrase) {
-    return { file: sqlFilePath, encrypted: false, warning: 'Backup encryption skipped: VISION_BACKUP_PASSPHRASE is not set.' };
-  }
-
-  const encPath = `${sqlFilePath}.enc`;
-  const salt = crypto.randomBytes(BACKUP_ENC_V2_SALT_BYTES);
-  const iv = crypto.randomBytes(BACKUP_ENC_V2_IV_BYTES);
-  const key = deriveBackupKeyV2(passphrase, salt);
-
-  try {
-    await new Promise((resolve, reject) => {
-      const input = fs.createReadStream(sqlFilePath);
-      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-      const output = fs.createWriteStream(encPath);
-
-      let settled = false;
-      const fail = (err) => {
-        if (settled) return;
-        settled = true;
-        input.destroy();
-        cipher.destroy();
-        output.destroy();
-        fs.unlink(encPath, () => {});
-        reject(err);
-      };
-
-      input.on('error', fail);
-      cipher.on('error', fail);
-      output.on('error', fail);
-
-      output.write(BACKUP_ENC_MAGIC_V2);
-      output.write(salt);
-      output.write(iv);
-
-      input.pipe(cipher);
-      cipher.on('data', (chunk) => output.write(chunk));
-      cipher.on('end', () => {
-        try {
-          const tag = cipher.getAuthTag();
-          output.end(tag);
-        } catch (err) {
-          fail(err);
-        }
-      });
-
-      output.on('finish', () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      });
-    });
-  } finally {
-    if (Buffer.isBuffer(key)) key.fill(0);
-  }
-
-  fs.unlink(sqlFilePath, () => {});
-  return { file: encPath, encrypted: true };
 }
 
 async function decryptBackupFileToTemp(encryptedFilePath, keyOrPassphrase) {
@@ -2108,28 +2051,19 @@ function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, de
   fs.writeFileSync(scriptPath, `${script}\n`, { mode: 0o755 });
 }
 
-function readGitHubRelease() {
-  return new Promise((resolve, reject) => {
-    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
-    const opts = {
-      headers: {
-        'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}`,
-        'Accept': 'application/vnd.github+json',
-      },
-    };
-    https.get(url, opts, (res) => {
-      let body = '';
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (err) {
-          reject(err);
-        }
-      });
-      res.on('error', reject);
-    }).on('error', reject);
+async function readGitHubRelease() {
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}`,
+      'Accept': 'application/vnd.github+json',
+    },
+    signal: AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
   });
+  // No status check, matching the previous implementation: a non-200 GitHub
+  // error body still parses as JSON and flows into the "no update asset"
+  // handling in the callers.
+  return await res.json();
 }
 
 function pickSourceLauncherZip(release) {
@@ -2143,28 +2077,16 @@ function pickChecksumAsset(release, zipName) {
   return assets.find((a) => (a?.name || '').toLowerCase() === wanted) || null;
 }
 
-function fetchUrlBody(url) {
-  return new Promise((resolve, reject) => {
-    const opts = { headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` } };
-    const handle = (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fetchUrlBody(res.headers.location).then(resolve, reject);
-        res.resume();
-        return;
-      }
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}`));
-        res.resume();
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => resolve(body));
-      res.on('error', reject);
-    };
-    https.get(url, opts, handle).on('error', reject);
+// fetch follows redirects itself (GitHub asset URLs 302 to a CDN).
+async function fetchUrlBody(url) {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
+    signal: AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
   });
+  if (res.status !== 200) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return await res.text();
 }
 
 function computeFileSha256(filePath) {
@@ -2210,25 +2132,16 @@ async function prepareShellUpdateInstaller() {
   fs.mkdirSync(extractDir, { recursive: true });
 
   try {
-    await new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(zipPath);
-      const req = https.get(sourceLauncherAsset.browser_download_url, {
-        headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
-      }, (res) => {
-        if (res.statusCode !== 200) {
-          file.close(() => {});
-          reject(new Error(`Download failed (${res.statusCode})`));
-          return;
-        }
-        res.pipe(file);
-        file.on('finish', () => file.close(resolve));
-      });
-      req.setTimeout(UPDATE_DOWNLOAD_TIMEOUT_MS, () => {
-        req.destroy(new Error('Update download timed out'));
-      });
-      req.on('error', (err) => { file.close(() => {}); reject(err); });
-      file.on('error', (err) => { req.destroy(err); reject(err); });
+    // fetch (unlike the previous bare https.get) follows the 302 GitHub
+    // serves for browser_download_url before handing out the CDN asset.
+    const download = await fetch(sourceLauncherAsset.browser_download_url, {
+      headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
+      signal: AbortSignal.timeout(UPDATE_DOWNLOAD_TIMEOUT_MS),
     });
+    if (download.status !== 200 || !download.body) {
+      throw new Error(`Download failed (${download.status})`);
+    }
+    await pipeline(Readable.fromWeb(download.body), fs.createWriteStream(zipPath));
 
     const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
     if (!checksumAsset?.browser_download_url) {
@@ -2415,21 +2328,6 @@ function setupManualShellUpdater() {
   }, MANUAL_UPDATE_CHECK_DELAY_MS);
 }
 
-// ── Docker image update (called after new Electron version detected) ──────────
-async function applyDockerImageUpdate(cwd, extraFiles = []) {
-  try {
-    notify(t('app.pullingLatestImage'));
-    const wasNew = await pullLatestImage(cwd, extraFiles);
-    if (wasNew) {
-      await restartAppContainer(cwd, extraFiles);
-      await pollHealth().catch(() => {});
-      notify(t('app.imageUpdated'));
-    }
-  } catch (err) {
-    console.warn('Docker image update failed (non-fatal):', err);
-  }
-}
-
 // ── HTTP helpers (main-process API calls) ─────────────────────────────────────
 // Lightweight wrappers around Node's built-in `http` module so the main process
 // can talk to the running backend without importing a heavy fetch polyfill.
@@ -2471,70 +2369,6 @@ function httpPut(url, payload) {
     req.write(data);
     req.end();
   });
-}
-
-// ── Backup helpers ────────────────────────────────────────────────────────────
-// Streams pg_dump output directly from the db container to a file on the host
-// using spawn() + piped stdout — no in-memory buffering, handles any DB size.
-async function runBackup(destDir) {
-  if (!destDir) throw new Error('No backup directory configured');
-
-  let dbUser = 'ftm_user';
-  let dbName = 'financial_transactions';
-  try {
-    const envContents = await fs.promises.readFile(path.join(workDir, '.env'), 'utf8');
-    ({ dbUser, dbName } = parseDatabaseUrlFromEnv(envContents));
-  } catch { /* use defaults */ }
-
-  const deviceId = await getBackupDeviceId();
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-  const filename = `vision_backup_${deviceId}_${timestamp}.sql`;
-  const sqlFile = path.join(destDir, filename);
-
-  await fs.promises.mkdir(destDir, { recursive: true });
-
-  const composeFileArgs = composeArgs(workDir, overrideFiles);
-  const args = [
-    'compose', ...composeFileArgs,
-    'exec', '-T', 'db',
-    'pg_dump', '-U', dbUser, '-d', dbName, '--no-owner', '--no-acl',
-  ];
-
-  await new Promise((resolve, reject) => {
-    const child = spawn('docker', args, { env: dockerEnv, cwd: workDir });
-    const out = fs.createWriteStream(sqlFile);
-
-    child.stdout.pipe(out);
-
-    const stderr = [];
-    child.stderr.on('data', (chunk) => stderr.push(chunk));
-
-    child.on('error', (err) => {
-      out.destroy();
-      fs.unlink(sqlFile, () => {});
-      reject(err);
-    });
-
-    child.on('close', (code) => {
-      if (code === 0) {
-        out.end(() => resolve());
-      } else {
-        out.destroy();
-        fs.unlink(sqlFile, () => {});
-        reject(new Error(Buffer.concat(stderr).toString().trim() || `pg_dump exited with code ${code}`));
-      }
-    });
-  });
-
-  const encryptedResult = await encryptBackupFile(sqlFile);
-  const cleanup = await cleanupOldBackups(destDir, deviceId);
-  return {
-    success: true,
-    file: encryptedResult.file,
-    encrypted: encryptedResult.encrypted,
-    warning: encryptedResult.warning,
-    cleanupRemoved: cleanup.removed,
-  };
 }
 
 // ── Bundle backup/restore helpers ────────────────────────────────────────────
@@ -2954,20 +2788,45 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
   return { success: true, file: bundlePath, frontendState };
 }
 
-// ── IPC: renderer can request a Docker image update ──────────────────────────
-ipcMain.handle('update:pull-image', async () => {
-  if (!workDir) return { success: false, error: 'workDir not set' };
-  try {
-    const wasNew = await pullLatestImage(workDir);
-    if (wasNew) {
-      await restartAppContainer(workDir, overrideFiles);
-      await pollHealth().catch(() => {});
+// ── IPC handler registration ─────────────────────────────────────────────────
+// Wraps ipcMain.handle() with the guard/boilerplate shared by most channels:
+//   • requireMainSender — reject calls that don't originate from the main
+//     window's webContents. `senderFailure` is the exact value returned on
+//     rejection; the shapes differ per channel and are load-bearing for the
+//     renderer bridge (electron.ts), so divergent channels pass their own.
+//   • requireWorkDir — precondition for handlers that shell out to Docker.
+//   • wrapErrors — uniform catch → { success: false, error: String(err) }.
+// Handlers with non-uniform failure shapes (update:check-github,
+// update:pre-update-backup, recovery:open-logs) keep plain ipcMain.handle.
+function registerHandler(channel, fn, {
+  requireMainSender = false,
+  senderFailure = { success: false, error: 'Unauthorized sender' },
+  requireWorkDir = false,
+  wrapErrors = false,
+} = {}) {
+  ipcMain.handle(channel, async (event, ...args) => {
+    if (requireMainSender && (!mainWindow || event.sender !== mainWindow.webContents)) {
+      return senderFailure;
     }
-    return { success: true, wasNew };
-  } catch (err) {
-    return { success: false, error: String(err) };
+    if (requireWorkDir && !workDir) return { success: false, error: 'workDir not set' };
+    if (!wrapErrors) return fn(event, ...args);
+    try {
+      return await fn(event, ...args);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+}
+
+// ── IPC: renderer can request a Docker image update ──────────────────────────
+registerHandler('update:pull-image', async () => {
+  const wasNew = await pullLatestImage(workDir);
+  if (wasNew) {
+    await restartAppContainer(workDir, overrideFiles);
+    await pollHealth().catch(() => {});
   }
-});
+  return { success: true, wasNew };
+}, { requireWorkDir: true, wrapErrors: true });
 
 ipcMain.handle('update:check-github', async () => {
   try {
@@ -2977,16 +2836,12 @@ ipcMain.handle('update:check-github', async () => {
   }
 });
 
-ipcMain.handle('update:install-shell', async () => {
+registerHandler('update:install-shell', async () => {
   if (app.isPackaged && !useRepoMode) {
     return { success: false, error: 'Shell update not available in embedded mode — use Docker image update instead.' };
   }
-  try {
-    return await installPreparedShellUpdate();
-  } catch (err) {
-    return { success: false, error: String(err) };
-  }
-});
+  return await installPreparedShellUpdate();
+}, { wrapErrors: true });
 
 ipcMain.handle('update:get-mode', () => ({
   mode: getUpdateMode(),
@@ -3231,11 +3086,7 @@ ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
   }
 });
 
-ipcMain.handle('backup:restore', async (event, filePath, opts) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
-  if (!workDir) return { success: false, error: 'workDir not set' };
+registerHandler('backup:restore', async (event, filePath, opts) => {
   if (typeof filePath !== 'string' || !filePath) {
     return { success: false, error: 'Invalid restore path' };
   }
@@ -3291,32 +3142,25 @@ ipcMain.handle('backup:restore', async (event, filePath, opts) => {
   } finally {
     startHealthWatchdog();
   }
-});
+}, { requireMainSender: true, requireWorkDir: true });
 
 // ── IPC: backup:run ───────────────────────────────────────────────────────────
 // frontendStateJson is the serialised { keys: { … } } localStorage snapshot,
 // collected by the renderer before invoking this handler.  Optional — when null
 // (e.g. automated backup on quit) the bundle is created without frontend-state.json.
 let backupInFlight = false;
-ipcMain.handle('backup:run', async (event, destDir, frontendStateJson = null) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
-  if (!workDir) return { success: false, error: 'workDir not set' };
+registerHandler('backup:run', async (event, destDir, frontendStateJson = null) => {
   const destError = validateBackupDest(destDir);
   if (destError) return { success: false, error: destError };
   const resolvedDest = path.resolve(destDir);
   if (backupInFlight) return { success: false, error: 'A backup is already in progress' };
   backupInFlight = true;
   try {
-    const result = await runBundleBackup(resolvedDest, frontendStateJson);
-    return result;
-  } catch (err) {
-    return { success: false, error: String(err) };
+    return await runBundleBackup(resolvedDest, frontendStateJson);
   } finally {
     backupInFlight = false;
   }
-});
+}, { requireMainSender: true, requireWorkDir: true, wrapErrors: true });
 
 ipcMain.handle('backup:select-dir', async () => {
   const defaultPath = getDefaultICloudBackupDir() || app.getPath('documents');
@@ -3330,12 +3174,9 @@ ipcMain.handle('backup:select-dir', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('backup:save-settings', async (event, { backupDir, backupOnQuit }) => {
-  // Same sender check as backup:restore — a compromised non-main frame must
-  // not be able to repoint where the quit-time backup writes.
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
+// Sender check matters here like on backup:restore — a compromised non-main
+// frame must not be able to repoint where the quit-time backup writes.
+registerHandler('backup:save-settings', async (event, { backupDir, backupOnQuit }) => {
   // Validate the destination NOW: the quit-time backup (will-quit handler)
   // writes wherever this setting points, with no further checks.
   if (backupDir) {
@@ -3356,7 +3197,7 @@ ipcMain.handle('backup:save-settings', async (event, { backupDir, backupOnQuit }
     console.warn('backup:save-settings: could not persist to DB, kept in local settings.json', err.message);
   }
   return { success: true };
-});
+}, { requireMainSender: true });
 
 ipcMain.handle('backup:get-encryption-status', async () => {
   return { success: true, ...(await getBackupPassphraseStatus()) };
@@ -3390,24 +3231,6 @@ ipcMain.handle('backup:load-settings', async () => {
   }
   const s = resolveBackupSettingsWithDefaults(await loadSettings());
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
-});
-
-// ── Services (keep-running-on-quit) settings ─────────────────────────────────
-// Opt-in toggle: when enabled, quit leaves the Docker containers running so the
-// next launch takes the hot path. Persisted to the Electron settings.json mirror
-// (read by the will-quit handler, which must work even after the backend is
-// down). Same authenticated-sender guard as backup:save-settings.
-ipcMain.handle('services:save-settings', async (event, { keepServicesOnQuit } = {}) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
-  await updateSettings((cur) => { cur.keepServicesOnQuit = !!keepServicesOnQuit; });
-  return { success: true };
-});
-
-ipcMain.handle('services:load-settings', async () => {
-  const s = await loadSettings();
-  return { keepServicesOnQuit: s.keepServicesOnQuit === true };
 });
 
 // ── Recovery (error page) ────────────────────────────────────────────────────
@@ -3459,15 +3282,14 @@ function sendToApp(channel, payload) {
   }
 }
 
-ipcMain.handle('app:renderer-ready', (event) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+registerHandler('app:renderer-ready', () => {
   rendererReady = true;
   while (pendingAppMessages.length > 0) {
     const [channel, payload] = pendingAppMessages.shift();
     mainWindow.webContents.send(channel, payload);
   }
   return { success: true };
-});
+}, { requireMainSender: true, senderFailure: { success: false } });
 
 function menuAction(action, payload) {
   sendToApp('menu:action', { action, payload });
@@ -3656,15 +3478,14 @@ function setupDockMenu() {
 // Dock badge — count of planned payments due, pushed by the renderer (it owns
 // the query + the user's dismissals). Input is clamped server-side so a
 // compromised renderer can at most show a number.
-ipcMain.handle('app:set-badge', (event, count) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+registerHandler('app:set-badge', (event, count) => {
   if (process.platform !== 'darwin' || !app.dock) return { success: false };
   const n = Number(count);
   if (!Number.isFinite(n)) return { success: false };
   const clamped = Math.max(0, Math.min(999, Math.floor(n)));
   app.dock.setBadge(clamped > 0 ? String(clamped) : '');
   return { success: true };
-});
+}, { requireMainSender: true, senderFailure: { success: false } });
 
 // System accent color — RRGGBBAA hex from macOS, or null when unavailable.
 function readSystemAccentColor() {
@@ -3677,16 +3498,14 @@ function readSystemAccentColor() {
   }
 }
 
-ipcMain.handle('app:get-accent-color', (event) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+registerHandler('app:get-accent-color', () => {
   return readSystemAccentColor();
-});
+}, { requireMainSender: true, senderFailure: null });
 
 // Renderer mirrors the active theme's primary colors here so the next boot
 // splash matches the chosen palette (see splashDataUrl / readSplashTheme).
 // Validated on write and again on read — the values land in splash HTML/CSS.
-ipcMain.handle('theme:persist-splash', async (event, colors) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+registerHandler('theme:persist-splash', async (event, colors) => {
   if (!colors || !isValidHslComponents(colors.background) || !isValidHslComponents(colors.foreground)) {
     return { success: false };
   }
@@ -3699,7 +3518,7 @@ ipcMain.handle('theme:persist-splash', async (event, colors) => {
     console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
     return { success: false };
   }
-});
+}, { requireMainSender: true, senderFailure: { success: false } });
 
 function subscribeAccentColorChanges() {
   if (process.platform !== 'darwin') return;
@@ -4202,14 +4021,6 @@ app.on('will-quit', (e) => {
         // graceful shutdown isn't held open waiting on it.
         stopHealthWatchdog();
         try { healthAgent.destroy(); } catch { /* already gone */ }
-        // Opt-in "keep services running on quit": leave the containers up so the
-        // next launch takes the hot path instead of a warm restart. Read from the
-        // local settings.json mirror (the backend may already be shutting down).
-        // compose's `restart: unless-stopped` policy governs reboot behaviour.
-        let keepServices = false;
-        try { keepServices = (await loadSettings()).keepServicesOnQuit === true; }
-        catch { /* default: stop containers */ }
-        if (keepServices) return;
         return stopContainers(workDir, overrideFiles);
       })
       .catch((err) => console.error('docker compose down failed:', err))

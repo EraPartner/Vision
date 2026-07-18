@@ -1,7 +1,36 @@
+import { z } from 'zod';
 import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from '@/lib/api/client';
 import { postMultipartImport } from '@/lib/api/helpers';
+import { importProgressSchema } from '@/lib/api/imports';
 import { readSseStream } from '@/lib/api/sse';
 import type { ImportProgress } from '@/lib/api/types';
+
+/**
+ * Runtime guards for the portfolio import SSE stream (ZOD-10); see the
+ * matching note in imports.ts. Shapes mirror portfolioImportRoutes.js
+ * `buildComplete` / the shared review_required payload.
+ */
+const portfolioImportResultSchema = z.looseObject({
+  batch_id: z.number(),
+  total_processed: z.number().optional(),
+  total: z.number().optional(),
+  skipped: z.number().optional(),
+  imported: z.number(),
+  duplicates: z.number(),
+  errors: z.number(),
+  status: z.string().optional(),
+  requires_review: z.boolean().optional(),
+});
+
+const portfolioReviewRequiredSchema = z.looseObject({
+  batch_id: z.number(),
+});
+
+const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
+  progress: importProgressSchema,
+  complete: portfolioImportResultSchema,
+  review_required: portfolioReviewRequiredSchema,
+};
 
 export type AssetClassValue =
   | 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
@@ -178,7 +207,7 @@ export function importPortfolioCSVWithProgress(
       if (!response.ok) throw await parseEnvelopeError(response, 'Import failed');
 
       let finalResult: PortfolioImportResult | null = null;
-      for await (const { event, data } of readSseStream<unknown>(response)) {
+      for await (const { event, data } of readSseStream<unknown>(response, { schemas: PORTFOLIO_STREAM_SCHEMAS })) {
         if (event === 'progress') {
           onProgress(data as ImportProgress);
           continue;

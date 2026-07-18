@@ -17,9 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ColumnSelect, NONE } from "./ColumnSelect";
+import { MappedColumnField, NONE } from "./ColumnSelect";
 import { PORTFOLIO_COLUMN_FIELDS } from "./portfolioColumnFields";
 import { ASSET_CLASSES } from "@/utils/assetClass";
 import type { PortfolioCustomConfig, PortfolioTxnTypeValue, AssetClassValue } from "@/lib/api/portfolioImports";
@@ -102,27 +101,17 @@ export function PortfolioCsvColumnMapper({ file, separator, config, onChange }: 
       {/* Column mapping */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {PORTFOLIO_COLUMN_FIELDS.map(([key, labelKey, required]) => (
-          hasHeaders ? (
-            <ColumnSelect
-              key={key}
-              id={`pf-${key}`}
-              label={t(labelKey)}
-              value={String(config[key] ?? "")}
-              headers={headers}
-              required={required}
-              onChange={(v) => set(key)(v as never)}
-              noMappingLabel={noMappingLabel}
-            />
-          ) : (
-            <div key={key} className="space-y-2">
-              <Label htmlFor={`pf-${key}`}>{t(labelKey)}{required && " *"}</Label>
-              <Input
-                id={`pf-${key}`}
-                value={String(config[key] ?? "")}
-                onChange={(e) => set(key)(e.target.value as never)}
-              />
-            </div>
-          )
+          <MappedColumnField
+            key={key}
+            id={`pf-${key}`}
+            label={t(labelKey)}
+            value={String(config[key] ?? "")}
+            headers={headers}
+            hasHeaders={hasHeaders}
+            required={required}
+            onChange={(v) => set(key)(v as never)}
+            noMappingLabel={noMappingLabel}
+          />
         ))}
       </div>
 

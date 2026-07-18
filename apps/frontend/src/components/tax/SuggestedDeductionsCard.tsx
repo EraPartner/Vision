@@ -3,24 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useBelgianTaxProfile, getTaxTable } from '@/contexts/BelgianTaxProfileContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { numberFormatToLocale } from '@/utils/currency';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { TaxProfileDialog } from './TaxProfileDialog';
 
 export function SuggestedDeductionsCard() {
     const { profile, calculation } = useBelgianTaxProfile();
     const { t } = useLanguage();
-    const { appSettings } = useAppSettings();
 
-    const locale = numberFormatToLocale(appSettings.numberFormat);
-    function fmt(val: number) {
-        return new Intl.NumberFormat(locale, {
-            style: 'currency',
-            currency: appSettings.defaultCurrency || 'EUR',
-            minimumFractionDigits: appSettings.showDecimalPlaces,
-            maximumFractionDigits: appSettings.showDecimalPlaces,
-        }).format(val);
-    }
+    // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+    const fmt = useCurrencyFormatter();
 
     const suggestions = useMemo(() => {
         const items: Array<{ id: string; title: string; desc: string; estimate?: number; note?: string }> = [];

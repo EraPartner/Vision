@@ -8,14 +8,15 @@ import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { AssetClass } from '@/types/portfolio';
 import { ASSET_CLASS_LABELS, getAssetClassLabel } from '@/types/portfolio';
-import type { PriceProvider } from '@/types/api';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { AssetTypeSelector } from './AssetTypeSelector';
+import { defaultProviderFor } from './defaultProviderFor';
 import { InvestmentFormFields } from './InvestmentFormFields';
 import type { InvestmentForm } from './InvestmentFormFields';
 import { PRICE_PROVIDERS } from './PriceProviderFields';
+import { priceProviderPayload } from './priceProviderPayload';
 import { todayYmd } from '@/lib/timezone';
 
 type Props = {
@@ -128,15 +129,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
           cadastral_income: form.cadastralIncome ? parseDecimal(form.cadastralIncome) : undefined,
           municipality_tax_rate: form.municipalityTaxRate ? parseDecimal(form.municipalityTaxRate) : undefined,
           notes: form.notes.trim() || undefined,
-          price_provider: form.priceProvider,
-          price_provider_id: form.priceProviderId.trim() || undefined,
-          price_provider_url: form.priceProviderUrl.trim() || undefined,
-          price_provider_latest_url: form.priceProviderLatestUrl.trim() || undefined,
-          price_provider_latest_path: form.priceProviderLatestPath.trim() || undefined,
-          price_provider_history_url: form.priceProviderHistoryUrl.trim() || undefined,
-          price_provider_history_path: form.priceProviderHistoryPath.trim() || undefined,
-          price_provider_history_ts_path: form.priceProviderHistoryTsPath.trim() || undefined,
-          price_provider_history_price_path: form.priceProviderHistoryPricePath.trim() || undefined,
+          ...priceProviderPayload(form),
           });
         if (!investment) return;
         investmentId = investment.id;
@@ -179,8 +172,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         reset();
         if (allowedAssetClasses && allowedAssetClasses.length === 1) {
           const key = allowedAssetClasses[0];
-          const defaultProvider = key === 'crypto' ? 'binance' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
-          setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
+          setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProviderFor(key) }));
           setStep('details');
         } else {
           setStep('type');

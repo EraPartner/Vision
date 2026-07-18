@@ -13,11 +13,6 @@
 
 services:
   db:
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "3"
     volumes:
       - postgres_data_clean:/var/lib/postgresql
 
@@ -25,11 +20,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "3"
 
 volumes:
   # Isolated volume for clean-slate testing. Never shares data with dev or prod.

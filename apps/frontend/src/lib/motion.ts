@@ -6,7 +6,7 @@
  * All consumers honor `prefers-reduced-motion` via useReducedMotion().
  */
 
-import type { Transition, Variants } from "framer-motion";
+import type { Transition } from "framer-motion";
 
 // ---------- Easings ----------
 
@@ -54,70 +54,3 @@ export const springs = {
         mass: 0.85,
     },
 } satisfies Record<string, Transition>;
-
-// ---------- Shared variants ----------
-
-export const fadeUp: Variants = {
-    hidden: { opacity: 0, y: 12 },
-    visible: {
-        opacity: 1,
-        y: 0,
-        transition: { duration: durations.normal, ease: easings.outExpo },
-    },
-};
-
-export const fadeIn: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: { duration: durations.normal, ease: easings.outExpo },
-    },
-};
-
-export const scaleIn: Variants = {
-    hidden: { opacity: 0, scale: 0.96 },
-    visible: {
-        opacity: 1,
-        scale: 1,
-        transition: springs.snappy,
-    },
-};
-
-export const dialogVariants: Variants = {
-    hidden: { opacity: 0, scale: 0.94, y: 14 },
-    visible: {
-        opacity: 1,
-        scale: 1,
-        y: 0,
-        transition: springs.dialog,
-    },
-    exit: {
-        opacity: 0,
-        scale: 0.96,
-        y: 6,
-        transition: { duration: durations.fast, ease: easings.outQuint },
-    },
-};
-
-// ---------- Stagger containers ----------
-
-export const staggerContainer = (stagger = 0.06, delay = 0): Variants => ({
-    hidden: {},
-    visible: {
-        transition: {
-            staggerChildren: stagger,
-            delayChildren: delay,
-        },
-    },
-});
-
-// ---------- Hover / press micro-interactions ----------
-
-export const microLift = {
-    whileHover: { y: -2, transition: { duration: durations.fast, ease: easings.outExpo } },
-    whileTap: { y: 0, scale: 0.985, transition: { duration: durations.fast } },
-} as const;
-
-export const pressFeedback = {
-    whileTap: { scale: 0.97, transition: { duration: durations.fast } },
-} as const;

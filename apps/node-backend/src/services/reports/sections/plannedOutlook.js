@@ -9,6 +9,7 @@ import {
   escapeHtml,
   fmtCurrency,
   fmtDate,
+  kpiGrid,
   signClass,
 } from '../sectionHelpers.js';
 
@@ -39,22 +40,11 @@ export function renderPlannedOutlook(data, { currency }) {
 
   // Summary KPIs
   const netSc = signClass(summary?.net_amount ?? 0);
-  const kpiHtml = `
-    <div class="kpi-grid kpi-grid-3" style="margin-bottom:24px">
-      <div class="kpi-card">
-        <div class="kpi-label">Expected Income</div>
-        <div class="kpi-value pos">${escapeHtml(fmtCurrency(summary?.total_income ?? 0, currency))}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Expected Expenses</div>
-        <div class="kpi-value neg">${escapeHtml(fmtCurrency(Math.abs(summary?.total_expenses ?? 0), currency))}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Net</div>
-        <div class="kpi-value ${netSc}">${escapeHtml(fmtCurrency(summary?.net_amount ?? 0, currency))}</div>
-        <div class="kpi-sub">${summary?.transaction_count ?? 0} planned txns</div>
-      </div>
-    </div>`;
+  const kpiHtml = kpiGrid([
+    { label: 'Expected Income', value: fmtCurrency(summary?.total_income ?? 0, currency), cls: 'pos' },
+    { label: 'Expected Expenses', value: fmtCurrency(Math.abs(summary?.total_expenses ?? 0), currency), cls: 'neg' },
+    { label: 'Net', value: fmtCurrency(summary?.net_amount ?? 0, currency), cls: netSc, sub: `${summary?.transaction_count ?? 0} planned txns` },
+  ], { cols: 3, style: 'margin-bottom:24px' });
 
   // Daily groups
   const days = daily_data.slice(0, MAX_DAYS);

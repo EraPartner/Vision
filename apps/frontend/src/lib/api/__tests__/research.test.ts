@@ -4,7 +4,6 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import {
   searchResearch,
-  getResearchQuote,
   getResearchChart,
   resolveResearchMappings,
 } from "@/lib/api/research";
@@ -47,27 +46,14 @@ describe("research API client", () => {
     expect(result.meta.provider).toBeNull();
   });
 
-  it("returns null data for an unavailable quote", async () => {
-    server.use(
-      http.get(`${API_BASE}/api/research/quote`, () =>
-        research(null, { provider: null, source: "unavailable" }),
-      ),
-    );
-
-    const result = await getResearchQuote("XYZ");
-
-    expect(result.data).toBeNull();
-    expect(result.meta.source).toBe("unavailable");
-  });
-
   it("normalizes a missing meta to source='unavailable'", async () => {
     server.use(
-      http.get(`${API_BASE}/api/research/quote`, () =>
-        HttpResponse.json({ ok: true, data: null }),
+      http.get(`${API_BASE}/api/research/search`, () =>
+        HttpResponse.json({ ok: true, data: { items: [] } }),
       ),
     );
 
-    const result = await getResearchQuote("XYZ");
+    const result = await searchResearch("XYZ");
 
     expect(result.meta.source).toBe("unavailable");
     expect(result.meta.provider).toBeNull();

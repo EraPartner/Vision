@@ -1,5 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {registerUndo} from '@/lib/undo';
+import { downloadBlob } from '@/lib/downloadBlob';
 import {apiClient} from '@/lib/api';
 import type {
     BulkExportRequest,
@@ -291,7 +292,7 @@ export function useBulkExportTransactions() {
             const ext = request.format === 'csv' ? 'csv' : 'ndjson';
             const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             const filename = `transactions_export_${stamp}.${ext}`;
-            triggerBlobDownload(blob, filename);
+            downloadBlob(blob, filename);
             toast.success(t('txPage.bulk.exported'));
         },
         onError: (error: Error) => {
@@ -300,13 +301,4 @@ export function useBulkExportTransactions() {
     });
 }
 
-function triggerBlobDownload(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-}
+

@@ -2,8 +2,7 @@ import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { apiClient } from "@/lib/api";
 import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
@@ -78,8 +77,7 @@ const METRIC_GROUPS: { titleKey: string; metrics: MetricDescriptor[] }[] = [
 
 export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamentalsTabProps) {
   const { t } = useLanguage();
-  const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const fmtCurrency = useCurrencyFormatter();
 
   const { data: result, isFetching } = useQuery({
     queryKey: ["research-scorecard", symbol],
@@ -96,9 +94,8 @@ export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamental
   const fmtRatio = useCallback((val: number | null | undefined) =>
     val == null || isNaN(val) ? "—" : val.toFixed(2), []);
   const fmtPrice = useCallback((val: number | null | undefined) =>
-    val == null || isNaN(val) ? "—" : new Intl.NumberFormat(locale, {
-      style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
-    }).format(val), [locale, currency]);
+    // Shared cached currency formatter; fundamentals pin 2 decimals (unchanged).
+    val == null || isNaN(val) ? "—" : fmtCurrency(val, currency, 2), [fmtCurrency, currency]);
 
   const fmt = (format: MetricFormat, val: number | null | undefined) => {
     if (format === "pct") return fmtPct(val);

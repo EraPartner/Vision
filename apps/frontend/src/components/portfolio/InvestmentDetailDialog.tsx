@@ -21,6 +21,7 @@ import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import { EditPortfolioTxnDialog } from './EditPortfolioTxnDialog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { numberFormatToLocale } from '@/utils/currency';
 import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
 import type { InvestmentSummary, PortfolioTxnType } from '@/types/portfolio';
@@ -42,23 +43,11 @@ interface Props {
   onEditTransaction?: (txn: TxnRow, investment: InvestmentSummary) => void;
 }
 
-// Module-level formatter caches. The transactions tab calls fmt/fmtNum several
-// times per row and re-renders the whole (unbounded) list on any dialog-level
-// state change, so constructing a fresh Intl.NumberFormat per call (~50-200µs
-// each) was pure waste. Cached by locale+currency+decimals — identical output.
-const currencyFmtCache = new Map<string, Intl.NumberFormat>();
-function getCurrencyFmt(locale: string, currency: string, decimals: number): Intl.NumberFormat {
-  const key = `${locale}:${currency}:${decimals}`;
-  let f = currencyFmtCache.get(key);
-  if (!f) {
-    f = new Intl.NumberFormat(locale, {
-      style: 'currency', currency,
-      minimumFractionDigits: decimals, maximumFractionDigits: decimals,
-    });
-    currencyFmtCache.set(key, f);
-  }
-  return f;
-}
+// Module-level plain-number formatter cache. The transactions tab calls fmtNum
+// several times per row and re-renders the whole (unbounded) list on any
+// dialog-level state change, so constructing a fresh Intl.NumberFormat per call
+// (~50-200µs each) was pure waste. Currency formatting comes from the shared
+// useCurrencyFormatter hook, which carries its own per-key cache (SIMP-67).
 const numberFmtCache = new Map<string, Intl.NumberFormat>();
 function getNumberFmt(locale: string, decimals: number): Intl.NumberFormat {
   const key = `${locale}:${decimals}`;
@@ -96,14 +85,9 @@ export function InvestmentDetailDialog({
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-
-  function fmt(
-    val: number,
-    currency = appSettings.defaultCurrency || 'EUR',
-    decimals = appSettings.showDecimalPlaces
-  ) {
-    return getCurrencyFmt(locale, currency, decimals).format(val);
-  }
+  // Shared cached currency formatter: fmt(val, currency?, decimals?) with the
+  // same defaults (app default currency, showDecimalPlaces) as the old local copy.
+  const fmt = useCurrencyFormatter();
 
   function fmtNum(val: number, decimals = 2) {
     return getNumberFmt(locale, decimals).format(val);
@@ -139,6 +123,16 @@ export function InvestmentDetailDialog({
 
   // Per-account positioning (ADR-091): where this holding is custodied. Only
   // shown once an account is actually involved (a lone unassigned group is noise).
+  // The same add-transaction control appears in three spots (overview footer,
+  // empty-transactions CTA, transactions footer) — build it once.
+  const addTransactionControl = onAddTransaction ? (
+    <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
+      {t('portfolio.addTransaction')}
+    </Button>
+  ) : (
+    <AddPortfolioTxnDialog investment={investment} />
+  );
+
   const accountPositions = useAccountPositions(investment);
   const showAccountBreakdown =
     isPerAccountHoldingsEnabled && (
@@ -518,13 +512,7 @@ export function InvestmentDetailDialog({
               )}
               
               <div className="flex justify-end">
-                {onAddTransaction ? (
-                  <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
-                    {t('portfolio.addTransaction')}
-                  </Button>
-                ) : (
-                  <AddPortfolioTxnDialog investment={investment} />
-                )}
+                {addTransactionControl}
               </div>
             </TabsContent>
 
@@ -533,13 +521,7 @@ export function InvestmentDetailDialog({
                 <div className="text-center py-8 text-muted-foreground">
                    <p>{t('invDetail.noTransactions')}</p>
                   <div className="mt-4">
-                    {onAddTransaction ? (
-                      <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
-                        {t('portfolio.addTransaction')}
-                      </Button>
-                    ) : (
-                      <AddPortfolioTxnDialog investment={investment} />
-                    )}
+                    {addTransactionControl}
                   </div>
                 </div>
               ) : (
@@ -638,13 +620,7 @@ export function InvestmentDetailDialog({
               
               {investment.transactions.length > 0 && (
                 <div className="flex justify-end mt-4 pt-4 border-t border-border">
-                  {onAddTransaction ? (
-                    <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
-                      {t('portfolio.addTransaction')}
-                    </Button>
-                  ) : (
-                    <AddPortfolioTxnDialog investment={investment} />
-                  )}
+                  {addTransactionControl}
                 </div>
               )}
             </TabsContent>

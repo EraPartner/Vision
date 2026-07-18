@@ -63,10 +63,6 @@ services:
       SERVER_HOST: "0.0.0.0"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
       APP_VERSION: ${APP_IMAGE_TAG:-latest}
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_USER: ftm_user
-      DB_NAME: financial_transactions
     volumes:
       - attachments_data:/app/data/attachments
       - vision_cache_data:/app/.vision-cache

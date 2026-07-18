@@ -2,7 +2,7 @@
   "name": "@vision/shared-utils",
   "private": true,
   "version": "0.1.0",
-  "description": "Pure utility helpers (money, slugify, downsample) shared by the Vision backend and frontend to avoid hand-mirrored drift.",
+  "description": "Pure utility helpers (money, slugify, portfolio) shared by the Vision backend and frontend to avoid hand-mirrored drift.",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -29,10 +29,6 @@
     "./slugify": {
       "types": "./src/slugify.d.ts",
       "default": "./src/slugify.js"
-    },
-    "./downsample": {
-      "types": "./src/downsample.d.ts",
-      "default": "./src/downsample.js"
     }
   },
   "types": "./src/index.d.ts",

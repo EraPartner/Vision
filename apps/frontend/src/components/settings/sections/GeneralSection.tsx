@@ -1,16 +1,10 @@
 import { memo } from 'react';
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
-
-const CURRENCIES = [
-    'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK',
-    'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'HRK', 'TRY', 'SAR', 'AED', 'INR',
-    'BRL', 'MXN', 'ZAR', 'SGD', 'HKD', 'NZD', 'KRW', 'THB', 'MYR', 'PHP',
-];
+import {
+    SettingsSection, SettingsGroup, SelectSettingRow, type SelectRowConfig,
+} from '../SettingsPrimitives';
+import { SUPPORTED_CURRENCIES as CURRENCIES } from '@/utils/currency';
 
 const DATE_FORMATS = [
     { value: 'DD/MM/YYYY', labelKey: 'settings.dateFormat.ddmmyyyy' },
@@ -26,29 +20,6 @@ const NUMBER_FORMATS = [
     { value: 'ch', labelKey: 'settings.numberFormat.ch' },
     { value: 'in', labelKey: 'settings.numberFormat.in' },
 ];
-
-interface SelectRowConfig {
-    title: string;
-    description?: string;
-    value: string;
-    onValueChange: (v: string) => void;
-    options: { value: string; label: string }[];
-}
-
-// One SettingRow→Select block; the seven rows here were identical apart from
-// their title/value/options/change handler, now expressed as config.
-function SelectSettingRow({ title, description, value, onValueChange, options }: SelectRowConfig) {
-    return (
-        <SettingRow title={title} description={description} layout="stack">
-            <Select value={value} onValueChange={onValueChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                    {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-            </Select>
-        </SettingRow>
-    );
-}
 
 export const GeneralSection = memo(function GeneralSection() {
     const { t } = useLanguage();

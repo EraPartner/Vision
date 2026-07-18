@@ -13,6 +13,7 @@
 
 import { query } from '../database/connection.js';
 import { normalizeForMatching } from '../services/textNormalization.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // Allowed sort columns for recipients (maps frontend key -> SQL expression)
 const RECIPIENT_SORT_COLUMNS = {
@@ -213,20 +214,17 @@ export const recipientRepository = {
    * @param {{ name?: any, default_category_id?: any, notes?: any, is_active?: any }} fields
    */
   async update(id, { name, default_category_id, notes, is_active }) {
-    const setClauses = [];
-    const params = [];
-    let paramIdx = 1;
-
-    if (name !== undefined && name !== null) {
-      const upperName = name.toUpperCase().trim();
-      setClauses.push(`name = $${paramIdx++}`);
-      params.push(upperName);
-      setClauses.push(`normalized_name = $${paramIdx++}`);
-      params.push(normalizeForMatching(name));
-    }
-    if (default_category_id !== undefined) { setClauses.push(`default_category_id = $${paramIdx++}`); params.push(default_category_id); }
-    if (notes !== undefined) { setClauses.push(`notes = $${paramIdx++}`); params.push(notes); }
-    if (is_active !== undefined && is_active !== null) { setClauses.push(`is_active = $${paramIdx++}`); params.push(is_active); }
+    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    // A name write always updates the derived normalized_name alongside it;
+    // null name / is_active mean "leave unchanged" (pre-mapped to undefined).
+    const hasName = name !== undefined && name !== null;
+    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses({
+      name: hasName ? name.toUpperCase().trim() : undefined,
+      normalized_name: hasName ? normalizeForMatching(name) : undefined,
+      default_category_id,
+      notes,
+      is_active: is_active ?? undefined,
+    });
 
     if (setClauses.length === 0) return this.getById(id);
 

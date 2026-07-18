@@ -8,6 +8,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
 import { walkForwardBacktestRolling } from '../../src/services/calculations/forecast/backtest.js';
 import mcRollingCacheRepo from '../../src/repositories/cashflowForecastMcRollingRepository.js';
 import { infoRepository } from '../../src/repositories/infoRepository.js';
@@ -73,7 +74,7 @@ vi.mock('../../src/repositories/cashflowForecastMcRepository.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 // ─── walkForwardBacktestRolling unit tests ────────────────────────────────────

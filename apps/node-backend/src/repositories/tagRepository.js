@@ -6,6 +6,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 export const tagRepository = {
   /**
@@ -98,12 +99,12 @@ export const tagRepository = {
    * Slug is immutable.
    */
   async update(id, { color, is_active }) {
-    const setClauses = [];
-    const params = [];
-    let idx = 1;
-
-    if (color !== undefined) { setClauses.push(`color = $${idx++}`); params.push(color); }
-    if (is_active !== undefined && is_active !== null) { setClauses.push(`is_active = $${idx++}`); params.push(is_active); }
+    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped;
+    // null is_active means "leave unchanged" (pre-mapped to undefined).
+    const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses({
+      color,
+      is_active: is_active ?? undefined,
+    });
 
     if (setClauses.length === 0) return this.getById(id);
 

@@ -5,8 +5,10 @@
  * data-access layer directly (vision-local/no-repo-direct-from-route, ADR-067).
  */
 
+import { z } from 'zod';
 import accountRepository from '../repositories/accountRepository.js';
 import { NotFoundError, ValidationError, ConflictError } from '../middleware/errorHandler.js';
+import { assertCurrency, validateNumber } from '../middleware/validation.js';
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
 export const ACCOUNT_TYPES = ['checking', 'savings', 'brokerage', 'crypto_exchange', 'wallet', 'pension', 'liability'];
@@ -14,102 +16,126 @@ export const LIQUIDITY_CLASSES = ['liquid', 'semi_liquid', 'illiquid'];
 export const TAX_WRAPPERS = ['none', 'pension', 'tax_advantaged'];
 export const ACCOUNT_OWNERS = ['me', 'partner', 'joint'];
 
-const BOOLEAN_FIELDS = ['spendable', 'in_net_worth', 'multi_currency_cash', 'has_cash_sleeve', 'is_active'];
 // Matches the 12-integer-digit ceiling of the money columns (NUMERIC(18,6)).
 const MAX_STATEMENT_BALANCE = 1e12;
-const ENUM_FIELDS = {
-  type: ACCOUNT_TYPES,
-  liquidity_class: LIQUIDITY_CLASSES,
-  tax_wrapper: TAX_WRAPPERS,
-  owner: ACCOUNT_OWNERS,
-};
+
+/* ── Zod schemas ───────────────────────────────────────────────────────────
+ * Payloads are validated with zod (schema → safeParse → ValidationError), the
+ * idiom established in settings.js/reports.js. The schemas are STRICT-strip:
+ * unknown body fields are dropped (allowlist semantics — closed_at stays
+ * server-stamped), explicit null survives to the repository as SQL NULL
+ * (PATCH-to-clear), and absent keys stay absent so the repository SET builder
+ * skips them. */
+
+// An account label must be a non-empty string; stored trimmed.
+const nameField = z.string({ error: 'name is required and must be a non-empty string' })
+  .refine((s) => s.trim().length > 0, 'name is required and must be a non-empty string')
+  .transform((s) => s.trim());
+
+// Clearable free-text: null clears, strings are trimmed, anything else rejects.
+const clearableStringField = (key) => z.string({ error: `${key} must be a string` })
+  .nullable()
+  .transform((value) => (value === null ? null : value.trim()))
+  .optional();
+
+// Shared ISO-4217 guard; null/'' still reject here (an explicit currency key
+// must carry a real code), matching the old inline regex.
+const currencyField = z.unknown().transform((value, ctx) => {
+  let code;
+  try {
+    code = assertCurrency(value);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+  if (code === undefined) {
+    ctx.addIssue({ code: 'custom', message: 'currency must be a 3-letter ISO code' });
+    return z.NEVER;
+  }
+  return code;
+}).optional();
+
+const enumField = (key, allowed) =>
+  z.enum(allowed, { error: `${key} must be one of: ${allowed.join(', ')}` }).optional();
+
+const boolField = (key) => z.boolean({ error: `${key} must be a boolean` }).optional();
+
+// FK reference: null clears; otherwise Number() coercion + positive-integer
+// check (the async existence check runs after parsing, see
+// assertFundingAccountValid).
+const fundingAccountIdField = z.unknown().transform((value, ctx) => {
+  if (value === null) return null;
+  const fid = Number(value);
+  if (!Number.isInteger(fid) || fid <= 0) {
+    ctx.addIssue({ code: 'custom', message: 'funding_account_id must be a positive integer' });
+    return z.NEVER;
+  }
+  return fid;
+}).optional();
+
+// Statement balance: null clears; otherwise Number() coercion bounded like the
+// money columns (NUMERIC 12-integer-digit ceiling) via the shared guard — an
+// unbounded 1e15 / JSON "Infinity" otherwise slid past a finite check and
+// 500'd at the DB. Balances can be negative (liability), so bound the magnitude.
+const statementBalanceField = z.unknown().transform((value, ctx) => {
+  if (value === null) return null;
+  const result = validateNumber(value, {
+    min: -MAX_STATEMENT_BALANCE, max: MAX_STATEMENT_BALANCE, fieldName: 'statement_balance',
+  });
+  if (!result.valid) {
+    ctx.addIssue({ code: 'custom', message: result.error });
+    return z.NEVER;
+  }
+  return result.value;
+}).optional();
+
+// Strict YYYY-MM-DD shape (String() coercion first, as before); null clears.
+const statementBalanceDateField = z.unknown().transform((value, ctx) => {
+  if (value === null) return null;
+  const d = String(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    ctx.addIssue({ code: 'custom', message: 'statement_balance_date must be an ISO date (YYYY-MM-DD)' });
+    return z.NEVER;
+  }
+  return d;
+}).optional();
+
+// Update: every field optional. Create: same rules, name required.
+const accountUpdateSchema = z.object({
+  name: nameField.optional(),
+  display_name: clearableStringField('display_name'),
+  institution: clearableStringField('institution'),
+  currency: currencyField,
+  type: enumField('type', ACCOUNT_TYPES),
+  liquidity_class: enumField('liquidity_class', LIQUIDITY_CLASSES),
+  tax_wrapper: enumField('tax_wrapper', TAX_WRAPPERS),
+  owner: enumField('owner', ACCOUNT_OWNERS),
+  spendable: boolField('spendable'),
+  in_net_worth: boolField('in_net_worth'),
+  multi_currency_cash: boolField('multi_currency_cash'),
+  has_cash_sleeve: boolField('has_cash_sleeve'),
+  is_active: boolField('is_active'),
+  funding_account_id: fundingAccountIdField,
+  statement_balance: statementBalanceField,
+  statement_balance_date: statementBalanceDateField,
+});
+
+const accountCreateSchema = accountUpdateSchema.extend({ name: nameField });
 
 /**
  * Validate + normalize an account payload. On create, name is required; on
  * update every field is optional. Returns only the fields that were provided.
  */
 function sanitize(body, { requireName }) {
-  const out = {};
-
-  if (body.name !== undefined || requireName) {
-    if (typeof body.name !== 'string' || !body.name.trim()) {
-      throw new ValidationError('name is required and must be a non-empty string');
-    }
-    out.name = body.name.trim();
+  const schema = requireName ? accountCreateSchema : accountUpdateSchema;
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
   }
-
-  // Explicit null means "clear this field" and must survive to the repository
-  // as SQL NULL — mapping it to undefined made PATCH-to-clear a silent no-op
-  // (the repository skips undefined when building SET).
-  for (const key of ['display_name', 'institution']) {
-    if (body[key] !== undefined) {
-      if (body[key] !== null && typeof body[key] !== 'string') {
-        throw new ValidationError(`${key} must be a string`);
-      }
-      out[key] = body[key] === null ? null : body[key].trim();
-    }
-  }
-
-  if (body.currency !== undefined) {
-    const c = String(body.currency).toUpperCase();
-    if (!/^[A-Z]{3}$/.test(c)) throw new ValidationError('currency must be a 3-letter ISO code');
-    out.currency = c;
-  }
-
-  for (const [key, allowed] of Object.entries(ENUM_FIELDS)) {
-    if (body[key] !== undefined) {
-      if (!allowed.includes(body[key])) {
-        throw new ValidationError(`${key} must be one of: ${allowed.join(', ')}`);
-      }
-      out[key] = body[key];
-    }
-  }
-
-  for (const key of BOOLEAN_FIELDS) {
-    if (body[key] !== undefined) {
-      if (typeof body[key] !== 'boolean') throw new ValidationError(`${key} must be a boolean`);
-      out[key] = body[key];
-    }
-  }
-
-  if (body.funding_account_id !== undefined) {
-    if (body.funding_account_id === null) {
-      out.funding_account_id = null;
-    } else {
-      const fid = Number(body.funding_account_id);
-      if (!Number.isInteger(fid) || fid <= 0) throw new ValidationError('funding_account_id must be a positive integer');
-      out.funding_account_id = fid;
-    }
-  }
-
-  if (body.statement_balance !== undefined) {
-    if (body.statement_balance === null) {
-      out.statement_balance = null;
-    } else {
-      const bal = Number(body.statement_balance);
-      if (!Number.isFinite(bal)) throw new ValidationError('statement_balance must be a number');
-      // Bound it like the money columns (NUMERIC 12-integer-digit ceiling): an
-      // unbounded 1e15 / JSON "Infinity" otherwise slid past the finite check
-      // and 500'd at the DB. Balances can be negative (liability), so bound the
-      // magnitude.
-      if (Math.abs(bal) > MAX_STATEMENT_BALANCE) {
-        throw new ValidationError(`statement_balance must be between -${MAX_STATEMENT_BALANCE} and ${MAX_STATEMENT_BALANCE}`);
-      }
-      out.statement_balance = bal;
-    }
-  }
-
-  if (body.statement_balance_date !== undefined) {
-    if (body.statement_balance_date === null) {
-      out.statement_balance_date = null;
-    } else {
-      const d = String(body.statement_balance_date);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new ValidationError('statement_balance_date must be an ISO date (YYYY-MM-DD)');
-      out.statement_balance_date = d;
-    }
-  }
-
-  return out;
+  return result.data;
 }
 
 /**
@@ -170,7 +196,11 @@ export const accountService = {
   },
 
   async update(id, body) {
-    const fields = sanitize(body, { requireName: false });
+    // Widened for closed_at: server-stamped below by the lifecycle logic (D5),
+    // never part of the parsed payload.
+    const fields = /** @type {ReturnType<typeof sanitize> & { closed_at?: Date | null }} */ (
+      sanitize(body, { requireName: false })
+    );
     await assertFundingAccountValid(fields.funding_account_id, id);
     const touchesStatement = 'statement_balance' in fields || 'statement_balance_date' in fields;
     let current;

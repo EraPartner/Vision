@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -181,13 +181,7 @@ export default function ProviderHealthPage() {
                         </TableHeader>
                         <TableBody>
                             {isLoading ? (
-                                Array.from({ length: 7 }).map((_, i) => (
-                                    <TableRow key={`skeleton-row-${i}`}>
-                                        {Array.from({ length: 6 }).map((__, j) => (
-                                            <TableCell key={`skeleton-cell-${i}-${j}`}><Skeleton className="h-4 w-full" /></TableCell>
-                                        ))}
-                                    </TableRow>
-                                ))
+                                <TableSkeletonRows rows={7} cols={6} />
                             ) : (
                                 providers?.map((p) => (
                                     <ProviderRow

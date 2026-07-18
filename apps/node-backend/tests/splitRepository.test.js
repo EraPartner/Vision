@@ -1,14 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockConnection } from './helpers/repoMocks.js';
 // Owed-detail / owed-export used to LEFT JOIN a whole-table
 // `SELECT split_id, SUM(amount) ... GROUP BY split_id` aggregate of
 // split_payments on every call. These tests pin the rewrite to a per-split
 // LATERAL aggregate (only the relevant rows) while preserving numeric output.
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  withTransaction: vi.fn(),
-}));
+vi.mock('../src/database/connection.js', () => mockConnection());
 
 import { query } from '../src/database/connection.js';
 import splitRepository from '../src/repositories/splitRepository.js';

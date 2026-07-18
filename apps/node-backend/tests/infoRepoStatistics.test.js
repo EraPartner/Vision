@@ -137,7 +137,7 @@ describe('statisticsRepository.getCategoryPivot', () => {
     convertRowsToEur.mockResolvedValueOnce([]);
     await statisticsRepository.getCategoryPivot([1, 2], 'EUR', [9]);
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('NOT IN ($1,$2)');
+    expect(sql).toContain('NOT IN ($1, $2)');
     expect(sql).toContain('NOT IN ($3)');
     expect(params).toEqual([1, 2, 9]);
     // Canonical semantics: 3-level category COALESCE + alias-aware recipient

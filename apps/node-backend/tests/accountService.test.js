@@ -223,6 +223,116 @@ describe('accountService.update', () => {
   });
 });
 
+// Pins for the zod swap (ZOD-05): exact boundaries, coercions, and the strip
+// semantics of sanitize() must survive byte-identical.
+describe('accountService — sanitize pins (create)', () => {
+  it('accepts a statement_balance exactly at the +/- money-column ceiling', async () => {
+    accountRepository.create.mockResolvedValue({ id: 1 });
+    await accountService.create({ name: 'A', statement_balance: 1e12, statement_balance_date: '2026-07-01' });
+    await accountService.create({ name: 'B', statement_balance: -1e12, statement_balance_date: '2026-07-01' });
+    expect(accountRepository.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a statement_balance just past the ceiling (either sign)', async () => {
+    await expect(accountService.create({
+      name: 'A', statement_balance: 1e12 + 1, statement_balance_date: '2026-07-01',
+    })).rejects.toThrow(ValidationError);
+    await expect(accountService.create({
+      name: 'A', statement_balance: -(1e12 + 1), statement_balance_date: '2026-07-01',
+    })).rejects.toThrow(ValidationError);
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('coerces a numeric-string statement_balance via Number()', async () => {
+    accountRepository.create.mockResolvedValueOnce({ id: 1 });
+    await accountService.create({
+      name: 'A', statement_balance: '123.45', statement_balance_date: '2026-07-01',
+    });
+    expect(accountRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ statement_balance: 123.45 }),
+    );
+  });
+
+  it('rejects malformed statement_balance_date shapes (strict YYYY-MM-DD)', async () => {
+    for (const bad of ['2026-7-01', '01-07-2026', 20260701, 'banana']) {
+      await expect(accountService.create({
+        name: 'A', statement_balance: 1, statement_balance_date: bad,
+      })).rejects.toThrow(ValidationError);
+    }
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('coerces a numeric-string funding_account_id and rejects zero/fractional ids', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 7 });
+    accountRepository.create.mockResolvedValueOnce({ id: 1 });
+    await accountService.create({ name: 'A', funding_account_id: '7' });
+    expect(accountRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ funding_account_id: 7 }),
+    );
+    await expect(accountService.create({ name: 'A', funding_account_id: 0 }))
+      .rejects.toThrow(ValidationError);
+    await expect(accountService.create({ name: 'A', funding_account_id: 1.5 }))
+      .rejects.toThrow(ValidationError);
+  });
+
+  it('rejects non-string and whitespace-only names', async () => {
+    await expect(accountService.create({ name: 123 })).rejects.toThrow(ValidationError);
+    await expect(accountService.create({ name: '   ' })).rejects.toThrow(ValidationError);
+  });
+
+  it('rejects a non-string display_name / institution and trims string ones', async () => {
+    await expect(accountService.create({ name: 'A', display_name: 42 })).rejects.toThrow(ValidationError);
+    await expect(accountService.create({ name: 'A', institution: {} })).rejects.toThrow(ValidationError);
+    accountRepository.create.mockResolvedValueOnce({ id: 1 });
+    await accountService.create({ name: 'A', display_name: '  Main  ', institution: ' KBC ' });
+    expect(accountRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ display_name: 'Main', institution: 'KBC' }),
+    );
+  });
+
+  it('rejects an explicit null/empty currency (an explicit key must carry a real code)', async () => {
+    await expect(accountService.create({ name: 'A', currency: null })).rejects.toThrow(ValidationError);
+    await expect(accountService.create({ name: 'A', currency: '' })).rejects.toThrow(ValidationError);
+  });
+
+  it('rejects unknown enum values for every enum field', async () => {
+    for (const [key, bad] of [
+      ['liquidity_class', 'frozen'], ['tax_wrapper', 'offshore'], ['owner', 'them'],
+    ]) {
+      await expect(accountService.create({ name: 'A', [key]: bad })).rejects.toThrow(ValidationError);
+    }
+  });
+
+  it('rejects truthy non-boolean flags (1 is not true)', async () => {
+    await expect(accountService.create({ name: 'A', spendable: 1 })).rejects.toThrow(ValidationError);
+  });
+
+  it('strips unknown body fields entirely (allowlist semantics)', async () => {
+    accountRepository.create.mockResolvedValueOnce({ id: 1 });
+    await accountService.create({ name: 'A', evil_column: 'x; DROP TABLE', balance: 999 });
+    expect(accountRepository.create).toHaveBeenCalledWith({ name: 'A' });
+  });
+});
+
+describe('accountService — sanitize pins (update)', () => {
+  it('rejects an explicit null name on update (name is not clearable)', async () => {
+    await expect(accountService.update(1, { name: null })).rejects.toThrow(ValidationError);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('trims an updated name', async () => {
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { name: '  New  ' });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, { name: 'New' });
+  });
+
+  it('forwards an empty PATCH body as an empty field set', async () => {
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, {});
+    expect(accountRepository.update).toHaveBeenCalledWith(1, {});
+  });
+});
+
 describe('accountService.remove', () => {
   it('maps a FK violation (23503) to ConflictError (archive instead)', async () => {
     accountRepository.remove.mockRejectedValueOnce(pgErr('23503'));

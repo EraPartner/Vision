@@ -8,7 +8,7 @@ import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -104,19 +104,14 @@ export default function PortfolioForecastPage() {
         <CardContent className="grid gap-6 pt-6 md:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <Label>{t("research.forecast.horizon")}</Label>
-            <div className="flex gap-1">
-              {HORIZONS.map((h) => (
-                <Button
-                  key={h.months}
-                  size="sm"
-                  variant={horizonMonths === h.months ? "default" : "ghost"}
-                  className="h-8 px-3 text-xs"
-                  onClick={() => setHorizonMonths(h.months)}
-                >
-                  {t(h.labelKey)}
-                </Button>
-              ))}
-            </div>
+            <SegmentedButtons
+              options={HORIZONS}
+              getKey={(h) => h.months}
+              getLabel={(h) => t(h.labelKey)}
+              isSelected={(h) => horizonMonths === h.months}
+              onSelect={(h) => setHorizonMonths(h.months)}
+              buttonClassName="h-8 px-3 text-xs"
+            />
           </div>
 
           <div className="space-y-2">
@@ -183,19 +178,14 @@ export default function PortfolioForecastPage() {
 
           <div className="space-y-2">
             <Label>{t("research.forecast.paths")}</Label>
-            <div className="flex gap-1">
-              {PATH_OPTIONS.map((p) => (
-                <Button
-                  key={p}
-                  size="sm"
-                  variant={paths === p ? "default" : "ghost"}
-                  className="h-8 px-3 text-xs tabular-nums"
-                  onClick={() => setPaths(p)}
-                >
-                  {p}
-                </Button>
-              ))}
-            </div>
+            <SegmentedButtons
+              options={PATH_OPTIONS}
+              getKey={(p) => p}
+              getLabel={(p) => p}
+              isSelected={(p) => paths === p}
+              onSelect={setPaths}
+              buttonClassName="h-8 px-3 text-xs tabular-nums"
+            />
           </div>
         </CardContent>
       </Card>

@@ -1,15 +1,22 @@
 /**
  * Import routes - Full CSV import with bank adapters.
+ *
+ * Request parsing is validated with zod (schema → safeParse → ValidationError),
+ * the idiom established in settings.js/reports.js. Batch/row route ids share
+ * one coerced schema with the portfolio import router (lib/importBatchIds.js).
+ * The CSV option/config schemas coerce multipart string fields exactly like the
+ * pre-zod hand-rolled parsing (String()/parseInt fallbacks, trims, defaults).
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
+import { parseBatchIdParam, parseBatchRowIdParams } from '../lib/importBatchIds.js';
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
-import { createSseWriter } from '../lib/sse.js';
 import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
-import { progressToPercent } from '../lib/importProgress.js';
+import { streamImport } from '../lib/importProgress.js';
 import {
   listBatches,
   getBatch,
@@ -56,17 +63,116 @@ function buildPipelineResult(pipelineResult) {
   };
 }
 
+/* ── Zod schemas ─────────────────────────────────────────────────────────── */
+
+// schema → safeParse → joined issues → ValidationError (settings.js idiom).
+// Messages here already name their field, so issues join without path prefixes.
+function parseImportInput(schema, input) {
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    throw new ValidationError(result.error.issues.map((issue) => issue.message).join('; '));
+  }
+  return result.data;
+}
+
+// Multipart/query fields arrive as strings; falsy values fall back to the
+// defaults exactly like the old `String(a || b || default)` chains.
+const csvImportOptionsSchema = z.object({
+  separator: z.unknown().optional().transform((value, ctx) => {
+    const separator = String(value || ',');
+    if (separator.length !== 1) {
+      ctx.addIssue({ code: 'custom', message: 'separator must be a single character' });
+      return z.NEVER;
+    }
+    return separator;
+  }),
+  encoding: z.unknown().optional().transform((value) => String(value || 'utf-8')),
+});
+
 // Parse + validate the CSV separator/encoding options shared by the
 // recipients/categories import endpoints. Cleans up the upload on rejection.
 function parseCsvImportOptions(req) {
-  const separator = String(req.query.separator || req.body.separator || ',');
-  const encoding = String(req.query.encoding || req.body.encoding || 'utf-8');
-  if (separator.length !== 1) {
+  const result = csvImportOptionsSchema.safeParse({
+    separator: req.query.separator || req.body.separator,
+    encoding: req.query.encoding || req.body.encoding,
+  });
+  if (!result.success) {
     if (req.file) cleanup(req.file.path);
-    throw new ValidationError('separator must be a single character');
+    throw new ValidationError(result.error.issues.map((issue) => issue.message).join('; '));
   }
-  return { separator, encoding };
+  return result.data;
 }
+
+// Free-text multipart field: falsy passes through (the required-set check in
+// superRefine owns the rejection message); a truthy non-string is a clean 400
+// where it previously crashed on `.trim()`.
+const multipartTextField = (field) => z.unknown().optional().transform((value, ctx) => {
+  if (!value) return value;
+  if (typeof value !== 'string') {
+    ctx.addIssue({ code: 'custom', message: `${field} must be a string` });
+    return z.NEVER;
+  }
+  return value;
+});
+
+// csv-parse throws "Invalid Option: from must be a positive integer" on a
+// negative skip — validate here so it 400s instead of a raw 500.
+const skipRowsField = z.unknown().optional().transform((value, ctx) => {
+  const skipRows = parseInt(/** @type {string} */ (value), 10) || 0;
+  if (skipRows < 0) {
+    ctx.addIssue({ code: 'custom', message: 'skip_rows must be zero or a positive integer' });
+    return z.NEVER;
+  }
+  return skipRows;
+});
+
+// POST /csv/custom flattened fields → { adapterName, customConfig }. The
+// adapter name stays RAW (pre-zod behavior); only customConfig is trimmed.
+const customCsvImportSchema = z.looseObject({
+  bank_name: multipartTextField('bank_name'),
+  date_format: multipartTextField('date_format'),
+  date_column: multipartTextField('date_column'),
+  recipient_column: multipartTextField('recipient_column'),
+  amount_column: multipartTextField('amount_column'),
+  memo_column: multipartTextField('memo_column'),
+  encoding: z.unknown().optional(),
+  separator: z.unknown().optional().transform((value, ctx) => {
+    const separator = value != null ? String(value) : '';
+    if (separator && separator.length !== 1) {
+      ctx.addIssue({ code: 'custom', message: 'separator must be a single character' });
+      return z.NEVER;
+    }
+    return separator || ',';
+  }),
+  skip_rows: skipRowsField,
+}).superRefine((data, ctx) => {
+  if (!data.bank_name || !data.date_format || !data.date_column || !data.recipient_column || !data.amount_column) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Missing required parameters: bank_name, date_format, date_column, recipient_column, amount_column',
+    });
+  }
+}).transform((data) => {
+  // The superRefine above guarantees the required fields are non-empty
+  // strings; the casts inform tsc of what zod's unknown bridges cannot.
+  const required = /** @type {Record<'bank_name'|'date_format'|'date_column'|'recipient_column'|'amount_column', string>} */ (data);
+  return {
+    adapterName: data.bank_name,
+    customConfig: {
+      bank_name: required.bank_name.trim(),
+      date_format: required.date_format.trim(),
+      encoding: data.encoding || 'utf-8',
+      separator: data.separator,
+      skip_rows: data.skip_rows,
+      column_mapping: {
+        date: required.date_column.trim(),
+        recipient: required.recipient_column.trim(),
+        amount: required.amount_column.trim(),
+        memo: data.memo_column ? /** @type {string} */ (data.memo_column).trim() : '',
+      },
+    },
+  };
+});
 
 // POST /api/import/csv
 router.post('/csv', csvUpload.single('file'), async (req, res) => {
@@ -113,50 +219,18 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
 
-  const {
-    bank_name, date_format, date_column, recipient_column, amount_column,
-    memo_column, separator, encoding, skip_rows,
-  } = { ...req.query, ...req.body };
-
-  if (!bank_name || !date_format || !date_column || !recipient_column || !amount_column) {
+  let adapterName, customConfig;
+  try {
+    ({ adapterName, customConfig } = parseImportInput(customCsvImportSchema, { ...req.query, ...req.body }));
+  } catch (err) {
     cleanup(req.file.path);
-    throw new ValidationError(
-      'Missing required parameters: bank_name, date_format, date_column, recipient_column, amount_column',
-    );
+    throw err;
   }
-
-  const separatorStr = separator != null ? String(separator) : '';
-  if (separatorStr && separatorStr.length !== 1) {
-    cleanup(req.file.path);
-    throw new ValidationError('separator must be a single character');
-  }
-
-  // csv-parse throws "Invalid Option: from must be a positive integer" on a
-  // negative skip — validate here so it 400s instead of a raw 500.
-  const skipRowsNum = parseInt(skip_rows, 10) || 0;
-  if (skipRowsNum < 0) {
-    cleanup(req.file.path);
-    throw new ValidationError('skip_rows must be zero or a positive integer');
-  }
-
-  const customConfig = {
-    bank_name: bank_name.trim(),
-    date_format: date_format.trim(),
-    encoding: encoding || 'utf-8',
-    separator: separatorStr || ',',
-    skip_rows: skipRowsNum,
-    column_mapping: {
-      date: date_column.trim(),
-      recipient: recipient_column.trim(),
-      amount: amount_column.trim(),
-      memo: memo_column ? memo_column.trim() : '',
-    },
-  };
 
   try {
     const pipelineResult = await runImportPipeline({
       filePath: req.file.path,
-      adapterName: bank_name,
+      adapterName,
       customConfig,
       filename: req.file.originalname,
       sizeBytes: req.file.size,
@@ -177,29 +251,42 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
 
 // --- Saved custom parser configs (CRUD) ---------------------------------
 
+// Saved parser configs (camelCase CustomConfig shape). Strip mode drops
+// unknown keys, exactly like the old hand-built return object. NOTE: unlike
+// the live import endpoints, separator deliberately has no single-char rule
+// here (pre-zod parity — any non-empty string sticks).
+const requiredConfigColumn = (key) => z.unknown().optional().transform((value, ctx) => {
+  if (!value || typeof value !== 'string' || value.trim().length === 0) {
+    ctx.addIssue({ code: 'custom', message: `config.${key} is required` });
+    return z.NEVER;
+  }
+  return value.trim();
+});
+
+const parserConfigSchema = z.object({
+  dateColumn: requiredConfigColumn('dateColumn'),
+  recipientColumn: requiredConfigColumn('recipientColumn'),
+  amountColumn: requiredConfigColumn('amountColumn'),
+  memoColumn: z.unknown().optional().transform((value) => (typeof value === 'string' ? value.trim() : '')),
+  dateFormat: z.unknown().optional().transform((value) =>
+    (typeof value === 'string' && value.trim() ? value.trim() : '%Y-%m-%d')),
+  separator: z.unknown().optional().transform((value) =>
+    (typeof value === 'string' && value.length ? value : ',')),
+  encoding: z.unknown().optional().transform((value) =>
+    (typeof value === 'string' && value.trim() ? value.trim() : 'utf-8')),
+  skipRows: z.unknown().optional().transform((value) => {
+    const skipRows = parseInt(/** @type {string} */ (value), 10);
+    return Number.isFinite(skipRows) && skipRows > 0 ? skipRows : 0;
+  }),
+});
+
 // Validates and normalizes the column-mapping config to the frontend's
 // CustomConfig shape. Required: dateColumn, recipientColumn, amountColumn.
 function normalizeParserConfig(config) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new ValidationError('Missing or invalid "config"');
   }
-  const required = ['dateColumn', 'recipientColumn', 'amountColumn'];
-  for (const key of required) {
-    if (!config[key] || typeof config[key] !== 'string' || config[key].trim().length === 0) {
-      throw new ValidationError(`config.${key} is required`);
-    }
-  }
-  const skipRows = parseInt(config.skipRows, 10);
-  return {
-    dateColumn: config.dateColumn.trim(),
-    recipientColumn: config.recipientColumn.trim(),
-    amountColumn: config.amountColumn.trim(),
-    memoColumn: typeof config.memoColumn === 'string' ? config.memoColumn.trim() : '',
-    dateFormat: typeof config.dateFormat === 'string' && config.dateFormat.trim() ? config.dateFormat.trim() : '%Y-%m-%d',
-    separator: typeof config.separator === 'string' && config.separator.length ? config.separator : ',',
-    encoding: typeof config.encoding === 'string' && config.encoding.trim() ? config.encoding.trim() : 'utf-8',
-    skipRows: Number.isFinite(skipRows) && skipRows > 0 ? skipRows : 0,
-  };
+  return parseImportInput(parserConfigSchema, config);
 }
 
 // GET/POST/PATCH/DELETE /api/import/parsers[/:id] — shared with the portfolio router.
@@ -217,58 +304,25 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
     throw new ValidationError('Missing required parameter: bank_name');
   }
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-
-  const writer = createSseWriter(req, res);
-
-  try {
-    const pipelineResult = await runImportPipeline({
+  await streamImport(req, res, {
+    filePath: req.file.path,
+    errorLogMessage: 'Streaming CSV import error',
+    run: (onProgress) => runImportPipeline({
       filePath: req.file.path,
       adapterName: bankName,
       filename: req.file.originalname,
       sizeBytes: req.file.size,
-      onProgress: async (ev) => { await writer.write('progress', progressToPercent(ev)); },
-    });
-
-    if (pipelineResult.requiresReview) {
-      if (!writer.closed) {
-        await writer.write('review_required', {
-          batch_id: pipelineResult.batchId,
-          match_source_counts: pipelineResult.matchSourceCounts,
-          percent: 70,
-        });
-        writer.end();
-      }
-    } else if (!writer.closed) {
-      const result = {
-        total_processed: pipelineResult.total,
-        imported: pipelineResult.imported,
-        duplicates: pipelineResult.duplicates,
-        errors: pipelineResult.errors,
-        batch_id: pipelineResult.batchId,
-        auto_linked_count: pipelineResult.autoLinkedCount || 0,
-      };
-      await writer.write('complete', {
-        ...result,
-        status: result.errors > 0 ? 'completed_with_errors' : 'completed',
-        percent: 100,
-      });
-      writer.end();
-    }
-  } catch (err) {
-    logger.error('Streaming CSV import error', { error: err.message });
-    if (!writer.closed) {
-      await writer.write('error', { detail: 'Import failed' });
-      writer.end();
-    }
-  } finally {
-    cleanup(req.file.path);
-  }
+      onProgress,
+    }),
+    buildComplete: (pipelineResult) => ({
+      total_processed: pipelineResult.total,
+      imported: pipelineResult.imported,
+      duplicates: pipelineResult.duplicates,
+      errors: pipelineResult.errors,
+      batch_id: pipelineResult.batchId,
+      auto_linked_count: pipelineResult.autoLinkedCount || 0,
+    }),
+  });
 });
 
 // (Removed dead GET /api/import/supported-banks — it had zero frontend callers
@@ -323,8 +377,7 @@ router.get('/batches', async (req, res) => {
 
 // GET /api/import/batches/:id
 router.get('/batches/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
+  const id = parseBatchIdParam(req);
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   res.ok(batch);
@@ -332,8 +385,7 @@ router.get('/batches/:id', async (req, res) => {
 
 // DELETE /api/import/batches/:id — rollback: deletes transactions, marks batch aborted
 router.delete('/batches/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
+  const id = parseBatchIdParam(req);
 
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
@@ -361,8 +413,7 @@ router.delete('/batches/:id', async (req, res) => {
 // GET /api/import/batches/:id/preview
 // Returns staging rows grouped by resolved recipient with match-source badges.
 router.get('/batches/:id/preview', async (req, res) => {
-  const batchId = Number(req.params.id);
-  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
+  const batchId = parseBatchIdParam(req);
 
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
@@ -438,11 +489,7 @@ router.get('/batches/:id/preview', async (req, res) => {
 // POST /api/import/batches/:id/rows/:rowId/override
 // Set (or clear) user_override_recipient_id on a single staging row.
 router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
-  const batchId = Number(req.params.id);
-  const rowId = Number(req.params.rowId);
-  if (!Number.isInteger(batchId) || batchId <= 0 || !Number.isInteger(rowId) || rowId <= 0) {
-    throw new ValidationError('Invalid batch or row id');
-  }
+  const { batchId, rowId } = parseBatchRowIdParams(req);
 
   const { recipient_id } = req.body;
   if (recipient_id !== null && recipient_id !== undefined && !Number.isInteger(Number(recipient_id))) {
@@ -469,11 +516,7 @@ router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
 // the recipient override above. The category landing on the committed
 // transaction is COALESCE(staging.override_category_id, recipient.default_category_id).
 router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
-  const batchId = Number(req.params.id);
-  const rowId = Number(req.params.rowId);
-  if (!Number.isInteger(batchId) || batchId <= 0 || !Number.isInteger(rowId) || rowId <= 0) {
-    throw new ValidationError('Invalid batch or row id');
-  }
+  const { batchId, rowId } = parseBatchRowIdParams(req);
 
   const { category_id } = req.body;
   if (category_id !== null && category_id !== undefined && !Number.isInteger(Number(category_id))) {
@@ -502,8 +545,7 @@ router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
 // POST /api/import/batches/:id/commit
 // Commit a reviewed batch, honouring any user overrides set above.
 router.post('/batches/:id/commit', async (req, res) => {
-  const batchId = Number(req.params.id);
-  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
+  const batchId = parseBatchIdParam(req);
 
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);

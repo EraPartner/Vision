@@ -13,10 +13,6 @@ export function getCategories(params?: {
     return requestWithQuery<CategoriesListResponse>('/api/categories', params);
 }
 
-export function getCategory(id: number): Promise<Category> {
-    return apiRequest<Category>(`/api/categories/${id}`);
-}
-
 export async function createCategory(
     category: CategoryCreate,
 ): Promise<{ category: Category; wasCreated: boolean }> {

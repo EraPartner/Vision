@@ -67,7 +67,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-45 | `recharts` is a full dependency for exactly one component | `features/ai-chat/ToolResultCard.tsx` | 1 dep | Medium | Yes — still 1 file | KEEP (#92) |
 | SIMP-46 | 1.1 MB checked-in pg_dump for demo DB | `packaging/electron/demo-db/01-demo.sql` | ~1.1 MB | Medium | Yes | KEEP (#92) |
 | SIMP-47 | 507 dead i18n keys (14% of surface) + no unused-key validator pass | `i18n/source/*.json` + 4 generated locale files | ~3,042 data lines | Low | Yes — samples verified | FIXED (#92) |
-| SIMP-48 | Exclusion-clause builder copy-pasted ~8× while tested canonical helper sits unused | `infoRepo.*`/`infoRepository*.js`, `services/filterBuilder.js` | ~110–130 | Low–medium | Yes — 0 prod call sites there too | PARTIAL — see Round 4 preamble |
+| SIMP-48 | Exclusion-clause builder copy-pasted ~8× while tested canonical helper sits unused | `infoRepo.*`/`infoRepository*.js`, `services/filterBuilder.js` | ~110–130 | Low–medium | Yes — 0 prod call sites there too | FIXED (#103) |
 | SIMP-49 | Period-pivot + recipient-rollup shaping duplicated across info repos | `infoRepositoryRecipients/Tags/Statistics.js` | ~65 | Low | Yes | FIXED (#92) |
 | SIMP-50 | Small service dedups: asset-class dispatch ×4, `aggregateByDate` ×2, cumulative-avg ×2, transfer-leg UPDATE ×3 | `snapshotBuilder.js`, `infoRepo.forecast.js`, `transferReconciliationService.js` | ~50 | Low | Yes | FIXED partial (#92) |
 | SIMP-51 | Backend hygiene: dead `IMPORT_PIPELINE_V2` env key, duplicate net-worth query, per-account await loop, double export | `config/env.js:108`, `infoRepositoryNetWorth.js`, `portfolioPerformanceSnapshotService.js` | ~20 + perf | Low | Yes — env key present | FIXED (#92) |
@@ -78,32 +78,32 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-56 | Portfolio transaction form fields triplicated across add/edit/from-market dialogs | `components/portfolio/{Add,Edit}PortfolioTxnDialog.tsx`, `AddInvestmentFromMarketDialog.tsx` | ~180–200 | Low | Yes | FIXED (#92) |
 | SIMP-57 | EditInvestmentDialog reimplements InvestmentFormFields' provider block; `PRICE_PROVIDERS` ×3 | `components/portfolio/EditInvestmentDialog.tsx:175-297` | ~110 | Low | Yes — dup intact | FIXED (#92) |
 | SIMP-58 | Small frontend dedups: CsvColumnMapper double-write, PerformanceBreakdown twins, ToolResultCard chart views, GeneralSection rows, ExportCard buttons | see finding | ~130 | Low | Yes | FIXED (#92) |
-| SIMP-59 | R4: 4 frontend modules alive only via their own tests | `utils/sanitize.ts`, `hooks/useCountUp.ts`, `useFormState.ts`, `useDataTableColumns.ts` | ~244 + ~299 test | None | n/a | OPEN |
-| SIMP-60 | R4: 24 dead `apiClient` members + 22 dead backing functions | `lib/api.ts`, `lib/api/*.ts` | ~115–145 | Low | n/a | OPEN |
-| SIMP-61 | R4: dead frontend exports batch (motion variants, chartStyles, tag hooks, tax compat consts) | `lib/motion.ts`, `shared/chartStyles.ts`, `hooks/useTags.ts`, `lib/belgianTax/constants.ts` | ~150 | None–low | n/a | OPEN |
-| SIMP-62 | R4: shared-utils dead module `downsample.js` chain + `index.d.ts` barrel drift | `packages/shared-utils/src/*` | ~95 + ~60 test | Low | n/a | OPEN |
-| SIMP-63 | R4: dead backend functions `validatePagination`, `downgradeMigrations` | `middleware/validation.js`, `database/migrate.js` | ~34 + ~10 test | None | n/a | OPEN |
-| SIMP-64 | R4: dead electron surface (`electronServices` API, `applyDockerImageUpdate`, legacy `runBackup`) | `packaging/electron/{main,preload}.js` | ~113 | Low | n/a | OPEN |
-| SIMP-65 | R4: dead deps, orphaned overrides, dead config (`config.py`, `env.DEBUG`, `DB_*` injections) | root/frontend/electron `package.json`, `config/` | ~90 + 7 deps/overrides | None–low | n/a | OPEN |
-| SIMP-66 | R4: toolchain version-drift hazards (typescript ^7 vs pinned 6.0.3; vite pinned below declared floor) | root + app `package.json` | correctness | Medium | n/a | OPEN |
-| SIMP-67 | R4: 13 currency-formatter stragglers bypass shared hooks (incl. RebalancePage locale bug) | see finding | ~90–110 | Low | n/a | OPEN |
-| SIMP-68 | R4: `buildSetClauses`/`buildInsert` — 7 unmigrated hand-rolled sites | 6 repositories + `recipientPatternService.js` | ~35 | Low | n/a | OPEN |
-| SIMP-69 | R4: `shared-utils/category` stranded — 4 inline reimplementations live on | `RecipientsPage`, `DashboardPage`, `dataImportService.js` | ~30–35 (or delete ~120) | Low | n/a | OPEN |
-| SIMP-70 | R4: Y-M-D formatter stragglers vs canonical `dateFormat.js` (3 TZ-sensitive copies + 7 epoch-ms sites + `todayYmd`) | see finding | ~28 | None | n/a | OPEN |
-| SIMP-71 | R4: small helper-exists batch (`median` ×2, `assertCurrency` ×3, `triggerBlobDownload`, `AbortSignal.timeout`, `RegExp.escape`) | see finding | ~50 | None–low | n/a | OPEN |
-| SIMP-72 | R4: `routes/settings.js` hand-rolls ~185 lines of validators; zod installed and in use one file over | `routes/settings.js` | ~90–110 net | Low–medium | n/a | OPEN |
-| SIMP-73 | R4: frontend hand-rolled CSV parser vs `csv-parse` browser build | `hooks/useCsvPreview.ts` | ~90–100 | Low–medium | n/a | OPEN |
-| SIMP-74 | R4: electron hand-rolled HTTP helpers vs `fetch` (latent redirect bug) + semver comparator | `packaging/electron/main.js` | ~60–125 | Low | n/a | OPEN |
-| SIMP-75 | R4: `CryptoPage` is an unparameterized copy of the parameterized `StocksPage` | `pages/portfolio/CryptoPage.tsx` | ~200 (or ~35 minimal) | Medium | n/a | OPEN |
-| SIMP-76 | R4: SIMP-56/57 stragglers — from-market dialog never adopted `PortfolioTxnFormFields`; EditInvestmentDialog init/reset dup | `AddInvestmentFromMarketDialog.tsx`, `EditInvestmentDialog.tsx` | ~125–145 | Medium | n/a | OPEN |
-| SIMP-77 | R4: multi-select combobox trio + pivot-hook twins | `shared/*Combobox.tsx`, `hooks/use{Recipient,Tag}Pivot.ts` | ~170 | Low | n/a | OPEN |
-| SIMP-78 | R4: config-driven micro-dedups (research quotes query ×4, RANGES ×4, symbol search ×3, segmented buttons ×6, CURRENCIES ×7, misc) | see finding | ~120–140 | Low | n/a | OPEN |
-| SIMP-79 | R4: small JSX/logic collapses (admin cards, CommandPalette groups, dialogs, belgianTax, account form mapping, SelectSettingRow hoist) | see finding | ~150 | Low | n/a | OPEN |
-| SIMP-80 | R4: backend service batch (SSE dup + drifted error detail, report KPI cards + escaping, plannedTxRepo update dup, rateFetcher binary search) | see finding | ~140–150 | Low | n/a | OPEN |
-| SIMP-81 | R4: test-suite dedup round 2 (transactions preamble ×6, `withTransaction` ×17, logger ×23, contracts `it.each` completion, 10 re-inlined sites) | `apps/node-backend/tests/**`, `contracts.test.ts` | ~530–610 test | Low | n/a | OPEN |
-| SIMP-82 | R4: e2e — `smoke.spec.ts` subsumed by a11y suite; duplicated create flows | `apps/frontend/e2e/*` | ~80–100 | Low | n/a | OPEN |
-| SIMP-83 | R4: electron IPC handler boilerplate + `electron-builder-demo.json` re-declaration | `packaging/electron/main.js`, `electron-builder-demo.json` | ~55–75 | Medium | n/a | OPEN |
-| SIMP-84 | R4: CI compose bring-up ×3 → composite action; no-op compose logging blocks | `.github/workflows/*`, `docker-compose.*.yml` | ~40–50 | Low | n/a | OPEN |
+| SIMP-59 | R4: 4 frontend modules alive only via their own tests | `utils/sanitize.ts`, `hooks/useCountUp.ts`, `useFormState.ts`, `useDataTableColumns.ts` | ~244 + ~299 test | None | n/a | FIXED (#103) |
+| SIMP-60 | R4: 24 dead `apiClient` members + 22 dead backing functions | `lib/api.ts`, `lib/api/*.ts` | ~115–145 | Low | n/a | FIXED (#103) |
+| SIMP-61 | R4: dead frontend exports batch (motion variants, chartStyles, tag hooks, tax compat consts) | `lib/motion.ts`, `shared/chartStyles.ts`, `hooks/useTags.ts`, `lib/belgianTax/constants.ts` | ~150 | None–low | n/a | FIXED (#103) |
+| SIMP-62 | R4: shared-utils dead module `downsample.js` chain + `index.d.ts` barrel drift | `packages/shared-utils/src/*` | ~95 + ~60 test | Low | n/a | FIXED (#103) |
+| SIMP-63 | R4: dead backend functions `validatePagination`, `downgradeMigrations` | `middleware/validation.js`, `database/migrate.js` | ~34 + ~10 test | None | n/a | FIXED (#103) |
+| SIMP-64 | R4: dead electron surface (`electronServices` API, `applyDockerImageUpdate`, legacy `runBackup`) | `packaging/electron/{main,preload}.js` | ~113 | Low | n/a | FIXED (#103) |
+| SIMP-65 | R4: dead deps, orphaned overrides, dead config (`config.py`, `env.DEBUG`, `DB_*` injections) | root/frontend/electron `package.json`, `config/` | ~90 + 7 deps/overrides | None–low | n/a | FIXED (#103) |
+| SIMP-66 | R4: toolchain version-drift hazards (typescript ^7 vs pinned 6.0.3; vite pinned below declared floor) | root + app `package.json` | correctness | Medium | n/a | FIXED (#103) |
+| SIMP-67 | R4: 13 currency-formatter stragglers bypass shared hooks (incl. RebalancePage locale bug) | see finding | ~90–110 | Low | n/a | FIXED (#103) |
+| SIMP-68 | R4: `buildSetClauses`/`buildInsert` — 7 unmigrated hand-rolled sites | 6 repositories + `recipientPatternService.js` | ~35 | Low | n/a | FIXED (#103) |
+| SIMP-69 | R4: `shared-utils/category` stranded — 4 inline reimplementations live on | `RecipientsPage`, `DashboardPage`, `dataImportService.js` | ~30–35 (or delete ~120) | Low | n/a | FIXED (#103) |
+| SIMP-70 | R4: Y-M-D formatter stragglers vs canonical `dateFormat.js` (3 TZ-sensitive copies + 7 epoch-ms sites + `todayYmd`) | see finding | ~28 | None | n/a | FIXED (#103) |
+| SIMP-71 | R4: small helper-exists batch (`median` ×2, `assertCurrency` ×3, `triggerBlobDownload`, `AbortSignal.timeout`, `RegExp.escape`) | see finding | ~50 | None–low | n/a | FIXED (#103) — RegExp.escape item skipped (Node 20/22 test+release runtimes lack it; SQL-regex site semantically unsuited) |
+| SIMP-72 | R4: `routes/settings.js` hand-rolls ~185 lines of validators; zod installed and in use one file over | `routes/settings.js` | ~90–110 net | Low–medium | n/a | FIXED (#103) |
+| SIMP-73 | R4: frontend hand-rolled CSV parser vs `csv-parse` browser build | `hooks/useCsvPreview.ts` | ~90–100 | Low–medium | n/a | FIXED (#103) |
+| SIMP-74 | R4: electron hand-rolled HTTP helpers vs `fetch` (latent redirect bug) + semver comparator | `packaging/electron/main.js` | ~60–125 | Low | n/a | FIXED (#103) — HTTP → fetch; semver comparator KEPT per the finding's own call (new runtime dep in the packaged shell) |
+| SIMP-75 | R4: `CryptoPage` is an unparameterized copy of the parameterized `StocksPage` | `pages/portfolio/CryptoPage.tsx` | ~200 (or ~35 minimal) | Medium | n/a | FIXED (#103) |
+| SIMP-76 | R4: SIMP-56/57 stragglers — from-market dialog never adopted `PortfolioTxnFormFields`; EditInvestmentDialog init/reset dup | `AddInvestmentFromMarketDialog.tsx`, `EditInvestmentDialog.tsx` | ~125–145 | Medium | n/a | FIXED (#103) |
+| SIMP-77 | R4: multi-select combobox trio + pivot-hook twins | `shared/*Combobox.tsx`, `hooks/use{Recipient,Tag}Pivot.ts` | ~170 | Low | n/a | FIXED (#103) |
+| SIMP-78 | R4: config-driven micro-dedups (research quotes query ×4, RANGES ×4, symbol search ×3, segmented buttons ×6, CURRENCIES ×7, misc) | see finding | ~120–140 | Low | n/a | FIXED (#103) |
+| SIMP-79 | R4: small JSX/logic collapses (admin cards, CommandPalette groups, dialogs, belgianTax, account form mapping, SelectSettingRow hoist) | see finding | ~150 | Low | n/a | FIXED (#103) |
+| SIMP-80 | R4: backend service batch (SSE dup + drifted error detail, report KPI cards + escaping, plannedTxRepo update dup, rateFetcher binary search) | see finding | ~140–150 | Low | n/a | FIXED (#103) |
+| SIMP-81 | R4: test-suite dedup round 2 (transactions preamble ×6, `withTransaction` ×17, logger ×23, contracts `it.each` completion, 10 re-inlined sites) | `apps/node-backend/tests/**`, `contracts.test.ts` | ~530–610 test | Low | n/a | FIXED (#103) |
+| SIMP-82 | R4: e2e — `smoke.spec.ts` subsumed by a11y suite; duplicated create flows | `apps/frontend/e2e/*` | ~80–100 | Low | n/a | FIXED (#103) |
+| SIMP-83 | R4: electron IPC handler boilerplate + `electron-builder-demo.json` re-declaration | `packaging/electron/main.js`, `electron-builder-demo.json` | ~55–75 | Medium | n/a | FIXED (#103) |
+| SIMP-84 | R4: CI compose bring-up ×3 → composite action; no-op compose logging blocks | `.github/workflows/*`, `docker-compose.*.yml` | ~40–50 | Low | n/a | FIXED (#103) |
 
 ---
 

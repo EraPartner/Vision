@@ -6,6 +6,7 @@
  * (previously "-1"/"0"/"12abc" slipped through as NaN-tolerant parseInt).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockConnection } from '../helpers/repoMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
 import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
@@ -67,10 +68,7 @@ vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
   },
 }));
 
-vi.mock('../../src/database/connection.js', () => ({
-  query: vi.fn(),
-  withTransaction: vi.fn(),
-}));
+vi.mock('../../src/database/connection.js', () => mockConnection());
 
 vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),

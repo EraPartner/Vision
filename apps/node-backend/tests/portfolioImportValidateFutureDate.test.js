@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 // Future-dated portfolio rows used to pass validation and commit silently: a
 // typo'd year or a settlement date ahead of today would skew every time-based
 // portfolio calc. validate.js now rejects tx_date > today (app calendar).
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../src/database/connection.js', () => ({

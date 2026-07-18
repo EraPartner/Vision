@@ -108,6 +108,43 @@ describe('Splits Routes', () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(splitRepository.createSplitAtomic).toHaveBeenCalledWith(expect.objectContaining({ amount: 20 }));
     });
+
+    // Pins for the zod swap (ZOD-08): raw values are forwarded to the repo
+    // unchanged; malformed ids/amounts stay 400s.
+    it('throws ValidationError for non-integer transaction_id / recipient_id', async () => {
+      for (const body of [
+        { transaction_id: 'abc', recipient_id: 2, amount: 5 },
+        { transaction_id: 1, recipient_id: 'abc', amount: 5 },
+      ]) {
+        await expect(routeHandlers['post:/']({ body, get: () => null }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(splitRepository.createSplitAtomic).not.toHaveBeenCalled();
+    });
+
+    it('throws ValidationError for a non-finite amount', async () => {
+      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 'abc' }, get: () => null };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(splitRepository.createSplitAtomic).not.toHaveBeenCalled();
+    });
+
+    it('forwards a numeric-string amount raw to the repo but coerced in the audit payload', async () => {
+      splitRepository.createSplitAtomic.mockResolvedValue({ id: 7, transaction_id: 1, recipient_id: 2, amount: 20 });
+      splitRepository.writeAudit.mockResolvedValue();
+
+      const req = { body: { transaction_id: 1, recipient_id: 2, amount: '20' }, get: () => null };
+      await routeHandlers['post:/'](req, mockResponse());
+
+      expect(splitRepository.createSplitAtomic).toHaveBeenCalledWith(expect.objectContaining({ amount: '20' }));
+      expect(splitRepository.writeAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ payload: expect.objectContaining({ amount: 20 }) }),
+      );
+    });
+
+    it('throws ValidationError when a falsy recipient_id hits the required check', async () => {
+      const req = { body: { transaction_id: 1, recipient_id: 0, amount: 5 }, get: () => null };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
   });
 
   describe('POST /batch', () => {
@@ -198,6 +235,61 @@ describe('Splits Routes', () => {
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
         data: { items: [{ id: 1 }], total: 1 },
+      });
+    });
+
+    // Pins for the zod swap (ZOD-08): normalization keeps parseInt-style id
+    // coercion ('12abc' → 12) and finite (even non-positive) amounts.
+    it('throws ValidationError for a non-integer batch transaction_id', async () => {
+      const req = {
+        body: { transaction_id: 'abc', splits: [{ recipient_id: 2, amount: 10 }] },
+        get: () => null,
+      };
+      await expect(routeHandlers['post:/batch'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
+    });
+
+    it('normalizes rows with parseInt id coercion and Number amount coercion', async () => {
+      splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
+      splitRepository.writeAudit.mockResolvedValue();
+
+      const req = {
+        body: {
+          transaction_id: 1,
+          splits: [
+            { recipient_id: '12abc', amount: '5', note: 'n' },
+            { recipient_id: 3, amount: 0 }, // finite non-positive amounts survive normalization
+          ],
+        },
+        get: () => null,
+      };
+      await routeHandlers['post:/batch'](req, mockResponse());
+
+      expect(splitRepository.createSplitsBatchAtomic).toHaveBeenCalledWith({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: 12, amount: 5, note: 'n' },
+          { recipient_id: 3, amount: 0, note: undefined },
+        ],
+      });
+    });
+
+    it('drops null and non-object rows during normalization', async () => {
+      splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
+      splitRepository.writeAudit.mockResolvedValue();
+
+      const req = {
+        body: {
+          transaction_id: 1,
+          splits: [null, 'junk', { recipient_id: 2, amount: 10 }],
+        },
+        get: () => null,
+      };
+      await routeHandlers['post:/batch'](req, mockResponse());
+
+      expect(splitRepository.createSplitsBatchAtomic).toHaveBeenCalledWith({
+        transaction_id: 1,
+        splits: [{ recipient_id: 2, amount: 10, note: undefined }],
       });
     });
   });
@@ -300,6 +392,26 @@ describe('Splits Routes', () => {
       });
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 5, split_id: 7, amount: 12 } });
+    });
+
+    // Pins for the zod swap (ZOD-08): positive-finite check, raw forwarding.
+    it('throws ValidationError for non-numeric or negative payment amounts', async () => {
+      for (const amount of ['abc', -5, undefined]) {
+        const req = { params: { id: '5' }, body: { amount }, get: () => null };
+        await expect(routeHandlers['post:/:id/pay'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(splitRepository.addPayment).not.toHaveBeenCalled();
+    });
+
+    it('forwards a numeric-string payment amount raw to the repo', async () => {
+      splitRepository.addPayment.mockResolvedValue({ id: 5, split_id: 7, amount: 12 });
+
+      const req = { params: { id: '7' }, body: { amount: '12' }, get: () => null };
+      await routeHandlers['post:/:id/pay'](req, mockResponse());
+
+      expect(splitRepository.addPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: '12' }),
+      );
     });
 
     it('propagates error when recording payment fails', async () => {

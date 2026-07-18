@@ -126,6 +126,80 @@ describe("useCsvPreview", () => {
     expect(result.current.preview?.rows).toHaveLength(5);
   });
 
+  it("skips rows whose column count differs from the header", async () => {
+    const csv = `Date,Amount\n2026-01-01,-1.00,EXTRA\n2026-01-02,-2.00`;
+    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+    const file = makeFile(csv);
+    const { result } = renderHook(() => useCsvPreview(file, ","));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.preview?.rows).toEqual([["2026-01-02", "-2.00"]]);
+  });
+
+  it("handles quoted fields with embedded newlines", async () => {
+    const csv = `Name,Memo\n"Smith, John","line one\nline two"\n2026-01-02,x`;
+    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+    const file = makeFile(csv);
+    const { result } = renderHook(() => useCsvPreview(file, ","));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.preview?.rows).toEqual([
+      ["Smith, John", "line one\nline two"],
+      ["2026-01-02", "x"],
+    ]);
+  });
+
+  it("keeps escaped double-quotes inside quoted fields", async () => {
+    const csv = `Name,Memo\n"Smith","said ""hi"" twice"`;
+    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+    const file = makeFile(csv);
+    const { result } = renderHook(() => useCsvPreview(file, ","));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.preview?.rows).toEqual([["Smith", 'said "hi" twice']]);
+  });
+
+  it("survives a tail truncated mid-quote (PEEK_BYTES cut)", async () => {
+    // Simulates the preview slice ending inside an open quoted field: the
+    // records before the cut must still preview, and the truncated record is
+    // treated as if the quote closed at the cut (it still has both columns
+    // here, so it stays — a partial record missing columns is dropped by the
+    // column-count check like any other short row).
+    const csv = `Date,Memo\n2026-01-01,ok\n2026-01-02,"cut off mid-quo`;
+    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+    const file = makeFile(csv);
+    const { result } = renderHook(() => useCsvPreview(file, ","));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.preview?.headers).toEqual(["Date", "Memo"]);
+    expect(result.current.preview?.rows).toEqual([
+      ["2026-01-01", "ok"],
+      ["2026-01-02", "cut off mid-quo"],
+    ]);
+  });
+
+  it("trims whitespace around fields, including inside quotes", async () => {
+    const csv = `Date , Amount \n 2026-01-01 ,"  -1.00  "`;
+    vi.stubGlobal("FileReader", buildFakeFileReader(csv));
+
+    const file = makeFile(csv);
+    const { result } = renderHook(() => useCsvPreview(file, ","));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.preview?.headers).toEqual(["Date", "Amount"]);
+    expect(result.current.preview?.rows).toEqual([["2026-01-01", "-1.00"]]);
+  });
+
   it("skips blank lines in data rows", async () => {
     const csv = `Date,Amount\n2026-01-01,-1.00\n\n2026-01-02,-2.00`;
     vi.stubGlobal("FileReader", buildFakeFileReader(csv));

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,8 +10,9 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
-import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useSymbolSearch } from "@/hooks/useSymbolSearch";
+import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -37,35 +38,18 @@ export default function ResearchHomePage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const navigate = useNavigate();
-  const isOnline = useOnlineStatus();
-  const [searchText, setSearchText] = useState("");
-  const debouncedSearch = useDebounce(searchText.trim(), SEARCH_DEBOUNCE_MS);
+  const { searchText, setSearchText, debouncedSearch, searchResult, isFetching } = useSymbolSearch();
 
   const numberFmt = useMemo(
     () => new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     [locale],
   );
 
-  const { data: searchResult, isFetching } = useQuery({
-    queryKey: ["research-search", debouncedSearch],
-    queryFn: () => apiClient.searchResearch(debouncedSearch),
-    enabled: debouncedSearch.length >= 1,
-    staleTime: 60_000,
-  });
-
   const items = searchResult?.data.items ?? [];
   const searchUnavailable = searchResult?.meta.source === "unavailable";
 
   // Live benchmark strip. 60s polling mirrors the watchlist quote cadence.
-  const { data: benchmarkData } = useQuery({
-    queryKey: ["research-benchmarks", BENCHMARK_SYMBOLS],
-    queryFn: () => apiClient.getMarketQuotes(BENCHMARK_SYMBOLS, { detail: "basic" }),
-    enabled: isOnline,
-    staleTime: 60_000,
-    refetchInterval: isOnline ? 60_000 : false,
-    refetchOnWindowFocus: false,
-    retry: isOnline ? 1 : false,
-  });
+  const { data: benchmarkData } = useMarketQuotesQuery(["research-benchmarks", BENCHMARK_SYMBOLS], BENCHMARK_SYMBOLS, { staleTime: 60_000 });
   const benchmarkMap = useMemo(
     () => new Map((benchmarkData?.quotes ?? []).map((q) => [q.symbol, q])),
     [benchmarkData],
@@ -84,15 +68,7 @@ export default function ResearchHomePage() {
     () => watchlistItems.map((i) => i.symbol).filter(Boolean).join(","),
     [watchlistItems],
   );
-  const { data: watchlistQuotes } = useQuery({
-    queryKey: ["watchlist-quotes", watchlistSymbols],
-    queryFn: () => watchlistSymbols ? apiClient.getMarketQuotes(watchlistSymbols, { detail: "basic" }) : Promise.resolve({ quotes: [] }),
-    enabled: !!watchlistSymbols && isOnline,
-    staleTime: 60_000,
-    refetchInterval: isOnline ? 60_000 : false,
-    refetchOnWindowFocus: false,
-    retry: isOnline ? 1 : false,
-  });
+  const { data: watchlistQuotes } = useMarketQuotesQuery(["watchlist-quotes", watchlistSymbols], watchlistSymbols, { staleTime: 60_000 });
   const watchlistPriceMap = useMemo(
     () => new Map((watchlistQuotes?.quotes ?? []).map((q) => [q.symbol, q])),
     [watchlistQuotes],
@@ -108,13 +84,8 @@ export default function ResearchHomePage() {
     navigate(`/research/market?symbol=${encodeURIComponent(symbol)}`);
   };
 
-  const formatPrice = (value: number, currency: string) =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(value);
+  // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+  const formatPrice = useCurrencyFormatter();
 
   return (
     <div className="space-y-6 animate-in">

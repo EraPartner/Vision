@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     CommandDialog,
@@ -105,6 +105,15 @@ const RESEARCH_PAGES: PaletteEntry[] = [
     { titleKey: "nav.watchlist", url: "/research/watchlist", icon: Target },
 ];
 
+// The three always-visible nav groups render identically (heading + page
+// items with go-to hints), so they collapse to one map. Admin stays separate:
+// it is conditional and has no go-to hints.
+const NAV_SECTIONS: { headingKey: string; pages: PaletteEntry[] }[] = [
+    { headingKey: "nav.budgeting", pages: BUDGETING_PAGES },
+    { headingKey: "nav.portfolio", pages: PORTFOLIO_PAGES },
+    { headingKey: "nav.research", pages: RESEARCH_PAGES },
+];
+
 // url → go-to key, so palette entries display their keyboard sequence.
 const GO_TO_BY_URL = new Map(GO_TO_ROUTES.map((r) => [r.url, r.key]));
 
@@ -207,16 +216,28 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     const fxParsed = useMemo(() => parseFxQuery(query.trim()), [query]);
     const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? "EUR";
     const { convertToTarget } = useCurrencyConverter(fxTarget);
+    // One safe currency formatter for both the FX answer and the ticker quote:
+    // user-typed / provider-supplied currency codes can be invalid, so fall back
+    // to "<amount> <code>" instead of throwing (the reason this stays off
+    // useCurrencyFormatter, which assumes valid codes).
+    const fmtSafeCurrency = useCallback((val: number, currency: string, decimals?: number) => {
+        try {
+            return new Intl.NumberFormat(locale, {
+                style: "currency",
+                currency,
+                ...(decimals != null ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals } : {}),
+            }).format(val);
+        } catch {
+            return `${val.toFixed(2)} ${currency}`;
+        }
+    }, [locale]);
+
     const fxResult = useMemo(() => {
         if (!fxParsed || fxParsed.from === fxTarget) return null;
         const converted = convertToTarget(fxParsed.amount, fxParsed.from);
         if (converted == null || !Number.isFinite(converted)) return null;
-        try {
-            return new Intl.NumberFormat(locale, { style: "currency", currency: fxTarget }).format(converted);
-        } catch {
-            return `${converted.toFixed(2)} ${fxTarget}`;
-        }
-    }, [fxParsed, fxTarget, convertToTarget, locale]);
+        return fmtSafeCurrency(converted, fxTarget);
+    }, [fxParsed, fxTarget, convertToTarget, fmtSafeCurrency]);
 
     const calcResult = useMemo(() => {
         if (fxParsed) return null;
@@ -252,13 +273,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
         enabled: open && debouncedTicker.length >= 1,
         staleTime: 30_000,
     });
-    const fmtTickerPrice = (val: number, currency: string) => {
-        try {
-            return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
-        } catch {
-            return `${val.toFixed(2)} ${currency}`;
-        }
-    };
+    const fmtTickerPrice = (val: number, currency: string) => fmtSafeCurrency(val, currency, 2);
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -408,35 +423,20 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                         ))}
                     </CommandGroup>
                 )}
-                <CommandGroup heading={t("nav.budgeting")}>
-                    {BUDGETING_PAGES.map((page) => (
-                        <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
-                            <page.icon className="text-muted-foreground" />
-                            <span>{t(page.titleKey)}</span>
-                            <GoToHint url={page.url} />
-                        </CommandItem>
-                    ))}
-                </CommandGroup>
-                <CommandSeparator />
-                <CommandGroup heading={t("nav.portfolio")}>
-                    {PORTFOLIO_PAGES.map((page) => (
-                        <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
-                            <page.icon className="text-muted-foreground" />
-                            <span>{t(page.titleKey)}</span>
-                            <GoToHint url={page.url} />
-                        </CommandItem>
-                    ))}
-                </CommandGroup>
-                <CommandSeparator />
-                <CommandGroup heading={t("nav.research")}>
-                    {RESEARCH_PAGES.map((page) => (
-                        <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
-                            <page.icon className="text-muted-foreground" />
-                            <span>{t(page.titleKey)}</span>
-                            <GoToHint url={page.url} />
-                        </CommandItem>
-                    ))}
-                </CommandGroup>
+                {NAV_SECTIONS.map(({ headingKey, pages }, idx) => (
+                    <Fragment key={headingKey}>
+                        {idx > 0 && <CommandSeparator />}
+                        <CommandGroup heading={t(headingKey)}>
+                            {pages.map((page) => (
+                                <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
+                                    <page.icon className="text-muted-foreground" />
+                                    <span>{t(page.titleKey)}</span>
+                                    <GoToHint url={page.url} />
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </Fragment>
+                ))}
                 {adminPages.length > 0 && (
                     <>
                         <CommandSeparator />

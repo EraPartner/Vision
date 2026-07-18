@@ -42,19 +42,6 @@ export function getAssetClassGroups(t: (key: string) => string): Record<string, 
 
 export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift';
 
-/** @deprecated Use getTxnTypeLabel(t, type) for UI display */
-export const TXN_TYPE_LABELS: Record<PortfolioTxnType, string> = {
-  buy: 'Buy',
-  sell: 'Sell',
-  dividend: 'Dividend',
-  fee: 'Fee',
-  tax: 'Tax',
-  interest: 'Interest',
-  rent_income: 'Rent Income',
-  appreciation: 'Appreciation',
-  gift: 'Gift',
-};
-
 /** Returns a translated label for a portfolio transaction type. */
 export function getTxnTypeLabel(t: (key: string) => string, type: PortfolioTxnType | string): string {
   return t(`portfolio.txnType.${type}`) || type;

@@ -8,12 +8,13 @@
  * amounts (and that signs survive).
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { mockLogger } from './helpers/mockLogger.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import { parse as parseBnp } from '../src/services/importPipeline/adapters/bnp.js';

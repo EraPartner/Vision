@@ -13,6 +13,7 @@
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { researchAggregator } from '../services/research/researchAggregator.js';
 import { researchMappingService } from '../services/research/researchMappingService.js';
@@ -39,6 +40,43 @@ function single(value) {
   return String(value).trim();
 }
 
+/* ── Zod schemas ─────────────────────────────────────────────────────────────
+ * Query/body params are validated with zod (schema → safeParse →
+ * ValidationError), the idiom established in settings.js/reports.js. single()
+ * stays as the shared array/scalar normalization step feeding the schemas.
+ */
+
+// A required param: single()-normalized, must be non-empty after trimming.
+const requiredParamSchema = (message) =>
+  z.unknown().transform(single).refine((value) => value.length > 0, { error: message });
+
+const symbolSchema = requiredParamSchema('symbol parameter required');
+const instrumentKeySchema = requiredParamSchema('instrument_key required');
+const querySchema = requiredParamSchema('query required');
+
+const keyTypeSchema = z.unknown()
+  .transform((value) => single(value) || 'isin')
+  .pipe(z.enum(['isin', 'internal'], { error: "key_type must be 'isin' or 'internal'" }));
+
+const macroProviderSchema = z.unknown()
+  .transform(single)
+  .pipe(z.enum(MACRO_PROVIDERS, { error: `provider must be one of: ${MACRO_PROVIDERS.join(', ')}` }));
+
+const mappingsArraySchema = z.array(z.unknown(), { error: 'mappings must be a non-empty array' })
+  .min(1, { error: 'mappings must be a non-empty array' });
+
+// schema → safeParse → joined issues → ValidationError (settings.js idiom).
+// Messages already name their param, so issues join without path prefixes.
+function parseResearchParam(schema, value) {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new ValidationError(result.error.issues.map((issue) => issue.message).join('; '));
+  }
+  return result.data;
+}
+
+const requireSymbol = (value) => parseResearchParam(symbolSchema, value);
+
 /**
  * Run an aggregator fetch and emit the unified envelope with provenance meta.
  * @param {import('express').Response} res
@@ -60,15 +98,13 @@ router.get('/search', async (req, res) => {
 
 // GET /api/research/quote?symbol=AAPL&asset_class=stock
 router.get('/quote', async (req, res) => {
-  const symbol = single(req.query.symbol);
-  if (!symbol) throw new ValidationError('symbol parameter required');
+  const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'quote', { symbol, assetClass: single(req.query.asset_class) || undefined });
 });
 
 // GET /api/research/chart?symbol=AAPL&asset_class=stock&range=1mo
 router.get('/chart', async (req, res) => {
-  const symbol = single(req.query.symbol);
-  if (!symbol) throw new ValidationError('symbol parameter required');
+  const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'chart', {
     symbol,
     assetClass: single(req.query.asset_class) || undefined,
@@ -80,8 +116,7 @@ router.get('/chart', async (req, res) => {
 // Fundamentals are MERGED across FMP + Yahoo (FMP preferred, Yahoo fills gaps),
 // not raced like the other data types.
 router.get('/fundamentals', async (req, res) => {
-  const symbol = single(req.query.symbol);
-  if (!symbol) throw new ValidationError('symbol parameter required');
+  const symbol = requireSymbol(req.query.symbol);
   const result = await researchAggregator.fetchFundamentals({
     symbol,
     assetClass: single(req.query.asset_class) || undefined,
@@ -92,15 +127,13 @@ router.get('/fundamentals', async (req, res) => {
 
 // GET /api/research/analyst?symbol=AAPL
 router.get('/analyst', async (req, res) => {
-  const symbol = single(req.query.symbol);
-  if (!symbol) throw new ValidationError('symbol parameter required');
+  const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'analyst', { symbol, assetClass: single(req.query.asset_class) || undefined });
 });
 
 // GET /api/research/news?symbol=AAPL
 router.get('/news', async (req, res) => {
-  const symbol = single(req.query.symbol);
-  if (!symbol) throw new ValidationError('symbol parameter required');
+  const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'news', { symbol });
 });
 
@@ -118,11 +151,10 @@ router.get('/macro/search', async (req, res) => {
 
 // GET /api/research/macro/series?provider=fred&series_id=CPIAUCSL&range=5y
 router.get('/macro/series', async (req, res) => {
-  const provider = single(req.query.provider);
+  const provider = parseResearchParam(macroProviderSchema, req.query.provider);
   const seriesId = single(req.query.series_id);
-  if (!MACRO_PROVIDERS.includes(provider)) {
-    throw new ValidationError(`provider must be one of: ${MACRO_PROVIDERS.join(', ')}`);
-  }
+  // Cross-field: the series_id shape depends on the (validated) provider, so
+  // this stays a one-line guard instead of an object schema.
   if (!isValidSeriesId(provider, seriesId)) {
     throw new ValidationError('valid series_id required for the given provider');
   }
@@ -136,8 +168,7 @@ router.get('/macro/series', async (req, res) => {
 
 // GET /api/research/scorecard?symbol=AAPL — heuristic flags + health score.
 router.get('/scorecard', async (req, res) => {
-  const symbol = single(req.query.symbol);
-  if (!symbol) throw new ValidationError('symbol parameter required');
+  const symbol = requireSymbol(req.query.symbol);
   const result = await researchAggregator.fetchFundamentals({
     symbol,
     assetClass: single(req.query.asset_class) || undefined,
@@ -171,19 +202,8 @@ router.post('/portfolio-forecast', async (req, res) => {
 
 // ─── Cross-provider symbol mapping (ADR-079) ────────────────────────────────
 
-const KEY_TYPES = new Set(['isin', 'internal']);
-
-function keyType(value) {
-  const v = single(value) || 'isin';
-  if (!KEY_TYPES.has(v)) throw new ValidationError("key_type must be 'isin' or 'internal'");
-  return v;
-}
-
-function requireInstrumentKey(value) {
-  const key = single(value);
-  if (!key) throw new ValidationError('instrument_key required');
-  return key;
-}
+const keyType = (value) => parseResearchParam(keyTypeSchema, value);
+const requireInstrumentKey = (value) => parseResearchParam(instrumentKeySchema, value);
 
 /** Coerce an optional id to a positive integer; undefined when absent or invalid. */
 function positiveInt(value) {
@@ -201,8 +221,7 @@ router.get('/mappings', async (req, res) => {
 // POST /api/research/mappings/resolve  { instrument_key, key_type, asset_class, query, investment_id }
 router.post('/mappings/resolve', async (req, res) => {
   const { instrument_key, key_type, asset_class, query, investment_id } = req.body ?? {};
-  const q = single(query);
-  if (!q) throw new ValidationError('query required');
+  const q = parseResearchParam(querySchema, query);
   const result = await researchMappingService.resolve({
     instrumentKey: requireInstrumentKey(instrument_key),
     keyType: keyType(key_type),
@@ -216,13 +235,10 @@ router.post('/mappings/resolve', async (req, res) => {
 // POST /api/research/mappings  { instrument_key, key_type, mappings: [...] }
 router.post('/mappings', async (req, res) => {
   const { instrument_key, key_type, mappings } = req.body ?? {};
-  if (!Array.isArray(mappings) || mappings.length === 0) {
-    throw new ValidationError('mappings must be a non-empty array');
-  }
   const rows = await researchMappingService.save({
     instrumentKey: requireInstrumentKey(instrument_key),
     keyType: keyType(key_type),
-    mappings,
+    mappings: parseResearchParam(mappingsArraySchema, mappings),
   });
   res.ok({ mappings: rows });
 });

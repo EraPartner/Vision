@@ -14,7 +14,6 @@ export { API_BASE_URL, ApiClientError } from '@/lib/api/client';
 export type { AggregationEnvelope, ImportProgress, ImportResult, NetWorthSnapshot, NetWorthResponse, SavedChart, SavedChartCreate, MarketNewsArticle, ImportPreviewResponse, ImportPreviewGroup, ImportStagingRow, MatchSource } from '@/lib/api/types';
 
 // Domain modules
-import { cancelAllRequests } from '@/lib/api/client';
 import * as txn from '@/lib/api/transactions';
 import * as cat from '@/lib/api/categories';
 import * as acct from '@/lib/api/accounts';
@@ -36,11 +35,8 @@ import * as tags from '@/lib/api/tags';
 import * as crossWorkspace from '@/lib/api/crossWorkspace';
 
 export const apiClient = {
-    cancelAll: cancelAllRequests,
-
     // Transactions
     getTransactions: txn.getTransactions,
-    getTransaction: txn.getTransaction,
     createTransaction: txn.createTransaction,
     updateTransaction: txn.updateTransaction,
     deleteTransaction: txn.deleteTransaction,
@@ -50,14 +46,12 @@ export const apiClient = {
 
     // Categories
     getCategories: cat.getCategories,
-    getCategory: cat.getCategory,
     createCategory: cat.createCategory,
     updateCategory: cat.updateCategory,
     deleteCategory: cat.deleteCategory,
 
     // Accounts (ADR-088)
     getAccounts: acct.getAccounts,
-    getAccount: acct.getAccount,
     createAccount: acct.createAccount,
     updateAccount: acct.updateAccount,
     deleteAccount: acct.deleteAccount,
@@ -73,17 +67,14 @@ export const apiClient = {
     deleteRecipient: rec.deleteRecipient,
     mergeRecipients: rec.mergeRecipients,
     unmergeRecipient: rec.unmergeRecipient,
-    getRecipientAliases: rec.getRecipientAliases,
     listRecipientPatterns: rec.listRecipientPatterns,
     createRecipientPattern: rec.createRecipientPattern,
     updateRecipientPattern: rec.updateRecipientPattern,
     deleteRecipientPattern: rec.deleteRecipientPattern,
     previewRecipientPattern: rec.previewRecipientPattern,
-    getRecipientClusters: rec.getRecipientClusters,
 
     // Planned transactions
     getPlannedTransactions: pln.getPlannedTransactions,
-    getPlannedTransaction: pln.getPlannedTransaction,
     createPlannedTransaction: pln.createPlannedTransaction,
     updatePlannedTransaction: pln.updatePlannedTransaction,
     deletePlannedTransaction: pln.deletePlannedTransaction,
@@ -97,7 +88,6 @@ export const apiClient = {
     importRecipients: imp.importRecipients,
     importCategories: imp.importCategories,
     listImportBatches: imp.listImportBatches,
-    getImportBatch: imp.getImportBatch,
     rollbackImportBatch: imp.rollbackImportBatch,
     getImportPreview: imp.getImportPreview,
     overrideImportRow: imp.overrideImportRow,
@@ -112,14 +102,11 @@ export const apiClient = {
     getSettings: sett.getSettings,
     getSetting: sett.getSetting,
     saveSetting: sett.saveSetting,
-    saveSettingsBulk: sett.saveSettingsBulk,
 
     // Portfolio / investments
     getInvestments: port.getInvestments,
-    getInvestment: port.getInvestment,
     createInvestment: port.createInvestment,
     refreshInvestmentPrices: port.refreshInvestmentPrices,
-    getPriceProviders: port.getPriceProviders,
     updateInvestment: port.updateInvestment,
     deleteInvestment: port.deleteInvestment,
     moveHolding: port.moveHolding,
@@ -145,22 +132,16 @@ export const apiClient = {
     // Info / statistics (getStatistics + getTransactionSummary removed — Phase 9
     // cutover deleted the legacy /api/info and /transaction-summary routes)
     getSupportedParsers: info.getSupportedParsers,
-    getBanks: info.getBanks,
     getDistinctBankAccounts: info.getDistinctBankAccounts,
     getTransactionCount: info.getTransactionCount,
-    getCashflowComparison: (params?: Parameters<typeof agg.getAggregationCashflowComparison>[0]) =>
-        agg.getAggregationCashflowComparison(params).then(r => r.data),
     getCashflowForecastMethods: (params?: Parameters<typeof agg.getCashflowForecastMethods>[0]) =>
         agg.getCashflowForecastMethods(params).then(r => r.data),
     getCashflowForecastRolling: (params?: Parameters<typeof agg.getCashflowForecastRolling>[0]) =>
         agg.getCashflowForecastRolling(params).then(r => r.data),
     getCashflowForecastAccuracy: (params?: Parameters<typeof agg.getCashflowForecastAccuracy>[0]) =>
         agg.getCashflowForecastAccuracy(params).then(r => r.data),
-    getMonthlyFinancialSummary: (params?: Parameters<typeof agg.getAggregationMonthlySummary>[0]) =>
-        agg.getAggregationMonthlySummary(params).then(r => r.data),
     getBankBalances: (params?: Parameters<typeof agg.getAggregationBankBalances>[0]) =>
         agg.getAggregationBankBalances(params).then(r => r.data),
-    getBelgianInflationRates: info.getBelgianInflationRates,
     getRecurringPatterns: info.getRecurringPatterns,
     getRecipientInsights: (params?: Parameters<typeof agg.getAggregationRecipientInsights>[0]) =>
         agg.getAggregationRecipientInsights(params).then(r => r.data),
@@ -168,7 +149,6 @@ export const apiClient = {
     getPortfolioSummary: info.getPortfolioSummary,
     getNetWorth: info.getNetWorth,
     getNetWorthByAccount: info.getNetWorthByAccount,
-    refreshMaterializedViews: info.refreshMaterializedViews,
     getExchangeRates: info.getExchangeRates,
     refreshExchangeRates: info.refreshExchangeRates,
 
@@ -188,7 +168,6 @@ export const apiClient = {
     checkForUpdates: electron.checkForUpdates,
     triggerDockerUpdate: electron.triggerDockerUpdate,
     installShellUpdate: electron.installShellUpdate,
-    getUpdateMode: electron.getUpdateMode,
     preUpdateBackup: electron.preUpdateBackup,
     runBackup: electron.runBackup,
     selectBackupFile: electron.selectBackupFile,
@@ -218,9 +197,7 @@ export const apiClient = {
 
     // Research (ADR-079) — multi-provider, envelope meta preserved
     searchResearch: research.searchResearch,
-    getResearchQuote: research.getResearchQuote,
     getResearchChart: research.getResearchChart,
-    getResearchFundamentals: research.getResearchFundamentals,
     getResearchAnalyst: research.getResearchAnalyst,
     getResearchNews: research.getResearchNews,
     getResearchMappings: research.getResearchMappings,
@@ -235,11 +212,7 @@ export const apiClient = {
 
     // Aggregations
     getAggregationMonthlySummary: agg.getAggregationMonthlySummary,
-    getAggregationCategoryBreakdown: agg.getAggregationCategoryBreakdown,
     getAggregationRecipientInsights: agg.getAggregationRecipientInsights,
-    getAggregationCashflowComparison: agg.getAggregationCashflowComparison,
-    getAggregationAverageVsCurrent: agg.getAggregationAverageVsCurrent,
-    getAggregationBankBalances: agg.getAggregationBankBalances,
 
     // Tags
     getTags: tags.getTags,
@@ -259,7 +232,6 @@ export const apiClient = {
     createConversation: ai.createConversation,
     renameConversation: ai.renameConversation,
     deleteConversation: ai.deleteConversation,
-    sendChatMessage: ai.sendChatMessage,
     streamChat: ai.streamChat,
 };
 
@@ -311,7 +283,7 @@ export type {
 } from '@/types/aiChat';
 export type { SavedParserConfig, CustomParserConfigPayload } from '@/lib/api/imports';
 export type { SplitItem, SplitPayment } from '@/lib/api/splits';
-export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, RecipientCluster, PatternSuggestion } from '@/lib/api/recipients';
+export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, PatternSuggestion } from '@/lib/api/recipients';
 export type { ExchangeRate, ExchangeRatesData, PortfolioSummaryItem, PortfolioSummaryResponse, PortfolioSummaryTotals } from '@/lib/api/info';
 export type { RebalanceRequest, RebalanceResponse, ModelPortfolio } from '@/lib/api/crossWorkspace';
 export type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';

@@ -3,11 +3,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../src/database/connection.js', () => ({
-  query: vi.fn(),
-  withTransaction: vi.fn(),
-  getClient: vi.fn(),
-}));
+import { mockConnection } from '../helpers/repoMocks.js';
+vi.mock('../../src/database/connection.js', () => mockConnection({ getClient: vi.fn() }));
 
 const { resolveBulkSelection, normalizeBulkFilter, BULK_SELECTION_DEFAULTS } =
   await import('../../src/services/bulkSelection.js');

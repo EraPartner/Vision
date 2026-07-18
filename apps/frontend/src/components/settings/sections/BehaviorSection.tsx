@@ -3,15 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX } from '@/hooks/portfolio/useInvestments';
 import { apiClient } from '@/lib/api';
 import type { CostBasisMethod, StartupSection } from '@/stores/settingsStore';
-import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
+import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
 
 const DISMISSED_RECURRING_PATTERNS_KEY = 'dismissed_recurring_patterns';
 
@@ -50,35 +47,32 @@ export const BehaviorSection = memo(function BehaviorSection() {
             description={t('settings.section.behavior.desc')}
         >
             <SettingsGroup>
-                <SettingRow title={t('settings.general.startupSection')} description={t('settings.general.startupSectionHint')} layout="stack">
-                    <Select
-                        value={appSettings.startupSection ?? 'budgeting'}
-                        onValueChange={(v) => updateAppSettings({ startupSection: v as StartupSection })}
-                    >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="budgeting">{t('nav.budgeting')}</SelectItem>
-                            <SelectItem value="portfolio">{t('nav.portfolio')}</SelectItem>
-                            <SelectItem value="research">{t('nav.research')}</SelectItem>
-                            <SelectItem value="ai-chat">{t('nav.aiChat')}</SelectItem>
-                            <SelectItem value="last">{t('settings.general.startupSection.last')}</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </SettingRow>
+                <SelectSettingRow
+                    title={t('settings.general.startupSection')}
+                    description={t('settings.general.startupSectionHint')}
+                    value={appSettings.startupSection ?? 'budgeting'}
+                    onValueChange={(v) => updateAppSettings({ startupSection: v as StartupSection })}
+                    options={[
+                        { value: 'budgeting', label: t('nav.budgeting') },
+                        { value: 'portfolio', label: t('nav.portfolio') },
+                        { value: 'research', label: t('nav.research') },
+                        { value: 'ai-chat', label: t('nav.aiChat') },
+                        { value: 'last', label: t('settings.general.startupSection.last') },
+                    ]}
+                />
 
-                <SettingRow title={t('settings.general.costBasisMethod')} description={t('settings.general.costBasisMethodHint')} layout="stack">
-                    <Select
-                        value={appSettings.costBasisMethod ?? 'weighted_avg'}
-                        onValueChange={(v) => { void handleCostBasisMethodChange(v); }}
-                    >
-                        <SelectTrigger aria-label={t('settings.general.costBasisMethod')}><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="weighted_avg">{t('settings.general.costBasisMethod.weighted_avg')}</SelectItem>
-                            <SelectItem value="fifo">{t('settings.general.costBasisMethod.fifo')}</SelectItem>
-                            <SelectItem value="lifo">{t('settings.general.costBasisMethod.lifo')}</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </SettingRow>
+                <SelectSettingRow
+                    title={t('settings.general.costBasisMethod')}
+                    description={t('settings.general.costBasisMethodHint')}
+                    value={appSettings.costBasisMethod ?? 'weighted_avg'}
+                    onValueChange={(v) => { void handleCostBasisMethodChange(v); }}
+                    triggerAriaLabel={t('settings.general.costBasisMethod')}
+                    options={[
+                        { value: 'weighted_avg', label: t('settings.general.costBasisMethod.weighted_avg') },
+                        { value: 'fifo', label: t('settings.general.costBasisMethod.fifo') },
+                        { value: 'lifo', label: t('settings.general.costBasisMethod.lifo') },
+                    ]}
+                />
 
                 <SettingRow
                     title={t('settings.general.autoClearPlanned')}

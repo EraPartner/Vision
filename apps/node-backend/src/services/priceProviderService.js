@@ -8,6 +8,7 @@
 
 import { logger } from '../config/logger.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
+import { epochMsToUtcYmd } from '../lib/dateFormat.js';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
 import { convertRowsToEur } from './currency/currencyConversionService.js';
 import {
@@ -412,7 +413,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       const rows = points.map((p) => ({
         amount: p.price,
         currency: 'USD',
-        date: new Date(p.timestampMs).toISOString().slice(0, 10),
+        date: epochMsToUtcYmd(p.timestampMs),
       }));
       const converted = await convertRowsToEur(rows, invCurrency, {
         useHistoricalRatesByDate: true,

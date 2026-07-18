@@ -14,7 +14,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
-import { useSettingsStore, DEFAULT_DASHBOARD_SETTINGS } from '@/stores/settingsStore';
+import { useSettingsStore, DEFAULT_DASHBOARD_SETTINGS, migrateDashboardSettings } from '@/stores/settingsStore';
 import type { ExclusionScope, DashboardSettings } from '@/stores/settingsStore';
 
 // Re-export so existing consumers don't need to change their imports
@@ -52,12 +52,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (preloaded) {
             _hydrateDashboardSettings({ ...DEFAULT_DASHBOARD_SETTINGS, ...preloaded }, false);
         } else {
-            // Fallback: migrate from localStorage for users upgrading from older versions
+            // Fallback: migrate from localStorage for users upgrading from older
+            // versions. The blob is untrusted — migrateDashboardSettings validates
+            // it (per-field fallback to defaults) so a malformed legacy value can
+            // never be written back to the API below.
             try {
                 const stored = localStorage.getItem('vision_dashboardSettings');
                 if (stored) {
-                    const parsed = JSON.parse(stored);
-                    const migrated = { ...DEFAULT_DASHBOARD_SETTINGS, ...parsed };
+                    const parsed: unknown = JSON.parse(stored);
+                    const migrated = migrateDashboardSettings(parsed);
                     _hydrateDashboardSettings(migrated, false);
                     apiClient.saveSetting(SETTINGS_KEY, migrated).catch((err) => {
                         logger.error('Failed to migrate settings to database', err);

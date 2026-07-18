@@ -1,4 +1,5 @@
 import { query } from '../database/connection.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 const COLUMNS = 'id, name, kind, config_json, created_at, updated_at';
 
@@ -49,18 +50,19 @@ const customParserConfigRepository = {
   },
 
   async update(id, { name, config }) {
-    const fields = [];
-    const values = [];
-    let idx = 1;
+    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses({
+      name,
+      config_json: config !== undefined ? JSON.stringify(config) : undefined,
+    });
+    // config_json needs the ::jsonb cast the generic builder does not emit.
+    const castFields = fields.map((f) => f.startsWith('config_json = ') ? `${f}::jsonb` : f);
 
-    if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name); }
-    if (config !== undefined) { fields.push(`config_json = $${idx++}::jsonb`); values.push(JSON.stringify(config)); }
-
-    if (fields.length === 0) return this.getById(id);
+    if (castFields.length === 0) return this.getById(id);
 
     values.push(id);
     const result = await query(
-      `UPDATE custom_parser_configs SET ${fields.join(', ')} WHERE id = $${idx} RETURNING ${COLUMNS}`,
+      `UPDATE custom_parser_configs SET ${castFields.join(', ')} WHERE id = $${idx} RETURNING ${COLUMNS}`,
       values,
     );
     return result.rows[0] ? mapRow(result.rows[0]) : undefined;

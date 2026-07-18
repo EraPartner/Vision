@@ -95,6 +95,22 @@ const SUGGESTED_CATEGORIES = [
     { general: "PERSONAL",      detail: "Gifts",            detailKey: "onboarding.cat.gifts",          emoji: "🎁" },
 ] as const;
 
+// The green check-circle "step done" block, shared by the import and
+// categories steps (they differed only in copy).
+function StepSuccess({ title, subtitle }: { title: string; subtitle?: string }) {
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <div className="h-14 w-14 rounded-full bg-accent/20 flex items-center justify-center">
+                <CheckCircle2 className="h-7 w-7 text-accent" />
+            </div>
+            <p className="text-lg font-semibold text-foreground">{title}</p>
+            {subtitle && (
+                <p className="text-sm text-muted-foreground">{subtitle}</p>
+            )}
+        </div>
+    );
+}
+
 export function OnboardingWizard({ open, onComplete, onOpenSettings }: OnboardingWizardProps) {
     const { t } = useLanguage();
     const navigate = useNavigate();
@@ -349,19 +365,12 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                             </div>
 
                             {importResult ? (
-                                <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                                    <div className="h-14 w-14 rounded-full bg-accent/20 flex items-center justify-center">
-                                        <CheckCircle2 className="h-7 w-7 text-accent" />
-                                    </div>
-                                    <p className="text-lg font-semibold text-foreground">
-                                        {t('onboarding.import.success', { n: String(importResult.imported) })}
-                                    </p>
-                                    {importResult.duplicates > 0 && (
-                                        <p className="text-sm text-muted-foreground">
-                                            {t('onboarding.import.duplicates', { n: String(importResult.duplicates) })}
-                                        </p>
-                                    )}
-                                </div>
+                                <StepSuccess
+                                    title={t('onboarding.import.success', { n: String(importResult.imported) })}
+                                    subtitle={importResult.duplicates > 0
+                                        ? t('onboarding.import.duplicates', { n: String(importResult.duplicates) })
+                                        : undefined}
+                                />
                             ) : (
                                 <>
                                     <CsvDropzone file={file} onFileSelect={setFile} compact />
@@ -388,13 +397,10 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                             </div>
 
                             {categoriesCreated ? (
-                                <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                                    <div className="h-14 w-14 rounded-full bg-accent/20 flex items-center justify-center">
-                                        <CheckCircle2 className="h-7 w-7 text-accent" />
-                                    </div>
-                                    <p className="text-lg font-semibold text-foreground">{t('onboarding.categories.created')}</p>
-                                    <p className="text-sm text-muted-foreground">{t('onboarding.categories.manage')}</p>
-                                </div>
+                                <StepSuccess
+                                    title={t('onboarding.categories.created')}
+                                    subtitle={t('onboarding.categories.manage')}
+                                />
                             ) : (
                                 <>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[240px] overflow-y-auto pr-1">

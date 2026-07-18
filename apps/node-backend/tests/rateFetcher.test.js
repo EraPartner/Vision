@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  withTransaction: vi.fn(),
-}));
+import { mockLogger } from './helpers/mockLogger.js';
+import { mockConnection } from './helpers/repoMocks.js';
+vi.mock('../src/database/connection.js', () => mockConnection());
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import { query, withTransaction } from '../src/database/connection.js';

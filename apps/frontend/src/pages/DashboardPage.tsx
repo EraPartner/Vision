@@ -29,6 +29,7 @@ import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVis
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { parseCategoryName } from "@vision/shared-utils";
 import type { Transaction } from "@/lib/api";
 
 type GraphExclusions = Record<string, boolean>;
@@ -221,13 +222,11 @@ export default function DashboardPage() {
 
         const extractDetail = (categoryName: string): string => {
             if (categoryName === t('txPage.field.uncategorized')) return categoryName;
-            const parts = categoryName.split(':');
-            if (parts.length > 1) {
-                // Join back — the DETAIL text itself may contain colons.
-                const detail = parts.slice(1).join(':').trim();
-                return detail.charAt(0) + detail.slice(1).toLowerCase();
-            }
-            return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
+            // Shared GENERAL:DETAIL split (first ':' only, detail may contain
+            // colons); sentence-case the detail for display.
+            const { general, detail } = parseCategoryName(categoryName);
+            const label = detail || general;
+            return label.charAt(0) + label.slice(1).toLowerCase();
         };
 
         const result = topCategories.map(cat => ({

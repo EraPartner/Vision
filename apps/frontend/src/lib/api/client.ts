@@ -204,14 +204,6 @@ export type QueryParams = Record<string, string | number | boolean | null | unde
 
 const activeControllers = new Set<AbortController>();
 
-/** Cancel every in-flight request (e.g. on logout). */
-export function cancelAllRequests(): void {
-    for (const controller of activeControllers) {
-        controller.abort();
-    }
-    activeControllers.clear();
-}
-
 /**
  * Raw fetch with timeout and AbortController tracking.
  * Does NOT parse the response — callers handle that.

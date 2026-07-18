@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
   queryPrepared: vi.fn(),
@@ -27,12 +28,7 @@ import infoRepository from '../src/repositories/infoRepository.js';
 import { clearMvCache } from '../src/repositories/infoRepository.js';
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
+  logger: mockLogger(),
 }));
 
 import { logger } from '../src/config/logger.js';
@@ -530,7 +526,7 @@ describe('InfoRepository', () => {
       expect(fallbackSql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
       expect(fallbackSql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
       // Canonical exclusion semantics: 3-level category COALESCE (alias-aware).
-      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1,$2)');
+      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1, $2)');
       // Aggregated per (date,currency) in the `daily` CTE, then joined by month.
       expect(fallbackSql).toContain('LEFT JOIN daily d ON d.date >= m.month_start');
     });

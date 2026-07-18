@@ -1,77 +1,132 @@
 /**
  * Watchlist routes — CRUD for prospective investments.
+ *
+ * Bodies are validated with zod (schema → safeParse → ValidationError), the
+ * idiom established in settings.js/reports.js. The schemas are LOOSE: fields
+ * without a typed column (notes, ...) pass through untouched and the
+ * repository allow-list decides what is written, exactly as before.
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import { watchlistRepository } from '../services/watchlistService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, validateNumber, assertMaxLength } from '../middleware/validation.js';
+import { validateIdParam, validateNumber, assertMaxLength, assertCurrency } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
-const WATCHLIST_ASSET_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
-const CURRENCY_RE = /^[A-Za-z]{3}$/;
+const WATCHLIST_ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals'];
 
 // NUMERIC(18,6) price columns hold at most 12 integer digits — anything
 // larger (or Infinity) previously surfaced as a DB overflow error → 500.
 const MAX_PRICE = 999_999_999_999;
 
-// Type-check the fields the repository forwards to typed columns; without
-// this a string target_price surfaces as a DB error (500) instead of a 400.
-// Presence requirements stay in the POST handler — PATCH allows partials.
-// `context` distinguishes create from update: added_price is an add-time
-// snapshot that is not PATCH-updatable (see below).
-function validateWatchlistFields(body, { context = 'create' } = {}) {
-  // An empty / whitespace-only name is not a valid item label. On PATCH `name`
-  // is optional (partial update), so only reject it when actually provided;
-  // this also closes the POST whitespace hole ('   ' is truthy so the POST
-  // presence check let it through).
-  if (body.name !== undefined) {
-    if (body.name === null || String(body.name).trim() === '') {
-      throw new ValidationError('name cannot be empty');
-    }
+/* ── Zod schemas ───────────────────────────────────────────────────────────
+ * The fields the repository forwards to typed columns; without these a string
+ * target_price surfaces as a DB error (500) instead of a 400. Presence
+ * requirements stay in the POST handler — PATCH allows partials. Bridges reuse
+ * the shared middleware guards so accepted shapes (String()/Number() coercion,
+ * bounds, widths) stay identical to the pre-zod behavior. */
+
+// An empty / whitespace-only name is not a valid item label; VARCHAR(200)
+// (migration 0001) caps the width before the column raises a raw 22001 500.
+const nameField = z.unknown().transform((value, ctx) => {
+  if (value === null || String(value).trim() === '') {
+    ctx.addIssue({ code: 'custom', message: 'name cannot be empty' });
+    return z.NEVER;
   }
-  // VARCHAR column widths (migration 0001): a provider-/market-prefilled value
-  // can exceed the HTML maxLength cap (which only clamps typed input), reaching
-  // the column as a raw 22001 500 instead of a clean 400.
-  assertMaxLength(body.name, 200, 'name');
-  assertMaxLength(body.symbol, 20, 'symbol');
-  assertMaxLength(body.price_provider_id, 200, 'price_provider_id');
-  if (body.target_price !== undefined && body.target_price !== null) {
-    const result = validateNumber(body.target_price, { min: 0, max: MAX_PRICE, fieldName: 'target_price' });
-    if (!result.valid) throw new ValidationError(result.error);
-    // A 0 target is meaningless for the at-or-below alert check.
-    if (result.value === 0) throw new ValidationError('target_price must be greater than 0');
-    body.target_price = result.value;
+  try {
+    return assertMaxLength(value, 200, 'name');
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
   }
+}).optional();
+
+// VARCHAR column widths: a provider-/market-prefilled value can exceed the
+// HTML maxLength cap (which only clamps typed input).
+const maxLenField = (maxLength, field) => z.unknown().transform((value, ctx) => {
+  try {
+    return assertMaxLength(value, maxLength, field);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+}).optional();
+
+// Numeric prices: Number() coercion + [0, MAX_PRICE] bounds via the shared
+// validateNumber guard; the coerced number replaces the raw input. null passes
+// through (explicit clear), undefined is absent.
+const priceField = (field, { rejectZero = false } = {}) => z.unknown().transform((value, ctx) => {
+  if (value === null) return null;
+  const result = validateNumber(value, { min: 0, max: MAX_PRICE, fieldName: field });
+  if (!result.valid) {
+    ctx.addIssue({ code: 'custom', message: result.error });
+    return z.NEVER;
+  }
+  // A 0 target is meaningless for the at-or-below alert check.
+  if (rejectZero && result.value === 0) {
+    ctx.addIssue({ code: 'custom', message: `${field} must be greater than 0` });
+    return z.NEVER;
+  }
+  return result.value;
+}).optional();
+
+// Shared ISO-4217 guard — validates AND uppercases, so a lower-case 'usd'
+// can't be stored and then mismatch the uppercase codes every FX/conversion
+// path expects. '' still rejects (an explicit currency key must carry a real
+// code); null passes through untouched, as before.
+const currencyField = z.unknown().transform((value, ctx) => {
+  if (value === null) return null;
+  let code;
+  try {
+    code = assertCurrency(value);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+  if (code === undefined) {
+    ctx.addIssue({ code: 'custom', message: 'currency must be a 3-letter ISO code' });
+    return z.NEVER;
+  }
+  return code;
+}).optional();
+
+const watchlistCreateSchema = z.looseObject({
+  name: nameField,
+  symbol: maxLenField(20, 'symbol'),
+  price_provider_id: maxLenField(200, 'price_provider_id'),
+  target_price: priceField('target_price', { rejectZero: true }),
   // Snapshot of the live price when the item was added (ADR-097 backtest); optional.
-  // It is captured once at creation and is NOT PATCH-updatable — the repository
-  // update allow-list omits it, so validating it on PATCH was dead code that
-  // silently accepted-then-dropped the value. Reject it explicitly on update so
-  // the caller gets a 400 instead of a no-op.
-  if (body.added_price !== undefined && body.added_price !== null) {
-    if (context === 'update') {
-      throw new ValidationError('added_price cannot be updated after creation');
+  added_price: priceField('added_price'),
+  asset_class: z.enum(WATCHLIST_ASSET_CLASSES, {
+    error: `asset_class must be one of: ${WATCHLIST_ASSET_CLASSES.join(', ')}`,
+  }).optional(),
+  currency: currencyField,
+});
+
+// Partial-update variant: same field rules, except added_price is captured
+// once at creation and is NOT PATCH-updatable — the repository update
+// allow-list omits it, so accepting it here silently dropped the value.
+// Reject it explicitly so the caller gets a 400 instead of a no-op.
+const watchlistUpdateSchema = watchlistCreateSchema.extend({
+  added_price: z.unknown().superRefine((value, ctx) => {
+    if (value != null) {
+      ctx.addIssue({ code: 'custom', message: 'added_price cannot be updated after creation' });
     }
-    const result = validateNumber(body.added_price, { min: 0, max: MAX_PRICE, fieldName: 'added_price' });
-    if (!result.valid) throw new ValidationError(result.error);
-    body.added_price = result.value;
+  }).optional(),
+});
+
+function parseWatchlistBody(schema, body) {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
   }
-  if (body.asset_class !== undefined && !WATCHLIST_ASSET_CLASSES.has(body.asset_class)) {
-    throw new ValidationError(
-      `asset_class must be one of: ${[...WATCHLIST_ASSET_CLASSES].join(', ')}`
-    );
-  }
-  if (body.currency !== undefined && body.currency !== null) {
-    if (!CURRENCY_RE.test(String(body.currency))) {
-      throw new ValidationError('currency must be a 3-letter code');
-    }
-    // Normalise to uppercase ISO shape so a lower-case 'usd' can't be stored
-    // and then mismatch the uppercase codes every FX/conversion path expects
-    // (transactions/accounts already uppercase via assertCurrency).
-    body.currency = String(body.currency).toUpperCase();
-  }
+  return result.data;
 }
 
 router.get('/', async (req, res) => {
@@ -101,9 +156,8 @@ router.post('/', async (req, res) => {
   if (!req.body.name || !req.body.asset_class || req.body.target_price == null) {
     throw new ValidationError('name, asset_class, and target_price are required');
   }
-  // Coerces target_price in place — destructure only after validation.
-  validateWatchlistFields(req.body);
-  const { name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price } = req.body;
+  const data = parseWatchlistBody(watchlistCreateSchema, req.body);
+  const { name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price } = data;
   const item = await watchlistRepository.create({
     name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price,
   });
@@ -113,8 +167,8 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  validateWatchlistFields(req.body, { context: 'update' });
-  const item = await watchlistRepository.update(id, req.body);
+  const data = parseWatchlistBody(watchlistUpdateSchema, req.body);
+  const item = await watchlistRepository.update(id, data);
   if (!item) throw new NotFoundError('Watchlist item not found');
   res.ok(item);
 });

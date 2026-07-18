@@ -68,6 +68,54 @@ describe('twelveDataAdapter', () => {
     mockFetch([['/quote', { status: 'error', code: 400, message: 'bad symbol' }]]);
     await expect(twelveData.quote('NOPE')).rejects.toThrow(/bad symbol/);
   });
+
+  // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
+
+  it('search degrades to no items when the data array is missing', async () => {
+    mockFetch([['/symbol_search', {}]]);
+    const { items } = await twelveData.search('AAPL');
+    expect(items).toEqual([]);
+  });
+
+  // Deliberate ZOD-12 behavior: non-object rows are skipped instead of the
+  // accidental TypeError the old bare field access produced.
+  it('search skips non-object rows and keeps the valid ones', async () => {
+    mockFetch([['/symbol_search', { data: [null, 'junk', { symbol: 'AAPL', instrument_name: 'Apple' }] }]]);
+    const { items } = await twelveData.search('AAPL');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ symbol: 'AAPL', name: 'Apple' });
+  });
+
+  it('quote tolerates a missing fifty_two_week block', async () => {
+    mockFetch([['/quote', { symbol: 'AAPL', close: '190.5' }]]);
+    const q = await twelveData.quote('AAPL');
+    expect(q.price).toBe(190.5);
+    expect(q.high52w).toBeUndefined();
+    expect(q.low52w).toBeUndefined();
+  });
+
+  it('quote throws on a null response body (aggregator falls through)', async () => {
+    mockFetch([['/quote', null]]);
+    await expect(twelveData.quote('AAPL')).rejects.toThrow();
+  });
+
+  it('chart degrades to no points when values are missing, and drops unparseable rows', async () => {
+    mockFetch([['/time_series', { meta: { symbol: 'AAPL' } }]]);
+    const empty = await twelveData.chart('AAPL');
+    expect(empty.points).toEqual([]);
+
+    mockFetch([['/time_series', {
+      meta: { symbol: 'AAPL', currency: 'USD' },
+      values: [
+        { datetime: '2026-01-02', close: 'garbage' }, // bad close -> dropped
+        { datetime: 'not-a-date', close: '2' }, // bad time -> dropped
+        { datetime: '2026-01-01', close: '1.5' },
+      ],
+    }]]);
+    const { points } = await twelveData.chart('AAPL');
+    expect(points).toHaveLength(1);
+    expect(points[0].close).toBe(1.5);
+  });
 });
 
 describe('finnhubAdapter', () => {
@@ -83,6 +131,74 @@ describe('finnhubAdapter', () => {
     ]]]);
     const { articles } = await finnhub.news('AAPL', { count: 5 });
     expect(articles[0]).toMatchObject({ title: 'H1', publisher: 'Reuters', publishedAt: 1700000000000, relatedSymbols: ['AAPL'] });
+  });
+
+  // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
+
+  it('search degrades to no items when result is missing', async () => {
+    mockFetch([['/search', {}]]);
+    const { items } = await finnhub.search('AAPL');
+    expect(items).toEqual([]);
+  });
+
+  it('quote degrades to an all-undefined quote on an empty object response', async () => {
+    mockFetch([['/quote', {}]]);
+    const q = await finnhub.quote('AAPL');
+    expect(q.symbol).toBe('AAPL');
+    expect(q.price).toBeUndefined();
+    expect(q.change).toBeUndefined();
+  });
+
+  it('quote throws on a null response body (aggregator falls through)', async () => {
+    mockFetch([['/quote', null]]);
+    await expect(finnhub.quote('AAPL')).rejects.toThrow();
+  });
+
+  it('chart returns empty points when the candle status is not ok', async () => {
+    mockFetch([['/stock/candle', { s: 'no_data' }]]);
+    const { points } = await finnhub.chart('AAPL');
+    expect(points).toEqual([]);
+  });
+
+  it('chart keeps timestamped points even when parallel arrays are missing', async () => {
+    mockFetch([['/stock/candle', { s: 'ok', t: [1700000000, 1700086400] }]]);
+    const { points } = await finnhub.chart('AAPL');
+    expect(points).toHaveLength(2);
+    expect(points[0]).toMatchObject({ time: 1700000000000, close: undefined });
+  });
+
+  it('fundamentals degrades to undefined metrics when metric is missing', async () => {
+    mockFetch([['/stock/metric', {}]]);
+    const f = await finnhub.fundamentals('AAPL');
+    expect(f.symbol).toBe('AAPL');
+    expect(f.pe).toBeUndefined();
+    expect(f.marketCap).toBeUndefined();
+  });
+
+  it('analyst degrades to no consensus when recommendations are not an array', async () => {
+    mockFetch([
+      ['/stock/recommendation', { error: 'nope' }],
+      ['/stock/price-target', {}],
+    ]);
+    const a = await finnhub.analyst('AAPL');
+    expect(a.consensus).toBeUndefined();
+    expect(a.numberOfAnalysts).toBeUndefined();
+    expect(a.targetMean).toBeUndefined();
+  });
+
+  it('news degrades to no articles on a non-array response', async () => {
+    mockFetch([['/company-news', { error: 'nope' }]]);
+    const { articles } = await finnhub.news('AAPL');
+    expect(articles).toEqual([]);
+  });
+
+  // Deliberate ZOD-12 behavior: non-object rows are skipped instead of the
+  // accidental TypeError the old bare field access produced.
+  it('news skips non-object rows and keeps the valid ones', async () => {
+    mockFetch([['/company-news', [null, 'junk', { headline: 'H1', url: 'http://x' }]]]);
+    const { articles } = await finnhub.news('AAPL');
+    expect(articles).toHaveLength(1);
+    expect(articles[0].title).toBe('H1');
   });
 });
 
@@ -120,6 +236,76 @@ describe('fmpAdapter', () => {
     });
     expect(a.recentActions[0]).toMatchObject({ firm: 'Needham', toGrade: 'Hold', action: 'maintain' });
   });
+
+  // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
+
+  it('search merges both endpoints, dedupes symbols, and skips rows without one', async () => {
+    mockFetch([
+      ['/search-symbol', [{ symbol: 'AAPL', name: 'Apple', exchange: 'NASDAQ' }, { name: 'no symbol' }]],
+      ['/search-name', [{ symbol: 'AAPL', name: 'dupe' }, { symbol: 'APC.DE', name: 'Apple (DE)', exchangeFullName: 'XETRA' }]],
+    ]);
+    const { items } = await fmp.search('apple');
+    expect(items.map((i) => i.symbol)).toEqual(['AAPL', 'APC.DE']);
+    expect(items[1].exchange).toBe('XETRA');
+  });
+
+  it('search degrades to no items when both endpoints return non-arrays', async () => {
+    mockFetch([
+      ['/search-symbol', { message: 'nope' }],
+      ['/search-name', { message: 'nope' }],
+    ]);
+    const { items } = await fmp.search('apple');
+    expect(items).toEqual([]);
+  });
+
+  it('quote throws when the response array is empty', async () => {
+    mockFetch([['/quote?', []]]);
+    await expect(fmp.quote('AAPL')).rejects.toThrow(/no quote/);
+  });
+
+  it('quote degrades to fallbacks when the first row is an empty object', async () => {
+    mockFetch([['/quote?', [{}]]]);
+    const q = await fmp.quote('AAPL');
+    expect(q.symbol).toBe('AAPL');
+    expect(q.name).toBe('AAPL');
+    expect(q.price).toBeUndefined();
+  });
+
+  it('fundamentals throws when both core endpoints come back empty', async () => {
+    mockFetch([
+      ['/profile?', []],
+      ['/ratios-ttm?', []],
+      ['/key-metrics-ttm?', []],
+      ['/financial-growth?', []],
+    ]);
+    await expect(fmp.fundamentals('AAPL')).rejects.toThrow(/no fundamentals/);
+  });
+
+  it('fundamentals returns a partial result from ratios alone', async () => {
+    mockFetch([
+      ['/profile?', []],
+      ['/ratios-ttm?', [{ priceToEarningsRatioTTM: 30 }]],
+      ['/key-metrics-ttm?', []],
+      ['/financial-growth?', []],
+    ]);
+    const f = await fmp.fundamentals('AAPL');
+    expect(f.name).toBe('AAPL');
+    expect(f.pe).toBe(30);
+    expect(f.marketCap).toBeUndefined();
+  });
+
+  it('analyst degrades to no consensus when grades-consensus is empty', async () => {
+    mockFetch([
+      ['/price-target-consensus?', [{ targetConsensus: 100 }]],
+      ['/grades?', []],
+      ['/grades-consensus?', []],
+    ]);
+    const a = await fmp.analyst('AAPL');
+    expect(a.consensus).toBeUndefined();
+    expect(a.numberOfAnalysts).toBeUndefined();
+    expect(a.targetMean).toBe(100);
+    expect(a.recentActions).toEqual([]);
+  });
 });
 
 describe('alphaVantageAdapter', () => {
@@ -150,5 +336,21 @@ describe('alphaVantageAdapter', () => {
     const { points } = await alphaVantage.chart('AAPL', { range: '1mo' });
     expect(points).toHaveLength(1);
     expect(points[0].close).toBe(2.5);
+  });
+
+  // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
+
+  it('quote throws "no quote" when the Global Quote block is missing or empty', async () => {
+    mockFetch([['GLOBAL_QUOTE', {}]]);
+    await expect(alphaVantage.quote('AAPL')).rejects.toThrow(/no quote/);
+
+    mockFetch([['GLOBAL_QUOTE', { 'Global Quote': {} }]]);
+    await expect(alphaVantage.quote('AAPL')).rejects.toThrow(/no quote/);
+  });
+
+  it('chart degrades to no points when the time series block is missing', async () => {
+    mockFetch([['TIME_SERIES_DAILY', { 'Meta Data': {} }]]);
+    const { points } = await alphaVantage.chart('AAPL', { range: '1mo' });
+    expect(points).toEqual([]);
   });
 });

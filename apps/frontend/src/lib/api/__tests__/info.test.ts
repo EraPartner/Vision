@@ -5,16 +5,13 @@ import { server } from "@/test/msw/server";
 
 import {
   getSupportedParsers,
-  getBanks,
   getDistinctBankAccounts,
   getTransactionCount,
-  getBelgianInflationRates,
   getRecurringPatterns,
   getPortfolioPerformance,
   getPortfolioSummary,
   getNetWorth,
   getNetWorthByAccount,
-  refreshMaterializedViews,
   getExchangeRates,
   refreshExchangeRates,
 } from "@/lib/api/info";
@@ -39,16 +36,6 @@ describe("info API client", () => {
     expect(res.adapters[0].key).toBe("kbc");
   });
 
-  it("getBanks maps adapter keys onto the banks array (deprecated shim)", async () => {
-    server.use(
-      http.get(`${API_BASE}/api/info/supported-adapters`, () =>
-        ok({ adapters: [{ key: "kbc", name: "KBC" }, { key: "ing", name: "ING" }], total_count: 2 }),
-      ),
-    );
-    const res = await getBanks();
-    expect(res.banks).toEqual(["kbc", "ing"]);
-  });
-
   it("getDistinctBankAccounts fetches the banks endpoint", async () => {
     server.use(http.get(`${API_BASE}/api/info/banks`, () => ok({ banks: ["acc1"] })));
     expect((await getDistinctBankAccounts()).banks).toEqual(["acc1"]);
@@ -59,20 +46,6 @@ describe("info API client", () => {
       http.get(`${API_BASE}/api/info/transaction-count`, () => ok({ total_transactions: 42 })),
     );
     expect((await getTransactionCount()).total_transactions).toBe(42);
-  });
-
-  it("getBelgianInflationRates forwards range + db_only params", async () => {
-    let url = "";
-    server.use(
-      http.get(`${API_BASE}/api/info/inflation-rates`, ({ request }) => {
-        url = request.url;
-        return ok({ source: "database", total_rates: 0, rates: [] });
-      }),
-    );
-    await getBelgianInflationRates({ start_month: "2025-01", end_month: "2025-12", db_only: true });
-    expect(url).toContain("start_month=2025-01");
-    expect(url).toContain("end_month=2025-12");
-    expect(url).toContain("db_only=true");
   });
 
   it("getRecurringPatterns returns the patterns on success", async () => {
@@ -137,15 +110,6 @@ describe("info API client", () => {
       ),
     );
     expect((await getNetWorthByAccount()).currency).toBe("EUR");
-  });
-
-  it("refreshMaterializedViews POSTs and returns timing", async () => {
-    server.use(
-      http.post(`${API_BASE}/api/info/refresh-views`, () =>
-        ok({ message: "done", duration_ms: 12 }),
-      ),
-    );
-    expect((await refreshMaterializedViews()).duration_ms).toBe(12);
   });
 
   it("getExchangeRates appends db_only only when requested", async () => {

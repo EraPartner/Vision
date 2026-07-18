@@ -1,4 +1,5 @@
 import { query } from '../database/connection.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // date_range_* are DATE columns — emitted via to_char so the wire carries the
 // calendar day, not a pg Date that JSON-serializes to the previous day east of UTC.
@@ -39,22 +40,12 @@ const savedChartsRepository = {
   },
 
   async update(id, { name, chartType, categoryIds, recipientIds, tagIds, allCategories, allRecipients, allTags, chartVariant, timeBucket, dateRangeStart, dateRangeEnd }) {
-    const fields = [];
-    const values = [];
-    let idx = 1;
-
-    if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name); }
-    if (chartType !== undefined) { fields.push(`chart_type = $${idx++}`); values.push(chartType); }
-    if (categoryIds !== undefined) { fields.push(`category_ids = $${idx++}`); values.push(categoryIds); }
-    if (recipientIds !== undefined) { fields.push(`recipient_ids = $${idx++}`); values.push(recipientIds); }
-    if (tagIds !== undefined) { fields.push(`tag_ids = $${idx++}`); values.push(tagIds); }
-    if (allCategories !== undefined) { fields.push(`all_categories = $${idx++}`); values.push(allCategories); }
-    if (allRecipients !== undefined) { fields.push(`all_recipients = $${idx++}`); values.push(allRecipients); }
-    if (allTags !== undefined) { fields.push(`all_tags = $${idx++}`); values.push(allTags); }
-    if (chartVariant !== undefined) { fields.push(`chart_variant = $${idx++}`); values.push(chartVariant); }
-    if (timeBucket !== undefined) { fields.push(`time_bucket = $${idx++}`); values.push(timeBucket); }
-    if (dateRangeStart !== undefined) { fields.push(`date_range_start = $${idx++}`); values.push(dateRangeStart); }
-    if (dateRangeEnd !== undefined) { fields.push(`date_range_end = $${idx++}`); values.push(dateRangeEnd); }
+    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped,
+    // mapColumn translates the camelCase API bag to the snake_case columns.
+    const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses(
+      { name, chartType, categoryIds, recipientIds, tagIds, allCategories, allRecipients, allTags, chartVariant, timeBucket, dateRangeStart, dateRangeEnd },
+      { mapColumn: (key) => key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`) },
+    );
 
     if (fields.length === 0) return this.getById(id);
 

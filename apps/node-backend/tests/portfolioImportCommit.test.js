@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
+import { mockTxConnection } from './helpers/repoMocks.js';
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  // Transaction shim: run the callback; a throw propagates (= rollback).
-  // The repo + leg service are module-mocked, so the client goes unused.
-  withTransaction: vi.fn(async (fn) => fn({ query: vi.fn().mockResolvedValue({ rows: [] }) })),
-}));
+// Transaction shim: runs the callback; a throw propagates (= rollback).
+// The repo + leg service are module-mocked, so the client goes unused.
+vi.mock('../src/database/connection.js', () =>
+  mockTxConnection({ query: vi.fn().mockResolvedValue({ rows: [] }) }));
 
 vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
   default: { create: vi.fn(), hardDelete: vi.fn() },

@@ -3,6 +3,7 @@
  */
 
 import { query, queryPrepared } from '../database/connection.js';
+import { buildExclusionClauses } from '../services/filterBuilder.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
@@ -113,22 +114,16 @@ export const statisticsRepository = {
   },
 
   async getCategoryPivot(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = []) {
-    const validCatIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-
-    const params = [];
     const includeTransfers = await getIncludeTransfers();
-    // Canonical exclusion semantics (match services/filterBuilder.buildExclusionClauses
-    // and every other money surface): 3-level category COALESCE and ALIAS-AWARE
-    // recipient exclusion. The bare `t.recipient_id NOT IN` here previously kept
-    // an excluded recipient's transactions whenever they were recorded under an
-    // alias of the excluded primary — disagreeing with the dashboard/forecast.
-    const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-      : '';
-    const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
-      : '';
+    // Canonical exclusion clauses (services/filterBuilder.buildExclusionClauses,
+    // shared with every other money surface): 3-level category COALESCE and
+    // ALIAS-AWARE recipient exclusion. The bare `t.recipient_id NOT IN` here
+    // previously kept an excluded recipient's transactions whenever they were
+    // recorded under an alias of the excluded primary — disagreeing with the
+    // dashboard/forecast.
+    const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
+    const params = excl.params;
+    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
     // Aggregate in SQL per (category, period, date, currency) instead of
     // streaming every active transaction into JS. Conversion uses each row's
@@ -153,8 +148,7 @@ export const statisticsRepository = {
       WHERE t.is_active = true
         ${includeTransfers ? '' : 'AND t.is_transfer = false'}
         AND COALESCE(t.category_id, r.default_category_id) IS NOT NULL
-        ${catExclude}
-        ${recExclude}
+        ${exclusionWhere}
       GROUP BY COALESCE(t.category_id, r.default_category_id), CONCAT(c.general, ': ', c.detail), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
       ORDER BY period
     `;

@@ -95,6 +95,49 @@ export function signClass(amount) {
   return 'neutral';
 }
 
+// ── KPI cards ──────────────────────────────────────────────────────────────
+
+/**
+ * Render one KPI card. Label, value and `sub` are HTML-escaped; pass
+ * `subHtml` instead of `sub` when the sub-line carries pre-built markup
+ * (e.g. a badge span).
+ *
+ * @param {{
+ *   label: string,
+ *   value: string | number,
+ *   cls?: string,        // sentiment class on the value ('pos' | 'neg' | …)
+ *   sub?: string | null, // plain-text sub-line (escaped)
+ *   subCls?: string,     // extra class on the sub-line
+ *   subHtml?: string | null, // pre-escaped/markup sub-line (wins over sub)
+ *   valueStyle?: string | null, // inline style on the value div
+ * }} card
+ * @returns {string}
+ */
+export function kpiCard({ label, value, cls = '', sub = null, subCls = '', subHtml = null, valueStyle = null }) {
+  const subInner = subHtml ?? (sub != null ? escapeHtml(sub) : null);
+  const subLine = subInner != null
+    ? `<div class="${subCls ? `kpi-sub ${subCls}` : 'kpi-sub'}">${subInner}</div>`
+    : '';
+  return `
+    <div class="kpi-card">
+      <div class="kpi-label">${escapeHtml(label)}</div>
+      <div class="${cls ? `kpi-value ${cls}` : 'kpi-value'}"${valueStyle ? ` style="${valueStyle}"` : ''}>${escapeHtml(value)}</div>
+      ${subLine}
+    </div>`;
+}
+
+/**
+ * Render a grid of KPI cards.
+ *
+ * @param {Parameters<typeof kpiCard>[0][]} cards
+ * @param {{ cols?: 3 | 4, style?: string | null }} [opts]
+ * @returns {string}
+ */
+export function kpiGrid(cards, { cols = 4, style = null } = {}) {
+  const cls = cols === 3 ? 'kpi-grid kpi-grid-3' : 'kpi-grid';
+  return `<div class="${cls}"${style ? ` style="${style}"` : ''}>${cards.map(kpiCard).join('')}</div>`;
+}
+
 // ── SVG Charts ─────────────────────────────────────────────────────────────
 
 /**

@@ -154,6 +154,32 @@ async function setPlannedTransactionTags(client, plannedTransactionId, slugs) {
   );
 }
 
+/**
+ * Apply the sanitized SET fields to a planned row inside the caller's
+ * transaction — or, when no updatable fields remain, just verify the row
+ * exists. Shared by update() and updateWithLoanSchedule() so the two
+ * transaction bodies cannot drift.
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {number} id
+ * @param {object} sanitized  output of sanitizeUpdateFields()
+ * @returns {Promise<boolean>} false when the row is gone
+ */
+async function applyPlannedFieldUpdate(client, id, sanitized) {
+  const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
+  if (setClauses.length === 0) {
+    const r = await client.query('SELECT id FROM planned_transactions WHERE id = $1', [id]);
+    return r.rowCount > 0;
+  }
+  setClauses.push('updated_at = NOW()');
+  params.push(id);
+  const r = await client.query(
+    `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
+    params,
+  );
+  return r.rowCount > 0;
+}
+
 export const plannedTransactionRepository = {
   async getAll({
     limit = 50, offset = 0, startDate = null, endDate = null,
@@ -414,22 +440,10 @@ export const plannedTransactionRepository = {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
-    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
 
     if (tags !== undefined) {
       const found = await withTransaction(async (client) => {
-        if (setClauses.length > 0) {
-          setClauses.push('updated_at = NOW()');
-          params.push(id);
-          const r = await client.query(
-            `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
-            params,
-          );
-          if (r.rowCount === 0) return false;
-        } else {
-          const r = await client.query('SELECT id FROM planned_transactions WHERE id = $1', [id]);
-          if (r.rowCount === 0) return false;
-        }
+        if (!(await applyPlannedFieldUpdate(client, id, sanitized))) return false;
         await setPlannedTransactionTags(client, id, tags);
         return true;
       });
@@ -437,6 +451,7 @@ export const plannedTransactionRepository = {
       return this.getById(id);
     }
 
+    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
     if (setClauses.length === 0) return this.getById(id);
 
     setClauses.push(`updated_at = NOW()`);
@@ -477,20 +492,7 @@ export const plannedTransactionRepository = {
     const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
 
     const found = await withTransaction(async (client) => {
-      const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
-
-      if (setClauses.length > 0) {
-        setClauses.push('updated_at = NOW()');
-        params.push(id);
-        const r = await client.query(
-          `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
-          params,
-        );
-        if (r.rowCount === 0) return false;
-      } else {
-        const r = await client.query('SELECT id FROM planned_transactions WHERE id = $1', [id]);
-        if (r.rowCount === 0) return false;
-      }
+      if (!(await applyPlannedFieldUpdate(client, id, sanitized))) return false;
 
       if (tags !== undefined) {
         await setPlannedTransactionTags(client, id, tags);

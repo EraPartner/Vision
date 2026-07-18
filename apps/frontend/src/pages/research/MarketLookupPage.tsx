@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
   formatDateTimeWithAppSettings,
@@ -11,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -35,16 +37,7 @@ import { ResearchMappingDialog } from "@/components/research/ResearchMappingDial
 
 import { apiClient } from "@/lib/api";
 
-const RANGES = [
-  { label: "1D", range: "1d", interval: "5m" },
-  { label: "5D", range: "5d", interval: "15m" },
-  { label: "1M", range: "1mo", interval: "1d" },
-  { label: "3M", range: "3mo", interval: "1d" },
-  { label: "6M", range: "6mo", interval: "1d" },
-  { label: "1Y", range: "1y", interval: "1wk" },
-  { label: "5Y", range: "5y", interval: "1mo" },
-  { label: "MAX", range: "max", interval: "1mo" },
-];
+import { LOOKUP_RANGES as RANGES } from "@/lib/research/ranges";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -134,15 +127,13 @@ export default function MarketLookupPage() {
     if (val == null || isNaN(val)) return "—";
     return new Intl.NumberFormat(locale, opts).format(val);
   }, [locale]);
+  // Shared cached currency formatter; quotes pin 2 decimals regardless of the
+  // showDecimalPlaces setting (unchanged behavior).
+  const fmtCurrency = useCurrencyFormatter("USD");
   const fmtPrice = useCallback((val: number | null | undefined, currency = "USD") => {
     if (val == null || isNaN(val)) return "—";
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(val);
-  }, [locale]);
+    return fmtCurrency(val, currency, 2);
+  }, [fmtCurrency]);
   const fmtLargeNum = useCallback(
     (val: number | null | undefined) =>
       formatCompactNumber(val, (v) => fmtNum(v, { maximumFractionDigits: 0 })),
@@ -424,19 +415,14 @@ export default function MarketLookupPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">{t('market.priceChart')}</CardTitle>
-                <div className="flex gap-1">
-                  {RANGES.map((r) => (
-                    <Button
-                      key={r.label}
-                      variant={selectedRange.range === r.range ? "default" : "ghost"}
-                      size="sm"
-                      className="h-7 px-2.5 text-xs"
-                      onClick={() => setSelectedRange(r)}
-                    >
-                      {r.label}
-                    </Button>
-                  ))}
-                </div>
+                <SegmentedButtons
+                  options={RANGES}
+                  getKey={(r) => r.label}
+                  getLabel={(r) => r.label}
+                  isSelected={(r) => selectedRange.range === r.range}
+                  onSelect={setSelectedRange}
+                  buttonClassName="h-7 px-2.5 text-xs"
+                />
               </div>
             </CardHeader>
             <CardContent>

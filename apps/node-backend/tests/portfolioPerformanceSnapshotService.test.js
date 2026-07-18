@@ -1,15 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => {
-  const queryFn = vi.fn();
-  return {
-    query: queryFn,
-    withTransaction: vi.fn(async (fn) => fn({ query: queryFn })),
-  };
-});
+import { mockLogger } from './helpers/mockLogger.js';
+import { mockTxConnection } from './helpers/repoMocks.js';
+vi.mock('../src/database/connection.js', () => mockTxConnection());
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../src/services/currency/currencyConversionService.js', () => ({

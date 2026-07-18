@@ -94,11 +94,6 @@ services:
       # refused. Remove this (and set ADMIN_AUTH_TOKEN) if you widen ports:.
       ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "true"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
-      # Database connection for Alembic migrations
-      DB_HOST: db
-      DB_PORT: "5432"
-      DB_USER: ftm_user
-      DB_NAME: financial_transactions
     # depends_on with service_healthy was removed intentionally.
     #
     # Docker's healthcheck gate forced a strict serial sequence:

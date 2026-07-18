@@ -446,39 +446,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      - name: Download image artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+      - name: Bring up the compose stack
+        uses: ./.github/actions/compose-up
         with:
-          name: docker-image
-          path: /tmp
-
-      - name: Load Docker image
-        run: docker load < /tmp/vision-ci.tar
-
-      - name: Create stub .env for Docker Compose
-        run: |
-          printf 'POSTGRES_PASSWORD=ci_test_password\nDATABASE_URL=postgresql://ftm_user:ci_test_password@db:5432/financial_transactions\nLOG_LEVEL=warn\nENABLE_LOGGING=true\n' > .env
-
-      - name: Start services with Docker Compose
-        run: |
-          export VISION_IMAGE=vision:ci
-          docker compose -f docker-compose.yml up -d
-
-      - name: Wait for /health to respond
-        run: |
-          echo "Waiting for backend health check..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:3002/health; then
-              echo ""
-              echo "Health check passed"
-              exit 0
-            fi
-            echo "Attempt $i/30 — retrying in 3s..."
-            sleep 3
-          done
-          echo "Health check timed out"
-          docker compose logs
-          exit 1
+          image-artifact: docker-image
+          vision-image: vision:ci
 
       # The release path bakes alembic into the image and runs migrations on
       # boot — by the time /health is green, the schema is at HEAD. Round-trip
@@ -519,39 +491,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      - name: Download image artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+      - name: Bring up the compose stack
+        uses: ./.github/actions/compose-up
         with:
-          name: docker-image
-          path: /tmp
-
-      - name: Load Docker image
-        run: docker load < /tmp/vision-ci.tar
-
-      - name: Create stub .env for Docker Compose
-        run: |
-          printf 'POSTGRES_PASSWORD=ci_test_password\nDATABASE_URL=postgresql://ftm_user:ci_test_password@db:5432/financial_transactions\nLOG_LEVEL=warn\nENABLE_LOGGING=true\n' > .env
-
-      - name: Start services with Docker Compose
-        run: |
-          export VISION_IMAGE=vision:ci
-          docker compose -f docker-compose.yml up -d
-
-      - name: Wait for /health to respond
-        run: |
-          echo "Waiting for backend health check..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:3002/health; then
-              echo ""
-              echo "Health check passed"
-              exit 0
-            fi
-            echo "Attempt $i/30 — retrying in 3s..."
-            sleep 3
-          done
-          echo "Health check timed out"
-          docker compose logs
-          exit 1
+          image-artifact: docker-image
+          vision-image: vision:ci
 
       - name: Setup toolchain
         uses: ./.github/actions/setup

@@ -26,6 +26,7 @@ import mcCacheRepo from '../../../repositories/cashflowForecastMcRepository.js';
 import mcRollingCacheRepo from '../../../repositories/cashflowForecastMcRollingRepository.js';
 import { logger } from '../../../config/logger.js';
 import { todayAppDateString } from '../../../lib/timezone.js';
+import { epochMsToUtcYmd } from '../../../lib/dateFormat.js';
 
 const DEFAULT_HISTORY_MONTHS = 36;
 const DEFAULT_MC_PATHS = 1000;
@@ -82,7 +83,7 @@ function rollingWindowDates(daysBack, daysForward) {
   const all = [];
   for (let offset = -daysBack; offset <= daysForward; offset++) {
     const ms = todayMs + offset * 86_400_000;
-    all.push(new Date(ms).toISOString().slice(0, 10));
+    all.push(epochMsToUtcYmd(ms));
   }
   const todayIndex = daysBack + 1;
   const future = all.slice(todayIndex);

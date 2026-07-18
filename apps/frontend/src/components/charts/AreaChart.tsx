@@ -18,7 +18,7 @@ import { scaleLinear, scaleTime } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
 import { bisector, extent, max, min } from "d3-array";
 import { motion, useReducedMotion } from "framer-motion";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { useChartSync } from "./ChartSyncContext";
@@ -415,7 +415,10 @@ function AreaChartInner<Datum>({
         hoverDatum != null ? margin.left + (xScale(xAccessor(hoverDatum) as never) ?? 0) : 0;
     const tooltipTop = margin.top;
 
-    const gradId = useMemo(() => `area-grad-${Math.random().toString(36).slice(2, 8)}`, []);
+    // useId: deterministic per render position (stable snapshots), unique per
+    // chart instance — replaces the old Math.random() suffix.
+    const reactId = useId();
+    const gradId = `area-grad-${reactId}`;
     const revealId = `${gradId}-reveal`;
 
     return (

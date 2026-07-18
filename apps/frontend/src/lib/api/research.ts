@@ -21,10 +21,8 @@ import type {
     ResearchAnalyst,
     ResearchAssetClass,
     ResearchChartResponse,
-    ResearchFundamentals,
     ResearchMeta,
     ResearchNewsResponse,
-    ResearchQuote,
     ResearchRange,
     ResearchResult,
     ResearchSearchResponse,
@@ -91,16 +89,6 @@ export function searchResearch(query: string): Promise<ResearchResult<ResearchSe
     return researchGet<ResearchSearchResponse>('/api/research/search', { q: query });
 }
 
-export function getResearchQuote(
-    symbol: string,
-    assetClass?: ResearchAssetClass,
-): Promise<ResearchResult<ResearchQuote | null>> {
-    return researchGet<ResearchQuote | null>('/api/research/quote', {
-        symbol,
-        asset_class: assetClass,
-    });
-}
-
 export function getResearchChart(
     symbol: string,
     range: ResearchRange,
@@ -114,12 +102,6 @@ export function getResearchChart(
         asset_class: assetClass,
         provider,
     });
-}
-
-export function getResearchFundamentals(
-    symbol: string,
-): Promise<ResearchResult<ResearchFundamentals | null>> {
-    return researchGet<ResearchFundamentals | null>('/api/research/fundamentals', { symbol });
 }
 
 export function getResearchAnalyst(

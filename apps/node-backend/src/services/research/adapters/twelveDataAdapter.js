@@ -7,10 +7,52 @@
  * documented Twelve Data API and need live verification with a real key.
  */
 
-import { getJson, num } from './httpClient.js';
+import { z } from 'zod';
+import { getJson } from './httpClient.js';
 import { providerKey } from '../providerKeys.js';
+import { looseArray, looseString, numish, parseOr } from './schemas.js';
 
 const BASE = 'https://api.twelvedata.com';
+
+// Response shapes (tolerant — see schemas.js). Twelve Data serializes all
+// numbers as strings, hence numish everywhere.
+const searchResponseSchema = z.looseObject({
+  data: looseArray(z.looseObject({
+    symbol: looseString,
+    instrument_name: looseString,
+    instrument_type: looseString,
+    exchange: looseString,
+  })),
+});
+
+const quoteResponseSchema = z.looseObject({
+  symbol: looseString,
+  name: looseString,
+  close: numish,
+  change: numish,
+  percent_change: numish,
+  currency: looseString,
+  exchange: looseString,
+  type: looseString,
+  open: numish,
+  high: numish,
+  low: numish,
+  previous_close: numish,
+  volume: numish,
+  average_volume: numish,
+  fifty_two_week: z.looseObject({ high: numish, low: numish }).catch({}),
+});
+
+const timeSeriesResponseSchema = z.looseObject({
+  meta: z.looseObject({ symbol: looseString, currency: looseString }).catch({}),
+  values: looseArray(z.looseObject({
+    datetime: looseString,
+    close: numish,
+    high: numish,
+    low: numish,
+    volume: numish,
+  })),
+});
 
 const RANGE_TO_OUTPUTSIZE = {
   '1d': 2, '5d': 7, '1mo': 23, '3mo': 66, '6mo': 130, '1y': 260, '2y': 520, '5y': 1300, max: 5000,
@@ -33,8 +75,9 @@ const twelveDataAdapter = {
 
   async search(query) {
     const url = `${BASE}/symbol_search?symbol=${encodeURIComponent(query)}&outputsize=8&apikey=${key()}`;
-    const data = assertOk(await getJson(url));
-    const items = (data?.data || []).map((d) => ({
+    const payload = assertOk(await getJson(url));
+    const { data } = parseOr(searchResponseSchema, payload, { data: [] });
+    const items = data.map((d) => ({
       symbol: d.symbol,
       name: d.instrument_name || d.symbol,
       type: d.instrument_type || 'UNKNOWN',
@@ -45,43 +88,48 @@ const twelveDataAdapter = {
 
   async quote(symbol) {
     const url = `${BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${key()}`;
-    const q = assertOk(await getJson(url));
+    const payload = assertOk(await getJson(url));
+    // Pre-zod, a null body threw on field access; keep throwing so the
+    // aggregator still falls through to the next provider.
+    if (payload == null) throw new Error('twelve_data: empty quote response');
+    const q = parseOr(quoteResponseSchema, payload, { fifty_two_week: {} });
     return {
       symbol: q.symbol || symbol,
       name: q.name || symbol,
-      price: num(q.close),
-      change: num(q.change),
-      changePercent: num(q.percent_change),
+      price: q.close,
+      change: q.change,
+      changePercent: q.percent_change,
       currency: q.currency,
       exchange: q.exchange,
       type: q.type,
-      open: num(q.open),
-      dayHigh: num(q.high),
-      dayLow: num(q.low),
-      prevClose: num(q.previous_close),
-      volume: num(q.volume),
-      avgVolume: num(q.average_volume),
-      high52w: num(q.fifty_two_week?.high),
-      low52w: num(q.fifty_two_week?.low),
+      open: q.open,
+      dayHigh: q.high,
+      dayLow: q.low,
+      prevClose: q.previous_close,
+      volume: q.volume,
+      avgVolume: q.average_volume,
+      high52w: q.fifty_two_week.high,
+      low52w: q.fifty_two_week.low,
     };
   },
 
   async chart(symbol, { range = '1mo' } = {}) {
     const outputsize = RANGE_TO_OUTPUTSIZE[range] ?? RANGE_TO_OUTPUTSIZE['1mo'];
     const url = `${BASE}/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=${outputsize}&apikey=${key()}`;
-    const data = assertOk(await getJson(url));
+    const payload = assertOk(await getJson(url));
+    const { meta, values } = parseOr(timeSeriesResponseSchema, payload, { meta: {}, values: [] });
     // Twelve Data returns newest-first; the chart expects oldest-first.
-    const points = (data?.values || [])
+    const points = values
       .map((v) => ({
         time: Date.parse(`${v.datetime}T00:00:00Z`),
-        close: num(v.close),
-        high: num(v.high),
-        low: num(v.low),
-        volume: num(v.volume),
+        close: v.close,
+        high: v.high,
+        low: v.low,
+        volume: v.volume,
       }))
       .filter((p) => Number.isFinite(p.time) && p.close !== undefined)
       .reverse();
-    return { symbol: data?.meta?.symbol || symbol, currency: data?.meta?.currency, points };
+    return { symbol: meta.symbol || symbol, currency: meta.currency, points };
   },
 };
 

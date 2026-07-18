@@ -1,9 +1,16 @@
 /**
  * Planned Transaction routes.
  *
+ * Leaf field validation (required fields, amount bounds, reminder lead time,
+ * recurrence bounds/pattern) is zod (schema → safeParse → ValidationError),
+ * the idiom established in settings.js/reports.js. The schemas are LOOSE:
+ * unvalidated fields pass through untouched and the repository allow-list
+ * decides what is written. The loan-schedule computation is side-effectful and
+ * stays imperative, running on the parsed body exactly as before.
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
@@ -56,17 +63,147 @@ async function resolveCategoryIdFromName(fields) {
   return resolveCategoryIdByName(fields.category_name);
 }
 
+/* ── Zod schemas ─────────────────────────────────────────────────────────── */
+
+const tagsField = z.array(z.unknown(), { error: 'tags must be an array of strings' }).optional();
+
 // reminder_days_before is a small non-negative integer lead time (bill-reminder
 // widgets). Validate it up front so a string/negative/fractional value 400s
-// instead of reaching the smallint column as a raw cast/overflow 500. Coerces
-// in place on the provided object.
-function assertReminderDaysBefore(fields) {
-  if (fields.reminder_days_before == null) return;
-  const n = Number(fields.reminder_days_before);
+// instead of reaching the smallint column as a raw cast/overflow 500; the
+// coerced integer replaces the raw input. null passes through (clears).
+const reminderDaysBeforeField = z.unknown().transform((value, ctx) => {
+  if (value == null) return value;
+  const n = Number(value);
   if (!Number.isInteger(n) || n < 0 || n > 365) {
-    throw new ValidationError('reminder_days_before must be an integer between 0 and 365');
+    ctx.addIssue({ code: 'custom', message: 'reminder_days_before must be an integer between 0 and 365' });
+    return z.NEVER;
   }
-  fields.reminder_days_before = n;
+  return n;
+}).optional();
+
+// Recurrence bounds (nullable): a Y-M-D end date and/or a positive occurrence
+// cap. plannedExecutionService completes the series when either is reached —
+// these used to be silently dropped and recur forever. Explicit null clears.
+const recurrenceEndDateField = z.unknown().transform((value, ctx) => {
+  if (value == null) return value;
+  try {
+    assertYmd(value, 'recurrence_end_date');
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: /** @type {Error} */ (err).message });
+    return z.NEVER;
+  }
+  return value;
+}).optional();
+
+const maxOccurrencesField = z.unknown().transform((value, ctx) => {
+  if (value == null) return value;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1) {
+    ctx.addIssue({ code: 'custom', message: 'max_occurrences must be a positive integer' });
+    return z.NEVER;
+  }
+  return n;
+}).optional();
+
+// POST body. The is_loan-conditional rules live in superRefine because the
+// loan branch in the handler overrides amount/planned_date/recurrence from the
+// generated schedule and DELETES truthy recurrence bounds — so only values
+// that survive that branch are validated, exactly like the pre-zod checks
+// that ran after it.
+const createPlannedSchema = z.looseObject({
+  tags: tagsField,
+  reminder_days_before: reminderDaysBeforeField,
+}).superRefine((data, ctx) => {
+  if (!data.bank_account) {
+    ctx.addIssue({ code: 'custom', message: 'Missing required field: bank_account' });
+  }
+
+  if (!data.is_loan) {
+    if (!data.planned_date || data.amount == null) {
+      ctx.addIssue({ code: 'custom', message: 'Missing required fields: planned_date, amount' });
+    } else {
+      // A non-loan planned payment's amount must be a real, non-zero figure —
+      // a 0 (meaningless, excluded from auto-match) or a non-finite value used
+      // to store end-to-end. Loans set their own amount from the generated
+      // schedule, so they skip this. Magnitude is bounded like the money
+      // columns (NUMERIC 12-integer-digit ceiling) — an absurd 1e15 otherwise
+      // reached the column as an overflow 500.
+      const amt = Number(data.amount);
+      if (!Number.isFinite(amt) || amt === 0) {
+        ctx.addIssue({ code: 'custom', message: 'amount must be a non-zero finite number' });
+      } else if (Math.abs(amt) > MAX_PLANNED_AMOUNT) {
+        ctx.addIssue({ code: 'custom', message: `amount must be between -${MAX_PLANNED_AMOUNT} and ${MAX_PLANNED_AMOUNT}` });
+      }
+    }
+  } else {
+    const termMonths = /** @type {number} */ (data.loan_term_months);
+    if (termMonths && (termMonths < 1 || termMonths > 600)) {
+      ctx.addIssue({ code: 'custom', message: 'loan_term_months must be between 1 and 600 months' });
+    }
+  }
+
+  // Only bounds that survive the loan branch's deletion (truthy value on a
+  // loan → deleted) are validated. A falsy-but-present value on a loan is NOT
+  // deleted and still validates (and always fails), matching the old order.
+  if (!(data.is_loan && data.recurrence_end_date) && data.recurrence_end_date != null) {
+    try {
+      assertYmd(data.recurrence_end_date, 'recurrence_end_date');
+    } catch (err) {
+      ctx.addIssue({ code: 'custom', message: /** @type {Error} */ (err).message });
+    }
+  }
+  if (!(data.is_loan && data.max_occurrences) && data.max_occurrences != null) {
+    const n = Number(data.max_occurrences);
+    if (!Number.isInteger(n) || n < 1) {
+      ctx.addIssue({ code: 'custom', message: 'max_occurrences must be a positive integer' });
+    }
+  }
+
+  // A recurring planned tx needs a recurrence_pattern calculateNextDate can
+  // advance. An absent pattern (is_recurring:true with none) or one it can't
+  // advance (e.g. "fortnightly") stores fine but on /execute leaves the row
+  // stuck as perpetually-due. The loan branch sets recurrence_pattern=
+  // 'monthly', so this never trips loan creation.
+  if (!data.is_loan && data.is_recurring && !isValidPattern(/** @type {string} */ (data.recurrence_pattern))) {
+    ctx.addIssue({ code: 'custom', message: `Invalid or missing recurrence_pattern: ${data.recurrence_pattern}` });
+  }
+}).transform((data) => {
+  // Coercions the old code applied in place; loan values are left raw because
+  // the loan branch overwrites/deletes them from the generated schedule.
+  const out = { ...data };
+  if (!out.is_loan && out.amount != null) out.amount = Number(out.amount);
+  if (!out.is_loan && out.max_occurrences != null) out.max_occurrences = Number(out.max_occurrences);
+  return out;
+});
+
+// PATCH body: same leaf rules as POST but unconditional — the PATCH handler
+// validated these before applying loan defaults. The pattern guard mirrors the
+// old post-defaults check: loan defaults only fill an *absent* pattern (always
+// 'monthly'), so an explicit invalid value rejects identically either way.
+const patchPlannedSchema = z.looseObject({
+  tags: tagsField,
+  reminder_days_before: reminderDaysBeforeField,
+  recurrence_end_date: recurrenceEndDateField,
+  max_occurrences: maxOccurrencesField,
+  recurrence_pattern: z.unknown().transform((value, ctx) => {
+    if (value && !isValidPattern(/** @type {string} */ (value))) {
+      ctx.addIssue({ code: 'custom', message: `Invalid recurrence_pattern: ${value}` });
+      return z.NEVER;
+    }
+    return value;
+  }).optional(),
+});
+
+// schema → safeParse → joined issues → ValidationError (settings.js idiom).
+function parsePlannedBody(schema, body) {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
+  }
+  return result.data;
 }
 
 function generateLoanScheduleOrThrow(input) {
@@ -169,38 +306,9 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const data = { ...req.body };
-  if (!data.bank_account) throw new ValidationError('Missing required field: bank_account');
-  if (data.tags !== undefined && !Array.isArray(data.tags)) throw new ValidationError('tags must be an array of strings');
-
-  if (!data.is_loan && (!data.planned_date || data.amount == null)) {
-    throw new ValidationError('Missing required fields: planned_date, amount');
-  }
-
-  // A non-loan planned payment's amount must be a real, non-zero figure. The
-  // create path previously null-checked only, so a 0 (meaningless — excluded
-  // from auto-match) or a non-finite value stored end-to-end. Loans set their
-  // own amount from the generated schedule below, so skip them here.
-  if (!data.is_loan && data.amount != null) {
-    const amt = Number(data.amount);
-    if (!Number.isFinite(amt) || amt === 0) {
-      throw new ValidationError('amount must be a non-zero finite number');
-    }
-    // Bound the magnitude like the money columns (NUMERIC 12-integer-digit
-    // ceiling) — an absurd 1e15 otherwise reached the column as an overflow 500.
-    if (Math.abs(amt) > MAX_PLANNED_AMOUNT) {
-      throw new ValidationError(`amount must be between -${MAX_PLANNED_AMOUNT} and ${MAX_PLANNED_AMOUNT}`);
-    }
-    data.amount = amt;
-  }
-
-  assertReminderDaysBefore(data);
+  const data = parsePlannedBody(createPlannedSchema, req.body);
 
   if (data.is_loan) {
-    if (data.loan_term_months && (data.loan_term_months < 1 || data.loan_term_months > 600)) {
-      throw new ValidationError('loan_term_months must be between 1 and 600 months');
-    }
-
     const generated = generateLoanScheduleOrThrow(data);
     data.loan_regular_payment_amount = generated.regular_payment_amount;
     data.loan_first_payment_date = generated.first_due_date;
@@ -219,27 +327,6 @@ router.post('/', async (req, res) => {
     // A loan's horizon is its generated schedule — recurrence bounds don't apply.
     if (data.recurrence_end_date) delete data.recurrence_end_date;
     if (data.max_occurrences) delete data.max_occurrences;
-  }
-
-  // Recurrence bounds (nullable): a Y-M-D end date and/or a positive
-  // occurrence cap. plannedExecutionService completes the series when either
-  // is reached — these used to be silently dropped and recur forever.
-  if (data.recurrence_end_date != null) {
-    assertYmd(data.recurrence_end_date, 'recurrence_end_date');
-  }
-  if (data.max_occurrences != null) {
-    const n = Number(data.max_occurrences);
-    if (!Number.isInteger(n) || n < 1) throw new ValidationError('max_occurrences must be a positive integer');
-    data.max_occurrences = n;
-  }
-
-  // A recurring planned tx needs a recurrence_pattern calculateNextDate can
-  // advance. An absent pattern (is_recurring:true with none) or one it can't
-  // advance (e.g. "fortnightly") stores fine but on /execute leaves the row
-  // stuck as perpetually-due. Loans set recurrence_pattern='monthly' above, so
-  // this never trips loan creation.
-  if (data.is_recurring && !isValidPattern(data.recurrence_pattern)) {
-    throw new ValidationError(`Invalid or missing recurrence_pattern: ${data.recurrence_pattern}`);
   }
 
   const created = await plannedTransactionRepository.create(data);
@@ -291,8 +378,9 @@ router.patch(
     const existing = await plannedTransactionRepository.getById(id);
     if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
-    const rawFields = withoutPatchOnlyReadOnlyFields(req.body);
-    if (rawFields.tags !== undefined && !Array.isArray(rawFields.tags)) throw new ValidationError('tags must be an array of strings');
+    // Validate/coerce the typed leaf fields before any lookups run; loose
+    // passthrough keeps the rest untouched for the repository allow-list.
+    const rawFields = parsePlannedBody(patchPlannedSchema, withoutPatchOnlyReadOnlyFields(req.body));
     // Independent lookups — run in parallel, then apply immutably.
     const [recipientId, categoryId] = await Promise.all([
       resolveRecipientIdFromName(rawFields),
@@ -302,27 +390,8 @@ router.patch(
     if (recipientId !== undefined) fields.recipient_id = recipientId;
     if (categoryId !== undefined) fields.category_id = categoryId;
 
-    assertReminderDaysBefore(fields);
-
-    // Recurrence bounds: same validation as POST; explicit null clears a bound.
-    if (fields.recurrence_end_date != null) {
-      assertYmd(fields.recurrence_end_date, 'recurrence_end_date');
-    }
-    if (fields.max_occurrences != null) {
-      const n = Number(fields.max_occurrences);
-      if (!Number.isInteger(n) || n < 1) throw new ValidationError('max_occurrences must be a positive integer');
-      fields.max_occurrences = n;
-    }
-
     const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
     const loanScheduleDirective = resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing);
-
-    // Same guard as POST: a recurrence_pattern calculateNextDate can't advance
-    // leaves the row perpetually due. applyLoanPatchDefaults already set a valid
-    // 'monthly' for loans by here, so this only rejects genuine typos.
-    if (fields.recurrence_pattern && !isValidPattern(fields.recurrence_pattern)) {
-      throw new ValidationError(`Invalid recurrence_pattern: ${fields.recurrence_pattern}`);
-    }
 
     // When the loan schedule must change, the field update and the schedule
     // rewrite MUST happen in one transaction — otherwise a crash between them

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
+import { mockConnection } from './helpers/repoMocks.js';
 // Zero-row import guard (TODO E9): a bad column mapping (nonexistent date
 // column, wrong date format) null-parses every row — the adapter skips them
 // all and the batch used to auto-complete {imported: 0, errors: 0} with a
@@ -7,12 +9,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // a partially unparseable file looked fully imported.
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn().mockResolvedValue({ rows: [{ is_brokerage: false }] }),
-  withTransaction: vi.fn(),
-}));
+vi.mock('../src/database/connection.js', () =>
+  mockConnection({ query: vi.fn().mockResolvedValue({ rows: [{ is_brokerage: false }] }) }));
 vi.mock('../src/routes/info/_cache.js', () => ({ invalidatePortfolioCaches: vi.fn() }));
 vi.mock('../src/services/portfolioImportPipeline/stage.js', () => ({
   createBatch: vi.fn().mockResolvedValue(42),

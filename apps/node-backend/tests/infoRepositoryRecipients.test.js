@@ -253,7 +253,7 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
     convertRowsToEur.mockResolvedValueOnce([]);
     await recipientInsightsRepository.getRecipientPivot([5, 6], 'EUR', { startDate: '2025-01-01' });
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('NOT IN ($1,$2)');
+    expect(sql).toContain('NOT IN ($1, $2)');
     expect(sql).toContain('t.date >= $3');
     expect(params).toEqual([5, 6, '2025-01-01']);
   });

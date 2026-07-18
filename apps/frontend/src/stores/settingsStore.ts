@@ -16,6 +16,7 @@
  */
 
 import { create } from 'zustand';
+import { z } from 'zod';
 import type { Language } from '@/contexts/LanguageContext';
 import type { ThemeVariant } from '@/styles/themes';
 
@@ -131,6 +132,38 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
     excludeHiddenCategories: true,
     exclusionScope: 'everywhere',
 };
+
+/**
+ * Persisted dashboard-settings blob guard (ZOD-11). Loose object so unknown
+ * keys survive the migration (they used to flow through the spread merge and
+ * be persisted); per-field `.catch` so a malformed field falls back to its
+ * default instead of poisoning the merge — important because the migrated
+ * result is written back to the API.
+ */
+const storedDashboardSettingsSchema = z.looseObject({
+    excludedCategoryIds: z.array(z.number()).catch(() => []),
+    excludedRecipientIds: z.array(z.number()).catch(() => []),
+    excludeHiddenCategories: z
+        .boolean()
+        .catch(DEFAULT_DASHBOARD_SETTINGS.excludeHiddenCategories),
+    exclusionScope: z
+        .enum(['everywhere', 'dashboard', 'statistics'] as const satisfies readonly ExclusionScope[])
+        .catch(DEFAULT_DASHBOARD_SETTINGS.exclusionScope),
+});
+
+/**
+ * Merge a stored dashboard_settings blob over the defaults. A well-formed
+ * (possibly partial) blob produces exactly the old
+ * `{ ...DEFAULT_DASHBOARD_SETTINGS, ...raw }` result, unknown keys included;
+ * malformed fields fall back per-field and a blob that is not an object at
+ * all falls back to the defaults wholesale.
+ */
+export function migrateDashboardSettings(raw: unknown): DashboardSettings {
+    const parsed = storedDashboardSettingsSchema.safeParse(raw);
+    return parsed.success
+        ? (parsed.data as DashboardSettings)
+        : { ...DEFAULT_DASHBOARD_SETTINGS };
+}
 
 export const DEFAULT_THEME_SCHEDULE: ThemeSchedule = {
     lightFrom: '07:00',

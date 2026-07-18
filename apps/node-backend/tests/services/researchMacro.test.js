@@ -90,6 +90,18 @@ describe('eurostat parseJsonStat', () => {
   it('returns [] for a malformed payload', () => {
     expect(parseJsonStat({})).toEqual([]);
     expect(parseJsonStat(undefined)).toEqual([]);
+    expect(parseJsonStat({ dimension: { time: { category: { index: 'junk' } } }, value: {} })).toEqual([]);
+    expect(parseJsonStat({ dimension: { time: { category: { index: {} } } }, value: 'junk' })).toEqual([]);
+  });
+
+  // ZOD-12 pin: JSON-stat also allows the dense array form for `value`.
+  it('supports value as a dense array', () => {
+    const payload = {
+      dimension: { time: { category: { index: { '2020-01': 0, '2020-02': 1 } } } },
+      value: [100, 'garbage'], // non-numeric entry -> dropped
+    };
+    const out = parseJsonStat(payload);
+    expect(out).toEqual([{ period: '2020-01', time: Date.UTC(2020, 0, 1), value: 100 }]);
   });
 });
 

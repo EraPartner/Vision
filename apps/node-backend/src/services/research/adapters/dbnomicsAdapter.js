@@ -9,11 +9,28 @@
  * the catalog is extensible).
  */
 
+import { z } from 'zod';
 import { getJson, num } from './httpClient.js';
 import { periodToMs, trimToRange } from './macroRange.js';
 import { searchCatalog, catalogEntry } from './macroCatalog.js';
+import { looseString, parseOr } from './schemas.js';
 
 const BASE = 'https://api.db.nomics.world/v22/series';
+
+// Envelope and doc are validated separately: doc PRESENCE keeps the existing
+// "series not found" throw, while a truthy-but-malformed doc degrades to an
+// empty series (as the old Array.isArray guards did).
+const seriesEnvelopeSchema = z.looseObject({
+  series: z.looseObject({ docs: z.array(z.any()).catch([]) }).catch({ docs: [] }),
+});
+
+const seriesDocSchema = z.looseObject({
+  series_name: looseString,
+  '@frequency': looseString,
+  period_start_day: z.array(z.any()).catch([]),
+  period: z.array(z.any()).catch([]),
+  value: z.array(z.any()).catch([]),
+});
 
 const dbnomicsAdapter = {
   key: 'dbnomics',
@@ -24,11 +41,10 @@ const dbnomicsAdapter = {
 
   async macroSeries(seriesId, { range = '5y' } = {}) {
     const data = await getJson(`${BASE}/${seriesId}?observations=1`);
-    const doc = data?.series?.docs?.[0];
-    if (!doc) throw new Error('dbnomics: series not found');
-    const days = Array.isArray(doc.period_start_day) ? doc.period_start_day : [];
-    const periods = Array.isArray(doc.period) ? doc.period : [];
-    const values = Array.isArray(doc.value) ? doc.value : [];
+    const docRaw = parseOr(seriesEnvelopeSchema, data, { series: { docs: [] } }).series.docs[0];
+    if (!docRaw) throw new Error('dbnomics: series not found');
+    const doc = parseOr(seriesDocSchema, docRaw, { period_start_day: [], period: [], value: [] });
+    const { period_start_day: days, period: periods, value: values } = doc;
     const points = [];
     for (let i = 0; i < values.length; i += 1) {
       const close = num(values[i]); // DBnomics encodes missing as "NA" → undefined

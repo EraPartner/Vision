@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 // Concurrency for per-holding price fetches (TODO E16): kinesis() and custom()
 // ran one sequential `await fetch` per holding (15s / 10s timeouts) — a
 // 5-holding Kinesis portfolio was 5 sequential round trips, worst case ~75s
 // when an endpoint hung. Both now fan out per holding.
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 vi.mock('../src/config/kinesisConfig.js', () => ({
   KINESIS_BASE_URL: 'https://kinesis.example/api',

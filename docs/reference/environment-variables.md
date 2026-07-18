@@ -53,7 +53,6 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `DB_POOL_SIZE` | `5` | No | PostgreSQL connection pool size | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `DB_MAX_OVERFLOW` | `10` | No | PostgreSQL pool max overflow | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `CORS_ORIGINS` | `http://localhost:5174,http://localhost:8080` | No | Comma-separated allowed origins | [[apps/node-backend/src/config/config.js\|config.js]] |
-| `DEBUG` | `true` | No | Enable debug logging | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `LOG_LEVEL` | `debug` (dev), `info` (prod) | No | Log level: debug, info, warn, error | [[apps/node-backend/src/config/logger.js\|logger.js]] |
 | `ENABLE_LOGGING` | `true` | No | Enable/disable logging | [[apps/node-backend/src/config/logger.js\|logger.js]] |
 | `ENABLE_RESET_DB` | `false` | No | Enable database reset endpoint | [[apps/node-backend/src/config/config.js\|config.js]] |
@@ -156,10 +155,6 @@ keyed — Yahoo needs no key). See
 | `POSTGRES_USER` | `ftm_user` | No | PostgreSQL username | [[docker-compose.yml\|docker-compose.yml]] |
 | `POSTGRES_DB` | `financial_transactions` | No | PostgreSQL database name | [[docker-compose.yml\|docker-compose.yml]] |
 | `PORT` | `3002` | No | Host port → app container mapping; also read by backend at startup | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_HOST` | `db` | No | **Stale / not consumed.** Injected into the app container by both compose files but read by nothing — Alembic connects via `DATABASE_URL` (or `DATABASE_URL_MIGRATIONS`) only, see `alembic/env.py`. Kept here only to document the unused compose injection; safe to remove from compose. | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_PORT` | `5432` | No | **Stale / not consumed** — see `DB_HOST`. | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_USER` | `ftm_user` | No | **Stale / not consumed** — see `DB_HOST`. | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_NAME` | `financial_transactions` | No | **Stale / not consumed** — see `DB_HOST`. | [[docker-compose.yml\|docker-compose.yml]] |
 
 ## Source-of-Truth
 

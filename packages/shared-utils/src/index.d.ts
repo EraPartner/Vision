@@ -1,4 +1,4 @@
 export * from './money';
 export * from './slugify';
-export * from './downsample';
+export * from './portfolio';
 export * from './category';

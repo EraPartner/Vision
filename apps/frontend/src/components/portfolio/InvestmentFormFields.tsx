@@ -7,6 +7,7 @@ import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import type { PriceProvider } from '@/types/api';
 import { PriceProviderFields, type PriceProviderOption } from './PriceProviderFields';
+import { INVESTMENT_CURRENCIES } from '@/utils/currency';
 
 export interface InvestmentForm {
   assetClass: string;
@@ -93,7 +94,7 @@ export function InvestmentFormFields({
             <Select value={form.currency} onValueChange={(v) => setForm(f => ({ ...f, currency: v }))}>
               <SelectTrigger id="inv-currency"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['EUR', 'USD', 'GBP', 'CHF', 'SAR', 'BTC'].map(c => (
+                {INVESTMENT_CURRENCIES.map(c => (
                   <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>

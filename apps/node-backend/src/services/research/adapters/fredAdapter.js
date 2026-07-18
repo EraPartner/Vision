@@ -8,11 +8,40 @@
  * (the free PMI proxies). Provider-pinned: a FRED seriesId is fetched only here.
  */
 
-import { getJson, num } from './httpClient.js';
+import { z } from 'zod';
+import { getJson } from './httpClient.js';
 import { providerKey } from '../providerKeys.js';
 import { trimToRange } from './macroRange.js';
+import { looseArray, looseString, numish, parseOr } from './schemas.js';
 
 const BASE = 'https://api.stlouisfed.org/fred';
+
+// Response shapes (tolerant: unknown keys pass through, malformed rows are
+// skipped, malformed leaves degrade like missing ones — see schemas.js).
+const searchResponseSchema = z.looseObject({
+  seriess: looseArray(z.looseObject({
+    id: looseString,
+    title: looseString,
+    units_short: looseString,
+    units: looseString,
+    frequency: looseString,
+    frequency_short: looseString,
+  })),
+});
+
+const observationsResponseSchema = z.looseObject({
+  // FRED encodes missing observations as "." → numish → undefined.
+  observations: looseArray(z.looseObject({ date: looseString, value: numish })),
+});
+
+const metaResponseSchema = z.looseObject({
+  seriess: looseArray(z.looseObject({
+    title: looseString,
+    units_short: looseString,
+    units: looseString,
+    frequency: looseString,
+  })),
+});
 
 function key() {
   const k = providerKey('fred');
@@ -28,8 +57,9 @@ const fredAdapter = {
       `${BASE}/series/search?search_text=${encodeURIComponent(query)}` +
       `&api_key=${key()}&file_type=json&limit=15&order_by=popularity&sort_order=desc`;
     const data = await getJson(url);
-    const items = (data?.seriess || [])
-      .filter((s) => s?.id)
+    const { seriess } = parseOr(searchResponseSchema, data, { seriess: [] });
+    const items = seriess
+      .filter((s) => s.id)
       .map((s) => ({
         provider: 'fred',
         seriesId: s.id,
@@ -54,14 +84,12 @@ const fredAdapter = {
       getJson(obsUrl),
       getJson(metaUrl).catch(() => undefined),
     ]);
-    const points = (obs?.observations || [])
-      .map((o) => ({
-        time: Date.parse(o?.date),
-        close: num(o?.value), // FRED encodes missing as "." → num() → undefined
-      }))
+    const { observations } = parseOr(observationsResponseSchema, obs, { observations: [] });
+    const points = observations
+      .map((o) => ({ time: Date.parse(o.date), close: o.value }))
       .filter((p) => Number.isFinite(p.time) && p.close !== undefined)
       .map((p) => ({ time: p.time, close: p.close, high: undefined, low: undefined, volume: undefined }));
-    const m = meta?.seriess?.[0];
+    const m = parseOr(metaResponseSchema, meta, { seriess: [] }).seriess[0];
     return {
       provider: 'fred',
       seriesId,

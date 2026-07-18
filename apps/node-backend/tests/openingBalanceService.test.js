@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  // Transaction shim: run the callback directly; a throw propagates (= rollback).
-  withTransaction: vi.fn(async (fn) => fn({ query: vi.fn() })),
-}));
+import { mockTxConnection } from './helpers/repoMocks.js';
+// Transaction shim: runs the callback directly; a throw propagates (= rollback).
+vi.mock('../src/database/connection.js', () => mockTxConnection({ query: vi.fn() }));
 vi.mock('../src/repositories/accountRepository.js', () => ({
   default: { getById: vi.fn() },
 }));
@@ -58,6 +56,30 @@ describe('normalizeOpeningBalance (ADR-094 D4)', () => {
 
   it('rejects a malformed currency', () => {
     expect(() => normalizeOpeningBalance({ balance: 1, date: '2024-01-01', currency: 'EURO' }, account)).toThrow(/currency/);
+  });
+
+  // Pins for the zod swap (ZOD-09): exact boundary/fallback semantics.
+  it('rejects an empty-string or null balance', () => {
+    expect(() => normalizeOpeningBalance({ balance: '', date: '2024-01-01' }, account)).toThrow(/balance/);
+    expect(() => normalizeOpeningBalance({ balance: null, date: '2024-01-01' }, account)).toThrow(/balance/);
+  });
+
+  it('rejects a missing or null date', () => {
+    expect(() => normalizeOpeningBalance({ balance: 1 }, account)).toThrow(/date/);
+    expect(() => normalizeOpeningBalance({ balance: 1, date: null }, account)).toThrow(/date/);
+  });
+
+  it('tolerates an absent body and account (throws balance ValidationError, no crash)', () => {
+    expect(() => normalizeOpeningBalance(undefined, account)).toThrow(/balance/);
+  });
+
+  it('falls back to EUR when neither body nor account carry a currency', () => {
+    expect(normalizeOpeningBalance({ balance: 1, date: '2024-01-01' }, {}).currency).toBe('EUR');
+    expect(normalizeOpeningBalance({ balance: 1, date: '2024-01-01', currency: '' }, {}).currency).toBe('EUR');
+  });
+
+  it('lowercase account currency is uppercased in the fallback', () => {
+    expect(normalizeOpeningBalance({ balance: 1, date: '2024-01-01' }, { currency: 'usd' }).currency).toBe('USD');
   });
 });
 

@@ -16,6 +16,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
+import { parseCategoryName } from '@vision/shared-utils';
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
 import { recipientRepository } from '../repositories/recipientRepository.js';
@@ -115,21 +116,24 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
                 });
             }
 
-            // Assign category if provided and recipient has none yet
+            // Assign category if provided and recipient has none yet.
+            // parseCategoryName (shared GENERAL:DETAIL interchange helper) splits
+            // on the first ':' and trims; both parts must be non-empty, matching
+            // the old colonIdx > 0 guard.
             if (categoryStr) {
-                const colonIdx = categoryStr.indexOf(':');
-                if (colonIdx > 0) {
-                    const general = categoryStr.slice(0, colonIdx).trim().toUpperCase();
-                    const detail = categoryStr.slice(colonIdx + 1).trim().toUpperCase();
-                    if (general && detail) {
-                        const { category } = await categoryRepository.createOrGet({ general, detail });
-                        // Only set if no default category yet (never overwrite existing assignment)
-                        await query(
-                            `UPDATE recipients SET default_category_id = $1 WHERE id = $2 AND default_category_id IS NULL`,
-                            [category.id, recipient.id]
-                        );
-                    }
-                } else {
+                const parsed = parseCategoryName(categoryStr);
+                const general = parsed.general.toUpperCase();
+                const detail = parsed.detail.toUpperCase();
+                if (general && detail) {
+                    const { category } = await categoryRepository.createOrGet({ general, detail });
+                    // Only set if no default category yet (never overwrite existing assignment)
+                    await query(
+                        `UPDATE recipients SET default_category_id = $1 WHERE id = $2 AND default_category_id IS NULL`,
+                        [category.id, recipient.id]
+                    );
+                } else if (categoryStr.indexOf(':') <= 0) {
+                    // Same warn condition as the old colonIdx <= 0 branch; an empty
+                    // part after a well-placed ':' stays a silent skip, as before.
                     logger.warn(`Recipient import: invalid category format "${categoryStr}" for "${name}" — expected GENERAL:DETAIL`);
                 }
             }
@@ -190,15 +194,17 @@ export async function importCategoriesCSV(filePath, { separator = ',', encoding 
             continue;
         }
 
-        const colonIdx = categoryStr.indexOf(':');
-        if (colonIdx <= 0) {
+        // Shared GENERAL:DETAIL interchange helper: splits on the first ':' and
+        // trims. No ':' at all is a format error; empty parts are flagged below.
+        if (!categoryStr.includes(':')) {
             logger.warn(`Category import: invalid format "${categoryStr}" — expected GENERAL:DETAIL`);
             results.errors++;
             continue;
         }
 
-        const general = categoryStr.slice(0, colonIdx).trim().toUpperCase();
-        const detail = categoryStr.slice(colonIdx + 1).trim().toUpperCase();
+        const parsed = parseCategoryName(categoryStr);
+        const general = parsed.general.toUpperCase();
+        const detail = parsed.detail.toUpperCase();
 
         if (!general || !detail) {
             logger.warn(`Category import: empty general or detail in "${categoryStr}"`);

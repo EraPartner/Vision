@@ -90,35 +90,24 @@ const PROVIDER_DEFINITIONS = {
 // ─── Probe helpers ────────────────────────────────────────────────────────────
 
 async function probeUrl(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const res = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
 async function probeYahoo() {
   const { default: YahooFinance } = await import('yahoo-finance2');
   const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  try {
-    // yahoo-finance2 may not wire AbortSignal in all published versions;
-    // race against a rejection promise to guarantee the timeout fires.
-    await Promise.race([
-      // The third-arg `{ signal }` is supported at runtime but missing from
-      // the published .d.ts overloads; cast through any to keep the wiring.
-      /** @type {any} */ (yf.quote)('AAPL', { fields: ['regularMarketPrice'] }, { signal: controller.signal }),
-      new Promise((_, reject) =>
-        controller.signal.addEventListener('abort', () => reject(new Error('Yahoo probe timed out')))
-      ),
-    ]);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const signal = AbortSignal.timeout(PROBE_TIMEOUT_MS);
+  // yahoo-finance2 may not wire AbortSignal in all published versions;
+  // race against a rejection promise to guarantee the timeout fires.
+  await Promise.race([
+    // The third-arg `{ signal }` is supported at runtime but missing from
+    // the published .d.ts overloads; cast through any to keep the wiring.
+    /** @type {any} */ (yf.quote)('AAPL', { fields: ['regularMarketPrice'] }, { signal }),
+    new Promise((_, reject) =>
+      signal.addEventListener('abort', () => reject(new Error('Yahoo probe timed out')))
+    ),
+  ]);
 }
 
 async function probeKinesis() {

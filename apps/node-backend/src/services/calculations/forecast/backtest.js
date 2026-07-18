@@ -6,6 +6,7 @@
  */
 
 import { densifyDailyHistory } from './_densify.js';
+import { epochMsToUtcYmd } from '../../../lib/dateFormat.js';
 
 const DEFAULT_BACKTEST_MONTHS = 12;
 
@@ -147,7 +148,7 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
 export function walkForwardBacktestRolling({ history, methods, daysBack: _daysBack, daysForward, windowCount = 8 }) {
   const now = new Date();
   const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const isoAt = (offset) => new Date(todayMs + offset * 86_400_000).toISOString().slice(0, 10);
+  const isoAt = (offset) => epochMsToUtcYmd(todayMs + offset * 86_400_000);
 
   const perMethod = new Map();
   for (const m of methods) {

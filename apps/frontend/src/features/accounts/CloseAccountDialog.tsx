@@ -25,7 +25,7 @@ import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { accountPositionsFor } from '@/hooks/portfolio/useAccountPositions';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { isPerAccountHoldingsEnabled } from '@/lib/env';
-import { numberFormatToLocale } from '@/utils/currency';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { toast } from 'sonner';
 import type { Account, Investment } from '@/types/api';
 import type { InvestmentSummary } from '@/types/portfolio';
@@ -75,12 +75,9 @@ function CloseAccountDialogView({ account, accounts, summaries, open, onOpenChan
   const queryClient = useQueryClient();
   const [destId, setDestId] = useState('');
 
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const target = (appSettings.defaultCurrency || 'EUR').toUpperCase();
-  const fmt = (v: number) => new Intl.NumberFormat(locale, {
-    style: 'currency', currency: target,
-    minimumFractionDigits: appSettings.showDecimalPlaces, maximumFractionDigits: appSettings.showDecimalPlaces,
-  }).format(v);
+  // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+  const fmt = useCurrencyFormatter(target);
 
   // Investments still holding a non-empty position in this account.
   // With per-account holdings off (ADR-103), there is no holdings transfer — the

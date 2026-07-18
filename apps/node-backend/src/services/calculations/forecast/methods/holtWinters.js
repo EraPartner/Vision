@@ -12,6 +12,8 @@
  * minimizing in-sample SSE. Cheap; converges well enough for forecast display.
  */
 
+import { epochMsToUtcYmd as toIso } from '../../../../lib/dateFormat.js';
+
 const M1 = 7;
 const M2 = 30;
 const GRID = [0.05, 0.2, 0.4];
@@ -27,7 +29,6 @@ function denseDaily(history) {
     const [y, m, dd] = d.split('-').map(Number);
     return Date.UTC(y, m - 1, dd);
   };
-  const toIso = (ms) => new Date(ms).toISOString().slice(0, 10);
   const start = parse(sorted[0].date);
   const end = parse(sorted[sorted.length - 1].date);
   const map = new Map();

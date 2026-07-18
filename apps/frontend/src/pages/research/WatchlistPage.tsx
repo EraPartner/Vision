@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
 import type { WatchlistItem } from "@/types/watchlist";
@@ -17,6 +18,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api";
@@ -43,14 +45,7 @@ export default function WatchlistPage() {
   });
 
   const symbols = data?.items?.map((i) => i.symbol).filter(Boolean).join(",") || "";
-  const { data: quotesData, isError: quotesError } = useQuery({
-    queryKey: ["watchlist-quotes", symbols],
-    queryFn: () => symbols ? apiClient.getMarketQuotes(symbols, { detail: "basic" }) : Promise.resolve({ quotes: [] }),
-    enabled: !!symbols && isOnline,
-    refetchInterval: isOnline ? 60_000 : false,
-    refetchOnWindowFocus: false,
-    retry: isOnline ? 1 : false,
-  });
+  const { data: quotesData, isError: quotesError } = useMarketQuotesQuery(["watchlist-quotes", symbols], symbols);
   const quotesUnavailable = !isOnline || quotesError;
 
   const priceMap = new Map(quotesData?.quotes?.map((q) => [q.symbol, q]) || []);
@@ -75,13 +70,8 @@ export default function WatchlistPage() {
     navigate(`/research/market?symbol=${encodeURIComponent(item.symbol)}`);
   };
 
-  const formatDisplayCurrency = (value: number, currency: string) =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(value);
+  // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+  const formatDisplayCurrency = useCurrencyFormatter();
 
   const watchlistEmptyLines = t('watchlist.empty').split('\n');
   const watchlistEmptyTitle = watchlistEmptyLines[0] ?? t('watchlist.empty');

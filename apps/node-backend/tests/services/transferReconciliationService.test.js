@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockTxConnection } from '../helpers/repoMocks.js';
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
-vi.mock('../../src/database/connection.js', () => ({
-  query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
-  withTransaction: vi.fn(async (fn) => fn(mockClient)),
-}));
+vi.mock('../../src/database/connection.js', () =>
+  mockTxConnection(mockClient, { query: vi.fn(async () => ({ rows: [], rowCount: 0 })) }));
 
 import { query } from '../../src/database/connection.js';
 import {

@@ -23,10 +23,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { DeltaPill } from "@/components/shared/DeltaPill";
-
-function fmtPct(val: number) {
-  return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
-}
+import { FxPnlCell } from "@/components/portfolio/FxPnlCell";
+import { fmtPct } from "@/utils/percent";
 
 export default function CryptoPage() {
   const { t } = useLanguage();
@@ -209,22 +207,9 @@ export default function CryptoPage() {
                     <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "amount-gain" : "amount-loss") : "text-muted-foreground")}>
                       {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(convertToTarget(h.realizedGain, h.currency))}` : '—'}
                     </td>
-                    {pageHasFxExposure && (() => {
-                      const fxInfo = fxInfoById.get(h.id);
-                      const isForeign = (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
-                      const fxGain = fxInfo?.fxGain;
-                      if (!isForeign || typeof fxGain !== 'number') {
-                        return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;
-                      }
-                      return (
-                        <td
-                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "amount-gain" : "amount-loss")}
-                          title={fxInfo?.usedFallbackRate ? t('portfolio.fxFallbackNote') : undefined}
-                        >
-                          {fxGain >= 0 ? "+" : ""}{fmt(fxGain)}{fxInfo?.usedFallbackRate ? " ⚠" : ""}
-                        </td>
-                      );
-                    })()}
+                    {pageHasFxExposure && (
+                      <FxPnlCell holding={h} fxInfo={fxInfoById.get(h.id)} targetCurrency={targetCurrency} fmt={fmt} t={t} />
+                    )}
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                         <InvestmentDetailDialog 
