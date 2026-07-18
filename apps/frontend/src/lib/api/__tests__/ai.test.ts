@@ -138,6 +138,42 @@ describe("streamChat SSE handling", () => {
     expect(terminal.type).toBe("done");
   });
 
+  it("passes the user_message payload's message object through unchanged", async () => {
+    const message = {
+      id: "m1",
+      conversationId: "c1",
+      role: "user",
+      content: "hi",
+      toolName: null,
+      toolArgs: null,
+      toolResult: null,
+      createdAt: "2026-07-18T00:00:00.000Z",
+    };
+    const wire =
+      `event: user_message\ndata: ${JSON.stringify({ message })}\n\n` +
+      "event: done\ndata: {}\n\n";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+    const captured: Array<{ type: string; message?: unknown }> = [];
+    const { result } = streamChat({ message: "hi" } as never, (e) =>
+      captured.push(e as { type: string; message?: unknown }),
+    );
+    await result;
+
+    const userEvent = captured.find((e) => e.type === "user_message");
+    expect(userEvent?.message).toEqual(message);
+  });
+
+  it("ignores unknown event names", async () => {
+    const wire = 'event: telemetry\ndata: {"x":1}\n\nevent: done\ndata: {}\n\n';
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+    const events: string[] = [];
+    const { result } = streamChat({ message: "hi" } as never, (e) => events.push(e.type));
+    await result;
+    expect(events).toEqual(["done"]);
+  });
+
   it("decodes a non-JSON token payload as a raw string", async () => {
     const wire = "event: token\ndata: plain text token\n\nevent: done\ndata: {}\n\n";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
@@ -150,6 +186,42 @@ describe("streamChat SSE handling", () => {
 
     const tokenEvent = captured.find((e) => e.type === "token");
     expect(tokenEvent?.delta).toBe("plain text token");
+  });
+
+  it("drops a user_message event whose message is not an object", async () => {
+    const wire = 'event: user_message\ndata: {"message":"not-an-object"}\n\nevent: done\ndata: {}\n\n';
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+    const events: string[] = [];
+    const { result } = streamChat({ message: "hi" } as never, (e) => events.push(e.type));
+    await result;
+    expect(events).toEqual(["done"]);
+  });
+
+  it("drops a tool_call event without a string name", async () => {
+    const wire = 'event: tool_call\ndata: {"args":{"q":"x"}}\n\nevent: done\ndata: {}\n\n';
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+    const events: string[] = [];
+    const { result } = streamChat({ message: "hi" } as never, (e) => events.push(e.type));
+    await result;
+    expect(events).toEqual(["done"]);
+  });
+
+  it("drops a done event whose payload is not an object", async () => {
+    const wire = 'event: done\ndata: "finished"\n\n';
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+    const { result } = streamChat({ message: "hi" } as never, () => {});
+    await expect(result).rejects.toThrow(/Stream ended without terminal event/);
+  });
+
+  it("still surfaces a terminal error when the error payload is malformed", async () => {
+    const wire = 'event: error\ndata: {"detail":42,"code":7}\n\n';
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(wire)));
+
+    const { result } = streamChat({ message: "hi" } as never, () => {});
+    await expect(result).rejects.toThrow("AI chat error");
   });
 
   it("throws with the detail from a terminal error event", async () => {

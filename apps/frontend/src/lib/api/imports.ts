@@ -1,7 +1,51 @@
+import { z } from 'zod';
 import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from '@/lib/api/client';
 import { postMultipartImport } from '@/lib/api/helpers';
 import { readSseStream } from '@/lib/api/sse';
 import type { ImportProgress, ImportResult, BatchListResponse, ImportPreviewResponse } from '@/lib/api/types';
+
+/**
+ * Runtime guards for the import SSE streams (ZOD-10). Loose objects so the
+ * backend may add fields; TypeScript shapes stay sourced from
+ * `@/lib/api/types` — these schemas only gate the untrusted payloads before
+ * the existing casts. A failing payload rejects the stream through the same
+ * `Invalid SSE payload` path as malformed JSON; the `error` event stays
+ * schema-free because `extractErrorDetail` is already shape-tolerant.
+ */
+export const importProgressSchema = z.looseObject({
+    phase: z.string(),
+    current: z.number(),
+    total: z.number(),
+    imported: z.number(),
+    duplicates: z.number(),
+    errors: z.number(),
+    percent: z.number(),
+});
+
+const importResultSchema = z.looseObject({
+    total_processed: z.number(),
+    imported: z.number(),
+    duplicates: z.number(),
+    errors: z.number(),
+    status: z.string().optional(),
+    error_message: z.string().optional(),
+    batch_id: z.number().optional(),
+    requires_review: z.boolean().optional(),
+    auto_linked_count: z.number().optional(),
+});
+
+// The backend emits { batch_id, match_source_counts, percent } — no `total`
+// (see node-backend lib/importProgress.js), so only batch_id is required.
+const reviewRequiredSchema = z.looseObject({
+    batch_id: z.number(),
+    total: z.number().optional(),
+});
+
+const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
+    progress: importProgressSchema,
+    complete: importResultSchema,
+    review_required: reviewRequiredSchema,
+};
 
 export function importCSV(
     file: File,
@@ -49,7 +93,7 @@ export function importCSVWithProgress(
 
             let finalResult: ImportResult | null = null;
 
-            for await (const { event, data } of readSseStream<unknown>(response)) {
+            for await (const { event, data } of readSseStream<unknown>(response, { schemas: IMPORT_STREAM_SCHEMAS })) {
                 if (event === 'progress') {
                     onProgress(data as ImportProgress);
                     continue;

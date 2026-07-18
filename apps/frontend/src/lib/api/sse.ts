@@ -16,6 +16,8 @@
  * rejects and the generator surfaces the `AbortError`.
  */
 
+import { z } from 'zod';
+
 /** One parsed SSE event. `event` defaults to "message" when not specified. */
 export interface SseEvent<T> {
     event: string;
@@ -28,9 +30,19 @@ const EVENT_PREFIX = 'event:';
 const DONE_SENTINEL = '[DONE]';
 const DEFAULT_EVENT_NAME = 'message';
 
-interface ParsedFrame {
+export interface ParsedFrame {
     eventName: string;
     dataRaw: string;
+}
+
+/**
+ * Optional runtime validation for `readSseStream`, keyed by event name.
+ * Events with an entry must satisfy their schema or the stream fails via the
+ * same `Invalid SSE payload` error path as malformed JSON; events without an
+ * entry pass through unvalidated, so unknown event names stay tolerated.
+ */
+export interface SseStreamOptions {
+    schemas?: Record<string, z.ZodType>;
 }
 
 /**
@@ -59,16 +71,14 @@ export function parseSseFrame(block: string): ParsedFrame | undefined {
 }
 
 /**
- * Read an SSE response body and yield each event as it arrives.
+ * Read an SSE response body and yield each parsed frame (event name + raw
+ * data payload) as it arrives. Comment/keep-alive frames are skipped;
+ * `[DONE]` sentinel frames are NOT filtered at this layer.
  *
- * Throws:
- *  - `Error('No response body')` if the response has no readable body.
- *  - `Error('Invalid SSE payload')` if a `data:` payload is not valid JSON.
- *  - Whatever the underlying reader rejects with (e.g. `AbortError`).
- *
- * `[DONE]` sentinel frames and keep-alive comment frames are filtered out.
+ * Throws `Error('No response body')` if the response has no readable body,
+ * or whatever the underlying reader rejects with (e.g. `AbortError`).
  */
-export async function* readSseStream<T>(response: Response): AsyncGenerator<SseEvent<T>, void, void> {
+export async function* readSseFrames(response: Response): AsyncGenerator<ParsedFrame, void, void> {
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No response body');
 
@@ -90,8 +100,8 @@ export async function* readSseStream<T>(response: Response): AsyncGenerator<SseE
                 const block = buffer.slice(0, separatorIndex);
                 buffer = buffer.slice(separatorIndex + separatorMatch[0].length);
 
-                const event = toEvent<T>(block);
-                if (event) yield event;
+                const frame = parseSseFrame(block);
+                if (frame) yield frame;
 
                 separatorMatch = buffer.match(FRAME_SEPARATOR);
             }
@@ -100,8 +110,8 @@ export async function* readSseStream<T>(response: Response): AsyncGenerator<SseE
         const trailing = decoder.decode();
         if (trailing) buffer += trailing;
         if (buffer.trim()) {
-            const event = toEvent<T>(buffer.trimEnd());
-            if (event) yield event;
+            const frame = parseSseFrame(buffer.trimEnd());
+            if (frame) yield frame;
         }
     } finally {
         // Release the lock so callers can abort/cancel cleanly.
@@ -113,15 +123,52 @@ export async function* readSseStream<T>(response: Response): AsyncGenerator<SseE
     }
 }
 
-function toEvent<T>(block: string): SseEvent<T> | undefined {
-    const frame = parseSseFrame(block);
-    if (!frame) return undefined;
+/**
+ * Read an SSE response body and yield each event as it arrives.
+ *
+ * Throws:
+ *  - `Error('No response body')` if the response has no readable body.
+ *  - `Error('Invalid SSE payload')` if a `data:` payload is not valid JSON,
+ *    or does not satisfy the caller-provided schema for its event name.
+ *  - Whatever the underlying reader rejects with (e.g. `AbortError`).
+ *
+ * `[DONE]` sentinel frames and keep-alive comment frames are filtered out.
+ */
+export async function* readSseStream<T>(
+    response: Response,
+    options: SseStreamOptions = {},
+): AsyncGenerator<SseEvent<T>, void, void> {
+    for await (const frame of readSseFrames(response)) {
+        const event = toEvent<T>(frame, options.schemas);
+        if (event) yield event;
+    }
+}
+
+function toEvent<T>(frame: ParsedFrame, schemas?: Record<string, z.ZodType>): SseEvent<T> | undefined {
     if (frame.dataRaw === DONE_SENTINEL) return undefined;
 
+    let data: unknown;
     try {
-        const data = JSON.parse(frame.dataRaw) as T;
-        return { event: frame.eventName, data };
+        data = JSON.parse(frame.dataRaw);
     } catch {
         throw new Error('Invalid SSE payload');
     }
+
+    // Own-property lookup so inherited names (e.g. "constructor") never
+    // resolve to a bogus schema.
+    const schema = schemas && Object.hasOwn(schemas, frame.eventName)
+        ? schemas[frame.eventName]
+        : undefined;
+    if (schema) {
+        const result = schema.safeParse(data);
+        if (!result.success) {
+            const issues = result.error.issues
+                .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+                .join('; ');
+            throw new Error(`Invalid SSE payload for "${frame.eventName}" event: ${issues}`);
+        }
+        data = result.data;
+    }
+
+    return { event: frame.eventName, data: data as T };
 }

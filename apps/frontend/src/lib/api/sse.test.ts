@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { parseSseFrame, readSseStream, type SseEvent } from './sse';
 
 function makeResponse(chunks: string[], { abortAfter }: { abortAfter?: number } = {}): Response {
@@ -111,5 +112,34 @@ describe('readSseStream', () => {
         const response = makeResponse(['event: progress\r\ndata: {"n":7}\r\n\r\n']);
         const events = await collect(readSseStream<{ n: number }>(response));
         expect(events).toEqual([{ event: 'progress', data: { n: 7 } }]);
+    });
+});
+
+describe('readSseStream per-event schemas', () => {
+    const schemas = { progress: z.looseObject({ n: z.number() }) };
+
+    it('passes payloads that satisfy the schema through unchanged (unknown keys kept)', async () => {
+        const response = makeResponse(['event: progress\ndata: {"n":1,"extra":"x"}\n\n']);
+        const events = await collect(readSseStream(response, { schemas }));
+        expect(events).toEqual([{ event: 'progress', data: { n: 1, extra: 'x' } }]);
+    });
+
+    it('rejects via the Invalid SSE payload path when a schema fails', async () => {
+        const response = makeResponse(['event: progress\ndata: {"n":"NaN"}\n\n']);
+        await expect(collect(readSseStream(response, { schemas }))).rejects.toThrow(
+            /Invalid SSE payload for "progress" event/,
+        );
+    });
+
+    it('leaves events without a schema entry unvalidated (unknown events tolerated)', async () => {
+        const response = makeResponse(['event: mystery\ndata: {"whatever":true}\n\n']);
+        const events = await collect(readSseStream(response, { schemas }));
+        expect(events).toEqual([{ event: 'mystery', data: { whatever: true } }]);
+    });
+
+    it('does not treat inherited object properties as schemas', async () => {
+        const response = makeResponse(['event: constructor\ndata: {"v":1}\n\n']);
+        const events = await collect(readSseStream(response, { schemas }));
+        expect(events).toEqual([{ event: 'constructor', data: { v: 1 } }]);
     });
 });

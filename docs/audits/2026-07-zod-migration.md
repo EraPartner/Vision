@@ -47,7 +47,7 @@ Resume by grepping this table for `OPEN`.
 | ZOD-07 | routes/importRoutes.js + portfolioImportRoutes.js | shared coerced batch-id schema (5 copy-paste sites), multipart config coercion, Set→z.enum | DONE (#103) |
 | ZOD-08 | routes/plannedTransactions.js + routes/splits.js | leaf field validation only; loan-schedule logic stays imperative | DONE (#103) |
 | ZOD-09 | routes/crossWorkspace.js + routes/research.js + services/openingBalanceService.js | rebalance-weights schema kept SEPARATE from settings.js rebalancePlanSchema (request path coerces weights, settings stores as sent — sharing would change one side's wire), query params, normalizeOpeningBalance | DONE (#103) |
-| ZOD-10 | frontend SSE payloads | per-event schemas in lib/api/sse.ts, imports.ts, ai.ts; ai.ts adopts shared SSE frame parser if clean | OPEN |
+| ZOD-10 | frontend SSE payloads | per-event schemas in lib/api/sse.ts, imports.ts, portfolioImports.ts, ai.ts; ai.ts adopts shared SSE frame reader (readSseFrames) | DONE (#103) |
 | ZOD-11 | frontend persisted state | SettingsContext localStorage blob schema with .catch(defaults) before API write-back; ChartBuilderPage state merge | OPEN |
 | ZOD-12 | backend research adapters | dedicated pass over services/research/adapters/*.js third-party JSON parsing; tolerant semantics preserved (schema failures degrade the same way current guards do, never new throws on hot paths) | OPEN |
 
