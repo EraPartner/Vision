@@ -196,9 +196,12 @@ function Inner<Datum>({
             });
         }
         const nums = xs as number[];
+        // The only live numeric-x caller (ForecastInner) feeds dayNum = i+1, so
+        // nums is finite: d3 min/max equal Math.min/max(...) here and avoid the
+        // spread stack-size hazard. (`?? 0` only guards the unreachable empty case.)
         return scaleLinear({
             range: [0, innerWidth],
-            domain: [Math.min(...nums), Math.max(...nums)],
+            domain: [min(nums) ?? 0, max(nums) ?? 0],
         });
     }, [data, innerWidth, stableXAccessor, xIsDate]);
 

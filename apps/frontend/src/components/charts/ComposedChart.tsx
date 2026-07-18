@@ -260,7 +260,9 @@ function Inner<Datum>({
       return scaleTime({ range: [0, innerWidth], domain: [lo ?? new Date(), hi ?? new Date()] });
     }
     const nums = xs as number[];
-    return scaleLinear({ range: [0, innerWidth], domain: [Math.min(...nums), Math.max(...nums)] });
+    // numeric-x branch is currently unused (all callers pass xIsDate); if it is
+    // ever wired up, keep it finite. d3 min/max avoid the spread stack hazard.
+    return scaleLinear({ range: [0, innerWidth], domain: [min(nums) ?? 0, max(nums) ?? 0] });
   }, [data, innerWidth, stableXAccessor, xIsDate]);
 
   const buildYScale = useCallback(
