@@ -1,8 +1,12 @@
 /**
  * Saved Charts routes.
+ *
+ * Bodies are validated with zod (schema → safeParse → ValidationError), the
+ * idiom established in settings.js/reports.js.
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import savedChartsRepository from '../services/savedChartsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
@@ -21,61 +25,105 @@ const INVALID_COMBINATIONS = new Set([
   'line:ranked', 'area:ranked',
 ]);
 
+/* ── Zod schemas ───────────────────────────────────────────────────────────── */
+
+const enumField = (field, values) =>
+  z.enum(values, { error: `"${field}" must be one of: ${values.join(', ')}` });
+
+const chartTypeField = enumField('chartType', VALID_CHART_TYPES);
+const chartVariantField = enumField('chartVariant', VALID_CHART_VARIANTS);
+const timeBucketField = enumField('timeBucket', VALID_TIME_BUCKETS);
+
+const boolField = (field) => z.boolean({ error: `"${field}" must be a boolean` });
+
+// Shares validateIntArray with the query-param routes so accepted shapes stay
+// identical (scalar wrapped to array, parseInt coercion, 1..2^31-1 bounds); the
+// coerced ints replace the raw input in the value handed to the repository.
+const intArrayField = (field) => z.unknown().transform((value, ctx) => {
+  const result = validateIntArray(value, field);
+  if (!result.valid) {
+    ctx.addIssue({ code: 'custom', message: result.error });
+    return z.NEVER;
+  }
+  return result.value;
+});
+
+// Distinguish "absent" (leave the stored value untouched) from "clear" (write
+// NULL). The edit modal sends null to clear a chart's date range; older code
+// mapped null/'' to undefined, which the repository skips, so a cleared range
+// silently kept its old value.
+const dateField = (field) => z.unknown().transform((value, ctx) => {
+  if (value === null || value === '') return null;
+  if (Number.isNaN(new Date(value).getTime())) {
+    ctx.addIssue({ code: 'custom', message: `Invalid date for "${field}"` });
+    return z.NEVER;
+  }
+  return value;
+}).optional();
+
+const nameField = (message) => z.string({ error: message })
+  .refine((s) => s.trim().length > 0, message)
+  .transform((s) => s.trim());
+
+// Cross-field rule: runs after per-field parsing (and after create defaults),
+// so on POST the resolved defaults participate in the combination check, while
+// on PATCH it only fires when both fields are present in the body.
+const assertValidCombination = (data, ctx) => {
+  const { chartType, chartVariant } = data;
+  if (!chartType || !chartVariant) return;
+  if (INVALID_COMBINATIONS.has(`${chartType}:${chartVariant}`)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid combination: chartType="${chartType}" with chartVariant="${chartVariant}"`,
+    });
+  }
+};
+
+const createChartSchema = z.object({
+  name: nameField('Missing or invalid "name"'),
+  chartType: chartTypeField.default('line'),
+  chartVariant: chartVariantField.default('default'),
+  timeBucket: timeBucketField.default('monthly'),
+  categoryIds: intArrayField('categoryIds'),
+  recipientIds: intArrayField('recipientIds').optional(),
+  tagIds: intArrayField('tagIds').optional(),
+  allCategories: boolField('allCategories').default(false),
+  allRecipients: boolField('allRecipients').default(false),
+  allTags: boolField('allTags').default(false),
+  dateRangeStart: dateField('dateRangeStart'),
+  dateRangeEnd: dateField('dateRangeEnd'),
+}).superRefine(assertValidCombination);
+
+const updateChartSchema = z.object({
+  name: nameField('Invalid "name"').optional(),
+  chartType: chartTypeField.optional(),
+  chartVariant: chartVariantField.optional(),
+  timeBucket: timeBucketField.optional(),
+  categoryIds: intArrayField('categoryIds').optional(),
+  recipientIds: intArrayField('recipientIds').optional(),
+  tagIds: intArrayField('tagIds').optional(),
+  allCategories: boolField('allCategories').optional(),
+  allRecipients: boolField('allRecipients').optional(),
+  allTags: boolField('allTags').optional(),
+  dateRangeStart: dateField('dateRangeStart'),
+  dateRangeEnd: dateField('dateRangeEnd'),
+}).superRefine(assertValidCombination);
+
+function parseChartBody(schema, body) {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
+  }
+  return result.data;
+}
+
 function parseChartId(req) {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid chart id');
   return id;
-}
-
-function assertChartType(chartType, { required = false } = {}) {
-  if (required && !chartType) throw new ValidationError(`"chartType" must be one of: ${VALID_CHART_TYPES.join(', ')}`);
-  if (chartType !== undefined && !VALID_CHART_TYPES.includes(chartType)) {
-    throw new ValidationError(`"chartType" must be one of: ${VALID_CHART_TYPES.join(', ')}`);
-  }
-}
-
-function assertChartVariant(chartVariant) {
-  if (chartVariant !== undefined && !VALID_CHART_VARIANTS.includes(chartVariant)) {
-    throw new ValidationError(`"chartVariant" must be one of: ${VALID_CHART_VARIANTS.join(', ')}`);
-  }
-}
-
-function assertTimeBucket(timeBucket) {
-  if (timeBucket !== undefined && !VALID_TIME_BUCKETS.includes(timeBucket)) {
-    throw new ValidationError(`"timeBucket" must be one of: ${VALID_TIME_BUCKETS.join(', ')}`);
-  }
-}
-
-function assertChartTypeCombination(chartType, chartVariant) {
-  if (!chartType || !chartVariant) return;
-  const key = `${chartType}:${chartVariant}`;
-  if (INVALID_COMBINATIONS.has(key)) {
-    throw new ValidationError(`Invalid combination: chartType="${chartType}" with chartVariant="${chartVariant}"`);
-  }
-}
-
-function assertBoolean(value, fieldName) {
-  if (value !== undefined && typeof value !== 'boolean') {
-    throw new ValidationError(`"${fieldName}" must be a boolean`);
-  }
-}
-
-function parseIntIds(raw, fieldName) {
-  const r = validateIntArray(raw, fieldName);
-  if (!r.valid) throw new ValidationError(r.error);
-  return r.value;
-}
-
-function parseDateOrNull(value, fieldName) {
-  // Distinguish "absent" (leave the stored value untouched) from "clear"
-  // (write NULL). The edit modal sends null to clear a chart's date range; the
-  // old code mapped null/'' to undefined, which the repository skips, so a
-  // cleared range silently kept its old value.
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) throw new ValidationError(`Invalid date for "${fieldName}"`);
-  return value;
 }
 
 router.get('/', async (req, res) => {
@@ -84,80 +132,18 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, chartType, categoryIds, recipientIds, tagIds, allCategories, allRecipients, allTags, chartVariant, timeBucket, dateRangeStart, dateRangeEnd } = req.body;
-
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    throw new ValidationError('Missing or invalid "name"');
-  }
-
-  const normalizedCategoryIds = parseIntIds(categoryIds, 'categoryIds');
-  const normalizedRecipientIds = recipientIds !== undefined ? parseIntIds(recipientIds, 'recipientIds') : undefined;
-  const normalizedTagIds = tagIds !== undefined ? parseIntIds(tagIds, 'tagIds') : undefined;
-  assertChartType(chartType);
-  assertChartVariant(chartVariant);
-  assertTimeBucket(timeBucket);
-  assertBoolean(allCategories, 'allCategories');
-  assertBoolean(allRecipients, 'allRecipients');
-  assertBoolean(allTags, 'allTags');
-
-  const resolvedType = chartType || 'line';
-  const resolvedVariant = chartVariant || 'default';
-  assertChartTypeCombination(resolvedType, resolvedVariant);
-
-  const chart = await savedChartsRepository.create({
-    name: name.trim(),
-    chartType: resolvedType,
-    categoryIds: normalizedCategoryIds,
-    recipientIds: normalizedRecipientIds,
-    tagIds: normalizedTagIds,
-    allCategories: allCategories ?? false,
-    allRecipients: allRecipients ?? false,
-    allTags: allTags ?? false,
-    chartVariant: resolvedVariant,
-    timeBucket: timeBucket || 'monthly',
-    dateRangeStart: parseDateOrNull(dateRangeStart, 'dateRangeStart'),
-    dateRangeEnd: parseDateOrNull(dateRangeEnd, 'dateRangeEnd'),
-  });
+  const data = parseChartBody(createChartSchema, req.body);
+  const chart = await savedChartsRepository.create(data);
   res.status(201);
   res.ok(chart);
 });
 
 router.patch('/:id', async (req, res) => {
   const id = parseChartId(req);
-  const { name, chartType, chartVariant, timeBucket, allCategories, allRecipients, allTags } = req.body;
-  let { categoryIds, recipientIds, tagIds, dateRangeStart, dateRangeEnd } = req.body;
-
-  if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
-    throw new ValidationError('Invalid "name"');
-  }
-  assertChartType(chartType);
-  assertChartVariant(chartVariant);
-  assertTimeBucket(timeBucket);
-  assertChartTypeCombination(chartType, chartVariant);
-  assertBoolean(allCategories, 'allCategories');
-  assertBoolean(allRecipients, 'allRecipients');
-  assertBoolean(allTags, 'allTags');
-
-  if (categoryIds !== undefined) categoryIds = parseIntIds(categoryIds, 'categoryIds');
-  if (recipientIds !== undefined) recipientIds = parseIntIds(recipientIds, 'recipientIds');
-  if (tagIds !== undefined) tagIds = parseIntIds(tagIds, 'tagIds');
-  dateRangeStart = parseDateOrNull(dateRangeStart, 'dateRangeStart');
-  dateRangeEnd = parseDateOrNull(dateRangeEnd, 'dateRangeEnd');
-
-  const updated = await savedChartsRepository.update(id, {
-    name: name?.trim(),
-    chartType,
-    categoryIds,
-    recipientIds,
-    tagIds,
-    allCategories,
-    allRecipients,
-    allTags,
-    chartVariant,
-    timeBucket,
-    dateRangeStart,
-    dateRangeEnd,
-  });
+  // Only fields present in the body reach the repository — buildSetClauses
+  // skips absent/undefined fields, so partial updates stay partial.
+  const data = parseChartBody(updateChartSchema, req.body);
+  const updated = await savedChartsRepository.update(id, data);
   if (!updated) throw new NotFoundError('Saved chart not found');
   res.ok(updated);
 });
