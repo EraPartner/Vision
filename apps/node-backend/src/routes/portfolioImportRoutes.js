@@ -2,10 +2,18 @@
  * Portfolio import routes — CSV import of brokerage/exchange trades into
  * portfolio_transactions. Always custom-config driven (no pre-built adapters),
  * with a review step to resolve instruments. Mirrors importRoutes.js.
+ *
+ * Request parsing is validated with zod (schema → safeParse → ValidationError),
+ * the idiom established in settings.js/reports.js. Batch/row route ids share
+ * one coerced schema with the transaction import router (lib/importBatchIds.js);
+ * the multipart config/brokerage schemas coerce string fields exactly like the
+ * pre-zod hand-rolled parsing (String()/parseInt fallbacks, trims, defaults).
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import { logger } from '../config/logger.js';
+import { parseBatchIdParam, parseBatchRowIdParams } from '../lib/importBatchIds.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
 import { streamImport } from '../lib/importProgress.js';
@@ -36,98 +44,151 @@ function parseTypeMapping(raw) {
   if (!raw) return {};
   if (typeof raw === 'object') return raw;
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(/** @type {string} */ (raw));
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
 }
 
+/* ── Zod schemas ─────────────────────────────────────────────────────────── */
+
+// schema → safeParse → joined issues → ValidationError (settings.js idiom).
+// Messages here already name their field, so issues join without path prefixes.
+function parseImportInput(schema, input) {
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    throw new ValidationError(result.error.issues.map((issue) => issue.message).join('; '));
+  }
+  return result.data;
+}
+
 // Brokerage import (ADR-095): a flag + the sleeve account every row lands on.
 // Multipart fields arrive as strings; coerce them. The account is required when
 // brokerage is on (cash rows + trade legs need a sleeve).
+const brokerageParamsSchema = z.looseObject({
+  is_brokerage: z.unknown().optional().transform((value) => value === true || value === 'true'),
+  account_id: z.unknown().optional().transform((value, ctx) => {
+    if (value == null || value === '') return undefined;
+    const accountId = Number(value);
+    if (!Number.isInteger(accountId) || accountId <= 0) {
+      ctx.addIssue({ code: 'custom', message: 'account_id must be a positive integer' });
+      return z.NEVER;
+    }
+    return accountId;
+  }),
+}).superRefine((data, ctx) => {
+  if (data.is_brokerage && data.account_id == null) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'A brokerage import requires account_id (the sleeve cash + trades land on)',
+    });
+  }
+}).transform((data) => ({ isBrokerage: data.is_brokerage, accountId: data.account_id }));
+
 function parseBrokerageParams(data) {
-  const isBrokerage = data.is_brokerage === true || data.is_brokerage === 'true';
-  const rawAccount = data.account_id;
-  let accountId;
-  if (rawAccount != null && rawAccount !== '') {
-    accountId = Number(rawAccount);
-    if (!Number.isInteger(accountId) || accountId <= 0) throw new ValidationError('account_id must be a positive integer');
-  }
-  if (isBrokerage && accountId == null) {
-    throw new ValidationError('A brokerage import requires account_id (the sleeve cash + trades land on)');
-  }
-  return { isBrokerage, accountId };
+  return parseImportInput(brokerageParamsSchema, data);
 }
+
+// Optional column-mapping field: trimmed when a string, '' otherwise.
+const trimOrEmptyField = z.unknown().optional().transform((value) =>
+  (typeof value === 'string' ? value.trim() : ''));
+
+// Text field with a default: `(value && String(value).trim()) || fallback`.
+const defaultedTextField = (fallback) => z.unknown().optional().transform((value) =>
+  (value && String(value).trim()) || fallback);
+
+// Flattened request fields → { customConfig, defaultAssetClass, defaultType,
+// adapterName }, the shape both /csv/custom and /csv/stream hand to the
+// pipeline. Field coercions mirror the pre-zod build byte for byte.
+const portfolioImportConfigSchema = z.looseObject({
+  date_column: z.unknown().optional().transform((value, ctx) => {
+    if (!value || typeof value !== 'string' || !value.trim()) {
+      ctx.addIssue({ code: 'custom', message: 'date_column is required' });
+      return z.NEVER;
+    }
+    return value.trim();
+  }),
+  type_column: trimOrEmptyField,
+  symbol_column: trimOrEmptyField,
+  name_column: trimOrEmptyField,
+  units_column: trimOrEmptyField,
+  price_column: trimOrEmptyField,
+  amount_column: trimOrEmptyField,
+  fees_column: trimOrEmptyField,
+  taxes_column: trimOrEmptyField,
+  currency_column: trimOrEmptyField,
+  fx_rate_column: trimOrEmptyField,
+  note_column: trimOrEmptyField,
+  default_asset_class: z.enum([...VALID_ASSET_CLASSES], {
+    error: 'default_asset_class is required and must be a valid asset class',
+  }),
+  // Falsy (absent/'') falls back to 'buy' downstream; a truthy value must be a
+  // valid canonical type.
+  default_type: z.preprocess(
+    (value) => (value || undefined),
+    z.enum([...VALID_PORTFOLIO_TXN_TYPES], {
+      error: (issue) => `default_type "${issue.input}" is not a valid transaction type`,
+    }).optional(),
+  ),
+  separator: z.unknown().optional().transform((value, ctx) => {
+    const separator = value != null ? String(value) : ',';
+    if (separator && separator.length !== 1) {
+      ctx.addIssue({ code: 'custom', message: 'separator must be a single character' });
+      return z.NEVER;
+    }
+    return separator || ',';
+  }),
+  date_format: defaultedTextField('%Y-%m-%d'),
+  encoding: defaultedTextField('utf-8'),
+  // csv-parse throws "Invalid Option: from must be a positive integer" on a
+  // negative skip — validate here so it 400s instead of a raw 500.
+  skip_rows: z.unknown().optional().transform((value, ctx) => {
+    const skipRows = parseInt(/** @type {string} */ (value), 10) || 0;
+    if (skipRows < 0) {
+      ctx.addIssue({ code: 'custom', message: 'skip_rows must be zero or a positive integer' });
+      return z.NEVER;
+    }
+    return skipRows;
+  }),
+  type_mapping: z.unknown().optional().transform(parseTypeMapping),
+  adapter_name: defaultedTextField('portfolio_generic'),
+}).superRefine((data, ctx) => {
+  if (!data.symbol_column && !data.name_column) {
+    ctx.addIssue({ code: 'custom', message: 'map at least one of symbol_column or name_column' });
+  }
+}).transform((data) => ({
+  customConfig: {
+    date_format: data.date_format,
+    separator: data.separator,
+    encoding: data.encoding,
+    skip_rows: data.skip_rows,
+    default_asset_class: data.default_asset_class,
+    default_type: data.default_type || 'buy',
+    type_mapping: data.type_mapping,
+    column_mapping: {
+      date: data.date_column,
+      type: data.type_column,
+      symbol: data.symbol_column,
+      name: data.name_column,
+      units: data.units_column,
+      price: data.price_column,
+      amount: data.amount_column,
+      fees: data.fees_column,
+      taxes: data.taxes_column,
+      currency: data.currency_column,
+      fx_rate: data.fx_rate_column,
+      note: data.note_column,
+    },
+  },
+  defaultAssetClass: data.default_asset_class,
+  defaultType: data.default_type || 'buy',
+  adapterName: data.adapter_name,
+}));
 
 // Build the backend customConfig + batch defaults from flattened request fields.
 function buildPortfolioConfig(data) {
-  const {
-    date_format, separator, encoding, skip_rows,
-    date_column, type_column, symbol_column, name_column,
-    units_column, price_column, amount_column, fees_column, taxes_column,
-    currency_column, fx_rate_column, note_column,
-    default_asset_class, default_type, type_mapping,
-  } = data;
-
-  if (!date_column || typeof date_column !== 'string' || !date_column.trim()) {
-    throw new ValidationError('date_column is required');
-  }
-  const hasSymbol = typeof symbol_column === 'string' && symbol_column.trim();
-  const hasName = typeof name_column === 'string' && name_column.trim();
-  if (!hasSymbol && !hasName) {
-    throw new ValidationError('map at least one of symbol_column or name_column');
-  }
-  if (!default_asset_class || !VALID_ASSET_CLASSES.has(default_asset_class)) {
-    throw new ValidationError('default_asset_class is required and must be a valid asset class');
-  }
-  if (default_type && !VALID_PORTFOLIO_TXN_TYPES.has(default_type)) {
-    throw new ValidationError(`default_type "${default_type}" is not a valid transaction type`);
-  }
-  const sep = separator != null ? String(separator) : ',';
-  if (sep && sep.length !== 1) {
-    throw new ValidationError('separator must be a single character');
-  }
-
-  const trimOrEmpty = (v) => (typeof v === 'string' ? v.trim() : '');
-
-  // csv-parse throws "Invalid Option: from must be a positive integer" on a
-  // negative skip — validate here so it 400s instead of a raw 500.
-  const skipRows = parseInt(skip_rows, 10) || 0;
-  if (skipRows < 0) {
-    throw new ValidationError('skip_rows must be zero or a positive integer');
-  }
-
-  const customConfig = {
-    date_format: (date_format && String(date_format).trim()) || '%Y-%m-%d',
-    separator: sep || ',',
-    encoding: (encoding && String(encoding).trim()) || 'utf-8',
-    skip_rows: skipRows,
-    default_asset_class,
-    default_type: default_type || 'buy',
-    type_mapping: parseTypeMapping(type_mapping),
-    column_mapping: {
-      date: date_column.trim(),
-      type: trimOrEmpty(type_column),
-      symbol: trimOrEmpty(symbol_column),
-      name: trimOrEmpty(name_column),
-      units: trimOrEmpty(units_column),
-      price: trimOrEmpty(price_column),
-      amount: trimOrEmpty(amount_column),
-      fees: trimOrEmpty(fees_column),
-      taxes: trimOrEmpty(taxes_column),
-      currency: trimOrEmpty(currency_column),
-      fx_rate: trimOrEmpty(fx_rate_column),
-      note: trimOrEmpty(note_column),
-    },
-  };
-
-  return {
-    customConfig,
-    defaultAssetClass: default_asset_class,
-    defaultType: default_type || 'buy',
-    adapterName: (data.adapter_name && String(data.adapter_name).trim()) || 'portfolio_generic',
-  };
+  return parseImportInput(portfolioImportConfigSchema, data);
 }
 
 // POST /api/portfolio/import/csv/custom — one-shot (202 if review needed)
@@ -228,22 +289,32 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
 
 // Stores the frontend's PortfolioCustomConfig (camelCase) as JSONB. Required:
 // dateColumn, a symbol or name column, and a valid defaultAssetClass.
+const portfolioParserConfigSchema = z.looseObject({
+  dateColumn: z.unknown().optional().transform((value, ctx) => {
+    if (!value || typeof value !== 'string' || !value.trim()) {
+      ctx.addIssue({ code: 'custom', message: 'config.dateColumn is required' });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  defaultAssetClass: z.enum([...VALID_ASSET_CLASSES], {
+    error: 'config.defaultAssetClass must be a valid asset class',
+  }),
+}).superRefine((config, ctx) => {
+  const hasSymbol = typeof config.symbolColumn === 'string' && config.symbolColumn.trim();
+  const hasName = typeof config.nameColumn === 'string' && config.nameColumn.trim();
+  if (!hasSymbol && !hasName) {
+    ctx.addIssue({ code: 'custom', message: 'config requires symbolColumn or nameColumn' });
+  }
+});
+
+// Loose pass-through: every key (known and unknown) is stored untouched, as
+// before — only presence/validity is checked.
 function normalizePortfolioParserConfig(config) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new ValidationError('Missing or invalid "config"');
   }
-  if (!config.dateColumn || typeof config.dateColumn !== 'string' || !config.dateColumn.trim()) {
-    throw new ValidationError('config.dateColumn is required');
-  }
-  const hasSymbol = typeof config.symbolColumn === 'string' && config.symbolColumn.trim();
-  const hasName = typeof config.nameColumn === 'string' && config.nameColumn.trim();
-  if (!hasSymbol && !hasName) {
-    throw new ValidationError('config requires symbolColumn or nameColumn');
-  }
-  if (!config.defaultAssetClass || !VALID_ASSET_CLASSES.has(config.defaultAssetClass)) {
-    throw new ValidationError('config.defaultAssetClass must be a valid asset class');
-  }
-  return config;
+  return parseImportInput(portfolioParserConfigSchema, config);
 }
 
 // GET/POST/PATCH/DELETE /parsers[/:id] — shared with the transaction import router.
@@ -262,16 +333,14 @@ router.get('/batches', async (req, res) => {
 });
 
 router.get('/batches/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
+  const id = parseBatchIdParam(req);
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   res.ok(batch);
 });
 
 router.delete('/batches/:id', async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
+  const id = parseBatchIdParam(req);
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   if (batch.status === 'aborted') throw new ValidationError('Batch is already aborted');
@@ -286,8 +355,7 @@ router.delete('/batches/:id', async (req, res) => {
 // --- Review -------------------------------------------------------------------
 
 router.get('/batches/:id/preview', async (req, res) => {
-  const batchId = Number(req.params.id);
-  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
+  const batchId = parseBatchIdParam(req);
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
 
@@ -356,11 +424,7 @@ router.get('/batches/:id/preview', async (req, res) => {
 // POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override
 // Body: { investment_id } to point at an existing holding, or { create_new: true }.
 router.post('/batches/:id/rows/:rowId/investment-override', async (req, res) => {
-  const batchId = Number(req.params.id);
-  const rowId = Number(req.params.rowId);
-  if (!Number.isInteger(batchId) || batchId <= 0 || !Number.isInteger(rowId) || rowId <= 0) {
-    throw new ValidationError('Invalid batch or row id');
-  }
+  const { batchId, rowId } = parseBatchRowIdParams(req);
 
   if (req.body.create_new === true) {
     const investment = await createInvestmentForRow({ batchId, rowId });
@@ -384,8 +448,7 @@ router.post('/batches/:id/rows/:rowId/investment-override', async (req, res) => 
 
 // POST /api/portfolio/import/batches/:id/commit
 router.post('/batches/:id/commit', async (req, res) => {
-  const batchId = Number(req.params.id);
-  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
+  const batchId = parseBatchIdParam(req);
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
   if (!['awaiting_review', 'matching'].includes(batch.status)) {
