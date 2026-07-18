@@ -10,16 +10,19 @@ export interface BankAdapter {
   adapter_class?: string;
 }
 
-export function useAdapters() {
+export function useAdapters(enabled = true) {
   const { t } = useLanguage();
 
   // The supported-parser list is near-static; a shared React Query entry dedupes
-  // the two import-page cards that each used to fetch it, and stops the refetch
-  // that fired on every language switch (the old useEffect had `t` in its deps).
+  // the import-page cards and the onboarding wizard that each used to fetch it,
+  // and stops the refetch that fired on every language switch (the old useEffect
+  // had `t` in its deps). `enabled` lets always-mounted consumers (the wizard)
+  // defer the fetch until they are actually shown.
   const { data, isLoading, isError } = useQuery({
     queryKey: ['supported-parsers'],
     queryFn: () => apiClient.getSupportedParsers(),
     staleTime: Infinity,
+    enabled,
   });
 
   useEffect(() => {

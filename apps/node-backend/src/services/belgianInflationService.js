@@ -35,6 +35,9 @@ function isTruthy(value) {
   return false;
 }
 
+// Deliberately global-setTimeout-based (not node:timers/promises): the retry
+// throttle test drives this with vi.useFakeTimers(), which patches the global
+// but cannot fake timers/promises.
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -63,8 +63,7 @@ export default defineConfig(({ mode }) => ({
                     if (norm.includes('@tanstack/react-query') || norm.includes('@tanstack+react-query')) {
                         return 'query';
                     }
-                    if (norm.includes('@tanstack/react-table') || norm.includes('@tanstack+react-table') ||
-                        norm.includes('@tanstack/react-virtual') || norm.includes('@tanstack+react-virtual')) {
+                    if (norm.includes('@tanstack/react-virtual') || norm.includes('@tanstack+react-virtual')) {
                         return 'tanstack';
                     }
                     // recharts is used by exactly one component (ToolResultCard),
