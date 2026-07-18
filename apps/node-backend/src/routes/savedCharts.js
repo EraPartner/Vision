@@ -54,7 +54,7 @@ const intArrayField = (field) => z.unknown().transform((value, ctx) => {
 // silently kept its old value.
 const dateField = (field) => z.unknown().transform((value, ctx) => {
   if (value === null || value === '') return null;
-  if (Number.isNaN(new Date(value).getTime())) {
+  if (Number.isNaN(new Date(/** @type {string|number|Date} */ (value)).getTime())) {
     ctx.addIssue({ code: 'custom', message: `Invalid date for "${field}"` });
     return z.NEVER;
   }
