@@ -7,6 +7,7 @@ import { RequestList } from './RequestList';
 import { RequestDetail } from './RequestDetail';
 import { MetricsPanel } from './MetricsPanel';
 import type { ApiRequestEvent } from '@/lib/devtools/apiEventBus';
+import { cn } from '@/lib/utils';
 
 export function ApiInspector() {
     const { log, inFlight } = useApiRequestLog();
@@ -93,7 +94,7 @@ export function ApiInspector() {
 
                     <TabsContent value="requests" className="flex-1 min-h-0 mt-0 data-[state=active]:flex">
                         <div className="flex flex-1 min-h-0">
-                            <div className={`flex flex-col min-h-0 ${showDetail && selectedEvent ? 'w-1/2 border-r border-border' : 'w-full'}`}>
+                            <div className={cn('flex flex-col min-h-0', showDetail && selectedEvent ? 'w-1/2 border-r border-border' : 'w-full')}>
                                 <RequestList
                                     events={log}
                                     inFlight={inFlight}

@@ -302,10 +302,10 @@ export default function PortfolioOverviewPage() {
                     <TrendHue tone={c.gain ? "gain" : "loss"} />
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                      <c.icon className={`h-4 w-4 ${c.cls}`} />
+                      <c.icon className={cn("h-4 w-4", c.cls)} />
                     </CardHeader>
                     <CardContent>
-                      <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
+                      <p className={cn("text-2xl font-bold", c.cls)}>{c.value}</p>
                       <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
                       {c.subline && (
                         <p className="text-xs text-muted-foreground mt-1 tabular-nums">

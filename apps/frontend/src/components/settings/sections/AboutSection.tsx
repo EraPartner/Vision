@@ -13,6 +13,7 @@ import { useOnboarding } from '@/components/onboarding/OnboardingWizard';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { apiClient } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
 import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
 
@@ -159,11 +160,12 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
                     layout="stack"
                 >
                     {updateStatus && (
-                        <div className={`mb-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
+                        <div className={cn(
+                            'mb-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm',
                             updateStatus.up_to_date
                                 ? 'border-success/30 bg-success/5 text-success'
                                 : 'border-warning/30 bg-warning/5 text-warning'
-                        }`}>
+                        )}>
                             {updateStatus.up_to_date
                                 ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                                 : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}

@@ -21,6 +21,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { Money } from "@/components/shared/Money";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { getCategoryColor } from "@/utils/categoryColors";
+import { cn } from "@/lib/utils";
 import type { RawApiTransaction, TableTransaction } from "../types";
 
 interface TransactionsTableProps {
@@ -137,7 +138,7 @@ export function TransactionsTable({
             editable: true,
             type: "date" as const,
             render: (row: TableTransaction) => (
-                <span className={`whitespace-nowrap ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                <span className={cn('whitespace-nowrap', row.is_active ? 'text-foreground' : 'text-muted-foreground line-through')}>
                     {row.date ? formatDateStringWithAppSettings(row.date, appSettings.dateFormat) : '—'}
                 </span>
             ),
@@ -162,7 +163,7 @@ export function TransactionsTable({
                     );
                 }
                 return (
-                    <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)} ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
+                    <Badge variant="outline" className={cn('font-medium', getCategoryColor(row.category), !row.is_active && 'opacity-50 line-through')}>
                         {row.category}
                     </Badge>
                 );
@@ -226,8 +227,7 @@ export function TransactionsTable({
             minWidth: 70,
             className: "text-right",
             render: (row: TableTransaction) => (
-                <span className={`font-mono font-medium whitespace-nowrap ${row.amount >= 0 ? 'amount-gain' : 'amount-loss'
-                    } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
+                <span className={cn('font-mono font-medium whitespace-nowrap', row.amount >= 0 ? 'amount-gain' : 'amount-loss', !row.is_active && 'opacity-50 line-through')}>
                     <Money signed amount={row.amount} currency={row.currency} />
                 </span>
             ),
@@ -269,7 +269,7 @@ export function TransactionsTable({
                 <Button
                     variant="ghost"
                     size="sm"
-                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50'}`}
+                    className={cn('gap-1.5', row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50')}
                     onClick={(e) => { e.stopPropagation(); onToggleActive(row.id, row.is_active); }}
                     disabled={updatePending}
                 >

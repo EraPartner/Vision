@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { AlertCircle, ChevronRight, Loader2, TableProperties } from "lucide-react";
 import { PEEK_BYTES, SEPARATOR_LABELS, detectSeparator } from "./csvSeparator";
+import { cn } from "@/lib/utils";
 
 /**
  * Sniff a separator from the file's first non-empty line. Only runs while
@@ -146,7 +147,7 @@ export function FileHeadersPanel({
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
             <ChevronRight
-              className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`}
+              className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
             />
             {t("csvHeaders.sampleRows")}
           </CollapsibleTrigger>

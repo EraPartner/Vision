@@ -16,7 +16,7 @@ import { Group } from "@visx/group";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleTime } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
-import { bisector, extent, max, min } from "d3-array";
+import { bisector, extent, max, min, sum } from "d3-array";
 import { motion, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
 
@@ -26,6 +26,7 @@ import { formatScrubDelta, useChartScrub } from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
@@ -269,9 +270,12 @@ function AreaChartInner<Datum>({
             });
         }
         const nums = xValues as number[];
+        // The only live numeric-x caller (ForecastInner) feeds dayNum = i+1, so
+        // nums is finite: d3 min/max equal Math.min/max(...) here and avoid the
+        // spread stack-size hazard. (`?? 0` only guards the unreachable empty case.)
         return scaleLinear({
             range: [0, innerWidth],
-            domain: [Math.min(...nums), Math.max(...nums)],
+            domain: [min(nums) ?? 0, max(nums) ?? 0],
         });
     }, [innerWidth, xIsDate, xValues]);
 
@@ -284,12 +288,8 @@ function AreaChartInner<Datum>({
             });
         }
         if (stacked) {
-            const stackMax = max(data, (d) =>
-                series.reduce((sum, s) => sum + (s.accessor(d) ?? 0), 0),
-            );
-            const stackMin = min(data, (d) =>
-                series.reduce((sum, s) => sum + (s.accessor(d) ?? 0), 0),
-            );
+            const stackMax = max(data, (d) => sum(series, (s) => s.accessor(d) ?? 0));
+            const stackMin = min(data, (d) => sum(series, (s) => s.accessor(d) ?? 0));
             return scaleLinear({
                 range: [innerHeight, 0],
                 domain: [Math.min(0, stackMin ?? 0), stackMax ?? 0],
@@ -306,8 +306,10 @@ function AreaChartInner<Datum>({
         if (referenceLines) {
             for (const r of referenceLines) values.push(r.y);
         }
-        const lo = values.length ? Math.min(...values) : 0;
-        const hi = values.length ? Math.max(...values) : 1;
+        // values is finite-filtered above, so d3 min/max match Math.min/max(...)
+        // exactly while avoiding the spread stack-size hazard on large series.
+        const lo = values.length ? (min(values) as number) : 0;
+        const hi = values.length ? (max(values) as number) : 1;
         const pad = (hi - lo) * 0.08 || 1;
         return scaleLinear({
             range: [innerHeight, 0],
@@ -604,7 +606,7 @@ function AreaChartInner<Datum>({
                 const rising = b - a > 0;
                 return (
                     <div
-                        className={`glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${rising ? "text-gain" : b - a < 0 ? "text-loss" : "text-foreground"}`}
+                        className={cn("glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums", rising ? "text-gain" : b - a < 0 ? "text-loss" : "text-foreground")}
                         style={{ left: mid, top: 2 }}
                     >
                         {formatScrubDelta(a, b, fmt)}

@@ -5,6 +5,7 @@
  */
 
 import express from 'express';
+import { setTimeout as sleep } from 'node:timers/promises';
 import fs from 'node:fs';
 import { createGzip } from 'node:zlib';
 import { dirname, resolve, sep } from 'path';
@@ -518,7 +519,7 @@ async function start() {
         // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms
         const delay = Math.min(baseDelay * Math.pow(2, attemptCount - 1), maxDelay);
         logger.debug(`Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts}, next retry in ${delay}ms)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await sleep(delay);
       }
     }
 

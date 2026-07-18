@@ -1,39 +1,36 @@
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
+import { format as dateFnsFormat, parseISO as dateFnsParseISO } from "date-fns";
 
 export function formatDate(date: Date, pattern: string, locale = "en-US"): string {
+  switch (pattern) {
+    // Numeric-only patterns delegate to date-fns; the tokens are locale-free.
+    case "yyyy-MM-dd":
+    case "yyyy-MM-dd HH:mm":
+    case "dd/MM/yyyy":
+    case "MM/dd/yyyy":
+    case "dd.MM.yyyy":
+    case "dd-MM-yyyy":
+    case "MM/yyyy":
+    case "yyyy-MM":
+    case "MM.yyyy":
+    case "MM-yyyy":
+      return dateFnsFormat(date, pattern);
+    default:
+      break;
+  }
+
+  // Month-name patterns stay on Intl.DateTimeFormat: it honors the app locale,
+  // while date-fns `format` uses its own locale objects (default enUS) and
+  // would silently break non-English month rendering.
   const y = date.getFullYear();
-  const M = date.getMonth() + 1;
-  const d = date.getDate();
-  const H = date.getHours();
-  const min = date.getMinutes();
-  const yy = String(y).slice(-2);
-  const mm = pad2(M);
-  const dd = pad2(d);
-  const HH = pad2(H);
-  const mm2 = pad2(min);
-  // Constructing Intl.DateTimeFormat is relatively costly and formatDate runs
-  // per table cell — only build it for patterns that actually use a month name.
   const MMM = pattern.includes("MMM")
     ? new Intl.DateTimeFormat(locale, { month: "short" }).format(date)
     : "";
 
   switch (pattern) {
-    case "yyyy-MM-dd":       return `${y}-${mm}-${dd}`;
-    case "yyyy-MM-dd HH:mm": return `${y}-${mm}-${dd} ${HH}:${mm2}`;
-    case "dd/MM/yyyy":       return `${dd}/${mm}/${y}`;
-    case "MM/dd/yyyy":       return `${mm}/${dd}/${y}`;
-    case "dd.MM.yyyy":       return `${dd}.${mm}.${y}`;
-    case "dd-MM-yyyy":       return `${dd}-${mm}-${y}`;
-    case "MMM yyyy":         return `${MMM} ${y}`;
-    case "MMM yy":           return `${MMM} ${yy}`;
-    case "MM/yyyy":          return `${mm}/${y}`;
-    case "yyyy-MM":          return `${y}-${mm}`;
-    case "MM.yyyy":          return `${mm}.${y}`;
-    case "MM-yyyy":          return `${mm}-${y}`;
-    case "dd MMM yyyy":      return `${dd} ${MMM} ${y}`;
-    case "MMM d":            return `${MMM} ${d}`;
+    case "MMM yyyy":    return `${MMM} ${y}`;
+    case "MMM yy":      return `${MMM} ${String(y).slice(-2)}`;
+    case "dd MMM yyyy": return `${String(date.getDate()).padStart(2, "0")} ${MMM} ${y}`;
+    case "MMM d":       return `${MMM} ${date.getDate()}`;
     default:
       return new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(date);
   }
@@ -41,11 +38,14 @@ export function formatDate(date: Date, pattern: string, locale = "en-US"): strin
 
 export function parseISO(dateString: string): Date {
   // date-only strings (YYYY-MM-DD) must parse as local midnight, not UTC midnight,
-  // to avoid off-by-one-day display for users east of UTC.
+  // to avoid off-by-one-day display for users east of UTC. date-fns parseISO
+  // returns exactly that for date-only input (and, unlike the old hand-rolled
+  // `new Date(y, m-1, d)`, rejects out-of-range days instead of rolling over).
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    const [y, m, d] = dateString.split('-').map(Number);
-    return new Date(y, m - 1, d);
+    return dateFnsParseISO(dateString);
   }
+  // Non-date-only input keeps Date's native parsing: date-fns is stricter on
+  // malformed timestamps and this fallback must stay tolerant.
   return new Date(dateString);
 }
 

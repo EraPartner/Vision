@@ -15,6 +15,7 @@ import { formatDateTimeStringWithAppSettings } from '@/components/shared/dateUti
 import { numberFormatToLocale } from '@/utils/currency';
 import { getProviderHealth, probeProvider } from '@/lib/api/admin';
 import type { ProviderHealth } from '@/lib/api/admin';
+import { cn } from '@/lib/utils';
 
 function StatusIcon({ failures }: { failures: number }) {
     if (failures === 0) return <CheckCircle2 className="h-4 w-4 text-success" />;
@@ -70,7 +71,7 @@ function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
                     {formatTs(provider.last_success_at, neverLabel, dateFormat, locale)}
                 </TableCell>
                 <TableCell>
-                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(provider.consecutive_failures)}`}>
+                    <span className={cn('text-xs rounded-full px-2 py-0.5 font-medium', statusBadgeClass(provider.consecutive_failures))}>
                         {provider.consecutive_failures}
                     </span>
                 </TableCell>

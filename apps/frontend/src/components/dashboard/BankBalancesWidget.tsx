@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { useNavigate } from "react-router-dom";
@@ -194,7 +195,7 @@ export function BankBalancesWidget() {
                     <div className="text-3xl font-bold tabular-nums bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
                         {(() => { const r = formatCurrencyCompact(total_net_position, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                     </div>
-                    <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "amount-gain" : "amount-loss"}`}>
+                    <p className={cn("text-xs font-medium mt-2 flex items-center gap-1", isPositive ? "amount-gain" : "amount-loss")}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                         {t('bankWidget.acrossAccounts', { n: balanceCards.length.toString() })}
                     </p>
@@ -240,7 +241,7 @@ export function BankBalancesWidget() {
                                         </div>
                                         <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                     </div>
-                                    <div className={`text-xl font-bold tabular-nums ${acctPositive ? "text-foreground" : "text-loss"}`}>
+                                    <div className={cn("text-xl font-bold tabular-nums", acctPositive ? "text-foreground" : "text-loss")}>
                                         {(() => { const r = formatCurrencyCompact(balance, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                                     </div>
                                     {txCount != null && (

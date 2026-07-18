@@ -4,6 +4,7 @@
  * windowed chart) stay in lockstep. Labels come from the `performance.period.*`
  * i18n keys, which are generic ("1M", "3M", …) and reused across charts.
  */
+import { subDays } from "date-fns";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 
 export const CHART_PERIODS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
@@ -32,7 +33,8 @@ export function filterByPeriod<T>(
     const lastYmd = getYmd(items[items.length - 1]);
     const anchor = parseLocalDateFromYmd(lastYmd);
     if (Number.isNaN(anchor.getTime())) return items.slice();
-    anchor.setDate(anchor.getDate() - days);
-    const cutoff = toYmd(anchor);
+    // subDays is local-calendar day arithmetic on the midnight anchor —
+    // identical to the previous `anchor.setDate(anchor.getDate() - days)`.
+    const cutoff = toYmd(subDays(anchor, days));
     return items.filter((item) => getYmd(item) >= cutoff);
 }

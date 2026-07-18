@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
 import { usePageTitle } from "@/contexts/PageTitleContext";
+import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
     title: string;
@@ -24,7 +25,7 @@ export function PageHeader({ title, subtitle, description, icon: Icon, iconColor
         <div className="canvas-text flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
                 {Icon && (
-                    <div className={`hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${iconColor} items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]`}>
+                    <div className={cn("hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br", iconColor, "items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]")}>
                         <Icon className="h-6 w-6" />
                     </div>
                 )}

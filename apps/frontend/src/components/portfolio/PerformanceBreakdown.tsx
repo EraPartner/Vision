@@ -7,6 +7,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { TrendingUp, TrendingDown, Calendar } from "lucide-react";
 import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass } from "@/types/api";
+import { cn } from "@/lib/utils";
 
 interface BreakdownItem {
     id: number;
@@ -45,7 +46,7 @@ function PerformerRow({ inv, defaultCurrency, t }: { inv: BreakdownItem; default
                 <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
             </div>
             <div className="text-right shrink-0">
-                <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss"}`}>
+                <p className={cn("text-sm font-bold", inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss")}>
                     {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -147,7 +148,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                             <div className="text-xl font-bold text-foreground">
                                 <Money amount={classValue} currency={defaultCurrency} />
                             </div>
-                            <div className={`text-sm font-medium mt-1 ${classGain >= 0 ? "amount-gain" : "amount-loss"}`}>
+                            <div className={cn("text-sm font-medium mt-1", classGain >= 0 ? "amount-gain" : "amount-loss")}>
                                 {classGain >= 0 ? "+" : ""}<Money amount={classGain} currency={defaultCurrency} /> ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
@@ -194,7 +195,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                                 {months.map((val, idx) => (
                                                     <td key={idx} className="py-1 px-1">
                                                         <div
-                                                            className={`rounded-md py-1.5 px-1 text-center font-mono font-medium transition-colors ${getHeatColor(val, heatmapData.maxAbsPct)}`}
+                                                            className={cn("rounded-md py-1.5 px-1 text-center font-mono font-medium transition-colors", getHeatColor(val, heatmapData.maxAbsPct))}
                                                             title={val !== null ? formatPct(val) : t('common.noData2')}
                                                         >
                                                             {val !== null ? formatPct(val) : "–"}
@@ -203,7 +204,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                                 ))}
                                                 <td className="py-1 px-2">
                                                     <div
-                                                        className={`rounded-md py-1.5 px-1 text-center font-mono font-bold transition-colors ${getHeatColor(ytd, heatmapData.maxAbsPct)}`}
+                                                        className={cn("rounded-md py-1.5 px-1 text-center font-mono font-bold transition-colors", getHeatColor(ytd, heatmapData.maxAbsPct))}
                                                     >
                                                         {ytd !== null ? formatPct(ytd) : "–"}
                                                     </div>

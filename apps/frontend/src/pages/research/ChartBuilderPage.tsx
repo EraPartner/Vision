@@ -23,6 +23,7 @@ import { apiClient } from "@/lib/api";
 import { sma, ema, bollinger, rsi, macd } from "@/lib/research/indicators";
 import type { MacroSeriesItem, ResearchChartPoint } from "@/types/research";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
+import { cn } from "@/lib/utils";
 import {
   STORAGE_KEY,
   loadState,
@@ -362,7 +363,7 @@ export default function ChartBuilderPage() {
       </Card>
 
       {/* Series builder */}
-      <Card className={`glass-regular ${searchOpen ? "relative z-20" : ""}`}>
+      <Card className={cn("glass-regular", searchOpen && "relative z-20")}>
         <CardHeader className="pb-2"><CardTitle className="text-base">{t("research.builder.series")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {series.map((s, i) => (

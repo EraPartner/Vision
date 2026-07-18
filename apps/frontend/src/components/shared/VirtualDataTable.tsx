@@ -17,6 +17,7 @@ import { ColumnFilter } from "@/components/shared/ColumnFilter";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import type { Column } from "@/types/dataTable";
+import { cn } from "@/lib/utils";
 
 export type { Column };
 
@@ -611,7 +612,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                     key={col.key}
                                     role="columnheader"
                                     aria-sort={ariaSort}
-                                    className={`px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 whitespace-nowrap ${col.className || ""}`}
+                                    className={cn("px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 whitespace-nowrap", col.className || "")}
                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                 >
                                     <div className="flex items-center gap-1">
@@ -636,10 +637,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     <button
                                                         type="button"
                                                         aria-label={`Filter ${col.header}`}
-                                                        className={`p-0.5 rounded transition-colors ${hasFilter
+                                                        className={cn("p-0.5 rounded transition-colors", hasFilter
                                                             ? "text-primary"
-                                                            : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
-                                                            }`}
+                                                            : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground")}
                                                     >
                                                         <Filter className="h-3 w-3" />
                                                     </button>
@@ -733,7 +733,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     : -1
                                                 : undefined
                                         }
-                                        className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
+                                        className={cn("flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset", isEditing && "bg-primary/5", onRowDoubleClick && "cursor-pointer")}
                                         style={{
                                             position: "absolute",
                                             top: 0,
@@ -769,7 +769,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 <div
                                                     key={col.key}
                                                     role="cell"
-                                                    className={`px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] ${col.className || ""}`}
+                                                    className={cn("px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]", col.className || "")}
                                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                                 >
                                                     {isEditing && col.editable ? (

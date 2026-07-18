@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -155,7 +156,7 @@ export default function AccountsPage() {
                             role="button"
                             tabIndex={0}
                             aria-label={t('accounts.openDetail', { name: a.display_name || a.name })}
-                            className={`glass-regular cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 ${a.is_active ? "" : "opacity-60"}`}
+                            className={cn("glass-regular cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2", !a.is_active && "opacity-60")}
                             onClick={() => setDetailing(a)}
                             onKeyDown={(e) => {
                                 // Only act on the card itself — keyboard activation of
@@ -189,6 +190,9 @@ export default function AccountsPage() {
                                                 <TooltipTrigger asChild>
                                                     <button
                                                         type="button"
+                                                        // Kept as a template literal: badgeVariants sets text-[11px] and the
+                                                        // appended text-xs deliberately overrides it; cn()'s tailwind-merge
+                                                        // would resolve the font-size differently, so preserve the raw join.
                                                         className={`${badgeVariants({ variant: "destructive" })} cursor-pointer text-xs`}
                                                         aria-label={t('accounts.reconcile.open')}
                                                         onClick={(e) => { e.stopPropagation(); setReconciling(a); }}

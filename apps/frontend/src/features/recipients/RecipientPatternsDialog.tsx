@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Eye } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { cn } from "@/lib/utils";
 
 type PatternKind = "literal_prefix" | "glob" | "regex";
 
@@ -225,11 +226,13 @@ export function RecipientPatternsDialog({
                                 {patterns.map((p) => (
                                     <div
                                         key={p.id}
-                                        className={`flex items-start gap-3 p-3 rounded-lg border ${
+                                        className={cn(
+                                            "flex items-start gap-3 p-3 rounded-lg border",
                                             editingId === p.id
                                                 ? "border-primary/50 bg-primary/5"
-                                                : "border-border bg-muted/30"
-                                        } ${!p.is_active ? "opacity-50" : ""}`}
+                                                : "border-border bg-muted/30",
+                                            !p.is_active && "opacity-50",
+                                        )}
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -237,7 +240,7 @@ export function RecipientPatternsDialog({
                                                     {p.pattern}
                                                 </code>
                                                 <span
-                                                    className={`text-xs px-1.5 py-0.5 rounded font-medium ${kindBadgeColor[p.pattern_kind]}`}
+                                                    className={cn("text-xs px-1.5 py-0.5 rounded font-medium", kindBadgeColor[p.pattern_kind])}
                                                 >
                                                     {kindLabel[p.pattern_kind]}
                                                 </span>
@@ -331,7 +334,7 @@ export function RecipientPatternsDialog({
                                                 </Button>
                                             </div>
                                             {previewCount != null && (
-                                                <p className={`text-xs ${previewCount > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"}`}>
+                                                <p className={cn("text-xs", previewCount > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground")}>
                                                     {previewCount > 0
                                                         ? t("recipientPatterns.previewCount", { n: previewCount })
                                                         : t("recipientPatterns.previewZero")}

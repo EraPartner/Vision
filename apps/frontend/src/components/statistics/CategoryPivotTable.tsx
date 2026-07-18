@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { cn } from "@/lib/utils";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
+import { getDaysInMonth } from "date-fns";
 import { formatPeriodShort, isExpandableGroup, computeMasterToggleState, type PivotValueMode } from "./statisticsUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
@@ -21,7 +23,8 @@ interface CategoryPivotTableProps {
 
 function lastDayOfMonth(period: string): string {
   const [year, month] = period.split('-').map(Number);
-  const day = new Date(year, month, 0).getDate();
+  // Same local-calendar result as `new Date(year, month, 0).getDate()`.
+  const day = getDaysInMonth(new Date(year, month - 1));
   return `${period}-${String(day).padStart(2, '0')}`;
 }
 
@@ -295,7 +298,7 @@ export function CategoryPivotTable({
                                 valueMode,
                                 label: `${group.general} — ${formatPeriodShort(p)}`,
                               })) : undefined}
-                              className={`text-right py-2 px-3 tabular-nums font-semibold ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-loss" : ""} ${canClick ? clickableCell : ""}`}
+                              className={cn("text-right py-2 px-3 tabular-nums font-semibold", val === 0 && "text-muted-foreground/40", val < 0 && "text-loss", canClick && clickableCell)}
                             >
                               {val === 0 ? "—" : formatCurrency(val)}
                             </td>
@@ -307,7 +310,7 @@ export function CategoryPivotTable({
                             valueMode,
                             label: group.general,
                           })) : undefined}
-                          className={`text-right py-2 px-3 font-bold tabular-nums ${group.total < 0 ? "text-loss" : ""} ${groupCategoryIds.length > 0 ? clickableCell : ""}`}
+                          className={cn("text-right py-2 px-3 font-bold tabular-nums", group.total < 0 && "text-loss", groupCategoryIds.length > 0 && clickableCell)}
                         >
                           {(() => { const r = formatCompact(group.total); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                         </td>
@@ -329,7 +332,7 @@ export function CategoryPivotTable({
                                   valueMode,
                                   label: `${cat.categoryName} — ${formatPeriodShort(p)}`,
                                 })) : undefined}
-                                className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-loss" : ""} ${canClick ? clickableCell : ""}`}
+                                className={cn("text-right py-2 px-3 tabular-nums", val === 0 && "text-muted-foreground/40", val < 0 && "text-loss", canClick && clickableCell)}
                               >
                                 {val === 0 ? "—" : formatCurrency(val)}
                               </td>
@@ -341,7 +344,7 @@ export function CategoryPivotTable({
                               valueMode,
                               label: String(cat.categoryName || ''),
                             })) : undefined}
-                            className={`text-right py-2 px-3 font-medium tabular-nums ${cat.filteredTotal < 0 ? "text-loss" : ""} ${cat.categoryId != null ? clickableCell : ""}`}
+                            className={cn("text-right py-2 px-3 font-medium tabular-nums", cat.filteredTotal < 0 && "text-loss", cat.categoryId != null && clickableCell)}
                           >
                             {formatCurrency(cat.filteredTotal)}
                           </td>
@@ -364,7 +367,7 @@ export function CategoryPivotTable({
                           valueMode,
                           label: formatPeriodShort(p),
                         }))}
-                        className={`text-right py-2 px-3 tabular-nums ${clickableCell}`}
+                        className={cn("text-right py-2 px-3 tabular-nums", clickableCell)}
                       >
                         <span title={r.isCompact ? r.full : undefined}>{r.display}</span>
                       </td>
@@ -375,7 +378,7 @@ export function CategoryPivotTable({
                     return (
                       <td
                         onClick={() => navigate('/transactions')}
-                        className={`text-right py-2 px-3 tabular-nums ${clickableCell}`}
+                        className={cn("text-right py-2 px-3 tabular-nums", clickableCell)}
                       >
                         <span title={r.isCompact ? r.full : undefined}>{r.display}</span>
                       </td>

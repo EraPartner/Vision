@@ -20,6 +20,7 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
 import {
     getTableRows, previewTableMutation, commitTableMutation,
     type DbColumn, type DbRow, type DbChange, type DbFilter, type PreviewStatement,
@@ -83,7 +84,7 @@ function EditableCell({
 
     if (isBoolean(column)) {
         return (
-            <TableCell className={`${dirtyCls}`}>
+            <TableCell className={dirtyCls}>
                 <Checkbox
                     checked={value === true}
                     disabled={disabled || !column.writable || lockEdit}
@@ -114,12 +115,12 @@ function EditableCell({
     const { text, isNull } = display(value);
     return (
         <TableCell
-            className={`font-mono text-xs ${dirtyCls} ${canEdit ? 'cursor-text' : ''}`}
+            className={cn('font-mono text-xs', dirtyCls, canEdit && 'cursor-text')}
             onClick={() => canEdit && setEditing(true)}
             title={lockEdit ? t('dbEditor.readOnlyCol') : column.writable ? t('dbEditor.clickToEdit') : t('dbEditor.readOnlyCol')}
         >
             <div className="flex items-center justify-between gap-2 max-w-[28rem] truncate">
-                <span className={`truncate ${isNull ? 'text-muted-foreground italic' : ''}`}>{text}</span>
+                <span className={cn('truncate', isNull && 'text-muted-foreground italic')}>{text}</span>
                 {column.nullable && canEdit && !isNull && (
                     <button
                         type="button"
@@ -288,7 +289,7 @@ export default function TableDataEditorPage() {
                         </Button>
                         <Button variant="outline" size="sm" className="gap-2" disabled={query.isFetching}
                             onClick={() => qc.invalidateQueries({ queryKey: ['admin', 'db-table', table] })}>
-                            <RefreshCw className={`h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={cn('h-4 w-4', query.isFetching && 'animate-spin')} />
                             {t('dbEditor.refresh')}
                         </Button>
                     </div>

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -107,14 +108,14 @@ export default function EndpointLivenessPage() {
                             ) : filtered.map((row) => (
                                 <TableRow key={`${row.method}:${row.path}`}>
                                     <TableCell>
-                                        <span className={`text-xs font-mono font-semibold rounded px-1.5 py-0.5 ${methodBadgeClass(row.method)}`}>
+                                        <span className={cn("text-xs font-mono font-semibold rounded px-1.5 py-0.5", methodBadgeClass(row.method))}>
                                             {row.method}
                                         </span>
                                     </TableCell>
                                     <TableCell className="font-mono text-xs">{row.path}</TableCell>
                                     <TableCell className="text-right text-sm">{row.count ?? '—'}</TableCell>
                                     <TableCell className="text-right text-sm">{row.errors ?? '—'}</TableCell>
-                                    <TableCell className={`text-right text-sm ${row.error_rate !== undefined ? errorRateBadgeClass(row.error_rate * 100) : 'text-muted-foreground'}`}>
+                                    <TableCell className={cn("text-right text-sm", row.error_rate !== undefined ? errorRateBadgeClass(row.error_rate * 100) : 'text-muted-foreground')}>
                                         {row.error_rate !== undefined ? `${(row.error_rate * 100).toFixed(1)}%` : '—'}
                                     </TableCell>
                                     <TableCell className="text-right text-sm text-muted-foreground">

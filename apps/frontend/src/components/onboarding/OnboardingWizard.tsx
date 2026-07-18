@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
+import { useAdapters } from "@/features/imports/useAdapters";
 import { RestoreFromBackupCard } from "./RestoreFromBackupCard";
 
 const ONBOARDING_KEY = "onboarding_complete";
@@ -71,11 +72,6 @@ interface OnboardingWizardProps {
 
 const STEP_KEYS = ["welcome", "overview", "bank", "import", "categories", "tour", "backup"] as const;
 type StepKey = (typeof STEP_KEYS)[number];
-
-interface BankAdapter {
-    key: string;
-    name: string;
-}
 
 const SUGGESTED_CATEGORIES = [
     { general: "FOOD",          detail: "Groceries",        detailKey: "onboarding.cat.groceries",      emoji: "🛒" },
@@ -159,9 +155,8 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         },
     ];
 
-    const [adapters, setAdapters] = useState<BankAdapter[]>([]);
+    const { adapters, loading: adaptersLoading } = useAdapters(open);
     const [selectedBank, setSelectedBank] = useState("");
-    const [adaptersLoading, setAdaptersLoading] = useState(false);
 
     const [file, setFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
@@ -172,17 +167,6 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
     );
     const [creatingCategories, setCreatingCategories] = useState(false);
     const [categoriesCreated, setCategoriesCreated] = useState(false);
-
-    useEffect(() => {
-        if (!open) return;
-        let mounted = true;
-        setAdaptersLoading(true);
-        apiClient.getSupportedParsers()
-            .then((res) => { if (mounted) setAdapters(res.adapters || []); })
-            .catch(() => { })
-            .finally(() => { if (mounted) setAdaptersLoading(false); });
-        return () => { mounted = false; };
-    }, [open]);
 
     const goNext = () => { if (stepIdx < STEP_KEYS.length - 1) setStep(STEP_KEYS[stepIdx + 1]); };
     const goBack = () => { if (stepIdx > 0) setStep(STEP_KEYS[stepIdx - 1]); };

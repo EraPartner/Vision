@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import type { StatisticsData } from "@/hooks/useStatistics";
+import { cn } from "@/lib/utils";
 
 interface YearlySummaryTableProps {
   data: StatisticsData;
@@ -52,9 +53,10 @@ export function YearlySummaryTable({ data }: YearlySummaryTableProps) {
                     <span title={spendingR.isCompact ? spendingR.full : undefined}>{spendingR.display}</span>
                   </td>
                   <td
-                    className={`text-right py-2 px-3 font-bold tabular-nums ${
+                    className={cn(
+                      "text-right py-2 px-3 font-bold tabular-nums",
                       y.net >= 0 ? "amount-gain" : "amount-loss"
-                    }`}
+                    )}
                   >
                     <span title={netR.isCompact ? netR.full : undefined}>{netR.display}</span>
                   </td>

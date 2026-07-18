@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getDbStats, getProviderHealth, getRequestMetrics } from '@/lib/api/admin';
 import { setAdminToken, clearAdminToken, hasAdminToken } from '@/lib/adminToken';
+import { cn } from '@/lib/utils';
 
 function OverviewCard({
     label,
@@ -34,7 +35,7 @@ function OverviewCard({
 
     return (
         <Link to={to} className="block group">
-            <Card className={`glass-chrome transition-shadow duration-200 group-hover:shadow-lg ${statusRing}`}>
+            <Card className={cn('glass-chrome transition-shadow duration-200 group-hover:shadow-lg', statusRing)}>
                 <CardContent className="pt-6">
                     <div className="flex items-center gap-4">
                         <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">

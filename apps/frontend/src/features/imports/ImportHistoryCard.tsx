@@ -2,7 +2,8 @@
  * ImportHistoryCard — paginated list of import batches with rollback support.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { History, Loader2, RefreshCw, Undo2 } from "lucide-react";
 import type { ImportBatch } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
 
@@ -184,33 +186,45 @@ function BatchRow({
 
 export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
   const { t } = useLanguage();
-  const [batches, setBatches] = useState<ImportBatch[]>([]);
-  const [total, setTotal] = useState(0);
+  const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [internalRefreshKey, setInternalRefreshKey] = useState(0);
 
-  const load = useCallback(async (currentOffset: number) => {
-    setLoading(true);
-    try {
-      const data = await apiClient.listImportBatches(PAGE_SIZE, currentOffset);
-      setBatches(data.batches);
-      setTotal(data.total);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(t("importHistory.loadFailed"), { description: msg });
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+  const { data, isLoading, isFetching, isError, error } = useQuery({
+    queryKey: ["importBatches", offset],
+    queryFn: () => apiClient.listImportBatches(PAGE_SIZE, offset),
+    placeholderData: keepPreviousData,
+  });
 
+  const batches = data?.batches ?? [];
+  const total = data?.total ?? 0;
+
+  // Preserve the old catch-block behavior: surface a toast whenever a load
+  // fails. A fresh error object per failed fetch re-triggers this effect, so
+  // repeated failures still notify.
   useEffect(() => {
-    load(offset);
-  }, [load, offset, refreshKey, internalRefreshKey]);
+    if (!isError) return;
+    const msg = error instanceof Error ? error.message : String(error);
+    toast.error(t("importHistory.loadFailed"), { description: msg });
+  }, [isError, error, t]);
+
+  const invalidate = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ["importBatches"] }),
+    [queryClient],
+  );
+
+  // External refresh trigger: the parent bumps refreshKey after an import.
+  // Skip the initial mount (the query already fetches then) so we only refetch
+  // on an actual change, matching the old effect's behavior.
+  const lastRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey === lastRefreshKey.current) return;
+    lastRefreshKey.current = refreshKey;
+    invalidate();
+  }, [refreshKey, invalidate]);
 
   const handleRolledBack = useCallback(() => {
-    setInternalRefreshKey((k) => k + 1);
-  }, []);
+    invalidate();
+  }, [invalidate]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
@@ -229,16 +243,16 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setInternalRefreshKey((k) => k + 1)}
-            disabled={loading}
+            onClick={() => invalidate()}
+            disabled={isFetching}
             title={t("common.refresh")}
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        {loading && batches.length === 0 ? (
+        {isLoading ? (
           <SectionLoader />
         ) : batches.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
@@ -262,7 +276,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
                     variant="outline"
                     size="sm"
                     onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                    disabled={offset === 0 || loading}
+                    disabled={offset === 0 || isFetching}
                   >
                     {t("common.previous")}
                   </Button>
@@ -270,7 +284,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
                     variant="outline"
                     size="sm"
                     onClick={() => setOffset(offset + PAGE_SIZE)}
-                    disabled={offset + PAGE_SIZE >= total || loading}
+                    disabled={offset + PAGE_SIZE >= total || isFetching}
                   >
                     {t("common.next")}
                   </Button>

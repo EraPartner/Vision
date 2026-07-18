@@ -3,6 +3,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useOllamaStatus, useOllamaModels } from '@/hooks/useOllamaStatus';
+import { cn } from '@/lib/utils';
 
 interface AIChatSettingsSectionProps {
     value: string | undefined;
@@ -43,7 +44,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
                         {t('settings.aiChat.status')}
                     </Label>
                     <div className="flex items-center gap-2">
-                        <span className={`inline-block h-2 w-2 rounded-full ${statusDotClass}`} />
+                        <span className={cn('inline-block h-2 w-2 rounded-full', statusDotClass)} />
                         <span className="text-sm text-foreground">{statusLabel}</span>
                     </div>
                     {(status?.displayUrl || status?.baseUrl) && (

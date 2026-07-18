@@ -49,6 +49,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { cn } from "@/lib/utils";
 import { springs } from "@/lib/motion";
 import { preloadRoute } from "@/lib/routePreload";
 import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
@@ -212,8 +213,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="glass-chrome border-r border-sidebar-border/60">
-      <SidebarHeader className={`border-b border-sidebar-border/50 py-4 ${collapsed ? "px-0" : "px-4"}`}>
-        <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
+      <SidebarHeader className={cn("border-b border-sidebar-border/50 py-4", collapsed ? "px-0" : "px-4")}>
+        <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
           <button
             type="button"
             onClick={() => toggleSidebar()}
@@ -263,7 +264,7 @@ export function AppSidebar() {
                     aria-label={t('nav.aiChat')}
                   >
                     {isActiveRoute("/ai-chat", location.pathname) && <ActiveRail />}
-                    <Sparkles className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/ai-chat", location.pathname) ? "text-primary" : ""}`} />
+                    <Sparkles className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActiveRoute("/ai-chat", location.pathname) && "text-primary")} />
                     <span className={isActiveRoute("/ai-chat", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
                       {t('nav.aiChat')}
                     </span>
@@ -284,7 +285,7 @@ export function AppSidebar() {
                     aria-label={t('nav.accounts')}
                   >
                     {isActiveRoute("/accounts", location.pathname) && <ActiveRail />}
-                    <Landmark className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/accounts", location.pathname) ? "text-primary" : ""}`} />
+                    <Landmark className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActiveRoute("/accounts", location.pathname) && "text-primary")} />
                     <span className={isActiveRoute("/accounts", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
                       {t('nav.accounts')}
                     </span>
@@ -353,7 +354,7 @@ export function AppSidebar() {
                           aria-label={item.title}
                         >
                           {isActive && <ActiveRail />}
-                          <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
+                          <item.icon className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActive && "text-primary")} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
                         </NavLink>
                       </SidebarMenuButton>
@@ -384,7 +385,7 @@ export function AppSidebar() {
                           aria-label={item.title}
                         >
                           {isActive && <ActiveRail />}
-                          <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
+                          <item.icon className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActive && "text-primary")} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
                         </NavLink>
                       </SidebarMenuButton>
@@ -426,12 +427,14 @@ function WorkspaceTab({
     <button
       onClick={onClick}
       title={label}
-      className={`min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-[background-color,color,box-shadow,transform] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
+      className={cn(
+        "min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-[background-color,color,box-shadow,transform] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)]",
+        active
           ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
-          : "text-muted-foreground hover:text-foreground hover:bg-background/40"
-        }`}
+          : "text-muted-foreground hover:text-foreground hover:bg-background/40",
+      )}
     >
-      <span className={`shrink-0 transition-colors duration-200 ${active ? "text-primary" : ""}`}>{icon}</span>
+      <span className={cn("shrink-0 transition-colors duration-200", active && "text-primary")}>{icon}</span>
       <span className="truncate">{label}</span>
     </button>
   );

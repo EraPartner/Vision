@@ -4,6 +4,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Filter, FilterX } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { cn } from "@/lib/utils";
 
 interface ExclusionToggleProps {
   graphKey: string;
@@ -26,11 +27,12 @@ export function ExclusionToggle({
           <Button
             variant={isFiltered && exclusionsApply ? "default" : "outline"}
             size="sm"
-            className={`h-8 gap-2 text-xs ml-4 font-medium transition-colors ${
-              isFiltered && exclusionsApply 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+            className={cn(
+              "h-8 gap-2 text-xs ml-4 font-medium transition-colors",
+              isFiltered && exclusionsApply
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                 : 'hover:bg-muted'
-            }`}
+            )}
             onClick={() => onToggle(graphKey)}
             disabled={!exclusionsApply}
           >

@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 type TrendTone = "gain" | "loss" | "neutral";
 
 const TREND_HUE: Record<TrendTone, string> = {
@@ -16,7 +18,7 @@ export function TrendHue({ tone }: { tone: TrendTone }) {
     return (
         <div
             aria-hidden
-            className={`absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br ${TREND_HUE[tone]}`}
+            className={cn("absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br", TREND_HUE[tone])}
         />
     );
 }

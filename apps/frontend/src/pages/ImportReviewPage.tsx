@@ -23,6 +23,7 @@ import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatCurrency } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { cn } from "@/lib/utils";
 
 type MatchSource = "exact" | "fuzzy" | "pattern" | "new" | null;
 
@@ -418,7 +419,7 @@ export default function ImportReviewPage() {
                       {row.memo && (
                         <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">{row.memo}</span>
                       )}
-                      <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-loss" : "text-gain"}`}>
+                      <span className={cn("ml-auto shrink-0 tabular-nums font-medium", Number(row.amount) < 0 ? "text-loss" : "text-gain")}>
                         {formatCurrency(Number(row.amount), row.currency ?? "EUR", locale)}
                       </span>
                     </div>
