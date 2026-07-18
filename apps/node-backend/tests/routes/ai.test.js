@@ -63,7 +63,14 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-import { AiChatServiceError, runChatTurn } from '../../src/services/aiChatService.js';
+import {
+  AiChatServiceError,
+  createEmptyConversation,
+  deleteConversation,
+  getConversationWithMessages,
+  renameConversation,
+  runChatTurn,
+} from '../../src/services/aiChatService.js';
 import { ValidationError, AppError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/ai.js');
 
@@ -407,5 +414,200 @@ describe('POST /api/ai/chat', () => {
     const res = mockResponse();
 
     await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(AppError);
+  });
+});
+
+// ──────────────────────────────────────────
+// validateChatBody pins (exact accept/reject + coercion semantics)
+// ──────────────────────────────────────────
+describe('POST /api/ai/chat body validation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const okTurn = {
+    conversation: { id: UUID }, userMessage: { id: 'u1' }, toolMessages: [],
+    assistantMessage: { id: 'a1' }, usage: {}, iterations: 1,
+  };
+
+  it('accepts an UPPERCASE conversation UUID (regex is case-insensitive) and forwards it unchanged', async () => {
+    runChatTurn.mockResolvedValue(okTurn);
+    const upper = UUID.toUpperCase();
+
+    await routeHandlers['post:/chat']({ body: { message: 'hi', conversationId: upper }, on: vi.fn() }, mockResponse());
+
+    expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ conversationId: upper }));
+  });
+
+  it('maps a null conversationId to null (new conversation)', async () => {
+    runChatTurn.mockResolvedValue(okTurn);
+
+    await routeHandlers['post:/chat']({ body: { message: 'hi', conversationId: null }, on: vi.fn() }, mockResponse());
+
+    expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ conversationId: null }));
+  });
+
+  it('rejects a non-string conversationId', async () => {
+    const req = { body: { message: 'hi', conversationId: 42 }, on: vi.fn() };
+    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    expect(runChatTurn).not.toHaveBeenCalled();
+  });
+
+  it('accepts a message of exactly 4000 chars and rejects 4001', async () => {
+    runChatTurn.mockResolvedValue(okTurn);
+
+    await routeHandlers['post:/chat']({ body: { message: 'x'.repeat(4000) }, on: vi.fn() }, mockResponse());
+    expect(runChatTurn).toHaveBeenCalledTimes(1);
+
+    await expect(
+      routeHandlers['post:/chat']({ body: { message: 'x'.repeat(4001) }, on: vi.fn() }, mockResponse()),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('rejects a whitespace-only message', async () => {
+    const req = { body: { message: '   ' }, on: vi.fn() };
+    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('rejects a non-string message', async () => {
+    const req = { body: { message: 123 }, on: vi.fn() };
+    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('maps a null model to null and rejects a non-string model', async () => {
+    runChatTurn.mockResolvedValue(okTurn);
+
+    await routeHandlers['post:/chat']({ body: { message: 'hi', model: null }, on: vi.fn() }, mockResponse());
+    expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ model: null }));
+
+    await expect(
+      routeHandlers['post:/chat']({ body: { message: 'hi', model: 7 }, on: vi.fn() }, mockResponse()),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('defaults useTools to true when omitted and honours an explicit false', async () => {
+    runChatTurn.mockResolvedValue(okTurn);
+
+    await routeHandlers['post:/chat']({ body: { message: 'hi' }, on: vi.fn() }, mockResponse());
+    expect(runChatTurn).toHaveBeenLastCalledWith(expect.objectContaining({ useTools: true }));
+
+    await routeHandlers['post:/chat']({ body: { message: 'hi', useTools: false }, on: vi.fn() }, mockResponse());
+    expect(runChatTurn).toHaveBeenLastCalledWith(expect.objectContaining({ useTools: false }));
+  });
+
+  it('rejects a non-boolean useTools', async () => {
+    const req = { body: { message: 'hi', useTools: 'yes' }, on: vi.fn() };
+    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+  });
+});
+
+// ──────────────────────────────────────────
+// Conversation CRUD validation pins
+// ──────────────────────────────────────────
+describe('AI conversation routes validation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  describe('POST /conversations', () => {
+    it('creates with optional title/model absent (even without a body)', async () => {
+      createEmptyConversation.mockResolvedValue({ id: UUID });
+
+      const res = mockResponse();
+      await routeHandlers['post:/conversations']({ body: undefined }, res);
+
+      expect(createEmptyConversation).toHaveBeenCalledWith({ title: undefined, model: undefined });
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('accepts an empty-string title (only type and length are checked)', async () => {
+      createEmptyConversation.mockResolvedValue({ id: UUID });
+
+      await routeHandlers['post:/conversations']({ body: { title: '' } }, mockResponse());
+
+      expect(createEmptyConversation).toHaveBeenCalledWith({ title: '', model: undefined });
+    });
+
+    it('accepts a title of exactly 200 chars and rejects 201', async () => {
+      createEmptyConversation.mockResolvedValue({ id: UUID });
+
+      await routeHandlers['post:/conversations']({ body: { title: 't'.repeat(200) } }, mockResponse());
+      expect(createEmptyConversation).toHaveBeenCalledTimes(1);
+
+      await expect(
+        routeHandlers['post:/conversations']({ body: { title: 't'.repeat(201) } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects a non-string title', async () => {
+      await expect(
+        routeHandlers['post:/conversations']({ body: { title: 5 } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(createEmptyConversation).not.toHaveBeenCalled();
+    });
+
+    it('rejects a blank or null model (null is NOT treated as absent here)', async () => {
+      await expect(
+        routeHandlers['post:/conversations']({ body: { model: '  ' } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+
+      await expect(
+        routeHandlers['post:/conversations']({ body: { model: null } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  describe('PATCH /conversations/:id', () => {
+    it('renames with the exact (untrimmed) title', async () => {
+      renameConversation.mockResolvedValue({ id: UUID, title: ' Hi ' });
+
+      await routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body: { title: ' Hi ' } }, mockResponse());
+
+      expect(renameConversation).toHaveBeenCalledWith(UUID, ' Hi ');
+    });
+
+    it('rejects a missing, blank, or non-string title', async () => {
+      for (const body of [{}, { title: '   ' }, { title: 9 }]) {
+        await expect(
+          routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body }, mockResponse()),
+        ).rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(renameConversation).not.toHaveBeenCalled();
+    });
+
+    it('accepts a title of exactly 200 chars and rejects 201', async () => {
+      renameConversation.mockResolvedValue({ id: UUID });
+
+      await routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body: { title: 't'.repeat(200) } }, mockResponse());
+      expect(renameConversation).toHaveBeenCalledTimes(1);
+
+      await expect(
+        routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body: { title: 't'.repeat(201) } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects a malformed conversation id', async () => {
+      await expect(
+        routeHandlers['patch:/conversations/:id']({ params: { id: 'nope' }, body: { title: 'x' } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  describe('GET/DELETE /conversations/:id', () => {
+    it('accepts an uppercase UUID id and passes it through unchanged', async () => {
+      const upper = UUID.toUpperCase();
+      getConversationWithMessages.mockResolvedValue({ id: upper, messages: [] });
+
+      await routeHandlers['get:/conversations/:id']({ params: { id: upper } }, mockResponse());
+
+      expect(getConversationWithMessages).toHaveBeenCalledWith(upper);
+    });
+
+    it('rejects a missing or malformed id', async () => {
+      await expect(
+        routeHandlers['get:/conversations/:id']({ params: { id: '123' } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+
+      await expect(
+        routeHandlers['delete:/conversations/:id']({ params: { id: '' } }, mockResponse()),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(deleteConversation).not.toHaveBeenCalled();
+    });
   });
 });

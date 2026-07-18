@@ -27,6 +27,7 @@
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 
 import { logger } from '../config/logger.js';
 import { createSseWriter } from '../lib/sse.js';
@@ -52,12 +53,62 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 200;
 
-function requireConversationId(req) {
-  const id = req.params.id;
-  if (!id || !UUID_RE.test(id)) {
-    throw new ValidationError('Invalid conversation id');
+/* ── Zod schemas ─────────────────────────────────────────────────────────────
+ * schema → safeParse → ValidationError, the idiom from settings.js/reports.js.
+ * UUIDs keep the existing case-insensitive UUID_RE (zod's .uuid() is stricter
+ * about variant/version bits, and ids are passed through in their original
+ * case), so the accepted id set is unchanged. */
+
+// Case-insensitive UUID; any-case input is forwarded unchanged.
+const conversationIdSchema = z.string().regex(UUID_RE);
+
+const uuidField = (message) => z.string({ error: message }).regex(UUID_RE, message);
+
+const nonBlankString = (message) => z.string({ error: message })
+  .refine((s) => s.trim().length > 0, message);
+
+const chatBodySchema = z.object({
+  conversationId: uuidField('"conversationId" must be a UUID').nullish(),
+  message: nonBlankString('"message" is required')
+    .refine((s) => s.length <= MAX_MESSAGE_LENGTH, `"message" must be <= ${MAX_MESSAGE_LENGTH} chars`),
+  model: nonBlankString('"model" must be a non-empty string').nullish(),
+  useTools: z.boolean({ error: '"useTools" must be a boolean' }).optional(),
+}).transform((body) => ({
+  conversationId: body.conversationId ?? null,
+  message: body.message,
+  model: body.model ?? null,
+  useTools: body.useTools !== false,
+}));
+
+const createConversationSchema = z.object({
+  // An empty title is allowed (only type and length are checked); model must
+  // be a non-blank string when provided — null is NOT treated as absent here.
+  title: z.string({ error: `"title" must be a string up to ${MAX_TITLE_LENGTH} chars` })
+    .max(MAX_TITLE_LENGTH, `"title" must be a string up to ${MAX_TITLE_LENGTH} chars`)
+    .optional(),
+  model: nonBlankString('"model" must be a non-empty string').optional(),
+});
+
+const renameConversationSchema = z.object({
+  title: nonBlankString('"title" is required')
+    .refine((s) => s.length <= MAX_TITLE_LENGTH, `"title" must be <= ${MAX_TITLE_LENGTH} chars`),
+});
+
+function parseAiBody(schema, body) {
+  const result = schema.safeParse(body || {});
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => issue.message)
+      .join('; ');
+    throw new ValidationError(msg);
   }
-  return id;
+  return result.data;
+}
+
+function requireConversationId(req) {
+  const result = conversationIdSchema.safeParse(req.params.id);
+  if (!result.success) throw new ValidationError('Invalid conversation id');
+  return result.data;
 }
 
 function enforceAiChatEnabled(req, res, next) {
@@ -168,13 +219,7 @@ router.get('/conversations', async (req, res) => {
 
 // POST /api/ai/conversations
 router.post('/conversations', async (req, res) => {
-  const { title, model } = req.body || {};
-  if (title !== undefined && (typeof title !== 'string' || title.length > MAX_TITLE_LENGTH)) {
-    throw new ValidationError(`"title" must be a string up to ${MAX_TITLE_LENGTH} chars`);
-  }
-  if (model !== undefined && (typeof model !== 'string' || !model.trim())) {
-    throw new ValidationError('"model" must be a non-empty string');
-  }
+  const { title, model } = parseAiBody(createConversationSchema, req.body);
 
   try {
     const conversation = await createEmptyConversation({ title, model });
@@ -196,13 +241,7 @@ router.get('/conversations/:id', async (req, res) => {
 // PATCH /api/ai/conversations/:id
 router.patch('/conversations/:id', async (req, res) => {
   const id = requireConversationId(req);
-  const { title } = req.body || {};
-  if (typeof title !== 'string' || !title.trim()) {
-    throw new ValidationError('"title" is required');
-  }
-  if (title.length > MAX_TITLE_LENGTH) {
-    throw new ValidationError(`"title" must be <= ${MAX_TITLE_LENGTH} chars`);
-  }
+  const { title } = parseAiBody(renameConversationSchema, req.body);
 
   const updated = await renameConversation(id, title);
   if (!updated) throw new NotFoundError('Conversation not found');
@@ -219,7 +258,7 @@ router.delete('/conversations/:id', async (req, res) => {
 
 // POST /api/ai/chat
 router.post('/chat', async (req, res) => {
-  const parsed = validateChatBody(req.body);
+  const parsed = parseAiBody(chatBodySchema, req.body);
 
   const abortController = new AbortController();
   res.on('close', () => {
@@ -247,43 +286,13 @@ router.post('/chat', async (req, res) => {
   }
 });
 
-function validateChatBody(body) {
-  const { conversationId, message, model, useTools } = body || {};
-
-  if (conversationId !== undefined && conversationId !== null) {
-    if (typeof conversationId !== 'string' || !UUID_RE.test(conversationId)) {
-      throw new ValidationError('"conversationId" must be a UUID');
-    }
-  }
-  if (typeof message !== 'string' || !message.trim()) {
-    throw new ValidationError('"message" is required');
-  }
-  if (message.length > MAX_MESSAGE_LENGTH) {
-    throw new ValidationError(`"message" must be <= ${MAX_MESSAGE_LENGTH} chars`);
-  }
-  if (model !== undefined && model !== null) {
-    if (typeof model !== 'string' || !model.trim()) {
-      throw new ValidationError('"model" must be a non-empty string');
-    }
-  }
-  if (useTools !== undefined && typeof useTools !== 'boolean') {
-    throw new ValidationError('"useTools" must be a boolean');
-  }
-  return {
-    conversationId: conversationId || null,
-    message,
-    model: model || null,
-    useTools: useTools !== false,
-  };
-}
-
 // POST /api/ai/chat/stream — SSE-streamed chat turn.
 //
 // Validation throws happen before headers are written, so they travel
 // through the global error handler as envelope responses. After headers
 // commit, errors ride the SSE `error` frame.
 router.post('/chat/stream', async (req, res) => {
-  const parsed = validateChatBody(req.body);
+  const parsed = parseAiBody(chatBodySchema, req.body);
   logger.info('[ai] chat/stream start', {
     requestId: req.id,
     conversationId: parsed.conversationId,
