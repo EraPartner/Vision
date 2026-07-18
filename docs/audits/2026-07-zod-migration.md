@@ -43,7 +43,7 @@ Resume by grepping this table for `OPEN`.
 | ZOD-03 | routes/ai.js | UUID/length/boolean checks (validateChatBody, requireConversationId, title/model) | DONE (#103) |
 | ZOD-04 | controllers/investmentController.js | numeric-bounds + string-length tables + currency; SSRF URL check stays imperative | DONE (#103) |
 | ZOD-05 | services/accountService.js | sanitize() enum/boolean/currency maps + .partial(); async FK check stays | DONE (#103) |
-| ZOD-06 | routes/transactions.js | POST/PATCH bodies + bulk-tag/bulk-update bodies (list-query coercion excluded) | OPEN |
+| ZOD-06 | routes/transactions.js | POST/PATCH bodies + bulk-tag/bulk-update bodies (list-query coercion excluded) | DONE (#103) |
 | ZOD-07 | routes/importRoutes.js + portfolioImportRoutes.js | shared coerced batch-id schema (5 copy-paste sites), multipart config coercion, Set→z.enum | OPEN |
 | ZOD-08 | routes/plannedTransactions.js + routes/splits.js | leaf field validation only; loan-schedule logic stays imperative | OPEN |
 | ZOD-09 | routes/crossWorkspace.js + routes/research.js + services/openingBalanceService.js | shared rebalance-weights schema (dedupe with settings.js rebalancePlanSchema), query params, normalizeOpeningBalance | OPEN |

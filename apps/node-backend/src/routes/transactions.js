@@ -1,9 +1,16 @@
 /**
  * Transaction routes.
  *
+ * Create/patch/bulk bodies are validated with zod (schema → safeParse →
+ * ValidationError), the idiom established in settings.js/reports.js. The body
+ * schemas are LOOSE where the old code was loose (unvalidated fields such as
+ * memo/comment/is_active pass through untouched; the repository allow-list
+ * decides what is written). Bridges reuse the shared middleware guards so
+ * accepted shapes and coercions stay identical to the pre-zod behavior.
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import { query as dbQuery, withTransaction } from '../database/connection.js';
 import transactionRepository from '../services/transactionService.js';
 import { resolveRecipientIdByName } from '../services/recipientService.js';
@@ -43,6 +50,157 @@ const router = Router();
 
 function parseRouteId(req) {
   return parseInt(req.params.id, 10);
+}
+
+/* ── Zod schemas ─────────────────────────────────────────────────────────── */
+
+const tagsField = z.array(z.unknown(), { error: 'tags must be an array of strings' }).optional();
+
+// bank_account is TEXT on transactions but VARCHAR(100) on the raw mirror
+// (manual_raw_transactions); cap it up front so the mirror insert can't 500
+// *after* the main row already committed. null/short values pass untouched.
+const bankAccountField = z.unknown().transform((value, ctx) => {
+  try {
+    return assertMaxLength(value, 100, 'bank_account');
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+}).optional();
+
+// Normalise/validate currency (ISO-4217) so free text never reaches the
+// VARCHAR(3) column + 0046 CHECK as a raw 400/500. `rejectEmpty` picks the
+// clear-vs-default semantics: POST maps absent/'' to undefined (repo default),
+// PATCH rejects a cleared value (the column is NOT NULL).
+const currencyField = ({ rejectEmpty = false } = {}) => z.unknown().transform((value, ctx) => {
+  if (rejectEmpty && (value == null || value === '')) {
+    ctx.addIssue({ code: 'custom', message: 'currency cannot be cleared' });
+    return z.NEVER;
+  }
+  try {
+    return assertCurrency(value);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+}).optional();
+
+// recipient_id/category_id on PATCH: null clears (both columns are nullable),
+// but a present non-null value must be a positive integer — a non-integer here
+// otherwise reached the DB as an FK type error and surfaced as a 500. The
+// coerced integer replaces the raw input.
+const nullableFkField = (field) => z.unknown().transform((value, ctx) => {
+  if (value === null) return null;
+  const idNum = Number(value);
+  if (!Number.isInteger(idNum) || idNum <= 0) {
+    ctx.addIssue({ code: 'custom', message: `${field} must be a positive integer` });
+    return z.NEVER;
+  }
+  return idNum;
+}).optional();
+
+// POST body: per-field guards run first; the cross-field required/amount/
+// recipient checks mirror the pre-zod handler (raw values are forwarded to the
+// repository — POST never coerced amount/recipient_id in the created row).
+const createTransactionSchema = z.looseObject({
+  tags: tagsField,
+  currency: currencyField(),
+  bank_account: bankAccountField,
+}).superRefine((data, ctx) => {
+  const txDate = data.transaction_date || data.date;
+  if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {
+    ctx.addIssue({ code: 'custom', message: 'Missing required fields: date, bank_account, recipient_id, amount' });
+    return;
+  }
+  // Sign carries meaning (− expense / + income), so a zero amount is
+  // meaningless and only pollutes aggregations — reject it up front.
+  const amountNum = Number(data.amount);
+  if (!Number.isFinite(amountNum) || amountNum === 0 || Math.abs(amountNum) > MAX_MONEY_VALUE) {
+    ctx.addIssue({ code: 'custom', message: 'amount must be a non-zero finite number within range' });
+  }
+  // Validate recipient_id is a positive integer up front — a non-integer here
+  // otherwise reached the DB as an FK type error and surfaced as a 500.
+  const recipientIdNum = Number(data.recipient_id);
+  if (!Number.isInteger(recipientIdNum) || recipientIdNum <= 0) {
+    ctx.addIssue({ code: 'custom', message: 'recipient_id must be a positive integer' });
+  }
+});
+
+// PATCH body (after normalizeTransactionPatchFields). Parity with POST, which
+// validates date/amount/recipient_id. Without these, the inline row editor's
+// cleared native date input ('') survived the whitelist and reached Postgres
+// as `SET "date" = ''` — a 22007 cast error surfacing as a 500 from pressing
+// Enter. date/amount/currency are NOT NULL columns, so a PATCH may change
+// them but never clear them.
+const patchTransactionSchema = z.looseObject({
+  tags: tagsField,
+  transaction_date: z.unknown().transform((value, ctx) => {
+    if (!value) {
+      ctx.addIssue({ code: 'custom', message: 'transaction_date cannot be cleared' });
+      return z.NEVER;
+    }
+    try {
+      return assertYmd(value, 'transaction_date');
+    } catch (err) {
+      ctx.addIssue({ code: 'custom', message: err.message });
+      return z.NEVER;
+    }
+  }).optional(),
+  amount: z.unknown().transform((value, ctx) => {
+    const amountNum = Number(value);
+    if (value == null || value === '' || !Number.isFinite(amountNum) || Math.abs(amountNum) > MAX_MONEY_VALUE) {
+      ctx.addIssue({ code: 'custom', message: 'amount must be a number within range' });
+      return z.NEVER;
+    }
+    return amountNum;
+  }).optional(),
+  currency: currencyField({ rejectEmpty: true }),
+  bank_account: bankAccountField,
+  recipient_id: nullableFkField('recipient_id'),
+  category_id: nullableFkField('category_id'),
+});
+
+const bulkTagSchema = z.object({
+  transaction_ids: z.array(z.unknown(), { error: 'transaction_ids must be a non-empty array of up to 500 IDs' })
+    .min(1, { error: 'transaction_ids must be a non-empty array of up to 500 IDs' })
+    .max(500, { error: 'transaction_ids must be a non-empty array of up to 500 IDs' }),
+  add_slugs: z.array(z.unknown(), { error: 'add_slugs must be an array of up to 50 slugs' })
+    .max(50, { error: 'add_slugs must be an array of up to 50 slugs' })
+    .default([]),
+  remove_slugs: z.array(z.unknown(), { error: 'remove_slugs must be an array of up to 50 slugs' })
+    .max(50, { error: 'remove_slugs must be an array of up to 50 slugs' })
+    .default([]),
+}).superRefine((data, ctx) => {
+  if (data.add_slugs.length === 0 && data.remove_slugs.length === 0) {
+    ctx.addIssue({ code: 'custom', message: 'At least one of add_slugs or remove_slugs must be non-empty' });
+  }
+});
+
+// bulk-update `fields`: strict (no coercion) — the pre-zod code required real
+// numbers/booleans here. Unknown keys are stripped, exactly like the old
+// manual sanitized{} build; presence drives the SET clause construction.
+const bulkUpdateFieldsSchema = z.object({
+  category_id: z.number({ error: '`fields.category_id` must be a positive integer or null' })
+    .int({ error: '`fields.category_id` must be a positive integer or null' })
+    .positive({ error: '`fields.category_id` must be a positive integer or null' })
+    .nullable().optional(),
+  recipient_id: z.number({ error: '`fields.recipient_id` must be a positive integer' })
+    .int({ error: '`fields.recipient_id` must be a positive integer' })
+    .positive({ error: '`fields.recipient_id` must be a positive integer' })
+    .optional(),
+  is_active: z.boolean({ error: '`fields.is_active` must be a boolean' }).optional(),
+});
+
+// schema → safeParse → joined issues → ValidationError (settings.js idiom).
+function parseTransactionBody(schema, body) {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
+  }
+  return result.data;
 }
 
 // Hard deletes CASCADE the attachments ROWS, but nothing removes the FILES —
@@ -290,20 +448,7 @@ router.post(
   '/bulk-tag',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-tag' }),
   async (req, res) => {
-    const { transaction_ids, add_slugs = [], remove_slugs = [] } = req.body;
-
-    if (!Array.isArray(transaction_ids) || transaction_ids.length === 0 || transaction_ids.length > 500) {
-      throw new ValidationError('transaction_ids must be a non-empty array of up to 500 IDs');
-    }
-    if (!Array.isArray(add_slugs) || add_slugs.length > 50) {
-      throw new ValidationError('add_slugs must be an array of up to 50 slugs');
-    }
-    if (!Array.isArray(remove_slugs) || remove_slugs.length > 50) {
-      throw new ValidationError('remove_slugs must be an array of up to 50 slugs');
-    }
-    if (add_slugs.length === 0 && remove_slugs.length === 0) {
-      throw new ValidationError('At least one of add_slugs or remove_slugs must be non-empty');
-    }
+    const { transaction_ids, add_slugs, remove_slugs } = parseTransactionBody(bulkTagSchema, req.body);
 
     const txIds = validateInt4Ids(transaction_ids.map(Number));
     if (txIds.length === 0) {
@@ -422,27 +567,14 @@ router.post(
       throw new ValidationError('`fields` must be an object with at least one updatable property');
     }
 
-    const sanitized = {};
-    if ('category_id' in fields) {
-      const v = fields.category_id;
-      if (v !== null && (!Number.isInteger(v) || v <= 0)) {
-        throw new ValidationError('`fields.category_id` must be a positive integer or null');
-      }
-      sanitized.category_id = v;
-    }
-    if ('recipient_id' in fields) {
-      const v = fields.recipient_id;
-      if (!Number.isInteger(v) || v <= 0) {
-        throw new ValidationError('`fields.recipient_id` must be a positive integer');
-      }
-      sanitized.recipient_id = v;
-    }
-    if ('is_active' in fields) {
-      if (typeof fields.is_active !== 'boolean') {
-        throw new ValidationError('`fields.is_active` must be a boolean');
-      }
-      sanitized.is_active = fields.is_active;
-    }
+    // Strip-mode parse: unknown keys are dropped, present keys are validated,
+    // absent keys stay absent — presence drives the SET clause build below.
+    // Explicit-undefined values (unreachable via JSON) are dropped too, so a
+    // `category_id: undefined` can never become `SET category_id = NULL`.
+    const sanitized = Object.fromEntries(
+      Object.entries(parseTransactionBody(bulkUpdateFieldsSchema, fields))
+        .filter(([, value]) => value !== undefined),
+    );
 
     if (Object.keys(sanitized).length === 0) {
       throw new ValidationError('`fields` must contain at least one of: category_id, recipient_id, is_active');
@@ -538,33 +670,11 @@ router.get('/:id', validateIdParam, async (req, res) => {
 
 // POST /api/transactions
 router.post('/', async (req, res) => {
-  const data = req.body;
+  // Validated body: currency is coerced (uppercased / undefined → repo
+  // default); everything else is forwarded raw, exactly as before the schema.
+  const data = parseTransactionBody(createTransactionSchema, req.body);
   const txDate = data.transaction_date || data.date;
-  if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {
-    throw new ValidationError('Missing required fields: date, bank_account, recipient_id, amount');
-  }
-  // Sign carries meaning (− expense / + income), so a zero amount is
-  // meaningless and only pollutes aggregations — reject it up front.
-  const amountNum = Number(data.amount);
-  if (!Number.isFinite(amountNum) || amountNum === 0 || Math.abs(amountNum) > MAX_MONEY_VALUE) {
-    throw new ValidationError('amount must be a non-zero finite number within range');
-  }
-  // Validate recipient_id is a positive integer up front — a non-integer here
-  // otherwise reached the DB as an FK type error and surfaced as a 500.
-  const recipientIdNum = Number(data.recipient_id);
-  if (!Number.isInteger(recipientIdNum) || recipientIdNum <= 0) {
-    throw new ValidationError('recipient_id must be a positive integer');
-  }
-  if (data.tags !== undefined && !Array.isArray(data.tags)) {
-    throw new ValidationError('tags must be an array of strings');
-  }
-  // Normalise/validate currency (ISO-4217) so free text never reaches the
-  // VARCHAR(3) column + 0046 CHECK as a raw 400/500. undefined → repo default.
-  const currency = assertCurrency(data.currency);
-  // bank_account is TEXT on transactions but VARCHAR(100) on the raw mirror
-  // (manual_raw_transactions); cap it up front so the mirror insert can't 500
-  // *after* the main row already committed.
-  assertMaxLength(data.bank_account, 100, 'bank_account');
+  const currency = data.currency;
 
   const dupCheck = await isManualDuplicate({
     date: txDate,
@@ -591,7 +701,8 @@ router.post('/', async (req, res) => {
     // account balance (ADR-094) anchors only on imported, bank-stamped rows.
     category_id: data.category_id,
     comment: data.comment,
-    tags: Array.isArray(data.tags) ? data.tags : null,
+    // Schema guarantees array-or-absent; absent stays null as before.
+    tags: data.tags ?? null,
   });
 
   await recordManualRawTransaction({
@@ -630,53 +741,13 @@ router.patch(
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-patch' }),
   async (req, res) => {
     const id = parseRouteId(req);
-    const fields = normalizeTransactionPatchFields(req.body);
-
-    if (fields.tags !== undefined && !Array.isArray(fields.tags)) {
-      throw new ValidationError('tags must be an array of strings');
-    }
-
-    // Parity with POST, which validates date/amount/recipient_id. Without
-    // these, the inline row editor's cleared native date input ('') survived
-    // the whitelist and reached Postgres as `SET "date" = ''` — a 22007 cast
-    // error surfacing as a 500 from pressing Enter. Both columns are NOT NULL,
-    // so a PATCH may change them but never clear them.
-    if ('transaction_date' in fields) {
-      if (!fields.transaction_date) {
-        throw new ValidationError('transaction_date cannot be cleared');
-      }
-      fields.transaction_date = assertYmd(fields.transaction_date, 'transaction_date');
-    }
-    if ('amount' in fields) {
-      const amountNum = Number(fields.amount);
-      if (fields.amount == null || fields.amount === '' || !Number.isFinite(amountNum) || Math.abs(amountNum) > MAX_MONEY_VALUE) {
-        throw new ValidationError('amount must be a number within range');
-      }
-      fields.amount = amountNum;
-    }
-    // currency is NOT NULL (0046); a PATCH may change it but never clear it,
-    // and free text must not reach the ISO CHECK as a raw 500.
-    if ('currency' in fields) {
-      if (fields.currency == null || fields.currency === '') {
-        throw new ValidationError('currency cannot be cleared');
-      }
-      fields.currency = assertCurrency(fields.currency);
-    }
-    if ('bank_account' in fields) {
-      assertMaxLength(fields.bank_account, 100, 'bank_account');
-    }
-    // recipient_id/category_id: null clears (both columns are nullable), but a
-    // present non-null value must be a positive integer — a non-integer here
-    // otherwise reached the DB as an FK type error and surfaced as a 500.
-    for (const fkField of ['recipient_id', 'category_id']) {
-      const value = fields[fkField];
-      if (value === undefined || value === null) continue;
-      const idNum = Number(value);
-      if (!Number.isInteger(idNum) || idNum <= 0) {
-        throw new ValidationError(`${fkField} must be a positive integer`);
-      }
-      fields[fkField] = idNum;
-    }
+    // Whitelist-strip read-only keys, then validate/coerce the typed fields.
+    // Absent keys stay absent (partial PATCH), null keeps its clear semantics
+    // for the nullable FK columns, and unvalidated fields pass through loose.
+    const fields = parseTransactionBody(
+      patchTransactionSchema,
+      normalizeTransactionPatchFields(req.body),
+    );
 
     // Independent lookups — run in parallel, then apply immutably.
     const [recipientId, categoryId] = await Promise.all([
