@@ -10,6 +10,7 @@ import {
     useSettingsStore,
     DEFAULT_APP_SETTINGS,
     DEFAULT_DASHBOARD_SETTINGS,
+    migrateDashboardSettings,
 } from "@/stores/settingsStore";
 import { useAppSettings, AppSettingsProvider } from "@/contexts/AppSettingsContext";
 import { useSettings, SettingsProvider } from "@/contexts/SettingsContext";
@@ -214,6 +215,104 @@ describe("AppSettingsContext — edge cases", () => {
 
         vi.useRealTimers();
         saveSpy.mockRestore();
+    });
+});
+
+describe("SettingsContext — legacy localStorage migration", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        localStorage.removeItem("vision_dashboardSettings");
+    });
+
+    function renderWithLegacyBlob(blob: string) {
+        const getSpy = vi.spyOn(apiClient, "getSettings").mockResolvedValueOnce({});
+        const saveSpy = vi.spyOn(apiClient, "saveSetting").mockResolvedValue(undefined as never);
+        localStorage.setItem("vision_dashboardSettings", blob);
+        const rendered = renderHook(() => useSettings(), { wrapper: makeProviderWrapper() });
+        return { ...rendered, getSpy, saveSpy };
+    }
+
+    it("hydrates a valid legacy blob merged over defaults and persists that merge to the API", async () => {
+        const blob = { excludedCategoryIds: [3, 4], exclusionScope: "dashboard" };
+        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        const expected = { ...DEFAULT_DASHBOARD_SETTINGS, ...blob };
+        expect(result.current.settings).toEqual(expected);
+        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", expected);
+        expect(localStorage.getItem("vision_dashboardSettings")).toBeNull();
+    });
+
+    it("preserves unknown keys from the legacy blob (loose merge)", async () => {
+        const blob = { excludedCategoryIds: [1], someLegacyFlag: true };
+        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", {
+            ...DEFAULT_DASHBOARD_SETTINGS,
+            ...blob,
+        });
+    });
+
+    it("falls back to defaults and does not persist when the legacy blob is not valid JSON", async () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const { result, saveSpy } = renderWithLegacyBlob("{not json");
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        expect(result.current.settings).toEqual(DEFAULT_DASHBOARD_SETTINGS);
+        expect(saveSpy).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
+    });
+
+    it("defaults a malformed field instead of writing it back to the API", async () => {
+        const blob = { excludedCategoryIds: "not-an-array", exclusionScope: "dashboard" };
+        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify(blob));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        const expected = { ...DEFAULT_DASHBOARD_SETTINGS, exclusionScope: "dashboard" };
+        expect(result.current.settings).toEqual(expected);
+        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", expected);
+    });
+
+    it("falls back to defaults wholesale when the legacy blob is not an object", async () => {
+        const { result, saveSpy } = renderWithLegacyBlob(JSON.stringify([1, 2]));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        expect(result.current.settings).toEqual(DEFAULT_DASHBOARD_SETTINGS);
+        // Still migrated (write-back timing unchanged), but with a valid shape —
+        // never the old `{ ...defaults, ...[1,2] }` index-key poisoning.
+        expect(saveSpy).toHaveBeenCalledWith("dashboard_settings", DEFAULT_DASHBOARD_SETTINGS);
+    });
+});
+
+describe("migrateDashboardSettings", () => {
+    it("merges a valid partial blob over defaults, preserving unknown keys", () => {
+        expect(
+            migrateDashboardSettings({ excludedRecipientIds: [7], someFutureKey: "x" }),
+        ).toEqual({ ...DEFAULT_DASHBOARD_SETTINGS, excludedRecipientIds: [7], someFutureKey: "x" });
+    });
+
+    it("keeps a fully valid blob unchanged", () => {
+        const blob = {
+            excludedCategoryIds: [1, 2],
+            excludedRecipientIds: [],
+            excludeHiddenCategories: false,
+            exclusionScope: "statistics",
+        };
+        expect(migrateDashboardSettings(blob)).toEqual(blob);
+    });
+
+    it("falls back per-field for malformed values", () => {
+        expect(
+            migrateDashboardSettings({
+                excludedCategoryIds: [1, "2"],
+                excludeHiddenCategories: "yes",
+                exclusionScope: "bogus",
+            }),
+        ).toEqual(DEFAULT_DASHBOARD_SETTINGS);
+    });
+
+    it("returns defaults for non-object blobs", () => {
+        expect(migrateDashboardSettings(null)).toEqual(DEFAULT_DASHBOARD_SETTINGS);
+        expect(migrateDashboardSettings([1])).toEqual(DEFAULT_DASHBOARD_SETTINGS);
+        expect(migrateDashboardSettings("x")).toEqual(DEFAULT_DASHBOARD_SETTINGS);
     });
 });
 

@@ -21,26 +21,22 @@ import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { apiClient } from "@/lib/api";
 import { sma, ema, bollinger, rsi, macd } from "@/lib/research/indicators";
-import type { MacroProvider, MacroSeriesItem, ResearchChartPoint, ResearchRange } from "@/types/research";
+import type { MacroSeriesItem, ResearchChartPoint } from "@/types/research";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
+import {
+  STORAGE_KEY,
+  loadState,
+  type BuilderIndicator,
+  type BuilderSeries,
+  type BuilderState,
+  type Field,
+  type IndicatorType,
+  type Oscillator,
+  type SeriesType,
+} from "./chartBuilderState";
 
 const PROVIDERS = ["", "yahoo", "twelve_data", "finnhub", "fmp", "alpha_vantage"];
 const MAX_SERIES = 5;
-const STORAGE_KEY = "research.chartBuilder.v1";
-
-type SeriesType = "line" | "area" | "candlestick" | "bar";
-type Field = "price" | "volume";
-
-interface BuilderSeries {
-  id: string;
-  symbol: string;
-  field: Field;
-  type: SeriesType;
-  axis: "left" | "right";
-  provider: string;
-  /** Set when this is a macroeconomic series (ADR-082); provider-pinned, fetched via getMacroSeries. */
-  macro?: { provider: MacroProvider; seriesId: string; title: string };
-}
 
 /** Stable fetch/cache key for a series — distinct (symbol,provider) for tickers, (provider,seriesId) for macro. */
 function seriesKey(s: Pick<BuilderSeries, "symbol" | "provider" | "macro">): string {
@@ -52,44 +48,7 @@ function seriesLabel(s: BuilderSeries): string {
   return s.macro ? s.macro.title : s.symbol;
 }
 
-type IndicatorType = "sma" | "ema" | "bollinger";
-interface BuilderIndicator {
-  id: string;
-  type: IndicatorType;
-  period: number;
-  seriesId: string;
-}
-type Oscillator = "none" | "rsi" | "macd";
-
-interface BuilderState {
-  range: ResearchRange;
-  logLeft: boolean;
-  rebase: boolean;
-  series: BuilderSeries[];
-  indicators: BuilderIndicator[];
-  oscillator: Oscillator;
-  oscillatorSeriesId: string | null;
-}
-
-const DEFAULT_STATE: BuilderState = {
-  range: "1y",
-  logLeft: false,
-  rebase: false,
-  series: [],
-  indicators: [],
-  oscillator: "none",
-  oscillatorSeriesId: null,
-};
-
 type Row = { time: number } & Record<string, number | null>;
-
-function loadState(): BuilderState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_STATE, ...JSON.parse(raw) };
-  } catch { /* ignore */ }
-  return DEFAULT_STATE;
-}
 
 export default function ChartBuilderPage() {
   const { t } = useLanguage();
