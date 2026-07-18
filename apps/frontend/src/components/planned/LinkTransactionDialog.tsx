@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Money } from "@/components/shared/Money";
 import { toast } from "sonner";
 import logger from "@/lib/logger";
@@ -29,8 +30,6 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
   const { appSettings } = useAppSettings();
 
   const [txSearchQuery, setTxSearchQuery] = useState("");
-  const [candidateTxs, setCandidateTxs] = useState<Transaction[]>([]);
-  const [txLoading, setTxLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
   const [txFilters, setTxFilters] = useState({
@@ -75,55 +74,62 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
     return () => { cancelled = true; };
   }, [payment?.recipient_id]);
 
+  // Debounce the query-key INPUT (not the fetch): txFilters churns at open time
+  // (the payment + recipient effects rewrite it), so trail it by 250ms and only
+  // let the settled value drive the query. Starts null so the first fetch also
+  // waits the full debounce — preserving the deliberate 250ms delay — and resets
+  // to null while closed so reopening re-debounces. txSearchQuery is deliberately
+  // absent here: it only drives client-side filtering below, never the API.
+  const [debouncedFilters, setDebouncedFilters] = useState<typeof txFilters | null>(null);
   useEffect(() => {
-    let isMounted = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const fetchTransactions = async () => {
-      if (!open || !payment) return;
-      setTxLoading(true);
-      try {
-        const params: Record<string, string | number | boolean> = { limit: 50 };
-        if (txFilters.start_date) params.start_date = txFilters.start_date;
-        if (txFilters.end_date) params.end_date = txFilters.end_date;
-        if (txFilters.bank_account) params.bank_account = txFilters.bank_account;
-        if (txFilters.recipient_id != null) {
-          params.recipient_id = txFilters.recipient_id;
-        } else if (txFilters.recipient_name) {
-          params.recipient_name = txFilters.recipient_name;
-        } else if (payment.recipient) {
-          params.recipient_name = payment.recipient;
-        }
-        if (txFilters.uncategorised) params.uncategorised = true;
-        params.active = txFilters.active;
-
-        const res = await apiClient.getTransactions(params);
-        if (isMounted) setCandidateTxs(res.items || []);
-      } catch (err) {
-        logger.error("Failed to fetch transactions:", err);
-        if (isMounted) setCandidateTxs([]);
-      } finally {
-        if (isMounted) setTxLoading(false);
-      }
-    };
-
-    if (open && payment) {
-      timer = setTimeout(fetchTransactions, 250);
+    if (!open || !payment) {
+      setDebouncedFilters(null);
+      return;
     }
-
-    return () => {
-      isMounted = false;
-      if (timer) clearTimeout(timer);
-    };
-    // txSearchQuery is intentionally excluded: it only drives client-side
-    // filtering (filteredCandidates) and is never sent to the API.
+    const timer = setTimeout(() => setDebouncedFilters(txFilters), 250);
+    return () => clearTimeout(timer);
   }, [open, payment, txFilters]);
+
+  const {
+    data: candidateTxs = [],
+    isLoading: txLoading,
+    isError: txError,
+    error: txErrorObj,
+  } = useQuery({
+    queryKey: ["linkTxCandidates", payment?.id, debouncedFilters],
+    enabled: open && !!payment && debouncedFilters !== null,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const f = debouncedFilters!;
+      const params: Record<string, string | number | boolean> = { limit: 50 };
+      if (f.start_date) params.start_date = f.start_date;
+      if (f.end_date) params.end_date = f.end_date;
+      if (f.bank_account) params.bank_account = f.bank_account;
+      if (f.recipient_id != null) {
+        params.recipient_id = f.recipient_id;
+      } else if (f.recipient_name) {
+        params.recipient_name = f.recipient_name;
+      } else if (payment?.recipient) {
+        params.recipient_name = payment.recipient;
+      }
+      if (f.uncategorised) params.uncategorised = true;
+      params.active = f.active;
+
+      const res = await apiClient.getTransactions(params);
+      return (res.items ?? []) as Transaction[];
+    },
+  });
+
+  useEffect(() => {
+    if (txError) logger.error("Failed to fetch transactions:", txErrorObj);
+  }, [txError, txErrorObj]);
 
   const handleClose = () => {
     onOpenChange(false);
     setSelectedTxId(null);
     setTxSearchQuery("");
-    setCandidateTxs([]);
+    // candidateTxs is now query-cached; closing disables the query
+    // (debouncedFilters resets to null) so it re-fetches on reopen.
   };
 
   const handleLinkAndExecute = async () => {

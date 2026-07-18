@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { getCurrencyFormatDefaults } from "@/utils/currency";
@@ -209,110 +209,138 @@ function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpd
 }
 
 export function usePlannedPayments(showInactive: boolean = false) {
-  const [payments, setPayments] = useState<PlannedPayment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const mountedRef = useRef(true);
   const queryClient = useQueryClient();
+  const queryKey = ["plannedTransactions", showInactive] as const;
 
-  // This hook manages its own state (not React Query), but the app-wide
-  // "upcoming payments" banner is a React Query cache (['upcomingPlannedPayments',
-  // queryDate]). Every mutating path must bust it or the banner shows stale data
-  // for up to its staleTime — ImportReviewPage already does this elsewhere.
+  const {
+    data: payments = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const response = await apiClient.getPlannedTransactions({
+        active: !showInactive,
+        limit: 1000,
+      });
+      return response.items.map(mapFromAPI);
+    },
+  });
+
+  // The app-wide "upcoming payments" banner is a separate React Query cache
+  // (['upcomingPlannedPayments', queryDate]). Every mutating path must bust it
+  // or the banner shows stale data for up to its staleTime.
   const invalidateUpcoming = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["upcomingPlannedPayments"] });
   }, [queryClient]);
 
-  const fetchPayments = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await apiClient.getPlannedTransactions({
-        active: !showInactive,
-        limit: 1000
-      });
-      if (!mountedRef.current) return;
-      setPayments(response.items.map(mapFromAPI));
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : "Failed to fetch planned payments");
-      logger.error("Error fetching planned payments:", err);
-    } finally {
-      if (mountedRef.current) setLoading(false);
-    }
-  }, [showInactive]);
+  // Mutations write the SERVER RESPONSE into the list cache in onSuccess (not
+  // optimistically) so the on-screen timing matches the old await-then-splice
+  // behavior exactly. The list query itself is not invalidated — the server
+  // returns the mutated row, so splicing it in keeps the same single round-trip.
+  const setList = useCallback(
+    (updater: (prev: PlannedPayment[]) => PlannedPayment[]) => {
+      queryClient.setQueryData<PlannedPayment[]>(queryKey, (prev) => updater(prev ?? []));
+    },
+    // queryKey is stable per showInactive; spread its member to satisfy the linter.
+    [queryClient, showInactive], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
-  useEffect(() => {
-    mountedRef.current = true;
-    fetchPayments();
-    return () => { mountedRef.current = false; };
-  }, [fetchPayments]);
-
-  const addPayment = useCallback(async (payment: Omit<PlannedPayment, "id" | "created_at">) => {
-    try {
-      const apiPayload = mapToCreateAPI(payment);
-      const created = await apiClient.createPlannedTransaction(apiPayload);
-      setPayments((prev) => [...prev, mapFromAPI(created)]);
+  const addMutation = useMutation({
+    mutationFn: (payment: Omit<PlannedPayment, "id" | "created_at">) =>
+      apiClient.createPlannedTransaction(mapToCreateAPI(payment)),
+    onSuccess: (created) => {
+      setList((prev) => [...prev, mapFromAPI(created)]);
       invalidateUpcoming();
-    } catch (err) {
-      logger.error("Error creating planned payment:", err);
-      throw err;
-    }
-  }, [invalidateUpcoming]);
+    },
+    onError: (err) => logger.error("Error creating planned payment:", err),
+  });
 
-  const updatePayment = useCallback(async (id: number, updates: Partial<PlannedPayment>) => {
-    try {
-      const apiUpdates = mapToUpdateAPI(updates);
-      const updated = await apiClient.updatePlannedTransaction(id, apiUpdates);
-      setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
+  const updateMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Partial<PlannedPayment> }) =>
+      apiClient.updatePlannedTransaction(id, mapToUpdateAPI(updates)),
+    onSuccess: (updated, { id }) => {
+      setList((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
       invalidateUpcoming();
-    } catch (err) {
-      logger.error("Error updating planned payment:", err);
-      throw err;
-    }
-  }, [invalidateUpcoming]);
+    },
+    onError: (err) => logger.error("Error updating planned payment:", err),
+  });
 
-  const deletePayment = useCallback(async (id: number) => {
-    try {
-      await apiClient.deletePlannedTransaction(id);
-      setPayments((prev) => prev.filter((p) => p.id !== id));
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiClient.deletePlannedTransaction(id),
+    onSuccess: (_res, id) => {
+      setList((prev) => prev.filter((p) => p.id !== id));
       invalidateUpcoming();
-    } catch (err) {
-      logger.error("Error deleting planned payment:", err);
-      throw err;
-    }
-  }, [invalidateUpcoming]);
+    },
+    onError: (err) => logger.error("Error deleting planned payment:", err),
+  });
 
-  const toggleActive = useCallback(async (id: number) => {
-    try {
-      const payment = payments.find((p) => p.id === id);
-      if (!payment) return;
-
-      const updated = await apiClient.updatePlannedTransaction(id, {
-        is_active: !payment.is_active
-      });
-      setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
+  const toggleMutation = useMutation({
+    mutationFn: (id: number) => {
+      const current = queryClient
+        .getQueryData<PlannedPayment[]>(queryKey)
+        ?.find((p) => p.id === id);
+      if (!current) return Promise.resolve(null);
+      return apiClient.updatePlannedTransaction(id, { is_active: !current.is_active });
+    },
+    onSuccess: (updated, id) => {
+      if (!updated) return;
+      setList((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
       invalidateUpcoming();
-    } catch (err) {
-      logger.error("Error toggling payment active status:", err);
-      throw err;
-    }
-  }, [payments, invalidateUpcoming]);
+    },
+    onError: (err) => logger.error("Error toggling payment active status:", err),
+  });
 
-  const executePayment = useCallback(async (id: number, transactionId: number, executionDate?: string) => {
-    try {
+  const executeMutation = useMutation({
+    mutationFn: ({ id, transactionId, executionDate }: { id: number; transactionId: number; executionDate?: string }) => {
       const executeRequest: PlannedTransactionExecuteRequest = {
         executed_transaction_id: transactionId,
-        execution_date: executionDate
+        execution_date: executionDate,
       };
-      const updated = await apiClient.executePlannedTransaction(id, executeRequest);
-      setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
+      return apiClient.executePlannedTransaction(id, executeRequest);
+    },
+    onSuccess: (updated, { id }) => {
+      setList((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
       invalidateUpcoming();
-    } catch (err) {
-      logger.error("Error executing payment:", err);
-      throw err;
-    }
-  }, [invalidateUpcoming]);
+    },
+    onError: (err) => logger.error("Error executing payment:", err),
+  });
+
+  const addPayment = useCallback(
+    async (payment: Omit<PlannedPayment, "id" | "created_at">) => {
+      await addMutation.mutateAsync(payment);
+    },
+    [addMutation],
+  );
+
+  const updatePayment = useCallback(
+    async (id: number, updates: Partial<PlannedPayment>) => {
+      await updateMutation.mutateAsync({ id, updates });
+    },
+    [updateMutation],
+  );
+
+  const deletePayment = useCallback(
+    async (id: number) => {
+      await deleteMutation.mutateAsync(id);
+    },
+    [deleteMutation],
+  );
+
+  const toggleActive = useCallback(
+    async (id: number) => {
+      await toggleMutation.mutateAsync(id);
+    },
+    [toggleMutation],
+  );
+
+  const executePayment = useCallback(
+    async (id: number, transactionId: number, executionDate?: string) => {
+      await executeMutation.mutateAsync({ id, transactionId, executionDate });
+    },
+    [executeMutation],
+  );
 
   return {
     payments,
@@ -322,7 +350,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
     toggleActive,
     executePayment,
     loading,
-    error,
-    refetch: fetchPayments
+    error: queryError ? (queryError instanceof Error ? queryError.message : "Failed to fetch planned payments") : null,
+    refetch,
   };
 }

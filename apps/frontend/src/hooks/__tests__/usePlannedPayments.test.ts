@@ -1,14 +1,18 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { apiClient } from "@/lib/api";
 import { usePlannedPayments } from "@/hooks/usePlannedPayments";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import type { PlannedTransaction } from "@/types/api";
 
-// The hook busts the ['upcomingPlannedPayments'] React Query cache on mutations,
-// so it must render inside a QueryClientProvider.
-const wrapper = createQueryWrapper();
+// The hook now backs its list with React Query (queryKey ['plannedTransactions',
+// showInactive]) and busts ['upcomingPlannedPayments'] on mutations, so it must
+// render inside a QueryClientProvider. Each test gets a FRESH client so a cached
+// list from one test can't leak into the next (which would make isLoading read
+// false against stale data before the new fetch settles).
+let wrapper: ReturnType<typeof createQueryWrapper>;
+beforeEach(() => { wrapper = createQueryWrapper(); });
 
 const STUB: PlannedTransaction = {
     id: 1,
@@ -101,7 +105,10 @@ describe("usePlannedPayments", () => {
                 is_active: true,
             });
         });
-        expect(result.current.payments).toHaveLength(1);
+        // React Query propagates the server response into the list cache
+        // asynchronously (via setQueryData in onSuccess), unlike the old
+        // synchronous setState — await the re-render.
+        await waitFor(() => expect(result.current.payments).toHaveLength(1));
     });
 
     it("deletePayment removes the payment from the list", async () => {
@@ -113,7 +120,7 @@ describe("usePlannedPayments", () => {
         await act(async () => {
             await result.current.deletePayment(1);
         });
-        expect(result.current.payments).toHaveLength(0);
+        await waitFor(() => expect(result.current.payments).toHaveLength(0));
     });
 
     it("updatePayment replaces the matching payment", async () => {
@@ -125,7 +132,7 @@ describe("usePlannedPayments", () => {
         await act(async () => {
             await result.current.updatePayment(1, { amount: 1500 });
         });
-        expect(result.current.payments[0].amount).toBe(1500);
+        await waitFor(() => expect(result.current.payments[0].amount).toBe(1500));
         expect(result.current.payments[0].name).toBe("Updated rent");
     });
 
