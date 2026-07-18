@@ -4,6 +4,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
 import { isPriceStale } from "@/utils/priceStaleness";
+import { cn } from "@/lib/utils";
 
 interface StalePriceIndicatorProps {
   priceProvider?: string;
@@ -30,7 +31,7 @@ export function StalePriceIndicator({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 text-warning ${className ?? ""}`}
+      className={cn("inline-flex items-center gap-1 text-warning", className)}
       title={t("portfolio.stalePriceTooltip", { date: formatted })}
       aria-label={t("portfolio.stalePriceTooltip", { date: formatted })}
     >

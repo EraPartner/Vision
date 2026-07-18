@@ -30,6 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { History, Loader2, RefreshCw, Undo2 } from "lucide-react";
 import type { ImportBatch } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
 
@@ -233,7 +234,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
             disabled={loading}
             title={t("common.refresh")}
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
         </div>
       </CardHeader>

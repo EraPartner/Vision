@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { cn } from "@/lib/utils";
 
 interface ColumnFilterProps {
     header: string;
@@ -64,10 +65,10 @@ export function ColumnFilter({
                                     onChange(candidate);
                                     onClose();
                                 }}
-                                className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate ${value === candidate
+                                className={cn("w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate", value === candidate
                                         ? "bg-primary/10 text-primary font-medium"
                                         : "text-foreground"
-                                    }`}
+                                    )}
                             >
                                 {candidate}
                             </button>

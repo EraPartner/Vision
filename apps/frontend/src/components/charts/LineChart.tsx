@@ -7,7 +7,7 @@ import { Group } from "@visx/group";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleTime } from "@visx/scale";
 import { Line, LinePath } from "@visx/shape";
-import { bisector, extent } from "d3-array";
+import { bisector, extent, max, min } from "d3-array";
 import { motion, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
@@ -17,6 +17,7 @@ import { formatScrubDelta, useChartScrub } from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
@@ -221,8 +222,10 @@ function Inner<Datum>({
                 if (typeof r.y === "number") values.push(r.y);
             }
         }
-        const lo = values.length ? Math.min(...values) : 0;
-        const hi = values.length ? Math.max(...values) : 1;
+        // values is finite-filtered above, so d3 min/max match Math.min/max(...)
+        // exactly while avoiding the spread stack-size hazard on large series.
+        const lo = values.length ? (min(values) as number) : 0;
+        const hi = values.length ? (max(values) as number) : 1;
         const pad = (hi - lo) * 0.08 || 1;
         return scaleLinear({
             range: [innerHeight, 0],
@@ -516,7 +519,7 @@ function Inner<Datum>({
                 const rising = b - a > 0;
                 return (
                     <div
-                        className={`glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${rising ? "text-gain" : b - a < 0 ? "text-loss" : "text-foreground"}`}
+                        className={cn("glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums", rising ? "text-gain" : b - a < 0 ? "text-loss" : "text-foreground")}
                         style={{ left: mid, top: 2 }}
                     >
                         {formatScrubDelta(a, b, fmt)}

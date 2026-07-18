@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { cn } from "@/lib/utils";
 import { parseISO } from "@/components/shared/dateUtils";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
@@ -279,7 +280,7 @@ export default function DashboardPage() {
             key: "category",
             header: t('txPage.col.category'),
             render: (row: (typeof recentTransactions)[0]) => (
-                <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)}`}>
+                <Badge variant="outline" className={cn("font-medium", getCategoryColor(row.category))}>
                     {row.category}
                 </Badge>
             ),
@@ -290,7 +291,7 @@ export default function DashboardPage() {
             header: t('txPage.col.amount'),
             className: "text-right",
             render: (row: (typeof recentTransactions)[0]) => (
-                <span className={`font-semibold ${row.amount >= 0 ? "amount-gain" : "amount-loss"}`}>
+                <span className={cn("font-semibold", row.amount >= 0 ? "amount-gain" : "amount-loss")}>
                     <Money signed amount={row.amount} currency={row.currency} />
                 </span>
             ),

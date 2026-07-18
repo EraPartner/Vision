@@ -26,6 +26,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { apiClient } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useRebalancePlans } from "@/hooks/useRebalancePlans";
 import type { ModelPortfolio, RebalanceResponse } from "@/lib/api/crossWorkspace";
 
@@ -282,7 +283,7 @@ export default function RebalancePage() {
                 <Button variant="outline" size="sm" className="gap-1" onClick={addRow} disabled={rows.length >= SLEEVES.length}>
                   <Plus className="h-4 w-4" />{t("rebalance.editor.addSleeve")}
                 </Button>
-                <span className={`text-sm tabular-nums ${Math.round(weightTotalPct) === 100 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-500"}`}>
+                <span className={cn("text-sm tabular-nums", Math.round(weightTotalPct) === 100 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-500")}>
                   {t("rebalance.editor.total")}: {weightTotalPct.toFixed(0)}%
                 </span>
               </div>

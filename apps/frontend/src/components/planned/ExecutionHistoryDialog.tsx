@@ -8,6 +8,7 @@ import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 
@@ -148,7 +149,7 @@ export function ExecutionHistoryDialog({ open, onOpenChange, payments }: Executi
                     </div>
                   </div>
                   <div className="col-span-2 flex items-center justify-end gap-2">
-                    <span className={`tabular-nums font-semibold ${item.amount < 0 ? 'text-loss' : 'text-gain'}`}>
+                    <span className={cn('tabular-nums font-semibold', item.amount < 0 ? 'text-loss' : 'text-gain')}>
                       {item.amount < 0 ? '−' : '+'}<Money amount={Math.abs(item.amount)} currency={item.currency} />
                     </span>
                     <Button

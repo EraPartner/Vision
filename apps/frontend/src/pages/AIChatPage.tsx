@@ -18,6 +18,7 @@ import { OllamaStatusBanner } from '@/features/ai-chat/OllamaStatusBanner';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import type { ChatMessage } from '@/types/aiChat';
+import { cn } from '@/lib/utils';
 
 const SELECTED_PARAM = 'c';
 
@@ -179,7 +180,7 @@ export default function AIChatPage() {
                             {detail?.conversation.title || t('aiChat.title')}
                         </h1>
                         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusDotClass}`} />
+                            <span className={cn('inline-block h-1.5 w-1.5 rounded-full', statusDotClass)} />
                             {statusLabel}
                         </p>
                         </div>

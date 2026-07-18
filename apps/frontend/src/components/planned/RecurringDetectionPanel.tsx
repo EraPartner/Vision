@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { cn } from "@/lib/utils";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
@@ -240,10 +241,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     {formatCurrency(lastChange.previousAmount, pattern.currency)}
                                                 </span>
                                                 <span className="text-xs">→</span>
-                                                <span className={`text-xs font-bold ${lastChange.direction === "increased" ? "text-loss" : "text-gain"}`}>
+                                                <span className={cn("text-xs font-bold", lastChange.direction === "increased" ? "text-loss" : "text-gain")}>
                                                     {formatCurrency(lastChange.newAmount, pattern.currency)}
                                                 </span>
-                                                <Badge variant="outline" className={`text-xs ${lastChange.direction === "increased" ? "text-loss border-loss/30" : "text-gain border-gain/30"}`}>
+                                                <Badge variant="outline" className={cn("text-xs", lastChange.direction === "increased" ? "text-loss border-loss/30" : "text-gain border-gain/30")}>
                                                     {lastChange.direction === "increased" ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
                                                     {lastChange.percentChange > 0 ? "+" : ""}{lastChange.percentChange.toFixed(1)}%
                                                 </Badge>
@@ -381,7 +382,7 @@ function ConfidenceBadge({ confidence, t }: { confidence: number; t: (key: strin
     }
 
     return (
-        <Badge variant="outline" className={`text-xs ${color}`}>
+        <Badge variant="outline" className={cn("text-xs", color)}>
             {confidence}% {label}
         </Badge>
     );

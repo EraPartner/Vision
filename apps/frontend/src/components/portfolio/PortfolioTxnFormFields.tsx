@@ -12,6 +12,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -160,7 +161,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
           </>
         )}
 
-        <div className={`space-y-2 ${showUnits ? 'col-span-2' : ''}`}>
+        <div className={cn("space-y-2", showUnits && 'col-span-2')}>
           <Label htmlFor={`${idPrefix}-amount`}>
             {t('addPortTxn.totalAmount', { currency })}
             {lockAmount
@@ -214,7 +215,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
           </>
         )}
 
-        <div className={`space-y-2 ${showFeesTaxes ? 'col-span-2' : ''}`}>
+        <div className={cn("space-y-2", showFeesTaxes && 'col-span-2')}>
           <Label htmlFor={`${idPrefix}-fx-rate-to-eur`}>FX rate to EUR (optional)</Label>
           <Input
             id={`${idPrefix}-fx-rate-to-eur`}

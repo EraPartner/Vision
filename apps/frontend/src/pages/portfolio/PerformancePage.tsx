@@ -4,6 +4,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
     AreaChart as VisxAreaChart,
@@ -68,7 +69,7 @@ function PerformanceEmptyState() {
                         size="sm"
                         title={!isOnline ? t('portfolio.refreshPricesOffline') : undefined}
                     >
-                        <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
+                        <RefreshCw className={cn("h-3.5 w-3.5 mr-2", isRefreshingPrices && "animate-spin")} />
                         {t('portfolio.refreshPrices')}
                     </Button>
                     {!isOnline && (
@@ -298,11 +299,12 @@ export default function PerformancePage() {
                         <button
                             onClick={() => setShowFxNeutral((v) => !v)}
                             title={t('performance.fxNeutralDesc')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-[color,background-color,border-color] shrink-0 ${
+                            className={cn(
+                                "px-3 py-1.5 text-xs font-medium rounded-md border transition-[color,background-color,border-color] shrink-0",
                                 showFxNeutral
                                     ? "bg-background text-foreground shadow-sm border-border"
-                                    : "text-muted-foreground hover:text-foreground border-transparent"
-                            }`}
+                                    : "text-muted-foreground hover:text-foreground border-transparent",
+                            )}
                         >
                             {t('performance.fxNeutral')}
                         </button>
@@ -404,10 +406,10 @@ function CompactReturnCard({
             <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
                 <div className="min-w-0">
                     <p className="text-xs font-medium text-muted-foreground truncate">{title}</p>
-                    <div className={`text-xl font-bold leading-tight ${trend ? "amount-gain" : "amount-loss"}`}>{value}</div>
+                    <div className={cn("text-xl font-bold leading-tight", trend ? "amount-gain" : "amount-loss")}>{value}</div>
                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{subtitle}</p>
                 </div>
-                <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
+                <div className={cn("h-9 w-9 shrink-0 rounded-xl flex items-center justify-center", iconBg, "shadow-sm")}>
                     <Icon className="h-4 w-4" />
                 </div>
             </CardContent>
@@ -465,7 +467,7 @@ function TotalValueCard({
             <CardSheen className="h-40 w-40 -mt-20 -mr-20" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{labels.title}</CardTitle>
-                <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
+                <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center", iconBg, "shadow-sm")}>
                     <DollarSign className="h-4 w-4" />
                 </div>
             </CardHeader>
@@ -480,10 +482,10 @@ function TotalValueCard({
                         </span>
                         <span className="text-muted-foreground">
                             {labels.netPL}:{" "}
-                            <span className={`font-semibold ${gainToneClass}`}>
+                            <span className={cn("font-semibold", gainToneClass)}>
                                 {isGain ? "+" : ""}<Money amount={totalGainLoss} currency={currency} />
                             </span>{" "}
-                            <span className={`font-medium ${gainToneClass}`}>
+                            <span className={cn("font-medium", gainToneClass)}>
                                 ({isGain ? "+" : ""}{totalReturnPct.toFixed(2)}%)
                             </span>
                         </span>
@@ -565,7 +567,7 @@ function AssetAllocationBar({ split, currency, labels }: AssetAllocationBarProps
                 {rows.map((r) => (
                     <li key={r.key} className="flex items-center justify-between text-[11px]">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <span className={`inline-block h-2 w-2 rounded-full ${r.color}`} />
+                            <span className={cn("inline-block h-2 w-2 rounded-full", r.color)} />
                             {r.label}
                         </span>
                         <span className="text-foreground font-medium tabular-nums">

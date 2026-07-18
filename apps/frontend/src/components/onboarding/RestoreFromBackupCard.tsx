@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { apiClient } from '@/lib/api';
 import { useRestoreBackup } from '@/hooks/useRestoreBackup';
+import { cn } from '@/lib/utils';
 
 interface RestoreFromBackupCardProps {
     /** Called after successful restore (before page reload), or if the user dismisses. */
@@ -69,18 +70,18 @@ export function RestoreFromBackupCard({ onDismiss, compact = false }: RestoreFro
                 }
             >
                 <div
-                    className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-md bg-success/10 flex items-center justify-center shrink-0`}
+                    className={cn(compact ? 'h-8 w-8' : 'h-10 w-10', 'rounded-md bg-success/10 flex items-center justify-center shrink-0')}
                 >
                     <Database
-                        className={`${compact ? 'h-4 w-4' : 'h-5 w-5'} text-success`}
+                        className={cn(compact ? 'h-4 w-4' : 'h-5 w-5', 'text-success')}
                     />
                 </div>
 
                 <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                    <p className={`${compact ? 'text-sm' : 'text-base'} font-medium text-foreground`}>
+                    <p className={cn(compact ? 'text-sm' : 'text-base', 'font-medium text-foreground')}>
                         {t('onboarding.restore.title')}
                     </p>
-                    <p className={`${compact ? 'text-xs' : 'text-sm'} text-muted-foreground leading-relaxed`}>
+                    <p className={cn(compact ? 'text-xs' : 'text-sm', 'text-muted-foreground leading-relaxed')}>
                         {t('onboarding.restore.desc')}
                     </p>
                     <Button

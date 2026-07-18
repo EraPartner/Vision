@@ -13,6 +13,7 @@ import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUti
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { EXCHANGE_RATES_QUERY_KEY } from "@/hooks/useExchangeRates";
+import { cn } from "@/lib/utils";
 
 // Hoisted out of the page component so React keeps the table subtree mounted
 // across page re-renders instead of remounting a fresh inline component type.
@@ -147,7 +148,7 @@ export default function ExchangeRatesPage() {
                 icon={Database}
                 actions={(
                     <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refreshMutation.mutate()} disabled={isRefreshing}>
-                        <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                        <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
                         {t('exchangeRates.refresh')}
                     </Button>
                 )}

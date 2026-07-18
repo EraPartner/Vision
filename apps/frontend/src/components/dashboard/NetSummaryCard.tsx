@@ -10,6 +10,7 @@ import { numberFormatToLocale } from "@/utils/currency";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 import type { NetHistoryPoint } from "@/hooks/useFilteredDashboardStats";
+import { cn } from "@/lib/utils";
 
 interface NetSummaryCardProps {
   netBalance: number;
@@ -80,7 +81,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   return (
     <Card
       className="glass-elevated premium-frame micro-lift group relative overflow-hidden flex flex-col h-full">
-      <div className={`absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br ${trendGradient}`} />
+      <div className={cn("absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br", trendGradient)} />
       <div
         className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-24 -mt-24 transition-transform duration-500 group-hover:scale-110" />
 
@@ -93,14 +94,14 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
             {isPositive ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')}
           </p>
         </div>
-        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] transition-transform duration-300 group-hover:scale-105 bg-gradient-to-br ${isPositive ? 'from-gain/20 to-gain/10 text-gain' : 'from-loss/20 to-loss/10 text-loss'}`}>
+        <div className={cn("h-11 w-11 rounded-xl flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] transition-transform duration-300 group-hover:scale-105 bg-gradient-to-br", isPositive ? 'from-gain/20 to-gain/10 text-gain' : 'from-loss/20 to-loss/10 text-loss')}>
           <DollarSign className="h-5 w-5" />
         </div>
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col gap-4">
         <div className="flex items-end gap-3 flex-wrap">
-          <div className={`text-4xl md:text-5xl font-bold tabular-nums ${netColor}`}>
+          <div className={cn("text-4xl md:text-5xl font-bold tabular-nums", netColor)}>
             <span title={netCompact.isCompact ? netCompact.full : undefined}>
               <RollingNumber parts={netCompact.parts} />
             </span>
@@ -155,7 +156,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
             onPointerCancel={endScrub}
             onPointerLeave={endScrub}
           >
-            <p className={`text-xs mb-1 ${scrubPoint ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+            <p className={cn("text-xs mb-1", scrubPoint ? "font-medium text-foreground" : "text-muted-foreground")}>
               {scrubPoint && scrubIndex !== undefined
                 ? chartData[scrubIndex].label
                 : t('dashboard.stat.netTrend', { n: chartData.length })}

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { countStalePrices } from "@/utils/priceStaleness";
+import { cn } from "@/lib/utils";
 
 interface InvestmentLike {
   price_provider?: string;
@@ -49,7 +50,7 @@ export function StalePricesBanner({
             title={!isOnline ? t("portfolio.refreshPricesOffline") : undefined}
             className="h-7 shrink-0"
           >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={cn("h-3.5 w-3.5 mr-1", isRefreshing && "animate-spin")} />
             {t("portfolio.refreshPrices")}
           </Button>
         )}

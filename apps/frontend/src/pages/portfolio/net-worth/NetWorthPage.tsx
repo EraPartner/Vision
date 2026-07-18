@@ -167,7 +167,7 @@ export default function NetWorthPage() {
                 size="sm"
                 title={!isOnline ? t('portfolio.refreshPricesOffline') : undefined}
               >
-                <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-2", isRefreshingPrices && "animate-spin")} />
                 {t('portfolio.refreshPrices')}
               </Button>
               {!isOnline && (

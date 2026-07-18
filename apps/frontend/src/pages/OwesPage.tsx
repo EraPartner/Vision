@@ -26,6 +26,7 @@ import type { Transaction } from "@/types/api";
 import { toast } from "sonner";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { cn } from "@/lib/utils";
 
 export default function OwesPage() {
     const { data: summary, isLoading } = useOwedSummary();
@@ -442,7 +443,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             minWidth: 100,
             className: "text-right",
             render: (row: RecentRecipientTransactionRow) => (
-                <span className={`font-mono whitespace-nowrap ${row.amount >= 0 ? 'amount-gain' : 'amount-loss'}`}>
+                <span className={cn('font-mono whitespace-nowrap', row.amount >= 0 ? 'amount-gain' : 'amount-loss')}>
                     <Money signed amount={row.amount} currency={row.currency} />
                 </span>
             ),

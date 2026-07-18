@@ -25,6 +25,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { cn } from "@/lib/utils";
 
 const FREQ_LABEL_KEYS: Record<string, string> = {
   daily: 'plannedPage.freq.daily',
@@ -162,7 +163,7 @@ export default function PlannedPaymentsPage() {
         <Button
           variant="ghost"
           size="icon"
-          className={`icon-touch-target ${row.is_executed ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground"}`}
+          className={cn("icon-touch-target", row.is_executed ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground")}
           onClick={(e) => {
             e.stopPropagation();
             if (!row.is_executed) {
@@ -186,10 +187,9 @@ export default function PlannedPaymentsPage() {
       minWidth: 180,
       render: (row: TableRow) => (
         <div className="flex flex-col gap-0.5">
-          <div className={`font-medium flex items-center gap-2 ${!row.is_active ? "text-muted-foreground line-through" :
+          <div className={cn("font-medium flex items-center gap-2", !row.is_active ? "text-muted-foreground line-through" :
             row.is_executed ? "text-muted-foreground line-through" :
-              "text-foreground"
-            }`}>
+              "text-foreground")}>
               <span>{row.name}</span>
               {row.is_loan && (
                 <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{t('plannedPage.loanBadge')}</Badge>
@@ -216,7 +216,7 @@ export default function PlannedPaymentsPage() {
       editable: false,
       defaultWidth: 120,
       render: (row: TableRow) => (
-        <span className={`font-semibold tabular-nums ${row.amount < 0 ? "text-loss" : "text-gain"}`}>
+        <span className={cn("font-semibold tabular-nums", row.amount < 0 ? "text-loss" : "text-gain")}>
           {row.amount < 0 ? "−" : "+"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
         </span>
       ),
@@ -300,7 +300,7 @@ export default function PlannedPaymentsPage() {
         <Button
           variant="ghost"
           size="sm"
-          className={`gap-1.5 ${row.is_active ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground"}`}
+          className={cn("gap-1.5", row.is_active ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground")}
           onClick={async (e) => {
             e.stopPropagation();
             setActionLoading(true);

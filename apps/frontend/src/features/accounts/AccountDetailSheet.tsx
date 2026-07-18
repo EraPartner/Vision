@@ -14,6 +14,7 @@ import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isPerAccountHoldingsEnabled } from "@/lib/env";
 import type { Account } from "@/types/api";
+import { cn } from "@/lib/utils";
 
 // The running-balance series lives on the transaction rows themselves, so the
 // sparkline is drawn "from existing history" (no new endpoint) — reversed to
@@ -181,7 +182,7 @@ export function AccountDetailSheet({
                                         <div className="truncate">{txn.recipient_name || txn.memo || t("accounts.detail.unlabelled")}</div>
                                         <div className="text-xs text-muted-foreground tabular-nums">{txn.transaction_date.slice(0, 10)}</div>
                                     </div>
-                                    <span className={`shrink-0 tabular-nums ${txn.amount >= 0 ? "amount-gain" : "amount-loss"}`}>
+                                    <span className={cn("shrink-0 tabular-nums", txn.amount >= 0 ? "amount-gain" : "amount-loss")}>
                                         {fmtCur(txn.amount, txn.currency || a.currency)}
                                     </span>
                                 </li>

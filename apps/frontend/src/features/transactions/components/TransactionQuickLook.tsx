@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/shared/Money";
@@ -44,7 +45,7 @@ export function TransactionQuickLook({ transaction, onClose }: TransactionQuickL
                 {transaction && (
                     <div className="space-y-4">
                         <div className="space-y-1.5 text-center">
-                            <div className={`font-mono text-4xl font-semibold tracking-tight ${transaction.amount >= 0 ? 'amount-gain' : 'amount-loss'} ${!transaction.is_active ? 'opacity-50' : ''}`}>
+                            <div className={cn("font-mono text-4xl font-semibold tracking-tight", transaction.amount >= 0 ? 'amount-gain' : 'amount-loss', !transaction.is_active && 'opacity-50')}>
                                 <Money signed amount={transaction.amount} currency={transaction.currency} />
                             </div>
                             <div className="text-base font-medium">{transaction.recipient}</div>
@@ -54,7 +55,7 @@ export function TransactionQuickLook({ transaction, onClose }: TransactionQuickL
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center justify-center gap-1.5">
-                            <Badge variant="outline" className={`font-medium ${getCategoryColor(transaction.category)}`}>
+                            <Badge variant="outline" className={cn("font-medium", getCategoryColor(transaction.category))}>
                                 {transaction.category}
                             </Badge>
                             {!transaction.is_active && (

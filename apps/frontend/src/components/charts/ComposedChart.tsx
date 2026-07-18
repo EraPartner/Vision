@@ -9,7 +9,7 @@ import { Group } from "@visx/group";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleLog, scaleTime } from "@visx/scale";
 import { AreaClosed, Line, LinePath } from "@visx/shape";
-import { bisector, extent } from "d3-array";
+import { bisector, extent, max, min } from "d3-array";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
@@ -280,8 +280,10 @@ function Inner<Datum>({
           }
         }
       }
-      const lo = values.length ? Math.min(...values) : 0;
-      const hi = values.length ? Math.max(...values) : 1;
+      // values is finite-filtered above, so d3 min/max match Math.min/max(...)
+      // exactly while avoiding the spread stack-size hazard on large series.
+      const lo = values.length ? (min(values) as number) : 0;
+      const hi = values.length ? (max(values) as number) : 1;
       if (axis === "left" && logLeft && lo > 0) {
         return scaleLog({ range: [innerHeight, 0], domain: [lo * 0.95, hi * 1.05] });
       }

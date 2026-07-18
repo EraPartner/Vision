@@ -17,6 +17,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getDbStats, vacuumTable } from '@/lib/api/admin';
 import type { DbTableStat } from '@/lib/api/admin';
+import { cn } from '@/lib/utils';
 
 // ── Row skeleton ──────────────────────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ export default function DbMaintenancePage() {
                             disabled={isLoading}
                             className="gap-2"
                         >
-                            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
                             {t('dbMaintenance.refresh')}
                         </Button>
                         <Button

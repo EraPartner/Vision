@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { CloudUpload, File as FileIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { isCsvFile } from "./csvFile";
+import { cn } from "@/lib/utils";
 
 interface CsvDropzoneProps {
   file: File | null;
@@ -58,9 +59,12 @@ export function CsvDropzone({ file, onFileSelect, compact = false, label }: CsvD
           setDragOver(true);
         }}
         onDragLeave={() => setDragOver(false)}
-        className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed ${pad} cursor-pointer transition-colors duration-200 ${
-          dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"
-        }`}
+        className={cn(
+          "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed",
+          pad,
+          "cursor-pointer transition-colors duration-200",
+          dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50",
+        )}
       >
         <input
           ref={inputRef}
@@ -71,7 +75,7 @@ export function CsvDropzone({ file, onFileSelect, compact = false, label }: CsvD
         />
         {file ? (
           <>
-            <FileIcon className={`${iconSize} text-primary`} />
+            <FileIcon className={cn(iconSize, "text-primary")} />
             <div className="text-center">
               <p className="font-medium text-foreground">{file.name}</p>
               <p className="text-xs text-muted-foreground">
@@ -92,12 +96,12 @@ export function CsvDropzone({ file, onFileSelect, compact = false, label }: CsvD
           </>
         ) : compact ? (
           <>
-            <CloudUpload className={`${iconSize} text-muted-foreground`} />
+            <CloudUpload className={cn(iconSize, "text-muted-foreground")} />
             <p className="text-sm text-muted-foreground">{t("importPage.dropzoneSmall")}</p>
           </>
         ) : (
           <>
-            <CloudUpload className={`${iconSize} text-muted-foreground`} />
+            <CloudUpload className={cn(iconSize, "text-muted-foreground")} />
             <div className="text-center">
               <p className="font-medium text-foreground">{t("importPage.dropzone")}</p>
               <p className="text-sm text-muted-foreground">{t("importPage.dropzoneOr")}</p>

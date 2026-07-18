@@ -13,6 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";
 import { getRecipient } from "@/lib/api/recipients";
+import { cn } from "@/lib/utils";
 import type { Transaction } from "@/types/api";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 
@@ -258,7 +259,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`font-semibold ${tx.amount < 0 ? 'text-loss' : 'text-gain'}`}>{tx.amount < 0 ? '−' : '+'}<Money amount={Math.abs(tx.amount)} currency={tx.currency} /></div>
+                    <div className={cn('font-semibold', tx.amount < 0 ? 'text-loss' : 'text-gain')}>{tx.amount < 0 ? '−' : '+'}<Money amount={Math.abs(tx.amount)} currency={tx.currency} /></div>
                     <div className="text-xs text-muted-foreground">#{tx.id}</div>
                   </div>
                 </label>

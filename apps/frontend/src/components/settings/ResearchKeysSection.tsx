@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
 import {
     getResearchProviderKeys,
     setResearchProviderKey,
@@ -95,7 +96,7 @@ function ProviderKeyRow({ status, onSave, onClear, saving, clearing }: ProviderK
                     <span className="text-sm font-medium text-foreground">{status.label}</span>
                     {status.configured && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
                 </div>
-                <span className={`text-xs ${status.configured ? 'text-success' : 'text-muted-foreground'}`}>
+                <span className={cn('text-xs', status.configured ? 'text-success' : 'text-muted-foreground')}>
                     {sourceLabel}{status.masked ? ` · ${status.masked}` : ''}
                 </span>
             </div>

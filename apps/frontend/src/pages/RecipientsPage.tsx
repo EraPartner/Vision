@@ -16,6 +16,7 @@ import { MergeRecipientsDialog } from "@/features/recipients/MergeRecipientsDial
 import { RecipientPatternsDialog } from "@/features/recipients/RecipientPatternsDialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { Recipient } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -158,7 +159,7 @@ export default function RecipientsPage() {
             editable: true,
             render: (row: TableRecipient) => (
                 <div className="flex items-center gap-2">
-                    <span className={`font-medium ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                    <span className={cn('font-medium', row.is_active ? 'text-foreground' : 'text-muted-foreground line-through')}>
                         {row.name}
                     </span>
                     {(row.alias_count ?? 0) > 0 && (
@@ -181,7 +182,7 @@ export default function RecipientsPage() {
             header: t('recipientsPage.col.account'),
             editable: false,
             render: (row: TableRecipient) => (
-                <span className={`text-muted-foreground font-mono text-sm ${!row.is_active ? 'line-through' : ''}`}>{row.primary_bank_account}</span>
+                <span className={cn('text-muted-foreground font-mono text-sm', !row.is_active && 'line-through')}>{row.primary_bank_account}</span>
             ),
         },
         {
@@ -225,7 +226,7 @@ export default function RecipientsPage() {
                 const isNone = !row.default_category_name;
 
                 return (
-                    <Badge variant="outline" className={`font-medium ${isNone ? 'text-muted-foreground' : ''}`}>
+                    <Badge variant="outline" className={cn('font-medium', isNone && 'text-muted-foreground')}>
                         {displayName}
                     </Badge>
                 );
@@ -236,7 +237,7 @@ export default function RecipientsPage() {
             header: t('recipientsPage.col.notes'),
             editable: true,
             render: (row: TableRecipient) => (
-                <span className={`text-sm text-muted-foreground ${!row.is_active ? 'line-through' : ''}`}>{row.notes || '-'}</span>
+                <span className={cn('text-sm text-muted-foreground', !row.is_active && 'line-through')}>{row.notes || '-'}</span>
             ),
         },
         {
@@ -247,7 +248,7 @@ export default function RecipientsPage() {
                 <Button
                     variant="ghost"
                     size="sm"
-                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50'}`}
+                    className={cn('gap-1.5', row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50')}
                     onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
                     disabled={updateMutation.isPending}
                 >

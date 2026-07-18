@@ -1,6 +1,7 @@
 /**
  * StackedBarChart — visx + framer-motion stacked bar chart (vertical).
  */
+import { sum } from "d3-array";
 import { Group } from "@visx/group";
 import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
@@ -182,7 +183,7 @@ function Inner<Datum>({
 
     const totals = useMemo(
         () =>
-            data.map((d) => series.reduce((sum, s) => sum + (s.accessor(d) ?? 0), 0)),
+            data.map((d) => sum(series, (s) => s.accessor(d) ?? 0)),
         [data, series],
     );
 
