@@ -1,8 +1,14 @@
 /**
  * Split routes - transaction splitting and debt tracking.
+ *
+ * Bodies are validated with zod (schema → safeParse → ValidationError), the
+ * idiom established in settings.js/reports.js. Schemas are LOOSE and forward
+ * raw values (the repos take the coercion decisions); id bridges reuse
+ * validateId so accepted shapes keep parseInt coercion exactly as before.
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import splitRepository from '../services/splitService.js';
 import { validateIdParam, validateId } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
@@ -40,17 +46,87 @@ function buildOwedExportFilename(recipientId) {
   return `owed_transactions_recipient_${recipientId}_${timestamp}.csv`;
 }
 
+/* ── Zod schemas ─────────────────────────────────────────────────────────── */
+
+// Reuses validateId so the accepted id shapes stay identical (parseInt
+// coercion: '12abc' → 12; 1..2^31-1 bounds); the coerced integer replaces the
+// raw input.
+const validatedIdField = (field) => z.unknown().transform((value, ctx) => {
+  const result = validateId(value, field);
+  if (!result.valid) {
+    ctx.addIssue({ code: 'custom', message: result.error });
+    return z.NEVER;
+  }
+  return result.value;
+});
+
+// One /batch row. Rows that fail this schema are FILTERED out (batch keeps
+// going), not rejected — normalizeBatchSplitInputs safeParses per row. Finite
+// non-positive amounts survive normalization (the repo rejects them), exactly
+// like the old filter.
+const batchSplitRowSchema = z.object({
+  recipient_id: validatedIdField('recipient_id'),
+  amount: z.unknown().transform((value, ctx) => {
+    const num = Number(value);
+    if (value == null || !Number.isFinite(num)) {
+      ctx.addIssue({ code: 'custom', message: 'amount must be a finite number' });
+      return z.NEVER;
+    }
+    return num;
+  }),
+  note: z.unknown().optional(),
+});
+
+// POST body: raw values are forwarded to the repository unchanged (only the
+// audit payload coerces amount), so the checks refine without transforming.
+const createSplitSchema = z.looseObject({}).superRefine((data, ctx) => {
+  if (!data.transaction_id || !data.recipient_id || data.amount == null) {
+    ctx.addIssue({ code: 'custom', message: 'Missing required fields: transaction_id, recipient_id, amount' });
+    return;
+  }
+  // FK ids were only truthiness-checked before, so a non-integer (e.g. "abc")
+  // reached Postgres as an FK/type error and surfaced as a raw 500.
+  const txIdCheck = validateId(data.transaction_id, 'transaction_id');
+  if (!txIdCheck.valid) ctx.addIssue({ code: 'custom', message: txIdCheck.error });
+  const recIdCheck = validateId(data.recipient_id, 'recipient_id');
+  if (!recIdCheck.valid) ctx.addIssue({ code: 'custom', message: recIdCheck.error });
+  if (!Number.isFinite(Number(data.amount))) {
+    ctx.addIssue({ code: 'custom', message: 'amount must be a finite number' });
+  }
+});
+
+const batchSplitsSchema = z.looseObject({}).superRefine((data, ctx) => {
+  if (!data.transaction_id || !Array.isArray(data.splits) || data.splits.length === 0) {
+    ctx.addIssue({ code: 'custom', message: 'Missing required fields: transaction_id, splits[]' });
+    return;
+  }
+  const txIdCheck = validateId(data.transaction_id, 'transaction_id');
+  if (!txIdCheck.valid) ctx.addIssue({ code: 'custom', message: txIdCheck.error });
+});
+
+const payBodySchema = z.looseObject({}).superRefine((data, ctx) => {
+  if (data.amount == null || !Number.isFinite(Number(data.amount)) || Number(data.amount) <= 0) {
+    ctx.addIssue({ code: 'custom', message: 'Payment amount must be a positive number' });
+  }
+});
+
+// schema → safeParse → joined issues → ValidationError (settings.js idiom).
+function parseSplitsBody(schema, body) {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
+  }
+  return result.data;
+}
+
 function normalizeBatchSplitInputs(splits) {
   return splits
-    .filter((split) =>
-      validateId(split?.recipient_id, 'recipient_id').valid
-      && split?.amount != null
-      && Number.isFinite(Number(split.amount)))
-    .map((split) => ({
-      recipient_id: validateId(split.recipient_id).value,
-      amount: Number(split.amount),
-      note: split.note,
-    }));
+    .map((split) => batchSplitRowSchema.safeParse(split))
+    .filter((result) => result.success)
+    .map((result) => result.data);
 }
 
 function resolveActor(req) {
@@ -88,19 +164,7 @@ router.get('/transaction/:id', validateIdParam, async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { transaction_id, recipient_id, amount, note } = req.body;
-  if (!transaction_id || !recipient_id || amount == null) {
-    throw new ValidationError('Missing required fields: transaction_id, recipient_id, amount');
-  }
-  // FK ids were only truthiness-checked, so a non-integer (e.g. "abc") reached
-  // Postgres as an FK/type error and surfaced as a raw 500. Validate up front.
-  const txIdCheck = validateId(transaction_id, 'transaction_id');
-  if (!txIdCheck.valid) throw new ValidationError(txIdCheck.error);
-  const recIdCheck = validateId(recipient_id, 'recipient_id');
-  if (!recIdCheck.valid) throw new ValidationError(recIdCheck.error);
-  if (!Number.isFinite(Number(amount))) {
-    throw new ValidationError('amount must be a finite number');
-  }
+  const { transaction_id, recipient_id, amount, note } = parseSplitsBody(createSplitSchema, req.body);
 
   const split = await splitRepository.createSplitAtomic({ transaction_id, recipient_id, amount, note });
   await splitRepository.writeAudit({
@@ -114,14 +178,9 @@ router.post('/', async (req, res) => {
 });
 
 router.post('/batch', async (req, res) => {
-  const { transaction_id, splits } = req.body;
-  if (!transaction_id || !Array.isArray(splits) || splits.length === 0) {
-    throw new ValidationError('Missing required fields: transaction_id, splits[]');
-  }
-  const batchTxIdCheck = validateId(transaction_id, 'transaction_id');
-  if (!batchTxIdCheck.valid) throw new ValidationError(batchTxIdCheck.error);
+  const { transaction_id, splits } = parseSplitsBody(batchSplitsSchema, req.body);
 
-  const preparedSplits = normalizeBatchSplitInputs(splits);
+  const preparedSplits = normalizeBatchSplitInputs(/** @type {unknown[]} */ (splits));
   // Client sent rows but every one was dropped by normalization (missing
   // recipient_id/amount) — that's a bad request, not a legitimately-empty
   // batch. Fail loud instead of returning a 201 { total: 0 } success envelope.
@@ -152,10 +211,7 @@ router.post('/batch', async (req, res) => {
 
 router.post('/:id/pay', validateIdParam, async (req, res) => {
   const splitId = parseRouteId(req);
-  const { amount, note, paid_at } = req.body;
-  if (amount == null || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
-    throw new ValidationError('Payment amount must be a positive number');
-  }
+  const { amount, note, paid_at } = parseSplitsBody(payBodySchema, req.body);
   // Repo serializes existence + overpayment check + insert under
   // SELECT … FOR UPDATE; routes no longer precheck (race window).
   const payment = await splitRepository.addPayment({

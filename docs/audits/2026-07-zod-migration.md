@@ -45,7 +45,7 @@ Resume by grepping this table for `OPEN`.
 | ZOD-05 | services/accountService.js | sanitize() enum/boolean/currency maps + .partial(); async FK check stays | DONE (#103) |
 | ZOD-06 | routes/transactions.js | POST/PATCH bodies + bulk-tag/bulk-update bodies (list-query coercion excluded) | DONE (#103) |
 | ZOD-07 | routes/importRoutes.js + portfolioImportRoutes.js | shared coerced batch-id schema (5 copy-paste sites), multipart config coercion, Set→z.enum | DONE (#103) |
-| ZOD-08 | routes/plannedTransactions.js + routes/splits.js | leaf field validation only; loan-schedule logic stays imperative | OPEN |
+| ZOD-08 | routes/plannedTransactions.js + routes/splits.js | leaf field validation only; loan-schedule logic stays imperative | DONE (#103) |
 | ZOD-09 | routes/crossWorkspace.js + routes/research.js + services/openingBalanceService.js | shared rebalance-weights schema (dedupe with settings.js rebalancePlanSchema), query params, normalizeOpeningBalance | OPEN |
 | ZOD-10 | frontend SSE payloads | per-event schemas in lib/api/sse.ts, imports.ts, ai.ts; ai.ts adopts shared SSE frame parser if clean | OPEN |
 | ZOD-11 | frontend persisted state | SettingsContext localStorage blob schema with .catch(defaults) before API write-back; ChartBuilderPage state merge | OPEN |

@@ -305,6 +305,167 @@ describe('Planned Transaction Routes', () => {
     });
   });
 
+  // Pins for the zod swap (ZOD-08): accepted inputs keep their exact coercions,
+  // rejected inputs stay rejected, loan-branch drop semantics are preserved.
+  describe('POST / validation pins', () => {
+    const validBody = { planned_date: '2026-03-15', bank_account: 'Chase', amount: 50 };
+
+    beforeEach(() => {
+      plannedTransactionRepository.create.mockResolvedValue({
+        id: 1, planned_date: '2026-03-15', amount: '50.00', bank_account: 'Chase',
+        is_recurring: false, is_executed: false,
+      });
+    });
+
+    it('coerces a string amount to a number before the repository', async () => {
+      const req = { body: { ...validBody, amount: '50.5' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 50.5 }),
+      );
+    });
+
+    it('rejects an empty-string amount (coerces to 0, which is meaningless)', async () => {
+      const req = { body: { ...validBody, amount: '' } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects non-array tags (including null)', async () => {
+      await expect(routeHandlers['post:/']({ body: { ...validBody, tags: 'groceries' } }, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+      await expect(routeHandlers['post:/']({ body: { ...validBody, tags: null } }, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('coerces reminder_days_before and accepts the 0/365 boundaries', async () => {
+      await routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: '5' } }, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ reminder_days_before: 5 }),
+      );
+      await routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: 0 } }, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({ reminder_days_before: 0 }),
+      );
+      await routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: 365 } }, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({ reminder_days_before: 365 }),
+      );
+    });
+
+    it('rejects out-of-range or fractional reminder_days_before', async () => {
+      for (const bad of [366, 2.5, 'abc']) {
+        await expect(routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: bad } }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+    });
+
+    it('coerces max_occurrences to an integer and accepts the 1 boundary', async () => {
+      await routeHandlers['post:/']({ body: { ...validBody, max_occurrences: '3' } }, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ max_occurrences: 3 }),
+      );
+      await routeHandlers['post:/']({ body: { ...validBody, max_occurrences: 1 } }, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({ max_occurrences: 1 }),
+      );
+    });
+
+    it('rejects non-positive or non-numeric max_occurrences', async () => {
+      for (const bad of [0, -1, 1.5, 'abc']) {
+        await expect(routeHandlers['post:/']({ body: { ...validBody, max_occurrences: bad } }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+    });
+
+    it('accepts a valid recurrence_end_date unchanged and rejects a malformed one', async () => {
+      await routeHandlers['post:/']({ body: { ...validBody, recurrence_end_date: '2026-12-31' } }, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ recurrence_end_date: '2026-12-31' }),
+      );
+      await expect(routeHandlers['post:/']({ body: { ...validBody, recurrence_end_date: 'banana' } }, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('drops truthy recurrence bounds on a loan instead of validating them', async () => {
+      const req = {
+        body: {
+          bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
+          loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
+          loan_start_date: '2026-04-01', loan_payment_day: 1,
+          // Garbage that would 400 on a non-loan — the loan branch deletes it.
+          max_occurrences: 'abc', recurrence_end_date: 'banana',
+          frequency: 'x', custom_interval_days: 3, end_date: 'y',
+        },
+      };
+      await routeHandlers['post:/'](req, mockResponse());
+      const arg = plannedTransactionRepository.create.mock.calls[0][0];
+      expect('max_occurrences' in arg).toBe(false);
+      expect('recurrence_end_date' in arg).toBe(false);
+      expect('frequency' in arg).toBe(false);
+      expect('custom_interval_days' in arg).toBe(false);
+      expect('end_date' in arg).toBe(false);
+    });
+
+    it('still rejects a falsy-but-present max_occurrences on a loan (not dropped)', async () => {
+      const req = {
+        body: {
+          bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
+          loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
+          loan_start_date: '2026-04-01', loan_payment_day: 1,
+          max_occurrences: 0,
+        },
+      };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('PATCH /:id validation pins', () => {
+    beforeEach(() => {
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false });
+      plannedTransactionRepository.update.mockResolvedValue({ id: 1 });
+    });
+
+    it('coerces reminder_days_before and max_occurrences on update', async () => {
+      const req = { params: { id: '1' }, body: { reminder_days_before: '7', max_occurrences: '4' } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ reminder_days_before: 7, max_occurrences: 4 }),
+      );
+    });
+
+    it('rejects invalid reminder_days_before / max_occurrences / recurrence_end_date', async () => {
+      for (const body of [
+        { reminder_days_before: -1 },
+        { max_occurrences: 0 },
+        { recurrence_end_date: 'banana' },
+        { tags: 'nope' },
+        { recurrence_pattern: 'fortnightly' },
+      ]) {
+        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('passes explicit nulls through to clear recurrence bounds and pattern', async () => {
+      const req = {
+        params: { id: '1' },
+        body: { recurrence_end_date: null, max_occurrences: null, recurrence_pattern: null },
+      };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          recurrence_end_date: null,
+          max_occurrences: null,
+          recurrence_pattern: null,
+        }),
+      );
+    });
+  });
+
   describe('GET /:id', () => {
     it('should return by id', async () => {
       plannedTransactionRepository.getById.mockResolvedValue({
