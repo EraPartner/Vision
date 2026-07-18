@@ -9,11 +9,27 @@
  * keyless-searchable. seriesId = `<dataset>?<dimension-query>`.
  */
 
+import { z } from 'zod';
 import { getJson, num } from './httpClient.js';
 import { periodToMs, trimToRange } from './macroRange.js';
 import { searchCatalog, catalogEntry } from './macroCatalog.js';
+import { parseOr } from './schemas.js';
 
 const BASE = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data';
+
+// JSON-stat 2.0 single-series shape. Both the time index and the observation
+// map allow the sparse object form AND the dense array form (JSON-stat permits
+// either); a payload that fails this shape degrades to an empty series.
+const jsonStatSchema = z.looseObject({
+  dimension: z.looseObject({
+    time: z.looseObject({
+      category: z.looseObject({
+        index: z.union([z.record(z.string(), z.any()), z.array(z.any())]),
+      }),
+    }),
+  }),
+  value: z.union([z.record(z.string(), z.any()), z.array(z.any())]),
+});
 
 /**
  * Parse a Eurostat JSON-stat (2.0) single-series payload into time/value pairs.
@@ -23,11 +39,10 @@ const BASE = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/dat
  * @returns {Array<{ period: string, time: number, value: number }>}
  */
 export function parseJsonStat(payload) {
-  const timeIndex = payload?.dimension?.time?.category?.index;
-  const values = payload?.value;
-  if (!timeIndex || typeof timeIndex !== 'object' || !values || typeof values !== 'object') {
-    return [];
-  }
+  const parsed = parseOr(jsonStatSchema, payload, undefined);
+  if (!parsed) return [];
+  const timeIndex = parsed.dimension.time.category.index;
+  const values = parsed.value;
   const out = [];
   for (const [period, idx] of Object.entries(timeIndex)) {
     const value = num(values[idx] ?? values[String(idx)]);

@@ -8,10 +8,24 @@
  * needs live verification with a real key.
  */
 
+import { z } from 'zod';
 import { getJson, num } from './httpClient.js';
 import { providerKey } from '../providerKeys.js';
+import { parseOr } from './schemas.js';
 
 const BASE = 'https://www.alphavantage.co/query';
+
+// Envelope-only schemas (ZOD-12): the row leaves are position-numbered keys
+// ('05. price', '4. close') read through num()/string munging that doubles as
+// the shape check, so a leaf schema adds nothing — only the envelope guards
+// are declarative.
+const globalQuoteEnvelopeSchema = z.looseObject({
+  'Global Quote': z.record(z.string(), z.any()).catch({}),
+});
+
+const dailySeriesEnvelopeSchema = z.looseObject({
+  'Time Series (Daily)': z.record(z.string(), z.any()).catch({}),
+});
 
 const RANGE_TO_DAYS = {
   '1d': 2, '5d': 7, '1mo': 31, '3mo': 93, '6mo': 186, '1y': 366, '2y': 731, '5y': 1827, max: 100000,
@@ -37,7 +51,7 @@ const alphaVantageAdapter = {
 
   async quote(symbol) {
     const url = `${BASE}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${key()}`;
-    const q = assertData(await getJson(url))?.['Global Quote'] || {};
+    const q = parseOr(globalQuoteEnvelopeSchema, assertData(await getJson(url)), { 'Global Quote': {} })['Global Quote'];
     if (!q['05. price']) throw new Error('alpha_vantage: no quote');
     return {
       symbol: q['01. symbol'] || symbol,
@@ -57,7 +71,7 @@ const alphaVantageAdapter = {
     const days = RANGE_TO_DAYS[range] ?? RANGE_TO_DAYS['1mo'];
     const outputsize = days > 100 ? 'full' : 'compact';
     const url = `${BASE}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=${outputsize}&apikey=${key()}`;
-    const series = assertData(await getJson(url))?.['Time Series (Daily)'] || {};
+    const series = parseOr(dailySeriesEnvelopeSchema, assertData(await getJson(url)), { 'Time Series (Daily)': {} })['Time Series (Daily)'];
     const cutoff = Date.now() - days * 86_400_000;
     const points = Object.entries(series)
       .map(([date, v]) => ({

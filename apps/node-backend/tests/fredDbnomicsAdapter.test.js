@@ -85,6 +85,37 @@ describe('fredAdapter', () => {
     expect(res.points[1].close).toBe(102.5);
   });
 
+  // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
+
+  it('macroSearch degrades to no items on a null response body', async () => {
+    mockGetJson.mockResolvedValue(null);
+    const { items } = await fredAdapter.macroSearch('cpi');
+    expect(items).toEqual([]);
+  });
+
+  // Deliberate ZOD-12 behavior: a non-array seriess degrades to empty instead
+  // of the accidental TypeError the old `.filter` produced.
+  it('macroSearch degrades to no items when seriess is not an array', async () => {
+    mockGetJson.mockResolvedValue({ seriess: 'junk' });
+    const { items } = await fredAdapter.macroSearch('cpi');
+    expect(items).toEqual([]);
+  });
+
+  it('macroSeries drops non-object observation rows and tolerates junk meta rows', async () => {
+    mockGetJson.mockImplementation(async (url) => {
+      if (url.includes('/series/observations')) {
+        return {
+          observations: [null, 'junk', { date: '2024-01-01', value: '1' }],
+        };
+      }
+      return { seriess: ['junk'] };
+    });
+    const res = await fredAdapter.macroSeries('FOO', { range: 'max' });
+    expect(res.points).toHaveLength(1);
+    expect(res.points[0].close).toBe(1);
+    expect(res.title).toBe('FOO'); // junk meta row -> seriesId fallback
+  });
+
   it('macroSeries tolerates failed meta fetch and falls back to seriesId title', async () => {
     mockGetJson.mockImplementation(async (url) => {
       if (url.includes('/series/observations')) {
@@ -134,6 +165,24 @@ describe('dbnomicsAdapter', () => {
     const times = res.points.map((p) => p.time);
     expect(times).toEqual([...times].sort((a, b) => a - b));
     expect(res.points.map((p) => p.close)).toEqual([1, 2, 3]);
+  });
+
+  // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
+
+  it('macroSeries degrades to empty points when the doc is truthy junk', async () => {
+    mockGetJson.mockResolvedValue({ series: { docs: ['junk'] } });
+    const res = await dbnomicsAdapter.macroSeries('PROV/DS/SER', { range: 'max' });
+    expect(res.points).toEqual([]);
+    expect(res.title).toBe('PROV/DS/SER'); // no series_name -> seriesId fallback
+  });
+
+  it('macroSeries degrades to empty points when value is not an array', async () => {
+    mockGetJson.mockResolvedValue({
+      series: { docs: [{ series_name: 'S', value: 'NA', period: ['2024-01'] }] },
+    });
+    const res = await dbnomicsAdapter.macroSeries('PROV/DS/SER', { range: 'max' });
+    expect(res.points).toEqual([]);
+    expect(res.title).toBe('S');
   });
 
   it('macroSeries falls back to period when period_start_day is absent', async () => {

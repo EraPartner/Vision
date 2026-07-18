@@ -12,8 +12,10 @@
  * below were verified against live AAPL responses (2026-06-16).
  */
 
-import { getJson, num } from './httpClient.js';
+import { z } from 'zod';
+import { getJson } from './httpClient.js';
 import { providerKey } from '../providerKeys.js';
+import { looseArray, looseString, numish, parseOr } from './schemas.js';
 
 const BASE = 'https://financialmodelingprep.com/stable';
 
@@ -24,7 +26,90 @@ function key() {
 }
 
 const first = (arr) => (Array.isArray(arr) ? arr[0] : undefined);
-const asArray = (value) => (Array.isArray(value) ? value : []);
+
+// Response row shapes (tolerant — see schemas.js). FMP wraps everything in
+// arrays; rows are validated after the existing first()/emptiness checks so
+// the "no quote"/"no fundamentals" throws keep firing on the same inputs.
+const searchRowSchema = z.looseObject({
+  symbol: looseString,
+  name: looseString,
+  exchange: looseString,
+  exchangeFullName: looseString,
+});
+
+const quoteRowSchema = z.looseObject({
+  symbol: looseString,
+  name: looseString,
+  price: numish,
+  change: numish,
+  changePercentage: numish,
+  exchange: looseString,
+  open: numish,
+  dayHigh: numish,
+  dayLow: numish,
+  previousClose: numish,
+  volume: numish,
+  averageVolume: numish,
+  yearHigh: numish,
+  yearLow: numish,
+});
+
+const profileRowSchema = z.looseObject({
+  companyName: looseString,
+  currency: looseString,
+  sector: looseString,
+  marketCap: numish,
+  beta: numish,
+});
+
+const ratiosRowSchema = z.looseObject({
+  priceToEarningsRatioTTM: numish,
+  priceToEarningsGrowthRatioTTM: numish,
+  dividendYieldTTM: numish,
+  dividendPayoutRatioTTM: numish,
+  netIncomePerShareTTM: numish,
+  priceToBookRatioTTM: numish,
+  netProfitMarginTTM: numish,
+  grossProfitMarginTTM: numish,
+  operatingProfitMarginTTM: numish,
+  debtToEquityRatioTTM: numish,
+  currentRatioTTM: numish,
+  quickRatioTTM: numish,
+  interestCoverageRatioTTM: numish,
+});
+
+const keyMetricsRowSchema = z.looseObject({
+  returnOnEquityTTM: numish,
+  freeCashFlowYieldTTM: numish,
+});
+
+const growthRowSchema = z.looseObject({
+  revenueGrowth: numish,
+  epsgrowth: numish,
+});
+
+const targetConsensusRowSchema = z.looseObject({
+  targetConsensus: numish,
+  targetMedian: numish,
+  targetHigh: numish,
+  targetLow: numish,
+});
+
+const gradeRowSchema = z.looseObject({
+  date: looseString,
+  gradingCompany: looseString,
+  newGrade: looseString,
+  previousGrade: looseString,
+  action: looseString,
+});
+
+const gradesConsensusRowSchema = z.looseObject({
+  strongBuy: numish,
+  buy: numish,
+  hold: numish,
+  sell: numish,
+  strongSell: numish,
+});
 
 const fmpAdapter = {
   key: 'fmp',
@@ -39,10 +124,14 @@ const fmpAdapter = {
       getJson(`${BASE}/search-symbol?query=${enc}&limit=8&apikey=${k}`).catch(() => []),
       getJson(`${BASE}/search-name?query=${enc}&limit=8&apikey=${k}`).catch(() => []),
     ]);
+    const rows = [
+      ...parseOr(looseArray(searchRowSchema), bySymbol, []),
+      ...parseOr(looseArray(searchRowSchema), byName, []),
+    ];
     const seen = new Set();
     const items = [];
-    for (const r of [...asArray(bySymbol), ...asArray(byName)]) {
-      if (!r?.symbol || seen.has(r.symbol)) continue;
+    for (const r of rows) {
+      if (!r.symbol || seen.has(r.symbol)) continue;
       seen.add(r.symbol);
       items.push({
         symbol: r.symbol,
@@ -55,24 +144,25 @@ const fmpAdapter = {
   },
 
   async quote(symbol) {
-    const q = first(await getJson(`${BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${key()}`));
-    if (!q) throw new Error('fmp: no quote');
+    const raw = first(await getJson(`${BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${key()}`));
+    if (!raw) throw new Error('fmp: no quote');
+    const q = parseOr(quoteRowSchema, raw, {});
     return {
       symbol: q.symbol || symbol,
       name: q.name || symbol,
-      price: num(q.price),
-      change: num(q.change),
-      changePercent: num(q.changePercentage),
+      price: q.price,
+      change: q.change,
+      changePercent: q.changePercentage,
       currency: undefined, // FMP /quote omits currency
       exchange: q.exchange,
-      open: num(q.open),
-      dayHigh: num(q.dayHigh),
-      dayLow: num(q.dayLow),
-      prevClose: num(q.previousClose),
-      volume: num(q.volume),
-      avgVolume: num(q.averageVolume),
-      high52w: num(q.yearHigh),
-      low52w: num(q.yearLow),
+      open: q.open,
+      dayHigh: q.dayHigh,
+      dayLow: q.dayLow,
+      prevClose: q.previousClose,
+      volume: q.volume,
+      avgVolume: q.averageVolume,
+      high52w: q.yearHigh,
+      low52w: q.yearLow,
     };
   },
 
@@ -87,53 +177,58 @@ const fmpAdapter = {
     /** @type {Error | undefined} */
     let coreError;
     const onCoreError = (err) => { if (!coreError) coreError = err; return undefined; };
-    const [profile, ratios, keyMetrics, growth] = await Promise.all([
+    const [profileRaw, ratiosRaw, keyMetricsRaw, growthRaw] = await Promise.all([
       getJson(`${BASE}/profile?symbol=${enc}&apikey=${k}`).then(first).catch(onCoreError),
       getJson(`${BASE}/ratios-ttm?symbol=${enc}&apikey=${k}`).then(first).catch(onCoreError),
       getJson(`${BASE}/key-metrics-ttm?symbol=${enc}&apikey=${k}`).then(first).catch(() => undefined),
       getJson(`${BASE}/financial-growth?symbol=${enc}&limit=1&apikey=${k}`).then(first).catch(() => undefined),
     ]);
-    if (!profile && !ratios) {
+    if (!profileRaw && !ratiosRaw) {
       throw new Error(`fmp: no fundamentals${coreError ? ` (${coreError.message})` : ''}`);
     }
+    const profile = parseOr(profileRowSchema, profileRaw, undefined);
+    const ratios = parseOr(ratiosRowSchema, ratiosRaw, undefined);
+    const keyMetrics = parseOr(keyMetricsRowSchema, keyMetricsRaw, undefined);
+    const growth = parseOr(growthRowSchema, growthRaw, undefined);
     return {
       symbol,
       name: profile?.companyName || symbol,
       currency: profile?.currency,
       sector: profile?.sector,
-      marketCap: num(profile?.marketCap),
-      pe: num(ratios?.priceToEarningsRatioTTM),
+      marketCap: profile?.marketCap,
+      pe: ratios?.priceToEarningsRatioTTM,
       forwardPE: undefined,
-      pegRatio: num(ratios?.priceToEarningsGrowthRatioTTM),
-      dividendYield: num(ratios?.dividendYieldTTM),
-      payoutRatio: num(ratios?.dividendPayoutRatioTTM),
-      eps: num(ratios?.netIncomePerShareTTM),
-      beta: num(profile?.beta),
-      priceToBook: num(ratios?.priceToBookRatioTTM),
-      profitMargin: num(ratios?.netProfitMarginTTM),
-      grossMargin: num(ratios?.grossProfitMarginTTM),
-      operatingMargin: num(ratios?.operatingProfitMarginTTM),
+      pegRatio: ratios?.priceToEarningsGrowthRatioTTM,
+      dividendYield: ratios?.dividendYieldTTM,
+      payoutRatio: ratios?.dividendPayoutRatioTTM,
+      eps: ratios?.netIncomePerShareTTM,
+      beta: profile?.beta,
+      priceToBook: ratios?.priceToBookRatioTTM,
+      profitMargin: ratios?.netProfitMarginTTM,
+      grossMargin: ratios?.grossProfitMarginTTM,
+      operatingMargin: ratios?.operatingProfitMarginTTM,
       revenue: undefined,
-      revenueGrowth: num(growth?.revenueGrowth),
-      earningsGrowth: num(growth?.epsgrowth),
-      returnOnEquity: num(keyMetrics?.returnOnEquityTTM),
-      debtToEquity: num(ratios?.debtToEquityRatioTTM),
-      currentRatio: num(ratios?.currentRatioTTM),
-      quickRatio: num(ratios?.quickRatioTTM),
-      interestCoverage: num(ratios?.interestCoverageRatioTTM),
-      fcfYield: num(keyMetrics?.freeCashFlowYieldTTM),
+      revenueGrowth: growth?.revenueGrowth,
+      earningsGrowth: growth?.epsgrowth,
+      returnOnEquity: keyMetrics?.returnOnEquityTTM,
+      debtToEquity: ratios?.debtToEquityRatioTTM,
+      currentRatio: ratios?.currentRatioTTM,
+      quickRatio: ratios?.quickRatioTTM,
+      interestCoverage: ratios?.interestCoverageRatioTTM,
+      fcfYield: keyMetrics?.freeCashFlowYieldTTM,
     };
   },
 
   async analyst(symbol) {
     const k = key();
     const enc = encodeURIComponent(symbol);
-    const [consensusTargets, grades, gradesConsensus] = await Promise.all([
+    const [consensusTargetsRaw, gradesRaw, gradesConsensusRaw] = await Promise.all([
       getJson(`${BASE}/price-target-consensus?symbol=${enc}&apikey=${k}`).then(first).catch(() => undefined),
       getJson(`${BASE}/grades?symbol=${enc}&limit=10&apikey=${k}`).catch(() => []),
       getJson(`${BASE}/grades-consensus?symbol=${enc}&apikey=${k}`).then(first).catch(() => undefined),
     ]);
-    const recentActions = asArray(grades).slice(0, 10).map((g) => ({
+    const consensusTargets = parseOr(targetConsensusRowSchema, consensusTargetsRaw, undefined);
+    const recentActions = parseOr(looseArray(gradeRowSchema), gradesRaw, []).slice(0, 10).map((g) => ({
       date: g.date ? Date.parse(g.date) : undefined,
       firm: g.gradingCompany,
       toGrade: g.newGrade,
@@ -141,13 +236,18 @@ const fmpAdapter = {
       action: g.action,
     }));
     // stable exposes buy/hold/sell bucket counts (the v3 free tier did not).
+    // Truthiness is checked on the RAW value so a malformed-but-present block
+    // still yields zeroed buckets, exactly as the old num()-guards did.
+    const gradesConsensus = gradesConsensusRaw
+      ? parseOr(gradesConsensusRowSchema, gradesConsensusRaw, {})
+      : undefined;
     const consensus = gradesConsensus
       ? {
-          strongBuy: num(gradesConsensus.strongBuy) ?? 0,
-          buy: num(gradesConsensus.buy) ?? 0,
-          hold: num(gradesConsensus.hold) ?? 0,
-          sell: num(gradesConsensus.sell) ?? 0,
-          strongSell: num(gradesConsensus.strongSell) ?? 0,
+          strongBuy: gradesConsensus.strongBuy ?? 0,
+          buy: gradesConsensus.buy ?? 0,
+          hold: gradesConsensus.hold ?? 0,
+          sell: gradesConsensus.sell ?? 0,
+          strongSell: gradesConsensus.strongSell ?? 0,
         }
       : undefined;
     const numberOfAnalysts = consensus
@@ -156,9 +256,9 @@ const fmpAdapter = {
     return {
       symbol,
       consensus,
-      targetMean: num(consensusTargets?.targetConsensus ?? consensusTargets?.targetMedian),
-      targetHigh: num(consensusTargets?.targetHigh),
-      targetLow: num(consensusTargets?.targetLow),
+      targetMean: consensusTargets?.targetConsensus ?? consensusTargets?.targetMedian,
+      targetHigh: consensusTargets?.targetHigh,
+      targetLow: consensusTargets?.targetLow,
       numberOfAnalysts,
       recentActions,
     };

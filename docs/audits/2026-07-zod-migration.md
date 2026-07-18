@@ -49,7 +49,7 @@ Resume by grepping this table for `OPEN`.
 | ZOD-09 | routes/crossWorkspace.js + routes/research.js + services/openingBalanceService.js | rebalance-weights schema kept SEPARATE from settings.js rebalancePlanSchema (request path coerces weights, settings stores as sent — sharing would change one side's wire), query params, normalizeOpeningBalance | DONE (#103) |
 | ZOD-10 | frontend SSE payloads | per-event schemas in lib/api/sse.ts, imports.ts, portfolioImports.ts, ai.ts; ai.ts adopts shared SSE frame reader (readSseFrames) | DONE (#103) |
 | ZOD-11 | frontend persisted state | SettingsContext localStorage blob schema with .catch(defaults) before API write-back (migrateDashboardSettings in settingsStore); ChartBuilderPage state merge (chartBuilderState.ts) | DONE (#103) |
-| ZOD-12 | backend research adapters | dedicated pass over services/research/adapters/*.js third-party JSON parsing; tolerant semantics preserved (schema failures degrade the same way current guards do, never new throws on hot paths) | OPEN |
+| ZOD-12 | backend research adapters | dedicated pass over services/research/adapters/*.js third-party JSON parsing; tolerant semantics preserved (schema failures degrade the same way current guards do, never new throws on hot paths); migrated fred/dbnomics/eurostat/fmp/finnhub/twelveData via shared adapters/schemas.js kit; alphaVantage envelope-only (position-numbered-key munging doubles as the leaf check); yahoo left as-is (yahoo-finance2 NO_VALIDATE opt-out per marketLookup precedent, not raw JSON) | DONE (#103) |
 
 ## Batching (sequential subagents)
 
