@@ -108,6 +108,8 @@ const rebalancePlanSchema = z.looseObject({
   name: z.string().max(80).refine((s) => s.trim().length > 0, 'name must not be blank'),
   // Weights and cashCap are validated through Number() coercion but stored as
   // sent (numeric strings are accepted, not rewritten) — pre-zod behavior.
+  // Deliberately not shared with crossWorkspace.js's targetWeightsSchema,
+  // which COERCES weights for computation and handles {} differently.
   targetWeights: z.record(z.string(), z.unknown()).superRefine((weights, ctx) => {
     const entries = Object.entries(weights);
     if (entries.length === 0) {
