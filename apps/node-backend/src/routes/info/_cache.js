@@ -8,12 +8,18 @@ export const NET_WORTH_CACHE_TTL_MS = 300_000; // 5min
 export const PERF_CACHE_TTL_MS = 300_000; // 5min
 export const PORTFOLIO_SUMMARY_CACHE_TTL_MS = 60_000; // 1min — realtime-ish
 export const BANK_BALANCES_CACHE_TTL_MS = 60_000; // 1min — live SQL, short TTL
+// Statistics pivots (category/recipient/tag) are all-time live scans that ship
+// near-transaction-cardinality intermediate rows per request. They are cleared
+// synchronously on every transaction/category/recipient mutation (see
+// invalidateStatisticsCaches callers), so the TTL is only a safety net.
+export const STATISTICS_CACHE_TTL_MS = 300_000; // 5min safety net
 export const MAX_CACHE_ENTRIES = 100;
 
 export const netWorthResponseCache = new Map();
 export const perfResponseCache = new Map();
 export const portfolioSummaryCache = new Map();
 export const bankBalancesResponseCache = new Map();
+export const statisticsResponseCache = new Map();
 
 /**
  * Invalidate every cache that depends on portfolio investments or transactions.
@@ -26,6 +32,18 @@ export function invalidatePortfolioCaches() {
   netWorthResponseCache.clear();
   perfResponseCache.clear();
   bankBalancesResponseCache.clear();
+}
+
+/**
+ * Invalidate the statistics-pivot response cache. Call this synchronously from
+ * the transaction / category / recipient mutation funnels (scheduleReconcile,
+ * scheduleRefresh, refreshMaterializedViews) so a data or label change is
+ * reflected on the next statistics request instead of being masked for the TTL.
+ * Kept separate from invalidatePortfolioCaches: these pivots depend on
+ * transactions + category/recipient labels, not portfolio holdings.
+ */
+export function invalidateStatisticsCaches() {
+  statisticsResponseCache.clear();
 }
 
 function pruneExpiredCacheEntries(cache) {

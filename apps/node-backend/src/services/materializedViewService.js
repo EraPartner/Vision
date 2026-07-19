@@ -8,6 +8,7 @@
 
 import { query, getClient } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { invalidateStatisticsCaches } from '../routes/info/_cache.js';
 
 /**
  * Run one maintenance statement with the pool-wide 30s statement_timeout
@@ -171,6 +172,10 @@ let refreshQueued = false;
  * Coalesces rapid-fire calls (e.g. bulk import) into a single refresh.
  */
 export async function refreshMaterializedViews() {
+  // Bulk imports invalidate via this path (refreshAggregations →
+  // refreshMaterializedViews); clear the statistics-pivot cache so it doesn't
+  // serve pre-import figures for the TTL.
+  invalidateStatisticsCaches();
   if (refreshInFlight) {
     refreshQueued = true;
     return;
@@ -242,6 +247,11 @@ let debounceTimer = null;
 let debounceDeadline = null; // epoch ms the current burst must flush by
 
 export function scheduleRefresh() {
+  // Category/recipient renames, single-row imports, the DB editor, and the
+  // transaction-reconcile tail all reach here — clear the statistics-pivot cache
+  // synchronously (the MV refresh itself is debounced, but the cache must drop
+  // now so the next statistics request recomputes against the mutated data).
+  invalidateStatisticsCaches();
   const now = Date.now();
   if (debounceTimer) clearTimeout(debounceTimer);
   if (debounceDeadline === null) debounceDeadline = now + REFRESH_MAX_WAIT_MS;

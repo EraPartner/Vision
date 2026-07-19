@@ -9,6 +9,7 @@
 import { recipientInsightsRepository } from '../../../repositories/infoRepositoryRecipients.js';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
+import { withStatisticsCache, statsKeyPart } from './_statisticsCache.js';
 
 export async function computeRecipientPivot({
   targetCurrency = 'EUR',
@@ -18,13 +19,17 @@ export async function computeRecipientPivot({
   endDate = undefined,
   recipientIds = undefined,
 } = {}) {
-  const data = await recipientInsightsRepository.getRecipientPivot(
-    excludedRecipientIds,
-    targetCurrency,
-    { bucket, startDate, endDate, recipientIds }
-  );
-  assertNoNaN(data, 'computeRecipientPivot');
-  return buildEnvelope(data, { source: 'live' });
+  const key = `rpv|${targetCurrency}|b:${bucket}|s:${startDate || ''}|e:${endDate || ''}`
+    + `|ri:${statsKeyPart(recipientIds)}|xr:${statsKeyPart(excludedRecipientIds)}`;
+  return withStatisticsCache(key, async () => {
+    const data = await recipientInsightsRepository.getRecipientPivot(
+      excludedRecipientIds,
+      targetCurrency,
+      { bucket, startDate, endDate, recipientIds }
+    );
+    assertNoNaN(data, 'computeRecipientPivot');
+    return buildEnvelope(data, { source: 'live' });
+  });
 }
 
 export default { computeRecipientPivot };
