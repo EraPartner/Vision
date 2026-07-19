@@ -2028,7 +2028,7 @@ look-changing one.
   - The repo already has the correct pattern one file over: `components/dashboard/NetSummaryCard.tsx:132` uses `touchAction: "pan-y"` for its pointer-event scrub, keeping vertical page panning alive while horizontal scrubs still work.
   - Fix: change the scrubbable rects to `touchAction: "pan-y"` (matching NetSummaryCard), or only suppress panning after `pointerdown` + `setPointerCapture` while a scrub drag is actually in progress.
 
-- [ ] **Tax Overview page conflates "loading" with "no data" — shows a false empty-state CTA** ⏫ 🔎 verified-present 2026-07-11 🔧 *(citation corrected)*
+- [x] **Tax Overview page conflates "loading" with "no data" — shows a false empty-state CTA** ⏫ ✅ 2026-07-19 · a5c9503 (both chart cards now branch on `stats.isLoading` → `<SectionLoader/>` as the FIRST ternary arm, short-circuiting before both the `!hasIncomeSources` CTA and the `.length === 0` no-data text, so a slow initial fetch shows a skeleton instead of either misleading state; `isLoading` is only true on first load, not background refetches.) 🔧 *(citation corrected)*
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `apps/frontend/src/pages/TaxOverviewPage.tsx:578` (`monthlyIncomeTax.length === 0`) and `:705` (`yearlyIncome.length === 0`)
   - These branches derive from `stats.data?.categoryPivot` and render "no income tracked, add some" whenever the data is `undefined` — true during the initial fetch, not just when genuinely empty, because `stats.isLoading` (from `useStatistics()`) is never read anywhere in this file. A user on a slow connection briefly sees a misleading CTA before real numbers load.
@@ -2041,13 +2041,13 @@ look-changing one.
   - Fixed pixel column widths mean any viewport narrower than total column width (phone, or a narrowed desktop window) lets the body scroll horizontally while headers stay put, in the app's most-used view.
   - Fix: drive both containers from one shared scroll position (shared ref + synced `scrollLeft`, or one wrapping scrollable element).
 
-- [ ] **Portfolio buy/sell/dividend dialogs have no pending-state guard — double-submit risk on money-affecting actions** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Portfolio buy/sell/dividend dialogs have no pending-state guard — double-submit risk on money-affecting actions** ⏫ ✅ 2026-07-19 · a5c9503 (`useInvestmentMutations` now returns `isAddingInvestment/isUpdatingInvestment/isAddingTransaction/isUpdatingTransaction`; all five dialogs — AddPortfolioTxn, AddInvestment, EditInvestment, EditPortfolioTxn, AddInvestmentFromMarket (both steps) — disable their submit button + show a `Loader2` spinner while the mutation is in flight, mirroring AddTransactionDialog. Disabled button also blocks double-Enter.)
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `AddPortfolioTxnDialog.tsx:315`, `AddInvestmentDialog.tsx`, `EditInvestmentDialog.tsx`, `EditPortfolioTxnDialog.tsx`, `AddInvestmentFromMarketDialog.tsx` (two-step flow, both buttons)
   - All five submit buttons lack `disabled`/`isPending` wiring — a double-click/double-Enter before the mutation resolves can fire two buy/sell/dividend transactions; the underlying hooks don't even expose `isPending` today. `AddTransactionDialog.tsx` already does this correctly for regular transactions.
   - Fix: apply the same `disabled={mutation.isPending}` + spinner pattern to all five dialogs.
 
-- [ ] **Attachment delete has zero confirmation step** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Attachment delete has zero confirmation step** ⏫ ✅ 2026-07-19 · a5c9503 (`handleDelete` now awaits `useConfirmDialog` `confirm({ variant: 'destructive' })` before mutating, matching Accounts/Recipients/Planned/Categories; new i18n key `txPage.deleteAttachment.desc` names the file being deleted.)
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `apps/frontend/src/components/shared/AttachmentPanel.tsx:130-133`
   - `handleDelete` calls `mutate(id)` directly — every other delete flow checked (Accounts, Recipients, Planned Payments, Categories) confirms first via `useConfirmDialog`.
