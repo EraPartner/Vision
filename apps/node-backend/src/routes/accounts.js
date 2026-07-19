@@ -82,8 +82,8 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
 router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await setOpeningBalance(id, req.body);
-  // The anchor row feeds mv_bank_balances + the forecast MC caches; refresh them
-  // like every transaction mutation route does, else dashboards serve stale
+  // The anchor row feeds the aggregation MVs + the forecast MC caches; refresh
+  // them like every transaction mutation route does, else dashboards serve stale
   // figures until the next unrelated mutation or cache expiry.
   scheduleAggregationRefresh();
   // Also drop the net-worth + bank-balances response caches (shared seam) so the
@@ -101,7 +101,7 @@ router.post('/:id/reconcile', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await reconcileAccount(id, req.body);
   // 'accept' rewrites the statement figure and 'adjustment' inserts a ledger row;
-  // both change mv_bank_balances + forecast caches, so refresh like the mutation
+  // both change the aggregation MVs + forecast caches, so refresh like the mutation
   // routes rather than serving a stale drift/balance until the next mutation.
   scheduleAggregationRefresh();
   // Same reasoning applies to the net-worth + bank-balances response caches
