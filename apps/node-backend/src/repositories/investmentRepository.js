@@ -5,7 +5,7 @@
 import { query, withTransaction } from '../database/connection.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import { coerceNumericFields } from '../lib/money.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { buildSetClauses, buildUpdateSql } from '../lib/sqlClauses.js';
 
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so rows match the `number` API/TS types (the inheritance create/update paths
@@ -214,18 +214,6 @@ async function ensureSymbolIsUnique(symbol, excludeId) {
   if (result.rows[0]) {
     throw makeValidationError('symbol must be unique');
   }
-}
-
-function buildUpdateSql(tableName, id, fields, allowedFields) {
-  const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(fields, { allowed: allowedFields });
-
-  if (!setClauses.length) return null;
-
-  params.push(id);
-  return {
-    sql: `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $${idx}`,
-    params,
-  };
 }
 
 async function updateThroughInheritanceTables(id, fields, getByIdFn) {

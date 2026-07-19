@@ -9,7 +9,7 @@
 
 import { query, withTransaction, withSavepointIfInTransaction } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { buildUpdateSql } from '../lib/sqlClauses.js';
 import { VALID_PORTFOLIO_TXN_TYPES } from '../services/portfolioImportPipeline/portfolioTypeNormalizer.js';
 
 // Mirrors the recurrence_interval DB enum (migration 0001) and the frontend
@@ -349,18 +349,6 @@ export const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
   savings: [],
   bond: [],
 };
-
-function buildUpdateSql(tableName, id, fields, allowedFields) {
-  const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(fields, { allowed: allowedFields });
-
-  if (!setClauses.length) return null;
-
-  params.push(id);
-  return {
-    sql: `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $${idx}`,
-    params,
-  };
-}
 
 export async function createThroughInheritanceTables(fields, getByIdFn, preloadedAssetClass) {
   const {

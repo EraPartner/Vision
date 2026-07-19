@@ -6215,7 +6215,7 @@ actually be exercised.
 - [ ] **SIMP-13 — visx chart-frame extraction** 🔽 — one `useCartesianChartFrame`
   hook + `<ChartFrame>` shared by AreaChart/LineChart/ComposedChart. Must land with
   the visual-regression e2e suite green (scrub/hover/sync behavior). Needs a browser.
-- [ ] **SIMP-14 — inheritance-table CRUD factory** 🔽 — `makeInheritanceRepo(...)`
+- [ ] **SIMP-14 — inheritance-table CRUD factory** 🔽 🔎 partial-2026-07-19 (the safe slice done: the byte-identical `buildUpdateSql(tableName, id, fields, allowedFields)` — duplicated verbatim in `investmentRepository` and `portfolioTxRepo.common`, both already depending only on the shared `buildSetClauses` — is extracted to `lib/sqlClauses.js` and imported by both; local copies removed, full backend suite green. LEFT: the error classifiers (view-not-updatable / missing-inheritance / duplicate-id) and the `resync*BaseIdSequence` helpers still live per-repo — sharing those needs a DB-aware helper module (sqlClauses.js is a pure string builder), and the full `makeInheritanceRepo(...)` factory is the medium-risk remainder.) — `makeInheritanceRepo(...)`
   (or at least share `buildUpdateSql` + error classifiers + sequence-resync) across
   `investmentRepository` and `portfolioTxRepo.common`. Medium risk; do under the
   portfolio-tx repo tests.
