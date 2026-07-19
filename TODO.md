@@ -1426,7 +1426,7 @@ look-changing one.
   - `grep -l DecimalError dist/assets/*.js` → both `money-*.js` and `AIChatPage-*.js` carry a full copy. Cause: `packages/shared-utils/package.json:35` declares its own `decimal.js` dep (consumed via `@vision/shared-utils`) while `src/utils/currency.ts` imports `decimal.js` directly — two module IDs, no shared chunk.
   - Fix: `resolve.dedupe: ['decimal.js']` in `apps/frontend/vite.config.ts`.
 
-- [ ] **theme-flash script silently merged into the main bundle in prod — dark-theme flash-of-light during load** 🔽 🔎 verified-present 2026-07-11
+- [x] **theme-flash script silently merged into the main bundle in prod — dark-theme flash-of-light during load** 🔽 ✅ 2026-07-19 (the light/dark base-class toggle is now a plain inline `<script>` in index.html — verified it survives the production build (`grep vision_theme dist/index.html` hits the inline `classList.toggle`), so it runs pre-paint instead of after the boot graph. theme-flash.ts is trimmed to only apply the palette VARIANT (accent colors, which don't cause the flash) and reads the base theme back off the class the inline script set; deferred bundling of that part is fine.)
   - ↪ _from: Performance research 2026-07-02 · Frontend — bundle / loading_
   - Source `apps/frontend/index.html:13` declares `/src/theme-flash.ts` as a separate early module; built `dist/index.html` has no such script — `vision_theme` handling lives inside the main `index-*.js`, so the dark class is applied only after the full ~300 KB gz boot graph executes. The "runs before React mounts" comment at `index.html:12` is misleading in prod.
   - Fix: inline the theme snippet as a plain non-module `<script>` in `index.html` so it survives bundling and runs pre-paint.
