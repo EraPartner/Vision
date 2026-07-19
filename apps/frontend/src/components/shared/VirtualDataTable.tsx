@@ -639,7 +639,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                         aria-label={`Filter ${col.header}`}
                                                         className={cn("p-0.5 rounded transition-colors", hasFilter
                                                             ? "text-primary"
-                                                            : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground")}
+                                                            : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-foreground")}
                                                     >
                                                         <Filter className="h-3 w-3" />
                                                     </button>

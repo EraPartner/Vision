@@ -842,6 +842,7 @@ const en: Record<string, string> = {
   'importPage.dateColPlaceholder': 'e.g., Date, Transaction Date',
   'importPage.dateFormat': 'Date Format *',
   'importPage.dropzone': 'Drag & drop your CSV here',
+  'importPage.dropzoneAria': 'Choose a CSV file',
   'importPage.dropzoneOr': 'or click to browse files',
   'importPage.dropzoneSmall': 'Drag & drop or click to browse',
   'importPage.duplicates': '⊘ {n} duplicates',

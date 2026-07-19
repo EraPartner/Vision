@@ -842,6 +842,7 @@ const nl: Record<string, string> = {
   'importPage.dateColPlaceholder': 'bijv. Datum, Transactiedatum',
   'importPage.dateFormat': 'Datumnotatie *',
   'importPage.dropzone': 'Sleep uw CSV hierheen',
+  'importPage.dropzoneAria': 'Kies een CSV-bestand',
   'importPage.dropzoneOr': 'of klik om te bladeren',
   'importPage.dropzoneSmall': 'Sleep of klik om te bladeren',
   'importPage.duplicates': '⊘ {n} duplicaten',
