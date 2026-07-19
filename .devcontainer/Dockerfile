@@ -125,8 +125,34 @@ RUN printf 'export PATH="/usr/local/share/npm-global/bin:/home/dev/.npm-global/b
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
 # Installed as root into the root-owned global prefix and deliberately NOT chown'd
 # to dev — so the pinned claude/npm cannot be replaced by the dev user.
-RUN npm install -g @anthropic-ai/claude-code@2.1.173 \
-  && claude --version
+# PINNED from LockBox/tool-pins.env — do NOT hand-edit. `./bump-pins.sh --write`
+# in the LockBox repo rewrites these ARGs and tool-pins.env together; `--check`
+# (its pre-commit gate + CI) fails on drift. The npm package is a ~20 KB wrapper;
+# the real binary is a per-arch optional dep that postinstall copies to
+# bin/claude.exe, so we hash the PAYLOAD and restore it if postinstall was blocked
+# (npm >= 12 leaves a 500-byte stub), then re-check PATH. Fail-closed.
+ARG CLAUDE_CODE_VERSION=2.1.207
+ARG CLAUDE_CODE_SHA256_ARM64=8bc14a284065383460f37981d724b8f7aa7ca93c9849d2fe367e08f03383f454
+ARG CLAUDE_CODE_SHA256_AMD64=85e7e988a392d859f90802ca21fb26e89d3c9ab527f5ed0b08df3955e34d5c83
+RUN set -eux; \
+    npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; \
+    case "$(dpkg --print-architecture)" in arm64) na=linux-arm64; want="${CLAUDE_CODE_SHA256_ARM64}" ;; amd64) na=linux-x64; want="${CLAUDE_CODE_SHA256_AMD64}" ;; *) exit 1 ;; esac; \
+    root="$(npm root -g)/@anthropic-ai/claude-code"; \
+    payload="$root/node_modules/@anthropic-ai/claude-code-${na}/claude"; \
+    test -f "$payload" || exit 1; \
+    got="$(sha256sum "$payload" | awk '{print $1}')"; \
+    echo "claude pin: want=$want got=$got"; \
+    test "$want" = "$got" || echo "FATAL: claude binary != reviewed pin; re-run ./bump-pins.sh --write in LockBox" >&2; \
+    test "$want" = "$got" || exit 1; \
+    stub="$(sha256sum "$root/bin/claude.exe" | awk '{print $1}')"; \
+    test "$stub" = "$want" || cd "$root"; \
+    test "$stub" = "$want" || node install.cjs; \
+    cd /; \
+    claudebin="$(command -v claude)"; \
+    run="$(readlink -f "$claudebin")"; \
+    got2="$(sha256sum "$run" | awk '{print $1}')"; \
+    test "$got2" = "$want" || exit 1; \
+    claude --version
 
 # Runtime global installs (safe-chain in post-create) go to a SEPARATE dev-owned
 # prefix, so they never need write access to the pinned root prefix above.
