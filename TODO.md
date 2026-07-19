@@ -1991,20 +1991,20 @@ look-changing one.
   - Worst case is AddPortfolioTxnDialog (~10 fields: units, price, fees, taxes, date, account, recurrence); a mis-click next to the dialog erases everything with no recovery.
   - Fix: when dirty, `event.preventDefault()` in `onInteractOutside`/`onEscapeKeyDown` and ask via the existing `useConfirmDialog`; or minimally stop resetting on dismissal (reset only on success/Cancel, as AddTransactionDialog and PlannedPaymentForm already do by staying mounted).
 
-- [ ] **No per-route document.title — every page, history entry and bookmark is "Vision - Financial Management"** ⏫ 🔎 verified-present 2026-07-11
+- [x] **No per-route document.title — every page, history entry and bookmark is "Vision - Financial Management"** ⏫ ✅ 2026-07-19 · d253976 (new `useDocumentTitle` hook in AppLayout maps `location.pathname` → localized nav label via a shared `navRoutes.ts` table extracted from CommandPalette — single source of truth — setting `document.title = \`${page} · Vision\``; unmatched routes fall back to the static index.html title. Re-resolves when the i18n dictionary loads.)
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3_
   - `apps/frontend/index.html:7` is the only title in the app; repo-wide grep finds zero `document.title` writes, no title hook, no react-helmet.
   - Back-button dropdown, browser history, bookmarks, and multiple open tabs are all indistinguishable; screen-reader users get no page announcement on SPA navigation either.
   - Fix: small `useEffect` in `AppLayout` (or a `useDocumentTitle` hook) mapping `location.pathname` to the localized nav label (the sidebar already has the route→label table) — `document.title = \`${pageName} · Vision\``.
   - Verification (2026-07-03): Electron pins the window title to `APP_NAME` (`main.js:386,1491`, no `page-title-updated` listener) — no mismatch today, but every tab/history entry and the Electron window itself all read "Vision".
 
-- [ ] **ScrollToTop fires on back/forward too — list scroll position is never restored** ⏫ 🔎 verified-present 2026-07-11
+- [x] **ScrollToTop fires on back/forward too — list scroll position is never restored** ⏫ ✅ 2026-07-19 · d253976 (`ScrollToTop.tsx` now reads `useNavigationType()` and returns early on `POP`, so browser-native scroll restoration works on back/forward; PUSH/REPLACE still scroll to top.)
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3_
   - `apps/frontend/src/components/shared/ScrollToTop.tsx:7-9` — `window.scrollTo(0)` on every `pathname` change with no `useNavigationType()` guard; the window is the app's real scroller (`AppLayout.tsx:217` plain `<main>`, window scroll listeners at `AppLayout.tsx:84-88`), so this also overrides the browser's native POP restoration.
   - Drill from a long transactions/recipients list into any page and press Back → you land at the top and must re-scroll (and re-load, for infinite-scroll lists) to find your row. Affects every back navigation in the app.
   - Fix: `const navType = useNavigationType();` and skip the scroll when `navType === "POP"` (browser restoration then works for same-height pages), or move to react-router's `<ScrollRestoration>`.
 
-- [ ] **Market Lookup: picking a symbol never updates the URL, and a stale `?investmentId=` keeps serving the OLD holding's data** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Market Lookup: picking a symbol never updates the URL, and a stale `?investmentId=` keeps serving the OLD holding's data** ⏫ ✅ 2026-07-19 · d253976 (removed the local `selectedSymbol` state; selection now derives solely from the URL, and `handleSelect` does `setSearchParams` setting `symbol` and deleting `investmentId` — the looked-up view is shareable/reload-safe and a fresh symbol search no longer serves the previously deep-linked holding's data.)
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3_
   - `apps/frontend/src/pages/research/MarketLookupPage.tsx:241-244` — `handleSelect` only does `setSelectedSymbol(symbol)`; `:158-159` `effectiveSelectedSymbol = selectedSymbol || symbolFromQuery`; `:167` `investmentId` is read fresh from the URL every render and is never cleared on select; `:181` `useYahoo = !!effectiveSelectedSymbol && !isProviderAsset && …`.
   - Two user-facing effects: (a) after searching a symbol, reload/share/bookmark reverts to the previous URL symbol (or blank) — the looked-up view is unshareable; (b) arrive via a non-Yahoo holding deep-link (`?symbol=X&investmentId=N`, Kinesis/custom/binance) then search any other symbol → `isProviderAsset` stays true, Yahoo is never queried, and the chart/quote shown under the NEW symbol's name is the OLD holding's price history.
