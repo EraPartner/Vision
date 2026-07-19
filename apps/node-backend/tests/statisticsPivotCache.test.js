@@ -7,9 +7,21 @@ vi.mock('../src/repositories/infoRepository.js', () => ({
   },
 }));
 
+vi.mock('../src/repositories/infoRepositoryRecipients.js', () => ({
+  recipientInsightsRepository: { getRecipientPivot: vi.fn() },
+}));
+
+vi.mock('../src/repositories/infoRepositoryTags.js', () => ({
+  tagInsightsRepository: { getTagPivot: vi.fn() },
+}));
+
 import infoRepository from '../src/repositories/infoRepository.js';
+import { recipientInsightsRepository } from '../src/repositories/infoRepositoryRecipients.js';
+import { tagInsightsRepository } from '../src/repositories/infoRepositoryTags.js';
 import { computeCategoryPivot } from '../src/services/calculations/aggregation/categoryPivot.js';
 import { computeRecipientByYear } from '../src/services/calculations/aggregation/recipientByYear.js';
+import { computeRecipientPivot } from '../src/services/calculations/aggregation/recipientPivot.js';
+import { computeTagPivot } from '../src/services/calculations/aggregation/tagPivot.js';
 import { statsKeyPart } from '../src/services/calculations/aggregation/_statisticsCache.js';
 import { invalidateStatisticsCaches } from '../src/routes/info/_cache.js';
 
@@ -18,6 +30,8 @@ beforeEach(() => {
   invalidateStatisticsCaches(); // module-scoped cache is shared across tests
   infoRepository.getCategoryPivot.mockResolvedValue([{ category_id: 1, total: 10 }]);
   infoRepository.getRecipientByYear.mockResolvedValue([{ recipient_id: 1, total: 10 }]);
+  recipientInsightsRepository.getRecipientPivot.mockResolvedValue([{ recipient_id: 1, m: '2026-01', total: 10 }]);
+  tagInsightsRepository.getTagPivot.mockResolvedValue([{ tag_id: 1, m: '2026-01', total: 10 }]);
 });
 
 describe('statistics pivot cache', () => {
@@ -45,6 +59,25 @@ describe('statistics pivot cache', () => {
     invalidateStatisticsCaches();
     await computeCategoryPivot({ targetCurrency: 'EUR' });
     expect(infoRepository.getCategoryPivot).toHaveBeenCalledTimes(2);
+  });
+
+  it('recipient pivot caches, and keys on bucket/date/id params', async () => {
+    const base = { targetCurrency: 'EUR', bucket: 'monthly', startDate: '2026-01-01', endDate: '2026-06-30' };
+    await computeRecipientPivot(base);
+    await computeRecipientPivot(base); // cache hit
+    expect(recipientInsightsRepository.getRecipientPivot).toHaveBeenCalledTimes(1);
+    await computeRecipientPivot({ ...base, bucket: 'yearly' }); // different bucket → miss
+    await computeRecipientPivot({ ...base, recipientIds: [5] }); // different ids → miss
+    expect(recipientInsightsRepository.getRecipientPivot).toHaveBeenCalledTimes(3);
+  });
+
+  it('tag pivot caches, and keys on allTags/date params', async () => {
+    const base = { targetCurrency: 'EUR', bucket: 'monthly', startDate: '2026-01-01' };
+    await computeTagPivot(base);
+    await computeTagPivot(base); // cache hit
+    expect(tagInsightsRepository.getTagPivot).toHaveBeenCalledTimes(1);
+    await computeTagPivot({ ...base, allTags: true }); // different allTags → miss
+    expect(tagInsightsRepository.getTagPivot).toHaveBeenCalledTimes(2);
   });
 
   it('does not collide across endpoints sharing the cache map', async () => {
