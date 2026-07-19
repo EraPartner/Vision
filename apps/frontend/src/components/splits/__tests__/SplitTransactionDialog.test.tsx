@@ -118,7 +118,7 @@ describe("SplitTransactionDialog", () => {
         renderDialog();
         await openDialog(user);
         await user.click(await screen.findByRole("button", { name: /custom amounts/i }));
-        expect(screen.getByRole("spinbutton")).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/amount owed/i)).toBeInTheDocument();
     });
 
     it("selecting a recipient enables Split button", async () => {

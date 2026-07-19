@@ -911,11 +911,12 @@ describe("Portfolio pages (integration)", () => {
             await screen.findByRole("dialog");
 
             // ETF (unit-based): fill units + price per unit (any 2 of 3 satisfies validation)
-            const spinbuttons = screen.getAllByRole("spinbutton");
-            await user.clear(spinbuttons[0]);
-            await user.type(spinbuttons[0], "10");
-            await user.clear(spinbuttons[1]);
-            await user.type(spinbuttons[1], "100");
+            const unitsInput = screen.getByLabelText(/units \/ shares/i);
+            const priceInput = screen.getByLabelText(/price per unit/i);
+            await user.clear(unitsInput);
+            await user.type(unitsInput, "10");
+            await user.clear(priceInput);
+            await user.type(priceInput, "100");
 
             // addPortTxn.record = "Record"
             await user.click(screen.getByRole("button", { name: /^record$/i }));

@@ -583,7 +583,7 @@ function AreaChartInner<Datum>({
                         width={innerWidth}
                         height={innerHeight}
                         fill="transparent"
-                        style={scrubbable ? { touchAction: "none", cursor: "crosshair" } : undefined}
+                        style={scrubbable ? { touchAction: "pan-y", cursor: "crosshair" } : undefined}
                         onPointerMove={handleMove}
                         onPointerLeave={handleLeave}
                         onPointerDown={handleDown}

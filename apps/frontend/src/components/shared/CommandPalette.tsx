@@ -12,33 +12,12 @@ import {
 } from "@/components/ui/command";
 import {
     ArrowLeftRight,
-    BarChart3,
-    Briefcase,
-    Building2,
-    CalendarClock,
-    Coins,
-    Gem,
-    Globe,
-    HandCoins,
-    Import,
-    Landmark,
-    LayoutDashboard,
     LineChart,
     Moon,
-    PiggyBank,
     Receipt,
     Settings,
-    Sparkles,
     Sun,
-    Tags,
-    Target,
-    Telescope,
-    GitCompareArrows,
-    CandlestickChart,
-    TrendingUp,
     Users,
-    Wallet,
-    type LucideIcon,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -54,12 +33,13 @@ import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-interface PaletteEntry {
-    titleKey: string;
-    url: string;
-    icon: LucideIcon;
-}
+import {
+    BUDGETING_PAGES,
+    PORTFOLIO_PAGES,
+    RESEARCH_PAGES,
+    ADMIN_PAGES,
+    type NavRoute as PaletteEntry,
+} from "@/lib/navRoutes";
 
 interface PaletteQuote {
     symbol: string;
@@ -69,41 +49,6 @@ interface PaletteQuote {
     changePercent: number;
     currency: string;
 }
-
-const BUDGETING_PAGES: PaletteEntry[] = [
-    { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
-    { titleKey: "nav.transactions", url: "/transactions", icon: Receipt },
-    { titleKey: "nav.categories", url: "/categories", icon: Tags },
-    { titleKey: "nav.recipients", url: "/recipients", icon: Users },
-    { titleKey: "nav.statistics", url: "/statistics", icon: BarChart3 },
-    { titleKey: "nav.plannedPayments", url: "/planned", icon: CalendarClock },
-    { titleKey: "nav.whoOwesYou", url: "/owes", icon: HandCoins },
-    { titleKey: "nav.taxOverview", url: "/tax", icon: Landmark },
-    { titleKey: "nav.importExport", url: "/import", icon: Import },
-    { titleKey: "nav.aiChat", url: "/ai-chat", icon: Sparkles },
-];
-
-const PORTFOLIO_PAGES: PaletteEntry[] = [
-    { titleKey: "nav.dashboard", url: "/portfolio", icon: Briefcase },
-    { titleKey: "nav.netWorth", url: "/portfolio/net-worth", icon: Wallet },
-    { titleKey: "nav.performance", url: "/portfolio/performance", icon: BarChart3 },
-    { titleKey: "nav.stocksEtfs", url: "/portfolio/stocks", icon: TrendingUp },
-    { titleKey: "nav.crypto", url: "/portfolio/crypto", icon: Coins },
-    { titleKey: "nav.metals", url: "/portfolio/metals", icon: Gem },
-    { titleKey: "nav.realEstate", url: "/portfolio/real-estate", icon: Building2 },
-    { titleKey: "nav.savingsBonds", url: "/portfolio/savings", icon: PiggyBank },
-    { titleKey: "nav.taxOverview", url: "/portfolio/tax", icon: Landmark },
-];
-
-const RESEARCH_PAGES: PaletteEntry[] = [
-    { titleKey: "nav.researchHome", url: "/research", icon: Telescope },
-    { titleKey: "nav.markets", url: "/research/markets", icon: Globe },
-    { titleKey: "nav.marketLookup", url: "/research/market", icon: LineChart },
-    { titleKey: "nav.compare", url: "/research/compare", icon: GitCompareArrows },
-    { titleKey: "nav.chartBuilder", url: "/research/charts", icon: CandlestickChart },
-    { titleKey: "nav.forecast", url: "/research/forecast", icon: TrendingUp },
-    { titleKey: "nav.watchlist", url: "/research/watchlist", icon: Target },
-];
 
 // The three always-visible nav groups render identically (heading + page
 // items with go-to hints), so they collapse to one map. Admin stays separate:
@@ -306,16 +251,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     };
 
     const adminPages: PaletteEntry[] = useMemo(
-        () =>
-            appSettings.adminMode
-                ? [
-                      { titleKey: "nav.adminOverview", url: "/admin", icon: Settings },
-                      { titleKey: "nav.dbMaintenance", url: "/admin/db", icon: Settings },
-                      { titleKey: "nav.adminProviders", url: "/admin/providers", icon: Settings },
-                      { titleKey: "nav.adminEndpoints", url: "/admin/endpoints", icon: Settings },
-                      { titleKey: "nav.exchangeRates", url: "/admin/exchange-rates", icon: ArrowLeftRight },
-                  ]
-                : [],
+        () => (appSettings.adminMode ? ADMIN_PAGES : []),
         [appSettings.adminMode],
     );
 

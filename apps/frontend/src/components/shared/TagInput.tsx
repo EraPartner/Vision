@@ -25,6 +25,23 @@ const PALETTE: string[] = [
     'hsl(322, 54%, 54%)', // magenta
 ];
 
+// Human-readable names for each palette swatch, keyed by its hsl() string, so
+// swatch buttons get a meaningful aria-label instead of raw CSS colour syntax.
+const PALETTE_NAMES: Record<string, string> = {
+    'hsl(355, 60%, 52%)': 'crimson',
+    'hsl(20, 68%, 52%)': 'coral',
+    'hsl(40, 64%, 50%)': 'amber',
+    'hsl(52, 62%, 46%)': 'gold',
+    'hsl(96, 42%, 42%)': 'moss',
+    'hsl(150, 50%, 38%)': 'emerald',
+    'hsl(174, 50%, 40%)': 'teal',
+    'hsl(192, 58%, 44%)': 'cyan',
+    'hsl(210, 62%, 50%)': 'azure',
+    'hsl(244, 46%, 58%)': 'indigo',
+    'hsl(280, 46%, 56%)': 'violet',
+    'hsl(322, 54%, 54%)': 'magenta',
+};
+
 // Pick a random palette colour so new tags aren't all the first (green) swatch.
 function randomPaletteColor(): string {
     return PALETTE[Math.floor(Math.random() * PALETTE.length)];
@@ -157,12 +174,21 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
                 <div
                     role="combobox"
                     aria-expanded={open}
+                    tabIndex={disabled ? -1 : 0}
                     className={cn(
                         'flex flex-wrap gap-1 items-center min-h-9 px-3 py-1.5 rounded-md border border-input bg-background text-sm cursor-text',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2',
                         disabled && 'opacity-50 pointer-events-none',
                         className,
                     )}
                     onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 0); }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setOpen(true);
+                            setTimeout(() => inputRef.current?.focus(), 0);
+                        }
+                    }}
                 >
                     {selectedTags.map((tag) => (
                         <TagChip key={tag.slug} tag={tag} onRemove={disabled ? undefined : removeSlug} />
@@ -223,7 +249,7 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
                                                     )}
                                                     style={{ backgroundColor: color }}
                                                     onClick={(e) => { e.stopPropagation(); setPendingColor(color); }}
-                                                    aria-label={color}
+                                                    aria-label={PALETTE_NAMES[color] ?? 'tag color'}
                                                 />
                                             ))}
                                         </div>

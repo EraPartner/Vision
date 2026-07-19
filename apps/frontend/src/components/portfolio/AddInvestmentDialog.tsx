@@ -3,7 +3,7 @@ import { parseDecimal } from '@/lib/decimal';
 import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Plus, ArrowRight } from 'lucide-react';
+import { Plus, ArrowRight, Loader2 } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { AssetClass } from '@/types/portfolio';
@@ -44,7 +44,8 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
   const defaultCurrency = appSettings.defaultCurrency || 'EUR';
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'type' | 'details'>('type');
-  const { addInvestment, addTransaction } = usePortfolio();
+  const { addInvestment, addTransaction, isAddingInvestment, isAddingTransaction } = usePortfolio();
+  const isSubmitting = isAddingInvestment || isAddingTransaction;
   const [form, setForm] = useState<InvestmentForm>(() => makeEmptyForm(defaultCurrency));
   // Set once the investment row exists so a retry after a failed buy leg
   // re-attempts only the transaction instead of creating a duplicate holding.
@@ -223,7 +224,8 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
             />
             <DialogFooter className="pt-2 sm:justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('type')}>{t('addInv.back')}</Button>
-              <Button type="submit" className="gap-1.5">
+              <Button type="submit" className="gap-1.5" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {t('addInv.create')} <ArrowRight className="h-4 w-4" />
               </Button>
             </DialogFooter>

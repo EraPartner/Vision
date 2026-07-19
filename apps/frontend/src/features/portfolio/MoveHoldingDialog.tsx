@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, ArrowLeftRight } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { parseDecimal } from "@/lib/decimal";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
@@ -42,13 +43,13 @@ export function MoveHoldingDialog({ investmentId, investmentLabel, open, onOpenC
 
     // The strategy only changes which lots a PARTIAL unit move draws from; a whole
     // move (units blank) re-points every lot regardless.
-    const isPartial = units.trim() !== "" && Number(units) > 0;
+    const isPartial = units.trim() !== "" && parseDecimal(units) > 0;
 
     const move = useMutation({
         mutationFn: () => apiClient.moveHolding(investmentId, {
             from_account_id: Number(fromId),
             to_account_id: Number(toId),
-            units: units.trim() ? Number(units) : null,
+            units: units.trim() ? parseDecimal(units) : null,
             ...(isPartial ? { strategy } : {}),
         }),
         onSuccess: (r) => {
@@ -93,7 +94,7 @@ export function MoveHoldingDialog({ investmentId, investmentLabel, open, onOpenC
                     <div className="space-y-1.5">
                         <Label htmlFor="move-units">{t('portfolio.move.units')}</Label>
                         <Input
-                            id="move-units" type="number" inputMode="decimal" min="0" step="any"
+                            id="move-units" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$"
                             value={units} onChange={(e) => setUnits(e.target.value)}
                             placeholder={t('portfolio.move.unitsPlaceholder')}
                         />

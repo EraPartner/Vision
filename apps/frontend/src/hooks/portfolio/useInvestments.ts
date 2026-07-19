@@ -203,5 +203,9 @@ export function useInvestmentMutations() {
     updateTransaction,
     refreshPrices,
     isRefreshingPrices: refreshPricesMutation.isPending,
+    isAddingInvestment: addInvestmentMutation.isPending,
+    isUpdatingInvestment: updateInvestmentMutation.isPending,
+    isAddingTransaction: addTxnMutation.isPending,
+    isUpdatingTransaction: updateTxnMutation.isPending,
   };
 }

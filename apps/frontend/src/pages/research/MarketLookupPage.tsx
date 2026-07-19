@@ -140,14 +140,14 @@ export default function MarketLookupPage() {
     [fmtNum],
   );
   const [searchText, setSearchText] = useState("");
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("fundamentals");
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
-  const [searchParams] = useSearchParams();
-  const symbolFromQuery = searchParams.get("symbol")?.trim().toUpperCase();
-  const effectiveSelectedSymbol = selectedSymbol || symbolFromQuery || null;
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The selected symbol lives entirely in the URL, so a looked-up view is
+  // shareable and survives reload. Picking a result (handleSelect) rewrites it.
+  const effectiveSelectedSymbol = searchParams.get("symbol")?.trim().toUpperCase() || null;
   const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
   const { summaries, isLoading: isPortfolioLoading } = usePortfolio();
   const isOnline = useOnlineStatus();
@@ -233,9 +233,17 @@ export default function MarketLookupPage() {
   });
 
   const handleSelect = useCallback((symbol: string) => {
-    setSelectedSymbol(symbol);
+    // Drive the selection off the URL so the view is shareable/reload-safe, and
+    // drop investmentId: a fresh symbol pick must query the newly-searched
+    // symbol, not keep serving the previously deep-linked holding's data.
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("symbol", symbol);
+      next.delete("investmentId");
+      return next;
+    });
     setSearchText("");
-  }, []);
+  }, [setSearchParams]);
 
   // Minimal quote synthesized from provider history: price = latest point,
   // change = move across the visible range. Fundamentals/news don't exist for

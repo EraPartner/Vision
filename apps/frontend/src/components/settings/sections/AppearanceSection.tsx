@@ -137,16 +137,18 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     <SettingRow title={t('settings.appearance.modes.schedule')} layout="stack">
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <Label className="text-xs">{t('settings.appearance.lightFrom')}</Label>
+                                <Label htmlFor="schedule-light-from" className="text-xs">{t('settings.appearance.lightFrom')}</Label>
                                 <Input
+                                    id="schedule-light-from"
                                     type="time"
                                     value={schedule.lightFrom}
                                     onChange={(e) => setSchedule({ ...schedule, lightFrom: e.target.value })}
                                 />
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-xs">{t('settings.appearance.darkFrom')}</Label>
+                                <Label htmlFor="schedule-dark-from" className="text-xs">{t('settings.appearance.darkFrom')}</Label>
                                 <Input
+                                    id="schedule-dark-from"
                                     type="time"
                                     value={schedule.darkFrom}
                                     onChange={(e) => setSchedule({ ...schedule, darkFrom: e.target.value })}

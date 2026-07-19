@@ -48,7 +48,16 @@ export function CsvDropzone({ file, onFileSelect, compact = false, label }: CsvD
       {label && <Label className="font-semibold">{label}</Label>}
       <div
         data-dropzone
+        role="button"
+        tabIndex={0}
+        aria-label={t("importPage.dropzoneAria")}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
@@ -63,6 +72,7 @@ export function CsvDropzone({ file, onFileSelect, compact = false, label }: CsvD
           "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed",
           pad,
           "cursor-pointer transition-colors duration-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
           dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50",
         )}
       >

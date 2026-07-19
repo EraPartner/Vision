@@ -176,8 +176,18 @@ export function InvestmentDetailDialog({
               <DialogTitle className="text-xl">
                 <button
                   type="button"
-                  className="hover:underline cursor-pointer"
+                  className="hover:underline cursor-pointer touch-manipulation"
                   onDoubleClick={openMarketLookup}
+                  // Coarse pointers (touch) can't reliably double-click, so a
+                  // single tap opens the chart. Fine pointers keep double-click
+                  // only, so desktop behavior is unchanged.
+                  onClick={() => {
+                    if (typeof window !== "undefined"
+                      && typeof window.matchMedia === "function"
+                      && window.matchMedia("(pointer: coarse)").matches) {
+                      openMarketLookup();
+                    }
+                  }}
                   onKeyDown={onActivateKeyDown(openMarketLookup)}
                   title={investment.symbol ? t('watchlist.doubleClickChart') : undefined}
                 >

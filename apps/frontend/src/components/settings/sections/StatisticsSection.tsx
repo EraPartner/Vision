@@ -92,7 +92,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
             <SettingsGroup label={t('settings.dashboard.exclusionScope')}>
                 <SettingRow title={t('settings.dashboard.exclusionScope')} description={t('settings.dashboard.exclusionScopeHint')} layout="stack">
                     <Select value={settings.exclusionScope} onValueChange={(v) => updateSettings({ exclusionScope: v as ExclusionScope })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t('settings.dashboard.exclusionScope')}><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="everywhere">{t('settings.dashboard.scope.everywhere')}</SelectItem>
                             <SelectItem value="dashboard">{t('settings.dashboard.scope.dashboard')}</SelectItem>

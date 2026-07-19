@@ -22,7 +22,7 @@ export function PageHeader({ title, subtitle, description, icon: Icon, iconColor
     }, [title, setTitle]);
 
     return (
-        <div className="canvas-text flex items-start justify-between gap-4">
+        <div className="canvas-text flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="flex items-center gap-4">
                 {Icon && (
                     <div className={cn("hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br", iconColor, "items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]")}>
@@ -34,7 +34,7 @@ export function PageHeader({ title, subtitle, description, icon: Icon, iconColor
                     {(subtitle ?? description) && <p className="text-muted-foreground mt-1">{subtitle ?? description}</p>}
                 </div>
             </div>
-            {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+            {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
         </div>
     );
 }

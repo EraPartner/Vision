@@ -158,7 +158,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 grid gap-1.5">
                 <Label htmlFor="pp-amount">{t('plannedForm.amountRequired2')}</Label>
-                <Input id="pp-amount" type="number" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <Input id="pp-amount" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="pp-currency">{t('plannedForm.currency')}</Label>
@@ -250,11 +250,11 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5">
                     <Label htmlFor="pp-loan-principal">{t('plannedForm.loanPrincipal')}</Label>
-                    <Input id="pp-loan-principal" type="number" step="0.01" min={0.01} value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} />
+                    <Input id="pp-loan-principal" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} />
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="pp-loan-rate">{t('plannedForm.loanRate')}</Label>
-                    <Input id="pp-loan-rate" type="number" step="0.01" min={0} max={100} value={loanRate} onChange={(e) => setLoanRate(e.target.value)} />
+                    <Input id="pp-loan-rate" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$" value={loanRate} onChange={(e) => setLoanRate(e.target.value)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">

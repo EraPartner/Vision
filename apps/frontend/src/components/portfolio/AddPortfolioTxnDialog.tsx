@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useAccounts } from '@/hooks/useAccounts';
@@ -25,7 +25,7 @@ interface Props {
 export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
   const [open, setOpen] = useState(false);
   const { t } = useLanguage();
-  const { addTransaction } = usePortfolio();
+  const { addTransaction, isAddingTransaction } = usePortfolio();
 
   const unitBased = isUnitBased(investment.assetClass);
   const realEstate = isRealEstate(investment.assetClass);
@@ -193,7 +193,10 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('addPortTxn.cancel')}</Button>
-            <Button type="submit">{t('addPortTxn.record')}</Button>
+            <Button type="submit" disabled={isAddingTransaction}>
+              {isAddingTransaction && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t('addPortTxn.record')}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -566,7 +566,9 @@ export default function TaxOverviewPage() {
                     <CardDescription>{t('tax.incomeBreakdown.description')}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {!hasIncomeSources ? (
+                    {stats.isLoading ? (
+                      <SectionLoader />
+                    ) : !hasIncomeSources ? (
                       <div className="flex flex-col items-center justify-center text-center py-10 px-4">
                         <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
                         <h4 className="text-sm font-semibold text-foreground mb-1">
@@ -693,7 +695,9 @@ export default function TaxOverviewPage() {
                    <CardDescription>{t('tax.yearly.description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {!hasIncomeSources ? (
+                  {stats.isLoading ? (
+                    <SectionLoader />
+                  ) : !hasIncomeSources ? (
                     <div className="flex flex-col items-center justify-center text-center py-10 px-4">
                       <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
                       <h4 className="text-sm font-semibold text-foreground mb-1">

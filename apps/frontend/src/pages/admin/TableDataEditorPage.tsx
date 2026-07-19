@@ -11,7 +11,8 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -338,13 +339,7 @@ export default function TableDataEditorPage() {
                 <p className="text-xs text-muted-foreground">{t('dbEditor.lockedWhilePending')}</p>
             )}
 
-            {query.error && (
-                <Card className="!border-destructive/60 bg-destructive/5">
-                    <CardContent className="pt-6">
-                        <p className="text-sm text-destructive">{t('dbEditor.loadError')}: {(query.error as Error).message}</p>
-                    </CardContent>
-                </Card>
-            )}
+            {query.error && <AdminErrorState error={query.error} fallbackMessage={t('dbEditor.loadError')} />}
 
             {/* Grid */}
             <Card className="glass-chrome overflow-hidden">

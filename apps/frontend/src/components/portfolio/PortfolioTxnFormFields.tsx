@@ -138,9 +138,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
               <Label htmlFor={`${idPrefix}-units`}>{t('addPortTxn.units')}</Label>
               <Input
                 id={`${idPrefix}-units`}
-                type="number"
-                step="0.000001"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                pattern="^[0-9]+([.,][0-9]+)?$"
                 placeholder={withPlaceholders ? '10' : undefined}
                 value={form.units}
                 onChange={(e) => setForm((f) => ({ ...f, units: e.target.value }))}
@@ -150,9 +150,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
               <Label htmlFor={`${idPrefix}-ppu`}>{t('addPortTxn.pricePerUnit')}</Label>
               <Input
                 id={`${idPrefix}-ppu`}
-                type="number"
-                step="0.0001"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                pattern="^[0-9]+([.,][0-9]+)?$"
                 placeholder={withPlaceholders ? '98.50' : undefined}
                 value={form.pricePerUnit}
                 onChange={(e) => setForm((f) => ({ ...f, pricePerUnit: e.target.value }))}
@@ -172,9 +172,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
           </Label>
           <Input
             id={`${idPrefix}-amount`}
-            type="number"
-            step="0.0001"
-            min="0"
+            type="text"
+            inputMode="decimal"
+            pattern="^[0-9]+([.,][0-9]+)?$"
             placeholder={amountPlaceholder}
             value={lockAmount ? '0' : form.amount}
             disabled={lockAmount}
@@ -192,9 +192,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
               <Label htmlFor={`${idPrefix}-fees`}>{t('addPortTxn.fees')}</Label>
               <Input
                 id={`${idPrefix}-fees`}
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                pattern="^[0-9]+([.,][0-9]+)?$"
                 placeholder={withPlaceholders ? '0.00' : undefined}
                 value={form.fees}
                 onChange={(e) => setForm((f) => ({ ...f, fees: e.target.value }))}
@@ -204,9 +204,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
               <Label htmlFor={`${idPrefix}-taxes`}>{t('addPortTxn.taxes')}</Label>
               <Input
                 id={`${idPrefix}-taxes`}
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                pattern="^[0-9]+([.,][0-9]+)?$"
                 placeholder={withPlaceholders ? '0.00' : undefined}
                 value={form.taxes}
                 onChange={(e) => setForm((f) => ({ ...f, taxes: e.target.value }))}
@@ -219,9 +219,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
           <Label htmlFor={`${idPrefix}-fx-rate-to-eur`}>FX rate to EUR (optional)</Label>
           <Input
             id={`${idPrefix}-fx-rate-to-eur`}
-            type="number"
-            step="0.0000000001"
-            min="0"
+            type="text"
+            inputMode="decimal"
+            pattern="^[0-9]+([.,][0-9]+)?$"
             placeholder={withPlaceholders ? '1.0000000000' : undefined}
             value={form.fxRateToEur}
             onChange={(e) => setForm((f) => ({ ...f, fxRateToEur: e.target.value }))}

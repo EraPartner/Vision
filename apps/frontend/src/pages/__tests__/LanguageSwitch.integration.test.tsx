@@ -159,9 +159,9 @@ describe("Language switch (integration)", () => {
     it("OwesPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<OwesPage />);
-        // Dutch: owesPage.title = "Wie u iets verschuldigd is"
+        // Dutch: owesPage.title = "Wie jou iets verschuldigd is"
         expect(
-            await screen.findByRole("heading", { name: /wie u iets verschuldigd is/i }),
+            await screen.findByRole("heading", { name: /wie jou iets verschuldigd is/i }),
         ).toBeInTheDocument();
     });
 

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { ShaderAurora } from "@/components/layout/ShaderAurora";
 import { ElectronBridge } from "@/components/layout/ElectronBridge";
 import { VisualEffectsController } from "@/components/layout/VisualEffectsController";
 import { useGoToShortcuts, useSectionCycleShortcuts } from "@/hooks/useGoToShortcuts";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
 import { consumeUndo } from "@/lib/undo";
 import { isTypingTarget } from "@/lib/keyboard";
@@ -70,6 +72,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { tier: effectsTier } = useVisualEffectsTier();
     useGoToShortcuts();
     useSectionCycleShortcuts();
+    useDocumentTitle();
 
     // Launch navigation (the "open app on" startup-section setting) and the
     // "last opened page" restoration both live in StartupRedirect now, so there
@@ -89,6 +92,16 @@ export function AppLayout({ children }: AppLayoutProps) {
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
     }, []);
+
+    // On route change, move keyboard focus to the main content region. Without
+    // this, focus is stranded on the just-clicked sidebar link and screen readers
+    // get no page-change cue. <main> is tabIndex={-1} (programmatic-focus only,
+    // no visible ring on mouse nav).
+    const { pathname } = useLocation();
+    const mainRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        mainRef.current?.focus();
+    }, [pathname]);
 
     const modeIcon = useMemo(() => ({
         light: <Sun className="h-5 w-5" />,
@@ -215,7 +228,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             <Settings className="h-5 w-5" />
                         </Button>
                     </header>
-                    <main className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)]">
+                    <main ref={mainRef} tabIndex={-1} className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)] outline-none focus:outline-none focus-visible:outline-none">
                         <FxStatusBanner />
                         <UpcomingPaymentsNotification />
                         <PageTransition>{children}</PageTransition>

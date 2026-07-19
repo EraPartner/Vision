@@ -19,6 +19,13 @@ import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
 import { createTradeCashLeg } from '../portfolio/tradeCashLegService.js';
 import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
 
+// Rows are drained in chunked BEGIN/COMMIT (mirrors importPipeline/commit.js):
+// one transaction per chunk instead of one autocommit per statement collapses a
+// 500-1000 row brokerage CSV from thousands of sequential round trips to a
+// handful, while a per-row SAVEPOINT keeps crash-isolation (a bad row rolls back
+// to its savepoint without poisoning the chunk).
+const COMMIT_CHUNK = 1000;
+
 // Staging stores cash magnitudes ABSOLUTE (adapter contract); the ledger sign
 // comes from the kind. Without this every withdrawal was credited as a
 // deposit (+500 instead of −500) — the sleeve error grew 2× per withdrawal.
@@ -70,148 +77,214 @@ export async function commitBatch({ batchId, onProgress }) {
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
+  let legs = 0;
   const committedHashes = new Set();
+
+  // Per-batch FX cache: the on-or-before stored-rate lookup is deterministic for
+  // a given (currency, tx_date), so resolve each pair once instead of issuing a
+  // fresh uncached lookup on every row — a single-currency CSV collapses ~N
+  // lookups to one per distinct trade date.
+  const fxCache = new Map();
+  async function resolveFx(currency, date) {
+    const key = `${String(currency || 'EUR').toUpperCase()}|${date}`;
+    if (fxCache.has(key)) return fxCache.get(key);
+    const rate = await autoResolveFxRateToEur(currency, date);
+    fxCache.set(key, rate);
+    return rate;
+  }
 
   if (onProgress) onProgress({ phase: 'committing', current: 0, total });
 
-  let legs = 0;
+  for (let start = 0; start < total; start += COMMIT_CHUNK) {
+    const chunk = matched.slice(start, start + COMMIT_CHUNK);
+    // Chunk-local counters: folded into the running totals (and the persisted
+    // checkpoint) only AFTER withTransaction resolves, so a chunk that rolls
+    // back never leaves the JS counters — or the checkpoint — inflated past
+    // what's actually committed. (Mirrors importPipeline/commit.js.)
+    let chunkImported = 0;
+    let chunkDuplicates = 0;
+    let chunkErrors = 0;
+    let chunkLegs = 0;
+    await withTransaction(async (client) => {
+      // Reset inside the callback so a withTransaction retry recounts cleanly.
+      chunkImported = 0;
+      chunkDuplicates = 0;
+      chunkErrors = 0;
+      chunkLegs = 0;
+      for (let j = 0; j < chunk.length; j++) {
+        const row = chunk[j];
 
-  for (let i = 0; i < total; i++) {
-    const row = matched[i];
-
-    // ── Brokerage cash row (ADR-095): an external deposit/withdrawal → a plain
-    // cash transaction on the sleeve (NOT a trade, no leg). ──
-    if (isBrokerage && row.route === 'cash') {
-      if (!batchAccountId) {
-        errors++;
-        await markRow(row.id, 'error', 'brokerage cash row requires a batch account');
-        continue;
-      }
-      if (row.tx_hash && committedHashes.has(row.tx_hash)) {
-        duplicates++;
-        await markRow(row.id, 'duplicate');
-        continue;
-      }
-      if (await isCashFieldDuplicate(batchAccountId, row)) {
-        duplicates++;
-        await markRow(row.id, 'duplicate');
-        continue;
-      }
-      try {
-        const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
-        const r = await query(
-          `INSERT INTO transactions (date, amount, currency, memo, account_id, is_active)
-           VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
-          [row.tx_date, signedCashAmount(row), row.currency || 'EUR', memo, batchAccountId],
-        );
-        imported++;
-        if (row.tx_hash) committedHashes.add(row.tx_hash);
-        await query(
-          `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
-          [row.id, r.rows[0]?.id ?? null],
-        );
-      } catch (err) {
-        errors++;
-        await markRow(row.id, 'error', err?.message?.slice(0, 500) || 'cash insert failed');
-      }
-      continue;
-    }
-
-    if (!row.investment_id) {
-      errors++;
-      await markRow(row.id, 'error', 'unresolved instrument — pick or create a holding');
-      continue;
-    }
-
-    if (row.tx_hash && committedHashes.has(row.tx_hash)) {
-      duplicates++;
-      await markRow(row.id, 'duplicate');
-      continue;
-    }
-
-    if (await isFieldDuplicate(row, batchAccountId)) {
-      duplicates++;
-      await markRow(row.id, 'duplicate');
-      continue;
-    }
-
-    try {
-      const currency = row.currency || row.investment_currency || 'EUR';
-      let fxRate = row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
-      if (fxRate === undefined) fxRate = await autoResolveFxRateToEur(currency, row.tx_date);
-
-      // Trade + its ADR-090 cash leg are all-or-nothing (ADR-095): one DB
-      // transaction, so a leg failure (or a crash mid-pair) leaves nothing
-      // behind — no compensating delete with its own crash window. The
-      // repository joins this transaction via the ambient-client reroute in
-      // withTransaction; the staging-row status update stays outside on
-      // purpose (it's bookkeeping about the batch, not part of the pair).
-      const { created, legCreated } = await withTransaction(async () => {
-        const created = await portfolioTransactionRepository.create(/** @type {any} */ ({
-          investment_id: row.investment_id,
-          type: row.type,
-          date: row.tx_date,
-          amount: row.amount != null ? Number(row.amount) : undefined,
-          units: row.units != null ? Number(row.units) : undefined,
-          price_per_unit: row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
-          fees: row.fees != null ? Number(row.fees) : 0,
-          taxes: row.taxes != null ? Number(row.taxes) : 0,
-          currency,
-          note: row.note || undefined,
-          fx_rate_to_eur: fxRate,
-          account_id: batchAccountId,
-          preloaded_asset_class: row.asset_class,
-        }));
-
-        // Brokerage trade (ADR-095/ADR-090): the trade's single cash movement
-        // is its auto-created leg on the same sleeve — never a second
-        // standalone cash row.
-        let legCreated = false;
-        if (isBrokerage && batchAccountId) {
-          try {
-            const legId = await createTradeCashLeg({
-              portfolioTxn: { ...created, type: row.type, amount: created?.amount ?? row.amount, fees: created?.fees ?? row.fees, taxes: created?.taxes ?? row.taxes, currency, date: row.tx_date, id: created?.id },
-              cashAccountId: batchAccountId,
-            });
-            legCreated = Boolean(legId);
-          } catch (legErr) {
-            // Rethrow with context: the whole pair rolls back, and the row's
-            // error message should say which half failed.
-            throw new Error(`cash leg failed: ${legErr?.message?.slice(0, 400) || 'unknown'}`, { cause: legErr });
+        // ── Brokerage cash row (ADR-095): an external deposit/withdrawal → a plain
+        // cash transaction on the sleeve (NOT a trade, no leg). ──
+        if (isBrokerage && row.route === 'cash') {
+          if (!batchAccountId) {
+            chunkErrors++;
+            await markRow(row.id, 'error', 'brokerage cash row requires a batch account');
+            continue;
           }
+          if (row.tx_hash && committedHashes.has(row.tx_hash)) {
+            chunkDuplicates++;
+            await markRow(row.id, 'duplicate');
+            continue;
+          }
+          if (await isCashFieldDuplicate(batchAccountId, row)) {
+            chunkDuplicates++;
+            await markRow(row.id, 'duplicate');
+            continue;
+          }
+          const sp = savepointFor(row.id);
+          if (!sp) { chunkErrors++; continue; }
+          await client.query(`SAVEPOINT ${sp}`);
+          try {
+            const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
+            const r = await query(
+              `INSERT INTO transactions (date, amount, currency, memo, account_id, is_active)
+               VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
+              [row.tx_date, signedCashAmount(row), row.currency || 'EUR', memo, batchAccountId],
+            );
+            await query(
+              `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
+              [row.id, r.rows[0]?.id ?? null],
+            );
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+            chunkImported++;
+            if (row.tx_hash) committedHashes.add(row.tx_hash);
+          } catch (err) {
+            // ROLLBACK TO SAVEPOINT before markRow: PostgreSQL poisons the whole
+            // chunk txn on ANY statement error (25P02), so the row's error must
+            // be recorded on a clean connection.
+            await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+            chunkErrors++;
+            await markRow(row.id, 'error', err?.message?.slice(0, 500) || 'cash insert failed');
+          }
+          continue;
         }
-        return { created, legCreated };
-      });
-      if (legCreated) legs++;
 
-      imported++;
-      if (row.tx_hash) committedHashes.add(row.tx_hash);
+        if (!row.investment_id) {
+          chunkErrors++;
+          await markRow(row.id, 'error', 'unresolved instrument — pick or create a holding');
+          continue;
+        }
 
-      await query(
-        `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
-        [row.id, created?.id ?? null],
-      );
-    } catch (err) {
-      errors++;
-      await markRow(row.id, 'error', err?.message?.slice(0, 500) || 'insert failed');
-    }
+        if (row.tx_hash && committedHashes.has(row.tx_hash)) {
+          chunkDuplicates++;
+          await markRow(row.id, 'duplicate');
+          continue;
+        }
 
-    if (onProgress && ((i + 1) % 50 === 0 || i + 1 === total)) {
-      onProgress({ phase: 'committing', current: i + 1, total, imported, duplicates, errors });
+        if (await isFieldDuplicate(row, batchAccountId)) {
+          chunkDuplicates++;
+          await markRow(row.id, 'duplicate');
+          continue;
+        }
+
+        const sp = savepointFor(row.id);
+        if (!sp) { chunkErrors++; continue; }
+        await client.query(`SAVEPOINT ${sp}`);
+        try {
+          const currency = row.currency || row.investment_currency || 'EUR';
+          let fxRate = row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
+          if (fxRate === undefined) fxRate = await resolveFx(currency, row.tx_date);
+
+          const created = await portfolioTransactionRepository.create(/** @type {any} */ ({
+            investment_id: row.investment_id,
+            type: row.type,
+            date: row.tx_date,
+            amount: row.amount != null ? Number(row.amount) : undefined,
+            units: row.units != null ? Number(row.units) : undefined,
+            price_per_unit: row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
+            fees: row.fees != null ? Number(row.fees) : 0,
+            taxes: row.taxes != null ? Number(row.taxes) : 0,
+            currency,
+            note: row.note || undefined,
+            fx_rate_to_eur: fxRate,
+            account_id: batchAccountId,
+            preloaded_asset_class: row.asset_class,
+          }));
+
+          // Trade + its ADR-090 cash leg are all-or-nothing (ADR-095): both run
+          // inside this row's SAVEPOINT, so a leg failure (or a crash mid-pair)
+          // rolls the trade back with it — no compensating delete with its own
+          // crash window. The repository + leg service join this transaction via
+          // the ambient-client reroute in withTransaction.
+          let legCreated = false;
+          if (isBrokerage && batchAccountId) {
+            try {
+              const legId = await createTradeCashLeg({
+                portfolioTxn: { ...created, type: row.type, amount: created?.amount ?? row.amount, fees: created?.fees ?? row.fees, taxes: created?.taxes ?? row.taxes, currency, date: row.tx_date, id: created?.id },
+                cashAccountId: batchAccountId,
+              });
+              legCreated = Boolean(legId);
+            } catch (legErr) {
+              // Rethrow with context: the savepoint rolls the pair back, and the
+              // row's error message should say which half failed.
+              throw new Error(`cash leg failed: ${legErr?.message?.slice(0, 400) || 'unknown'}`, { cause: legErr });
+            }
+          }
+
+          await query(
+            `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
+            [row.id, created?.id ?? null],
+          );
+          await client.query(`RELEASE SAVEPOINT ${sp}`);
+          chunkImported++;
+          if (legCreated) chunkLegs++;
+          if (row.tx_hash) committedHashes.add(row.tx_hash);
+        } catch (err) {
+          await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+          chunkErrors++;
+          await markRow(row.id, 'error', err?.message?.slice(0, 500) || 'insert failed');
+        }
+
+        if (onProgress && (start + j + 1) % 50 === 0) {
+          onProgress({
+            phase: 'committing',
+            current: start + j + 1,
+            total,
+            imported: imported + chunkImported,
+            duplicates: duplicates + chunkDuplicates,
+            errors: errors + chunkErrors,
+          });
+        }
+      }
+    });
+
+    // Transaction committed — only now fold the chunk's counts into the running
+    // totals and the persisted checkpoint.
+    imported += chunkImported;
+    duplicates += chunkDuplicates;
+    errors += chunkErrors;
+    legs += chunkLegs;
+
+    // Checkpoint per chunk (increment by chunk-local delta, preserving any
+    // rows_error already set by earlier pipeline phases) so a crash mid-import
+    // leaves recoverable state in portfolio_import_batches.
+    await query(
+      `UPDATE portfolio_import_batches
+          SET rows_imported = COALESCE(rows_imported, 0) + $2,
+              rows_duplicate = COALESCE(rows_duplicate, 0) + $3,
+              rows_error = COALESCE(rows_error, 0) + $4
+        WHERE id = $1`,
+      [batchId, chunkImported, chunkDuplicates, chunkErrors],
+    );
+
+    if (onProgress) {
+      onProgress({ phase: 'committing', current: Math.min(start + chunk.length, total), total, imported, duplicates, errors });
     }
   }
 
-  await query(
-    `UPDATE portfolio_import_batches
-        SET rows_imported = COALESCE(rows_imported, 0) + $2,
-            rows_duplicate = COALESCE(rows_duplicate, 0) + $3,
-            rows_error = COALESCE(rows_error, 0) + $4
-      WHERE id = $1`,
-    [batchId, imported, duplicates, errors],
-  );
-
   logger.info('[portfolio-pipeline:commit] done', { batchId, total, imported, duplicates, errors, legs, isBrokerage });
   return { imported, duplicates, errors, legs };
+}
+
+// Build a per-row SAVEPOINT identifier. portfolio_import_staging_rows.id is
+// BIGSERIAL — the pg driver returns BIGINT as a string to preserve int64
+// precision, so validate against a digits-only regex to keep the interpolated
+// identifier injection-safe. Returns null for a non-numeric id so the caller
+// can skip the row rather than emit an unsafe savepoint name.
+function savepointFor(id) {
+  const idStr = String(id);
+  return /^\d+$/.test(idStr) ? `sp_prow_${idStr}` : null;
 }
 
 async function markRow(id, status, message) {
