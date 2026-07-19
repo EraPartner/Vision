@@ -293,7 +293,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         <div className="grid grid-cols-2 gap-3 pt-1">
                             <div className="space-y-2">
                                 <Label htmlFor="acct-stmt-bal">{t('accounts.field.statementBalance')}</Label>
-                                <Input id="acct-stmt-bal" type="number" step="0.01" value={form.statementBalance} onChange={(e) => set("statementBalance", e.target.value)} />
+                                <Input id="acct-stmt-bal" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" value={form.statementBalance} onChange={(e) => set("statementBalance", e.target.value)} />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="acct-stmt-date">{t('accounts.field.statementBalanceDate')}</Label>

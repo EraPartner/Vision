@@ -195,8 +195,9 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                                     />
                                     {splitType === "custom" && (
                                         <Input
-                                            type="number"
-                                            step="0.01"
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="^[0-9]+([.,][0-9]+)?$"
                                             placeholder={t('splitDialog.amountOwed')}
                                             value={entry.amount}
                                             onChange={(e) => updateEntry(idx, "amount", e.target.value)}

@@ -107,13 +107,13 @@ describe("EditPortfolioTxnDialog", () => {
 
         // Assert — pre-populated numeric fields
         const unitsInput = await screen.findByLabelText(/units/i);
-        expect(unitsInput).toHaveValue(10);
+        expect(unitsInput).toHaveValue("10");
 
         const ppuInput = screen.getByLabelText(/price per unit/i);
-        expect(ppuInput).toHaveValue(90);
+        expect(ppuInput).toHaveValue("90");
 
         const amountInput = screen.getByLabelText(/total amount/i);
-        expect(amountInput).toHaveValue(900);
+        expect(amountInput).toHaveValue("900");
     });
 
     it("cancel button closes dialog", async () => {
@@ -247,10 +247,10 @@ describe("EditPortfolioTxnDialog", () => {
 
         // Assert — fees and taxes are populated (buy type shows fee/tax fields)
         const feesInput = await screen.findByLabelText(/fees/i);
-        expect(feesInput).toHaveValue(2.5);
+        expect(feesInput).toHaveValue("2.5");
 
         const taxesInput = screen.getByLabelText(/taxes/i);
-        expect(taxesInput).toHaveValue(0);
+        expect(taxesInput).toHaveValue("0");
     });
 
     it("pre-populates note field from transaction prop", async () => {

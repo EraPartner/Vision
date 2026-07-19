@@ -1,3 +1,4 @@
+import { parseDecimal } from "@/lib/decimal";
 import type { Account, AccountCreate, AccountUpdate } from "@/types/api";
 import type { AccountFormValues } from "./AddAccountDialog";
 
@@ -26,7 +27,7 @@ export function toAccountPayload(values: AccountFormValues, mode: "create" | "up
         in_net_worth: values.in_net_worth,
         multi_currency_cash: values.multi_currency_cash,
         has_cash_sleeve: values.has_cash_sleeve,
-        statement_balance: values.statementBalance ? Number(values.statementBalance) : empty,
+        statement_balance: values.statementBalance ? parseDecimal(values.statementBalance) : empty,
         statement_balance_date: values.statementBalanceDate || empty,
     } as AccountCreate | AccountUpdate;
 }

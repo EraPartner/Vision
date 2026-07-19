@@ -111,6 +111,15 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
         return () => { cancelled = true; };
     }, [dicts.en]);
 
+    // Mirror the active locale onto <html lang>. index.html hardcodes lang="en",
+    // and browsers parse native `<input type="number">` values against that
+    // locale — so without this a Dutch user's "12,50" is rejected as invalid en
+    // input. Keeping documentElement.lang in sync with the UI language makes the
+    // native numeric inputs comma-tolerant for nl.
+    useEffect(() => {
+        document.documentElement.lang = language;
+    }, [language]);
+
     useEffect(() => {
         // If we already loaded this locale, nothing to do.
         if (dicts[language]) return;

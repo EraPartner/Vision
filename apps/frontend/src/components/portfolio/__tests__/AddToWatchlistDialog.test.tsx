@@ -95,7 +95,7 @@ describe("AddToWatchlistDialog", () => {
     await user.click(result);
 
     // Assert — details phase: target price input is present
-    expect(await screen.findByRole("spinbutton")).toBeInTheDocument();
+    expect(await screen.findByLabelText(/target buy price/i)).toBeInTheDocument();
   });
 
   it("submit button is disabled when targetPrice is empty", async () => {
@@ -115,7 +115,7 @@ describe("AddToWatchlistDialog", () => {
     await user.click(await screen.findByText("Apple Inc."));
 
     // Assert — wait for details phase, then check submit is disabled
-    await screen.findByRole("spinbutton");
+    await screen.findByLabelText(/target buy price/i);
     const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
     expect(submitButton).toBeDisabled();
   });
@@ -137,7 +137,7 @@ describe("AddToWatchlistDialog", () => {
     await user.type(searchInput, "AAPL");
     await user.click(await screen.findByText("Apple Inc."));
 
-    const targetPriceInput = await screen.findByRole("spinbutton");
+    const targetPriceInput = await screen.findByLabelText(/target buy price/i);
     await user.type(targetPriceInput, "200");
 
     const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
@@ -166,7 +166,7 @@ describe("AddToWatchlistDialog", () => {
     await user.type(searchInput, "AAPL");
     await user.click(await screen.findByText("Apple Inc."));
 
-    const targetPriceInput = await screen.findByRole("spinbutton");
+    const targetPriceInput = await screen.findByLabelText(/target buy price/i);
     await user.type(targetPriceInput, "200");
 
     const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
@@ -199,7 +199,7 @@ describe("AddToWatchlistDialog", () => {
     await user.type(searchInput, "AAPL");
     await user.click(await screen.findByText("Apple Inc."));
 
-    const targetPriceInput = await screen.findByRole("spinbutton");
+    const targetPriceInput = await screen.findByLabelText(/target buy price/i);
     fireEvent.change(targetPriceInput, { target: { value: "0" } });
 
     const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
@@ -226,14 +226,14 @@ describe("AddToWatchlistDialog", () => {
     const searchInput = await screen.findByRole("textbox");
     await user.type(searchInput, "AAPL");
     await user.click(await screen.findByText("Apple Inc."));
-    await screen.findByRole("spinbutton"); // wait for phase 2
+    await screen.findByLabelText(/target buy price/i); // wait for phase 2
 
     const changeButton = await screen.findByRole("button", { name: /change/i });
     await user.click(changeButton);
 
     // Assert — back to search phase: textbox (search input) is visible again
     expect(await screen.findByRole("textbox")).toBeInTheDocument();
-    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/target buy price/i)).not.toBeInTheDocument();
   });
 
   // ─── Edge cases ────────────────────────────────────────────────────────────

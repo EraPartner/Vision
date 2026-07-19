@@ -280,10 +280,12 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
               </div>
 
                 <div className="space-y-2">
-                  <Label>{t('addWatchlist.targetPrice')}</Label>
+                  <Label htmlFor="watchlist-target-price">{t('addWatchlist.targetPrice')}</Label>
                   <Input
-                    type="number"
-                    step="0.01"
+                    id="watchlist-target-price"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="^[0-9]+([.,][0-9]+)?$"
                     placeholder={quoteData && Number.isFinite(quoteData.price) && quoteData.price > 0
                       ? t('addWatchlist.currentPrice', { price: quoteData.price.toFixed(2) })
                       : t('addWatchlist.targetPlaceholder')}
