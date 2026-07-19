@@ -6229,8 +6229,13 @@ actually be exercised.
   `Decimal` to `investments` while the shared `sanitizeIsolatedValueSpikes` wraps in
   `toNumber`; on the untested net-worth path this flips a Decimal→number JSON wire
   type. Needs a test pinning the net-worth wire shape first.
-- [ ] **SIMP-34 — quoteBackfill SELECT + row-mapper dedup** 🔽 — parameterize the
-  WHERE, share `mapRowToInvestment`.
+- [x] **SIMP-34 — quoteBackfill SELECT + row-mapper dedup** 🔽 ✅ 2026-07-19 — the
+  all-investments and single-investment holding-window loaders shared a verbatim
+  13-column SELECT, asset-class filter, and row→investment/row→transaction
+  mappers. Extracted `HOLDING_WINDOW_SELECT` + `HOLDING_ASSET_CLASS_FILTER`
+  constants and `mapRowToInvestment`/`mapRowToHoldingTx` helpers; each loader now
+  only supplies its own WHERE/ORDER BY. Pure refactor, no behavior change
+  (named-field mappers, identical column aliases); 34 existing tests green.
 - [ ] **SIMP-44 — App.tsx route/lazy list generation** 🔽 — derive the 37 `lazy(...)`
   lines + `<RequireAdmin>` wraps from the `routeLoaders` map; hoist the repeated
   `staleTime` magic numbers. Touches routing — verify navigation + admin gating.
