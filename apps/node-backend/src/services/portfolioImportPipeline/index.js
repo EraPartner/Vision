@@ -79,8 +79,23 @@ export async function prepareImport({ batchId, filePath, customConfig, onProgres
 export async function commitPortfolioImport({ batchId, onProgress }) {
   const { imported, duplicates, errors } = await commitBatch({ batchId, onProgress });
 
+  // A batch that still has any 'error' staging row is not truly done — it lands
+  // in 'complete_with_errors' so it stays reviewable (the commit route re-accepts
+  // it) and is signalled for repair, instead of reading as a clean 'complete'
+  // while silently stranding the failed rows. The status is driven by the actual
+  // remaining error rows, not this run's `errors` count, so a re-commit that
+  // fixes the last error correctly flips the batch back to 'complete'.
   await query(
-    `UPDATE portfolio_import_batches SET status = 'complete', completed_at = NOW() WHERE id = $1`,
+    `UPDATE portfolio_import_batches
+        SET status = CASE
+              WHEN EXISTS (
+                SELECT 1 FROM portfolio_import_staging_rows
+                 WHERE batch_id = $1 AND status = 'error'
+              ) THEN 'complete_with_errors'
+              ELSE 'complete'
+            END,
+            completed_at = NOW()
+      WHERE id = $1`,
     [batchId],
   );
 

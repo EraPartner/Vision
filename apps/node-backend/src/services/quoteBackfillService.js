@@ -160,6 +160,66 @@ export function sanitizeIsolatedSpikes(points) {
 
 // ─── Database Functions ─────────────────────────────────────────────────────
 
+// Shared projection for the "investment + its buy/gift/sell legs" join. Both the
+// all-investments and single-investment loaders select the identical columns and
+// only differ in their WHERE/ORDER BY, so keep the column list + asset-class
+// filter in one place (was duplicated verbatim across the two queries).
+const HOLDING_WINDOW_SELECT = `
+  SELECT
+    i.id,
+    i.asset_class,
+    i.currency,
+    i.price_provider,
+    i.price_provider_id,
+    i.symbol,
+    i.price_provider_url,
+    i.price_provider_latest_url,
+    i.price_provider_latest_path,
+    i.price_provider_history_url,
+    i.price_provider_history_path,
+    i.price_provider_history_ts_path,
+    i.price_provider_history_price_path,
+    pt.id   AS tx_id,
+    pt.type AS tx_type,
+    to_char(pt.date::date, 'YYYY-MM-DD') AS tx_date,
+    COALESCE(pt.units, 0) AS tx_units
+  FROM investments i
+  JOIN portfolio_transactions pt
+    ON pt.investment_id = i.id
+   AND pt.type IN ('buy', 'gift', 'sell')`;
+
+// Priceable asset classes — the only ones with a provider quote series to backfill.
+const HOLDING_ASSET_CLASS_FILTER = `i.asset_class IN ('stock', 'etf', 'crypto', 'metals')`;
+
+/** Map a HOLDING_WINDOW_SELECT row's investment columns to the provider-config object. */
+function mapRowToInvestment(row) {
+  return {
+    id: Number(row.id),
+    asset_class: row.asset_class,
+    currency: row.currency,
+    price_provider: row.price_provider,
+    price_provider_id: row.price_provider_id,
+    symbol: row.symbol,
+    price_provider_url: row.price_provider_url,
+    price_provider_latest_url: row.price_provider_latest_url,
+    price_provider_latest_path: row.price_provider_latest_path,
+    price_provider_history_url: row.price_provider_history_url,
+    price_provider_history_path: row.price_provider_history_path,
+    price_provider_history_ts_path: row.price_provider_history_ts_path,
+    price_provider_history_price_path: row.price_provider_history_price_path,
+  };
+}
+
+/** Map a HOLDING_WINDOW_SELECT row's transaction columns to a holding-window tx. */
+function mapRowToHoldingTx(row) {
+  return {
+    id: Number(row.tx_id),
+    type: row.tx_type,
+    date: row.tx_date,
+    units: Number(row.tx_units),
+  };
+}
+
 /**
  * Fetch all unit-based investments with their buy/gift/sell transactions,
  * compute holding windows, and return a structured map.
@@ -170,29 +230,8 @@ export function sanitizeIsolatedSpikes(points) {
  */
 export async function getInvestmentsWithHoldingWindows() {
   const result = await query(
-    `SELECT
-       i.id,
-       i.asset_class,
-       i.currency,
-       i.price_provider,
-       i.price_provider_id,
-       i.symbol,
-       i.price_provider_url,
-       i.price_provider_latest_url,
-       i.price_provider_latest_path,
-       i.price_provider_history_url,
-       i.price_provider_history_path,
-       i.price_provider_history_ts_path,
-       i.price_provider_history_price_path,
-       pt.id   AS tx_id,
-       pt.type AS tx_type,
-       to_char(pt.date::date, 'YYYY-MM-DD') AS tx_date,
-       COALESCE(pt.units, 0) AS tx_units
-     FROM investments i
-     JOIN portfolio_transactions pt
-       ON pt.investment_id = i.id
-      AND pt.type IN ('buy', 'gift', 'sell')
-     WHERE i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
+    `${HOLDING_WINDOW_SELECT}
+     WHERE ${HOLDING_ASSET_CLASS_FILTER}
      ORDER BY i.id, pt.date, pt.id`,
     []
   );
@@ -205,31 +244,12 @@ export async function getInvestmentsWithHoldingWindows() {
 
     if (!investmentMap.has(invId)) {
       investmentMap.set(invId, {
-        investment: {
-          id: invId,
-          asset_class: row.asset_class,
-          currency: row.currency,
-          price_provider: row.price_provider,
-          price_provider_id: row.price_provider_id,
-          symbol: row.symbol,
-          price_provider_url: row.price_provider_url,
-          price_provider_latest_url: row.price_provider_latest_url,
-          price_provider_latest_path: row.price_provider_latest_path,
-          price_provider_history_url: row.price_provider_history_url,
-          price_provider_history_path: row.price_provider_history_path,
-          price_provider_history_ts_path: row.price_provider_history_ts_path,
-          price_provider_history_price_path: row.price_provider_history_price_path,
-        },
+        investment: mapRowToInvestment(row),
         transactions: [],
       });
     }
 
-    investmentMap.get(invId).transactions.push({
-      id: Number(row.tx_id),
-      type: row.tx_type,
-      date: row.tx_date,
-      units: Number(row.tx_units),
-    });
+    investmentMap.get(invId).transactions.push(mapRowToHoldingTx(row));
   }
 
   // Compute holding windows per investment
@@ -252,30 +272,9 @@ export async function getInvestmentsWithHoldingWindows() {
  */
 async function getInvestmentWithHoldingWindows(investmentId) {
   const result = await query(
-    `SELECT
-       i.id,
-       i.asset_class,
-       i.currency,
-       i.price_provider,
-       i.price_provider_id,
-       i.symbol,
-       i.price_provider_url,
-       i.price_provider_latest_url,
-       i.price_provider_latest_path,
-       i.price_provider_history_url,
-       i.price_provider_history_path,
-       i.price_provider_history_ts_path,
-       i.price_provider_history_price_path,
-       pt.id   AS tx_id,
-       pt.type AS tx_type,
-       to_char(pt.date::date, 'YYYY-MM-DD') AS tx_date,
-       COALESCE(pt.units, 0) AS tx_units
-     FROM investments i
-     JOIN portfolio_transactions pt
-       ON pt.investment_id = i.id
-      AND pt.type IN ('buy', 'gift', 'sell')
+    `${HOLDING_WINDOW_SELECT}
      WHERE i.id = $1
-       AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
+       AND ${HOLDING_ASSET_CLASS_FILTER}
      ORDER BY pt.date, pt.id`,
     [Number(investmentId)]
   );
@@ -283,29 +282,8 @@ async function getInvestmentWithHoldingWindows(investmentId) {
   const rows = result.rows || [];
   if (rows.length === 0) return null;
 
-  const firstRow = rows[0];
-  const investment = {
-    id: Number(firstRow.id),
-    asset_class: firstRow.asset_class,
-    currency: firstRow.currency,
-    price_provider: firstRow.price_provider,
-    price_provider_id: firstRow.price_provider_id,
-    symbol: firstRow.symbol,
-    price_provider_url: firstRow.price_provider_url,
-    price_provider_latest_url: firstRow.price_provider_latest_url,
-    price_provider_latest_path: firstRow.price_provider_latest_path,
-    price_provider_history_url: firstRow.price_provider_history_url,
-    price_provider_history_path: firstRow.price_provider_history_path,
-    price_provider_history_ts_path: firstRow.price_provider_history_ts_path,
-    price_provider_history_price_path: firstRow.price_provider_history_price_path,
-  };
-
-  const transactions = rows.map((row) => ({
-    id: Number(row.tx_id),
-    type: row.tx_type,
-    date: row.tx_date,
-    units: Number(row.tx_units),
-  }));
+  const investment = mapRowToInvestment(rows[0]);
+  const transactions = rows.map(mapRowToHoldingTx);
 
   const holdingWindows = computeHoldingWindows(transactions);
   if (holdingWindows.length === 0) return null;

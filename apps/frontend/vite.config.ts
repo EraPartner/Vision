@@ -23,6 +23,11 @@ export default defineConfig(({ mode }) => ({
         alias: {
             "@": path.resolve(__dirname, "./src"),
         },
+        // decimal.js is imported both directly (src/utils/currency.ts) and
+        // transitively via @vision/shared-utils, which declares its own copy.
+        // Without deduping, Rollup emits two full copies (~12-13 KB gz each) into
+        // separate chunks (money-*.js and AIChatPage-*.js). Force a single module id.
+        dedupe: ['decimal.js'],
     },
     build: {
         outDir: "../../dist",
@@ -80,6 +85,16 @@ export default defineConfig(({ mode }) => ({
                     }
                     if (norm.includes('/lucide-react') || norm.includes('+lucide-react')) {
                         return 'icons';
+                    }
+                    // decimal.js is imported by two independent lazy chunks (the
+                    // shared-utils money chunk and AIChatPage). resolve.dedupe
+                    // collapses them to one module id, but Rollup still inlines a
+                    // full copy (~12-13 KB gz) into EACH async chunk rather than
+                    // pay an extra request for a shared one. A named chunk forces a
+                    // single shared copy; neither parent is in the boot graph, so
+                    // this loads on demand and never enters the initial preload.
+                    if (norm.includes('/decimal.js') || norm.includes('+decimal.js')) {
+                        return 'decimal';
                     }
                 },
             },

@@ -68,11 +68,11 @@ describe('materializedViewService', () => {
     // Each view's refresh is bracketed by SET 0 / RESET on its dedicated client.
     const firstRefreshIdx = clientSql.findIndex((sql) => sql.includes('REFRESH MATERIALIZED VIEW'));
     expect(firstRefreshIdx).toBeGreaterThan(-1);
-    expect(clientSql.filter((sql) => sql === 'SET statement_timeout = 0')).toHaveLength(4);
-    expect(clientSql.filter((sql) => sql === 'RESET statement_timeout')).toHaveLength(4);
+    expect(clientSql.filter((sql) => sql === 'SET statement_timeout = 0')).toHaveLength(3);
+    expect(clientSql.filter((sql) => sql === 'RESET statement_timeout')).toHaveLength(3);
     expect(clientSql[firstRefreshIdx - 1]).toBe('SET statement_timeout = 0');
     // Clients go back to the pool healthy (no destructive release).
-    expect(release).toHaveBeenCalledTimes(4);
+    expect(release).toHaveBeenCalledTimes(3);
     expect(release).not.toHaveBeenCalledWith(true);
   });
 
@@ -85,7 +85,7 @@ describe('materializedViewService', () => {
 
     query.mockImplementation(() => {
       callCount += 1;
-      if (callCount <= 4) {
+      if (callCount <= 3) {
         return new Promise((resolve) => {
           pendingResolvers.push(resolve);
         });
@@ -99,14 +99,14 @@ describe('materializedViewService', () => {
     // precede each REFRESH statement.
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(3);
 
     pendingResolvers.forEach((resolve) => resolve({ rows: [] }));
     await firstRefresh;
 
     await vi.advanceTimersByTimeAsync(500);
 
-    expect(query).toHaveBeenCalledTimes(8);
+    expect(query).toHaveBeenCalledTimes(6);
   });
 
   it('debounces scheduleRefresh calls into one refresh', async () => {
@@ -122,7 +122,7 @@ describe('materializedViewService', () => {
     expect(query).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
   // TODO E20: trailing-only debounce let a steady mutation stream (< debounce
@@ -146,14 +146,14 @@ describe('materializedViewService', () => {
 
     // Crossing the 10s deadline flushes even though the last call was < 5s ago.
     await vi.advanceTimersByTimeAsync(step);
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(3);
 
     // The burst state resets: the next lone call waits the full trailing window again.
     scheduleRefresh();
     await vi.advanceTimersByTimeAsync(REFRESH_DEBOUNCE_MS - 1);
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(1);
-    expect(query).toHaveBeenCalledTimes(8);
+    expect(query).toHaveBeenCalledTimes(6);
   });
 
   it('creates materialized views and indexes in expected order', async () => {
@@ -167,34 +167,17 @@ describe('materializedViewService', () => {
     expect(sqlCalls.some((sql) => sql.includes('CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily'))).toBe(true);
-    expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances'))).toBe(true);
     expect(logger.info).toHaveBeenCalledWith('Materialized views ready');
   });
 
-  it('grains mv_bank_balances on (account_id, currency), not the bank_account string', async () => {
-    // Accounts rewrite Phase B (ADR-088): mv_bank_balances is the last derived
-    // object flipped off the bank_account string onto the account_id FK.
+  it('no longer creates the dead mv_bank_balances view (dropped — zero readers)', async () => {
     const { createMaterializedViews, query } = await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });
 
     await createMaterializedViews();
 
     const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    const createSql = sqlCalls.find((sql) =>
-      sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances'));
-    const indexSql = sqlCalls.find((sql) =>
-      sql.includes('CREATE UNIQUE INDEX IF NOT EXISTS mv_bank_balances_idx'));
-
-    expect(createSql).toBeDefined();
-    // Grouped by the FK + currency, joined to accounts for the compat label.
-    expect(createSql).toMatch(/JOIN accounts a ON a\.id = t\.account_id/);
-    expect(createSql).toMatch(/GROUP BY t\.account_id, a\.name, t\.currency/);
-    expect(createSql).toMatch(/a\.name AS bank_account/);
-    // No longer groups on / requires the raw bank_account string.
-    expect(createSql).not.toMatch(/GROUP BY bank_account/);
-
-    expect(indexSql).toBeDefined();
-    expect(indexSql).toMatch(/mv_bank_balances \(account_id, currency\)/);
+    expect(sqlCalls.some((sql) => sql.includes('mv_bank_balances'))).toBe(false);
   });
 
   it('ensures indexes and warns when one creation fails', async () => {
@@ -208,7 +191,7 @@ describe('materializedViewService', () => {
 
     await ensureMaterializedViewIndexes();
 
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(3);
     expect(logger.warn).toHaveBeenCalledWith(
       'Could not create index mv_cashflow_daily_idx on mv_cashflow_daily',
       { error: 'index create denied' }

@@ -15,6 +15,7 @@
 import { query, withTransaction } from '../database/connection.js';
 import { resolveTransferMatches } from './calculations/transfers.js';
 import { scheduleAggregationRefresh } from './aggregationRefresh.js';
+import { invalidateStatisticsCaches } from '../routes/info/_cache.js';
 import { logger } from '../config/logger.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
@@ -297,6 +298,10 @@ let reconcileTimer;
 let reconcileDeadline = null; // epoch ms the current burst must flush by
 
 export function scheduleReconcile() {
+  // Transaction CRUD funnels here (the reconcile itself is debounced). Drop the
+  // statistics-pivot cache immediately so an edited/added/deleted transaction is
+  // reflected on the next statistics request rather than after the reconcile tail.
+  invalidateStatisticsCaches();
   const now = Date.now();
   if (reconcileTimer) clearTimeout(reconcileTimer);
   if (reconcileDeadline === null) reconcileDeadline = now + RECONCILE_MAX_WAIT_MS;

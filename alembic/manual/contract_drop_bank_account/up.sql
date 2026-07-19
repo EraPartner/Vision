@@ -9,7 +9,7 @@
 -- Run only AFTER:
 --   1. the dual-write soak holds (the guard below also enforces it), AND
 --   2. all read/write code is off the string (see README "Decouple checklist"), AND
---   3. mv_bank_balances + its consumers are switched to account_id.
+--   3. mv_bank_balances is gone (dropped as a dead view — migration 0082).
 --
 -- Wrapped in a single transaction: if the soak guard raises, nothing is dropped.
 
@@ -32,25 +32,12 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Redefine mv_bank_balances on account_id; keep a `bank_account` output column
---    (derived from accounts.name) so read-side consumers stay source-compatible.
---    NOTE: services/materializedViewService.js must be updated to this same
---    definition so the next boot recreates it correctly (it CREATEs IF NOT EXISTS).
+-- 2. Drop mv_bank_balances if it still exists. It was a dead view (zero readers;
+--    ADR-094-wrong Σ(amount) semantics) removed from the managed set and dropped
+--    by migration 0082, so on a HEAD-migrated DB this is already a no-op — kept
+--    here only to cover a DB that predates 0082 and to keep the string retirement
+--    self-contained. (Nothing to recreate; the account-balance reads run live SQL.)
 DROP MATERIALIZED VIEW IF EXISTS mv_bank_balances;
-CREATE MATERIALIZED VIEW mv_bank_balances AS
-  SELECT t.account_id,
-         a.name AS bank_account,
-         t.currency,
-         COUNT(*)       AS transaction_count,
-         MIN(t.date)    AS first_transaction,
-         MAX(t.date)    AS last_transaction,
-         SUM(t.amount)  AS balance
-    FROM transactions t
-    JOIN accounts a ON a.id = t.account_id
-   WHERE t.is_active = true AND t.account_id IS NOT NULL
-   GROUP BY t.account_id, a.name, t.currency
-   ORDER BY a.name;
-CREATE UNIQUE INDEX mv_bank_balances_idx ON mv_bank_balances (account_id, currency);
 
 -- 3. Drop the ADR-088 dual-write trigger + function (migration 0051) — the string
 --    is gone, so there is nothing left to sync from.

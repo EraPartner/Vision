@@ -8,6 +8,7 @@
 
 import { query, getClient } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { invalidateStatisticsCaches } from '../routes/info/_cache.js';
 
 /**
  * Run one maintenance statement with the pool-wide 30s statement_timeout
@@ -41,7 +42,6 @@ const MATERIALIZED_VIEWS = [
   'mv_monthly_summary',
   'mv_category_totals',
   'mv_cashflow_daily',
-  'mv_bank_balances',
 ];
 
 /**
@@ -81,8 +81,8 @@ export async function createMaterializedViews() {
     ON mv_monthly_summary (month_start, currency, category_id_key)
   `);
 
-  // 2-4. Category totals, daily cashflow, and bank balances are fully independent
-  //      of each other — create them in parallel.
+  // 2-3. Category totals and daily cashflow are fully independent of each other —
+  //      create them in parallel.
   await Promise.all([
     // 2. Category totals (all-time)
     query(`
@@ -125,31 +125,6 @@ export async function createMaterializedViews() {
       CREATE UNIQUE INDEX IF NOT EXISTS mv_cashflow_daily_idx
       ON mv_cashflow_daily (date, currency)
     `)),
-
-    // 4. Bank account balances (running totals). Grained on (account_id, currency)
-    //    per ADR-088 / D2 — the last reader flipped off the bank_account string.
-    //    `a.name AS bank_account` is kept as an output label so read-side consumers
-    //    stay source-compatible while the string column is retired. Matches
-    //    alembic/manual/contract_drop_bank_account/up.sql step 2.
-    query(`
-      CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances AS
-      SELECT
-        t.account_id,
-        a.name AS bank_account,
-        t.currency,
-        COUNT(*) AS transaction_count,
-        MIN(t.date) AS first_transaction,
-        MAX(t.date) AS last_transaction,
-        SUM(t.amount) AS balance
-      FROM transactions t
-      JOIN accounts a ON a.id = t.account_id
-      WHERE t.is_active = true AND t.account_id IS NOT NULL
-      GROUP BY t.account_id, a.name, t.currency
-      ORDER BY a.name
-    `).then(() => query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS mv_bank_balances_idx
-      ON mv_bank_balances (account_id, currency)
-    `)),
   ]);
 
   logger.info('Materialized views ready');
@@ -177,14 +152,9 @@ export async function ensureMaterializedViewIndexes() {
       view: 'mv_cashflow_daily',
       columns: `(date, currency)`,
     },
-    {
-      name: 'mv_bank_balances_idx',
-      view: 'mv_bank_balances',
-      columns: `(account_id, currency)`,
-    },
   ];
 
-  // All three indexes are on independent views — create them in parallel
+  // All indexes are on independent views — create them in parallel
   await Promise.all(
     indexes.map(({ name, view, columns }) =>
       query(`CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`).catch(err => {
@@ -202,6 +172,10 @@ let refreshQueued = false;
  * Coalesces rapid-fire calls (e.g. bulk import) into a single refresh.
  */
 export async function refreshMaterializedViews() {
+  // Bulk imports invalidate via this path (refreshAggregations →
+  // refreshMaterializedViews); clear the statistics-pivot cache so it doesn't
+  // serve pre-import figures for the TTL.
+  invalidateStatisticsCaches();
   if (refreshInFlight) {
     refreshQueued = true;
     return;
@@ -273,6 +247,11 @@ let debounceTimer = null;
 let debounceDeadline = null; // epoch ms the current burst must flush by
 
 export function scheduleRefresh() {
+  // Category/recipient renames, single-row imports, the DB editor, and the
+  // transaction-reconcile tail all reach here — clear the statistics-pivot cache
+  // synchronously (the MV refresh itself is debounced, but the cache must drop
+  // now so the next statistics request recomputes against the mutated data).
+  invalidateStatisticsCaches();
   const now = Date.now();
   if (debounceTimer) clearTimeout(debounceTimer);
   if (debounceDeadline === null) debounceDeadline = now + REFRESH_MAX_WAIT_MS;

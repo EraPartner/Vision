@@ -3629,7 +3629,7 @@ export interface components {
             source_filename?: string;
             source_size_bytes?: number;
             /** @enum {string} */
-            status: "pending" | "staging" | "validating" | "matching" | "committing" | "complete" | "failed" | "aborted" | "awaiting_review";
+            status: "pending" | "staging" | "validating" | "matching" | "committing" | "complete" | "complete_with_errors" | "failed" | "aborted" | "awaiting_review";
             rows_total: number;
             rows_imported: number;
             rows_duplicate: number;

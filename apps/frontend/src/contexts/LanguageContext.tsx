@@ -31,17 +31,6 @@ const loaders: Record<Language, () => Promise<{ default: Record<string, string> 
 
 const englishLoader = loaders.en;
 
-// Kick the fallback (English) dictionary fetch off at module-evaluation time so
-// the chunk request overlaps the entry bundle's execution + React mount, instead
-// of only starting after first commit — this removes the raw-key flash on cold
-// boot (keys like `nav.dashboard` rendering literally until the dict arrives).
-const enDictPromise: Promise<Record<string, string>> = englishLoader()
-    .then((mod) => mod.default)
-    .catch((err) => {
-        logger.error('Failed to preload fallback locale "en":', err);
-        return {} as Record<string, string>;
-    });
-
 // Language mirrored to localStorage on the previous session (server value still
 // wins on hydration). Reading it synchronously lets a non-English user warm the
 // active locale chunk during entry execution rather than waiting behind the
@@ -54,6 +43,25 @@ function readCachedLanguage(): Language {
     }
 }
 const cachedLanguage = readCachedLanguage();
+
+// Kick the active dictionary fetch off at module-evaluation time so the chunk
+// request overlaps the entry bundle's execution + React mount instead of only
+// starting after first commit — this shrinks the raw-key flash on cold boot.
+//
+// en is preloaded ONLY when it is the active locale. Every non-en locale has
+// full key parity with en (CI-enforced by validate-locales), so en is never
+// consulted as a fallback for it — eagerly downloading the ~50 KB gz en dict for
+// a Dutch user was pure waste. Non-en users warm their own locale below instead.
+const enDictPromise: Promise<Record<string, string>> | null =
+    cachedLanguage === 'en'
+        ? englishLoader()
+            .then((mod) => mod.default)
+            .catch((err) => {
+                logger.error('Failed to preload locale "en":', err);
+                return {} as Record<string, string>;
+            })
+        : null;
+
 if (cachedLanguage !== 'en') {
     // Fire-and-forget: warms Vite's module cache so the later effect-driven
     // import resolves from cache instead of a fresh request.
@@ -103,7 +111,11 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
     const [dicts, setDicts] = useState<Partial<Record<Language, Record<string, string>>>>({});
 
     useEffect(() => {
-        if (dicts.en) return;
+        // Only populated when en is the active locale (preloaded above). For a
+        // non-en locale enDictPromise is null and en is never loaded as a
+        // fallback — the active locale has full key parity, and the
+        // language-keyed effect below loads en on demand if the user switches.
+        if (dicts.en || !enDictPromise) return;
         let cancelled = false;
         void enDictPromise.then((en) => {
             if (!cancelled) setDicts((prev) => (prev.en ? prev : { ...prev, en }));

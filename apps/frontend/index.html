@@ -9,7 +9,24 @@
         name="description" />
     <meta content="Vision" name="author" />
 
-    <!-- Prevent flash by setting preferred theme before React mounts -->
+    <!-- Prevent flash-of-light before first paint. This MUST be a plain inline
+         script: a `type="module"` script (even /src/theme-flash.ts) is folded into
+         the deferred main bundle in a production build, so it runs only after the
+         ~300 KB boot graph executes — too late to stop the flash. Keep this in sync
+         with theme-flash.ts's class toggle (localStorage key `vision_theme`). -->
+    <script>
+      (function () {
+        try {
+          document.documentElement.classList.toggle(
+            'dark', localStorage.getItem('vision_theme') !== 'light'
+          );
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+    <!-- Palette VARIANT (accent colors only — does not affect the light/dark base
+         that causes the flash) is applied here; deferred bundling is acceptable. -->
     <script src="/src/theme-flash.ts" type="module"></script>
 </head>
 

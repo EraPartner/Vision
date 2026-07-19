@@ -9,16 +9,16 @@
  * (statement_balance − computed_balance), per-account net worth, and the
  * rebalance available-cash input.
  *
- * Switching wholesale to Σ(amount) (as `mv_bank_balances` does) would instead
- * drop the opening balance, because the bank's stamped balance embeds all
- * activity prior to the first imported row while Σ(amount) only sums the rows
- * we actually hold.
+ * Switching wholesale to a plain Σ(amount) would instead drop the opening
+ * balance, because the bank's stamped balance embeds all activity prior to the
+ * first imported row while Σ(amount) only sums the rows we actually hold. (This
+ * is exactly why the old all-time-Σ `mv_bank_balances` view was ADR-094-wrong
+ * and has since been dropped.)
  *
  * This reconciles both: anchor on the most recent stamped bank balance (which
  * embeds the opening balance), then add the amounts of every active row posted
  * strictly after that anchor (the unstamped trade/manual/brokerage activity).
- * When nothing is stamped at all, it falls back to the full Σ(amount), matching
- * `mv_bank_balances`.
+ * When nothing is stamped at all, it falls back to the full Σ(amount).
  *
  * The lateral always returns exactly one row (so a LEFT JOIN never drops the
  * account) exposing a single `balance` column. The account must be aliased `a`.

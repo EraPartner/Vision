@@ -1296,24 +1296,6 @@ CREATE TABLE public.transactions (
 
 
 --
--- Name: mv_bank_balances; Type: MATERIALIZED VIEW; Schema: public; Owner: -
---
-
-CREATE MATERIALIZED VIEW public.mv_bank_balances AS
- SELECT bank_account,
-    currency,
-    count(*) AS transaction_count,
-    min(date) AS first_transaction,
-    max(date) AS last_transaction,
-    sum(amount) AS balance
-   FROM public.transactions t
-  WHERE ((is_active = true) AND (bank_account IS NOT NULL))
-  GROUP BY bank_account, currency
-  ORDER BY bank_account
-  WITH NO DATA;
-
-
---
 -- Name: planned_transaction_executions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3941,13 +3923,6 @@ CREATE INDEX idx_wise_transfer_id ON public.wise_raw_transactions USING btree (t
 --
 
 CREATE INDEX ix_instrument_provider_map_provider_symbol ON public.instrument_provider_map USING btree (provider, provider_symbol);
-
-
---
--- Name: mv_bank_balances_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX mv_bank_balances_idx ON public.mv_bank_balances USING btree (bank_account, currency);
 
 
 --

@@ -1254,7 +1254,7 @@ components:
           type: integer
         status:
           type: string
-          enum: [pending, staging, validating, matching, committing, complete, failed, aborted, awaiting_review]
+          enum: [pending, staging, validating, matching, committing, complete, complete_with_errors, failed, aborted, awaiting_review]
         rows_total:
           type: integer
         rows_imported:

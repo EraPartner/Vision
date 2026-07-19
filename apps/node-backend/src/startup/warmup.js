@@ -67,7 +67,7 @@ async function pruneOldImportBatches() {
     try {
       const result = await query(
         `DELETE FROM ${table}
-          WHERE status IN ('complete', 'failed', 'aborted')
+          WHERE status IN ('complete', 'complete_with_errors', 'failed', 'aborted')
             AND started_at < now() - ($1 || ' days')::interval`,
         [String(IMPORT_RETENTION_DAYS)],
       );

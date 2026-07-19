@@ -1,5 +1,7 @@
--- ROLLBACK for up.sql — restore transactions/planned_transactions.bank_account,
--- the dual-write trigger, and the bank_account-keyed mv_bank_balances.
+-- ROLLBACK for up.sql — restore transactions/planned_transactions.bank_account
+-- and the dual-write trigger. mv_bank_balances is intentionally NOT restored: it
+-- was a dead view (zero readers) dropped for good by migration 0082, independent
+-- of the string column, so bringing it back would only re-create an orphan.
 --
 -- Lossless: accounts.name was backfilled from these same strings, so the values
 -- re-derive exactly. Mirrors alembic/versions/0056 + the pre-contract MV. Run
@@ -52,20 +54,5 @@ DROP TRIGGER IF EXISTS trg_planned_transactions_account_sync ON planned_transact
 CREATE TRIGGER trg_planned_transactions_account_sync
     BEFORE INSERT OR UPDATE ON planned_transactions
     FOR EACH ROW EXECUTE FUNCTION sync_account_id_from_bank_account();
-
--- 3. Restore mv_bank_balances on bank_account (the pre-contract definition).
-DROP MATERIALIZED VIEW IF EXISTS mv_bank_balances;
-CREATE MATERIALIZED VIEW mv_bank_balances AS
-  SELECT bank_account,
-         t.currency,
-         COUNT(*)      AS transaction_count,
-         MIN(t.date)   AS first_transaction,
-         MAX(t.date)   AS last_transaction,
-         SUM(t.amount) AS balance
-    FROM transactions t
-   WHERE t.is_active = true AND bank_account IS NOT NULL
-   GROUP BY bank_account, t.currency
-   ORDER BY bank_account;
-CREATE UNIQUE INDEX mv_bank_balances_idx ON mv_bank_balances (bank_account, currency);
 
 COMMIT;

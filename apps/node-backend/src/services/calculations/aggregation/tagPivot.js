@@ -8,6 +8,7 @@
 import { tagInsightsRepository } from '../../../repositories/infoRepositoryTags.js';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
+import { withStatisticsCache, statsKeyPart } from './_statisticsCache.js';
 
 export async function computeTagPivot({
   targetCurrency = 'EUR',
@@ -17,15 +18,19 @@ export async function computeTagPivot({
   tagIds = undefined,
   allTags = false,
 } = {}) {
-  const data = await tagInsightsRepository.getTagPivot(targetCurrency, {
-    bucket,
-    startDate,
-    endDate,
-    tagIds,
-    allTags,
+  const key = `tag|${targetCurrency}|b:${bucket}|s:${startDate || ''}|e:${endDate || ''}`
+    + `|ti:${statsKeyPart(tagIds)}|all:${allTags ? 1 : 0}`;
+  return withStatisticsCache(key, async () => {
+    const data = await tagInsightsRepository.getTagPivot(targetCurrency, {
+      bucket,
+      startDate,
+      endDate,
+      tagIds,
+      allTags,
+    });
+    assertNoNaN(data, 'computeTagPivot');
+    return buildEnvelope(data, { source: 'live' });
   });
-  assertNoNaN(data, 'computeTagPivot');
-  return buildEnvelope(data, { source: 'live' });
 }
 
 export default { computeTagPivot };

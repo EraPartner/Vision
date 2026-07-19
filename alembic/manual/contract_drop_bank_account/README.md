@@ -20,7 +20,8 @@ here as a **manually-run script**, applied in lockstep with the decoupled code.
    SELECT count(*) FROM planned_transactions WHERE bank_account IS NOT NULL AND account_id IS NULL;  -- must be 0
    ```
 2. **All read/write code is off the string** (see checklist below) and deployed.
-3. **`mv_bank_balances` + its consumers are switched to `account_id`** (code, not just the MV).
+3. **`mv_bank_balances` is dropped** — it was a dead view (zero readers) removed for good by
+   migration 0082; nothing here needs it switched to `account_id` any more.
 
 ## Apply / roll back
 
@@ -28,7 +29,7 @@ here as a **manually-run script**, applied in lockstep with the decoupled code.
 # Apply (after the preconditions). Wrapped in a transaction; aborts if the soak guard fails.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f alembic/manual/contract_drop_bank_account/up.sql
 
-# Roll back (re-adds the column, re-derives from accounts.name, restores the trigger + MV).
+# Roll back (re-adds the column, re-derives from accounts.name, restores the trigger).
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f alembic/manual/contract_drop_bank_account/down.sql
 ```
 
@@ -49,12 +50,12 @@ recipient's IBANs and are unrelated to `transactions.bank_account`. Files that t
 `services/recipientMergeService.js`, `repositories/importBatchRepository.js`,
 `repositories/accountRepository.js`, `backup/coverage.js`.
 
-### 1. Materialized view (do first — coupled to `up.sql` step 2)
-- `services/materializedViewService.js` — change the `mv_bank_balances` definition to the
-  `account_id`-grouped form in `up.sql` (label `a.name AS bank_account` kept for read compat).
-- Consumers: `services/reports/sections/bankBalances.js`, `repositories/infoRepositoryBanks.js`
-  (and the `getBankBalances` aggregation) — verify they read `bank_account`/`account_id` from the
-  new MV shape.
+### 1. Materialized view — already done (migration 0082)
+- `mv_bank_balances` was a dead view (zero readers) and has been dropped: removed from
+  `services/materializedViewService.js`'s managed set and dropped by migration 0082. Nothing
+  reads it, so there is no consumer to switch. The account-balance / bank-balances reads
+  (`repositories/infoRepositoryBanks.js`, the `getBankBalances` aggregation) already run live SQL,
+  not the MV. `up.sql` step 2 is now just a defensive `DROP … IF EXISTS`.
 
 ### 2. Reads — derive the label from `account_id`
 `repositories/transactionRepository.js`, `repositories/plannedTransactionRepository.js`,
