@@ -130,7 +130,7 @@ describe("OnboardingWizard", () => {
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
-        expect(await screen.findByRole("heading", { name: /you're all set/i })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: /setup complete/i })).toBeInTheDocument();
         // Click the "Transactions" feature tile
         await user.click(screen.getByRole("button", { name: /transactions.*view, filter/i }));
         expect(onComplete).toHaveBeenCalled();
