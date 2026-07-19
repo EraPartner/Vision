@@ -129,6 +129,18 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     searchSuggestions,
 }: VirtualDataTableProps<T>) {
     const { t } = useLanguage();
+    // Coarse pointers (touch) can't reliably double-click and iOS Safari never
+    // fires `contextmenu` on long-press, so the mouse-only row actions are dead
+    // on touch. Detect a coarse pointer once and enable single-tap "open".
+    // Guarded for jsdom/SSR (no matchMedia) → false, keeping the desktop
+    // double-click path unchanged in tests and on fine pointers.
+    const isCoarsePointer = useMemo(
+        () =>
+            typeof window !== "undefined" &&
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(pointer: coarse)").matches,
+        [],
+    );
     const isServerSort = !!onSortChange;
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, unknown>>({});
@@ -405,6 +417,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     // Virtualizer
     const parentRef = useRef<HTMLDivElement>(null);
+    // Header lives in its own horizontal scroller separate from the body. On
+    // narrow viewports the body can scroll horizontally while the header stays
+    // put; drive the header's scrollLeft from the body's scroll to keep them in
+    // sync. Only the body writes to the header (one-way) so there's no feedback
+    // loop — the header has no onScroll handler writing back.
+    const headerScrollRef = useRef<HTMLDivElement>(null);
     const loadRequestedForLengthRef = useRef<number | null>(null);
     const virtualizer = useVirtualizer({
         count: processedRows.length,
@@ -595,7 +613,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 aria-colcount={columns.length + (hasEditableColumns ? 1 : 0)}
             >
                 {/* Sticky header */}
-                <div className="overflow-x-auto border-b border-border" role="rowgroup">
+                <div ref={headerScrollRef} className="overflow-x-auto border-b border-border" role="rowgroup">
                     <div className="flex items-center bg-muted/50 min-h-[40px]" role="row">
                         {columns.map((col) => {
                             const width = columnWidths[col.key];
@@ -684,6 +702,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     className="overflow-auto"
                     style={{ maxHeight: `${maxHeight}px` }}
                     role="rowgroup"
+                    onScroll={(e) => {
+                        // Mirror horizontal scroll onto the header (one-way).
+                        const header = headerScrollRef.current;
+                        if (header) header.scrollLeft = e.currentTarget.scrollLeft;
+                    }}
                 >
                     {processedRows.length === 0 ? (
                         // A `rowgroup` must contain a `row`, and a `row` must contain a
@@ -733,7 +756,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     : -1
                                                 : undefined
                                         }
-                                        className={cn("flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset", isEditing && "bg-primary/5", onRowDoubleClick && "cursor-pointer")}
+                                        className={cn("flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset", isEditing && "bg-primary/5", onRowDoubleClick && "cursor-pointer", rowsInteractive && "touch-manipulation")}
                                         style={{
                                             position: "absolute",
                                             top: 0,
@@ -748,6 +771,20 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 startEditing(sourceIndex, row);
                                             }
                                         }}
+                                        // Coarse pointers can't double-click reliably, so a single
+                                        // tap performs the OPEN action only (never inline-edit, never
+                                        // destructive) — matching Enter's `onRowOpen ?? onRowDoubleClick`.
+                                        // Fine pointers keep double-click-only behavior unchanged.
+                                        // Guard against taps on interactive cell content (buttons,
+                                        // links, inputs, menus) so those still do their own thing.
+                                        onClick={isCoarsePointer && rowsInteractive ? (e) => {
+                                            if (isEditing) return;
+                                            const openAction = onRowOpen ?? onRowDoubleClick;
+                                            if (!openAction) return;
+                                            const target = e.target as HTMLElement;
+                                            if (target.closest('button, a, input, select, textarea, label, [role="button"], [role="menuitem"], [role="checkbox"], [contenteditable="true"]')) return;
+                                            openAction(row, sourceIndex);
+                                        } : undefined}
                                         onKeyDown={rowsInteractive ? (e) => {
                                             // Don't hijack keys while typing in an inline-edit field.
                                             if (e.target !== e.currentTarget) return;
