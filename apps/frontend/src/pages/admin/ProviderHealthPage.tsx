@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
@@ -123,7 +124,7 @@ export default function ProviderHealthPage() {
     const qc = useQueryClient();
     const [probingSet, setProbingSet] = useState<Set<string>>(new Set());
 
-    const { data: providers, isLoading } = useQuery({
+    const { data: providers, isLoading, error } = useQuery({
         queryKey: ['admin', 'provider-health'],
         queryFn: getProviderHealth,
         staleTime: 30_000,
@@ -163,6 +164,8 @@ export default function ProviderHealthPage() {
                 title={t('admin.providers.title')}
                 description={t('admin.providers.description')}
             />
+
+            {error && <AdminErrorState error={error} fallbackMessage={t('admin.providers.loadError')} />}
 
             <Card className="glass-chrome">
                 <CardHeader>

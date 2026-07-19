@@ -5,6 +5,7 @@ import { Database, HardDrive, RefreshCw, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/shared/PageHeader';
+import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { numberFormatToLocale } from '@/utils/currency';
 import { formatDateTimeWithAppSettings } from '@/components/shared/dateUtils';
@@ -209,15 +210,7 @@ export default function DbMaintenancePage() {
             </div>
 
             {/* Error state */}
-            {error && (
-                <Card className="!border-destructive/60 bg-destructive/5">
-                    <CardContent className="pt-6">
-                        <p className="text-sm text-destructive">
-                            {t('dbMaintenance.loadError')}: {(error as Error).message}
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
+            {error && <AdminErrorState error={error} fallbackMessage={t('dbMaintenance.loadError')} />}
 
             {/* Table stats */}
             <Card className="glass-chrome">
