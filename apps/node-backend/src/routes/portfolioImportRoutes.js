@@ -451,7 +451,10 @@ router.post('/batches/:id/commit', async (req, res) => {
   const batchId = parseBatchIdParam(req);
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
-  if (!['awaiting_review', 'matching'].includes(batch.status)) {
+  // 'complete_with_errors' re-opens for a repair pass: the user fixes the errored
+  // rows (override → reset to matched) and re-commits; commit only drains 'matched'
+  // rows, so already-committed rows are untouched and only the repaired ones import.
+  if (!['awaiting_review', 'matching', 'complete_with_errors'].includes(batch.status)) {
     throw new ValidationError(`Batch ${batchId} is not in a reviewable state (status: ${batch.status})`);
   }
 

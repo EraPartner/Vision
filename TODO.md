@@ -299,7 +299,7 @@ look-changing one.
   - Identical buy already on the Degiro account → importing the same-shaped IBKR buy drops it as duplicate → IBKR position under-counted. Two identical same-day fills / equal same-day deposits: the second is always dropped.
   - Fix: include `account_id` (and currency) in both predicates; consider an order-reference column for legitimate same-day duplicates.
 
-- [ ] **Commit errors strand staging rows permanently; batch still marked `complete`** 🔼 🔎 verified-present 2026-07-11
+- [x] **Commit errors strand staging rows permanently; batch still marked `complete`** 🔼 ✅ 2026-07-19 (new `complete_with_errors` batch status (migration 0081 widens the CHECK) — `commitPortfolioImport` now branches on whether any `error` staging row remains instead of unconditionally writing `complete`, so a partially-failed batch stays flagged and reviewable; `overrideInvestment` resets an `error` row → `matched` and clears its message when pointed at a holding (and decrements `rows_error` so counts don't exceed `rows_total`), giving the repair path; the commit route re-accepts `complete_with_errors` for a re-commit that only drains the repaired `matched` rows; warmup prune + openapi enum + regenerated FE types updated to know the status)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `portfolioImportPipeline/index.js:66-72` (status `'complete'` unconditional) + `portfolioImportBatchRepository.js:100-108` (`overrideInvestment` only touches `status='matched'`; `commitBatch` only drains `'matched'`)
   - E.g. brokerage batch committed with account unset → every cash row errors (`commit.js:76-79`) → batch `'complete'`, no repair path; full re-upload then dedups the already-imported trades, confusing counts further.
