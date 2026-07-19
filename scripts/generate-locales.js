@@ -35,7 +35,8 @@ function normalizeString(s) {
     .replace(/\u201C|\u201D|\u201F|\u2033/g, '"')
     .replace(/\u2026/g, '...')
     .replace(/\u2013/g, '-')
-    .replace(/\u2014/g, '--')
+    // U+2014 (em dash) is intentionally preserved: it is real UI typography,
+    // not a smart-quote parse hazard, and downstream (TS/JSON) carry it fine.
     .replace(/\u00A0/g, ' ')
     .replace(/\u00B7/g, '.')
     .replace(/\u2010|\u2011/g, '-')
