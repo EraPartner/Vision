@@ -1,5 +1,5 @@
 // @refresh reset
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -171,6 +171,17 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
     const goNext = () => { if (stepIdx < STEP_KEYS.length - 1) setStep(STEP_KEYS[stepIdx + 1]); };
     const goBack = () => { if (stepIdx > 0) setStep(STEP_KEYS[stepIdx - 1]); };
 
+    // Move focus to the current step's heading when the step changes so keyboard
+    // and screen-reader users land on the new content (the heading is
+    // tabIndex={-1} for programmatic focus only). Skip the initial mount so we
+    // don't fight the Dialog's own open-focus behaviour.
+    const headingRef = useRef<HTMLHeadingElement>(null);
+    const didMountRef = useRef(false);
+    useEffect(() => {
+        if (!didMountRef.current) { didMountRef.current = true; return; }
+        headingRef.current?.focus();
+    }, [step]);
+
     const handleImport = async () => {
         if (!file || !selectedBank) return;
         setImporting(true);
@@ -237,7 +248,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     </div>
                     <div className="flex items-center gap-2 mt-3">
                         {(() => { const StepIcon = STEPS[stepIdx].icon; return <StepIcon className="h-4 w-4 text-primary" />; })()}
-                        <span className="text-sm font-medium text-muted-foreground">
+                        <span aria-live="polite" className="text-sm font-medium text-muted-foreground">
                             {t('onboarding.stepOf', { n: String(stepIdx + 1), total: String(STEPS.length), label: STEPS[stepIdx].label })}
                         </span>
                     </div>
@@ -252,7 +263,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                             <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg">
                                 <Sparkles className="h-8 w-8 text-primary-foreground" />
                             </div>
-                            <h2 className="text-2xl font-bold text-foreground">{t('onboarding.welcome.title')}</h2>
+                            <h2 ref={headingRef} tabIndex={-1} className="text-2xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.welcome.title')}</h2>
                             <p className="text-muted-foreground max-w-md">{t('onboarding.welcome.desc')}</p>
                             <div className="flex gap-2 mt-2">
                                 <Badge variant="secondary" className="gap-1">
@@ -276,7 +287,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "overview" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.overview.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.overview.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.overview.desc')}</p>
                             </div>
                             <div className="flex flex-col gap-3 overflow-y-auto">
@@ -308,7 +319,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "bank" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.bank.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.bank.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.bank.desc')}</p>
                             </div>
                             {adaptersLoading ? (
@@ -342,7 +353,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "import" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.import.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.import.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">
                                     {t('onboarding.import.desc', { bank: selectedBank ? adapters.find(a => a.key === selectedBank)?.name || t('onboarding.import.yourBank') : t('onboarding.import.yourBank') })}
                                 </p>
@@ -376,7 +387,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "categories" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.categories.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.categories.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.categories.desc')}</p>
                             </div>
 
@@ -448,7 +459,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "tour" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.tour.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.tour.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.tour.desc')}</p>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -475,7 +486,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "backup" && (
                         <div className="flex-1 flex flex-col gap-5">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.backup.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.backup.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.backup.desc')}</p>
                             </div>
 

@@ -13,6 +13,17 @@ async function openSheet(user: ReturnType<typeof userEvent.setup>) {
     await user.click(trigger);
 }
 
+/**
+ * Fill the income step's required gross-annual-income field. The dialog now gates
+ * forward navigation on this being > 0, so any test that walks past the income
+ * step must provide it first.
+ */
+async function fillGrossIncome(user: ReturnType<typeof userEvent.setup>) {
+    const input = await screen.findByLabelText(/gross annual income/i);
+    await user.clear(input);
+    await user.type(input, "50000");
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("TaxProfileDialog", () => {
@@ -91,6 +102,9 @@ describe("TaxProfileDialog", () => {
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Income details")).toBeInTheDocument();
 
+        // Income step now requires a gross annual income before advancing.
+        await fillGrossIncome(user);
+
         // Step 2 → 3 (income sources)
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Taxable income sources")).toBeInTheDocument();
@@ -114,6 +128,7 @@ describe("TaxProfileDialog", () => {
         await screen.findByText("Employment type");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
+        await fillGrossIncome(user);
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Taxable income sources");
         await user.click(screen.getByRole("button", { name: /next/i }));
@@ -136,6 +151,7 @@ describe("TaxProfileDialog", () => {
         await screen.findByText("Employment type");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
+        await fillGrossIncome(user);
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Taxable income sources");
         await user.click(screen.getByRole("button", { name: /next/i }));
@@ -157,9 +173,13 @@ describe("TaxProfileDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<TaxProfileDialog />);
 
-        // Act — open sheet, then click the Region step indicator
+        // Act — open sheet, advance to income and satisfy its required field so a
+        // forward jump is permitted (jumping past an incomplete step is blocked).
         await openSheet(user);
         await screen.findByText("Employment type");
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        await screen.findByText("Income details");
+        await fillGrossIncome(user);
 
         // Step indicator buttons render the translated step label on sm+ screens;
         // use the visible text "Region" in the indicator nav area
@@ -169,6 +189,48 @@ describe("TaxProfileDialog", () => {
 
         // Assert — jumps directly to region step
         expect(await screen.findByText("Region & communal surcharge")).toBeInTheDocument();
+    });
+
+    it("blocks jumping forward past an incomplete step, redirecting to it", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog />);
+
+        // Act — from the (valid) employment step, try to jump straight to Region.
+        // Income has no gross-income yet, so the forward jump is refused and the
+        // dialog lands the user on the incomplete income step instead.
+        await openSheet(user);
+        await screen.findByText("Employment type");
+        const stepButtons = await screen.findAllByRole("button", { name: /region/i });
+        await user.click(stepButtons[0]);
+
+        // Assert — redirected to income, not region
+        expect(await screen.findByText("Income details")).toBeInTheDocument();
+        expect(screen.queryByText("Region & communal surcharge")).not.toBeInTheDocument();
+    });
+
+    it("blocks advancing past the income step until gross income is provided", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog />);
+
+        // Act — reach the income step and try to advance with no income
+        await openSheet(user);
+        await screen.findByText("Employment type");
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        await screen.findByText("Income details");
+        await user.click(screen.getByRole("button", { name: /next/i }));
+
+        // Assert — still on income (advancement blocked)
+        expect(screen.getByText("Income details")).toBeInTheDocument();
+        expect(screen.queryByText("Taxable income sources")).not.toBeInTheDocument();
+
+        // Act — provide income, then advancing works
+        await fillGrossIncome(user);
+        await user.click(screen.getByRole("button", { name: /next/i }));
+
+        // Assert
+        expect(await screen.findByText("Taxable income sources")).toBeInTheDocument();
     });
 
     it("initialStep prop opens directly to the specified step", async () => {

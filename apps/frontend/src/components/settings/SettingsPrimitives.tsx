@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import {
@@ -75,6 +75,8 @@ interface SettingRowProps {
     description?: ReactNode;
     /** Associates the title <Label> with a control's id for click-to-focus. */
     htmlFor?: string;
+    /** Gives the title <Label> an id so a control can reference it via aria-labelledby. */
+    labelId?: string;
     /**
      * 'row' (default): title/description left, control right — for switches and
      * compact selects. 'stack': control sits full-width below the title — for
@@ -113,10 +115,13 @@ export function SelectSettingRow({
     triggerAriaLabel,
     children,
 }: SelectRowConfig) {
+    // Give the Radix SelectTrigger (role=combobox) an accessible name by pointing
+    // it at the row's title <Label> — comboboxes otherwise announce only their value.
+    const labelId = useId();
     return (
-        <SettingRow title={title} description={description} layout="stack">
+        <SettingRow title={title} description={description} labelId={labelId} layout="stack">
             <Select value={value} onValueChange={onValueChange}>
-                <SelectTrigger aria-label={triggerAriaLabel}><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-labelledby={labelId} aria-label={triggerAriaLabel}><SelectValue /></SelectTrigger>
                 <SelectContent>
                     {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
@@ -130,6 +135,7 @@ export function SettingRow({
     title,
     description,
     htmlFor,
+    labelId,
     layout = 'row',
     destructive,
     children,
@@ -138,6 +144,7 @@ export function SettingRow({
     const heading = (
         <div className="space-y-0.5">
             <Label
+                id={labelId}
                 htmlFor={htmlFor}
                 className={cn(
                     'text-sm font-medium',

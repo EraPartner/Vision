@@ -2738,6 +2738,8 @@ const nl: Record<string, string> = {
   'tax.profile.step.region': 'Regio',
   'tax.profile.title': 'Belgisch belastingprofiel',
   'tax.profile.trigger': 'Belastingprofiel',
+  'tax.profile.validation.actualExpensesRequired': 'Vul je werkelijke beroepskosten in voordat je verdergaat.',
+  'tax.profile.validation.grossIncomeRequired': 'Vul je bruto jaarinkomen in voordat je verdergaat.',
   'tax.realized': 'Gerealiseerd',
   'tax.recordedFees': 'Geregistreerde kosten',
   'tax.recordedTaxes': 'Geregistreerde belastingen',

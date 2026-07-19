@@ -2738,6 +2738,8 @@ const en: Record<string, string> = {
   'tax.profile.step.region': 'Region',
   'tax.profile.title': 'Belgian Tax Profile',
   'tax.profile.trigger': 'Tax Profile',
+  'tax.profile.validation.actualExpensesRequired': 'Enter your actual professional expenses before continuing.',
+  'tax.profile.validation.grossIncomeRequired': 'Enter your gross annual income before continuing.',
   'tax.realized': 'Realized',
   'tax.recordedFees': 'Recorded fees',
   'tax.recordedTaxes': 'Recorded taxes',

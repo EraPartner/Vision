@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Settings, ChevronRight, ChevronLeft, Check, User, Landmark, MapPin, Users, ListChecks, History, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { useBelgianTaxProfile, type BelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
@@ -99,17 +100,75 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
     const isFirst = stepIdx === 0;
     const isLast = stepIdx === STEPS.length - 1;
 
+    // Per-step required-field validation. Returns a user-facing error message when
+    // the step's required fields are missing/invalid, or null when the step is OK.
+    // Only the income step has hard requirements: a positive gross annual income,
+    // and — when the "actual expenses" deduction method is chosen — a positive
+    // actual-expenses amount. The other steps have valid defaults for every field.
+    const stepError = useCallback(
+        (s: Step): string | null => {
+            if (s === 'income') {
+                if (!((profile.grossAnnualIncome ?? 0) > 0)) {
+                    return t('tax.profile.validation.grossIncomeRequired');
+                }
+                if (
+                    profile.professionalExpenseMethod === 'actual' &&
+                    !((profile.actualProfessionalExpenses ?? 0) > 0)
+                ) {
+                    return t('tax.profile.validation.actualExpensesRequired');
+                }
+            }
+            return null;
+        },
+        [profile.grossAnnualIncome, profile.professionalExpenseMethod, profile.actualProfessionalExpenses, t],
+    );
+
+    // Index of the earliest invalid step strictly before `targetIdx`, or -1 if all
+    // are valid. Used to block forward navigation past an incomplete step.
+    const firstInvalidStepBefore = useCallback(
+        (targetIdx: number): number => {
+            for (let i = 0; i < targetIdx; i++) {
+                if (stepError(STEPS[i])) return i;
+            }
+            return -1;
+        },
+        [stepError],
+    );
+
     function next() {
-        if (!isLast) setStep(STEPS[stepIdx + 1]);
-        else {
-            // For historical edits, the snapshot is already "configured" by definition —
-            // setting `profileConfigured` again is a no-op patch, which is fine.
-            updateProfile({ profileConfigured: true });
-            setOpen(false);
+        // Block leaving the current step until its required fields are valid.
+        const err = stepError(step);
+        if (err) { toast.error(err); return; }
+        if (!isLast) { setStep(STEPS[stepIdx + 1]); return; }
+        // Final step → save. Guard against reaching here (e.g. via initialStep or
+        // tab jumps) with an earlier step still incomplete.
+        const bad = firstInvalidStepBefore(STEPS.length - 1);
+        if (bad !== -1) {
+            toast.error(stepError(STEPS[bad])!);
+            setStep(STEPS[bad]);
+            return;
         }
+        // For historical edits, the snapshot is already "configured" by definition —
+        // setting `profileConfigured` again is a no-op patch, which is fine.
+        updateProfile({ profileConfigured: true });
+        setOpen(false);
     }
     function prev() {
         if (!isFirst) setStep(STEPS[stepIdx - 1]);
+    }
+
+    // Tab navigation: going back to an earlier/current step is always free; jumping
+    // forward is only allowed once every step in between has its required fields.
+    function goToStep(target: Step) {
+        const targetIdx = STEPS.indexOf(target);
+        if (targetIdx <= stepIdx) { setStep(target); return; }
+        const bad = firstInvalidStepBefore(targetIdx);
+        if (bad !== -1) {
+            toast.error(stepError(STEPS[bad])!);
+            setStep(STEPS[bad]);
+            return;
+        }
+        setStep(target);
     }
 
     function handleOpenChange(o: boolean) {
@@ -145,7 +204,7 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
                         return (
                             <div key={s} className="flex items-center flex-1">
                                 <button
-                                    onClick={() => setStep(s)}
+                                    onClick={() => goToStep(s)}
                                     className={cn(
                                         'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors',
                                         active && 'bg-primary text-primary-foreground',
