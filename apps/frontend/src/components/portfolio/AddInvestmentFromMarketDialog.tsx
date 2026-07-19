@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { isUnitBased } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useAccounts } from '@/hooks/useAccounts';
@@ -43,7 +43,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   const [step, setStep] = useState<'choose' | 'new' | 'transaction'>('choose');
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const { addInvestment, addTransaction } = usePortfolio();
+  const { addInvestment, addTransaction, isAddingInvestment, isAddingTransaction } = usePortfolio();
 
   const today = todayYmd();
   const todayLabel = formatDateWithAppSettings(new Date(), appSettings.dateFormat);
@@ -331,7 +331,10 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
               <Button type="button" variant="outline" onClick={() => setStep('choose')}>
                 {t('addInv.back')}
               </Button>
-              <Button type="submit">{t('addInv.create')}</Button>
+              <Button type="submit" disabled={isAddingInvestment}>
+                {isAddingInvestment && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('addInv.create')}
+              </Button>
             </DialogFooter>
           </form>
         )}
@@ -376,7 +379,10 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
               <Button type="button" variant="outline" onClick={() => setStep('choose')}>
                 {t('addInv.back')}
               </Button>
-              <Button type="submit">{t('addPortTxn.record')}</Button>
+              <Button type="submit" disabled={isAddingTransaction}>
+                {isAddingTransaction && <Loader2 className="h-4 w-4 animate-spin" />}
+                {t('addPortTxn.record')}
+              </Button>
             </DialogFooter>
           </form>
         )}

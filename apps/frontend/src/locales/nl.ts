@@ -2922,6 +2922,7 @@ const nl: Record<string, string> = {
   'txPage.delete.desc': 'Weet u zeker dat u "{desc}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.',
   'txPage.delete.title': 'Transactie verwijderen',
   'txPage.deleteAttachment': 'Bijlage verwijderen',
+  'txPage.deleteAttachment.desc': 'Weet u zeker dat u "{name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.',
   'txPage.detailsTitle': 'Transactiedetails',
   'txPage.empty': 'Geen transacties gevonden',
   'txPage.emptySearch': 'Geen transacties komen overeen met uw zoekopdracht.',

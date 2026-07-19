@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, Trash2, Upload, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
     listAttachments,
     uploadAttachment,
@@ -91,6 +92,7 @@ function AttachmentRow({
 export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
     const { t } = useLanguage();
     const queryClient = useQueryClient();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -129,12 +131,21 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
         e.target.value = "";
     }
 
-    function handleDelete(id: number) {
+    async function handleDelete(id: number) {
+        const target = attachments.find((a) => a.id === id);
+        const ok = await confirm({
+            title: t('txPage.deleteAttachment'),
+            description: t('txPage.deleteAttachment.desc', { name: target?.filename ?? '' }),
+            confirmLabel: t('common.delete'),
+            variant: 'destructive',
+        });
+        if (!ok) return;
         setDeletingId(id);
         deleteMutation.mutate(id);
     }
 
     return (
+        <>
         <div className="space-y-2">
             <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-muted-foreground">
@@ -199,5 +210,7 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
                 />
             ))}
         </div>
+        <ConfirmDialog />
+        </>
     );
 }

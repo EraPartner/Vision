@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2 } from 'lucide-react';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { toast } from 'sonner';
 import type { InvestmentSummary } from '@/types/portfolio';
@@ -22,7 +23,7 @@ interface Props {
 
 export function EditInvestmentDialog({ investment, trigger }: Props) {
   const { t } = useLanguage();
-  const { updateInvestment } = usePortfolio();
+  const { updateInvestment, isUpdatingInvestment } = usePortfolio();
   const [open, setOpen] = useState(false);
 
   const initialForm = () => ({
@@ -155,7 +156,10 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-            <Button type="submit">{t('common.save')}</Button>
+            <Button type="submit" disabled={isUpdatingInvestment}>
+              {isUpdatingInvestment && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t('common.save')}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -2920,6 +2920,7 @@
   "txPage.delete.desc": "Are you sure you want to delete \"{desc}\"? This action cannot be undone.",
   "txPage.delete.title": "Delete Transaction",
   "txPage.deleteAttachment": "Delete attachment",
+  "txPage.deleteAttachment.desc": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
   "txPage.detailsTitle": "Transaction Details",
   "txPage.empty": "No transactions found",
   "txPage.emptySearch": "No transactions match your search.",

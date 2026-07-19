@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Loader2 } from 'lucide-react';
 import { toYmd } from '@/components/shared/dateUtils';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useAccounts } from '@/hooks/useAccounts';
@@ -48,7 +49,7 @@ interface Props {
 
 export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Props) {
   const { t } = useLanguage();
-  const { updateTransaction } = usePortfolio();
+  const { updateTransaction, isUpdatingTransaction } = usePortfolio();
   const [open, setOpen] = useState(false);
 
   const unitBased = isUnitBased(investment.assetClass);
@@ -205,7 +206,10 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-            <Button type="submit">{t('common.save')}</Button>
+            <Button type="submit" disabled={isUpdatingTransaction}>
+              {isUpdatingTransaction && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t('common.save')}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
