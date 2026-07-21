@@ -4000,7 +4000,7 @@ look-changing one.
   - No digest pin, no cosign/sigstore check — contrast with the separate shell-updater path in the same file, which does checksum + SHA256 verification correctly. A compromised registry/pipeline would silently propagate to every running instance.
   - Fix: pin `APP_IMAGE_TAG` to a digest resolved from release metadata, and/or `cosign verify` before `compose up`.
 
-- [ ] **Bun version `1.3.14` is hardcoded in 12 workflow steps with no single source of truth** 🔽 🔎 verified-present 2026-07-11
+- [x] **Bun version `1.3.14` is hardcoded in 12 workflow steps with no single source of truth** 🔽 ✅ 2026-07-21 · 4a671a3 (#92) (re-verified: all three workflows (ci/release/e2e) now use the composite `.github/actions/setup` action — no direct `setup-bun` remains — and the version literal lives only in that action's `bun-version` default. Single source of truth achieved via the composite action rather than a `.bun-version` file; marker was just never stamped)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/ci.yml` (9×), `release.yml` (2×), `e2e.yml:38` — a Bun upgrade requires editing 12 sites; missing one gives version-skewed CI (e.g. release building with a different Bun than CI tested).
   - Fix: commit a `.bun-version` file and switch every `setup-bun` step to `bun-version-file: .bun-version`.
@@ -4040,12 +4040,12 @@ look-changing one.
   - `docker-compose.yml:61-73` — the health-gate removal is sound, but dropping `depends_on` entirely means `docker compose up app` / `docker compose up -d app --build` (a natural iterate-on-app command) starts only the app, which crash-loops on `getaddrinfo db` until the user figures out db was never created.
   - Fix: add `depends_on: { db: { condition: service_started } }` — keeps the parallel-start win, restores dependency creation.
 
-- [ ] **Postgres runs with the default 64 MB `/dev/shm`** 🔽 🔎 verified-present 2026-07-11
+- [x] **Postgres runs with the default 64 MB `/dev/shm`** 🔽 ✅ 2026-07-21 · 55d9364 (#93) (re-verified: `shm_size: 256mb` present on the db service in both `docker-compose.yml` and `packaging/electron/resources/docker-compose.yml`; marker was just never stamped)
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `docker-compose.yml:2-19` — no `shm_size:` on the db service; parallel workers / matview refreshes (this app refreshes finance-aggregation matviews) on a grown DB can abort with `could not resize shared memory segment … No space left on device`. The app container is covered (`--disable-dev-shm-usage` in `puppeteerRenderer.js:29`), the db is not.
   - Fix: add `shm_size: 256mb` to the db service in both root and packaged compose (sync rule applies).
 
-- [ ] **No container log rotation — unbounded json-file growth on an always-on self-host** 🔽 🔎 verified-present 2026-07-11
+- [x] **No container log rotation — unbounded json-file growth on an always-on self-host** 🔽 ✅ 2026-07-21 · 55d9364 (#93) (re-verified: `logging:` json-file driver with `max-size`/`max-file` limits present on both services in both `docker-compose.yml` and the packaged compose; marker was just never stamped)
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `docker-compose.yml:2-73`, `packaging/electron/resources/docker-compose.yml` — neither service sets `logging:` limits; the backend logs structured JSON per request/boot and postgres logs too, so a long-lived packaged install grows daemon logs indefinitely unless the user configured the daemon globally.
   - Fix: add `logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }` to both services in both compose files.
@@ -4223,7 +4223,7 @@ look-changing one.
   - Version lives in root `package.json:4` (1.0.2), `packaging/electron/package.json:3` (1.0.2, enforced pair per `.claude/rules/packaging.md`), plus stale/unenforced copies: `apps/frontend/package.json:3` and `apps/node-backend/package.json:3` (both 1.0.0) and `openapi.yaml:5` ("1.0"). The release.yml verify job (lines 75-90) catches a mismatch only after the tag is pushed — failure means delete/re-tag churn; there is no `version:bump` script and no CHANGELOG `[Unreleased]` → section automation.
   - Fix: add a `bun run version:bump <ver>` script that edits both enforced files (and optionally rolls the CHANGELOG heading) in one step.
 
-- [ ] **scripts/ contains unwired one-off tools and a committed generated report** ⏬ 🔎 verified-present 2026-07-11
+- [x] **scripts/ contains unwired one-off tools and a committed generated report** ⏬ ✅ 2026-07-21 · 4a671a3 (#92) (re-verified: all three unwired scripts (`auto-translate-nl.js`, `auto-translate-nl-pass2.js`, `locales-capitalizer.js`) and the committed `locales-capitalizer-report.json` are deleted from the tree; marker was just never stamped)
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
   - `scripts/auto-translate-nl.js`, `scripts/auto-translate-nl-pass2.js`, `scripts/locales-capitalizer.js` are referenced by no package.json script, workflow, hook, or docs page (`scripts.md` omits them); `scripts/locales-capitalizer-report.json` is a generated output artifact committed next to the tooling. Dead tools invite running against current locale sources they may no longer match.
   - Fix: delete them (git history keeps them) or document them in `docs/reference/scripts.md` with a "one-off, verify before reuse" note; drop the report JSON.
