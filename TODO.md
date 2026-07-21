@@ -4203,7 +4203,7 @@ look-changing one.
   - `Dockerfile:114-115` — the HEALTHCHECK is defined, but plain Docker (non-Swarm) takes no action on `unhealthy`; a hung-but-alive backend (event-loop stall, deadlocked pool) stays down until manual intervention since `restart: unless-stopped` only fires on exit.
   - Fix: accept and document, or have the Electron orchestrator poll container health and restart on sustained `unhealthy`.
 
-- [ ] **Entrypoint boot-trace resolution is whole seconds — `%N` unsupported on busybox/musl** ⏬ 🔎 verified-present 2026-07-11
+- [x] **Entrypoint boot-trace resolution is whole seconds — `%N` unsupported on busybox/musl** ⏬ ✅ 2026-07-21 (replaced both `date +%s.%N` reads (which busybox/alpine renders with empty nanoseconds → the ms metric quantized to 0/1000) with `cut -d' ' -f1 /proc/uptime` — seconds.centiseconds, real ~10ms resolution on the Linux container, falling back to 0 off-Linux so a local run emits a harmless 0ms rather than a bogus value. `sh -n` valid; simulated delta emits real sub-second ms.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `docker-entrypoint.sh:9,25-28` — verified in `oven/bun:1-alpine`: `date +%s.%N` prints `1783030579.` (empty nanoseconds), so `entrypoint_total` ms is quantized to 0/1000, making the startup metric useless for its stated charting purpose.
   - Fix: use `%s%3N`-capable coreutils, or drop sub-second precision claims and measure entrypoint time from the bun side instead.

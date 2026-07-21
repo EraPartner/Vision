@@ -6,7 +6,11 @@ set -e
 
 # Boot trace: emit total entrypoint duration so the Electron orchestrator and
 # CI can chart container init. Disable with VISION_BOOT_TRACE=0.
-BOOT_T0=$(date +%s.%N)
+# NB: busybox `date +%N` is empty on the alpine base image, which quantized this
+# metric to whole seconds. Read seconds.centiseconds from /proc/uptime instead for
+# a real sub-second delta; fall back to 0 off-Linux (e.g. a local mac run) so the
+# trace is a harmless 0ms rather than bogus.
+BOOT_T0=$(cut -d' ' -f1 /proc/uptime 2>/dev/null || echo 0)
 
 echo "[entrypoint] Starting Vision app container..."
 
@@ -23,7 +27,8 @@ cd /app
 # (apps/node-backend/src/database/migrate.js).
 
 if [ "$VISION_BOOT_TRACE" != "0" ]; then
-  TOTAL_MS=$(awk -v a="$(date +%s.%N)" -v b="$BOOT_T0" 'BEGIN{ printf("%d", (a-b)*1000) }')
+  BOOT_T1=$(cut -d' ' -f1 /proc/uptime 2>/dev/null || echo 0)
+  TOTAL_MS=$(awk -v a="$BOOT_T1" -v b="$BOOT_T0" 'BEGIN{ printf("%d", (a-b)*1000) }')
   echo "[startup] {\"phase\":\"entrypoint_total\",\"ms\":$TOTAL_MS}" >&2
 fi
 
