@@ -98,7 +98,10 @@ services:
       # refused. Remove this (and set ADMIN_AUTH_TOKEN) if you widen ports:.
       ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "true"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
-    # depends_on with service_healthy was removed intentionally.
+    # depends_on uses `condition: service_started`, NOT `service_healthy`. The
+    # strict health-gate was removed intentionally; service_started still creates
+    # the db container for partial targets like `docker compose up app` (which
+    # otherwise crash-loops on `getaddrinfo db`), without the serial delay.
     #
     # Docker's healthcheck gate forced a strict serial sequence:
     #   db starts → postgres init → healthcheck passes → THEN app starts
@@ -109,8 +112,12 @@ services:
     # isn't ready yet it waits. If it exhausts all attempts, Docker's
     # restart:unless-stopped policy will relaunch it automatically.
     #
-    # Both containers now start in parallel. The db healthcheck is kept
-    # so `docker ps` / monitoring tools can still report db readiness.
+    # Both containers now start together (service_started does not wait for the
+    # db healthcheck). The db healthcheck is kept so `docker ps` / monitoring
+    # tools can still report db readiness.
+    depends_on:
+      db:
+        condition: service_started
 
 volumes:
   postgres_data:

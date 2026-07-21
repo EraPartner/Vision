@@ -4035,7 +4035,7 @@ look-changing one.
   - `.github/workflows/release.yml:176-186,281-296` — `build-push-action` doesn't enable SBOM, and the dmg/zip get only self-hosted `.sha256` files (which an attacker who can replace the asset can also replace); no `actions/attest-build-provenance` for either.
   - Fix: add `provenance: mode=max` + `sbom: true` to the docker build and an `actions/attest-build-provenance` step (with `id-token: write`, `attestations: write`) for the mac artifacts.
 
-- [ ] **No `depends_on` at all — partial `up` targets never create the db container** 🔽 🔎 verified-present 2026-07-11
+- [x] **No `depends_on` at all — partial `up` targets never create the db container** 🔽 ✅ 2026-07-21 (added `depends_on: { db: { condition: service_started } }` to the app service in both `docker-compose.yml` and `packaging/electron/resources/docker-compose.yml`. `service_started` (not `service_healthy`) restores db-container creation for `docker compose up app` — which otherwise crash-loops on `getaddrinfo db` — without reintroducing the ~30s health-gate serial delay that was deliberately removed. Comments updated; YAML valid; the CI volume/name sync guard still passes.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `docker-compose.yml:61-73` — the health-gate removal is sound, but dropping `depends_on` entirely means `docker compose up app` / `docker compose up -d app --build` (a natural iterate-on-app command) starts only the app, which crash-loops on `getaddrinfo db` until the user figures out db was never created.
   - Fix: add `depends_on: { db: { condition: service_started } }` — keeps the parallel-start win, restores dependency creation.

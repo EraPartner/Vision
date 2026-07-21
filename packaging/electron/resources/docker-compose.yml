@@ -68,6 +68,11 @@ services:
       - vision_cache_data:/app/.vision-cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # condition: service_started (not service_healthy) — creates the db container
+    # for partial `up` targets without reintroducing the health-gate serial delay.
+    depends_on:
+      db:
+        condition: service_started
 
 volumes:
   postgres_data:
