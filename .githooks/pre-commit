@@ -52,7 +52,16 @@ if command -v gitleaks >/dev/null 2>&1; then
   fi
   [ "$fail" -eq 0 ] || echo "[pre-commit] FAIL: gitleaks flagged potential secrets (above)."
 else
-  echo "[pre-commit] gitleaks not found -- skipping secret scan (brew install gitleaks)."
+  echo "[pre-commit] =================================================================="
+  echo "[pre-commit] WARNING: gitleaks not installed -- staged changes were NOT scanned"
+  echo "[pre-commit]          for secrets locally. Install it: brew install gitleaks"
+  echo "[pre-commit]          (CI's secrets-scan job still gates, but local coverage is"
+  echo "[pre-commit]          off). Set REQUIRE_GITLEAKS=1 to make this a hard failure."
+  echo "[pre-commit] =================================================================="
+  if [ "${REQUIRE_GITLEAKS:-}" = "1" ]; then
+    echo "[pre-commit] FAIL: REQUIRE_GITLEAKS=1 but gitleaks is not installed."
+    fail=1
+  fi
 fi
 
 # --- 2. Leftover merge-conflict markers --------------------------------------
@@ -89,10 +98,12 @@ run_eslint() { # <workspace-dir> <fix|check> <newline-list of repo-relative path
     return 0
   fi
   _rel=$(printf '%s\n' "$_list" | sed "s#^${_ws}/##")
+  # NUL-delimit (newline -> NUL, then xargs -0) so paths containing spaces are
+  # passed as single args. `-0` (not `-d`) for BSD/macOS xargs compatibility.
   if [ "$_mode" = fix ]; then
-    printf '%s\n' "$_rel" | ( cd "$REPO_ROOT/$_ws" && xargs "$_bin" --fix --no-error-on-unmatched-pattern )
+    printf '%s' "$_rel" | tr '\n' '\0' | ( cd "$REPO_ROOT/$_ws" && xargs -0 "$_bin" --fix --no-error-on-unmatched-pattern )
   else
-    printf '%s\n' "$_rel" | ( cd "$REPO_ROOT/$_ws" && xargs "$_bin" --no-error-on-unmatched-pattern )
+    printf '%s' "$_rel" | tr '\n' '\0' | ( cd "$REPO_ROOT/$_ws" && xargs -0 "$_bin" --no-error-on-unmatched-pattern )
   fi
 }
 
@@ -105,7 +116,8 @@ lint_workspace() { # <workspace-dir> <path-filter-regex>
   echo "[pre-commit] eslint: ${_ws} ($(printf '%s\n' "$_staged" | grep -c .) file(s))"
   if [ -n "$_fix" ]; then
     run_eslint "$_ws" fix "$_fix" || fail=1
-    printf '%s\n' "$_fix" | xargs git add --   # re-stage anything --fix changed
+    # re-stage anything --fix changed (NUL-delimited for space-safe paths)
+    printf '%s' "$_fix" | tr '\n' '\0' | xargs -0 git add --
   fi
   if [ -n "$_check" ]; then
     echo "[pre-commit]   (partially-staged files checked only, not auto-fixed)"

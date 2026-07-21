@@ -4166,7 +4166,7 @@ look-changing one.
   - `config/gitleaks.toml:12-14` — a real secret ever committed to that specific file would be permanently masked from all future scans. Rest of the config is sane (`useDefault = true`, `.obsidian/` path allowlist, match-scoped placeholder regexes).
   - Fix: scope the allowlist to specific known placeholder patterns in that file instead of the whole path, or remove the allowlist and fix any current false positives directly.
 
-- [ ] **`.githooks/pre-commit` has a couple of robustness gaps: silent gitleaks degrade, `xargs` without `-0`** ⬇ 🔎 verified-present 2026-07-11
+- [x] **`.githooks/pre-commit` has a couple of robustness gaps: silent gitleaks degrade, `xargs` without `-0`** ⬇ ✅ 2026-07-21 (both fixed: the missing-gitleaks branch now prints a prominent multi-line WARNING (was a one-line hint) and honors an opt-in `REQUIRE_GITLEAKS=1` to fail closed — kept non-failing by default so fresh clones / gitleaks-less envs can still commit, and CI's secrets-scan job remains the hard gate; the three `printf '%s\n' … | xargs` sites now NUL-delimit via `tr '\n' '\0' | xargs -0` (`-0` not `-d`, for BSD/macOS xargs) so paths containing spaces are passed as single args. `sh -n`/`bash -n` valid; NUL-delimiting verified to keep `some dir/b file.ts` as one arg.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D3 (residue, closed 2026-07-03)_
   - `.githooks/pre-commit:54-55` — if `gitleaks` isn't installed locally, the hook prints a hint instead of failing, so a contributor without the binary gets no local secret-scan coverage at all and may not notice.
   - `.githooks/pre-commit:93,95,108` — pipes filenames through `xargs` without `-0`/`--null`, which breaks on filenames containing whitespace.
