@@ -15,6 +15,7 @@ import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { buildHistoricalRateIndex, findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
 import { buildInvestmentSummaryCore } from '@vision/shared-utils/portfolio';
 import { settingsRepository } from '../../repositories/settingsRepository.js';
+import { portfolioTransactionRepository } from '../../repositories/portfolioTransactionRepository.js';
 import { todayAppDateString } from '../../lib/timezone.js';
 import { toDecimal, addAll, multiply, divide, roundMoney } from '../../lib/money.js';
 
@@ -54,7 +55,7 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   const costBasisMethod = await resolveCostBasisMethod();
   const todayYmd = todayAppDateString();
 
-  const [investmentsResult, txnResult] = await Promise.all([
+  const [investmentsResult, txnRows] = await Promise.all([
     query(`
       SELECT i.*,
              COALESCE(i.currency, 'EUR') AS currency,
@@ -64,25 +65,11 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
       WHERE i.is_active = true
       ORDER BY i.name
     `),
-    query(`
-      SELECT pt.id, pt.investment_id, pt.type,
-             COALESCE(pt.amount, 0) AS amount,
-             COALESCE(pt.units, 0) AS units,
-             COALESCE(pt.fees, 0) AS fees,
-             COALESCE(pt.taxes, 0) AS taxes,
-             to_char(pt.date::date, 'YYYY-MM-DD') AS date,
-             COALESCE(pt.currency, i.currency, 'EUR') AS currency,
-             pt.fx_rate_to_eur,
-             pt.account_id
-      FROM portfolio_transactions pt
-      JOIN investments i ON i.id = pt.investment_id
-      WHERE i.is_active = true
-      ORDER BY pt.date::date, pt.id
-    `),
+    portfolioTransactionRepository.getRowsForPortfolioMath({ activeInvestmentsOnly: true }),
   ]);
 
   const txnsByInvestment = new Map();
-  for (const txn of txnResult.rows) {
+  for (const txn of txnRows) {
     const id = Number(txn.investment_id);
     if (!txnsByInvestment.has(id)) txnsByInvestment.set(id, []);
     txnsByInvestment.get(id).push(txn);
@@ -95,7 +82,7 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   const distinctCurrencies = [
     ...new Set([
       ...investmentsResult.rows.map((inv) => (inv.currency || 'EUR').toUpperCase()),
-      ...txnResult.rows.map((txn) => (txn.currency || 'EUR').toUpperCase()),
+      ...txnRows.map((txn) => (txn.currency || 'EUR').toUpperCase()),
     ]),
   ];
   const multiplierByCurrency = new Map();
@@ -112,7 +99,7 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   // transaction converts at the rate of ITS date — invested capital must not
   // move when today's rate does (the FX-attribution contract).
   const historicalIndex = await loadHistoricalRateIndex(distinctCurrencies, target);
-  annotateTransactionFxMultipliers(txnResult.rows, target, historicalIndex, multiplierByCurrency);
+  annotateTransactionFxMultipliers(txnRows, target, historicalIndex, multiplierByCurrency);
 
   const summaries = investmentsResult.rows.map((inv) =>
     buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target, multiplierByCurrency, {

@@ -149,6 +149,73 @@ export async function getById(id) {
   return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
 }
 
+/**
+ * Shared transaction loader for the portfolio math services (live summary and
+ * snapshot builder): every portfolio transaction joined to its investment, with
+ * the COALESCE defaults and calendar-day `to_char` date formatting both
+ * consumers rely on. Parameterized only on the axes the call sites differ on
+ * (active-investment filter, date window, within-day sell ordering).
+ *
+ * Rows are returned RAW — deliberately NOT passed through mapPortfolioTxRow.
+ * The math paths coerce numerics themselves (Number()/Decimal), the date is
+ * already emitted as a 'YYYY-MM-DD' string by to_char, and mapping here would
+ * change NULL handling mid-calculation (e.g. fx_rate_to_eur NULL → 0, which
+ * both consumers distinguish from a stamped rate).
+ *
+ * The transaction day is emitted under BOTH aliases (`date` and `day`) so each
+ * consumer keeps its historical field name; the duplicate column is harmless
+ * (same expression, no row-count effect).
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.activeInvestmentsOnly=false] restrict to transactions of active investments (i.is_active = true)
+ * @param {string} [options.dateFrom] inclusive YYYY-MM-DD lower bound on pt.date
+ * @param {string} [options.dateTo] inclusive YYYY-MM-DD upper bound on pt.date
+ * @param {boolean} [options.sellsLastWithinDay=false] replay ordering: sells after other types within the same day (snapshot day-walk); otherwise pt.date, pt.id
+ * @returns {Promise<object[]>} raw joined rows
+ */
+export async function getRowsForPortfolioMath({
+  activeInvestmentsOnly = false,
+  dateFrom,
+  dateTo,
+  sellsLastWithinDay = false,
+} = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (activeInvestmentsOnly) conditions.push('i.is_active = true');
+  if (dateFrom !== undefined) {
+    params.push(dateFrom);
+    conditions.push(`pt.date >= $${params.length}::date`);
+  }
+  if (dateTo !== undefined) {
+    params.push(dateTo);
+    conditions.push(`pt.date <= $${params.length}::date`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const orderBy = sellsLastWithinDay
+    ? `ORDER BY pt.date::date, CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END, pt.id`
+    : 'ORDER BY pt.date::date, pt.id';
+
+  const result = await query(`
+    SELECT pt.id, pt.investment_id, pt.type,
+           COALESCE(pt.amount, 0) AS amount,
+           COALESCE(pt.units, 0) AS units,
+           COALESCE(pt.fees, 0) AS fees,
+           COALESCE(pt.taxes, 0) AS taxes,
+           to_char(pt.date::date, 'YYYY-MM-DD') AS date,
+           to_char(pt.date::date, 'YYYY-MM-DD') AS day,
+           COALESCE(pt.currency, i.currency, 'EUR') AS currency,
+           pt.fx_rate_to_eur,
+           pt.account_id
+    FROM portfolio_transactions pt
+    JOIN investments i ON i.id = pt.investment_id
+    ${where}
+    ${orderBy}
+  `, params);
+  return result.rows;
+}
+
 const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = ['total_amount', 'total_units', 'total_fees', 'total_taxes'];
 
 export async function getSummary(investmentId) {
