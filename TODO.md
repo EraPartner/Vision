@@ -4238,7 +4238,7 @@ look-changing one.
   - `alembic/env.py:12-14` — one-line path drift between what the code actually loads and what's documented; worth clarifying to avoid confusion when debugging DB connection issues.
   - Fix: align the doc/comment with the actual load path, or move the load path to match documented convention.
 
-- [ ] **Minor packaging config nits** ⏬ 🔎 verified-present 2026-07-11
+- [x] **Minor packaging config nits** ⏬ ✅ 2026-07-21 (both sub-parts fixed: removed the invalid `"packageManager": "bun"` from packaging/electron/package.json (corepack needs `name@version`; root/apps don't set it, so removal is consistent); `demo-db/regenerate.sh` now resolves psql/pg_dump from an overridable `PGBIN` (default Homebrew postgresql@18) with a `command -v` PATH fallback so it runs on non-Homebrew hosts, plus a pg_dump existence check. JSON + `sh -n` validated.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
   - `packaging/electron/package.json:6` — `"packageManager": "bun"` is not a valid corepack value (must be `name@version`); breaks the build the day corepack is enabled on the runner.
   - `packaging/electron/demo-db/regenerate.sh:24` — `PGBIN` hardcoded to `/opt/homebrew/opt/postgresql@18/bin`; fails on any machine without that exact keg (no PATH fallback like the alembic resolution above it has).

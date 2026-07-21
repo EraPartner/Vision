@@ -21,16 +21,26 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 DEMO_DB_DIR="$REPO/packaging/electron/demo-db"
 OUT="$DEMO_DB_DIR/01-demo.sql"
-PGBIN="/opt/homebrew/opt/postgresql@18/bin"
 CTN="vision-demo-regen-$$"
 PORT="${REGEN_PORT:-55432}"
 URL="postgresql://ftm_user:ftm_password@localhost:${PORT}/financial_transactions"
 export PGPASSWORD=ftm_password
-PSQL="$PGBIN/psql"
-PGDUMP="$PGBIN/pg_dump"
+
+# Prefer the Homebrew postgresql@18 client (matches the demo DB's server major),
+# but fall back to whatever psql/pg_dump is on PATH so this also runs on
+# non-Homebrew hosts. Override PGBIN to point at a specific install.
+PGBIN="${PGBIN:-/opt/homebrew/opt/postgresql@18/bin}"
+if [ -x "$PGBIN/psql" ] && [ -x "$PGBIN/pg_dump" ]; then
+  PSQL="$PGBIN/psql"
+  PGDUMP="$PGBIN/pg_dump"
+else
+  PSQL="$(command -v psql || true)"
+  PGDUMP="$(command -v pg_dump || true)"
+fi
 
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker required"; exit 1; }
-[ -x "$PSQL" ] || { echo "ERROR: psql 18 not found at $PGBIN (brew install postgresql@18)"; exit 1; }
+[ -n "$PSQL" ] && [ -x "$PSQL" ] || { echo "ERROR: psql not found (set PGBIN or 'brew install postgresql@18')"; exit 1; }
+[ -n "$PGDUMP" ] && [ -x "$PGDUMP" ] || { echo "ERROR: pg_dump not found (set PGBIN or 'brew install postgresql@18')"; exit 1; }
 
 # Pick a working alembic: the repo venv if its interpreter resolves (it won't on the
 # host when the venv was built inside the devcontainer), else a system alembic that can
