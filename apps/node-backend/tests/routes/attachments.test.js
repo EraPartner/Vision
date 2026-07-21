@@ -14,6 +14,7 @@ vi.mock('express', () => ({
 
 vi.mock('../../src/services/attachmentRecordService.js', () => ({
   attachmentRepository: {
+    transactionExists: vi.fn(),
     create: vi.fn(),
     findById: vi.fn(),
     listByTransaction: vi.fn(),
@@ -33,17 +34,12 @@ vi.mock('../../src/middleware/validation.js', () => ({
   validateIdParam: vi.fn(),
 }));
 
-vi.mock('../../src/database/connection.js', () => ({
-  query: vi.fn(),
-}));
-
 vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
 import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
 import { storeAttachment, removeAttachmentFile, verifyAttachmentContent } from '../../src/services/attachmentService.js';
-import { query as dbQuery } from '../../src/database/connection.js';
 import { logger } from '../../src/config/logger.js';
 await import('../../src/routes/attachments.js');
 
@@ -56,7 +52,7 @@ describe('Attachment routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     verifyAttachmentContent.mockReturnValue('image/png');
-    dbQuery.mockResolvedValue({ rows: [{ id: 1 }] });
+    attachmentRepository.transactionExists.mockResolvedValue(true);
     storeAttachment.mockResolvedValue('attachments/1/receipt.png');
   });
 

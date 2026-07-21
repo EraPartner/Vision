@@ -175,6 +175,21 @@ export async function getHistoricalRateIndex(currencies) {
 }
 
 /**
+ * Latest stored exchange-rate rows (`is_latest = true`), one per currency,
+ * ordered by currency code. Returns the raw pg result — the /exchange-rates
+ * route owns response shaping (ADR-067: routes call services, never the
+ * database layer directly).
+ */
+export async function listLatestStoredRates() {
+  return query(`
+      SELECT currency_code, rate_to_eur, rate_date, fetched_at
+      FROM exchange_rates
+      WHERE is_latest = true
+      ORDER BY currency_code ASC
+    `);
+}
+
+/**
  * Fetch fresh rates from both sources, update DB, memory cache, and fallback map.
  * ECB is fetched first and takes priority; open.er-api fills in currencies ECB doesn't publish.
  * Called on startup and every 12 hours by the scheduler in main.js.
@@ -581,6 +596,7 @@ export default {
   convertToCurrency,
   convertWithRates,
   loadCurrentRates,
+  listLatestStoredRates,
   warmCache,
   clearMemoryCache,
   backfillPortfolioHistoricalRates,

@@ -22,6 +22,15 @@ function formatRow(row) {
 
 export const attachmentRepository = {
   /**
+   * Whether the parent transaction row exists. Upload guard — checked before
+   * the file is written to disk so a bad id 404s instead of orphaning a file.
+   */
+  async transactionExists(transactionId) {
+    const result = await query('SELECT id FROM transactions WHERE id = $1', [transactionId]);
+    return result.rows.length > 0;
+  },
+
+  /**
    * List all attachments for a transaction, newest first.
    */
   async listByTransaction(transactionId) {
