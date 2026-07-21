@@ -30,7 +30,13 @@ command -v bun >/dev/null 2>&1 || { echo "ERROR: bun not found (brew install bun
 # SKIP_DEMO_DATA_REGEN=1 to just re-bake the existing demo-db/01-demo.sql.
 if [ "${SKIP_DEMO_DATA_REGEN:-0}" != "1" ]; then
   echo "==> Regenerating synthetic dataset (demo-db/01-demo.sql) against the head schema..."
-  "$ELECTRON_DIR/demo-db/regenerate.sh" || echo "    WARN: regen failed — baking the existing 01-demo.sql instead."
+  # Abort on regen failure rather than silently baking a stale 01-demo.sql — a
+  # demo audit would otherwise run on last month's schema/data believing it's HEAD.
+  # Opt into baking the existing file explicitly with SKIP_DEMO_DATA_REGEN=1.
+  "$ELECTRON_DIR/demo-db/regenerate.sh" || {
+    echo "ERROR: demo dataset regen failed. Fix it, or re-run with SKIP_DEMO_DATA_REGEN=1 to bake the existing 01-demo.sql." >&2
+    exit 1
+  }
 fi
 echo "==> Building vision-demo-db:latest (synthetic data preloaded)..."
 docker build -t vision-demo-db:latest "$ELECTRON_DIR/demo-db"
@@ -60,8 +66,16 @@ APP_SRC="$(find_built_app \
 
 install_app_bundle "$APP_SRC" "$APP_DEST"
 # electron-builder skips signing (identity:null); arm64 needs at least an ad-hoc
-# signature or macOS refuses to launch it. Sign locally.
-codesign --force --deep -s - "$APP_DEST" 2>/dev/null || true
+# signature or macOS refuses to launch it. Sign locally and verify — swallowing a
+# codesign failure produces a "successfully installed" app that won't open.
+codesign --force --deep -s - "$APP_DEST" || {
+  echo "ERROR: ad-hoc codesign of $APP_DEST failed — the app would refuse to launch." >&2
+  exit 1
+}
+codesign --verify "$APP_DEST" || {
+  echo "ERROR: codesign verification failed for $APP_DEST — the app would refuse to launch." >&2
+  exit 1
+}
 
 # ── 5) Tear down any old demo stack so the new images + data take effect ───────
 # A fresh volume makes the demo DB re-run initdb and reload 01-demo.sql on the
