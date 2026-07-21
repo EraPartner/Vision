@@ -11,15 +11,59 @@
  *
  * Kept off the startup/boot path on purpose — a full re-fetch can be slow and is rate-limited.
  *
- * Usage: bun run quotes:densify
+ * Usage: bun run quotes:densify [--yes]
+ *   The operation WRITES to asset_price_history, so it confirms the target
+ *   database first. Pass --yes (or -y / --force) to skip the prompt in
+ *   automation; a non-interactive run without --yes aborts rather than writing
+ *   to the wrong environment unattended.
  * Requires network access to the price providers and a reachable database.
  */
 
+import { createInterface } from 'node:readline';
 import { backfillHoldingGaps } from '../src/services/quoteBackfillService.js';
 import { computeAndStoreSnapshots } from '../src/services/portfolioPerformanceSnapshotService.js';
 import { closePool } from '../src/database/connection.js';
 
+const args = new Set(process.argv.slice(2));
+const ASSUME_YES = args.has('--yes') || args.has('-y') || args.has('--force');
+
+/** Host:port/dbname of the target DB, credentials stripped, for the prompt. */
+function describeTargetDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) return 'the default local database (DATABASE_URL unset)';
+  try {
+    const u = new URL(url);
+    return `${u.host}${u.pathname}`;
+  } catch {
+    return 'the configured database';
+  }
+}
+
+/** Interactive y/N confirmation; false when there is no TTY to prompt on. */
+async function confirm(question) {
+  if (!process.stdin.isTTY) return false;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await new Promise((resolve) => rl.question(question, resolve));
+    return /^y(es)?$/i.test(answer.trim());
+  } finally {
+    rl.close();
+  }
+}
+
 async function main() {
+  if (!ASSUME_YES) {
+    console.log(`This re-fetches quotes and WRITES new rows into asset_price_history on:`);
+    console.log(`  ${describeTargetDb()}`);
+    const ok = await confirm('Proceed? [y/N] ');
+    if (!ok) {
+      console.log(process.stdin.isTTY
+        ? 'Aborted.'
+        : 'Aborted: no TTY to confirm on — re-run with --yes to proceed unattended.');
+      return;
+    }
+  }
+
   console.log('Densifying asset price history (gap-fill across all holding windows)…');
   const result = await backfillHoldingGaps();
   console.log(

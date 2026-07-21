@@ -4090,7 +4090,7 @@ look-changing one.
   - Same file: `curl | bash` bun installer (`:34`) and `bun install || true` swallowing install failures (`:49,:53`).
   - Fix: accept only a candidate whose `package.json` name is `vision`.
 
-- [ ] **`densify-asset-history.js` writes to the DB with no dry-run/confirmation gate** 🔽 🔎 verified-present 2026-07-11
+- [x] **`densify-asset-history.js` writes to the DB with no dry-run/confirmation gate** 🔽 ✅ 2026-07-21 (added a confirmation gate before the writes: the script now prints the target DB (host:port/dbname, credentials stripped) and asks `Proceed? [y/N]`. `--yes`/`-y`/`--force` skips the prompt for automation; a non-interactive run without `--yes` aborts *before* any fetch/write rather than hitting the wrong environment unattended. A true `--dry-run` was not taken — `backfillHoldingGaps` writes internally and threading a dry-run flag through it would be invasive; the confirmation gate satisfies the finding's OR. Manually verified: non-TTY + no --yes aborts before writing, password not printed.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D3 (residue, closed 2026-07-03)_
   - `apps/node-backend/scripts/densify-asset-history.js:24-33` — inserts into `asset_price_history` and recomputes snapshots with no `--dry-run` or confirmation prompt. Mitigated by the operation being additive-only and idempotent, but running it against the wrong environment gives no warning first. (`index-stats.js` and `check-precision-drift.js`, the other two scripts in the same directory, are read-only and clean.)
   - Fix: add a `--dry-run` flag or an explicit `--yes` confirmation gate before the writes.
