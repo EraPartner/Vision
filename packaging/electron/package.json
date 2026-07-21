@@ -50,10 +50,6 @@
         "to": "resources"
       }
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "EraPartner",
-      "repo": "Vision"
-    }
+    "publish": null
   }
 }
