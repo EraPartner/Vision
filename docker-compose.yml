@@ -1,11 +1,15 @@
-# ⚠️ REAL-DATA STACK. With no `name:` here, the compose project defaults to this
-# directory's basename → project `vision`, whose `postgres_data` volume
-# (vision_postgres_data) holds your real financial database — shared with the
-# packaged Vision.app and the dev stack (docker-compose.dev.yml).
+# ⚠️ REAL-DATA STACK. `name: vision` below pins the compose project to `vision`
+# regardless of this checkout's directory name (a clone/worktree named `vision-2`
+# would otherwise default to its basename and silently get a *fresh, empty* DB).
+# Its `postgres_data` volume (vision_postgres_data) holds your real financial
+# database — shared with the packaged Vision.app and the dev stack
+# (docker-compose.dev.yml). Matches packaging/electron/resources/docker-compose.yml.
 # DO NOT run `docker compose down -v` / `docker volume rm vision_postgres_data`
 # from this directory: it destroys that data (it did, on 2026-07-06). For e2e/CI
 # or clean-slate runs use an isolated project — e.g. `COMPOSE_PROJECT_NAME=vision_e2e`
-# (see .github/workflows/{ci,e2e}.yml) or docker-compose.clean.yml's separate volume.
+# (env var overrides `name:`; see .github/workflows/{ci,e2e}.yml) or
+# docker-compose.clean.yml's separate volume.
+name: vision
 services:
   db:
     image: postgres:18-alpine

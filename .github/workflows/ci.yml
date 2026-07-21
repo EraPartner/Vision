@@ -311,6 +311,19 @@ jobs:
           fi
           echo "Compose volume sync OK."
 
+      - name: Check compose project name matches between compose files
+        run: |
+          ROOT_NAME=$(awk '/^name:[[:space:]]/{print $2; exit}' docker-compose.yml)
+          ELECTRON_NAME=$(awk '/^name:[[:space:]]/{print $2; exit}' packaging/electron/resources/docker-compose.yml)
+          echo "Root name    : $ROOT_NAME"
+          echo "Electron name: $ELECTRON_NAME"
+          if [ -z "$ROOT_NAME" ] || [ "$ROOT_NAME" != "$ELECTRON_NAME" ]; then
+            echo "ERROR: compose 'name:' out of sync — both files must pin the same project name"
+            echo "(the shared vision_postgres_data volume depends on a stable project name)"
+            exit 1
+          fi
+          echo "Compose project name sync OK."
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Quality Gate — all quality checks must pass before Docker builds run.
   # Prevents wasting expensive Docker build time on broken commits.
