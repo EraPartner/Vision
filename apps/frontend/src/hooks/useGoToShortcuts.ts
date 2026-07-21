@@ -1,29 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { isTypingTarget } from "@/lib/keyboard";
-
-/** Gmail-style go-to sequences: press `g`, then a destination key.
- *  Shared with ShortcutsOverlay so the help sheet stays truthful. */
-export const GO_TO_ROUTES: ReadonlyArray<{ key: string; url: string; titleKey: string }> = [
-    { key: "d", url: "/", titleKey: "nav.dashboard" },
-    { key: "t", url: "/transactions", titleKey: "nav.transactions" },
-    { key: "s", url: "/statistics", titleKey: "nav.statistics" },
-    { key: "c", url: "/categories", titleKey: "nav.categories" },
-    { key: "r", url: "/recipients", titleKey: "nav.recipients" },
-    { key: "i", url: "/import", titleKey: "nav.importExport" },
-    { key: "p", url: "/portfolio", titleKey: "nav.portfolio" },
-    { key: "n", url: "/portfolio/net-worth", titleKey: "nav.netWorth" },
-    { key: "m", url: "/research/markets", titleKey: "nav.markets" },
-    { key: "a", url: "/ai-chat", titleKey: "nav.aiChat" },
-];
-
-/** The three workspace section roots, in left-to-right cycle order. `[` / `]`
- *  step between them; shared with ShortcutsOverlay so the help stays truthful. */
-export const SECTION_CYCLE: ReadonlyArray<{ url: string; titleKey: string }> = [
-    { url: "/", titleKey: "nav.budgeting" },
-    { url: "/portfolio", titleKey: "nav.portfolio" },
-    { url: "/research", titleKey: "nav.research" },
-];
+import { GO_TO_ROUTES, SECTION_CYCLE } from "@/lib/navigation";
 
 // Budgeting owns the root and every route that isn't portfolio/research
 // (admin included — it has no section root of its own).

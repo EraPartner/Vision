@@ -27,19 +27,18 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
-import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
 import { Keyboard, Calculator } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-    BUDGETING_PAGES,
-    PORTFOLIO_PAGES,
-    RESEARCH_PAGES,
-    ADMIN_PAGES,
-    type NavRoute as PaletteEntry,
-} from "@/lib/navRoutes";
+    ADMIN_NAV_ITEMS,
+    GO_TO_KEY_BY_URL,
+    PALETTE_SECTIONS,
+    WORKSPACE_AGNOSTIC_URLS,
+    type NavItem as PaletteEntry,
+} from "@/lib/navigation";
 
 interface PaletteQuote {
     symbol: string;
@@ -50,20 +49,8 @@ interface PaletteQuote {
     currency: string;
 }
 
-// The three always-visible nav groups render identically (heading + page
-// items with go-to hints), so they collapse to one map. Admin stays separate:
-// it is conditional and has no go-to hints.
-const NAV_SECTIONS: { headingKey: string; pages: PaletteEntry[] }[] = [
-    { headingKey: "nav.budgeting", pages: BUDGETING_PAGES },
-    { headingKey: "nav.portfolio", pages: PORTFOLIO_PAGES },
-    { headingKey: "nav.research", pages: RESEARCH_PAGES },
-];
-
-// url → go-to key, so palette entries display their keyboard sequence.
-const GO_TO_BY_URL = new Map(GO_TO_ROUTES.map((r) => [r.url, r.key]));
-
 function GoToHint({ url }: { url: string }) {
-    const key = GO_TO_BY_URL.get(url);
+    const key = GO_TO_KEY_BY_URL.get(url);
     if (!key) return null;
     return <CommandShortcut>G {key.toUpperCase()}</CommandShortcut>;
 }
@@ -235,11 +222,12 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
         onOpenChange(false);
         pushRecent(url);
         // Keep the sidebar workspace in sync with cross-workspace jumps.
+        // Workspace-agnostic pages (AI chat, Accounts) keep the current one.
         if (url.startsWith("/portfolio")) {
             setWorkspace("portfolio");
         } else if (url.startsWith("/research")) {
             setWorkspace("research");
-        } else if (url !== "/ai-chat") {
+        } else if (!WORKSPACE_AGNOSTIC_URLS.has(url)) {
             setWorkspace("budgeting");
         }
         navigate(url);
@@ -250,13 +238,13 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
         action();
     };
 
-    const adminPages: PaletteEntry[] = useMemo(
-        () => (appSettings.adminMode ? ADMIN_PAGES : []),
+    const adminPages: ReadonlyArray<PaletteEntry> = useMemo(
+        () => (appSettings.adminMode ? ADMIN_NAV_ITEMS : []),
         [appSettings.adminMode],
     );
 
     const allPages = useMemo(
-        () => [...BUDGETING_PAGES, ...PORTFOLIO_PAGES, ...RESEARCH_PAGES, ...adminPages],
+        () => [...PALETTE_SECTIONS.flatMap((s) => s.pages), ...adminPages],
         [adminPages],
     );
     const recentEntries = useMemo(
@@ -359,7 +347,10 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                         ))}
                     </CommandGroup>
                 )}
-                {NAV_SECTIONS.map(({ headingKey, pages }, idx) => (
+                {/* The always-visible nav sections render identically (heading +
+                    page items with go-to hints). Admin stays separate: it is
+                    conditional and has no go-to hints. */}
+                {PALETTE_SECTIONS.map(({ headingKey, pages }, idx) => (
                     <Fragment key={headingKey}>
                         {idx > 0 && <CommandSeparator />}
                         <CommandGroup heading={t(headingKey)}>
