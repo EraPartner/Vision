@@ -6,12 +6,21 @@ const srcDir = path.join('i18n', 'source');
 const enPath = path.join(srcDir, 'en.json');
 const nlPath = path.join(srcDir, 'nl.json');
 
-if (!fs.existsSync(enPath)) { console.error('Missing', enPath); process.exit(1); }
-if (!fs.existsSync(nlPath)) { console.error('Missing', nlPath); process.exit(1); }
-
-/** Parse a locale JSON file, failing with an actionable message on malformed input. */
+/**
+ * Read + parse a locale JSON file, failing with an actionable message. Reads
+ * directly and handles a missing file via ENOENT rather than an existsSync
+ * pre-check, so there is no check-then-use (TOCTOU) window on the path.
+ */
 function readLocale(p) {
-  const raw = fs.readFileSync(p, 'utf8');
+  let raw;
+  try {
+    raw = fs.readFileSync(p, 'utf8');
+  } catch (err) {
+    console.error(err.code === 'ENOENT'
+      ? `Missing ${p}`
+      : `ERROR: cannot read ${p} — ${err.message}`);
+    process.exit(1);
+  }
   try {
     return JSON.parse(raw);
   } catch (err) {
