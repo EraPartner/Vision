@@ -84,7 +84,9 @@ jobs:
           echo "Version check passed."
 
       - name: Audit JS dependencies
-        run: bun audit --audit-level=high
+        # Shared with ci.yml's Deps Audit (JS) job via scripts/audit-js.sh so the
+        # audit command + accepted-risk ignore list can't drift between the two.
+        run: sh scripts/audit-js.sh
 
       - name: Setup Python (for pip-audit)
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5

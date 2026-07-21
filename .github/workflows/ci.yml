@@ -71,13 +71,9 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Audit JS dependencies
-        # Ignore two fast-uri HIGH CVEs that only affect dev dependencies
-        # (@stryker-mutator/core, eslint). fast-uri is not bundled into the
-        # production frontend or backend, so neither advisory is reachable
-        # at runtime. Re-evaluate when stryker/eslint ship a transitive bump.
-        #   GHSA-v39h-62p7-jpjc — host confusion via percent-encoded delimiters
-        #   GHSA-q3j6-qgpj-74h6 — path traversal via percent-encoded dots
-        run: bun audit --audit-level=high --ignore=GHSA-v39h-62p7-jpjc --ignore=GHSA-q3j6-qgpj-74h6
+        # Shared with release.yml's verify job via scripts/audit-js.sh so the
+        # audit command + accepted-risk ignore list can't drift between the two.
+        run: sh scripts/audit-js.sh
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Python deps audit — pip-audit on config/requirements.txt
