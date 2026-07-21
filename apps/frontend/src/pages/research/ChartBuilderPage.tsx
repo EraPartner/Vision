@@ -68,7 +68,10 @@ export default function ChartBuilderPage() {
   }, [state]);
 
   // Symbol search picker.
-  const { searchText, setSearchText, debouncedSearch, searchResult } = useSymbolSearch();
+  const { searchText, setSearchText, debouncedSearch, searchResult, isOpen } = useSymbolSearch(
+    apiClient.searchResearch,
+    { queryKey: "research-search" },
+  );
   // Macro search runs alongside the ticker search; results merge into one
   // dropdown, tagged "Economic" (ADR-082). Keyless providers always respond;
   // FRED contributes only when its key is configured.
@@ -324,7 +327,7 @@ export default function ChartBuilderPage() {
   // Lift the Series card above the chart/oscillator cards below it while the
   // results dropdown is open, so its overflowing rows aren't painted behind
   // those later glass cards (each forms its own backdrop-filter stacking context).
-  const searchOpen = debouncedSearch.length >= 1 && searchText.length > 0 && (searchItems.length > 0 || macroItems.length > 0);
+  const searchOpen = isOpen && (searchItems.length > 0 || macroItems.length > 0);
 
   return (
     <div className="space-y-6 animate-in">

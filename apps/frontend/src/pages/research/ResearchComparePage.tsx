@@ -188,7 +188,10 @@ export default function ResearchComparePage() {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [selectedRange, setSelectedRange] = useState(RANGES[3]); // 1Y
   const [sortMetric, setSortMetric] = useState<FundamentalsMetricKey | null>(null);
-  const { searchText, setSearchText, debouncedSearch, searchResult, isFetching: isSearching } = useSymbolSearch();
+  const { searchText, setSearchText, searchResult, isFetching: isSearching, isOpen } = useSymbolSearch(
+    apiClient.searchResearch,
+    { queryKey: "research-search" },
+  );
 
   const fmtPct = useCallback((val: number | null | undefined) =>
     val == null || isNaN(val) ? "—" : `${val >= 0 ? "+" : ""}${(val * 100).toFixed(2)}%`, []);
@@ -344,7 +347,7 @@ export default function ResearchComparePage() {
             value={searchText}
             onChange={setSearchText}
             loading={isSearching && searchText.length > 0}
-            open={debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0}
+            open={isOpen && searchItems.length > 0}
           >
             {searchItems.map((item) => (
               <SymbolSearchResultItem

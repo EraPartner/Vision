@@ -38,7 +38,10 @@ export default function ResearchHomePage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const navigate = useNavigate();
-  const { searchText, setSearchText, debouncedSearch, searchResult, isFetching } = useSymbolSearch();
+  const { searchText, setSearchText, searchResult, isFetching, isOpen } = useSymbolSearch(
+    apiClient.searchResearch,
+    { queryKey: "research-search" },
+  );
 
   const numberFmt = useMemo(
     () => new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -98,7 +101,7 @@ export default function ResearchHomePage() {
         placeholder={t('research.searchPlaceholder')}
         value={searchText}
         onChange={setSearchText}
-        open={debouncedSearch.length >= 1 && searchText.length > 0}
+        open={isOpen}
       >
         {searchUnavailable ? (
           <div className="px-3 py-3">
