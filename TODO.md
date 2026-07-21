@@ -4208,7 +4208,7 @@ look-changing one.
   - `docker-entrypoint.sh:9,25-28` — verified in `oven/bun:1-alpine`: `date +%s.%N` prints `1783030579.` (empty nanoseconds), so `entrypoint_total` ms is quantized to 0/1000, making the startup metric useless for its stated charting purpose.
   - Fix: use `%s%3N`-capable coreutils, or drop sub-second precision claims and measure entrypoint time from the bun side instead.
 
-- [ ] **`install.sh` clobbers a possibly-running Vision.app and copies the bundle with `cp -r`** ⏬ 🔎 verified-present 2026-07-11
+- [x] **`install.sh` clobbers a possibly-running Vision.app and copies the bundle with `cp -r`** ⏬ ✅ 2026-07-21 (fixed in the shared `scripts/lib/mac-install.sh` `install_app_bundle` (used by both install.sh and install-demo.sh): before `rm -rf` of an existing bundle it now best-effort `osascript … quit`s a running copy (app name derived from the dest basename; ignored if not running) so it isn't replaced out from under a live process + its Docker stack; and it uses `ditto` instead of `cp -r` for correct .app symlink/xattr/resource-fork fidelity. `sh -n`/`bash -n` valid.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `install.sh:143-150` — `rm -rf /Applications/Vision.app` doesn't check whether the app (and its Docker stack) is running, and `cp -r` is not the canonical way to copy .app bundles (symlink/xattr fidelity); `ditto` is.
   - Fix: `osascript -e 'quit app "Vision"'` (or warn) before replacing, and use `ditto "$APP_SRC" "$APP_DEST"`.
