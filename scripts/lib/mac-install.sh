@@ -40,8 +40,16 @@ find_built_app() {
 # self-built app. Usage: install_app_bundle "$APP_SRC" "$APP_DEST"
 install_app_bundle() {
   local src="$1" dest="$2"
+  local appname
+  appname="$(basename "$dest" .app)"
   echo "==> Installing to $dest..."
-  [ -d "$dest" ] && rm -rf "$dest"
-  cp -r "$src" "$dest"
+  if [ -d "$dest" ]; then
+    # Best-effort: quit a running copy first so we're not replacing a live bundle
+    # (and its Docker stack) out from under a running process. Ignored if not running.
+    osascript -e "tell application \"$appname\" to quit" >/dev/null 2>&1 || true
+    rm -rf "$dest"
+  fi
+  # ditto (not cp -r) preserves .app symlink / xattr / resource-fork fidelity.
+  ditto "$src" "$dest"
   xattr -cr "$dest" 2>/dev/null || true
 }

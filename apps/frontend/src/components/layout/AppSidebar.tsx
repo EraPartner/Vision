@@ -13,37 +13,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  BarChart3,
-  Briefcase,
-  Landmark,
-  Building2,
-  CalendarClock,
-  Gem,
-  Coins,
-  HandCoins,
-  Import,
-  LayoutDashboard,
-  LineChart,
-  PiggyBank,
-  Receipt,
-  Sparkles,
-  Tags,
-  Target,
-  TrendingUp,
-  Users,
-  Wallet,
-  ArrowLeftRight,
-  Database,
-  ShieldCheck,
-  Activity,
-  Globe,
-  PanelLeftClose,
-  Telescope,
-  GitCompareArrows,
-  CandlestickChart,
-  Scale,
-} from "lucide-react";
+import { PanelLeftClose, Wallet } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -52,7 +22,14 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { cn } from "@/lib/utils";
 import { springs } from "@/lib/motion";
 import { preloadRoute } from "@/lib/routePreload";
-import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
+import {
+  ADMIN_NAV_ITEMS,
+  GLOBAL_NAV_ITEMS,
+  GO_TO_KEY_BY_URL,
+  NAV_WORKSPACE_BY_ID,
+  NAV_WORKSPACES,
+  WORKSPACE_ROOT_URLS,
+} from "@/lib/navigation";
 
 /**
  * The active-route accent rail as a shared layout element: framer-motion
@@ -76,16 +53,14 @@ function ActiveRail() {
 }
 
 // Collapsed-rail tooltips double as shortcut teachers: "Transactions · G T".
-const GO_TO_BY_URL = new Map(GO_TO_ROUTES.map((r) => [r.url, r.key]));
-
 function withGoToHint(title: string, url: string): string {
-  const key = GO_TO_BY_URL.get(url);
+  const key = GO_TO_KEY_BY_URL.get(url);
   return key ? `${title} · G ${key.toUpperCase()}` : title;
 }
 
 function isActiveRoute(itemUrl: string, pathname: string) {
   // Workspace roots are active only on an exact match (they have children).
-  if (itemUrl === "/" || itemUrl === "/portfolio" || itemUrl === "/research") return pathname === itemUrl;
+  if (WORKSPACE_ROOT_URLS.has(itemUrl)) return pathname === itemUrl;
   // Boundary-aware prefix match so a route whose path is a string prefix of
   // another (e.g. /research/market vs /research/markets) doesn't light up its
   // sibling. Child routes (/import/:id) still highlight their parent nav item.
@@ -107,109 +82,16 @@ export function AppSidebar() {
     else if (url === "/portfolio/performance") prefetchPerformance();
   }, [prefetchNetWorth, prefetchPerformance]);
 
-  const budgetingGroups = useMemo(() => [
-    {
-      label: t('nav.overview'),
-      items: [
-        { title: t('nav.dashboard'), url: "/", icon: LayoutDashboard },
-        { title: t('nav.transactions'), url: "/transactions", icon: Receipt },
-      ],
-    },
-    {
-      label: t('nav.organization'),
-      items: [
-        { title: t('nav.categories'), url: "/categories", icon: Tags },
-        { title: t('nav.recipients'), url: "/recipients", icon: Users },
-      ],
-    },
-    {
-      label: t('nav.analysis'),
-      items: [
-        { title: t('nav.statistics'), url: "/statistics", icon: BarChart3 },
-        { title: t('nav.plannedPayments'), url: "/planned", icon: CalendarClock },
-        { title: t('nav.whoOwesYou'), url: "/owes", icon: HandCoins },
-        { title: t('nav.taxOverview'), url: "/tax", icon: Landmark },
-      ],
-    },
-    {
-      label: t('nav.tools'),
-      items: [
-        { title: t('nav.importExport'), url: "/import", icon: Import },
-      ],
-    },
-  ], [t]);
+  // The active workspace's nav, localized from the shared registry.
+  const activeWorkspace = NAV_WORKSPACE_BY_ID[workspace];
+  const groups = useMemo(() => activeWorkspace.groups.map((group) => ({
+    label: t(group.labelKey),
+    items: group.items.map((item) => ({ title: t(item.titleKey), url: item.url, icon: item.icon })),
+  })), [activeWorkspace, t]);
 
-  const adminItems = useMemo(() => [
-    { title: t('nav.adminOverview'), url: "/admin", icon: ShieldCheck },
-    { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
-    { title: t('nav.adminProviders'), url: "/admin/providers", icon: Globe },
-    { title: t('nav.adminEndpoints'), url: "/admin/endpoints", icon: Activity },
-    { title: t('nav.exchangeRates'), url: "/admin/exchange-rates", icon: ArrowLeftRight },
-  ], [t]);
-
-  const portfolioGroups = useMemo(() => [
-    {
-      label: t('nav.overview'),
-      items: [
-        { title: t('nav.dashboard'), url: "/portfolio", icon: LayoutDashboard },
-        { title: t('nav.netWorth'), url: "/portfolio/net-worth", icon: Wallet },
-      ],
-    },
-    {
-      label: t('nav.investments'),
-      items: [
-        { title: t('nav.stocksEtfs'), url: "/portfolio/stocks", icon: TrendingUp },
-        { title: t('nav.crypto'), url: "/portfolio/crypto", icon: Coins },
-        { title: t('nav.metals'), url: "/portfolio/metals", icon: Gem },
-      ],
-    },
-    {
-      label: t('nav.assets'),
-      items: [
-        { title: t('nav.realEstate'), url: "/portfolio/real-estate", icon: Building2 },
-        { title: t('nav.savingsBonds'), url: "/portfolio/savings", icon: PiggyBank },
-      ],
-    },
-    {
-      label: t('nav.analysis'),
-      items: [
-        { title: t('nav.performance'), url: "/portfolio/performance", icon: BarChart3 },
-        { title: t('nav.rebalance'), url: "/portfolio/rebalance", icon: Scale },
-        { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
-      ],
-    },
-    {
-      label: t('nav.tools'),
-      items: [
-        { title: t('nav.portfolioImport'), url: "/portfolio/import", icon: Import },
-      ],
-    },
-  ], [t]);
-
-  const researchGroups = useMemo(() => [
-    {
-      label: t('nav.overview'),
-      items: [
-        { title: t('nav.researchHome'), url: "/research", icon: Telescope },
-        { title: t('nav.markets'), url: "/research/markets", icon: Globe },
-        { title: t('nav.marketLookup'), url: "/research/market", icon: LineChart },
-      ],
-    },
-    {
-      label: t('nav.analysis'),
-      items: [
-        { title: t('nav.compare'), url: "/research/compare", icon: GitCompareArrows },
-        { title: t('nav.chartBuilder'), url: "/research/charts", icon: CandlestickChart },
-        { title: t('nav.forecast'), url: "/research/forecast", icon: TrendingUp },
-        { title: t('nav.watchlist'), url: "/research/watchlist", icon: Target },
-      ],
-    },
-  ], [t]);
-
-  const groups =
-    workspace === "budgeting" ? budgetingGroups
-      : workspace === "research" ? researchGroups
-        : portfolioGroups;
+  const adminItems = useMemo(() => ADMIN_NAV_ITEMS.map((item) => (
+    { title: t(item.titleKey), url: item.url, icon: item.icon }
+  )), [t]);
 
   return (
     <Sidebar collapsible="icon" className="glass-chrome border-r border-sidebar-border/60">
@@ -247,51 +129,33 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* AI Chat — workspace-agnostic, shown above workspace switcher */}
+        {/* Workspace-agnostic pages (AI chat, Accounts hub — ADR-088), shown
+            above the workspace switcher */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActiveRoute("/ai-chat", location.pathname)}
-                  tooltip={withGoToHint(t('nav.aiChat'), "/ai-chat")}
-                >
-                  <NavLink
-                    to="/ai-chat"
-                    onMouseEnter={() => handleNavHover("/ai-chat")}
-                    className="relative"
-                    aria-label={t('nav.aiChat')}
-                  >
-                    {isActiveRoute("/ai-chat", location.pathname) && <ActiveRail />}
-                    <Sparkles className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActiveRoute("/ai-chat", location.pathname) && "text-primary")} />
-                    <span className={isActiveRoute("/ai-chat", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
-                      {t('nav.aiChat')}
-                    </span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              {/* Accounts — workspace-agnostic hub (ADR-088) */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActiveRoute("/accounts", location.pathname)}
-                  tooltip={withGoToHint(t('nav.accounts'), "/accounts")}
-                >
-                  <NavLink
-                    to="/accounts"
-                    onMouseEnter={() => handleNavHover("/accounts")}
-                    className="relative"
-                    aria-label={t('nav.accounts')}
-                  >
-                    {isActiveRoute("/accounts", location.pathname) && <ActiveRail />}
-                    <Landmark className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActiveRoute("/accounts", location.pathname) && "text-primary")} />
-                    <span className={isActiveRoute("/accounts", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
-                      {t('nav.accounts')}
-                    </span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {GLOBAL_NAV_ITEMS.map((item) => {
+                const title = t(item.titleKey);
+                const isActive = isActiveRoute(item.url, location.pathname);
+                return (
+                  <SidebarMenuItem key={item.url}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={withGoToHint(title, item.url)}>
+                      <NavLink
+                        to={item.url}
+                        onMouseEnter={() => handleNavHover(item.url)}
+                        className="relative"
+                        aria-label={title}
+                      >
+                        {isActive && <ActiveRail />}
+                        <item.icon className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActive && "text-primary")} />
+                        <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>
+                          {title}
+                        </span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -300,39 +164,30 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="px-3 pt-3">
             <div className="flex rounded-xl bg-sidebar-accent/60 ring-1 ring-sidebar-border/50 p-1 gap-1">
-              <WorkspaceTab
-                active={workspace === "budgeting"}
-                onClick={() => setWorkspace("budgeting")}
-                icon={<Receipt className="h-3.5 w-3.5" />}
-                label={t('nav.budgeting')}
-              />
-              <WorkspaceTab
-                active={workspace === "portfolio"}
-                onClick={() => setWorkspace("portfolio")}
-                icon={<Briefcase className="h-3.5 w-3.5" />}
-                label={t('nav.portfolio')}
-              />
-              <WorkspaceTab
-                active={workspace === "research"}
-                onClick={() => setWorkspace("research")}
-                icon={<Telescope className="h-3.5 w-3.5" />}
-                label={t('nav.research')}
-              />
+              {NAV_WORKSPACES.map((ws) => (
+                <WorkspaceTab
+                  key={ws.id}
+                  active={workspace === ws.id}
+                  onClick={() => setWorkspace(ws.id)}
+                  icon={<ws.icon className="h-3.5 w-3.5" />}
+                  label={t(ws.labelKey)}
+                />
+              ))}
             </div>
           </div>
         )}
         {collapsed && (
           <div className="flex justify-center pt-3 px-1.5">
+            {/* Cycles to the next workspace; shows the current one. */}
             <button
-              onClick={() => setWorkspace(
-                workspace === "budgeting" ? "portfolio"
-                  : workspace === "portfolio" ? "research"
-                    : "budgeting",
-              )}
+              onClick={() => {
+                const idx = NAV_WORKSPACES.findIndex((ws) => ws.id === workspace);
+                setWorkspace(NAV_WORKSPACES[(idx + 1) % NAV_WORKSPACES.length].id);
+              }}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-              title={workspace === "budgeting" ? t('nav.budgeting') : workspace === "portfolio" ? t('nav.portfolio') : t('nav.research')}
+              title={t(activeWorkspace.labelKey)}
             >
-              {workspace === "budgeting" ? <Receipt className="h-4 w-4" /> : workspace === "portfolio" ? <Briefcase className="h-4 w-4" /> : <Telescope className="h-4 w-4" />}
+              <activeWorkspace.icon className="h-4 w-4" />
             </button>
           </div>
         )}

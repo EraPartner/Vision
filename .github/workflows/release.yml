@@ -41,6 +41,20 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Fail fast on a malformed release tag. Map the (possibly workflow_dispatch
+      # user-supplied) value through env: rather than interpolating ${{ }} inline
+      # into the shell, so it can't inject shell, and validate the format before
+      # it's used as a checkout ref or elsewhere in the pipeline.
+      - name: Validate release tag format
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: release tag '$TAG' must be vMAJOR.MINOR.PATCH (e.g. v1.2.3)"
+            exit 1
+          fi
+          echo "Release tag OK: $TAG"
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
@@ -61,8 +75,9 @@ jobs:
           echo "Compose volume sync OK."
 
       - name: Check version tag matches package.json
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           TAG_VERSION="${TAG#v}"
           ROOT_VERSION=$(node -p "require('./package.json').version")
           PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
@@ -84,7 +99,9 @@ jobs:
           echo "Version check passed."
 
       - name: Audit JS dependencies
-        run: bun audit --audit-level=high
+        # Shared with ci.yml's Deps Audit (JS) job via scripts/audit-js.sh so the
+        # audit command + accepted-risk ignore list can't drift between the two.
+        run: sh scripts/audit-js.sh
 
       - name: Setup Python (for pip-audit)
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
@@ -92,7 +109,7 @@ jobs:
           python-version: '3.12'
 
       - name: Audit Python dependencies
-        run: pip install pip-audit && pip-audit -r config/requirements.txt
+        run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt
 
       - name: Lint frontend
         run: bun run lint
@@ -151,6 +168,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Only move `latest` when this tag is actually the highest release — a
+      # re-release of an older version (e.g. v1.0.3 pushed after v1.2.0 exists)
+      # must not repoint `latest` at the older image. Worst case is `latest`
+      # staying put, never worse than the previous unconditional behavior.
+      - name: Determine whether this tag should move `latest`
+        id: latest_check
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          git fetch --tags --force --quiet
+          HIGHEST=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          if [ "$TAG" = "$HIGHEST" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            echo "$TAG is the highest release tag — 'latest' will move to it."
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG is not the highest release tag ($HIGHEST) — leaving 'latest' unchanged."
+          fi
+
       - name: Extract Docker metadata (tags & labels)
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v5
@@ -159,7 +195,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ steps.latest_check.outputs.is_latest == 'true' }}
 
       - name: Build and push
         id: build-push
@@ -237,9 +273,10 @@ jobs:
           npx electron-builder --mac --arm64 --publish never
 
       - name: Stage release artifacts
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           VER="${TAG#v}"
           OUT="$GITHUB_WORKSPACE/dist/release"
           mkdir -p "$OUT"

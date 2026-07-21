@@ -1,19 +1,30 @@
 ---
 title: Performance - Chart Data Downsampling
 type: performance
-status: active
+status: removed
 date: 2026-04-16
-tags: [performance, charts, downsampling, lttb, optimization]
-description: LTTB downsampling algorithm for large time-series chart data
+tags: [performance, charts, downsampling, lttb, optimization, historical]
+description: LTTB downsampling algorithm for large time-series chart data (removed 2026-07)
 aliases: [lttb, largest-triangle-three-buckets, downsampling, data reduction, chart optimization]
-related_code: ["apps/frontend/src/utils/downsample.ts", "apps/node-backend/src/utils/downsample.js"]
+related_code: []
 ---
 
 # Chart Data Downsampling
 
+> **Status: REMOVED (2026-07).** LTTB downsampling is no longer used anywhere in
+> Vision. It was removed from **both** the frontend (the `utils/downsample.ts`
+> re-export was deleted; Net Worth and Performance charts render full daily
+> resolution deliberately, so scrubbing stays day-granular) and the
+> **backend** `/api/info/portfolio-performance` path (see
+> `apps/node-backend/src/routes/info/_performanceHelpers.js` — at daily
+> granularity even ~10 years (~3.6k points) renders fine at full resolution, and
+> removing the shared downsampler also closed a correctness bug). This page is
+> retained only as a historical description of the algorithm; do not treat it as
+> a live code reference.
+
 ## Overview
 
-Vision uses the **Largest-Triangle-Three-Buckets (LTTB)** algorithm to downsample large time-series datasets before rendering charts. This prevents performance degradation when displaying thousands of data points while preserving the visual shape of the data.
+Vision **previously** used the **Largest-Triangle-Three-Buckets (LTTB)** algorithm to downsample large time-series datasets before rendering charts, to avoid performance degradation when displaying thousands of data points while preserving the visual shape of the data. It has since been removed (see the status note above) — daily-granularity series render acceptably at full resolution.
 
 ## Algorithm
 
@@ -82,16 +93,18 @@ const sampled = downsampleLTTB(
 - **Any Recharts/Recharts-based visualization** where point count exceeds pixel width
 - **Backend responses** to reduce API payload before transmission (e.g., `/api/info/portfolio-performance`)
 
-## Backend Usage
+## Backend Usage (historical — removed)
 
-As of 2026-04-16, the Performance page (`/api/info/portfolio-performance`) uses server-side LTTB downsampling:
+Between 2026-04-16 and 2026-07, the Performance page (`/api/info/portfolio-performance`)
+used server-side LTTB to downsample period-filtered snapshots to ~400 points
+before response. **This has been removed** — at daily granularity even ~10 years
+(~3.6k points) renders fine at full resolution, and dropping the shared
+downsampler also closed a correctness bug (see
+`apps/node-backend/src/routes/info/_performanceHelpers.js`). Metrics and heatmap
+always used full historical data regardless.
 
-- Backend downsamples period-filtered snapshots to ~400 points before response
-- Metrics and heatmap always use full historical data (no filtering)
-- Per-period cache keys allow independent caching of downsampled responses
-- Reduces payload 30-40x for filtered periods (e.g., 1000 snapshots → ~30 points)
-
-See [[docs/adr/008-performance-page-server-computed-response|ADR-008]] for architectural rationale.
+See [[docs/adr/008-performance-page-server-computed-response|ADR-008]] for the
+architectural rationale of the (server-computed) Performance response.
 
 ## Related
 

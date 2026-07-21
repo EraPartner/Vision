@@ -12,7 +12,7 @@
  * NO_VALIDATE: yahoo-finance2 validates every upstream payload and throws on any
  * schema drift; Yahoo's responses drift and vary by IP/geo. We read a small
  * subset of known fields, so we opt out of the throw and degrade to whatever
- * came back — matching routes/marketLookup.js.
+ * came back — matching services/marketLookupService.js.
  */
 
 import { getYahooClient } from '../../prices/yahooClient.js';

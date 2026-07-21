@@ -1,11 +1,15 @@
-# ⚠️ REAL-DATA STACK. With no `name:` here, the compose project defaults to this
-# directory's basename → project `vision`, whose `postgres_data` volume
-# (vision_postgres_data) holds your real financial database — shared with the
-# packaged Vision.app and the dev stack (docker-compose.dev.yml).
+# ⚠️ REAL-DATA STACK. `name: vision` below pins the compose project to `vision`
+# regardless of this checkout's directory name (a clone/worktree named `vision-2`
+# would otherwise default to its basename and silently get a *fresh, empty* DB).
+# Its `postgres_data` volume (vision_postgres_data) holds your real financial
+# database — shared with the packaged Vision.app and the dev stack
+# (docker-compose.dev.yml). Matches packaging/electron/resources/docker-compose.yml.
 # DO NOT run `docker compose down -v` / `docker volume rm vision_postgres_data`
 # from this directory: it destroys that data (it did, on 2026-07-06). For e2e/CI
 # or clean-slate runs use an isolated project — e.g. `COMPOSE_PROJECT_NAME=vision_e2e`
-# (see .github/workflows/{ci,e2e}.yml) or docker-compose.clean.yml's separate volume.
+# (env var overrides `name:`; see .github/workflows/{ci,e2e}.yml) or
+# docker-compose.clean.yml's separate volume.
+name: vision
 services:
   db:
     image: postgres:18-alpine
@@ -94,7 +98,10 @@ services:
       # refused. Remove this (and set ADMIN_AUTH_TOKEN) if you widen ports:.
       ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "true"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
-    # depends_on with service_healthy was removed intentionally.
+    # depends_on uses `condition: service_started`, NOT `service_healthy`. The
+    # strict health-gate was removed intentionally; service_started still creates
+    # the db container for partial targets like `docker compose up app` (which
+    # otherwise crash-loops on `getaddrinfo db`), without the serial delay.
     #
     # Docker's healthcheck gate forced a strict serial sequence:
     #   db starts → postgres init → healthcheck passes → THEN app starts
@@ -105,8 +112,12 @@ services:
     # isn't ready yet it waits. If it exhausts all attempts, Docker's
     # restart:unless-stopped policy will relaunch it automatically.
     #
-    # Both containers now start in parallel. The db healthcheck is kept
-    # so `docker ps` / monitoring tools can still report db readiness.
+    # Both containers now start together (service_started does not wait for the
+    # db healthcheck). The db healthcheck is kept so `docker ps` / monitoring
+    # tools can still report db readiness.
+    depends_on:
+      db:
+        condition: service_started
 
 volumes:
   postgres_data:

@@ -3,7 +3,6 @@
   "version": "1.0.2",
   "description": "Vision desktop wrapper",
   "main": "main.js",
-  "packageManager": "bun",
   "scripts": {
     "start": "node ../../scripts/generate-locales.js && electron .",
     "dist": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64",
@@ -50,10 +49,6 @@
         "to": "resources"
       }
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "EraPartner",
-      "repo": "Vision"
-    }
+    "publish": null
   }
 }

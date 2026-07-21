@@ -19,7 +19,7 @@ import {
   TrendingUp, TrendingDown, BarChart3, Activity, Clock, Star, Link2,
 } from "lucide-react";
 import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/components/charts";
-import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
+import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -139,7 +139,6 @@ export default function MarketLookupPage() {
       formatCompactNumber(val, (v) => fmtNum(v, { maximumFractionDigits: 0 })),
     [fmtNum],
   );
-  const [searchText, setSearchText] = useState("");
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("fundamentals");
@@ -148,7 +147,6 @@ export default function MarketLookupPage() {
   // The selected symbol lives entirely in the URL, so a looked-up view is
   // shareable and survives reload. Picking a result (handleSelect) rewrites it.
   const effectiveSelectedSymbol = searchParams.get("symbol")?.trim().toUpperCase() || null;
-  const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
   const { summaries, isLoading: isPortfolioLoading } = usePortfolio();
   const isOnline = useOnlineStatus();
 
@@ -172,13 +170,11 @@ export default function MarketLookupPage() {
     && providerInvestment.price_provider !== "yahoo";
   const useYahoo = !!effectiveSelectedSymbol && !isProviderAsset && !resolvingProvider;
 
-  // Search
-  const { data: searchResults, isFetching: isSearching } = useQuery({
-    queryKey: ["market-search", debouncedSearch],
-    queryFn: () => apiClient.searchMarket(debouncedSearch),
-    enabled: debouncedSearch.length >= 1,
-    staleTime: 60_000,
-  });
+  // Search — trim: false keeps the query text (and so the "market-search"
+  // cache keys) byte-identical with the historical inline wiring and with
+  // AddToWatchlistDialog, which shares this cache scope.
+  const { searchText, setSearchText, searchResult: searchResults, isFetching: isSearching, isOpen } =
+    useSymbolSearch(apiClient.searchMarket, { queryKey: "market-search", trim: false });
 
   // Quote — price-only (detail=basic); the rich fundamentals/analyst/news now
   // come from the multi-provider research tabs below, so the quoteSummary fetch
@@ -243,7 +239,7 @@ export default function MarketLookupPage() {
       return next;
     });
     setSearchText("");
-  }, [setSearchParams]);
+  }, [setSearchParams, setSearchText]);
 
   // Minimal quote synthesized from provider history: price = latest point,
   // change = move across the visible range. Fundamentals/news don't exist for
@@ -293,7 +289,7 @@ export default function MarketLookupPage() {
         value={searchText}
         onChange={setSearchText}
         loading={isSearching && searchText.length > 0}
-        open={debouncedSearch.length >= 1 && searchText.length > 0 && (searchResults?.items?.length ?? 0) > 0}
+        open={isOpen && (searchResults?.items?.length ?? 0) > 0}
       >
         {searchResults?.items?.map((item) => (
           <SymbolSearchResultItem

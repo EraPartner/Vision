@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { matchNavTitleKey } from "@/lib/navRoutes";
+import { matchNavTitleKey } from "@/lib/navigation";
 
 // Shown for routes with no nav entry (e.g. deep detail pages) and mirrors the
 // static <title> in index.html so unmatched routes read consistently.

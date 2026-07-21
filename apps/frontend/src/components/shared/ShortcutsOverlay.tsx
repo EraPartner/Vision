@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isTypingTarget } from "@/lib/keyboard";
-import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
+import { GO_TO_ROUTES } from "@/lib/navigation";
 import { isElectron } from "@/lib/api/electron";
 
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);

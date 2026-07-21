@@ -34,7 +34,7 @@ import { computeCategoryPivot } from '../services/calculations/aggregation/categ
 import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
 import { computeRecipientPivot } from '../services/calculations/aggregation/recipientPivot.js';
 import { computeTagPivot } from '../services/calculations/aggregation/tagPivot.js';
-import { getTargetCurrency } from './info/_queryParams.js';
+import { getTargetCurrency, parseBoolQueryParam } from './info/_queryParams.js';
 import { parseIntClamped } from '../lib/pagination.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
@@ -109,11 +109,14 @@ router.get('/cashflow-forecast-methods', async (req, res) => {
   const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });
   const percentiles = parseNumericArrayQueryParam(req.query.mc_percentiles);
   const mcPercentiles = percentiles.length > 0 ? percentiles : [10, 50, 90];
-  const includePlanned =
-    req.query.include_planned === 'true' || req.query.include_planned === '1';
-  const includeBacktest = req.query.include_backtest !== 'false' && req.query.include_backtest !== '0';
-  const includeBreakdown =
-    req.query.include_breakdown === 'true' || req.query.include_breakdown === '1';
+  const includePlanned = parseBoolQueryParam(req.query.include_planned, false);
+  // Methods forecast defaults include_backtest ON: the backtest diagnostics are
+  // core to comparing methods (computeCashflowForecast defaults it true, and the
+  // cache-freshness check requires diagnostics). The sibling -rolling endpoint
+  // defaults it OFF (see below) — the differing default is intentional; only the
+  // parser is now shared so the accepted spellings can't drift per endpoint.
+  const includeBacktest = parseBoolQueryParam(req.query.include_backtest, true);
+  const includeBreakdown = parseBoolQueryParam(req.query.include_breakdown, false);
 
   const { data, meta } = await computeCashflowForecastMethods({
     targetCurrency: getTargetCurrency(req),
@@ -139,10 +142,11 @@ router.get('/cashflow-forecast-rolling', async (req, res) => {
   const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });
   const percentiles = parseNumericArrayQueryParam(req.query.mc_percentiles);
   const mcPercentiles = percentiles.length > 0 ? percentiles : [10, 50, 90];
-  const includePlanned =
-    req.query.include_planned === 'true' || req.query.include_planned === '1';
-  const includeBacktest =
-    req.query.include_backtest === 'true' || req.query.include_backtest === '1';
+  const includePlanned = parseBoolQueryParam(req.query.include_planned, false);
+  // Rolling forecast defaults include_backtest OFF: with default MC params and no
+  // backtest, computeCashflowForecastRolling takes a fast cached path. Kept OFF by
+  // default on purpose (see the methods endpoint above for the shared-parser note).
+  const includeBacktest = parseBoolQueryParam(req.query.include_backtest, false);
 
   const { data, meta } = await computeCashflowForecastRolling({
     targetCurrency: getTargetCurrency(req),

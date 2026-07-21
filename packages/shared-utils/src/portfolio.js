@@ -213,7 +213,12 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
   const ZERO = toDecimal(0);
   const defaultFx = toDecimal(opts.defaultFxMultiplier ?? 1);
   /** @type {{ units: Decimal, costBasis: Decimal, costBasisConv: Decimal }[]} */
+  // FIFO consumes from lots[head] forward (head advances); LIFO pops from the end;
+  // buys push to the end. The active (unconsumed) lots are lots[head..]. This keeps
+  // each buy/consume O(1) amortized instead of the previous per-op spread-copy
+  // (which made a B-buy history O(B^2)); results are unchanged.
   let lots = [];
+  let head = 0;
   let totalUnits = ZERO;
   let realizedGain = ZERO;
   let realizedGainConv = ZERO;
@@ -232,7 +237,7 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
 
     if (txn.type === 'buy' || txn.type === 'gift') {
       const buyCost = amount.plus(fees).plus(taxes);
-      lots = [...lots, { units, costBasis: buyCost, costBasisConv: buyCost.times(fx) }];
+      lots.push({ units, costBasis: buyCost, costBasisConv: buyCost.times(fx) });
       totalUnits = totalUnits.plus(units);
       totalBuyCost = totalBuyCost.plus(buyCost);
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
@@ -245,27 +250,25 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
       let costOfSold = ZERO;
       let costOfSoldConv = ZERO;
 
-      while (unitsToSell.gt(0) && lots.length > 0) {
-        const lot = fromEnd ? lots[lots.length - 1] : lots[0];
+      while (unitsToSell.gt(0) && head < lots.length) {
+        const idx = fromEnd ? lots.length - 1 : head;
+        const lot = lots[idx];
         if (lot.units.lte(unitsToSell)) {
           costOfSold = costOfSold.plus(lot.costBasis);
           costOfSoldConv = costOfSoldConv.plus(lot.costBasisConv);
           unitsToSell = unitsToSell.minus(lot.units);
-          lots = fromEnd ? lots.slice(0, -1) : lots.slice(1);
+          if (fromEnd) lots.pop(); else head += 1;
         } else {
           const fraction = unitsToSell.dividedBy(lot.units);
           const lotCostUsed = lot.costBasis.times(fraction);
           const lotCostUsedConv = lot.costBasisConv.times(fraction);
           costOfSold = costOfSold.plus(lotCostUsed);
           costOfSoldConv = costOfSoldConv.plus(lotCostUsedConv);
-          const reducedLot = {
+          lots[idx] = {
             units: lot.units.minus(unitsToSell),
             costBasis: lot.costBasis.minus(lotCostUsed),
             costBasisConv: lot.costBasisConv.minus(lotCostUsedConv),
           };
-          lots = fromEnd
-            ? [...lots.slice(0, -1), reducedLot]
-            : [reducedLot, ...lots.slice(1)];
           unitsToSell = ZERO;
         }
       }
@@ -276,14 +279,18 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
       totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
       totalSellProceedsConv = totalSellProceedsConv.plus(amount.times(sellRatio).times(fx));
     } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
-      const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
+      // Events operate on the active lots only; rebase (head -> 0) with the fresh
+      // array applyEventToLots returns.
+      const result = applyEventToLots(lots.slice(head), txn.type, units, amount, totalUnits);
       totalUnits = result.totalUnits;
       lots = result.lots;
+      head = 0;
     }
   }
 
-  const totalCost = lots.reduce((sum, lot) => sum.plus(lot.costBasis), ZERO);
-  const totalCostConv = lots.reduce((sum, lot) => sum.plus(lot.costBasisConv), ZERO);
+  const activeLots = head > 0 ? lots.slice(head) : lots;
+  const totalCost = activeLots.reduce((sum, lot) => sum.plus(lot.costBasis), ZERO);
+  const totalCostConv = activeLots.reduce((sum, lot) => sum.plus(lot.costBasisConv), ZERO);
   const finalUnits = Decimal.max(ZERO, totalUnits);
   const finalCost = Decimal.max(ZERO, totalCost);
   const finalCostConv = Decimal.max(ZERO, totalCostConv);
