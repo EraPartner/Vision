@@ -67,7 +67,7 @@ export function createResearchCache({ now = () => Date.now() } = {}) {
 
   // Every instance self-sweeps to bound Map growth (mirrors the price cache's
   // 5-min sweep). Previously only the singleton below had a sweeper, so factory
-  // instances (e.g. routes/marketLookup.js) grew unbounded. unref so the timer
+  // instances (e.g. services/marketLookupService.js) grew unbounded. unref so the timer
   // never holds the process (or a test runner) open.
   if (typeof setInterval === 'function') {
     const handle = setInterval(sweep, 5 * 60_000);
