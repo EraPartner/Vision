@@ -4188,7 +4188,7 @@ look-changing one.
   - Fix: run `playwright test` with `testIgnore` for visual specs (so new files are included by default) and decide whether visual specs join the nightly job.
   - Verification (2026-07-03, D1 residue): `visual.spec.ts` being excluded from `test:e2e` and run in no workflow is likely deliberate (Linux screenshot baseline vs. the developer's local macOS rendering) rather than an oversight — doesn't change the fix recommendation, just the urgency.
 
-- [ ] **`latest` Docker tag moves on every tag push, even a re-release of an older version** ⏬ 🔎 verified-present 2026-07-11
+- [x] **`latest` Docker tag moves on every tag push, even a re-release of an older version** ⏬ ✅ 2026-07-21 (added a "Determine whether this tag should move `latest`" step that fetches all tags, finds the highest `vX.Y.Z` via `sort -V`, and sets `is_latest`; the `type=raw,value=latest` metadata line is now gated on `enable=${{ steps.latest_check.outputs.is_latest == 'true' }}`. So re-releasing an older version won't repoint `latest` at the older image; pre-releases are excluded from the highest-tag computation. Safe by construction — worst case `latest` stays put, never worse than the old unconditional behavior. Compare logic simulated locally (v1.10.0 > v1.2.0, older re-release → false, first release → true); YAML validated.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/release.yml:171-174` — `type=raw,value=latest` is unconditional; pushing `v1.0.3` after `v1.2.0` exists would point `latest` at the older image.
   - Fix: use `type=raw,value=latest,enable={{is_default_branch}}`-style guarding or a semver comparison step before applying `latest`.

@@ -168,6 +168,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Only move `latest` when this tag is actually the highest release — a
+      # re-release of an older version (e.g. v1.0.3 pushed after v1.2.0 exists)
+      # must not repoint `latest` at the older image. Worst case is `latest`
+      # staying put, never worse than the previous unconditional behavior.
+      - name: Determine whether this tag should move `latest`
+        id: latest_check
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          git fetch --tags --force --quiet
+          HIGHEST=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          if [ "$TAG" = "$HIGHEST" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            echo "$TAG is the highest release tag — 'latest' will move to it."
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG is not the highest release tag ($HIGHEST) — leaving 'latest' unchanged."
+          fi
+
       - name: Extract Docker metadata (tags & labels)
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v5
@@ -176,7 +195,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ steps.latest_check.outputs.is_latest == 'true' }}
 
       - name: Build and push
         id: build-push
