@@ -41,6 +41,20 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Fail fast on a malformed release tag. Map the (possibly workflow_dispatch
+      # user-supplied) value through env: rather than interpolating ${{ }} inline
+      # into the shell, so it can't inject shell, and validate the format before
+      # it's used as a checkout ref or elsewhere in the pipeline.
+      - name: Validate release tag format
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: release tag '$TAG' must be vMAJOR.MINOR.PATCH (e.g. v1.2.3)"
+            exit 1
+          fi
+          echo "Release tag OK: $TAG"
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
@@ -61,8 +75,9 @@ jobs:
           echo "Compose volume sync OK."
 
       - name: Check version tag matches package.json
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           TAG_VERSION="${TAG#v}"
           ROOT_VERSION=$(node -p "require('./package.json').version")
           PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
@@ -239,9 +254,10 @@ jobs:
           npx electron-builder --mac --arm64 --publish never
 
       - name: Stage release artifacts
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           VER="${TAG#v}"
           OUT="$GITHUB_WORKSPACE/dist/release"
           mkdir -p "$OUT"

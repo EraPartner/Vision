@@ -4193,7 +4193,7 @@ look-changing one.
   - `.github/workflows/release.yml:171-174` — `type=raw,value=latest` is unconditional; pushing `v1.0.3` after `v1.2.0` exists would point `latest` at the older image.
   - Fix: use `type=raw,value=latest,enable={{is_default_branch}}`-style guarding or a semver comparison step before applying `latest`.
 
-- [ ] **`workflow_dispatch` tag input is interpolated unquoted into shell and used as checkout ref without format validation** ⏬ 🔎 verified-present 2026-07-11
+- [x] **`workflow_dispatch` tag input is interpolated unquoted into shell and used as checkout ref without format validation** ⏬ ✅ 2026-07-21 (added a fail-fast "Validate release tag format" step as the first step of the `verify` job — maps the tag through `env:` (not inline `${{ }}`) and rejects anything not matching `^v[0-9]+\.[0-9]+\.[0-9]+$`. `verify` gates the build/package jobs via `needs`, so a malformed tag stops the pipeline early with a clear error. Also converted the two remaining inline `TAG="${{ … }}"` shell interpolations (version-check + stage-artifacts steps) to the same `env:`-mapped pattern for defense-in-depth; the `ref:` checkout usages are a non-shell context. YAML validated.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/release.yml:46,77,266` — `${{ github.event.inputs.tag }}` is expanded directly into `run:` scripts; only write-access users can dispatch, so exposure is low, but a malformed input produces confusing mid-pipeline failures rather than a clean early error.
   - Fix: first step validates `[[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]` (via `env:` mapping, not inline `${{ }}`) and fails fast.
