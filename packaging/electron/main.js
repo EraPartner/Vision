@@ -1524,11 +1524,14 @@ function stopContainers(cwd, extraFiles = []) {
   return run('docker', args, cwd, { timeout: 60000 });
 }
 
-// Pull the latest Docker image tag for the app service without stopping the DB.
-// Returns true if a new image was pulled, false if already up to date.
+// Pull the latest Docker image for both the app and db services (without
+// stopping the running containers). Includes `db` so packaged installs also
+// receive Postgres minor/security updates — the `postgres:18-alpine` tag pins
+// the major, so only in-place-compatible minor bumps are fetched.
+// Returns true if a new image layer was pulled, false if already up to date.
 async function pullLatestImage(cwd, extraFiles = []) {
   try {
-    const output = await run('docker', ['compose', ...composeArgs(cwd, extraFiles), 'pull', 'app'], cwd, { timeout: 120000 });
+    const output = await run('docker', ['compose', ...composeArgs(cwd, extraFiles), 'pull', 'app', 'db'], cwd, { timeout: 120000 });
     // docker compose pull outputs "Pulled" when a new layer was downloaded
     return /pulled/i.test(output);
   } catch (err) {
@@ -3676,7 +3679,7 @@ async function launch() {
             setSplashStatus('splash.downloading');
             await run(
               'docker',
-              ['compose', ...composeArgs(workDir, overrideFiles), 'pull', '--quiet', 'app'],
+              ['compose', ...composeArgs(workDir, overrideFiles), 'pull', '--quiet', 'app', 'db'],
               workDir,
               { timeout: 600000, env: dockerEnv }
             );
