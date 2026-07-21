@@ -4177,7 +4177,7 @@ look-changing one.
   - `curl x | tee f | sh` bypasses the `curl | sh` deny pattern; `grep`/`node -e` secret-reading commands pass the `SECRET_READ` check. Enforcement is in-container-only by design — the host copy of the same guard is advisory only (acknowledged in its own header) — so this is a defense-in-depth gap, not a bypass of the actual sandbox boundary. All 14 regexes compile correctly and malformed payloads fail open into the normal permission flow (correct behavior).
   - Fix: extend the deny patterns to catch multi-stage pipes ending in a shell, and broaden `SECRET_READ` detection to cover `grep`/`node -e` style reads — low priority given the in-container-only threat model.
 
-- [ ] **`pip-audit` is installed unpinned at run time in both workflows** ⏬ 🔎 verified-present 2026-07-11
+- [x] **`pip-audit` is installed unpinned at run time in both workflows** ⏬ ✅ 2026-07-21 (both `ci.yml` and `release.yml` now `pip install pip-audit==2.10.1` — reproducible and pinned, matching the repo's SHA-pinning discipline. Version bumps are now an explicit edit.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/ci.yml:103`, `release.yml:107` — `pip install pip-audit` pulls latest from PyPI on every run: non-reproducible and a (small) supply-chain surface, inconsistent with the repo's otherwise strict SHA-pinning.
   - Fix: pin it (`pip install pip-audit==X.Y.Z`) or use the pinned `pypa/gh-action-pip-audit` action.
