@@ -4005,7 +4005,7 @@ look-changing one.
   - `.github/workflows/ci.yml` (9×), `release.yml` (2×), `e2e.yml:38` — a Bun upgrade requires editing 12 sites; missing one gives version-skewed CI (e.g. release building with a different Bun than CI tested).
   - Fix: commit a `.bun-version` file and switch every `setup-bun` step to `bun-version-file: .bun-version`.
 
-- [ ] **Nightly E2E failures alert nobody** 🔽 🔎 verified-present 2026-07-11
+- [x] **Nightly E2E failures alert nobody** 🔽 ✅ 2026-07-21 (added an `if: failure() && github.event_name == 'schedule'` step to `e2e.yml` that opens — or comments on an existing — tracking issue "Nightly E2E/a11y suite is failing" via `gh` (idempotent, searches by title so no label dependency), with the run URL; added `issues: write` to the workflow permissions. Gated to scheduled runs so a manual workflow_dispatch debugging failure doesn't spam issues. YAML validated.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/e2e.yml:14-18` — scheduled-run failures only email the last editor of the workflow file and don't gate anything, so a broken critical-flow/a11y suite can stay red for weeks unnoticed (compounded by it never having run — see the ⏫ finding).
   - Fix: add an `if: failure()` step that opens/updates a pinned issue (e.g. `gh issue create`) on nightly failure.

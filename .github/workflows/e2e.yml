@@ -22,6 +22,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   e2e:
@@ -82,3 +83,22 @@ jobs:
       - name: Dump compose logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml logs --no-color | tail -200
+
+      # A nightly failure would otherwise only email the workflow file's last
+      # editor and gate nothing. Open (or comment on) a single tracking issue so
+      # a broken critical-flow/a11y suite is visible. Scheduled runs only, so a
+      # manual workflow_dispatch debugging failure doesn't spam issues.
+      - name: Open/refresh tracking issue on nightly failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="Nightly E2E/a11y suite is failing"
+          BODY="The scheduled E2E + a11y suite failed on $(date -u +%Y-%m-%d). Run: $RUN_URL"
+          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
