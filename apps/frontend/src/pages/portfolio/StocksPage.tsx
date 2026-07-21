@@ -3,7 +3,8 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
@@ -38,6 +39,44 @@ interface StocksPageProps {
   emptyDescriptionKey?: string;
   allowedAddAssetClasses?: AssetClass[];
   enableFxAwarePnl?: boolean;
+  /** Page icon shown in the header, empty state, and (combined variant) asset cell. */
+  icon?: LucideIcon;
+  /** i18n key for the dashed "how it works" info card at the bottom. */
+  howItWorksKey?: string;
+  /** i18n keys for the delete-confirmation dialog (description key receives {name}). */
+  deleteTitleKey?: string;
+  deleteDescriptionKey?: string;
+  /** Whether the empty-state header also offers the portfolio ExportDialog (Stocks/Metals: yes, Crypto: no). */
+  showEmptyStateExport?: boolean;
+  /**
+   * Whether dividends are surfaced: summary card, table column, and the
+   * dividends term inside the net-return card. Crypto hides all three.
+   */
+  showDividends?: boolean;
+  /** Unrealized-P&L card icon follows the sign (up/down) instead of a fixed TrendingUp (Crypto). */
+  dynamicUnrealizedIcon?: boolean;
+  /**
+   * 'split' = separate Symbol and Name columns with an asset-class badge
+   * (Stocks/Metals); 'combined' = single Asset column with an icon avatar,
+   * symbol, and name stacked (Crypto).
+   */
+  assetCellVariant?: 'split' | 'combined';
+  /** Decimal places for the units column (Stocks: 4, Crypto: 6). */
+  unitsDecimals?: number;
+  /** Render the units column in a monospace font (Crypto). */
+  unitsMonospace?: boolean;
+  /**
+   * Show avg-cost/price/value converted to the display currency instead of the
+   * holding's native currency (Crypto converts, Stocks/Metals stay native).
+   */
+  priceColumnsInTargetCurrency?: boolean;
+  /**
+   * Percentage shown in the unrealized pill when enableFxAwarePnl is false:
+   * 'costBasis' = unrealizedGain / cost-of-held-units; 'totalReturn' = the
+   * legacy gainLossPercent figure (incl. dividends + realized) that CryptoPage
+   * has always displayed. Ignored while FX-aware P&L is enabled.
+   */
+  simplePnlPercentSource?: 'costBasis' | 'totalReturn';
 }
 
 const DEFAULT_STOCKS_ASSET_CLASSES: AssetClass[] = ['stock', 'etf'];
@@ -50,6 +89,18 @@ export default function StocksPage({
   emptyDescriptionKey = 'stocks.noStocksDesc',
   allowedAddAssetClasses = DEFAULT_STOCKS_ALLOWED_ADD_ASSET_CLASSES,
   enableFxAwarePnl = true,
+  icon: PageIcon = TrendingUp,
+  howItWorksKey = 'stocks.howItWorks',
+  deleteTitleKey = 'portfolio.deleteInvestment',
+  deleteDescriptionKey = 'portfolio.deleteInvestmentDesc',
+  showEmptyStateExport = true,
+  showDividends = true,
+  dynamicUnrealizedIcon = false,
+  assetCellVariant = 'split',
+  unitsDecimals = 4,
+  unitsMonospace = false,
+  priceColumnsInTargetCurrency = false,
+  simplePnlPercentSource = 'costBasis',
 }: StocksPageProps = {}) {
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -80,7 +131,7 @@ export default function StocksPage({
   const openMarketLookup = useCallback((symbol?: string, investmentId?: number) => {
     if (!symbol) return;
     // Pass the holding id so the market page can chart non-Yahoo providers
-    // (custom/kinesis) from this holding's own price history.
+    // (custom/kinesis/binance) from this holding's own price history.
     const suffix = investmentId != null ? `&investmentId=${investmentId}` : "";
     navigate(`/research/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
   }, [navigate]);
@@ -94,19 +145,21 @@ export default function StocksPage({
       }
 
       // True unrealized % = unrealizedGain / cost-of-held-units (a currency-free
-      // ratio). Previously used gainLossPercent, which is total-return (incl.
-      // dividends + realized) — wrong label for an "unrealized %" column. This
-      // branch is currently unreachable (enableFxAwarePnl defaults true) but kept
-      // correct in case a caller ever opts out.
+      // ratio). gainLossPercent is total-return (incl. dividends + realized) —
+      // the wrong label for an "unrealized %" column — but CryptoPage has always
+      // displayed it, so the 'totalReturn' source preserves that page's pill
+      // verbatim while 'costBasis' stays the correct default.
       const heldCost = (Number(holding.avgCostBasis) || 0) * (Number(holding.totalUnits) || 0);
       map[holding.id] = {
         realizedTarget: convertToTarget(holding.realizedGain, holding.currency),
         unrealizedTarget: convertToTarget(holding.unrealizedGain, holding.currency),
-        unrealizedPercent: heldCost > 0 ? ((Number(holding.unrealizedGain) || 0) / heldCost) * 100 : 0,
+        unrealizedPercent: simplePnlPercentSource === 'totalReturn'
+          ? holding.gainLossPercent
+          : heldCost > 0 ? ((Number(holding.unrealizedGain) || 0) / heldCost) * 100 : 0,
       };
     }
     return map;
-  }, [holdings, enableFxAwarePnl, computeFxAwarePnl, convertToTarget]);
+  }, [holdings, enableFxAwarePnl, computeFxAwarePnl, convertToTarget, simplePnlPercentSource]);
 
   const totals = useMemo(() => {
     return holdings.reduce((acc, holding) => {
@@ -145,12 +198,18 @@ export default function StocksPage({
   // fees/taxes columns into cost/proceeds, so net gain subtracts ONLY standalone
   // fee/tax transaction rows. Subtracting totalFees/totalTaxes double-counted the
   // per-row columns. (totalFees/totalTaxes remain for the fees-&-taxes display card.)
-  const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - feeTransactions - taxTransactions;
+  // Pages that hide dividends (Crypto) also exclude them from net return.
+  const netGain = totalRealizedGain + totalUnrealizedGain + (showDividends ? totalDividends : 0) - feeTransactions - taxTransactions;
+
+  // Stocks/Metals show avg-cost/price/value in the holding's native currency;
+  // Crypto shows them converted to the display currency.
+  const fmtPriceCol = (value: number, currency?: string) =>
+    priceColumnsInTargetCurrency ? fmt(convertToTarget(value, currency)) : fmt(value, currency);
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t(titleKey)} icon={TrendingUp} />
+        <PageHeader title={t(titleKey)} icon={PageIcon} />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -159,7 +218,7 @@ export default function StocksPage({
   if (isError) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t(titleKey)} icon={TrendingUp} />
+        <PageHeader title={t(titleKey)} icon={PageIcon} />
         <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
       </div>
     );
@@ -170,13 +229,15 @@ export default function StocksPage({
       <div className="space-y-6">
         <PageHeader
           title={t(titleKey)}
-          icon={TrendingUp}
-          actions={<><ExportDialog defaultType="portfolio" /><AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} /></>}
+          icon={PageIcon}
+          actions={showEmptyStateExport
+            ? <><ExportDialog defaultType="portfolio" /><AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} /></>
+            : <AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />}
         />
         <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
-              icon={TrendingUp}
+              icon={PageIcon}
               title={t(emptyTitleKey)}
               description={t(emptyDescriptionKey)}
               action={<AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />}
@@ -192,7 +253,7 @@ export default function StocksPage({
     <div className="space-y-6">
       <PageHeader
         title={t(titleKey)}
-        icon={TrendingUp}
+        icon={PageIcon}
         actions={<AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />}
       />
 
@@ -203,7 +264,7 @@ export default function StocksPage({
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-3", showDividends ? "lg:grid-cols-6" : "lg:grid-cols-5")}>
         <StatCard size="compact" title={t('portfolio.portfolioValue')}
           value={<RollingNumber parts={fmtParts(totalValue)} />}
           icon={DollarSign} valueClassName="text-primary" />
@@ -213,11 +274,14 @@ export default function StocksPage({
           valueClassName={totalRealizedGain >= 0 ? "amount-gain" : "amount-loss"} />
         <StatCard size="compact" title={t('portfolio.unrealizedPnl')}
           value={<RollingNumber parts={fmtParts(totalUnrealizedGain, { signed: true })} />}
-          icon={TrendingUp} trend={totalUnrealizedGain >= 0 ? "income" : "expense"}
+          icon={dynamicUnrealizedIcon && totalUnrealizedGain < 0 ? TrendingDown : TrendingUp}
+          trend={totalUnrealizedGain >= 0 ? "income" : "expense"}
           valueClassName={totalUnrealizedGain >= 0 ? "amount-gain" : "amount-loss"} />
-        <StatCard size="compact" title={t('portfolio.dividends')}
-          value={<RollingNumber parts={fmtParts(totalDividends, { signed: true })} />}
-          trend="income" valueClassName="text-gain" />
+        {showDividends && (
+          <StatCard size="compact" title={t('portfolio.dividends')}
+            value={<RollingNumber parts={fmtParts(totalDividends, { signed: true })} />}
+            trend="income" valueClassName="text-gain" />
+        )}
         <StatCard size="compact" title={t('portfolio.feesAndTaxes')}
           value={<RollingNumber parts={fmtParts(-(totalFees + totalTaxes), { signed: true })} />}
           trend="expense" valueClassName="text-loss" />
@@ -235,8 +299,14 @@ export default function StocksPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="py-2 px-3 text-left font-medium text-muted-foreground">{t('portfolio.symbol')}</th>
-                  <th className="py-2 px-3 text-left font-medium text-muted-foreground">{t('portfolio.name')}</th>
+                  {assetCellVariant === 'split' ? (
+                    <>
+                      <th className="py-2 px-3 text-left font-medium text-muted-foreground">{t('portfolio.symbol')}</th>
+                      <th className="py-2 px-3 text-left font-medium text-muted-foreground">{t('portfolio.name')}</th>
+                    </>
+                  ) : (
+                    <th className="py-2 px-3 text-left font-medium text-muted-foreground">{t('portfolio.asset')}</th>
+                  )}
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.units')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.avgCost')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.price')}</th>
@@ -246,40 +316,66 @@ export default function StocksPage({
                   {pageHasFxExposure && (
                     <th className="py-2 px-3 text-right font-medium text-muted-foreground" title={t('portfolio.fxEffect')}>{t('portfolio.fxPnl')}</th>
                   )}
-                  <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.dividends')}</th>
+                  {showDividends && (
+                    <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.dividends')}</th>
+                  )}
                   <th className="py-2 px-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {holdings.map((h) => (
                   <tr key={h.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors group">
-                    <td className="py-2 px-3 font-mono font-bold text-primary">{h.symbol || '—'}</td>
-                    <td className="py-2 px-3">
-                      <button
-                        type="button"
-                        className="font-medium text-left hover:underline cursor-pointer"
-                        onDoubleClick={() => openMarketLookup(h.symbol, h.id)}
-                        onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol, h.id))}
-                        title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
-                      >
-                        {h.name}
-                      </button>
-                       <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">
-                         {h.assetClass === 'etf' ? t('stocks.etf') : h.assetClass === 'metals' ? t('portfolio.assetClass.metals') : t('stocks.stock')}
-                       </Badge>
-                    </td>
-                    <td className="text-right py-2 px-3 tabular-nums">{h.totalUnits.toFixed(4)}</td>
-                    <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{fmt(h.avgCostBasis, h.currency)}</td>
+                    {assetCellVariant === 'split' ? (
+                      <>
+                        <td className="py-2 px-3 font-mono font-bold text-primary">{h.symbol || '—'}</td>
+                        <td className="py-2 px-3">
+                          <button
+                            type="button"
+                            className="font-medium text-left hover:underline cursor-pointer"
+                            onDoubleClick={() => openMarketLookup(h.symbol, h.id)}
+                            onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol, h.id))}
+                            title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
+                          >
+                            {h.name}
+                          </button>
+                           <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">
+                             {h.assetClass === 'etf' ? t('stocks.etf') : h.assetClass === 'metals' ? t('portfolio.assetClass.metals') : t('stocks.stock')}
+                           </Badge>
+                        </td>
+                      </>
+                    ) : (
+                      <td className="py-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <PageIcon className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <span className="font-mono font-bold">{h.symbol || '?'}</span>
+                            <button
+                              type="button"
+                              className="block text-xs text-muted-foreground hover:underline cursor-pointer"
+                              onDoubleClick={() => openMarketLookup(h.symbol, h.id)}
+                              onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol, h.id))}
+                              title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
+                            >
+                              {h.name}
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                    <td className={cn("text-right py-2 px-3 tabular-nums", unitsMonospace && "font-mono")}>{h.totalUnits.toFixed(unitsDecimals)}</td>
+                    <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{fmtPriceCol(h.avgCostBasis, h.currency)}</td>
                     <td className="text-right py-2 px-3 tabular-nums">
                       <span className="inline-flex items-center gap-1 justify-end">
-                        {fmt(h.currentPrice ?? 0, h.currency)}
+                        {fmtPriceCol(h.currentPrice ?? 0, h.currency)}
                         <StalePriceIndicator
                           priceProvider={h.price_provider}
                           priceUpdatedAt={h.price_updated_at}
                         />
                       </span>
                     </td>
-                    <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(h.currentValue, h.currency)}</td>
+                    <td className="text-right py-2 px-3 tabular-nums font-medium">{fmtPriceCol(h.currentValue, h.currency)}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", (displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "amount-gain" : "amount-loss")}>
                       {(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "+" : ""}{fmt(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0)}
                       <DeltaPill
@@ -294,9 +390,11 @@ export default function StocksPage({
                     {pageHasFxExposure && (
                       <FxPnlCell holding={h} fxInfo={fxInfoById.get(h.id)} targetCurrency={targetCurrency} fmt={fmt} t={t} />
                     )}
-                    <td className="text-right py-2 px-3 tabular-nums text-gain">
-                      {h.totalDividends > 0 ? `+${fmt(convertToTarget(h.totalDividends, h.currency))}` : '—'}
-                    </td>
+                    {showDividends && (
+                      <td className="text-right py-2 px-3 tabular-nums text-gain">
+                        {h.totalDividends > 0 ? `+${fmt(convertToTarget(h.totalDividends, h.currency))}` : '—'}
+                      </td>
+                    )}
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity">
                         <InvestmentDetailDialog
@@ -309,15 +407,15 @@ export default function StocksPage({
                         />
                         <AddPortfolioTxnDialog investment={h} />
                         <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                          aria-label={t('portfolio.deleteInvestment')} title={t('portfolio.deleteInvestment')}
+                          aria-label={t(deleteTitleKey)} title={t(deleteTitleKey)}
                           onClick={async () => {
                             const ok = await confirm({
-                              title: t('portfolio.deleteInvestment'), 
-                              description: t('portfolio.deleteInvestmentDesc', { name: h.name }), 
-                              confirmLabel: t('common.delete'), 
-                              variant: "destructive" 
-                            }); 
-                            if (ok) deleteInvestment(h.id); 
+                              title: t(deleteTitleKey),
+                              description: t(deleteDescriptionKey, { name: h.name }),
+                              confirmLabel: t('common.delete'),
+                              variant: "destructive"
+                            });
+                            if (ok) deleteInvestment(h.id);
                           }}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -334,7 +432,7 @@ export default function StocksPage({
       {/* Info Card */}
       <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
-          <p className="text-sm text-muted-foreground">{t('stocks.howItWorks')}</p>
+          <p className="text-sm text-muted-foreground">{t(howItWorksKey)}</p>
         </CardContent>
       </Card>
     </div>
