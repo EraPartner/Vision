@@ -26,6 +26,7 @@ import { Check, Loader2, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { ReconcileMode } from '@/lib/api/accounts';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { useBalanceProvenance } from '@/features/accounts/balanceProvenance';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
 import { toast } from 'sonner';
@@ -43,6 +44,8 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
   const statement = account.statement_balance ?? 0;
   const computed = account.computed_balance ?? 0;
   const delta = account.drift ?? statement - computed;
+  // Provenance of the computed figure (WP-B2) — same subline as the hub card.
+  const provenanceText = useBalanceProvenance()(account);
 
   const reconcile = useMutation({
     mutationFn: (mode: ReconcileMode) => apiClient.reconcileAccount(account.id, mode),
@@ -81,6 +84,11 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
             <dt className="text-muted-foreground">{t('accounts.reconcile.computedLabel')}</dt>
             <dd className="tabular-nums font-medium">{fmtCur(computed, account.currency)}</dd>
           </div>
+          {provenanceText && (
+            <div className="pb-1 text-right text-xs text-muted-foreground">
+              {provenanceText}
+            </div>
+          )}
           <div className="mt-1 flex items-center justify-between border-t border-border/50 pt-2">
             <dt className="font-medium">{t('accounts.reconcile.deltaLabel')}</dt>
             <dd className="tabular-nums font-semibold text-destructive">

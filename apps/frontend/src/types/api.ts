@@ -90,6 +90,10 @@ export interface Account {
     computed_balance?: number;
     /** statement_balance − computed_balance; null when no statement balance (ADR-094). */
     drift?: number;
+    /** YYYY-MM-DD date of the stamped statement anchor behind computed_balance (WP-A1 provenance); absent when unstamped. Only set by the list endpoint. */
+    anchor_date?: string;
+    /** Active entries after the anchor, or all active entries when unstamped (WP-A1 provenance). Only set by the list endpoint. */
+    post_anchor_count?: number;
     /** Whether the account has any active ledger rows; only set by the list endpoint. */
     has_transactions?: boolean;
     is_active: boolean;

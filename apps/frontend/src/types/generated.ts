@@ -3152,6 +3152,13 @@ export interface components {
             computed_balance?: number | null;
             /** @description statement_balance − computed_balance; null if no statement balance (ADR-094) */
             drift?: number | null;
+            /**
+             * Format: date
+             * @description YYYY-MM-DD date of the stamped statement balance anchoring computed_balance (WP-A1 provenance); absent when nothing is stamped. Only returned by the list endpoint.
+             */
+            anchor_date?: string;
+            /** @description Active ledger entries after the anchor, or all active entries when unstamped — the "{n} entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list endpoint. */
+            post_anchor_count?: number;
             /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
             has_transactions?: boolean;
             is_active: boolean;

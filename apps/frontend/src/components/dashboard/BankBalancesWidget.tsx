@@ -14,6 +14,7 @@ import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--chart-1))",
@@ -65,6 +66,9 @@ export function BankBalancesWidget() {
     // the Accounts hub reads. getBankBalances still backs the history chart +
     // net-position total (both now read that shared source server-side).
     const { data: accountsData, isLoading: accountsLoading } = useAccounts({ active: "true" });
+    // Balance provenance subline (WP-B2) — the entity payload carries
+    // anchor_date/post_anchor_count, same fields the Accounts hub cards read.
+    const balanceProvenance = useBalanceProvenance();
 
     // The ~365-point × N-accounts chart dataset (and its derived series/legend)
     // is expensive to build and produced a fresh `data`/`series` identity on
@@ -213,6 +217,7 @@ export function BankBalancesWidget() {
                         const acctPositive = balance >= 0;
                         const label = a.display_name || a.name;
                         const txCount = countByAccountName.get(a.name);
+                        const provenanceText = balanceProvenance(a);
                         return (
                             <Card
                                 key={a.id}
@@ -245,6 +250,11 @@ export function BankBalancesWidget() {
                                     <div className={cn("text-xl font-bold tabular-nums", acctPositive ? "text-foreground" : "text-loss")}>
                                         {(() => { const r = formatCurrencyCompact(balance, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                                     </div>
+                                    {provenanceText && (
+                                        <div className="text-xs text-muted-foreground mt-1 truncate" title={provenanceText}>
+                                            {provenanceText}
+                                        </div>
+                                    )}
                                     {txCount != null && (
                                         <div className="text-xs text-muted-foreground mt-1">
                                             {t('bankWidget.transactions', { n: integerLocaleFormatter.format(txCount) })}

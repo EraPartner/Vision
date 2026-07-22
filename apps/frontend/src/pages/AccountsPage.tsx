@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed, Receipt, Coins } from "lucide-react";
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
 import { toAccountPayload, accountToFormValues } from "@/features/accounts/accountFormMapping";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
@@ -36,6 +37,7 @@ export default function AccountsPage() {
     const deleteMutation = useDeleteAccount();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const fmtCur = useCurrencyFormatter();
+    const balanceProvenance = useBalanceProvenance();
 
     const requestDelete = async (a: Account) => {
         const ok = await confirm({
@@ -149,6 +151,9 @@ export default function AccountsPage() {
                         // portfolio_transactions, not the ledger — only offer "view transactions"
                         // when there actually are ledger rows to show.
                         const canViewTransactions = a.has_transactions !== false;
+                        // Provenance subline (WP-B2): where the computed balance comes
+                        // from — stamped statement anchor + entries since, or plain sum.
+                        const provenanceText = balanceProvenance(a);
                         return (
                         <Tooltip key={a.id}>
                         <TooltipTrigger asChild>
@@ -213,6 +218,11 @@ export default function AccountsPage() {
                                             </TooltipTrigger>
                                             <TooltipContent>{t('accounts.balanceTooltip')}</TooltipContent>
                                         </Tooltip>
+                                    )}
+                                    {a.computed_balance != null && provenanceText && (
+                                        <div className="mt-0.5 text-xs text-muted-foreground">
+                                            {provenanceText}
+                                        </div>
                                     )}
                                 </div>
                                 <DropdownMenu>
