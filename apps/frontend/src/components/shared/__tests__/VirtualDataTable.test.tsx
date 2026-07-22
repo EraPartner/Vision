@@ -193,15 +193,15 @@ describe("VirtualDataTable — local search", () => {
 describe("VirtualDataTable — server-side search", () => {
     afterEach(() => vi.useRealTimers());
 
-    it("uses 'Search database...' placeholder when onSearchChange provided", () => {
-        renderTable({ onSearchChange: vi.fn() });
+    it("uses 'Search database...' placeholder when server search provided", () => {
+        renderTable({ serverMode: { search: { onChange: vi.fn() } } });
         expect(screen.getByPlaceholderText("Search database...")).toBeInTheDocument();
     });
 
     it(`calls onSearchChange after ${SEARCH_DEBOUNCE_MS} ms debounce`, async () => {
         vi.useFakeTimers();
         const onSearchChange = vi.fn();
-        renderTable({ onSearchChange });
+        renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
         fireEvent.change(
             screen.getByPlaceholderText("Search database..."),
@@ -216,7 +216,7 @@ describe("VirtualDataTable — server-side search", () => {
     it(`does not fire onSearchChange before ${SEARCH_DEBOUNCE_MS} ms`, async () => {
         vi.useFakeTimers();
         const onSearchChange = vi.fn();
-        renderTable({ onSearchChange });
+        renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
         fireEvent.change(
             screen.getByPlaceholderText("Search database..."),
@@ -235,7 +235,7 @@ describe("VirtualDataTable — server-side sort", () => {
     it("first click calls onSortChange with asc", async () => {
         const user = userEvent.setup();
         const onSortChange = vi.fn();
-        renderTable({ onSortChange, sortKeyProp: null, sortDirProp: null });
+        renderTable({ serverMode: { sort: { onChange: onSortChange, key: null, dir: null } } });
         await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
         expect(onSortChange).toHaveBeenCalledWith("name", "asc");
     });
@@ -243,7 +243,7 @@ describe("VirtualDataTable — server-side sort", () => {
     it("second click on same column calls onSortChange with desc", async () => {
         const user = userEvent.setup();
         const onSortChange = vi.fn();
-        renderTable({ onSortChange, sortKeyProp: "name", sortDirProp: "asc" });
+        renderTable({ serverMode: { sort: { onChange: onSortChange, key: "name", dir: "asc" } } });
         await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
         expect(onSortChange).toHaveBeenCalledWith("name", "desc");
     });
@@ -251,7 +251,7 @@ describe("VirtualDataTable — server-side sort", () => {
     it("third click on same column calls onSortChange to clear sort", async () => {
         const user = userEvent.setup();
         const onSortChange = vi.fn();
-        renderTable({ onSortChange, sortKeyProp: "name", sortDirProp: "desc" });
+        renderTable({ serverMode: { sort: { onChange: onSortChange, key: "name", dir: "desc" } } });
         await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
         expect(onSortChange).toHaveBeenCalledWith(null, null);
     });

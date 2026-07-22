@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX } from '@/hooks/portfolio/useInvestments';
+import { portfolioKeys } from '@/lib/queryKeys';
 import { apiClient } from '@/lib/api';
 import type { CostBasisMethod, StartupSection } from '@/stores/settingsStore';
 import { SettingsSection, SettingsGroup, SettingRow, SelectSettingRow } from '../SettingsPrimitives';
@@ -23,7 +23,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
             // Server-computed summaries (portfolioSummaryService) read the
             // top-level cost_basis_method setting, not the app_settings blob.
             await apiClient.saveSetting('cost_basis_method', v);
-            await queryClient.invalidateQueries({ queryKey: [PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX] });
+            await queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
         } catch {
             toast.error(t('settings.saveFailed'));
         }

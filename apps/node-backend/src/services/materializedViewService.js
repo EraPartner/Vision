@@ -8,7 +8,7 @@
 
 import { query, getClient } from '../database/connection.js';
 import { logger } from '../config/logger.js';
-import { invalidateStatisticsCaches } from '../routes/info/_cache.js';
+import { invalidateStatisticsCaches } from './info/cache.js';
 
 /**
  * Run one maintenance statement with the pool-wide 30s statement_timeout

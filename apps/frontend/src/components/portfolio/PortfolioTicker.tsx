@@ -3,10 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownRight, ArrowUpRight, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
-import {
-  INVESTMENTS_QUERY_KEY,
-  PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX,
-} from "@/hooks/portfolio/useInvestments";
+import { portfolioKeys } from "@/lib/queryKeys";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -240,10 +237,10 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
     // Optimistic: flip the cached investment so the switch and tape react
     // instantly; reconcile (or roll back) once the server responds.
     onMutate: async ({ id, show }) => {
-      await queryClient.cancelQueries({ queryKey: INVESTMENTS_QUERY_KEY });
-      const prev = queryClient.getQueryData<InvestmentsListResponse>(INVESTMENTS_QUERY_KEY);
+      await queryClient.cancelQueries({ queryKey: portfolioKeys.investments });
+      const prev = queryClient.getQueryData<InvestmentsListResponse>(portfolioKeys.investments);
       if (prev) {
-        queryClient.setQueryData<InvestmentsListResponse>(INVESTMENTS_QUERY_KEY, {
+        queryClient.setQueryData<InvestmentsListResponse>(portfolioKeys.investments, {
           ...prev,
           items: prev.items.map((it) => (it.id === id ? { ...it, show_in_ticker: show } : it)),
         });
@@ -251,14 +248,14 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
       return { prev };
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(INVESTMENTS_QUERY_KEY, ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(portfolioKeys.investments, ctx.prev);
       toast.error(t("portfolio.updateInvestmentFailedTitle"), {
         description: (err as Error).message,
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: INVESTMENTS_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: [PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX] });
+      queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });
+      queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
     },
   });
 

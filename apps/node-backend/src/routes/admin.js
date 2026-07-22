@@ -14,6 +14,7 @@
 
 import { Router } from 'express';
 import https from 'https';
+// eslint-disable-next-line vision-local/no-repo-direct-from-route -- admin table stats/VACUUM are legitimately DB-level (ADR-067 documented exemption)
 import { checkConnection, getClient, getTableCount, query } from '../database/connection.js';
 import { getSettings } from '../config/config.js';
 import { env } from '../config/env.js';

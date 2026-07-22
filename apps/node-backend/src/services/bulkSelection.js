@@ -13,7 +13,7 @@
 
 import { query as dbQuery } from '../database/connection.js';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from './filterBuilder.js';
+import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from '../lib/filterBuilder.js';
 import { EXPORT_JOINS_SQL } from './transactionExport.js';
 
 const DEFAULT_ID_CAP = 500;

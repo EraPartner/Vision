@@ -21,7 +21,7 @@ import {
   runPortfolioImportPipeline,
   commitPortfolioImport,
 } from '../services/portfolioImportPipeline/index.js';
-import { VALID_PORTFOLIO_TXN_TYPES } from '../services/portfolioImportPipeline/portfolioTypeNormalizer.js';
+import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
 import {
   listBatches,
   getBatch,

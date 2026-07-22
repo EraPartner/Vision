@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Archive, ArrowRight, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { invalidateAccountRepoint } from '@/hooks/useAccounts';
+import { invalidateAccountRepoint } from '@/lib/queryKeys';
 import { toNumber } from '@/lib/money';
 import { todayYmd } from '@/lib/timezone';
 import { useLanguage } from '@/contexts/LanguageContext';

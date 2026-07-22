@@ -23,7 +23,7 @@ import { computeRecipientByYear } from '../src/services/calculations/aggregation
 import { computeRecipientPivot } from '../src/services/calculations/aggregation/recipientPivot.js';
 import { computeTagPivot } from '../src/services/calculations/aggregation/tagPivot.js';
 import { statsKeyPart } from '../src/services/calculations/aggregation/_statisticsCache.js';
-import { invalidateStatisticsCaches } from '../src/routes/info/_cache.js';
+import { invalidateStatisticsCaches } from '../src/services/info/cache.js';
 
 beforeEach(() => {
   vi.clearAllMocks();

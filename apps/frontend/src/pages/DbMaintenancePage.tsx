@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { adminKeys } from '@/lib/queryKeys';
 import { Database, HardDrive, RefreshCw, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -126,7 +127,7 @@ export default function DbMaintenancePage() {
     const [vacuumingTable, setVacuumingTable] = useState<string | null>(undefined as unknown as null);
 
     const { data, isLoading, error } = useQuery({
-        queryKey: ['admin', 'db-stats'],
+        queryKey: adminKeys.dbStats,
         queryFn: getDbStats,
         staleTime: 30_000,
     });
@@ -137,7 +138,7 @@ export default function DbMaintenancePage() {
         onSuccess: (_, table) => {
             const label = table ?? t('dbMaintenance.allTables');
             toast.success(t('dbMaintenance.vacuumSuccess'), { description: label });
-            qc.invalidateQueries({ queryKey: ['admin', 'db-stats'] });
+            qc.invalidateQueries({ queryKey: adminKeys.dbStats });
         },
         onError: (err: Error, table) => {
             const label = table ?? t('dbMaintenance.allTables');
@@ -155,7 +156,7 @@ export default function DbMaintenancePage() {
     }
 
     function handleRefresh() {
-        qc.invalidateQueries({ queryKey: ['admin', 'db-stats'] });
+        qc.invalidateQueries({ queryKey: adminKeys.dbStats });
     }
 
     const tableCount = data?.tables.length ?? 0;

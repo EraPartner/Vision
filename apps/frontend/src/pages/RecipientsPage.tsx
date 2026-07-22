@@ -16,6 +16,7 @@ import { MergeRecipientsDialog } from "@/features/recipients/MergeRecipientsDial
 import { RecipientPatternsDialog } from "@/features/recipients/RecipientPatternsDialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
+import { recipientKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import type { Recipient } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,7 +66,7 @@ export default function RecipientsPage() {
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['recipients', 'virtual', { active: !showAll, search: search || undefined, uncategorized: showUncategorized, sortKey, sortDir, pageSize }],
+        queryKey: recipientKeys.virtualList({ active: !showAll, search: search || undefined, uncategorized: showUncategorized, sortKey, sortDir, pageSize }),
         queryFn: () => apiClient.getRecipients({ limit: pageSize, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized, sort_by: sortKey || undefined, sort_dir: sortDir || undefined }),
         placeholderData: (prev) => prev, // keep previous list while a new filter/search/sort round-trips
         staleTime: 30_000,
@@ -197,7 +198,7 @@ export default function RecipientsPage() {
                             onSelect={(catId) => {
                                 // Cancel any ongoing queries to prevent refetch removing this row
                                 // before the edit mode is properly cancelled
-                                queryClient.cancelQueries({ queryKey: ['recipients'] });
+                                queryClient.cancelQueries({ queryKey: recipientKeys.all });
                                 // Cancel edit mode first to avoid stale state
                                 cancelEditingRef.current?.();
                                 // Small delay to let the UI update before mutation
@@ -400,15 +401,16 @@ export default function RecipientsPage() {
                             description={t('recipientsPage.tableSubtitle', { n: 0 })}
                         />
                     )}
-                    totalItems={totalItems}
-                    isFetchingMore={isFetchingMore}
-                    onLoadMore={loadMore}
-                    hasMore={hasMoreRef.current}
-                    onSearchChange={setSearch}
-                    searchValue={search}
-                    onSortChange={handleSortChange}
-                    sortKeyProp={sortKey}
-                    sortDirProp={sortDir}
+                    serverMode={{
+                        sort: { onChange: handleSortChange, key: sortKey, dir: sortDir },
+                        search: { onChange: setSearch, value: search },
+                        pagination: {
+                            totalItems,
+                            isFetchingMore,
+                            onLoadMore: loadMore,
+                            hasMore: hasMoreRef.current,
+                        },
+                    }}
                     actions={tableActions}
                     maxHeight={700}
                     cancelEditingRef={cancelEditingRef}

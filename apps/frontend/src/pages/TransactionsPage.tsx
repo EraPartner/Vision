@@ -438,23 +438,27 @@ export default function TransactionsPage() {
                 <TransactionsTable
                     transactions={transactions}
                     allItems={allItems}
-                    totalItems={totalItems}
-                    isFetchingMore={isFetchingMore}
-                    hasMore={hasMoreRef.current}
-                    loadMoreOffset={loadMoreOffset}
-                    search={search}
-                    onSearchChange={setSearch}
-                    searchSuggestions={({ query, close }) => (
-                        <TransactionSearchSuggestions
-                            query={query}
-                            onApply={handleApplyQuickFilter}
-                            close={close}
-                        />
-                    )}
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSortChange={handleSortChange}
-                    onLoadMore={loadMore}
+                    serverMode={{
+                        sort: { onChange: handleSortChange, key: sortKey, dir: sortDir },
+                        search: {
+                            onChange: setSearch,
+                            value: search,
+                            suggestions: ({ query, close }) => (
+                                <TransactionSearchSuggestions
+                                    query={query}
+                                    onApply={handleApplyQuickFilter}
+                                    close={close}
+                                />
+                            ),
+                        },
+                        pagination: {
+                            totalItems,
+                            isFetchingMore,
+                            hasMore: hasMoreRef.current,
+                            loadMoreOffset,
+                            onLoadMore: loadMore,
+                        },
+                    }}
                     onRowUpdate={handleUpdate}
                     onOpenInfo={setInfoTransaction}
                     onQuickLook={setQuickLookTransaction}

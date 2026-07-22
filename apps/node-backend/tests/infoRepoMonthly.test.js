@@ -26,7 +26,7 @@ vi.mock('../src/repositories/infoRepositoryHelpers.js', async () => {
 import { query } from '../src/database/connection.js';
 import { convertRowsToEur } from '../src/services/currency/currencyConversionService.js';
 import { mvAvailable } from '../src/repositories/infoRepositoryHelpers.js';
-import { getMonthlyFinancialSummary } from '../src/repositories/infoRepo.monthly.js';
+import { getMonthlyFinancialSummary } from '../src/repositories/infoRepositoryMonthly.js';
 
 beforeEach(() => vi.clearAllMocks());
 

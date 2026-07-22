@@ -2,13 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { apiClient } from '@/lib/api';
+import { importKeys } from '@/lib/queryKeys';
 import type { PortfolioCustomConfig } from '@/lib/api/portfolioImports';
-
-const QUERY_KEY = ['portfolio-parser-configs'];
 
 export function usePortfolioParserConfigs() {
   return useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: importKeys.portfolioParserConfigs,
     queryFn: () => apiClient.listPortfolioParserConfigs(),
     staleTime: 60_000,
   });
@@ -21,7 +20,7 @@ export function useCreatePortfolioParserConfig() {
     mutationFn: ({ name, config }: { name: string; config: PortfolioCustomConfig }) =>
       apiClient.createPortfolioParserConfig(name, config),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: importKeys.portfolioParserConfigs });
       toast.success(t('importPage.customParser.saved'));
     },
     onError: (error: Error) => {
@@ -37,7 +36,7 @@ export function useUpdatePortfolioParserConfig() {
     mutationFn: ({ id, ...patch }: { id: number; name?: string; config?: PortfolioCustomConfig }) =>
       apiClient.updatePortfolioParserConfig(id, patch),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: importKeys.portfolioParserConfigs });
       toast.success(t('importPage.customParser.updated'));
     },
     onError: (error: Error) => {
@@ -52,7 +51,7 @@ export function useDeletePortfolioParserConfig() {
   return useMutation({
     mutationFn: (id: number) => apiClient.deletePortfolioParserConfig(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: importKeys.portfolioParserConfigs });
       toast.success(t('importPage.customParser.deleted'));
     },
     onError: (error: Error) => {

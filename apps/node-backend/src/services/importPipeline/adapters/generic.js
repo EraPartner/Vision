@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../../../config/logger.js';
-import { normalizeToUppercase } from '../../textNormalization.js';
+import { normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat } from './_shared.js';
 
 const NAME = 'generic';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { expandOccurrences } from '../../src/services/calculations/recurrence.js';
+import { expandOccurrences } from '../../src/lib/calculations/recurrence.js';
 
 /**
  * Shared horizon-expansion loop (formerly duplicated in cashflowForecast and the

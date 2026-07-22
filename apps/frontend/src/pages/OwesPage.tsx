@@ -18,6 +18,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { transactionKeys } from "@/lib/queryKeys";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { todayYmd } from "@/lib/timezone";
 import { onActivateKeyDown } from "@/utils/a11y";
@@ -360,7 +361,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
     const loadingRef = useRef(false);
 
     const { data, isLoading } = useQuery({
-        queryKey: ['transactions', 'owes-recipient-group', recipientId],
+        queryKey: transactionKeys.owesRecipientGroup(recipientId),
         queryFn: () => apiClient.getTransactions({
             recipient_group_id: recipientId,
             limit: 10,
@@ -465,10 +466,14 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             subtitle={t('owesPage.recentTransactionsSubtitle', { name: recipientName })}
             columns={columns}
             data={transactions}
-            totalItems={totalItems}
-            isFetchingMore={isFetchingMore}
-            onLoadMore={loadMore}
-            hasMore={hasMoreRef.current}
+            serverMode={{
+                pagination: {
+                    totalItems,
+                    isFetchingMore,
+                    onLoadMore: loadMore,
+                    hasMore: hasMoreRef.current,
+                },
+            }}
             maxHeight={320}
             rowHeight={42}
             emptyMessage={t('owesPage.noRecentTransactions')}

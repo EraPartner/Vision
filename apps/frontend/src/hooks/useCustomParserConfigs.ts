@@ -1,15 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type SavedParserConfig, type CustomParserConfigPayload } from '@/lib/api';
 import { toast } from 'sonner';
+import { importKeys } from '@/lib/queryKeys';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export type { SavedParserConfig, CustomParserConfigPayload };
 
-const QUERY_KEY = ['custom-parser-configs'];
-
 export function useCustomParserConfigs() {
   return useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: importKeys.customParserConfigs,
     queryFn: () => apiClient.listCustomParserConfigs(),
     staleTime: 60_000,
   });
@@ -22,7 +21,7 @@ export function useCreateCustomParserConfig() {
     mutationFn: ({ name, config }: { name: string; config: CustomParserConfigPayload }) =>
       apiClient.createCustomParserConfig(name, config),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: importKeys.customParserConfigs });
       toast.success(t('importPage.customParser.saved'));
     },
     onError: (error: Error) => {
@@ -38,7 +37,7 @@ export function useUpdateCustomParserConfig() {
     mutationFn: ({ id, ...patch }: { id: number; name?: string; config?: CustomParserConfigPayload }) =>
       apiClient.updateCustomParserConfig(id, patch),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: importKeys.customParserConfigs });
       toast.success(t('importPage.customParser.updated'));
     },
     onError: (error: Error) => {
@@ -53,7 +52,7 @@ export function useDeleteCustomParserConfig() {
   return useMutation({
     mutationFn: (id: number) => apiClient.deleteCustomParserConfig(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: importKeys.customParserConfigs });
       toast.success(t('importPage.customParser.deleted'));
     },
     onError: (error: Error) => {

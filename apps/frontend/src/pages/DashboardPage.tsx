@@ -20,6 +20,7 @@ import { useFilteredDashboardStats, useMonthlySummary } from "@/hooks/useFiltere
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { dashboardKeys } from "@/lib/queryKeys";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { Money } from "@/components/shared/Money";
@@ -107,7 +108,7 @@ export default function DashboardPage() {
         isLoading: recentFilteredLoading,
         error: recentFilteredError,
     } = useQuery({
-        queryKey: ['dashboardRecentTransactions', allExcludedCategoryIds, excludedRecipientIds, exclusionsApply],
+        queryKey: dashboardKeys.recentTransactions(allExcludedCategoryIds, excludedRecipientIds, exclusionsApply),
         queryFn: async () => {
             const pageSize = 200;
             // Cap the scan so a history dominated by excluded categories (e.g.

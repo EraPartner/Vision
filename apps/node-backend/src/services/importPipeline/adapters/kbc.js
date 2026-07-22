@@ -2,7 +2,7 @@
  * KBC CSV adapter — Belgian bank, ';'-separated with 15+ columns.
  */
 
-import { cleanKbcRecipientName, normalizeToUppercase } from '../../textNormalization.js';
+import { cleanKbcRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 

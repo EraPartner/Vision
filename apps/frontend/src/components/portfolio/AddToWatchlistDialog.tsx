@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MAX_NUMERIC_18_6, parseDecimal } from "@/lib/decimal";
 import { useQueryClient } from "@tanstack/react-query";
+import { watchlistKeys } from "@/lib/queryKeys";
 import {
   Dialog,
   DialogContent,
@@ -161,7 +162,7 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
           : undefined,
       });
 
-      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+      queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
       toast.success(t('addWatchlist.success'));
       handleClose();
     } catch {

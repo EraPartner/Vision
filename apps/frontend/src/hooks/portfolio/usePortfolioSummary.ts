@@ -10,13 +10,12 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { portfolioKeys } from '@/lib/queryKeys';
 import type { PortfolioSummaryResponse } from '@/lib/api/info';
-
-export const PORTFOLIO_SUMMARY_QUERY_KEY = ['portfolio-summary'] as const;
 
 export function usePortfolioSummaryQuery(currency: string) {
   return useQuery<PortfolioSummaryResponse>({
-    queryKey: [...PORTFOLIO_SUMMARY_QUERY_KEY, currency],
+    queryKey: portfolioKeys.summary(currency),
     queryFn: () => apiClient.getPortfolioSummary({ currency }),
     staleTime: 60_000,
     gcTime: 5 * 60_000,

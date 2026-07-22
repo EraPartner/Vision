@@ -11,7 +11,7 @@
 import { query } from '../database/connection.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { toWireDate } from '../lib/dateFormat.js';
-import { buildExclusionClauses } from '../services/filterBuilder.js';
+import { buildExclusionClauses } from '../lib/filterBuilder.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
@@ -29,7 +29,7 @@ export const recipientInsightsRepository = {
    * - month-over-month comparison alerts ("You spent X% more at …")
    */
   async getRecipientInsights(targetCurrency = 'EUR', { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
-    // Canonical exclusion semantics (services/filterBuilder.buildExclusionClauses,
+    // Canonical exclusion semantics (lib/filterBuilder.buildExclusionClauses,
     // shared with the dashboard / statistics endpoints): drop hidden categories
     // (by effective category) and excluded recipients (rolled up to the primary
     // recipient via COALESCE(r.primary_recipient_id, t.recipient_id)). Built once
@@ -166,7 +166,7 @@ export const recipientInsightsRepository = {
   },
 
   async getRecipientByYear(targetCurrency = 'EUR', excludedRecipientIds = [], excludedCategoryIds = []) {
-    // Canonical exclusion clauses (services/filterBuilder.buildExclusionClauses).
+    // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses).
     // Category exclusion (incl. hidden categories) must apply here too, or the
     // year-filtered Top Recipients view contradicts the "All years" view (which
     // does exclude them).
@@ -231,7 +231,7 @@ export const recipientInsightsRepository = {
   },
 
   async getRecipientPivot(excludedRecipientIds = [], targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, recipientIds = null } = {}) {
-    // Canonical recipient exclusion (services/filterBuilder.buildExclusionClauses).
+    // Canonical recipient exclusion (lib/filterBuilder.buildExclusionClauses).
     const excl = buildExclusionClauses({ excludedRecipientIds });
     const params = excl.params;
     const recExclude = excl.whereSql ? `AND ${excl.whereSql}` : '';

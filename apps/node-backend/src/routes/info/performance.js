@@ -11,8 +11,8 @@ import {
   perfResponseCache,
   PERF_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from './_cache.js';
-import { buildPortfolioPerformancePayload } from './_performanceHelpers.js';
+} from '../../services/info/cache.js';
+import { buildPortfolioPerformancePayload } from '../../services/info/performanceHelpers.js';
 
 const router = Router();
 

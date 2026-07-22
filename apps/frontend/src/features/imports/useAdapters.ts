@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { importKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -19,7 +20,7 @@ export function useAdapters(enabled = true) {
   // had `t` in its deps). `enabled` lets always-mounted consumers (the wizard)
   // defer the fetch until they are actually shown.
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['supported-parsers'],
+    queryKey: importKeys.supportedParsers,
     queryFn: () => apiClient.getSupportedParsers(),
     staleTime: Infinity,
     enabled,

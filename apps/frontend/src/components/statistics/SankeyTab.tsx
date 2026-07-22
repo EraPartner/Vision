@@ -9,6 +9,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { getSankeyFlow } from "@/lib/api/aggregations";
+import { aggregationKeys } from "@/lib/queryKeys";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { SankeyChart } from "./SankeyChart";
@@ -42,14 +43,12 @@ export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply,
   const excludedRecipientIds = applyExclusions ? resolvedRecIds : [];
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: [
-      "aggregations",
-      "sankey",
+    queryKey: aggregationKeys.sankey(
       selectedYear,
       currency,
       applyExclusions ? excludedCategoryIds : [],
       applyExclusions ? excludedRecipientIds : [],
-    ],
+    ),
     queryFn: () =>
       getSankeyFlow({
         currency,

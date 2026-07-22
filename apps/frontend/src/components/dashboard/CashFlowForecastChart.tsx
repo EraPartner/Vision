@@ -30,6 +30,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 import { apiClient } from "@/lib/api";
+import { cashflowKeys } from "@/lib/queryKeys";
 import type { ForecastMethod } from "@/lib/api/aggregations";
 import {
     ACTUAL_COLOR,
@@ -116,13 +117,12 @@ export function CashFlowForecastChart({
     );
 
     const monthQuery = useQuery({
-        queryKey: [
-            "cashflowForecastMethods",
+        queryKey: cashflowKeys.forecastMethods(
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
             includePlanned,
-        ] as const,
+        ),
         queryFn: () =>
             apiClient.getCashflowForecastMethods({
                 currency,
@@ -138,14 +138,13 @@ export function CashFlowForecastChart({
     });
 
     const rollingQuery = useQuery({
-        queryKey: [
-            "cashflowForecastRolling",
+        queryKey: cashflowKeys.forecastRolling(
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
             includePlanned,
             rollingDays,
-        ] as const,
+        ),
         queryFn: () =>
             apiClient.getCashflowForecastRolling({
                 currency,
@@ -163,14 +162,13 @@ export function CashFlowForecastChart({
     });
 
     const rollingDiagnosticsQuery = useQuery({
-        queryKey: [
-            "cashflowForecastRollingDiagnostics",
+        queryKey: cashflowKeys.forecastRollingDiagnostics(
             currency,
             excludedCategoryIds,
             excludedRecipientIds,
             includePlanned,
             rollingDays,
-        ] as const,
+        ),
         queryFn: () =>
             apiClient.getCashflowForecastRolling({
                 currency,

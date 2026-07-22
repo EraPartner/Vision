@@ -13,7 +13,7 @@ vi.mock('../src/config/logger.js', () => ({
 }));
 vi.mock('../src/database/connection.js', () =>
   mockConnection({ query: vi.fn().mockResolvedValue({ rows: [{ is_brokerage: false }] }) }));
-vi.mock('../src/routes/info/_cache.js', () => ({ invalidatePortfolioCaches: vi.fn() }));
+vi.mock('../src/services/info/cache.js', () => ({ invalidatePortfolioCaches: vi.fn() }));
 vi.mock('../src/services/portfolioImportPipeline/stage.js', () => ({
   createBatch: vi.fn().mockResolvedValue(42),
   stageBatch: vi.fn(),

@@ -27,7 +27,7 @@
  */
 
 import plannedTransactionRepository from '../../../repositories/plannedTransactionRepository.js';
-import { expandOccurrences as expandRecurrence } from '../recurrence.js';
+import { expandOccurrences as expandRecurrence } from '../../../lib/calculations/recurrence.js';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
 import { toAppTz, appDateStringToUtc, toAppDateString } from '../../../lib/timezone.js';

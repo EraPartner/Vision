@@ -2,6 +2,13 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {registerUndo} from '@/lib/undo';
 import { downloadBlob } from '@/lib/downloadBlob';
 import {apiClient} from '@/lib/api';
+import {
+    categoryKeys,
+    invalidateTransactionData,
+    recipientKeys,
+    tagKeys,
+    transactionKeys,
+} from '@/lib/queryKeys';
 import type {
     BulkExportRequest,
     BulkSelectionRequest,
@@ -31,7 +38,7 @@ interface UseTransactionsParams {
 
 export function useTransactions(params?: UseTransactionsParams) {
     return useQuery({
-        queryKey: ['transactions', params],
+        queryKey: transactionKeys.list(params),
         queryFn: () => apiClient.getTransactions(params),
         staleTime: 30_000,
         placeholderData: (prev) => prev, // keep previous data while fetching (smooth pagination)
@@ -50,11 +57,11 @@ export function useCreateTransaction() {
         // via invalidation. Derived fields (category_name, …) stay undefined
         // until the refetch — renderers already fall back for those.
         onMutate: async (transaction) => {
-            await queryClient.cancelQueries({queryKey: ['transactions']});
+            await queryClient.cancelQueries({queryKey: transactionKeys.all});
             const snapshot = snapshotTransactionLists(queryClient);
             const tempId = -Date.now();
             const tempRow = {...transaction, id: tempId} as unknown as Transaction;
-            queryClient.setQueriesData<TransactionsListResponse>({queryKey: ['transactions']}, (old) => {
+            queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
                 if (!old?.items) return old;
                 return {
                     ...old,
@@ -66,7 +73,7 @@ export function useCreateTransaction() {
         },
         onSuccess: (created, _vars, context) => {
             if (context?.tempId != null) {
-                queryClient.setQueriesData<TransactionsListResponse>({queryKey: ['transactions']}, (old) => {
+                queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
                     if (!old?.items) return old;
                     return {
                         ...old,
@@ -81,7 +88,7 @@ export function useCreateTransaction() {
             toast.error(t('transactions.createFailedTitle'), { description: error.message });
         },
         onSettled: () => {
-            invalidateTransactionLists(queryClient);
+            invalidateTransactionData(queryClient);
         },
     });
 }
@@ -99,28 +106,13 @@ type TransactionsSnapshot = Array<[readonly unknown[], TransactionsListResponse 
  * invalidation so server truth always wins regardless of outcome.
  */
 function snapshotTransactionLists(queryClient: ReturnType<typeof useQueryClient>): TransactionsSnapshot {
-    return queryClient.getQueriesData<TransactionsListResponse>({queryKey: ['transactions']});
+    return queryClient.getQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all});
 }
 
 function rollbackTransactionLists(queryClient: ReturnType<typeof useQueryClient>, snapshot: TransactionsSnapshot) {
     for (const [key, data] of snapshot) {
         queryClient.setQueryData(key, data);
     }
-}
-
-export function invalidateTransactionLists(queryClient: ReturnType<typeof useQueryClient>) {
-    queryClient.invalidateQueries({queryKey: ['transactions']});
-    queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
-    queryClient.invalidateQueries({queryKey: ['monthlySummary']});
-    // Dashboard stat cards (['filteredDashboardStats']), the Statistics page
-    // (['aggregations', …]) and the dashboard recent-transactions widget
-    // (['dashboardRecentTransactions', …]) all derive from transactions but
-    // were never invalidated, so they served stale data (deleted/imported rows
-    // still showing) until staleTime expired. Window-focus refetch is disabled
-    // globally, so only explicit invalidation refreshes them.
-    queryClient.invalidateQueries({queryKey: ['filteredDashboardStats']});
-    queryClient.invalidateQueries({queryKey: ['aggregations']});
-    queryClient.invalidateQueries({queryKey: ['dashboardRecentTransactions']});
 }
 
 export function useUpdateTransaction() {
@@ -131,12 +123,12 @@ export function useUpdateTransaction() {
         mutationFn: ({id, data}: { id: number; data: TransactionUpdate }) =>
             apiClient.updateTransaction(id, data),
         onMutate: async ({id, data}) => {
-            await queryClient.cancelQueries({queryKey: ['transactions']});
+            await queryClient.cancelQueries({queryKey: transactionKeys.all});
             const snapshot = snapshotTransactionLists(queryClient);
             // `tags` is excluded from the optimistic merge: the update payload
             // carries string[] while the cached rows hold Tag[] objects.
             const {tags: _tags, ...optimisticFields} = data;
-            queryClient.setQueriesData<TransactionsListResponse>({queryKey: ['transactions']}, (old) => {
+            queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
                 if (!old?.items) return old;
                 return {
                     ...old,
@@ -153,7 +145,7 @@ export function useUpdateTransaction() {
             toast.error(t('transactions.updateFailedTitle'), { description: error.message });
         },
         onSettled: () => {
-            invalidateTransactionLists(queryClient);
+            invalidateTransactionData(queryClient);
         },
     });
 }
@@ -165,7 +157,7 @@ export function useDeleteTransaction() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteTransaction(id),
         onMutate: async (id) => {
-            await queryClient.cancelQueries({queryKey: ['transactions']});
+            await queryClient.cancelQueries({queryKey: transactionKeys.all});
             const snapshot = snapshotTransactionLists(queryClient);
             // Keep the deleted row so Undo can faithfully recreate it.
             let deletedRow: Transaction | undefined;
@@ -173,7 +165,7 @@ export function useDeleteTransaction() {
                 deletedRow = data?.items?.find((tx) => tx.id === id);
                 if (deletedRow) break;
             }
-            queryClient.setQueriesData<TransactionsListResponse>({queryKey: ['transactions']}, (old) => {
+            queryClient.setQueriesData<TransactionsListResponse>({queryKey: transactionKeys.all}, (old) => {
                 if (!old?.items) return old;
                 const items = old.items.filter((tx) => tx.id !== id);
                 if (items.length === old.items.length) return old;
@@ -206,7 +198,7 @@ export function useDeleteTransaction() {
                             comment: row.comment ?? undefined,
                             tags: row.tags?.map((tag) => (typeof tag === 'string' ? tag : tag.slug)),
                         });
-                        invalidateTransactionLists(queryClient);
+                        invalidateTransactionData(queryClient);
                         toast.success(t('transactions.restored'));
                     } catch (error) {
                         toast.error(t('transactions.restoreFailedTitle'), {
@@ -227,7 +219,7 @@ export function useDeleteTransaction() {
             toast.error(t('transactions.deleteFailedTitle'), { description: error.message });
         },
         onSettled: () => {
-            invalidateTransactionLists(queryClient);
+            invalidateTransactionData(queryClient);
         },
     });
 }
@@ -239,8 +231,8 @@ export function useBulkTagTransactions() {
     return useMutation({
         mutationFn: (request: BulkTagRequest) => apiClient.bulkTagTransactions(request),
         onSuccess: () => {
-            invalidateTransactionLists(queryClient);
-            queryClient.invalidateQueries({queryKey: ['tags']});
+            invalidateTransactionData(queryClient);
+            queryClient.invalidateQueries({queryKey: tagKeys.all});
             toast.success(t('tags.bulkApplied'));
         },
         onError: (error: Error) => {
@@ -256,7 +248,7 @@ export function useBulkDeleteTransactions() {
     return useMutation({
         mutationFn: (request: BulkSelectionRequest) => apiClient.bulkDeleteTransactions(request),
         onSuccess: (result) => {
-            invalidateTransactionLists(queryClient);
+            invalidateTransactionData(queryClient);
             toast.success(t('txPage.bulk.deleted', { n: result.deleted }));
         },
         onError: (error: Error) => {
@@ -272,9 +264,9 @@ export function useBulkUpdateTransactions() {
     return useMutation({
         mutationFn: (request: BulkUpdateRequest) => apiClient.bulkUpdateTransactions(request),
         onSuccess: (result) => {
-            invalidateTransactionLists(queryClient);
-            queryClient.invalidateQueries({ queryKey: ['categories'] });
-            queryClient.invalidateQueries({ queryKey: ['recipients'] });
+            invalidateTransactionData(queryClient);
+            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             toast.success(t('txPage.bulk.updated', { n: result.updated }));
         },
         onError: (error: Error) => {

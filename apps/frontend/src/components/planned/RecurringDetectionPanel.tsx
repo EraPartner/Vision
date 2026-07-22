@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { plannedKeys } from "@/lib/queryKeys";
 import { formatCurrency } from "@/utils/currency";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -121,7 +122,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     }, []);
 
     const { data, isLoading, error } = useQuery({
-        queryKey: ["recurringPatterns"],
+        queryKey: plannedKeys.recurringPatterns,
         queryFn: () => apiClient.getRecurringPatterns(),
         staleTime: 5 * 60_000,
         retry: false,
@@ -155,8 +156,8 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                     ? `every ${pattern.intervalDays} days`
                     : pattern.detectedPattern,
             });
-            queryClient.invalidateQueries({ queryKey: ["recurringPatterns"] });
-            queryClient.invalidateQueries({ queryKey: ["plannedTransactions"] });
+            queryClient.invalidateQueries({ queryKey: plannedKeys.recurringPatterns });
+            queryClient.invalidateQueries({ queryKey: plannedKeys.transactionsAll });
             toast.success(t('recurring.toast.created', { name: pattern.recipientName }));
         } catch (err: unknown) {
             toast.error(t('recurring.toast.failed', { msg: (err as Error).message }));

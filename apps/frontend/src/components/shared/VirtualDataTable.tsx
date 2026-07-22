@@ -21,7 +21,54 @@ import { cn } from "@/lib/utils";
 
 export type { Column };
 
-type SortDirection = "asc" | "desc" | null;
+export type SortDirection = "asc" | "desc" | null;
+
+/**
+ * Server-driven data operations, grouped by concern. Presence of a group turns
+ * that concern over to the server; omit the whole object for a fully local table.
+ *
+ * - `sort`: clicking a column header calls `sort.onChange` instead of sorting
+ *   locally, so the full dataset (not just the loaded page) is sorted by the
+ *   server. `key`/`dir` are the controlled sort state.
+ * - `search`: the search box debounces into `search.onChange` instead of
+ *   filtering loaded rows locally.
+ * - `pagination`: infinite scroll near the bottom calls `pagination.onLoadMore`.
+ */
+export interface VirtualTableServerMode {
+    sort?: {
+        /** Called with the next key/direction when a column header is clicked. */
+        onChange: (key: string | null, dir: SortDirection) => void;
+        /** Controlled sort key */
+        key?: string | null;
+        /** Controlled sort direction */
+        dir?: SortDirection;
+    };
+    search?: {
+        /** Server-side search callback (debounced) */
+        onChange: (query: string) => void;
+        /** Controlled search value */
+        value?: string;
+        /**
+         * Optional filter-suggestion dropdown rendered under the search input while
+         * it is focused. Receives the live query and a `close()` to dismiss the
+         * dropdown (e.g. after applying a filter). The table only provides the
+         * anchor + open state; the suggestion content is owned by the caller.
+         */
+        suggestions?: (ctx: { query: string; close: () => void }) => React.ReactNode;
+    };
+    pagination?: {
+        /** Total items available on server */
+        totalItems?: number;
+        /** Whether more data is currently being fetched */
+        isFetchingMore?: boolean;
+        /** Called when the user scrolls near the bottom and more data should be loaded */
+        onLoadMore?: () => void;
+        /** Whether there are more items to load */
+        hasMore?: boolean;
+        /** Number of rows from the end before triggering onLoadMore. Defaults to 15 */
+        loadMoreOffset?: number;
+    };
+}
 
 interface VirtualDataTableProps<T> {
     title: string;
@@ -43,29 +90,8 @@ interface VirtualDataTableProps<T> {
      * the table's inline edit for that row.
      */
     rowContextMenu?: (row: T, index: number, helpers: { startEditing: () => void }) => React.ReactNode;
-    /** Total items available on server */
-    totalItems?: number;
-    /** Whether more data is currently being fetched */
-    isFetchingMore?: boolean;
-    /** Called when the user scrolls near the bottom and more data should be loaded */
-    onLoadMore?: () => void;
-    /** Whether there are more items to load */
-    hasMore?: boolean;
-    /** Number of rows from the end before triggering onLoadMore */
-    loadMoreOffset?: number;
-    /** Server-side search callback */
-    onSearchChange?: (query: string) => void;
-    searchValue?: string;
-    /**
-     * When provided the table operates in server-sort mode: clicking a column
-     * header calls onSortChange instead of sorting locally. This ensures the
-     * full dataset (not just the loaded page) is sorted by the server.
-     */
-    onSortChange?: (key: string | null, dir: SortDirection) => void;
-    /** Controlled sort key (server-sort mode) */
-    sortKeyProp?: string | null;
-    /** Controlled sort direction (server-sort mode) */
-    sortDirProp?: SortDirection;
+    /** Server-side sort / search / pagination. Omit for a fully local table. */
+    serverMode?: VirtualTableServerMode;
     /** Height of the virtual scroll container. Defaults to 600 */
     maxHeight?: number;
     /** Estimated row height for virtualizer */
@@ -74,13 +100,6 @@ interface VirtualDataTableProps<T> {
     cancelEditingRef?: React.MutableRefObject<(() => void) | null>;
     /** Optional callback to notify when editing state changes (true = editing started, false = editing ended) */
     onEditingChange?: (editing: boolean) => void;
-    /**
-     * Optional filter-suggestion dropdown rendered under the search input while it
-     * is focused. Receives the live query and a `close()` to dismiss the dropdown
-     * (e.g. after applying a filter). The table only provides the anchor + open
-     * state; the suggestion content is owned by the caller.
-     */
-    searchSuggestions?: (ctx: { query: string; close: () => void }) => React.ReactNode;
 }
 
 interface IndexedRow<T> {
@@ -112,22 +131,29 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     onRowOpen,
     onRowQuickLook,
     rowContextMenu,
-    totalItems,
-    isFetchingMore = false,
-    onLoadMore,
-    hasMore = false,
-    loadMoreOffset = 15,
-    onSearchChange,
-    searchValue,
-    onSortChange,
-    sortKeyProp,
-    sortDirProp,
+    serverMode,
     maxHeight = 600,
     rowHeight = 44,
     cancelEditingRef,
     onEditingChange,
-    searchSuggestions,
 }: VirtualDataTableProps<T>) {
+    // Ungroup the server-mode config once — all internal logic keys off these
+    // leaf values (identical names/defaults to the former flat props), so a
+    // fresh `serverMode` object identity per render costs nothing: hooks below
+    // depend on the leaves, and the leaf callbacks are as stable as the caller
+    // makes them.
+    const onSortChange = serverMode?.sort?.onChange;
+    const sortKeyProp = serverMode?.sort?.key;
+    const sortDirProp = serverMode?.sort?.dir;
+    const onSearchChange = serverMode?.search?.onChange;
+    const searchValue = serverMode?.search?.value;
+    const searchSuggestions = serverMode?.search?.suggestions;
+    const totalItems = serverMode?.pagination?.totalItems;
+    const isFetchingMore = serverMode?.pagination?.isFetchingMore ?? false;
+    const onLoadMore = serverMode?.pagination?.onLoadMore;
+    const hasMore = serverMode?.pagination?.hasMore ?? false;
+    const loadMoreOffset = serverMode?.pagination?.loadMoreOffset ?? 15;
+
     const { t } = useLanguage();
     // Coarse pointers (touch) can't reliably double-click and iOS Safari never
     // fires `contextmenu` on long-press, so the mouse-only row actions are dead

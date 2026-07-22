@@ -19,7 +19,7 @@ import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateNumber, assertMaxLength, assertCurrency } from '../middleware/validation.js';
-import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
+import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
 import { createTradeCashLeg, deleteTradeCashLegs, deleteTradeCashLegsForTrades } from '../services/portfolio/tradeCashLegService.js';

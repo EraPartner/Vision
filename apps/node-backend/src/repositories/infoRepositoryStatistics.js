@@ -3,7 +3,7 @@
  */
 
 import { query, queryPrepared } from '../database/connection.js';
-import { buildExclusionClauses } from '../services/filterBuilder.js';
+import { buildExclusionClauses } from '../lib/filterBuilder.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
@@ -115,7 +115,7 @@ export const statisticsRepository = {
 
   async getCategoryPivot(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = []) {
     const includeTransfers = await getIncludeTransfers();
-    // Canonical exclusion clauses (services/filterBuilder.buildExclusionClauses,
+    // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses,
     // shared with every other money surface): 3-level category COALESCE and
     // ALIAS-AWARE recipient exclusion. The bare `t.recipient_id NOT IN` here
     // previously kept an excluded recipient's transactions whenever they were

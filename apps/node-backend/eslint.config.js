@@ -1,12 +1,10 @@
 /**
  * ESLint flat config for the node-backend.
  *
- * Key rule: routes must not import repositories directly.
- * All data access must flow through the services layer.
- *
- * Existing violations are reported as warnings so they can be fixed
- * incrementally without blocking CI.  New violations added after the
- * rule is introduced will be caught in code review.
+ * Key rule: routes must not import repositories or the database layer
+ * directly. All data access must flow through the services layer (ADR-067).
+ * Sole documented exemption: routes/admin.js, whose table-stats/VACUUM
+ * endpoints are legitimately DB-level (inline eslint-disable there).
  */
 
 import js from '@eslint/js';
@@ -18,7 +16,10 @@ import globals from 'globals';
  * no-repo-direct-from-route
  *
  * Disallows importing from `../repositories/` (or any path containing
- * `/repositories/`) inside files under `src/routes/`.
+ * `/repositories/`) inside files under `src/routes/`, and likewise from the
+ * database layer (any path containing `/database/` — `query`,
+ * `withTransaction`, etc.), which would let routes run raw SQL and bypass
+ * the route→service boundary (ADR-067).
  * Routes must delegate data access to the services layer.
  */
 const noRepoDirectFromRoute = {
@@ -26,13 +27,16 @@ const noRepoDirectFromRoute = {
     type: 'suggestion',
     docs: {
       description:
-        'Routes must not import repositories directly; use the services layer instead.',
+        'Routes must not import repositories or the database layer directly; use the services layer instead.',
       url: null,
     },
     messages: {
       noDirectRepo:
         "Route file imports '{{source}}' directly from the repository layer. " +
         'Move data access into a service and import the service here.',
+      noDirectDb:
+        "Route file imports '{{source}}' directly from the database layer. " +
+        'Move the raw SQL into a service/repository and import the service here.',
     },
     schema: [],
   },
@@ -44,6 +48,12 @@ const noRepoDirectFromRoute = {
           context.report({
             node,
             messageId: 'noDirectRepo',
+            data: { source: src },
+          });
+        } else if (src.includes('/database/')) {
+          context.report({
+            node,
+            messageId: 'noDirectDb',
             data: { source: src },
           });
         }

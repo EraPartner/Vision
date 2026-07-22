@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { dashboardKeys, monthlySummaryKeys } from '@/lib/queryKeys';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useExcludedIds } from '@/hooks/useExcludedIds';
 
@@ -39,8 +40,8 @@ export interface UseMonthlySummaryOptions {
  * cache entry, and with exclusions off everything collapses onto
  * `['monthlySummary', currency, [], []]`.
  *
- * The `'monthlySummary'` prefix is what invalidateTransactionLists
- * (useTransactions) invalidates after mutations — keep it.
+ * The `'monthlySummary'` prefix is what invalidateTransactionData
+ * (lib/queryKeys) invalidates after mutations — keep it.
  */
 export function useMonthlySummary({
   excludedCategoryIds = EMPTY_IDS,
@@ -51,7 +52,7 @@ export function useMonthlySummary({
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
   return useQuery({
-    queryKey: ['monthlySummary', targetCurrency, excludedCategoryIds, excludedRecipientIds],
+    queryKey: monthlySummaryKeys.summary(targetCurrency, excludedCategoryIds, excludedRecipientIds),
     enabled,
     queryFn: async () => {
       const envelope = await apiClient.getAggregationMonthlySummary({
@@ -92,9 +93,9 @@ export function useFilteredDashboardStats() {
 
   // The count is the DB total, independent of filters and currency — one cache
   // entry, kept under the 'filteredDashboardStats' prefix that
-  // invalidateTransactionLists already invalidates after mutations.
+  // invalidateTransactionData already invalidates after mutations.
   const countQuery = useQuery({
-    queryKey: ['filteredDashboardStats', 'transactionCount'],
+    queryKey: dashboardKeys.transactionCount,
     queryFn: () => apiClient.getTransactionCount(),
     staleTime: 30000,
     refetchOnWindowFocus: false,

@@ -13,6 +13,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSettings, type ExclusionScope } from '@/contexts/SettingsContext';
 import { apiClient } from '@/lib/api';
+import { categoryKeys, recipientKeys, settingKeys } from '@/lib/queryKeys';
 import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
 
 export const StatisticsSection = memo(function StatisticsSection() {
@@ -23,17 +24,17 @@ export const StatisticsSection = memo(function StatisticsSection() {
     const [recipientSearch, setRecipientSearch] = useState('');
 
     const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
-        queryKey: ['categories', 'all'],
+        queryKey: categoryKeys.allList,
         queryFn: () => apiClient.getCategories({ limit: 1000 }),
         staleTime: 60000,
     });
     const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
-        queryKey: ['recipients', 'all'],
+        queryKey: recipientKeys.allList,
         queryFn: () => apiClient.getRecipients({ limit: 1000 }),
         staleTime: 60000,
     });
     const { data: includeTransfersSetting } = useQuery({
-        queryKey: ['setting', 'includeTransfers'],
+        queryKey: settingKeys.byKey('includeTransfers'),
         queryFn: () => apiClient.getSetting('includeTransfers'),
         staleTime: 60000,
     });
@@ -63,7 +64,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
     // includeTransfers is a server-only aggregation setting with no client
     // reader — persist it directly, then refetch cash-flow/aggregation data.
     const handleIncludeTransfersChange = (v: boolean) => {
-        queryClient.setQueryData(['setting', 'includeTransfers'], { key: 'includeTransfers', value: v });
+        queryClient.setQueryData(settingKeys.byKey('includeTransfers'), { key: 'includeTransfers', value: v });
         apiClient.saveSetting('includeTransfers', v)
             // includeTransfers only affects server-side aggregation / cash-flow
             // outputs, so scope the refetch to those families instead of blanket-

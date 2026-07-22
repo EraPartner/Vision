@@ -22,6 +22,7 @@ import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api";
+import { watchlistKeys } from "@/lib/queryKeys";
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
   stock: "bg-chart-3/10 text-chart-3 border-chart-3/20",
@@ -40,7 +41,7 @@ export default function WatchlistPage() {
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["watchlist"],
+    queryKey: watchlistKeys.all,
     queryFn: () => apiClient.getWatchlist(),
   });
 
@@ -53,7 +54,7 @@ export default function WatchlistPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.deleteWatchlistItem(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+      queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
       toast.success(t('watchlist.removedSuccess'));
     },
   });

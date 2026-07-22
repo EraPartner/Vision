@@ -3,7 +3,7 @@
  * Statement-export format: 13 header lines, then ';'-delimited transactions.
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
+import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';

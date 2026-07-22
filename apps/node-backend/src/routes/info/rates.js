@@ -7,13 +7,13 @@
  */
 
 import { Router } from 'express';
-import { query as dbQuery } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { rateLimiter, adminRateLimiter } from '../../middleware/rateLimiter.js';
 import {
   FALLBACK_RATES,
   warmCache,
   clearMemoryCache,
+  listLatestStoredRates,
 } from '../../services/currency/currencyConversionService.js';
 import {
   getInflationRates,
@@ -35,12 +35,7 @@ router.get(
   async (req, res) => {
     const dbOnly = isTruthyQueryParam(req.query.db_only);
 
-    const result = await dbQuery(`
-      SELECT currency_code, rate_to_eur, rate_date, fetched_at
-      FROM exchange_rates
-      WHERE is_latest = true
-      ORDER BY currency_code ASC
-    `);
+    const result = await listLatestStoredRates();
 
     const rates = result.rows.map(row => ({
       currency: row.currency_code,

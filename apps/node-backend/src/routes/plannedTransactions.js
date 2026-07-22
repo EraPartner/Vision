@@ -18,7 +18,7 @@ import { validateIdParam, assertYmd, validateId } from '../middleware/validation
 import { formatDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
-import { isValidPattern } from '../services/calculations/recurrence.js';
+import { isValidPattern } from '../lib/calculations/recurrence.js';
 import { executePlanned } from '../services/plannedExecutionService.js';
 import { getMatchSuggestions } from '../services/plannedMatchService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';

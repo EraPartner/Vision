@@ -9,6 +9,7 @@ import {useMergeRecipients} from "@/hooks/useRecipients";
 import {useLanguage} from "@/contexts/LanguageContext";
 import {useQuery} from "@tanstack/react-query";
 import {apiClient} from "@/lib/api";
+import {recipientKeys} from "@/lib/queryKeys";
 import type {Recipient} from "@/types/api";
 
 interface MergeRecipientsDialogProps {
@@ -23,7 +24,7 @@ export function MergeRecipientsDialog({open, onOpenChange}: MergeRecipientsDialo
     const mergeMutation = useMergeRecipients();
 
     const { data: recipients = [], isLoading: recipientsLoading } = useQuery({
-        queryKey: ["recipients", "merge-all"],
+        queryKey: recipientKeys.mergeAll,
         enabled: open,
         staleTime: 2 * 60_000,
         queryFn: async () => {

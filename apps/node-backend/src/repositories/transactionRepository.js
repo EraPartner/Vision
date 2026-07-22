@@ -11,7 +11,7 @@
 
 import { query, queryPrepared, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
-import { buildTransactionWhere } from '../services/filterBuilder.js';
+import { buildTransactionWhere } from '../lib/filterBuilder.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // Shared JOIN fragment used by every multi-join query

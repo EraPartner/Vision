@@ -11,7 +11,7 @@
  * All functions are pure: no I/O, no mutation of inputs.
  */
 
-import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal } from '../../lib/money.js';
+import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal } from '../money.js';
 
 /**
  * @typedef {Object} ValidationResult

@@ -34,7 +34,7 @@ import { computeRecipientInsights } from '../../src/services/calculations/aggreg
 import { computeCashflowComparison } from '../../src/services/calculations/aggregation/cashflow.js';
 import { computeAverageVsCurrent } from '../../src/services/calculations/aggregation/averageVsCurrent.js';
 import { computeBankBalances } from '../../src/services/calculations/aggregation/bankBalances.js';
-import { bankBalancesResponseCache, invalidatePortfolioCaches } from '../../src/routes/info/_cache.js';
+import { bankBalancesResponseCache, invalidatePortfolioCaches } from '../../src/services/info/cache.js';
 
 beforeEach(() => {
   vi.clearAllMocks();

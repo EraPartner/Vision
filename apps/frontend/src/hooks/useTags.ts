@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { tagKeys } from '@/lib/queryKeys';
 import type { TagCreate } from '@/types/api';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export function useTags(params?: { is_active?: boolean }) {
     return useQuery({
-        queryKey: ['tags', params ?? {}],
+        queryKey: tagKeys.list(params ?? {}),
         queryFn: () => apiClient.getTags(params),
         staleTime: 60_000,
     });
@@ -19,7 +20,7 @@ export function useCreateTag() {
     return useMutation({
         mutationFn: (tag: TagCreate) => apiClient.createTag(tag),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tags'] });
+            queryClient.invalidateQueries({ queryKey: tagKeys.all });
         },
         onError: (error: Error) => {
             toast.error(t('tags.createFailed'), { description: error.message });

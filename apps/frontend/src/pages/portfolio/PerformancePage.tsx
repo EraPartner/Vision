@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Money } from "@/components/shared/Money";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { portfolioKeys } from "@/lib/queryKeys";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";
@@ -92,7 +93,7 @@ export default function PerformancePage() {
     const [showFxNeutral, setShowFxNeutral] = useState(false);
 
     const { data: portfolioPerformanceData, isLoading, isError, error } = useQuery({
-        queryKey: ["portfolio-performance", defaultCurrency, selectedPeriod],
+        queryKey: portfolioKeys.performance(defaultCurrency, selectedPeriod),
         queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency, period: selectedPeriod }),
         staleTime: 300_000,
         gcTime: 10 * 60_000,
@@ -100,7 +101,7 @@ export default function PerformancePage() {
     });
 
     const { data: sparkline1mData } = useQuery({
-        queryKey: ["portfolio-performance", defaultCurrency, "1m"],
+        queryKey: portfolioKeys.performance(defaultCurrency, "1m"),
         queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency, period: "1m" }),
         staleTime: 300_000,
         gcTime: 10 * 60_000,

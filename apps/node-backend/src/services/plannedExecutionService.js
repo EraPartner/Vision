@@ -12,7 +12,7 @@
  */
 
 import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
-import { calculateNextDate } from './calculations/recurrence.js';
+import { calculateNextDate } from '../lib/calculations/recurrence.js';
 import { NotFoundError } from '../middleware/errorHandler.js';
 import { toAppDateString, todayAppDateString } from '../lib/timezone.js';
 import { toWireDate } from '../lib/dateFormat.js';

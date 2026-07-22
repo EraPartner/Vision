@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { categoryKeys } from '@/lib/queryKeys';
 import { useSettings } from '@/contexts/SettingsContext';
 
 /**
@@ -46,7 +47,7 @@ export function useExcludedIds(scope: ExclusionScopeName): ExcludedIds {
   const needsHidden = exclusionsApply && settings.excludeHiddenCategories;
 
   const categoriesQuery = useQuery({
-    queryKey: ['categories', 'all-for-exclusions'],
+    queryKey: categoryKeys.allForExclusions,
     queryFn: async () => {
       const res = await apiClient.getCategories({ limit: CATEGORY_FETCH_LIMIT });
       if (res.items.length >= CATEGORY_FETCH_LIMIT) {

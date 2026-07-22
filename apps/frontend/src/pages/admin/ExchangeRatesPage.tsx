@@ -12,7 +12,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
-import { EXCHANGE_RATES_QUERY_KEY } from "@/hooks/useExchangeRates";
+import { exchangeRateKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 
 // Hoisted out of the page component so React keeps the table subtree mounted
@@ -71,7 +71,7 @@ export default function ExchangeRatesPage() {
     // carried no information). "Refresh rates" below invalidates the shared
     // namespace for everyone.
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
-        queryKey: [EXCHANGE_RATES_QUERY_KEY],
+        queryKey: exchangeRateKeys.all,
         queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
         staleTime: 10 * 60_000,
         gcTime: 30 * 60_000,
@@ -80,7 +80,7 @@ export default function ExchangeRatesPage() {
     const refreshMutation = useMutation({
         mutationFn: () => apiClient.refreshExchangeRates(),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [EXCHANGE_RATES_QUERY_KEY] });
+            queryClient.invalidateQueries({ queryKey: exchangeRateKeys.all });
             toast.success(t('exchangeRates.refreshSuccess'));
         },
         onError: () => {

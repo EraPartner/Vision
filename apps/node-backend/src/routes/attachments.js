@@ -19,7 +19,6 @@ import {
 } from '../services/attachmentService.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 
 const router = Router();
@@ -62,8 +61,8 @@ router.post(
       throw new ValidationError(err.message);
     }
 
-    const txResult = await query('SELECT id FROM transactions WHERE id = $1', [transactionId]);
-    if (txResult.rows.length === 0) {
+    const txExists = await attachmentRepository.transactionExists(transactionId);
+    if (!txExists) {
       throw new NotFoundError('Transaction not found');
     }
 

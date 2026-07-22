@@ -15,7 +15,7 @@
 import { query, withTransaction } from '../database/connection.js';
 import { resolveTransferMatches } from './calculations/transfers.js';
 import { scheduleAggregationRefresh } from './aggregationRefresh.js';
-import { invalidateStatisticsCaches } from '../routes/info/_cache.js';
+import { invalidateStatisticsCaches } from './info/cache.js';
 import { logger } from '../config/logger.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import { runGolden } from '../golden/runGolden.js';
-import { normalizeForMatching } from '../../src/services/textNormalization.js';
+import { normalizeForMatching } from '../../src/lib/textNormalization.js';
 
 /**
  * Golden-fixture regression suite for normalizeForMatching (Phase 6).

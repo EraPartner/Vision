@@ -7,17 +7,23 @@
  * memo/comment/is_active pass through untouched; the repository allow-list
  * decides what is written). Bridges reuse the shared middleware guards so
  * accepted shapes and coercions stay identical to the pre-zod behavior.
+ *
+ * Handlers keep only request parsing/validation and response shaping
+ * (ADR-067): the write orchestration lives in transactionService and the
+ * bulk-action SQL in transactionBulkService.
  */
 
 import { Router } from 'express';
 import { z } from 'zod';
-import { query as dbQuery, withTransaction } from '../database/connection.js';
-import transactionRepository from '../services/transactionService.js';
+import transactionService from '../services/transactionService.js';
+import {
+  bulkTagTransactions,
+  bulkUpdateTransactions,
+  bulkDeleteTransactions,
+} from '../services/transactionBulkService.js';
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
-import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { logger } from '../config/logger.js';
 import { validateIdParam, assertYmd, assertOptionalId, assertCurrency, assertMaxLength, MAX_MONEY_VALUE } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import {
@@ -26,14 +32,12 @@ import {
   markTransfer,
   unmarkTransfer,
 } from '../services/transferReconciliationService.js';
-import { autoLinkTransactions } from '../services/plannedMatchService.js';
 import {
   ValidationError,
   NotFoundError,
-  ConflictError,
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
-import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from '../services/filterBuilder.js';
+import { buildTransactionWhere, parseAmountFilter } from '../lib/filterBuilder.js';
 import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,
@@ -43,8 +47,6 @@ import {
 import { resolveBulkSelection } from '../services/bulkSelection.js';
 import { parsePagination } from '../lib/pagination.js';
 import { toWireDate } from '../lib/dateFormat.js';
-import { attachmentRepository } from '../services/attachmentRecordService.js';
-import { removeAttachmentFile } from '../services/attachmentService.js';
 
 const router = Router();
 
@@ -201,24 +203,6 @@ function parseTransactionBody(schema, body) {
     throw new ValidationError(msg);
   }
   return result.data;
-}
-
-// Hard deletes CASCADE the attachments ROWS, but nothing removes the FILES —
-// receipt PII persisted forever on disk and re-entered every backup. Collect
-// stored paths before the delete, remove best-effort after (same log-only
-// pattern as DELETE /api/attachments/:id — a removal failure must not fail
-// the already-committed transaction delete).
-async function removeAttachmentFilesBestEffort(storedPaths) {
-  for (const storedPath of storedPaths) {
-    try {
-      await removeAttachmentFile(storedPath);
-    } catch (err) {
-      logger.warn('Attachment file removal failed after transaction delete; file orphaned on disk', {
-        storedPath,
-        error: err?.message,
-      });
-    }
-  }
 }
 
 function parseTransactionListQuery(query) {
@@ -398,11 +382,11 @@ router.get('/', async (req, res) => {
 
   let items, total;
   if (uncategorised === 'true') {
-    const result = await transactionRepository.getUncategorisedWithCount(opts);
+    const result = await transactionService.getUncategorisedWithCount(opts);
     items = result.rows;
     total = result.total;
   } else {
-    const result = await transactionRepository.getAllWithCount(opts);
+    const result = await transactionService.getAllWithCount(opts);
     items = result.rows;
     total = result.total;
   }
@@ -450,77 +434,11 @@ router.post(
   async (req, res) => {
     const { transaction_ids, add_slugs, remove_slugs } = parseTransactionBody(bulkTagSchema, req.body);
 
-    const txIds = validateInt4Ids(transaction_ids.map(Number));
-    if (txIds.length === 0) {
-      throw new ValidationError('transaction_ids contains no valid IDs');
-    }
-
-    const addTagIds = [];
-    const removeTagIds = [];
-    const allUnknown = [];
-
-    if (add_slugs.length > 0) {
-      const r = await dbQuery(
-        'SELECT id, slug FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
-        [add_slugs],
-      );
-      const found = new Map(r.rows.map((row) => [row.slug, row.id]));
-      for (const s of add_slugs) {
-        if (!found.has(s)) allUnknown.push(s);
-        else addTagIds.push(found.get(s));
-      }
-    }
-
-    if (remove_slugs.length > 0) {
-      const r = await dbQuery(
-        'SELECT id, slug FROM tags WHERE slug = ANY($1::text[])',
-        [remove_slugs],
-      );
-      const found = new Map(r.rows.map((row) => [row.slug, row.id]));
-      for (const s of remove_slugs) {
-        if (!found.has(s)) allUnknown.push(s);
-        else removeTagIds.push(found.get(s));
-      }
-    }
-
-    if (allUnknown.length > 0) {
-      throw new ValidationError(`Unknown or inactive tags: ${allUnknown.join(', ')}`);
-    }
-
-    const result = await withTransaction(async (client) => {
-      let added = 0;
-      let removed = 0;
-      const affectedTxIds = new Set();
-
-      if (addTagIds.length > 0) {
-        const r = await client.query(
-          `INSERT INTO transaction_tags (transaction_id, tag_id)
-           SELECT t_id, g_id
-           FROM unnest($1::int[]) AS t(t_id)
-           CROSS JOIN unnest($2::int[]) AS g(g_id)
-           ON CONFLICT DO NOTHING
-           RETURNING transaction_id`,
-          [txIds, addTagIds],
-        );
-        added = r.rows.length;
-        r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
-      }
-
-      if (removeTagIds.length > 0) {
-        const r = await client.query(
-          `DELETE FROM transaction_tags
-           WHERE transaction_id = ANY($1::int[]) AND tag_id = ANY($2::int[])
-           RETURNING transaction_id`,
-          [txIds, removeTagIds],
-        );
-        removed = r.rows.length;
-        r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
-      }
-
-      return { added, removed, transactions_affected: affectedTxIds.size };
+    const result = await bulkTagTransactions({
+      transactionIds: transaction_ids,
+      addSlugs: add_slugs,
+      removeSlugs: remove_slugs,
     });
-
-    scheduleReconcile();
     res.ok(result);
   },
 );
@@ -534,21 +452,7 @@ router.post(
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-delete' }),
   async (req, res) => {
     const { ids, filter } = req.body ?? {};
-    const txIds = await resolveBulkSelection({ ids, filter });
-
-    const attachmentPaths = await attachmentRepository.listPathsByTransactionIds(txIds);
-    const deleted = await withTransaction(async (client) => {
-      const r = await client.query(
-        `DELETE FROM transactions WHERE id = ANY($1::int[]) RETURNING id`,
-        [txIds],
-      );
-      return r.rows.length;
-    });
-
-    if (deleted > 0) {
-      await removeAttachmentFilesBestEffort(attachmentPaths);
-      scheduleReconcile();
-    }
+    const deleted = await bulkDeleteTransactions({ ids, filter });
     res.ok({ deleted });
   },
 );
@@ -580,53 +484,7 @@ router.post(
       throw new ValidationError('`fields` must contain at least one of: category_id, recipient_id, is_active');
     }
 
-    if (sanitized.category_id != null) {
-      const r = await dbQuery(
-        'SELECT id FROM categories WHERE id = $1 AND is_active = true',
-        [sanitized.category_id],
-      );
-      if (r.rows.length === 0) {
-        throw new ValidationError(`Category ${sanitized.category_id} does not exist or is inactive`);
-      }
-    }
-    if (sanitized.recipient_id != null) {
-      const r = await dbQuery(
-        'SELECT id FROM recipients WHERE id = $1 AND is_active = true',
-        [sanitized.recipient_id],
-      );
-      if (r.rows.length === 0) {
-        throw new ValidationError(`Recipient ${sanitized.recipient_id} does not exist or is inactive`);
-      }
-    }
-
-    const txIds = await resolveBulkSelection({ ids, filter });
-
-    const setClauses = [];
-    const params = [txIds];
-    let p = 2;
-    if ('category_id' in sanitized) {
-      setClauses.push(`category_id = $${p++}`);
-      params.push(sanitized.category_id);
-    }
-    if ('recipient_id' in sanitized) {
-      setClauses.push(`recipient_id = $${p++}`);
-      params.push(sanitized.recipient_id);
-    }
-    if ('is_active' in sanitized) {
-      setClauses.push(`is_active = $${p}`);
-      params.push(sanitized.is_active);
-    }
-    setClauses.push('updated_at = NOW()');
-
-    const updated = await withTransaction(async (client) => {
-      const r = await client.query(
-        `UPDATE transactions SET ${setClauses.join(', ')} WHERE id = ANY($1::int[]) RETURNING id`,
-        params,
-      );
-      return r.rows.length;
-    });
-
-    if (updated > 0) scheduleReconcile();
+    const updated = await bulkUpdateTransactions({ ids, filter, fields: sanitized });
     res.ok({ updated });
   },
 );
@@ -661,7 +519,7 @@ router.post(
 
 // GET /api/transactions/:id
 router.get('/:id', validateIdParam, async (req, res) => {
-  const transaction = await transactionRepository.getById(parseInt(req.params.id, 10));
+  const transaction = await transactionService.getById(parseInt(req.params.id, 10));
   if (!transaction) {
     throw new NotFoundError(`Transaction with ID ${req.params.id} not found`);
   }
@@ -672,61 +530,12 @@ router.get('/:id', validateIdParam, async (req, res) => {
 router.post('/', async (req, res) => {
   // Validated body: currency is coerced (uppercased / undefined → repo
   // default); everything else is forwarded raw, exactly as before the schema.
+  // The dup-check → insert → raw-mirror → auto-link → reconcile chain lives
+  // in the service; a duplicate surfaces as ConflictError (409) from there.
   const data = parseTransactionBody(createTransactionSchema, req.body);
-  const txDate = data.transaction_date || data.date;
-  const currency = data.currency;
 
-  const dupCheck = await isManualDuplicate({
-    date: txDate,
-    amount: data.amount,
-    recipientId: data.recipient_id,
-    memo: data.memo || '',
-    bankAccount: data.bank_account,
-  });
+  const { transaction, autoLink } = await transactionService.createManualTransaction(data);
 
-  if (dupCheck.isDuplicate) {
-    throw new ConflictError('Duplicate transaction detected', {
-      details: { existing_transaction_id: dupCheck.existingTransactionId },
-    });
-  }
-
-  const transaction = await transactionRepository.create({
-    transaction_date: txDate,
-    bank_account: data.bank_account,
-    recipient_id: data.recipient_id,
-    amount: data.amount,
-    memo: data.memo,
-    currency,
-    // `balance` intentionally not accepted: manual entries leave it NULL so the
-    // account balance (ADR-094) anchors only on imported, bank-stamped rows.
-    category_id: data.category_id,
-    comment: data.comment,
-    // Schema guarantees array-or-absent; absent stays null as before.
-    tags: data.tags ?? null,
-  });
-
-  await recordManualRawTransaction({
-    date: txDate,
-    amount: data.amount,
-    recipientId: data.recipient_id,
-    memo: data.memo || '',
-    bankAccount: data.bank_account,
-    categoryId: data.category_id || null,
-    comment: data.comment || null,
-    transactionId: transaction.id,
-  });
-
-  // Auto-clear a matching planned payment if this transaction unambiguously
-  // matches one. Never let an auto-link failure fail the create.
-  let autoLink = { autoLinkedCount: 0, links: [] };
-  try {
-    autoLink = await autoLinkTransactions([transaction]);
-  } catch (err) {
-    logger.warn('Auto-link after manual create failed', { id: transaction.id, error: err?.message });
-  }
-
-  logger.info('Transaction created', { id: transaction.id });
-  scheduleReconcile();
   res.status(201);
   res.ok({
     ...formatTransaction(transaction),
@@ -758,7 +567,7 @@ router.patch(
     if (recipientId !== undefined) patch.recipient_id = recipientId;
     if (categoryId !== undefined) patch.category_id = categoryId;
 
-    const updated = await transactionRepository.update(id, patch);
+    const updated = await transactionService.update(id, patch);
     if (!updated) {
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
@@ -771,13 +580,10 @@ router.patch(
 // DELETE /api/transactions/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseRouteId(req);
-  const attachmentPaths = await attachmentRepository.listPathsByTransactionIds([id]);
-  const deleted = await transactionRepository.hardDelete(id);
+  const deleted = await transactionService.hardDeleteWithCleanup(id);
   if (!deleted) {
     throw new NotFoundError(`Transaction with ID ${id} not found`);
   }
-  await removeAttachmentFilesBestEffort(attachmentPaths);
-  scheduleReconcile();
   res.ok({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
 });
 

@@ -13,7 +13,7 @@ import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from './_cache.js';
+} from '../../services/info/cache.js';
 
 const router = Router();
 

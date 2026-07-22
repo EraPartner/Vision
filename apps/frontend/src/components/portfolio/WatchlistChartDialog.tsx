@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import type { WatchlistItem } from "@/types/watchlist";
 
 import { apiClient } from "@/lib/api";
+import { watchlistKeys } from "@/lib/queryKeys";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 
 interface WatchlistChartDialogProps {
@@ -96,7 +97,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
     try {
       await apiClient.updateWatchlistItem(item.id, { target_price: targetValue });
 
-      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+      queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
       toast.success(t('watchlist.targetUpdated'));
       setEditingPrice(false);
       setNewTargetPrice("");

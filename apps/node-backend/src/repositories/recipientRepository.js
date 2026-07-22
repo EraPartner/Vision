@@ -12,7 +12,7 @@
  */
 
 import { query } from '../database/connection.js';
-import { normalizeForMatching } from '../services/textNormalization.js';
+import { normalizeForMatching } from '../lib/textNormalization.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // Allowed sort columns for recipients (maps frontend key -> SQL expression)

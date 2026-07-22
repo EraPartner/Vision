@@ -15,8 +15,8 @@
  *   getSupportedPatterns() → string[]
  */
 
-import { toAppTz, toUtc, appDateStringToUtc, toAppDateString } from '../../lib/timezone.js';
-import { formatDateToYmd } from '../../lib/dateFormat.js';
+import { toAppTz, toUtc, appDateStringToUtc, toAppDateString } from '../timezone.js';
+import { formatDateToYmd } from '../dateFormat.js';
 
 const SUPPORTED_PATTERNS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
 

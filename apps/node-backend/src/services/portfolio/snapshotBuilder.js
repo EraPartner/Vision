@@ -9,6 +9,7 @@
 
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { portfolioTransactionRepository } from '../../repositories/portfolioTransactionRepository.js';
 import { sanitizeSnapshotSpikes, calendarDaysBetween, toYmd } from '../../utils/portfolioMath.js';
 import { toDecimal, roundMoney } from '../../lib/money.js';
 import { todayAppDateString } from '../../lib/timezone.js';
@@ -56,7 +57,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
   const [
     unitInvestmentsResult,
-    allTxResult,
+    allTxRows,
     fixedIncomeResult,
     priceHistoryResult,
     inflationResult,
@@ -70,20 +71,11 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       WHERE i.is_active = true
         AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
     `),
-    query(`
-      SELECT pt.investment_id,
-             to_char(pt.date::date, 'YYYY-MM-DD') AS day,
-             pt.type,
-             COALESCE(pt.amount, 0) AS amount,
-             COALESCE(pt.units, 0) AS units,
-             COALESCE(pt.currency, i.currency, 'EUR') AS currency,
-             pt.fx_rate_to_eur,
-             pt.account_id
-      FROM portfolio_transactions pt
-      JOIN investments i ON i.id = pt.investment_id
-      WHERE pt.date >= $1::date AND pt.date <= $2::date
-      ORDER BY pt.date::date, CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END, pt.id
-    `, [firstDateYmd, todayYmd]),
+    portfolioTransactionRepository.getRowsForPortfolioMath({
+      dateFrom: firstDateYmd,
+      dateTo: todayYmd,
+      sellsLastWithinDay: true,
+    }),
     query(`
       SELECT id, COALESCE(currency, 'EUR') AS currency,
              COALESCE(current_price, 0) AS current_price,
@@ -199,7 +191,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // (per the same pattern as the price-history sort) so the day-walk stays
   // correct regardless of raw row order.
   const txByDay = {};
-  for (const row of allTxResult.rows) {
+  for (const row of allTxRows) {
     if (!txByDay[row.day]) txByDay[row.day] = [];
     txByDay[row.day].push({
       investmentId: Number(row.investment_id),

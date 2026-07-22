@@ -17,7 +17,7 @@ import { mergeAccounts } from '../services/accountMergeService.js';
 import { setOpeningBalance } from '../services/openingBalanceService.js';
 import { reconcileAccount } from '../services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
-import { invalidatePortfolioCaches } from './info/_cache.js';
+import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();

@@ -12,8 +12,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getExchangeRates } from '@/lib/api/info';
-
-export const EXCHANGE_RATES_QUERY_KEY = 'exchange-rates';
+import { exchangeRateKeys } from '@/lib/queryKeys';
 
 export interface ExchangeRateMap {
   /** rate_to_eur per upper-cased currency code (EUR = 1). */
@@ -25,7 +24,7 @@ export interface ExchangeRateMap {
 
 export function useExchangeRates(): ExchangeRateMap {
   const query = useQuery({
-    queryKey: [EXCHANGE_RATES_QUERY_KEY],
+    queryKey: exchangeRateKeys.all,
     // db_only: read-through of stored rates — never triggers external fetches
     // from a passive consumer (the backend scheduler owns refreshes).
     queryFn: () => getExchangeRates({ dbOnly: true }),

@@ -46,6 +46,7 @@ const mockDetectRecurringPatterns = vi.fn();
 const mockRefreshMaterializedViews = vi.fn();
 const mockWarmCache = vi.fn();
 const mockClearMemoryCache = vi.fn();
+const mockListLatestStoredRates = vi.fn();
 const mockGetSnapshots = vi.fn();
 
 vi.mock('../../src/database/connection.js', () => ({
@@ -64,6 +65,7 @@ vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
   FALLBACK_RATES: { USD: 1.1 },
   warmCache: mockWarmCache,
   clearMemoryCache: mockClearMemoryCache,
+  listLatestStoredRates: mockListLatestStoredRates,
 }));
 
 vi.mock('../../src/services/portfolioPerformanceSnapshotService.js', () => ({
@@ -87,6 +89,7 @@ describe('Info Routes', () => {
     mockRefreshMaterializedViews.mockResolvedValue(undefined);
     mockDetectRecurringPatterns.mockResolvedValue({ patterns: [], total: 0 });
     mockDbQuery.mockResolvedValue({ rows: [] });
+    mockListLatestStoredRates.mockResolvedValue({ rows: [] });
     mockGetSnapshots.mockResolvedValue([]);
   });
 
@@ -372,7 +375,7 @@ describe('Info Routes', () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
-        mockDbQuery.mockResolvedValue({
+        mockListLatestStoredRates.mockResolvedValue({
           rows: [
             {
               currency_code: 'USD',
@@ -416,7 +419,7 @@ describe('Info Routes', () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
-        mockDbQuery.mockResolvedValue({
+        mockListLatestStoredRates.mockResolvedValue({
           rows: [
             {
               currency_code: 'GBP',
@@ -451,7 +454,7 @@ describe('Info Routes', () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
-        mockDbQuery.mockResolvedValue({
+        mockListLatestStoredRates.mockResolvedValue({
           rows: [
             {
               currency_code: 'USD',
@@ -478,7 +481,7 @@ describe('Info Routes', () => {
     });
 
     it('should handle exchange-rate query errors', async () => {
-      mockDbQuery.mockRejectedValue(new Error('query failed'));
+      mockListLatestStoredRates.mockRejectedValue(new Error('query failed'));
 
       const req = { query: {} };
       const res = mockResponse();

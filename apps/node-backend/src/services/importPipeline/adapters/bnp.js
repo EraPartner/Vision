@@ -20,7 +20,7 @@
  *  12  Reden van weigering     rejection reason
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
+import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 

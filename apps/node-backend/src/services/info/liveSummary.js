@@ -9,12 +9,12 @@
  */
 
 import { logger } from '../../config/logger.js';
-import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
+import { getPortfolioSummary } from '../portfolio/portfolioSummaryService.js';
 import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from './_cache.js';
+} from './cache.js';
 
 /**
  * Live portfolio summary (cached, inflight-deduped).

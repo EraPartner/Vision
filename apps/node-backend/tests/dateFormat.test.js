@@ -19,7 +19,7 @@ describe('formatDateToYmd (local extraction)', () => {
 
   it('formats a locally-constructed month end to the last day (period_end regression)', () => {
     process.env.TZ = 'Europe/Brussels';
-    // infoRepo.monthly builds period_end as new Date(y, m, 0) — under UTC
+    // infoRepositoryMonthly builds period_end as new Date(y, m, 0) — under UTC
     // extraction this rendered as the SECOND-to-last day of the month.
     expect(formatDateToYmd(new Date(2026, 6, 0))).toBe('2026-06-30');
     expect(formatDateToYmd(new Date(2026, 2, 0))).toBe('2026-02-28');

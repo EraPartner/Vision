@@ -17,7 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { LinkTransactionDialog } from "@/components/planned/LinkTransactionDialog";
 import { MatchSuggestionsBanner } from "@/components/planned/MatchSuggestionsBanner";
-import { PLANNED_MATCH_SUGGESTIONS_KEY } from "@/hooks/usePlannedMatchSuggestions";
+import { plannedKeys } from "@/lib/queryKeys";
 import { ExecutionHistoryDialog } from "@/components/planned/ExecutionHistoryDialog";
 import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/components/shared/dateUtils";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
@@ -102,7 +102,7 @@ export default function PlannedPaymentsPage() {
   // match suggestions (the cleared pair must drop off the suggestions banner).
   const handleExecute = useCallback(async (id: number, transactionId: number, executionDate?: string) => {
     await executePayment(id, transactionId, executionDate);
-    await queryClient.invalidateQueries({ queryKey: PLANNED_MATCH_SUGGESTIONS_KEY });
+    await queryClient.invalidateQueries({ queryKey: plannedKeys.matchSuggestions });
   }, [executePayment, queryClient]);
 
   const filteredPayments = useMemo(() => {

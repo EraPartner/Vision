@@ -20,8 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Coins, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { invalidateTransactionLists } from '@/hooks/useTransactions';
-import { invalidateAccountDerived } from '@/hooks/useAccounts';
+import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
 import { toYmd } from '@/components/shared/dateUtils';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
@@ -65,7 +64,7 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
       invalidateAccountDerived(queryClient);
       // The anchor is a real ledger row, so the transaction lists must refetch
       // for it to appear.
-      invalidateTransactionLists(queryClient);
+      invalidateTransactionData(queryClient);
       // A mid-history anchor is inert (a later import stamp wins) — surface it.
       if (result.warning) toast.warning(t('accounts.openingBalance.saved'), { description: result.warning });
       else toast.success(t('accounts.openingBalance.saved'));
