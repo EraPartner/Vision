@@ -223,8 +223,8 @@ export const accountService = {
       fields.closed_at = new Date();
       // §1 F3 aggregate semantics: `in_net_worth` governs aggregates,
       // `is_active` governs UI listing — so closing an account also drops it
-      // from every aggregate (net worth, by-account table, bank-balances
-      // widget). An explicit in_net_worth in the same PATCH wins (respect
+      // from every aggregate (net worth, bank-balances widget). An explicit
+      // in_net_worth in the same PATCH wins (respect
       // explicit intent). Reactivating deliberately does NOT auto-restore
       // in_net_worth: whether a reopened account should count again is a user
       // decision, made explicitly via PATCH { in_net_worth: true }.

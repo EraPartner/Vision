@@ -13,7 +13,6 @@ import { apiClient } from "@/lib/api";
 import { transactionKeys } from "@/lib/queryKeys";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { isPerAccountHoldingsEnabled } from "@/lib/env";
 import type { Account } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -198,15 +197,11 @@ export function AccountDetailSheet({
                 <div>
                     <div className="mb-3 flex items-center gap-2">
                         <h3 className="text-sm font-semibold tracking-tight">{t("accounts.detail.holdings")}</h3>
-                        {!isPerAccountHoldingsEnabled && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />}
+                        <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                     </div>
-                    {isPerAccountHoldingsEnabled ? (
-                        <p className="text-sm text-muted-foreground">{t("accounts.detail.holdingsEmpty")}</p>
-                    ) : (
-                        <div className="rounded-xl border border-dashed border-border/60 p-4">
-                            <p className="text-sm text-muted-foreground">{t("accounts.detail.holdingsDark")}</p>
-                        </div>
-                    )}
+                    <div className="rounded-xl border border-dashed border-border/60 p-4">
+                        <p className="text-sm text-muted-foreground">{t("accounts.detail.holdingsDark")}</p>
+                    </div>
                 </div>
 
                 <Separator className="my-6" />

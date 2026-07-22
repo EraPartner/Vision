@@ -215,8 +215,6 @@ export const netWorthKeys = {
     all: ['net-worth'] as const,
     byCurrency: (currency: string) => ['net-worth', currency] as const,
     table: (params: object) => ['net-worth', 'table', params] as const,
-    byAccountAll: ['net-worth-by-account'] as const,
-    byAccount: (currency: string) => ['net-worth-by-account', currency] as const,
 };
 
 // ── Portfolio ───────────────────────────────────────────────────────────────
@@ -327,14 +325,13 @@ export function invalidateTransactionData(queryClient: QueryClient) {
 }
 
 /**
- * Account CRUD changes balances/in_net_worth flags, so the net-worth views
- * must refetch too — NetWorthPage keeps both queries at a 2-minute staleTime,
+ * Account CRUD changes balances/in_net_worth flags, so the net-worth view
+ * must refetch too — NetWorthPage keeps its query at a 2-minute staleTime,
  * so a missed invalidation shows a stale total for up to 2 minutes.
  */
 export function invalidateAccountDerived(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: accountKeys.all });
     queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
-    queryClient.invalidateQueries({ queryKey: netWorthKeys.byAccountAll });
 }
 
 /**
@@ -369,8 +366,8 @@ export function invalidateAccountRepoint(queryClient: QueryClient) {
 
 /**
  * Everything derived from investments / portfolio transactions. Investment
- * CRUD also moves the net-worth total; both net-worth queries sit at a
- * 2-minute staleTime on NetWorthPage, so without this they show stale figures.
+ * CRUD also moves the net-worth total; the net-worth query sits at a
+ * 2-minute staleTime on NetWorthPage, so without this it shows stale figures.
  */
 export function invalidateInvestmentData(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });
@@ -378,5 +375,4 @@ export function invalidateInvestmentData(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
     queryClient.invalidateQueries({ queryKey: portfolioKeys.performanceAll });
     queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
-    queryClient.invalidateQueries({ queryKey: netWorthKeys.byAccountAll });
 }

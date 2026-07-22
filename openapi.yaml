@@ -2490,31 +2490,6 @@ paths:
                       data:
                         $ref: "#/components/schemas/NetWorthResponse"
 
-  /api/info/net-worth/by-account:
-    get:
-      summary: Net worth split by account (Σ-accounts, ADR-100)
-      description: Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
-      operationId: getNetWorthByAccount
-      tags: [Info]
-      parameters:
-        - in: query
-          name: currency
-          schema:
-            type: string
-          description: "Target currency for conversion (alias: target_currency; default EUR)"
-      responses:
-        "200":
-          description: Per-account net-worth breakdown with holdings history
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        type: object
-
   /api/saved-charts:
     get:
       summary: List saved charts
@@ -4511,48 +4486,6 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PortfolioTransaction"
-
-  /api/investments/{id}/move:
-    parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-    post:
-      summary: Move this holding between accounts (in-specie, cost-basis-preserving)
-      description: Moves the investment's lots from `from_account_id` to `to_account_id` (ADR-091). Omit `units` (or pass ≥ net) for a whole move (re-points all lots incl. history); pass `units` for a partial move (unit-based only — FIFO lot re-point + pro-rata boundary split). No sell/buy, no realized gain, no cash leg.
-      operationId: moveHolding
-      tags: [Investments]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [from_account_id, to_account_id]
-              properties:
-                from_account_id:
-                  type: integer
-                to_account_id:
-                  type: integer
-                units:
-                  type: number
-                  nullable: true
-                  description: Units to move; omit for the whole position
-                strategy:
-                  type: string
-                  enum: [fifo, proportional]
-                  description: Lot-selection strategy for a partial move; ignored for a whole move. Defaults to the service default when omitted.
-      responses:
-        "200":
-          description: Move result (mode, movedUnits, lotsMoved, lotsSplit)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-        "404":
-          description: Investment or an account not found
 
   /api/investments/{id}/summary:
     parameters:

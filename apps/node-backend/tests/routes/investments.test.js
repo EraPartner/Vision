@@ -35,7 +35,6 @@ vi.mock('../../src/repositories/portfolioTransactionRepository.js', () => ({
     getAllWithCount: vi.fn(),
     getCount: vi.fn(),
     getById: vi.fn(),
-    getIdsByInvestment: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     hardDelete: vi.fn(),
@@ -453,19 +452,17 @@ describe('Investment Routes', () => {
   // ── DELETE /api/investments/:id ────────────────────────────
   describe('DELETE /:id', () => {
     it('should delete and return 204', async () => {
-      portfolioTransactionRepository.getIdsByInvestment.mockResolvedValue([]);
       investmentRepository.hardDelete.mockResolvedValue(true);
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(portfolioTransactionRepository.getIdsByInvestment).toHaveBeenCalledWith(1);
+      expect(investmentRepository.hardDelete).toHaveBeenCalledWith(1);
       expect(res.status).toHaveBeenCalledWith(204);
     });
 
     it('should throw NotFoundError for non-existent', async () => {
-      portfolioTransactionRepository.getIdsByInvestment.mockResolvedValue([]);
       investmentRepository.hardDelete.mockResolvedValue(false);
 
       const req = { params: { id: '999' } };
@@ -474,7 +471,6 @@ describe('Investment Routes', () => {
     });
 
     it('should handle errors', async () => {
-      portfolioTransactionRepository.getIdsByInvestment.mockResolvedValue([]);
       investmentRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' } };

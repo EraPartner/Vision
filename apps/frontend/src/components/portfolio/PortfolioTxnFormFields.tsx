@@ -1,5 +1,5 @@
 /**
- * PortfolioTxnFormFields — the shared type/date/account/units/price/amount/
+ * PortfolioTxnFormFields — the shared type/date/units/price/amount/
  * fees/taxes/FX/recurring/note field body for the portfolio Add and Edit
  * transaction dialogs, which were ~90% identical JSX.
  *
@@ -20,9 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
-import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import type { RecurrenceInterval } from '@/types/portfolio';
-import type { Account } from '@/types/api';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -36,7 +34,6 @@ export interface PortfolioTxnFieldsForm {
   taxes: string;
   fxRateToEur: string;
   note: string;
-  accountId: string;
   isRecurring: boolean;
   recurrenceInterval: RecurrenceInterval;
   recurrenceEndDate: string;
@@ -63,7 +60,6 @@ interface PortfolioTxnFormFieldsProps<F extends PortfolioTxnFieldsForm> {
   t: TranslateFn;
   /** The type control (editable on Add, read-only on Edit). */
   typeField: ReactNode;
-  accounts: Account[];
   showUnits: boolean;
   showFeesTaxes: boolean;
   showRecurring: boolean;
@@ -84,7 +80,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
   currency,
   t,
   typeField,
-  accounts,
   showUnits,
   showFeesTaxes,
   showRecurring,
@@ -113,24 +108,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
             placeholder={t('plannedPage.link.pickDate')}
           />
         </div>
-
-        {isPerAccountHoldingsEnabled && (
-          <div className="space-y-2 col-span-2">
-            <Label>{t('nav.accounts')}</Label>
-            <Select
-              value={form.accountId || 'none'}
-              onValueChange={(v) => setForm((f) => ({ ...f, accountId: v === 'none' ? '' : v }))}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
 
         {showUnits && (
           <>

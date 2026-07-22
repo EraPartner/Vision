@@ -109,7 +109,6 @@ export const apiClient = {
     refreshInvestmentPrices: port.refreshInvestmentPrices,
     updateInvestment: port.updateInvestment,
     deleteInvestment: port.deleteInvestment,
-    moveHolding: port.moveHolding,
     getInvestmentPriceHistory: port.getInvestmentPriceHistory,
     getPortfolioTransactions: port.getPortfolioTransactions,
     getPortfolioTransactionsBulk: port.getPortfolioTransactionsBulk,
@@ -148,7 +147,6 @@ export const apiClient = {
     getPortfolioPerformance: info.getPortfolioPerformance,
     getPortfolioSummary: info.getPortfolioSummary,
     getNetWorth: info.getNetWorth,
-    getNetWorthByAccount: info.getNetWorthByAccount,
     getExchangeRates: info.getExchangeRates,
     refreshExchangeRates: info.refreshExchangeRates,
 

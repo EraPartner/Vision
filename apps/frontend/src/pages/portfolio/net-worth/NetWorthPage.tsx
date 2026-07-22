@@ -5,7 +5,7 @@ import { netWorthKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank, CreditCard } from "lucide-react";
@@ -28,9 +28,6 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { useAccountNetWorth } from "@/hooks/portfolio/useAccountNetWorth";
-import { NetWorthByAccountChart } from "./NetWorthByAccountChart";
-import { isPerAccountHoldingsEnabled } from "@/lib/env";
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
@@ -43,21 +40,8 @@ export default function NetWorthPage() {
     staleTime: 120_000,
   });
 
-  // Per-account holdings history (ADR-100) — the rebuilt daily series, served Σ accounts.
-  const {
-    data: byAccountData,
-    isLoading: byAccountLoading,
-    error: byAccountError,
-  } = useQuery({
-    queryKey: netWorthKeys.byAccount(targetCurrency),
-    queryFn: () => apiClient.getNetWorthByAccount({ currency: targetCurrency }),
-    staleTime: 120_000,
-    enabled: isPerAccountHoldingsEnabled,
-  });
-
-  const { investments, summaries, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { investments, refreshPrices, isRefreshingPrices } = usePortfolio();
   const isOnline = useOnlineStatus();
-  const accountRows = useAccountNetWorth(summaries);
 
   const {
     allItems: tableSnapshots,
@@ -201,10 +185,6 @@ export default function NetWorthPage() {
   const investmentsPct = current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : '0';
   const liabilitiesPct = current.netWorth > 0 ? ((current.liabilities / current.netWorth) * 100).toFixed(0) : '0';
   const hasLiabilities = Math.abs(current.liabilities) > 0.005;
-  const accountsHaveLiabilities = accountRows.some((r) => Math.abs(r.liabilities) > 0.005);
-  const byAccountGrid = accountsHaveLiabilities
-    ? "grid-cols-[1fr_auto_auto_auto_auto]"
-    : "grid-cols-[1fr_auto_auto_auto]";
 
   return (
     <div className="space-y-6">
@@ -282,60 +262,6 @@ export default function NetWorthPage() {
         tooltipLabelFormatter={tooltipLabelFormatter}
         t={t}
       />
-
-      {/* Per-account breakdown (ADR-093/100) — gated off with per-account holdings (ADR-103) */}
-      {isPerAccountHoldingsEnabled && accountRows.length > 0 && (
-        <Card className="glass-regular">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">{t('networth.byAccount')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <div className={cn("grid gap-x-4 sm:gap-x-8 text-xs uppercase tracking-wider text-muted-foreground pb-2 border-b border-border/50", byAccountGrid)}>
-              <span>{t('networth.account')}</span>
-              <span className="text-right">{t('networth.liquid')}</span>
-              {accountsHaveLiabilities && <span className="text-right">{t('networth.liabilities')}</span>}
-              <span className="text-right">{t('networth.investments')}</span>
-              <span className="text-right">{t('networth.title')}</span>
-            </div>
-            {accountRows.map((row) => (
-              <div
-                key={row.accountId ?? 'unassigned'}
-                className={cn("grid gap-x-4 sm:gap-x-8 py-1.5 text-sm border-b border-border/30 last:border-0", byAccountGrid)}
-              >
-                <span className="truncate text-foreground">{row.name ?? t('accounts.unassigned')}</span>
-                <span className="text-right tabular-nums text-muted-foreground">{fmt(row.cash)}</span>
-                {accountsHaveLiabilities && <span className="text-right tabular-nums text-muted-foreground">{fmt(row.liabilities)}</span>}
-                <span className="text-right tabular-nums text-muted-foreground">{fmt(row.holdings)}</span>
-                <span className="text-right tabular-nums font-medium">{fmt(row.total)}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Per-account holdings history (ADR-100): stacked daily series, Σ accounts.
-          Gated off with per-account holdings (ADR-103). Surface load/error
-          explicitly so a failed fetch doesn't silently render a blank chart. */}
-      {!isPerAccountHoldingsEnabled ? null : byAccountError ? (
-        <Card className="glass-regular">
-          <CardContent className="py-10 text-center">
-            <p className="text-sm font-medium text-foreground">{t('networth.unableToLoad')}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {byAccountError instanceof Error ? byAccountError.message : t('networth.tryAgain')}
-            </p>
-          </CardContent>
-        </Card>
-      ) : byAccountLoading ? (
-        <Card className="glass-regular"><CardContent className="pt-6"><Skeleton className="h-[300px] w-full" /></CardContent></Card>
-      ) : (
-        <NetWorthByAccountChart
-          accounts={byAccountData?.accounts ?? []}
-          fmt={fmt}
-          title={t('networth.byAccountHistory')}
-          description={t('networth.byAccountHistoryDesc')}
-          unassignedLabel={t('accounts.unassigned')}
-        />
-      )}
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

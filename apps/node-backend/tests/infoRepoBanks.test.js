@@ -215,8 +215,8 @@ describe('banksRepository.getBankBalances', () => {
   it('sources the current balance from the shared anchor+delta lateral (not a frozen stamped balance)', async () => {
     // Regression: the widget used to read the latest stamped `transactions.balance`,
     // freezing at the last imported statement figure and diverging from the accounts
-    // hub. It must now consume the SAME COMPUTED_BALANCE_LATERAL the hub and
-    // net-worth-by-account use, so all three surfaces agree by construction.
+    // hub. It must now consume the SAME COMPUTED_BALANCE_LATERAL the hub uses,
+    // so both surfaces agree by construction.
     query.mockResolvedValue({ rows: [] });
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([[], []]);
 

@@ -16,7 +16,6 @@ import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
 import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
-import { createTradeCashLeg } from '../portfolio/tradeCashLegService.js';
 import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
 
 // Rows are drained in chunked BEGIN/COMMIT (mirrors importPipeline/commit.js):
@@ -39,7 +38,7 @@ export async function commitBatch({ batchId, onProgress }) {
 
   // Batch-level brokerage account (ADR-095): every lot from this batch lands on it,
   // giving imported holdings a real per-account position (ADR-091). NULL = unassigned.
-  // In brokerage mode the batch ALSO fans out cash rows + trade cash legs.
+  // In brokerage mode the batch ALSO routes external cash rows into the ledger.
   const { rows: batchRows } = await query(
     `SELECT account_id, is_brokerage FROM portfolio_import_batches WHERE id = $1`,
     [batchId],
@@ -77,7 +76,6 @@ export async function commitBatch({ batchId, onProgress }) {
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
-  let legs = 0;
   const committedHashes = new Set();
 
   // Per-batch FX cache: the on-or-before stored-rate lookup is deterministic for
@@ -104,13 +102,11 @@ export async function commitBatch({ batchId, onProgress }) {
     let chunkImported = 0;
     let chunkDuplicates = 0;
     let chunkErrors = 0;
-    let chunkLegs = 0;
     await withTransaction(async (client) => {
       // Reset inside the callback so a withTransaction retry recounts cleanly.
       chunkImported = 0;
       chunkDuplicates = 0;
       chunkErrors = 0;
-      chunkLegs = 0;
       for (let j = 0; j < chunk.length; j++) {
         const row = chunk[j];
 
@@ -202,33 +198,12 @@ export async function commitBatch({ batchId, onProgress }) {
             preloaded_asset_class: row.asset_class,
           }));
 
-          // Trade + its ADR-090 cash leg are all-or-nothing (ADR-095): both run
-          // inside this row's SAVEPOINT, so a leg failure (or a crash mid-pair)
-          // rolls the trade back with it — no compensating delete with its own
-          // crash window. The repository + leg service join this transaction via
-          // the ambient-client reroute in withTransaction.
-          let legCreated = false;
-          if (isBrokerage && batchAccountId) {
-            try {
-              const legId = await createTradeCashLeg({
-                portfolioTxn: { ...created, type: row.type, amount: created?.amount ?? row.amount, fees: created?.fees ?? row.fees, taxes: created?.taxes ?? row.taxes, currency, date: row.tx_date, id: created?.id },
-                cashAccountId: batchAccountId,
-              });
-              legCreated = Boolean(legId);
-            } catch (legErr) {
-              // Rethrow with context: the savepoint rolls the pair back, and the
-              // row's error message should say which half failed.
-              throw new Error(`cash leg failed: ${legErr?.message?.slice(0, 400) || 'unknown'}`, { cause: legErr });
-            }
-          }
-
           await query(
             `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
             [row.id, created?.id ?? null],
           );
           await client.query(`RELEASE SAVEPOINT ${sp}`);
           chunkImported++;
-          if (legCreated) chunkLegs++;
           if (row.tx_hash) committedHashes.add(row.tx_hash);
         } catch (err) {
           await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
@@ -254,7 +229,6 @@ export async function commitBatch({ batchId, onProgress }) {
     imported += chunkImported;
     duplicates += chunkDuplicates;
     errors += chunkErrors;
-    legs += chunkLegs;
 
     // Checkpoint per chunk (increment by chunk-local delta, preserving any
     // rows_error already set by earlier pipeline phases) so a crash mid-import
@@ -273,8 +247,8 @@ export async function commitBatch({ batchId, onProgress }) {
     }
   }
 
-  logger.info('[portfolio-pipeline:commit] done', { batchId, total, imported, duplicates, errors, legs, isBrokerage });
-  return { imported, duplicates, errors, legs };
+  logger.info('[portfolio-pipeline:commit] done', { batchId, total, imported, duplicates, errors, isBrokerage });
+  return { imported, duplicates, errors };
 }
 
 // Build a per-row SAVEPOINT identifier. portfolio_import_staging_rows.id is

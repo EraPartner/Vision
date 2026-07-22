@@ -18,9 +18,8 @@ export const banksRepository = {
    *
    * The current balance is sourced from the shared anchor+delta lateral
    * (`COMPUTED_BALANCE_LATERAL`, ADR-094) — the *same* single source the
-   * accounts hub (`accountRepository.getAll`) and net-worth-by-account
-   * (`getNetWorthByAccount`) consume — so the dashboard widget no longer
-   * diverges from the hub. The naive "latest stamped balance" it replaced froze
+   * accounts hub (`accountRepository.getAll`) consumes — so the dashboard
+   * widget no longer diverges from the hub. The naive "latest stamped balance" it replaced froze
    * at the last imported statement figure, dropping manual/trade/brokerage
    * activity that leaves `transactions.balance` NULL. Grouped by account_id
    * (ADR-088); the label is sourced from `accounts.name` so the response

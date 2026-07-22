@@ -18,9 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Switch } from "@/components/ui/switch";
-import { useAccounts } from "@/hooks/useAccounts";
-import { isPerAccountHoldingsEnabled } from "@/lib/env";
 import { PortfolioCsvColumnMapper } from "@/features/imports/PortfolioCsvColumnMapper";
 import { portfolioMappedColumns } from "@/features/imports/portfolioColumnFields";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
@@ -58,11 +55,6 @@ export function PortfolioImportPage() {
   const [config, setConfig] = useState<PortfolioCustomConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
-  // Brokerage fan-out (ADR-095): treat the file as a full statement (cash + trades)
-  // landing on one sleeve account; trades get an ADR-090 cash leg.
-  const [isBrokerage, setIsBrokerage] = useState(false);
-  const [brokerageAccountId, setBrokerageAccountId] = useState("");
-  const { data: accountsData } = useAccounts({ active: "true" });
   const abortRef = useRef<(() => void) | null>(null);
 
   const { data: savedParsers } = usePortfolioParserConfigs();
@@ -120,15 +112,13 @@ export function PortfolioImportPage() {
   const handleImport = async () => {
     if (!file) { toast.error(t("importPage.toast.noFileSel")); return; }
     if (!hasRequiredMapping) { toast.error(t("portfolioImport.toast.noMapping")); return; }
-    if (isBrokerage && !brokerageAccountId) { toast.error(t("portfolioImport.brokerage.needAccount")); return; }
 
     setLoading(true);
     setProgress({ phase: "connecting", current: 0, total: 0, imported: 0, duplicates: 0, errors: 0, percent: 0 });
     const adapterName = isSaved && selectedParser ? selectedParser.name : (parserName.trim() || "portfolio_generic");
-    const brokerage = isBrokerage ? { isBrokerage: true, accountId: Number(brokerageAccountId) } : undefined;
 
     try {
-      const { abort, result } = apiClient.importPortfolioCSVWithProgress(file, config, adapterName, (p) => setProgress(p), brokerage);
+      const { abort, result } = apiClient.importPortfolioCSVWithProgress(file, config, adapterName, (p) => setProgress(p));
       abortRef.current = abort;
       const data = await result;
       abortRef.current = null;
@@ -260,32 +250,6 @@ export function PortfolioImportPage() {
             highlightedHeaders={portfolioMappedColumns(config)}
             defaultCollapsed
           />
-
-          {/* Brokerage fan-out (ADR-095) — gated with per-account holdings (ADR-103) */}
-          {isPerAccountHoldingsEnabled && (
-          <div className="rounded-lg border p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="pf-brokerage" className="text-sm">{t("portfolioImport.brokerage.toggle")}</Label>
-                <p className="text-xs text-muted-foreground">{t("portfolioImport.brokerage.hint")}</p>
-              </div>
-              <Switch id="pf-brokerage" checked={isBrokerage} onCheckedChange={setIsBrokerage} />
-            </div>
-            {isBrokerage && (
-              <div className="space-y-1.5">
-                <Label htmlFor="pf-brokerage-account">{t("portfolioImport.review.account")}</Label>
-                <Select value={brokerageAccountId} onValueChange={setBrokerageAccountId}>
-                  <SelectTrigger id="pf-brokerage-account"><SelectValue placeholder={t("portfolio.move.selectAccount")} /></SelectTrigger>
-                  <SelectContent>
-                    {(accountsData?.items ?? []).map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          )}
 
           {/* Progress */}
           {progress && loading && (

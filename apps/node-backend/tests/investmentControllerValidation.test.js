@@ -25,11 +25,6 @@ vi.mock('../src/config/kinesisConfig.js', () => ({ getKinesisAssetConfig: vi.fn(
 vi.mock('../src/services/info/cache.js', () => ({ invalidatePortfolioCaches: vi.fn() }));
 vi.mock('../src/lib/urlSafety.js', () => ({ assertPublicHttpUrl: vi.fn() }));
 vi.mock('../src/services/portfolio/fxResolve.js', () => ({ autoResolveFxRateToEur: vi.fn() }));
-vi.mock('../src/services/portfolio/tradeCashLegService.js', () => ({
-  createTradeCashLeg: vi.fn(),
-  deleteTradeCashLegs: vi.fn(),
-}));
-vi.mock('../src/services/portfolio/moveHoldingService.js', () => ({ moveHolding: vi.fn() }));
 
 import investmentRepository from '../src/repositories/investmentRepository.js';
 import { createInvestment, updateInvestment, parseDefaultListOptions } from '../src/controllers/investmentController.js';

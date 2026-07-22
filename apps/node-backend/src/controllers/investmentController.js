@@ -22,8 +22,6 @@ import { validateNumber, assertMaxLength, assertCurrency } from '../middleware/v
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
-import { createTradeCashLeg, deleteTradeCashLegs, deleteTradeCashLegsForTrades } from '../services/portfolio/tradeCashLegService.js';
-import { moveHolding as moveHoldingSvc } from '../services/portfolio/moveHoldingService.js';
 import { parsePagination } from '../lib/pagination.js';
 
 // Custom price-provider URLs are fetched server-side at refresh time, so reject
@@ -416,17 +414,8 @@ export async function updateInvestment(req, res) {
 export async function deleteInvestment(req, res) {
   const investmentId = parseRequestId(req);
 
-  // Capture trade ids before the delete: the schema cascade removes the trades
-  // themselves, but their cash legs hang off portfolio_transaction_id, which is
-  // not a real FK (ADR-090) — cascade app-side, like deleteTransaction below.
-  const tradeIds = await portfolioTransactionRepository.getIdsByInvestment(investmentId);
-
   const ok = await investmentRepository.hardDelete(investmentId);
   if (!ok) throw new NotFoundError('Investment not found');
-
-  await deleteTradeCashLegsForTrades(tradeIds).catch((err) => {
-    logger.error('Trade cash-leg cleanup failed', { investmentId, error: err.message });
-  });
 
   clearInvestmentsCaches();
   res.status(204).send();
@@ -452,7 +441,7 @@ export async function createTransaction(req, res) {
   const {
     type, date, amount, units, price_per_unit, fees, taxes,
     currency, note, is_recurring, recurrence_interval,
-    recurrence_end_date, account_id, cash_account_id,
+    recurrence_end_date, account_id,
   } = req.body;
   let { fx_rate_to_eur } = req.body;
 
@@ -481,42 +470,12 @@ export async function createTransaction(req, res) {
     translateRepoError(err);
   }
 
-  // Trades = transfers (ADR-090): when a cash account is designated, post the
-  // paired cash leg on its sleeve. NOTE: not yet in one DB transaction with the
-  // trade insert — a leg failure leaves the trade without its leg (follow-up:
-  // thread a shared client through the repo create path).
-  if (txn && cash_account_id != null) {
-    try {
-      await createTradeCashLeg({ portfolioTxn: txn, cashAccountId: Number(cash_account_id) });
-    } catch (err) {
-      logger.error('Trade cash-leg creation failed', { txnId: txn.id, error: err.message });
-      throw err;
-    }
-  }
-
   clearInvestmentsCaches();
   refreshQuotesForInvestment(investment_id).catch((err) => {
     logger.error('Transaction-triggered quote refresh failed', { investmentId: investment_id, error: err.message });
   });
   res.status(201);
   res.ok(txn);
-}
-
-export async function moveHolding(req, res) {
-  const investmentId = parseRequestId(req);
-  const inv = await investmentRepository.getById(investmentId);
-  if (!inv) throw new NotFoundError('Investment not found');
-
-  const { from_account_id, to_account_id, units, strategy } = req.body || {};
-  const result = await moveHoldingSvc({
-    investmentId,
-    fromAccountId: from_account_id != null ? Number(from_account_id) : NaN,
-    toAccountId: to_account_id != null ? Number(to_account_id) : NaN,
-    units: units != null ? Number(units) : null,
-    strategy: strategy === 'fifo' || strategy === 'proportional' ? strategy : undefined,
-  });
-  clearInvestmentsCaches();
-  res.ok(result);
 }
 
 export async function deleteTransaction(req, res) {
@@ -527,12 +486,6 @@ export async function deleteTransaction(req, res) {
 
   const ok = await portfolioTransactionRepository.hardDelete(txnId);
   if (!ok) throw new NotFoundError('Portfolio transaction not found');
-
-  // App-side cascade for the trade cash leg (ADR-090): portfolio_transaction_id is not a FK
-  // (inheritance/view schema), so remove any linked cash legs here.
-  await deleteTradeCashLegs(txnId).catch((err) => {
-    logger.error('Trade cash-leg cleanup failed', { txnId, error: err.message });
-  });
 
   clearInvestmentsCaches();
   refreshQuotesForInvestment(existingTxn.investment_id).catch((err) => {

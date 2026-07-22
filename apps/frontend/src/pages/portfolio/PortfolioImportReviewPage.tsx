@@ -11,11 +11,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvestmentCombobox } from "@/components/portfolio/InvestmentCombobox";
-import { useAccounts } from "@/hooks/useAccounts";
-import { isPerAccountHoldingsEnabled } from "@/lib/env";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -29,9 +25,6 @@ export function PortfolioImportReviewPage() {
   const { batchId: batchIdParam } = useParams<{ batchId: string }>();
   const batchId = Number(batchIdParam);
   const [busyGroup, setBusyGroup] = useState<string | null>(null);
-  // Batch-level brokerage account (ADR-095): committed lots inherit it (ADR-091).
-  const [accountId, setAccountId] = useState<string>("");
-  const { data: accountsData } = useAccounts({ active: "true" });
 
   const queryKey = ["portfolio-import-preview", batchId];
   const { data, isLoading, error } = useQuery({
@@ -41,7 +34,7 @@ export function PortfolioImportReviewPage() {
   });
 
   const commit = useMutation({
-    mutationFn: () => apiClient.commitPortfolioImportBatch(batchId, accountId ? Number(accountId) : undefined),
+    mutationFn: () => apiClient.commitPortfolioImportBatch(batchId),
     onSuccess: (res) => {
       toast.success(t("portfolioImport.toast.importSuccess", { n: res.imported, dups: res.duplicates }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
@@ -174,23 +167,6 @@ export function PortfolioImportReviewPage() {
           </Card>
         );
       })}
-
-      {/* Batch account picker (ADR-095) — gated with per-account holdings (ADR-103) */}
-      {isPerAccountHoldingsEnabled && (
-      <div className="space-y-1.5 rounded-md border p-3">
-        <Label htmlFor="import-account">{t("portfolioImport.review.account")}</Label>
-        <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
-          <SelectTrigger id="import-account"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">{t("accounts.unassigned")}</SelectItem>
-            {(accountsData?.items ?? []).map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">{t("portfolioImport.review.accountHint")}</p>
-      </div>
-      )}
 
       <div className="flex gap-2">
         <Button onClick={() => commit.mutate()} disabled={commit.isPending} className="flex-1 h-11" size="lg">

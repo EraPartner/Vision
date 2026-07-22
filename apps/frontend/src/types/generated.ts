@@ -384,26 +384,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/info/net-worth/by-account": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Net worth split by account (Σ-accounts, ADR-100)
-         * @description Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
-         */
-        get: operations["getNetWorthByAccount"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/saved-charts": {
         parameters: {
             query?: never;
@@ -1508,28 +1488,6 @@ export interface paths {
         put?: never;
         /** Create transaction for investment */
         post: operations["createInvestmentTransaction"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/investments/{id}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Move this holding between accounts (in-specie, cost-basis-preserving)
-         * @description Moves the investment's lots from `from_account_id` to `to_account_id` (ADR-091). Omit `units` (or pass ≥ net) for a whole move (re-points all lots incl. history); pass `units` for a partial move (unit-based only — FIFO lot re-point + pro-rata boundary split). No sell/buy, no realized gain, no cash leg.
-         */
-        post: operations["moveHolding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4908,31 +4866,6 @@ export interface operations {
             };
         };
     };
-    getNetWorthByAccount: {
-        parameters: {
-            query?: {
-                /** @description Target currency for conversion (alias: target_currency; default EUR) */
-                currency?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Per-account net-worth breakdown with holdings history */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: Record<string, never>;
-                    };
-                };
-            };
-        };
-    };
     getSavedCharts: {
         parameters: {
             query?: never;
@@ -6958,49 +6891,6 @@ export interface operations {
                         data?: components["schemas"]["PortfolioTransaction"];
                     };
                 };
-            };
-        };
-    };
-    moveHolding: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    from_account_id: number;
-                    to_account_id: number;
-                    /** @description Units to move; omit for the whole position */
-                    units?: number | null;
-                    /**
-                     * @description Lot-selection strategy for a partial move; ignored for a whole move. Defaults to the service default when omitted.
-                     * @enum {string}
-                     */
-                    strategy?: "fifo" | "proportional";
-                };
-            };
-        };
-        responses: {
-            /** @description Move result (mode, movedUnits, lotsMoved, lotsSplit) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Investment or an account not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

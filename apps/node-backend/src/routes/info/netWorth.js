@@ -63,26 +63,4 @@ router.get(
   },
 );
 
-// Net worth as Σ accounts (ADR-100): per-account current cash + holdings and the
-// rebuilt daily holdings history. Only the HOLDINGS side is "Σ == aggregate by
-// construction" (the snapshot builder's per-account split). The cash side is
-// per-account computed balances — since WP-A1 the same anchor+delta definition
-// the /net-worth headline uses, but converted at current rates per account, so
-// Σ cash can differ from the headline's Liquid by FX-conversion granularity
-// (not by population or balance definition).
-router.get(
-  '/net-worth/by-account',
-  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'net-worth-by-account' }),
-  async (req, res) => {
-    const targetCurrency = getTargetCurrency(req);
-    const data = await resolveCacheWithInflight(netWorthResponseCache, `by-account:${targetCurrency}`, {
-      ttlMs: NET_WORTH_CACHE_TTL_MS,
-      requireData: true,
-      keepPreviousData: true,
-      loader: () => infoRepository.getNetWorthByAccount(targetCurrency),
-    });
-    res.ok(data);
-  },
-);
-
 export default router;
