@@ -12,8 +12,8 @@ import {
   netWorthResponseCache,
   NET_WORTH_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from './_cache.js';
-import { resolveLivePortfolioValue } from './_liveSummary.js';
+} from '../../services/info/cache.js';
+import { resolveLivePortfolioValue } from '../../services/info/liveSummary.js';
 import { parsePagination } from '../../lib/pagination.js';
 
 const router = Router();

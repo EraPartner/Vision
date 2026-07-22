@@ -26,9 +26,9 @@ import {
   PERF_CACHE_TTL_MS,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   setCachedData,
-} from './info/_cache.js';
-import { buildPortfolioPerformancePayload } from './info/_performanceHelpers.js';
-import { resolveLivePortfolioValue } from './info/_liveSummary.js';
+} from '../services/info/cache.js';
+import { buildPortfolioPerformancePayload } from '../services/info/performanceHelpers.js';
+import { resolveLivePortfolioValue } from '../services/info/liveSummary.js';
 import { getCurrentDateString } from './info/_queryParams.js';
 
 import statisticsRouter from './info/statistics.js';

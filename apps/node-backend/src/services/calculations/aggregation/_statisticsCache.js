@@ -15,7 +15,7 @@ import {
   statisticsResponseCache,
   STATISTICS_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from '../../../routes/info/_cache.js';
+} from '../../info/cache.js';
 
 /**
  * Stable key fragment for an optional numeric-id array (order-independent).

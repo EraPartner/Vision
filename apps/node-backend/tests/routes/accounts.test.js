@@ -42,7 +42,7 @@ vi.mock('../../src/services/aggregationRefresh.js', () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));
 
-vi.mock('../../src/routes/info/_cache.js', () => ({
+vi.mock('../../src/services/info/cache.js', () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 
@@ -55,7 +55,7 @@ import { mergeAccounts } from '../../src/services/accountMergeService.js';
 import { setOpeningBalance } from '../../src/services/openingBalanceService.js';
 import { reconcileAccount } from '../../src/services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../../src/services/aggregationRefresh.js';
-import { invalidatePortfolioCaches } from '../../src/routes/info/_cache.js';
+import { invalidatePortfolioCaches } from '../../src/services/info/cache.js';
 await import('../../src/routes/accounts.js');
 
 describe('Account Routes — portfolio cache invalidation', () => {

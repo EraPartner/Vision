@@ -24,7 +24,7 @@
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { ValidationError } from '../../middleware/errorHandler.js';
-import { invalidatePortfolioCaches } from '../../routes/info/_cache.js';
+import { invalidatePortfolioCaches } from '../info/cache.js';
 
 import { createBatch, stageBatch } from './stage.js';
 import { validateBatch } from './validate.js';

@@ -22,7 +22,7 @@ vi.mock('../src/services/priceProviderService.js', () => ({
 }));
 vi.mock('../src/services/quoteBackfillService.js', () => ({ refreshQuotesForInvestment: vi.fn() }));
 vi.mock('../src/config/kinesisConfig.js', () => ({ getKinesisAssetConfig: vi.fn() }));
-vi.mock('../src/routes/info/_cache.js', () => ({ invalidatePortfolioCaches: vi.fn() }));
+vi.mock('../src/services/info/cache.js', () => ({ invalidatePortfolioCaches: vi.fn() }));
 vi.mock('../src/lib/urlSafety.js', () => ({ assertPublicHttpUrl: vi.fn() }));
 vi.mock('../src/services/portfolio/fxResolve.js', () => ({ autoResolveFxRateToEur: vi.fn() }));
 vi.mock('../src/services/portfolio/tradeCashLegService.js', () => ({

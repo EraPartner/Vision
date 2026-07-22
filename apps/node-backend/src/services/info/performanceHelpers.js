@@ -5,9 +5,9 @@
  *   - final payload assembly (metrics + heatmap + breakdown summary)
  */
 
-import { computeMetrics, computeHeatmap } from '../../services/portfolioPerformanceSnapshotService.js';
+import { computeMetrics, computeHeatmap } from '../portfolioPerformanceSnapshotService.js';
 import { toWireDate } from '../../lib/dateFormat.js';
-import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
+import { getPortfolioSummary } from '../portfolio/portfolioSummaryService.js';
 import { todayAppDateString, addDaysYmd } from '../../lib/timezone.js';
 import { toYmd, sanitizeIsolatedValueSpikes } from '../../utils/portfolioMath.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
@@ -15,7 +15,7 @@ import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from './_cache.js';
+} from './cache.js';
 
 const PERIOD_OFFSETS = {
   '1m': 30,

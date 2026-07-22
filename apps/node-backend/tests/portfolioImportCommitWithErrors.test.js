@@ -13,7 +13,7 @@ vi.mock('../src/services/portfolioImportPipeline/commit.js', () => ({
   commitBatch: vi.fn(),
 }));
 
-vi.mock('../src/routes/info/_cache.js', () => ({
+vi.mock('../src/services/info/cache.js', () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 

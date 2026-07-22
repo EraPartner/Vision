@@ -16,7 +16,7 @@ import {
   bankBalancesResponseCache,
   BANK_BALANCES_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from '../../../routes/info/_cache.js';
+} from '../../info/cache.js';
 
 export async function computeBankBalances({
   targetCurrency = 'EUR',
