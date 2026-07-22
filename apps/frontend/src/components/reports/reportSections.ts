@@ -2,8 +2,8 @@
  * Report-section catalog for the PDF export dialog.
  *
  * Hand-mirrors the backend's single source of truth in
- * apps/node-backend/src/services/reports/index.js
- * (FINANCIAL/PORTFOLIO/TAX_REPORT_SECTIONS): same IDs, same order. The backend
+ * apps/node-backend/src/services/reports/sectionCatalog.js
+ * (FINANCIAL/PORTFOLIO/TAX_SECTION_CATALOG): same IDs, same order. The backend
  * silently drops unknown section IDs, so a typo here would silently omit a
  * section from the PDF — apps/node-backend/tests/reportSectionCatalog.test.js
  * imports this module and fails when the two sides drift.
