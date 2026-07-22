@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { calculateNextDate, getSupportedPatterns } from '../../src/services/calculations/recurrence.js';
+import { calculateNextDate, getSupportedPatterns } from '../../src/lib/calculations/recurrence.js';
 
 function seeded(seed) {
   let t = seed >>> 0;

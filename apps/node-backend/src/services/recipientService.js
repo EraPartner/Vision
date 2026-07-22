@@ -5,7 +5,7 @@
  */
 import { query } from '../database/connection.js';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { normalizeForMatching } from './textNormalization.js';
+import { normalizeForMatching } from '../lib/textNormalization.js';
 
 export { default } from '../repositories/recipientRepository.js';
 

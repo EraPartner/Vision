@@ -12,7 +12,7 @@ import {
   computeOwedSummary,
   validatePaymentAmount,
   roundToCents,
-} from '../../src/services/calculations/splits.js';
+} from '../../src/lib/calculations/splits.js';
 
 const CENT = 0.01;
 

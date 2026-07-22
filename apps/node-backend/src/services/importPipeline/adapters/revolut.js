@@ -2,7 +2,7 @@
  * Revolut CSV adapter — english headers, comma-separated, COMPLETED-only rows.
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
+import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseCsvFile, buildOptionalComment, parseDecimalSafe, parseDateFlexibleUtc } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';

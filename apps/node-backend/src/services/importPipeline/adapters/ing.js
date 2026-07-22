@@ -16,7 +16,7 @@
  *  10  Bericht              free-text message from sender
  */
 
-import { normalizeToUppercase } from '../../textNormalization.js';
+import { normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 

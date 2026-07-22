@@ -5,10 +5,10 @@ import {
   validateSplitAllocation,
   validateBatchSplitAllocation,
   validatePaymentAmount,
-} from '../../src/services/calculations/splits.js';
+} from '../../src/lib/calculations/splits.js';
 
 /**
- * Golden-fixture regression suite for services/calculations/splits.
+ * Golden-fixture regression suite for lib/calculations/splits.
  * Inputs live in tests/golden/__fixtures__/splits/*.input.json.
  * Run `UPDATE_GOLDENS=1 bun run test splits.golden` to re-baseline.
  *

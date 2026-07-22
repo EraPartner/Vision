@@ -37,7 +37,7 @@ import {
   NotFoundError,
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
-import { buildTransactionWhere, parseAmountFilter } from '../services/filterBuilder.js';
+import { buildTransactionWhere, parseAmountFilter } from '../lib/filterBuilder.js';
 import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,

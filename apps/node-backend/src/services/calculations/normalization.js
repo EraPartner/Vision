@@ -16,7 +16,7 @@ import {
   cleanKbcRecipientName,
   normalizeToUppercase,
   normalizeForMatching,
-} from '../textNormalization.js';
+} from '../../lib/textNormalization.js';
 
 export {
   cleanRecipientName,

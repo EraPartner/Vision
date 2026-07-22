@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeType, VALID_PORTFOLIO_TXN_TYPES } from '../src/services/portfolioImportPipeline/portfolioTypeNormalizer.js';
+import { normalizeType } from '../src/services/portfolioImportPipeline/portfolioTypeNormalizer.js';
+import { VALID_PORTFOLIO_TXN_TYPES } from '../src/lib/portfolioTxnTypes.js';
 
 describe('normalizeType', () => {
   it('resolves built-in aliases case-insensitively', () => {

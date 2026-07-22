@@ -11,7 +11,7 @@
 
 import { query as dbQuery, withTransaction } from '../database/connection.js';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { validateInt4Ids } from './filterBuilder.js';
+import { validateInt4Ids } from '../lib/filterBuilder.js';
 import { resolveBulkSelection } from './bulkSelection.js';
 import { scheduleReconcile } from './transferReconciliationService.js';
 import { attachmentRepository } from './attachmentRecordService.js';

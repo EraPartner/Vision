@@ -14,7 +14,7 @@ import {
 } from './infoRepositoryHelpers.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { buildExclusionClauses } from '../services/filterBuilder.js';
+import { buildExclusionClauses } from '../lib/filterBuilder.js';
 
 // Sum converted rows into a sorted per-day net series (SIMP-50).
 function aggregateByDate(rows) {
@@ -62,7 +62,7 @@ export async function getCashflowComparison(
   const currentDay = Number(todayYmd.slice(8, 10));
   const HISTORY_MONTHS = 24;
 
-  // Canonical exclusion clauses (services/filterBuilder.js). The joins are only
+  // Canonical exclusion clauses (lib/filterBuilder.js). The joins are only
   // needed when a clause actually references r/pr, so they stay conditional.
   const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
   const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
@@ -223,7 +223,7 @@ export async function getCashflowForecastData(
     throw new ValidationError('historyMonths must be an integer in [1, 120]');
   }
 
-  // Canonical exclusion clauses (services/filterBuilder.js); joins stay conditional.
+  // Canonical exclusion clauses (lib/filterBuilder.js); joins stay conditional.
   const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
   const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
   const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
@@ -317,7 +317,7 @@ export async function getCashflowForecastDataRolling(
     throw new ValidationError('daysForward must be an integer in [1, 365]');
   }
 
-  // Canonical exclusion clauses (services/filterBuilder.js); joins stay conditional.
+  // Canonical exclusion clauses (lib/filterBuilder.js); joins stay conditional.
   const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
   const categoryExclusionJoin = excl.whereSql ? excl.joinSql : '';
   const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
@@ -390,7 +390,7 @@ export async function getCashflowForecastDataByCategory(
     throw new ValidationError('historyMonths must be an integer in [1, 120]');
   }
 
-  // Canonical exclusion clauses (services/filterBuilder.js). The r/pr joins are
+  // Canonical exclusion clauses (lib/filterBuilder.js). The r/pr joins are
   // unconditional here (the effective-category COALESCE needs them anyway).
   const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
   const excludeParams = excl.params;

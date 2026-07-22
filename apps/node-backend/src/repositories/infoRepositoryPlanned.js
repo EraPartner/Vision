@@ -5,7 +5,7 @@
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { toAppTz, toAppDateString } from '../lib/timezone.js';
-import { calculateNextDate } from '../services/calculations/recurrence.js';
+import { calculateNextDate } from '../lib/calculations/recurrence.js';
 import { addAll, toDecimal, toNumber } from '../lib/money.js';
 import {
   roundToCents,

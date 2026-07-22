@@ -9,11 +9,7 @@
  * CSV has no type column).
  */
 
-export const VALID_PORTFOLIO_TXN_TYPES = new Set([
-  'buy', 'sell', 'dividend', 'fee', 'tax', 'interest',
-  'rent_income', 'appreciation', 'gift', 'split', 'merger',
-  'spinoff', 'return_of_capital',
-]);
+import { VALID_PORTFOLIO_TXN_TYPES } from '../../lib/portfolioTxnTypes.js';
 
 // Lowercased raw → canonical. Covers common English/Dutch/German brokerage labels.
 export const BUILTIN_TYPE_ALIASES = {

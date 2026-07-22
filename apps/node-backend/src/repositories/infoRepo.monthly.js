@@ -4,7 +4,7 @@
  */
 
 import { query } from '../database/connection.js';
-import { buildExclusionClauses } from '../services/filterBuilder.js';
+import { buildExclusionClauses } from '../lib/filterBuilder.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 import { toDecimal, toNumber } from '../lib/money.js';
@@ -134,7 +134,7 @@ export async function getMonthlyFinancialSummary(
     return { months, summary: buildMonthlySummary(months) };
   }
 
-  // Canonical exclusion clauses (services/filterBuilder.buildExclusionClauses):
+  // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses):
   // 3-level category COALESCE and alias-aware recipient exclusion.
   const excl = buildExclusionClauses({ excludedCategoryIds, excludedRecipientIds });
   const params = excl.params;

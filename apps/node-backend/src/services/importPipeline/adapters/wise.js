@@ -2,7 +2,7 @@
  * Wise CSV adapter — multi-currency transfer history.
  */
 
-import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
+import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc } from './_shared.js';
 

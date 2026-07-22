@@ -10,7 +10,7 @@
 import { query, withTransaction, withSavepointIfInTransaction } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
 import { buildUpdateSql } from '../lib/sqlClauses.js';
-import { VALID_PORTFOLIO_TXN_TYPES } from '../services/portfolioImportPipeline/portfolioTypeNormalizer.js';
+import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
 
 // Mirrors the recurrence_interval DB enum (migration 0001) and the frontend
 // RecurrenceInterval union. An out-of-set value has no DB CHECK on the flat

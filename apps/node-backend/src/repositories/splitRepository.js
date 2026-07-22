@@ -13,7 +13,7 @@ import {
   validateSplitAllocation,
   validateBatchSplitAllocation,
   roundToCents as roundToCentsCalc,
-} from '../services/calculations/splits.js';
+} from '../lib/calculations/splits.js';
 import { toDecimal, subtract, toNumber, roundToCents } from '../lib/money.js';
 import { toAppDateString } from '../lib/timezone.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
@@ -173,7 +173,7 @@ export const splitRepository = {
    *
    * Reads from agg_split_outstanding (trigger-maintained by migration
    * 0026) joined to recipients. Projection + filter + sort live in
-   * services/calculations/splits.js::computeOwedSummary so the shape is
+   * lib/calculations/splits.js::computeOwedSummary so the shape is
    * golden-fixture covered.
    *
    * Settled splits are excluded at the source: is_settled=true splits

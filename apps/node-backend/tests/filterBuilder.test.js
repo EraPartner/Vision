@@ -13,7 +13,7 @@ import {
   buildAggregationFilter,
   parseAmountFilter,
   validateInt4Ids,
-} from '../src/services/filterBuilder.js';
+} from '../src/lib/filterBuilder.js';
 
 describe('parseAmountFilter', () => {
   it('returns null for missing or unparseable input', () => {

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { runGolden } from '../golden/runGolden.js';
-import { calculateNextDate, isValidPattern } from '../../src/services/calculations/recurrence.js';
+import { calculateNextDate, isValidPattern } from '../../src/lib/calculations/recurrence.js';
 
 /**
- * Golden-fixture regression suite for services/calculations/recurrence.
+ * Golden-fixture regression suite for lib/calculations/recurrence.
  * Fixture inputs: { currentDate: ISO string, pattern: string }.
  * Output is normalized to { next: ISO string | null } so JSON round-trip is stable.
  */

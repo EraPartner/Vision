@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/database/connection.js', () => ({ query: vi.fn() }));
-vi.mock('../src/services/textNormalization.js', () => ({
+vi.mock('../src/lib/textNormalization.js', () => ({
   normalizeForMatching: vi.fn((s) => `norm:${String(s).trim().toLowerCase()}`),
 }));
 

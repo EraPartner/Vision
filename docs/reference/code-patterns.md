@@ -471,6 +471,34 @@ export default entityRepository;
 | Dynamic updates | Build `SET` clauses from `Object.entries()`, skip `undefined` |
 | SQL injection | Use parameterized queries only, never string concatenation |
 
+### Layering: repositories must not import services — with one sanctioned exception
+
+The intended layering is `routes → services → repositories`, with pure, framework-free helpers in
+`lib/` importable from any layer. Pure helpers that used to sit under `services/` were relocated to
+`lib/` in Wave A2 (2026-07) precisely so repositories can use them without inverting the layers:
+`lib/filterBuilder.js`, `lib/textNormalization.js`, `lib/calculations/splits.js`,
+`lib/calculations/recurrence.js`, and the `VALID_PORTFOLIO_TXN_TYPES` const
+(`lib/portfolioTxnTypes.js`).
+
+> [!note] Accepted exception — `info*` read-repositories may import currency conversion + snapshot computation
+> Two repository→service imports remain by design and are **sanctioned exceptions**, not bugs:
+>
+> - Eight `repositories/info*` files import `convertRowsToEur` / `convertToCurrency` from
+>   [[apps/node-backend/src/services/currency/currencyConversionService.js|currencyConversionService.js]].
+> - [[apps/node-backend/src/repositories/infoRepositoryNetWorth.js|infoRepositoryNetWorth.js]] imports
+>   `computeDailySnapshots` from
+>   [[apps/node-backend/src/services/portfolio/snapshotBuilder.js|snapshotBuilder.js]] (which itself
+>   runs `withTransaction` and reads other repositories).
+>
+> **Rationale:** these info "repositories" are effectively read-services — they aggregate rows and
+> currency-convert them as part of producing API-shaped results. Currency conversion is stateful
+> (in-memory rate cache, ECB/er-api fetch, DB fallback, provider-health recording), so it cannot
+> move to `lib/`; and lifting the conversion calls up into the info service layer would change the
+> seam every info query result flows through — a behaviour-risk refactor deferred until the info
+> read-path is restructured. Until then, `repositories/info*` may import currency conversion and
+> snapshot computation from the service layer. Do **not** extend this exception to other
+> repositories: any other pure helper a repository needs belongs in `lib/`.
+
 ---
 
 ## Timezone Boundary Handling & APP_TIMEZONE Consistency (Phase 9, ADR-009)
@@ -1152,14 +1180,14 @@ class AppError extends Error {
 
 ## Filter Builder Pattern
 
-**Source:** [[apps/node-backend/src/services/filterBuilder.js|filterBuilder.js]]
+**Source:** [[apps/node-backend/src/lib/filterBuilder.js|filterBuilder.js]] _(moved from `services/` to `lib/` in Wave A2, 2026-07)_
 
 Centralized SQL WHERE clause builder for transaction-like queries. Consolidates previously duplicated filter logic across repositories.
 
 ### Usage
 
 ```js
-import { buildTransactionWhere, validateInt4Ids } from '../services/filterBuilder.js';
+import { buildTransactionWhere, validateInt4Ids } from '../lib/filterBuilder.js';
 
 const opts = {
   startDate: '2026-01-01',
@@ -1293,7 +1321,8 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 | Module | Purpose |
 |--------|---------|
 | `services/calculations/loanSchedule.js` | Loan amortization schedule generation (amortizing, fixed_principal, interest_only) |
-| `services/calculations/recurrence.js` | Recurring payment date calculation (daily, weekly, monthly, yearly, custom) |
+| `lib/calculations/recurrence.js` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom) |
+| `lib/calculations/splits.js` _(moved from `services/calculations/` in Wave A2)_ | Transaction-split allocation/payment validation and owed-summary projection |
 | `utils/portfolioMath.js` | Cost basis calculations (weighted average, FIFO, LIFO) with immutable lot handling |
 
 **Immutability in portfolioMath (2026-04-25):**
