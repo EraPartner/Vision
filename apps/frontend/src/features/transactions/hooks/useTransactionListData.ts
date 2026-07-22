@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { transactionKeys } from "@/lib/queryKeys";
 import logger from "@/lib/logger";
 import type { RawApiTransaction } from "../types";
 
@@ -80,29 +81,26 @@ export function useTransactionListData({
     }, []);
 
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: [
-            'transactions-virtual',
-            {
-                active: !showAll,
-                search: search || undefined,
-                transactionIdFilter,
-                recipientIdFilter,
-                categoryIdFilter,
-                categoryIdsFilter,
-                startDateFilter,
-                endDateFilter,
-                transactionTypeFilter,
-                amountMinFilter,
-                amountMaxFilter,
-                amountSignedFilter,
-                tagsFilter,
-                accountIdFilter,
-                bankAccountFilter,
-                sortKey,
-                sortDir,
-                pageSize,
-            },
-        ],
+        queryKey: transactionKeys.virtualList({
+            active: !showAll,
+            search: search || undefined,
+            transactionIdFilter,
+            recipientIdFilter,
+            categoryIdFilter,
+            categoryIdsFilter,
+            startDateFilter,
+            endDateFilter,
+            transactionTypeFilter,
+            amountMinFilter,
+            amountMaxFilter,
+            amountSignedFilter,
+            tagsFilter,
+            accountIdFilter,
+            bankAccountFilter,
+            sortKey,
+            sortDir,
+            pageSize,
+        }),
         // Forward React Query's abort `signal` so a superseded keystroke's
         // request is actually aborted client-side (React Query drops the stale
         // query, but without this the expensive backend search kept running).

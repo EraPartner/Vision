@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import type { SavedChart } from '@/lib/api/types';
+import { aggregationKeys } from '@/lib/queryKeys';
 
 /**
  * Static (module-level) part of a pivot-hook configuration. Keeping it out of
@@ -67,20 +68,16 @@ export function usePivotQuery<Item extends { total: number }, Row extends { mont
     const enabled = !!(chart && (all || (ids?.length ?? 0) > 0));
 
     const query = useQuery({
-        queryKey: [
-            'aggregations',
+        // The selected entities MUST key the cache (ADR-041 amendment) — see
+        // aggregationKeys.pivot.
+        queryKey: aggregationKeys.pivot(
             config.kind,
             targetCurrency,
             chart?.time_bucket ?? 'monthly',
             chart?.date_range_start ?? null,
             chart?.date_range_end ?? null,
-            // Narrowed per chart, so the selected entities MUST key the cache
-            // (ADR-041 amendment) — else one chart's narrowed payload would be
-            // served to a different chart with a different selection. The all
-            // flag keys it too so the all-entities payload isn't reused as a
-            // narrowed one.
             all ? 'all' : (ids ?? []),
-        ],
+        ),
         queryFn: () =>
             config.fetchPivot({
                 currency: targetCurrency,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { adminKeys } from '@/lib/queryKeys';
 import { Activity, Database, Globe, KeyRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -113,19 +114,19 @@ export default function AdminOverviewPage() {
     const { t } = useLanguage();
 
     const { data: dbStats, isLoading: dbLoading } = useQuery({
-        queryKey: ['admin', 'db-stats'],
+        queryKey: adminKeys.dbStats,
         queryFn: getDbStats,
         staleTime: 60_000,
     });
 
     const { data: providers, isLoading: providersLoading } = useQuery({
-        queryKey: ['admin', 'provider-health'],
+        queryKey: adminKeys.providerHealth,
         queryFn: getProviderHealth,
         staleTime: 30_000,
     });
 
     const { data: metrics, isLoading: metricsLoading } = useQuery({
-        queryKey: ['admin', 'request-metrics'],
+        queryKey: adminKeys.requestMetrics,
         queryFn: getRequestMetrics,
         staleTime: 15_000,
     });

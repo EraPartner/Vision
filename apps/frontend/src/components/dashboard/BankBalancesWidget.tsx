@@ -5,6 +5,7 @@ import { CardSheen } from "@/components/shared/CardSheen";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { cashflowKeys } from "@/lib/queryKeys";
 import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,7 +56,7 @@ export function BankBalancesWidget() {
     const integerLocaleFormatter = new Intl.NumberFormat(locale);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const { data, isLoading, error } = useQuery({
-        queryKey: ["bankBalances", defaultCurrency],
+        queryKey: cashflowKeys.bankBalances(defaultCurrency),
         queryFn: () => apiClient.getBankBalances({ currency: defaultCurrency }),
         staleTime: 60_000,
     });

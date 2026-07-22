@@ -1,12 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-
-const STATUS_KEY = ['ai', 'ollama', 'status'] as const;
-const MODELS_KEY = ['ai', 'ollama', 'models'] as const;
+import { aiKeys } from '@/lib/queryKeys';
 
 export function useOllamaStatus() {
     return useQuery({
-        queryKey: STATUS_KEY,
+        queryKey: aiKeys.ollamaStatus,
         queryFn: () => apiClient.getOllamaStatus(),
         staleTime: 15_000,
         refetchInterval: 30_000,
@@ -18,7 +16,7 @@ export function useOllamaStatus() {
 
 export function useOllamaModels(enabled = true) {
     return useQuery({
-        queryKey: MODELS_KEY,
+        queryKey: aiKeys.ollamaModels,
         queryFn: () => apiClient.getOllamaModels(),
         enabled,
         staleTime: 60_000,

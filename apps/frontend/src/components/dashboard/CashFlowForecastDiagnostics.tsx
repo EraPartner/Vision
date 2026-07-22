@@ -24,6 +24,7 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { getCashflowForecastAccuracy } from "@/lib/api/aggregations";
+import { cashflowKeys } from "@/lib/queryKeys";
 import type {
     ForecastDiagnostics,
     ForecastBacktestEntry,
@@ -124,7 +125,7 @@ export function CashFlowForecastDiagnostics({
     const locale = numberFormatToLocale(appSettings.numberFormat);
 
     const { data: persistedData } = useQuery({
-        queryKey: ["cashflow-forecast-accuracy"],
+        queryKey: cashflowKeys.forecastAccuracy,
         queryFn: () => getCashflowForecastAccuracy({ limit_months: 24 }),
         staleTime: 10 * 60 * 1000,
         enabled: open,

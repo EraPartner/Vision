@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Money } from "@/components/shared/Money";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { aggregationKeys } from "@/lib/queryKeys";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,10 +50,10 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
     [formatCurrencyBase],
   );
   const { data, isLoading, isError } = useQuery({
-    // Keyed under the ['aggregations', …] prefix so useTransactions.invalidateAll
+    // Keyed under the ['aggregations', …] prefix so invalidateTransactionData
     // (which invalidates the whole aggregations family) reaches this copy too —
     // otherwise it stayed stale until staleTime expiry after a mutation.
-    queryKey: ["aggregations", "recipient-insights", targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds],
+    queryKey: aggregationKeys.recipientInsightsWithExclusions(targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds),
     queryFn: () => apiClient.getRecipientInsights({
       currency: targetCurrency,
       excluded_category_ids: effectiveExcludedCatIds,

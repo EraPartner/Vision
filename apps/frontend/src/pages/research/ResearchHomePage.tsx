@@ -14,6 +14,7 @@ import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { apiClient } from "@/lib/api";
+import { watchlistKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
@@ -59,7 +60,7 @@ export default function ResearchHomePage() {
   );
 
   const { data: watchlist } = useQuery({
-    queryKey: ["watchlist"],
+    queryKey: watchlistKeys.all,
     queryFn: () => apiClient.getWatchlist(),
     staleTime: 60_000,
   });

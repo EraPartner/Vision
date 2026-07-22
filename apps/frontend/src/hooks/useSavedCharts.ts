@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type SavedChart, type SavedChartCreate } from '@/lib/api';
 import { toast } from 'sonner';
+import { savedChartKeys } from '@/lib/queryKeys';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export type { SavedChart };
 
 export function useSavedCharts() {
   return useQuery({
-    queryKey: ['saved-charts'],
+    queryKey: savedChartKeys.all,
     queryFn: () => apiClient.getSavedCharts(),
     staleTime: 60_000,
   });
@@ -19,7 +20,7 @@ export function useCreateSavedChart() {
   return useMutation({
     mutationFn: (payload: SavedChartCreate) => apiClient.createSavedChart(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['saved-charts'] });
+      queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
       toast.success(t('charts.saved'));
     },
     onError: (error: Error) => {
@@ -35,7 +36,7 @@ export function useUpdateSavedChart() {
     mutationFn: ({ id, ...payload }: { id: number } & Partial<SavedChartCreate>) =>
       apiClient.updateSavedChart(id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['saved-charts'] });
+      queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
     },
     onError: (error: Error) => {
       toast.error(t('charts.updateFailed'), { description: error.message });
@@ -49,7 +50,7 @@ export function useDeleteSavedChart() {
   return useMutation({
     mutationFn: (id: number) => apiClient.deleteSavedChart(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['saved-charts'] });
+      queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
       toast.success(t('charts.deleted'));
     },
     onError: (error: Error) => {

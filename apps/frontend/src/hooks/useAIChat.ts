@@ -2,6 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
+import { aiKeys } from '@/lib/queryKeys';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { aiChatStreamStore, type SendBody } from '@/lib/aiChatStreamStore';
 import type {
@@ -10,11 +11,9 @@ import type {
     CreateConversationBody,
 } from '@/types/aiChat';
 
-const CONVERSATIONS_KEY = ['ai', 'conversations'] as const;
-
 export function useConversations() {
     return useQuery({
-        queryKey: CONVERSATIONS_KEY,
+        queryKey: aiKeys.conversations,
         queryFn: () => apiClient.getConversations(),
         staleTime: 30_000,
         placeholderData: (prev) => prev,
@@ -23,7 +22,7 @@ export function useConversations() {
 
 export function useConversation(id: string | null) {
     return useQuery({
-        queryKey: ['ai', 'conversations', id],
+        queryKey: aiKeys.conversation(id),
         queryFn: () => (id ? apiClient.getConversation(id) : Promise.resolve(null)),
         enabled: Boolean(id),
         staleTime: 10_000,
@@ -38,8 +37,8 @@ export function useCreateConversation() {
     return useMutation({
         mutationFn: (body: CreateConversationBody = {}) => apiClient.createConversation(body),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
-            queryClient.setQueryData(['ai', 'conversations', data.conversation.id], data);
+            queryClient.invalidateQueries({ queryKey: aiKeys.conversations });
+            queryClient.setQueryData(aiKeys.conversation(data.conversation.id), data);
         },
         onError: (error: Error) => {
             toast.error(t('aiChat.createFailed'), { description: error.message });
@@ -55,9 +54,9 @@ export function useRenameConversation() {
         mutationFn: ({ id, title }: { id: string; title: string }) =>
             apiClient.renameConversation(id, title),
         onSuccess: (updated) => {
-            queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+            queryClient.invalidateQueries({ queryKey: aiKeys.conversations });
             queryClient.setQueryData<ConversationDetail | undefined>(
-                ['ai', 'conversations', updated.id],
+                aiKeys.conversation(updated.id),
                 (prev) => (prev ? { ...prev, conversation: { ...prev.conversation, ...updated } } : prev),
             );
         },
@@ -74,8 +73,8 @@ export function useDeleteConversation() {
     return useMutation({
         mutationFn: (id: string) => apiClient.deleteConversation(id),
         onSuccess: (_void, id) => {
-            queryClient.removeQueries({ queryKey: ['ai', 'conversations', id] });
-            queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY, exact: true });
+            queryClient.removeQueries({ queryKey: aiKeys.conversation(id) });
+            queryClient.invalidateQueries({ queryKey: aiKeys.conversations, exact: true });
             toast.success(t('aiChat.deleted'));
         },
         onError: (error: Error) => {

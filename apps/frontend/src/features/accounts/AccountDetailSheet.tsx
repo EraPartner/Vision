@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Sparkline } from "@/components/charts";
 import { Pencil, Coins, Receipt, Scale, Lock } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { transactionKeys } from "@/lib/queryKeys";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isPerAccountHoldingsEnabled } from "@/lib/env";
@@ -45,7 +46,7 @@ export function AccountDetailSheet({
     // the balance sparkline. Gated on the sheet being open for a ledger-backed
     // account so a closed sheet holds no live query.
     const { data: txData, isLoading: txLoading } = useQuery({
-        queryKey: ["transactions", "account-detail", account?.id],
+        queryKey: transactionKeys.accountDetail(account?.id),
         queryFn: () => apiClient.getTransactions({
             account_id: account!.id,
             limit: 30,

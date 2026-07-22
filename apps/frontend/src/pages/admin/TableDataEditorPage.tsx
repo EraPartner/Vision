@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { adminKeys } from '@/lib/queryKeys';
 import {
     ArrowLeft, Plus, Trash2, RotateCcw, Eye, AlertTriangle, ChevronUp, ChevronDown,
     ChevronsUpDown, ChevronLeft, ChevronRight, Ban, RefreshCw, Search, KeyRound,
@@ -159,7 +160,7 @@ export default function TableDataEditorPage() {
     const [previewStatements, setPreviewStatements] = useState<PreviewStatement[]>([]);
 
     const query = useQuery({
-        queryKey: ['admin', 'db-table', table, page, sort, appliedFilters],
+        queryKey: adminKeys.dbTable(table, page, sort, appliedFilters),
         queryFn: () => getTableRows(table, {
             limit: PAGE_SIZE,
             offset: page * PAGE_SIZE,
@@ -269,7 +270,7 @@ export default function TableDataEditorPage() {
             toast.success(t('dbEditor.commitSuccess'), { description: `${res.applied} ${t('dbEditor.statementsApplied')}` });
             setPreviewOpen(false);
             discardAll();
-            qc.invalidateQueries({ queryKey: ['admin', 'db-table', table] });
+            qc.invalidateQueries({ queryKey: adminKeys.dbTableAll(table) });
         },
         onError: (err: Error) => toast.error(t('dbEditor.commitFailed'), { description: err.message }),
     });
@@ -289,7 +290,7 @@ export default function TableDataEditorPage() {
                             {t('dbEditor.back')}
                         </Button>
                         <Button variant="outline" size="sm" className="gap-2" disabled={query.isFetching}
-                            onClick={() => qc.invalidateQueries({ queryKey: ['admin', 'db-table', table] })}>
+                            onClick={() => qc.invalidateQueries({ queryKey: adminKeys.dbTableAll(table) })}>
                             <RefreshCw className={cn('h-4 w-4', query.isFetching && 'animate-spin')} />
                             {t('dbEditor.refresh')}
                         </Button>

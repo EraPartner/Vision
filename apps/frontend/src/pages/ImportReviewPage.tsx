@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { invalidateTransactionLists } from "@/hooks/useTransactions";
+import { importKeys, invalidateTransactionData, plannedKeys } from "@/lib/queryKeys";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -95,7 +95,7 @@ export default function ImportReviewPage() {
   const [groupOverrides, setGroupOverrides] = useState<Map<string, GroupState>>(new Map());
 
   const { data: preview, isLoading, error } = useQuery({
-    queryKey: ["import-preview", batchId],
+    queryKey: importKeys.preview(batchId),
     queryFn: () => apiClient.getImportPreview(batchId),
     enabled: Number.isFinite(batchId),
   });
@@ -128,15 +128,15 @@ export default function ImportReviewPage() {
       );
       if (data.auto_linked_count && data.auto_linked_count > 0) {
         toast.success(t("importReview.toast.autoLinked", { n: data.auto_linked_count }));
-        queryClient.invalidateQueries({ queryKey: ["plannedMatchSuggestions"] });
-        queryClient.invalidateQueries({ queryKey: ["upcomingPlannedPayments"] });
+        queryClient.invalidateQueries({ queryKey: plannedKeys.matchSuggestions });
+        queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
       }
       queryClient.invalidateQueries({ queryKey: ["import-batches"] });
       // A commit inserts the staged rows into `transactions`; refresh the
       // transactions list, dashboard stat cards, monthly summary and
       // aggregations so the imported rows appear immediately instead of after
       // staleTime expires (window-focus refetch is disabled globally).
-      invalidateTransactionLists(queryClient);
+      invalidateTransactionData(queryClient);
       navigate("/import");
     },
     onError: (err: Error) => {
@@ -182,7 +182,7 @@ export default function ImportReviewPage() {
       await Promise.all(rows.map((row) => overrideMutation.mutateAsync({ rowId: row.id, recipientId })));
       updateGroupState(groupKey, { recipientSaving: false }, fallback);
       // Recipient changed — recipient default category may differ. Refresh.
-      queryClient.invalidateQueries({ queryKey: ["import-preview", batchId] });
+      queryClient.invalidateQueries({ queryKey: importKeys.preview(batchId) });
     } catch (err) {
       toast.error(t("importReview.toast.overrideFailed"), {
         description: err instanceof Error ? err.message : undefined,

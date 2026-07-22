@@ -1,5 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
+import {categoryKeys} from '@/lib/queryKeys';
 import type {CategoryCreate, CategoryUpdate} from '@/types/api';
 import {toast} from 'sonner';
 import {useLanguage} from '@/contexts/LanguageContext';
@@ -13,7 +14,7 @@ export function useCategories(params?: {
     search?: string;
 }) {
     return useQuery({
-        queryKey: ['categories', params],
+        queryKey: categoryKeys.list(params),
         queryFn: () => apiClient.getCategories(params),
         staleTime: 2 * 60_000, // categories rarely change - 2min stale
         placeholderData: (prev) => prev,
@@ -27,7 +28,7 @@ export function useCreateCategory() {
     return useMutation({
         mutationFn: (category: CategoryCreate) => apiClient.createCategory(category),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({queryKey: ['categories']});
+            queryClient.invalidateQueries({queryKey: categoryKeys.all});
             if (data.wasCreated) {
                 toast.success(t('categories.created'));
             } else {
@@ -48,7 +49,7 @@ export function useUpdateCategory() {
         mutationFn: ({id, data}: { id: number; data: CategoryUpdate }) =>
             apiClient.updateCategory(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['categories']});
+            queryClient.invalidateQueries({queryKey: categoryKeys.all});
         },
         onError: (error: Error) => {
             toast.error(t('categories.updateFailedTitle'), { description: error.message });
@@ -63,7 +64,7 @@ export function useDeleteCategory() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteCategory(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['categories']});
+            queryClient.invalidateQueries({queryKey: categoryKeys.all});
         },
         onError: (error: Error) => {
             toast.error(t('categories.deleteFailedTitle'), { description: error.message });

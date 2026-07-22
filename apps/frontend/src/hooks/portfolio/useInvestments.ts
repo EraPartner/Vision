@@ -6,6 +6,7 @@
 import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { invalidateInvestmentData, portfolioKeys } from '@/lib/queryKeys';
 import type {
   InvestmentCreate,
   InvestmentUpdate,
@@ -14,14 +15,9 @@ import type {
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 
-export const INVESTMENTS_QUERY_KEY = ['investments'] as const;
-export const PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX = 'portfolio-transactions';
-export const PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX = 'portfolio-summary';
-export const PORTFOLIO_PERFORMANCE_QUERY_KEY_PREFIX = 'portfolio-performance';
-
 export function useInvestmentsQuery() {
   return useQuery({
-    queryKey: INVESTMENTS_QUERY_KEY,
+    queryKey: portfolioKeys.investments,
     queryFn: () => apiClient.getInvestments({ limit: 500, active: false }),
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
@@ -30,7 +26,7 @@ export function useInvestmentsQuery() {
 
 export function usePortfolioTransactionsQuery(investmentIds: number[]) {
   return useQuery({
-    queryKey: [PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX, investmentIds.join(',')],
+    queryKey: portfolioKeys.transactions(investmentIds.join(',')),
     queryFn: async () => {
       if (investmentIds.length === 0) return [];
       try {
@@ -57,14 +53,7 @@ export function useInvestmentMutations() {
   const { t } = useLanguage();
 
   const invalidateAll = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: INVESTMENTS_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX] });
-    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX] });
-    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_PERFORMANCE_QUERY_KEY_PREFIX] });
-    // Investment CRUD moves the net-worth total; both queries sit at a 2-minute
-    // staleTime on NetWorthPage, so without this they show stale figures.
-    queryClient.invalidateQueries({ queryKey: ['net-worth'] });
-    queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });
+    invalidateInvestmentData(queryClient);
   }, [queryClient]);
 
   const addInvestmentMutation = useMutation({

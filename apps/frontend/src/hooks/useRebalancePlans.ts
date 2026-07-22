@@ -6,13 +6,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
+import { settingKeys } from '@/lib/queryKeys';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { RebalancePlan } from '@/lib/api/crossWorkspace';
 
 export type { RebalancePlan };
 
 const SETTING_KEY = 'rebalance_plans';
-const QUERY_KEY = ['settings', SETTING_KEY];
+const QUERY_KEY = settingKeys.rebalancePlans;
 
 export function useRebalancePlans() {
   const queryClient = useQueryClient();

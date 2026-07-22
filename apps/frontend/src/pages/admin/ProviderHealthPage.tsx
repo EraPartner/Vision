@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { adminKeys } from '@/lib/queryKeys';
 import { Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -125,7 +126,7 @@ export default function ProviderHealthPage() {
     const [probingSet, setProbingSet] = useState<Set<string>>(new Set());
 
     const { data: providers, isLoading, error } = useQuery({
-        queryKey: ['admin', 'provider-health'],
+        queryKey: adminKeys.providerHealth,
         queryFn: getProviderHealth,
         staleTime: 30_000,
     });
@@ -144,7 +145,7 @@ export default function ProviderHealthPage() {
                     description: result.error,
                 });
             }
-            void qc.invalidateQueries({ queryKey: ['admin', 'provider-health'] });
+            void qc.invalidateQueries({ queryKey: adminKeys.providerHealth });
         },
         onError: (_err, name) => {
             toast.error(t('admin.providers.probeError', { provider: name }));

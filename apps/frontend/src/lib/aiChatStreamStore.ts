@@ -13,6 +13,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '@/lib/api';
+import { aiKeys } from '@/lib/queryKeys';
 import logger from '@/lib/logger';
 import type {
     ChatDoneEvent,
@@ -22,7 +23,6 @@ import type {
     SendChatBody,
 } from '@/types/aiChat';
 
-const CONVERSATIONS_KEY = ['ai', 'conversations'] as const;
 export const OPTIMISTIC_USER_ID_PREFIX = '__optimistic_user__';
 
 export function isOptimisticUserId(id: string): boolean {
@@ -35,7 +35,7 @@ function mergeMessageIntoConversationCache(
     message: ChatMessage,
 ): void {
     queryClient.setQueryData<ConversationDetail | null>(
-        ['ai', 'conversations', conversationId],
+        aiKeys.conversation(conversationId),
         (prev) => {
             if (!prev) return prev;
             if (prev.messages.some((m) => m.id === message.id)) return prev;
@@ -54,7 +54,7 @@ function mergeDoneIntoConversationCache(
     current: StreamState,
 ): void {
     queryClient.setQueryData<ConversationDetail | null>(
-        ['ai', 'conversations', conversationId],
+        aiKeys.conversation(conversationId),
         (prev) => {
             if (!prev) return prev;
             const existing = prev.messages;
@@ -242,8 +242,8 @@ class AiChatStreamStore {
                     this.streams.delete(id);
                     this.aborts.delete(id);
                     this.emit();
-                    queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
-                    queryClient.invalidateQueries({ queryKey: ['ai', 'conversations', id] });
+                    queryClient.invalidateQueries({ queryKey: aiKeys.conversations });
+                    queryClient.invalidateQueries({ queryKey: aiKeys.conversation(id) });
                     return;
                 case 'error':
                     next = { ...current, error: event.detail, isStreaming: false };

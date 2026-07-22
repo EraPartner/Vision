@@ -1,5 +1,6 @@
 import { AlertTriangle, ExternalLink, RefreshCw } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { aiKeys } from '@/lib/queryKeys';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { OllamaStatus } from '@/types/aiChat';
@@ -19,7 +20,7 @@ export function OllamaStatusBanner({ status, isLoading }: OllamaStatusBannerProp
     if (status?.ok) return null;
 
     const handleRetry = () => {
-        void queryClient.invalidateQueries({ queryKey: ['ai', 'ollama'] });
+        void queryClient.invalidateQueries({ queryKey: aiKeys.ollamaAll });
     };
 
     const shownUrl = status?.displayUrl || status?.baseUrl;

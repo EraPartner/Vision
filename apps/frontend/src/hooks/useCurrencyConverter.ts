@@ -9,11 +9,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { EXCHANGE_RATES_QUERY_KEY } from '@/hooks/useExchangeRates';
-
-// Re-exported for existing importers; the single source of truth is
-// EXCHANGE_RATES_QUERY_KEY so every consumer shares one invalidation namespace.
-export const EXCHANGE_RATES_QUERY_KEY_PREFIX = EXCHANGE_RATES_QUERY_KEY;
+import { exchangeRateKeys } from '@/lib/queryKeys';
 
 export function useCurrencyConverter(targetCurrency: string) {
   // The endpoint's response does not depend on targetCurrency (conversion
@@ -24,7 +20,7 @@ export function useCurrencyConverter(targetCurrency: string) {
   // useExchangeRates (the backend scheduler owns refreshes, and the manual
   // refresh invalidates this namespace).
   const { data: exchangeData, isLoading, error } = useQuery({
-    queryKey: [EXCHANGE_RATES_QUERY_KEY_PREFIX],
+    queryKey: exchangeRateKeys.all,
     queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,

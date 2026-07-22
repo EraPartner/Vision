@@ -1,16 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { plannedKeys } from "@/lib/queryKeys";
 
 /**
  * Planned payments that have recent unlinked transactions within match
  * tolerance but were not auto-cleared (ambiguous matches, or auto-clear off).
- * Shared query key so the planned-payments page can invalidate after a confirm.
+ * The shared plannedKeys.matchSuggestions key lets the planned-payments page
+ * invalidate after a confirm.
  */
-export const PLANNED_MATCH_SUGGESTIONS_KEY = ["plannedMatchSuggestions"] as const;
-
 export function usePlannedMatchSuggestions() {
     const { data, isLoading, refetch } = useQuery({
-        queryKey: PLANNED_MATCH_SUGGESTIONS_KEY,
+        queryKey: plannedKeys.matchSuggestions,
         queryFn: () => apiClient.getPlannedMatchSuggestions(),
         staleTime: 5 * 60_000,
     });

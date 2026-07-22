@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, useCallback } from 'react';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useExcludedIds } from '@/hooks/useExcludedIds';
+import { aggregationKeys } from '@/lib/queryKeys';
 import {
   getAggregationMonthlySummary,
   getAggregationCategoryPivot,
@@ -215,25 +216,25 @@ export function useStatistics() {
   // ── Unfiltered queries ────────────────────────────────────────────────────
 
   const monthlySummaryUnfilteredQuery = useQuery({
-    queryKey: ['aggregations', 'monthly-summary', 'unfiltered', targetCurrency],
+    queryKey: aggregationKeys.monthlySummaryUnfiltered(targetCurrency),
     queryFn: () => getAggregationMonthlySummary({ currency: targetCurrency, all_time: true }),
     staleTime: 60_000,
   });
 
   const categoryPivotUnfilteredQuery = useQuery({
-    queryKey: ['aggregations', 'category-pivot', 'unfiltered', targetCurrency],
+    queryKey: aggregationKeys.categoryPivotUnfiltered(targetCurrency),
     queryFn: () => getAggregationCategoryPivot({ currency: targetCurrency }),
     staleTime: 60_000,
   });
 
   const recipientInsightsQuery = useQuery({
-    queryKey: ['aggregations', 'recipient-insights', targetCurrency],
+    queryKey: aggregationKeys.recipientInsights(targetCurrency),
     queryFn: () => getAggregationRecipientInsights({ currency: targetCurrency }),
     staleTime: 60_000,
   });
 
   const recipientByYearUnfilteredQuery = useQuery({
-    queryKey: ['aggregations', 'recipient-by-year', 'unfiltered', targetCurrency],
+    queryKey: aggregationKeys.recipientByYearUnfiltered(targetCurrency),
     queryFn: () => getAggregationRecipientByYear({ currency: targetCurrency }),
     staleTime: 60_000,
   });
@@ -241,10 +242,7 @@ export function useStatistics() {
   // ── Filtered queries (only when exclusions are active) ────────────────────
 
   const monthlySummaryFilteredQuery = useQuery({
-    queryKey: [
-      'aggregations', 'monthly-summary', 'filtered',
-      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
-    ],
+    queryKey: aggregationKeys.monthlySummaryFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
     queryFn: () =>
       getAggregationMonthlySummary({
         currency: targetCurrency,
@@ -257,10 +255,7 @@ export function useStatistics() {
   });
 
   const categoryPivotFilteredQuery = useQuery({
-    queryKey: [
-      'aggregations', 'category-pivot', 'filtered',
-      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
-    ],
+    queryKey: aggregationKeys.categoryPivotFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
     queryFn: () =>
       getAggregationCategoryPivot({
         currency: targetCurrency,
@@ -272,10 +267,7 @@ export function useStatistics() {
   });
 
   const recipientByYearFilteredQuery = useQuery({
-    queryKey: [
-      'aggregations', 'recipient-by-year', 'filtered',
-      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
-    ],
+    queryKey: aggregationKeys.recipientByYearFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
     queryFn: () =>
       getAggregationRecipientByYear({
         currency: targetCurrency,
@@ -292,10 +284,7 @@ export function useStatistics() {
   // Recipient insights (the "all years" Top Recipients chart) must honour the
   // same exclusions as the other charts — both category and recipient.
   const recipientInsightsFilteredQuery = useQuery({
-    queryKey: [
-      'aggregations', 'recipient-insights', 'filtered',
-      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
-    ],
+    queryKey: aggregationKeys.recipientInsightsFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
     queryFn: () =>
       getAggregationRecipientInsights({
         currency: targetCurrency,

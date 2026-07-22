@@ -5,6 +5,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { importKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
@@ -190,7 +191,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
   const [offset, setOffset] = useState(0);
 
   const { data, isLoading, isFetching, isError, error } = useQuery({
-    queryKey: ["importBatches", offset],
+    queryKey: importKeys.batches(offset),
     queryFn: () => apiClient.listImportBatches(PAGE_SIZE, offset),
     placeholderData: keepPreviousData,
   });
@@ -208,7 +209,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
   }, [isError, error, t]);
 
   const invalidate = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ["importBatches"] }),
+    () => queryClient.invalidateQueries({ queryKey: importKeys.batchesAll }),
     [queryClient],
   );
 

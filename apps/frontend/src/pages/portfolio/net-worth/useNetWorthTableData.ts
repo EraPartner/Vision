@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { netWorthKeys } from "@/lib/queryKeys";
 import type { NetWorthSnapshot } from "@/lib/api";
 import logger from "@/lib/logger";
 
@@ -41,7 +42,7 @@ export function useNetWorthTableData({
     const loadingRef = useRef(false);
 
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['net-worth', 'table', { currency, pageSize }],
+        queryKey: netWorthKeys.table({ currency, pageSize }),
         queryFn: () => apiClient.getNetWorth({ currency, limit: pageSize, offset: 0 }),
         staleTime: 120_000,
     });

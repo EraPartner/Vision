@@ -1,5 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
+import {aggregationKeys, recipientKeys, transactionKeys} from '@/lib/queryKeys';
 import type {RecipientCreate, RecipientUpdate} from '@/types/api';
 import {toast} from 'sonner';
 import {useLanguage} from '@/contexts/LanguageContext';
@@ -13,7 +14,7 @@ export function useRecipients(params?: {
     search?: string;
 }) {
     return useQuery({
-        queryKey: ['recipients', params],
+        queryKey: recipientKeys.list(params),
         queryFn: () => apiClient.getRecipients(params),
         staleTime: 2 * 60_000, // recipients rarely change - 2min stale
         placeholderData: (prev) => prev,
@@ -27,7 +28,7 @@ export function useCreateRecipient() {
     return useMutation({
         mutationFn: (recipient: RecipientCreate) => apiClient.createRecipient(recipient),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({queryKey: ['recipients']});
+            queryClient.invalidateQueries({queryKey: recipientKeys.all});
             if (data.wasCreated) {
                 toast.success(t('recipients.created'));
             } else {
@@ -48,7 +49,7 @@ export function useUpdateRecipient() {
         mutationFn: ({id, data}: { id: number; data: RecipientUpdate }) =>
             apiClient.updateRecipient(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['recipients']});
+            queryClient.invalidateQueries({queryKey: recipientKeys.all});
         },
         onError: (error: Error) => {
             toast.error(t('recipients.updateFailedTitle'), { description: error.message });
@@ -63,7 +64,7 @@ export function useDeleteRecipient() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteRecipient(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['recipients']});
+            queryClient.invalidateQueries({queryKey: recipientKeys.all});
             toast.success(t('recipients.deleted'));
         },
         onError: (error: Error) => {
@@ -80,12 +81,12 @@ export function useMergeRecipients() {
         mutationFn: ({primaryId, aliasIds}: { primaryId: number; aliasIds: number[] }) =>
             apiClient.mergeRecipients(primaryId, aliasIds),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({queryKey: ['recipients']});
-            queryClient.invalidateQueries({queryKey: ['transactions']});
+            queryClient.invalidateQueries({queryKey: recipientKeys.all});
+            queryClient.invalidateQueries({queryKey: transactionKeys.all});
             // Statistics' recipient breakdowns live under ['aggregations', …];
             // without this a merged/unmerged identity stays split in Top
             // Recipients until staleTime expires.
-            queryClient.invalidateQueries({queryKey: ['aggregations']});
+            queryClient.invalidateQueries({queryKey: aggregationKeys.all});
             toast.success(t('recipients.merged', { n: String(data.merged_ids.length), name: data.primary.name }));
             if (data.patternSuggestion) {
                 const { patternSuggestion } = data;
@@ -117,11 +118,11 @@ export function useUnmergeRecipient() {
     return useMutation({
         mutationFn: (id: number) => apiClient.unmergeRecipient(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['recipients']});
-            queryClient.invalidateQueries({queryKey: ['transactions']});
+            queryClient.invalidateQueries({queryKey: recipientKeys.all});
+            queryClient.invalidateQueries({queryKey: transactionKeys.all});
             // See useMergeRecipients: keep Statistics' ['aggregations'] breakdowns
             // in sync with the recipient-identity change.
-            queryClient.invalidateQueries({queryKey: ['aggregations']});
+            queryClient.invalidateQueries({queryKey: aggregationKeys.all});
             toast.success(t('recipients.unmerged'));
         },
         onError: (error: Error) => {

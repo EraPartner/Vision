@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
+import { adminKeys } from '@/lib/queryKeys';
 import { Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,13 +37,13 @@ export default function EndpointLivenessPage() {
     const [filter, setFilter] = useState('');
 
     const { data: manifest, isLoading: manifestLoading } = useQuery({
-        queryKey: ['admin', 'endpoints'],
+        queryKey: adminKeys.endpoints,
         queryFn: getEndpointManifest,
         staleTime: 300_000,
     });
 
     const { data: metrics } = useQuery({
-        queryKey: ['admin', 'request-metrics'],
+        queryKey: adminKeys.requestMetrics,
         queryFn: getRequestMetrics,
         staleTime: 15_000,
     });

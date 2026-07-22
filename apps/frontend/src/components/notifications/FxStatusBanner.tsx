@@ -3,6 +3,7 @@ import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiClient } from "@/lib/api";
+import { exchangeRateKeys } from "@/lib/queryKeys";
 import type { ExchangeRatesData } from "@/lib/api/info";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -30,7 +31,7 @@ export function FxStatusBanner() {
     const [dismissed, setDismissed] = useState<boolean>(() => isDismissedRecently());
 
     const { data } = useQuery<ExchangeRatesData>({
-        queryKey: ["exchangeRates", { dbOnly: true }],
+        queryKey: exchangeRateKeys.fxStatus,
         queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
         staleTime: 60_000,
         retry: false,

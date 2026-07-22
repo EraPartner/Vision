@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { KeyRound, CheckCircle2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { researchKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -23,13 +24,13 @@ export function ResearchKeysSection() {
     const queryClient = useQueryClient();
 
     const { data, isLoading } = useQuery({
-        queryKey: ['research-provider-keys'],
+        queryKey: researchKeys.providerKeys,
         queryFn: getResearchProviderKeys,
         staleTime: 60_000,
     });
 
     const invalidate = () =>
-        queryClient.invalidateQueries({ queryKey: ['research-provider-keys'] });
+        queryClient.invalidateQueries({ queryKey: researchKeys.providerKeys });
 
     const saveMutation = useMutation({
         mutationFn: ({ provider, apiKey }: { provider: string; apiKey: string }) =>

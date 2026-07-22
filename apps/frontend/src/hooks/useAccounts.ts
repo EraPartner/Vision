@@ -1,55 +1,13 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type { AccountCreate, AccountUpdate } from '@/types/api';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { invalidateTransactionLists } from '@/hooks/useTransactions';
-import {
-    INVESTMENTS_QUERY_KEY,
-    PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX,
-    PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX,
-    PORTFOLIO_PERFORMANCE_QUERY_KEY_PREFIX,
-} from '@/hooks/portfolio/useInvestments';
-
-// Account CRUD changes balances/in_net_worth flags, so the net-worth views must
-// refetch too — NetWorthPage keeps both queries at a 2-minute staleTime, so a
-// missed invalidation shows a stale total for up to 2 minutes.
-export function invalidateAccountDerived(queryClient: QueryClient) {
-    queryClient.invalidateQueries({ queryKey: ['accounts'] });
-    queryClient.invalidateQueries({ queryKey: ['net-worth'] });
-    queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });
-}
-
-// A merge or close repoints transactions / planned / holdings / funding from one
-// account onto another, so it touches more than the account-derived views: the
-// transaction lists, planned-payment surfaces and the portfolio trees all restate.
-// This is the targeted replacement for a blanket `queryClient.invalidateQueries()`
-// — it refetches exactly those trees and leaves unrelated caches (categories,
-// recipients, market data, exchange rates, …) untouched so a merge/close no longer
-// triggers a whole-app refetch storm.
-export function invalidateAccountRepoint(queryClient: QueryClient) {
-    invalidateAccountDerived(queryClient);
-    invalidateTransactionLists(queryClient);
-    // The dashboard bank-balances widget (history + net-position) and the
-    // cash-flow forecast both key off account balances, so a repoint restates them.
-    queryClient.invalidateQueries({ queryKey: ['bankBalances'] });
-    queryClient.invalidateQueries({ queryKey: ['cashflowForecastMethods'] });
-    queryClient.invalidateQueries({ queryKey: ['cashflowForecastRolling'] });
-    queryClient.invalidateQueries({ queryKey: ['cashflowForecastRollingDiagnostics'] });
-    // Planned payments can reference the merged/closed account.
-    queryClient.invalidateQueries({ queryKey: ['upcomingPlannedPayments'] });
-    queryClient.invalidateQueries({ queryKey: ['plannedTransactions'] });
-    queryClient.invalidateQueries({ queryKey: ['plannedMatchSuggestions'] });
-    // Holdings move across accounts (in-specie), so the portfolio trees restate.
-    queryClient.invalidateQueries({ queryKey: INVESTMENTS_QUERY_KEY });
-    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX] });
-    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX] });
-    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_PERFORMANCE_QUERY_KEY_PREFIX] });
-}
+import { accountKeys, invalidateAccountDerived, invalidateAccountRepoint } from '@/lib/queryKeys';
 
 export function useAccounts(params?: { active?: 'true' | 'false' | 'all' }) {
     return useQuery({
-        queryKey: ['accounts', params],
+        queryKey: accountKeys.list(params),
         queryFn: () => apiClient.getAccounts(params),
         staleTime: 2 * 60_000, // accounts rarely change - 2min stale
         placeholderData: (prev) => prev,

@@ -1,6 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { plannedKeys } from "@/lib/queryKeys";
 import { toYmd, todayYmd } from "@/lib/timezone";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import type { PlannedTransaction } from "@/types/api";
@@ -93,7 +94,7 @@ export function useUpcomingPlannedPayments() {
     const queryDate = toYmd(new Date());
 
     const { data: upcoming } = useQuery({
-        queryKey: ["upcomingPlannedPayments", queryDate],
+        queryKey: plannedKeys.upcoming(queryDate),
         queryFn: async () => {
             // Derive the range from queryDate (the key) so the fetched window can't
             // disagree with the cache key across a midnight boundary.

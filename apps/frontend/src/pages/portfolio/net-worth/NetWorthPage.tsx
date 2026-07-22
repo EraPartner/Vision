@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api";
+import { netWorthKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
@@ -37,7 +38,7 @@ export default function NetWorthPage() {
   const targetCurrency = appSettings.defaultCurrency || "EUR";
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["net-worth", targetCurrency],
+    queryKey: netWorthKeys.byCurrency(targetCurrency),
     queryFn: () => apiClient.getNetWorth({ currency: targetCurrency }),
     staleTime: 120_000,
   });
@@ -48,7 +49,7 @@ export default function NetWorthPage() {
     isLoading: byAccountLoading,
     error: byAccountError,
   } = useQuery({
-    queryKey: ["net-worth-by-account", targetCurrency],
+    queryKey: netWorthKeys.byAccount(targetCurrency),
     queryFn: () => apiClient.getNetWorthByAccount({ currency: targetCurrency }),
     staleTime: 120_000,
     enabled: isPerAccountHoldingsEnabled,
