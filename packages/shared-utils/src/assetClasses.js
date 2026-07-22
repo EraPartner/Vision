@@ -1,10 +1,12 @@
 /**
- * Canonical list of supported portfolio asset classes, in display order.
- * Single source shared by the backend (lib/assetClasses) and frontend
- * (utils/assetClass) so the two hand-mirrored copies can no longer drift.
- * Must stay in lockstep with the PG enum and TRANSACTION_TABLE_BY_ASSET_CLASS.
+ * Compatibility shim — the canonical asset-class lists moved to
+ * @vision/types/assetClasses (runtime constants + derived unions). This
+ * subpath re-exports them so existing `@vision/shared-utils/assetClasses`
+ * imports keep resolving.
  */
-export const ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals', 'real_estate', 'savings', 'bond'];
-export const UNIT_BASED_ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals'];
-export const FIXED_INCOME_ASSET_CLASSES = ['savings', 'bond'];
-export const REAL_ESTATE_ASSET_CLASS = 'real_estate';
+export {
+  ASSET_CLASSES,
+  UNIT_BASED_ASSET_CLASSES,
+  FIXED_INCOME_ASSET_CLASSES,
+  REAL_ESTATE_ASSET_CLASS,
+} from '@vision/types/assetClasses';

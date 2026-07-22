@@ -137,6 +137,7 @@
       "name": "@vision/shared-utils",
       "version": "0.1.0",
       "dependencies": {
+        "@vision/types": "workspace:*",
         "decimal.js": "^10.6.0",
       },
     },

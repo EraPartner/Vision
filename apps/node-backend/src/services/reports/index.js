@@ -33,6 +33,11 @@ import { renderTaxByAssetClass } from './sections/taxByAssetClass.js';
 import { renderTaxMonthlyTrend } from './sections/taxMonthlyTrend.js';
 import { renderTopInvestmentsByCost } from './sections/topInvestmentsByCost.js';
 import { renderBelgianRulesSummary } from './sections/belgianRulesSummary.js';
+import {
+  FINANCIAL_SECTION_CATALOG,
+  PORTFOLIO_SECTION_CATALOG,
+  TAX_SECTION_CATALOG,
+} from './sectionCatalog.js';
 import investmentRepository from '../../repositories/investmentRepository.js';
 
 /**
@@ -410,28 +415,32 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
   `.trim();
 }
 
-/** Financial section renderers keyed by section ID. */
+/**
+ * @typedef {(data: any, ctx: { currency: string; period: Period }) => string} SectionRenderer
+ */
+
+/*
+ * id -> renderer, per report type. sectionCatalog.js owns the canonical
+ * section IDs, order, and default membership (the surface the frontend export
+ * dialog mirrors); these maps own only the id->render wiring. reconcile()
+ * below zips the two at module load and throws if they disagree, so a section
+ * with no renderer — or a renderer with no catalog entry — fails fast on boot
+ * instead of silently dropping a section at request time. To add, remove, or
+ * reorder a section, edit its sectionCatalog.js array and this map together.
+ */
+
+/** @type {Record<string, SectionRenderer>} */
 const FINANCIAL_SECTION_RENDERERS = {
-  executiveSummary: renderExecutiveSummary,
-  cashflowTrend: renderCashflowTrend,
+  executiveSummary:  renderExecutiveSummary,
+  cashflowTrend:     renderCashflowTrend,
   categoryBreakdown: renderCategoryBreakdown,
-  topRecipients: renderTopRecipients,
-  bankBalances: renderBankBalances,
-  plannedOutlook: renderPlannedOutlook,
-  rollingAverages: renderRollingAverages,
+  topRecipients:     renderTopRecipients,
+  bankBalances:      renderBankBalances,
+  rollingAverages:   renderRollingAverages,
+  plannedOutlook:    renderPlannedOutlook,
 };
 
-const DEFAULT_FINANCIAL_SECTIONS = [
-  'executiveSummary',
-  'cashflowTrend',
-  'categoryBreakdown',
-  'topRecipients',
-  'bankBalances',
-  'rollingAverages',
-  'plannedOutlook',
-];
-
-/** Portfolio section renderers keyed by section ID. */
+/** @type {Record<string, SectionRenderer>} */
 const PORTFOLIO_SECTION_RENDERERS = {
   portfolioExecutiveSummary: renderPortfolioExecutiveSummary,
   portfolioAllocation:       renderPortfolioAllocation,
@@ -441,35 +450,40 @@ const PORTFOLIO_SECTION_RENDERERS = {
   dividendIncome:            renderDividendIncome,
 };
 
-const DEFAULT_PORTFOLIO_SECTIONS = [
-  'portfolioExecutiveSummary',
-  'portfolioAllocation',
-  'topHoldings',
-  'performanceTrend',
-  'assetClassDetail',
-  'dividendIncome',
-];
-
-/** Tax section renderers keyed by section ID. */
+/** @type {Record<string, SectionRenderer>} */
 const TAX_SECTION_RENDERERS = {
-  taxExecutiveSummary:   renderTaxExecutiveSummary,
-  taxTypeBreakdown:      renderTaxTypeBreakdown,
-  feeBreakdown:          renderFeeBreakdown,
-  taxByAssetClass:       renderTaxByAssetClass,
-  taxMonthlyTrend:       renderTaxMonthlyTrend,
-  topInvestmentsByCost:  renderTopInvestmentsByCost,
-  belgianRulesSummary:   renderBelgianRulesSummary,
+  taxExecutiveSummary:  renderTaxExecutiveSummary,
+  taxTypeBreakdown:     renderTaxTypeBreakdown,
+  taxByAssetClass:      renderTaxByAssetClass,
+  taxMonthlyTrend:      renderTaxMonthlyTrend,
+  topInvestmentsByCost: renderTopInvestmentsByCost,
+  feeBreakdown:         renderFeeBreakdown,
+  belgianRulesSummary:  renderBelgianRulesSummary,
 };
 
-const DEFAULT_TAX_SECTIONS = [
-  'taxExecutiveSummary',
-  'taxTypeBreakdown',
-  'taxByAssetClass',
-  'taxMonthlyTrend',
-  'topInvestmentsByCost',
-  'feeBreakdown',
-  'belgianRulesSummary',
-];
+/**
+ * Cross-check a section catalog against its renderer map and return the
+ * catalog's default-section IDs in canonical order. Throws at module load if
+ * the two ever drift so a wiring mistake surfaces on boot, not as a silently
+ * omitted section at request time.
+ *
+ * @param {import('./sectionCatalog.js').SectionEntry[]} catalog
+ * @param {Record<string, SectionRenderer>} renderers
+ * @param {string} label
+ * @returns {string[]} default section IDs, in order
+ */
+function reconcile(catalog, renderers, label) {
+  const catalogIds = catalog.map((s) => s.id);
+  const missing = catalogIds.filter((id) => !(id in renderers));
+  const orphan = Object.keys(renderers).filter((id) => !catalogIds.includes(id));
+  if (missing.length) throw new Error(`${label} report sections without a renderer: ${missing.join(', ')}`);
+  if (orphan.length) throw new Error(`${label} report renderers without a catalog entry: ${orphan.join(', ')}`);
+  return catalog.filter((s) => s.default).map((s) => s.id);
+}
+
+const DEFAULT_FINANCIAL_SECTIONS = reconcile(FINANCIAL_SECTION_CATALOG, FINANCIAL_SECTION_RENDERERS, 'financial');
+const DEFAULT_PORTFOLIO_SECTIONS = reconcile(PORTFOLIO_SECTION_CATALOG, PORTFOLIO_SECTION_RENDERERS, 'portfolio');
+const DEFAULT_TAX_SECTIONS       = reconcile(TAX_SECTION_CATALOG, TAX_SECTION_RENDERERS, 'tax');
 
 /**
  * Shared report-body builder. Picks the requested sections (or the type's

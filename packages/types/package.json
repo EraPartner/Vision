@@ -17,6 +17,14 @@
     "./errors": {
       "types": "./src/errors.d.ts",
       "default": "./src/errors.js"
+    },
+    "./assetClasses": {
+      "types": "./src/assetClasses.d.ts",
+      "default": "./src/assetClasses.js"
+    },
+    "./portfolioTxnTypes": {
+      "types": "./src/portfolioTxnTypes.d.ts",
+      "default": "./src/portfolioTxnTypes.js"
     }
   },
   "types": "./src/index.d.ts",

@@ -5,6 +5,7 @@
  * No new SQL — wraps existing repositories.
  */
 
+import { ASSET_CLASSES } from '@vision/types/assetClasses';
 import { infoRepository } from '../../../repositories/infoRepository.js';
 import { watchlistRepository } from '../../../repositories/watchlistRepository.js';
 import { categoryRepository } from '../../../repositories/categoryRepository.js';
@@ -14,8 +15,6 @@ import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
 import { parseEnum, parsePositiveInt } from './_validate.js';
 import { detectRecurringPatterns } from '../../recurringDetectionService.js';
-
-const ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals', 'real_estate', 'savings', 'bond'];
 
 /**
  * Current bank account balances + total net position.

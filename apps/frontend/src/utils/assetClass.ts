@@ -3,20 +3,12 @@ import {
   ASSET_CLASSES,
   UNIT_BASED_ASSET_CLASSES,
   FIXED_INCOME_ASSET_CLASSES,
-} from '@vision/shared-utils/assetClasses';
+} from '@vision/types/assetClasses';
 
 // Full set of supported asset classes, in display order. Single-sourced in
-// @vision/shared-utils so the backend copy cannot drift (SIMP-11). The parity
-// check below fails typecheck if the shared list and the OpenAPI-generated
-// AssetClass union ever diverge.
-type SharedAssetClass = (typeof ASSET_CLASSES)[number];
-type _AssetClassParity = [SharedAssetClass] extends [AssetClass]
-  ? [AssetClass] extends [SharedAssetClass]
-    ? true
-    : never
-  : never;
-const _assetClassParity: _AssetClassParity = true;
-void _assetClassParity;
+// @vision/types so the backend copy cannot drift (SIMP-11); the AssetClass
+// union itself now derives from the shared array (types/portfolio.ts
+// re-exports it), so no separate parity check is needed.
 
 export { ASSET_CLASSES, UNIT_BASED_ASSET_CLASSES, FIXED_INCOME_ASSET_CLASSES };
 

@@ -11,6 +11,7 @@ import { query, withTransaction, withSavepointIfInTransaction } from '../databas
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
 import { buildUpdateSql } from '../lib/sqlClauses.js';
 import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
+import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision/types/assetClasses';
 
 // Mirrors the recurrence_interval DB enum (migration 0001) and the frontend
 // RecurrenceInterval union. An out-of-set value has no DB CHECK on the flat
@@ -88,7 +89,10 @@ export const TRANSACTION_TABLE_BY_ASSET_CLASS = {
   bond: 'bond_transactions',
 };
 
-export const UNIT_BASED_ASSET_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
+// Derived from the shared canonical subset (@vision/types/assetClasses) so it
+// cannot drift from the frontend's copy. Widened to Set<string>: callers probe
+// raw payload values with .has().
+export const UNIT_BASED_ASSET_CLASSES = new Set(/** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASS_LIST));
 
 export function buildListWhereClause({ investmentId = null, type = null } = {}) {
   let where = 'WHERE 1=1';

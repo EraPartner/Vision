@@ -4,6 +4,8 @@ import { postMultipartImport } from '@/lib/api/helpers';
 import { importProgressSchema } from '@/lib/api/imports';
 import { readSseStream } from '@/lib/api/sse';
 import type { ImportProgress } from '@/lib/api/types';
+import type { AssetClass as AssetClassValue } from '@vision/types/assetClasses';
+import type { PortfolioTxnType as PortfolioTxnTypeValue } from '@vision/types/portfolioTxnTypes';
 
 /**
  * Runtime guards for the portfolio import SSE stream (ZOD-10); see the
@@ -32,13 +34,9 @@ const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
   review_required: portfolioReviewRequiredSchema,
 };
 
-export type AssetClassValue =
-  | 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
-
-export type PortfolioTxnTypeValue =
-  | 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest'
-  | 'rent_income' | 'appreciation' | 'gift' | 'split' | 'merger'
-  | 'spinoff' | 'return_of_capital';
+// Unions derive from the canonical runtime arrays in @vision/types; re-exported
+// under their historical names so existing imports keep resolving.
+export type { AssetClassValue, PortfolioTxnTypeValue };
 
 export interface PortfolioCustomConfig {
   dateColumn: string;

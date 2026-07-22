@@ -2,8 +2,12 @@
  * Portfolio investment types — shared between frontend components.
  */
 import type { PortfolioTransaction } from './api';
+import type { AssetClass } from '@vision/types/assetClasses';
+import type { PortfolioTxnType as CanonicalPortfolioTxnType } from '@vision/types/portfolioTxnTypes';
 
-export type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
+// Derived from the canonical runtime array in @vision/types/assetClasses, so
+// this union can no longer drift from the shared ASSET_CLASSES list.
+export type { AssetClass };
 
 /** @deprecated Use getAssetClassLabel(t, assetClass) for UI display */
 export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
@@ -40,7 +44,16 @@ export function getAssetClassGroups(t: (key: string) => string): Record<string, 
   };
 }
 
+// Deliberate UI-facing SUBSET of the canonical PORTFOLIO_TXN_TYPES list in
+// @vision/types/portfolioTxnTypes: only the types with portfolio.txnType.*
+// labels are offered in the transaction dialogs. Corporate actions
+// (split/merger/spinoff/return_of_capital) stay importable via CSV but are not
+// part of this union. The parity check below fails typecheck if this subset
+// ever contains a value outside the canonical set.
 export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift';
+type _TxnTypeSubsetParity = PortfolioTxnType extends CanonicalPortfolioTxnType ? true : never;
+const _txnTypeSubsetParity: _TxnTypeSubsetParity = true;
+void _txnTypeSubsetParity;
 
 /** Returns a translated label for a portfolio transaction type. */
 export function getTxnTypeLabel(t: (key: string) => string, type: PortfolioTxnType | string): string {

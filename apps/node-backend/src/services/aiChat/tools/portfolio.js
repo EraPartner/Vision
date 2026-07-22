@@ -5,6 +5,7 @@
  * portfolioTransactionRepository. No new SQL paths.
  */
 
+import { ASSET_CLASSES } from '@vision/types/assetClasses';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
@@ -14,8 +15,6 @@ import {
   requireDate,
   assertDateOrder,
 } from './_validate.js';
-
-const ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals', 'real_estate', 'savings', 'bond'];
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

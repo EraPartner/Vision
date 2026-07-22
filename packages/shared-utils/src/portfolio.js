@@ -13,11 +13,18 @@
  */
 
 import Decimal from 'decimal.js';
+import {
+  UNIT_BASED_ASSET_CLASSES,
+  FIXED_INCOME_ASSET_CLASSES,
+  REAL_ESTATE_ASSET_CLASS,
+} from '@vision/types/assetClasses';
 import { toDecimal, roundToCents, toNumber } from './money.js';
 
-const UNIT_BASED_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
-const FIXED_INCOME_CLASSES = new Set(['savings', 'bond']);
-const REAL_ESTATE_CLASS = 'real_estate';
+// Derived from the canonical subsets in @vision/types/assetClasses (widened to
+// Set<string>: .has() probes raw row values).
+const UNIT_BASED_CLASSES = new Set(/** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASSES));
+const FIXED_INCOME_CLASSES = new Set(/** @type {readonly string[]} */ (FIXED_INCOME_ASSET_CLASSES));
+const REAL_ESTATE_CLASS = REAL_ESTATE_ASSET_CLASS;
 
 /** @typedef {'weighted_avg'|'fifo'|'lifo'} CostBasisMethod */
 
