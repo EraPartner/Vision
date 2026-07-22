@@ -230,6 +230,26 @@ describe('banksRepository.getBankBalances', () => {
     expect(currentBalanceSql).not.toContain('DISTINCT ON (t.account_id)');
   });
 
+  it('gates BOTH queries on in_net_worth so the widget population matches net worth (§1 F3)', async () => {
+    // Close semantics: closing an account sets in_net_worth=false, and
+    // in_net_worth governs aggregates (is_active governs UI listing) — so a
+    // closed/tracking-only account must vanish from the widget's current
+    // balances AND its 12-month history the moment it is closed.
+    query.mockResolvedValue({ rows: [] });
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([[], []]);
+
+    await banksRepository.getBankBalances();
+
+    const currentBalanceSql = query.mock.calls[0][0];
+    const historySql = query.mock.calls[1][0];
+    expect(currentBalanceSql).toContain('a.in_net_worth = true');
+    expect(historySql).toContain('a.in_net_worth = true');
+    // The pre-existing filters stay.
+    expect(currentBalanceSql).toContain(`a.type <> 'liability'`);
+    expect(currentBalanceSql).toContain('tx.transaction_count > 0');
+    expect(historySql).toContain(`a.type <> 'liability'`);
+  });
+
   it('runs the two queries in parallel', async () => {
     let resolveCurrent;
     let resolveHistory;

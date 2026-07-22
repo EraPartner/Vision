@@ -72,6 +72,10 @@ export const banksRepository = {
           WHERE t.account_id = a.id AND t.is_active = true
         ) tx ON true
         WHERE a.type <> 'liability'
+          -- §1 F3: in_net_worth governs aggregates (is_active governs UI
+          -- listing) — closing an account sets in_net_worth=false, so it
+          -- leaves this widget the moment it is closed, matching net worth.
+          AND a.in_net_worth = true
           AND tx.transaction_count > 0
         ORDER BY a.name
       `),
@@ -86,7 +90,10 @@ export const banksRepository = {
         account_list AS (
           SELECT a.id AS account_id, a.name AS bank_account
           FROM accounts a
+          -- Same population rule as the current-balance query above (§1 F3):
+          -- aggregates include only in_net_worth accounts.
           WHERE a.type <> 'liability'
+            AND a.in_net_worth = true
             AND a.id IN (
               SELECT t.account_id FROM transactions t
                WHERE t.is_active = true AND t.account_id IS NOT NULL

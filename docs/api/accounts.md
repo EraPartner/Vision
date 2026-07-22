@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-07-10
+updated: 2026-07-22
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -70,6 +70,15 @@ Lifecycle ([[docs/adr/088-account-entity|ADR-088 addendum]], D5): `{ is_active: 
 `closed_at` server-side (kept on redundant re-archives); `{ is_active: true }` clears it.
 `closed_at` is never accepted from the request body.
 
+**Aggregate semantics on close (WP-A3, §1 F3):** closing an account (`is_active: false` on an
+active account) also sets `in_net_worth = false` server-side, so the account drops out of net
+worth, the by-account table, and the dashboard bank-balances widget the moment it is closed. The
+rule: **`in_net_worth` governs aggregates, `is_active` governs UI listing**. An explicit
+`in_net_worth` in the same PATCH wins (a closed but still-counted tracking account remains
+possible by sending `{ is_active: false, in_net_worth: true }`). Reactivating does **not**
+auto-restore `in_net_worth` — whether a reopened account should count again is an explicit user
+decision (`PATCH { in_net_worth: true }`).
+
 > [!info] Account rename propagates to transactions (2026-06-25)
 > When the `name` field is included in the update body, `accountRepository.update()` atomically
 > propagates the new name to the denormalized `bank_account` string on all owned rows:
@@ -102,10 +111,48 @@ source is repointed to the survivor — `transactions.account_id` + `bank_accoun
 survivor's name so the dual-write trigger keeps it merged), `planned_transactions`, portfolio lots
 (`portfolio_transactions_base.account_id`, cascading to child tables, or the flat table), and any
 `accounts.funding_account_id` — then the sources are deleted. Returns
-`{ into, merged, reassigned: { transactions, planned, portfolio, funding } }`. `404` if the
-survivor or any source is missing. Irreversible (the source rows are gone; identity lives on
-`account_id`). Used to unify e.g. an old literal `'KBC'` account into its IBAN account after the
-ADR-088 adapter change.
+`{ into, merged, reassigned: { transactions, planned, portfolio, funding }, stampsInterleaved }`.
+`404` if the survivor or any source is missing. Irreversible (the source rows are gone; identity
+lives on `account_id`). Used to unify e.g. an old literal `'KBC'` account into its IBAN account
+after the ADR-088 adapter change.
+
+**Overlapping-stamp guard (WP-A3, §1 F2):** per-row `balance` stamps are per-source-bank running
+balances, so merging two accounts that were both being stamped over the same period interleaves
+their stamp histories — the anchor+delta computed balance would then anchor on whichever source's
+latest stamp is most recent, silently dropping the other bank's balance. The merge detects
+overlapping stamped-date ranges across the original accounts (`stampsInterleaved: true` in the
+response) and clears the survivor's now-invalidated `statement_balance` /
+`statement_balance_date` anchor (reversible — re-reconcile with a fresh statement). Historical
+per-row stamps are never rewritten. Sequential merges (the old account's stamps end before the
+new one's begin — the label-dedup use case) are unaffected.
+
+### GET /api/accounts/:id/merge-preview
+
+Read-only dry-run of merging **this** account (`:id`, the source) **into**
+`?into=<targetId>` (the survivor). No mutation, no locks. Returns:
+
+```json
+{
+  "into": 2,
+  "source": 1,
+  "reassigned": { "transactions": 120, "planned": 2, "portfolio": 0, "funding": 1 },
+  "projectedBalance": 1234.5,
+  "projectedBalanceCurrency": "EUR",
+  "stampsInterleaved": true
+}
+```
+
+- `reassigned.*` — row counts that WOULD move (the same categories `POST /merge` repoints).
+- `projectedBalance` — the post-merge **computed** balance: the anchor+delta definition
+  (`COMPUTED_BALANCE_LATERAL` semantics, [[docs/adr/094-balance-reconciliation-drift|ADR-094]])
+  evaluated over the **union** of survivor + source active rows as if they were already one
+  account, reported in the survivor's native currency (`projectedBalanceCurrency`).
+- `stampsInterleaved` — the same detection the merge guard uses: would the merge interleave
+  stamped balance histories (and therefore clear the survivor's statement anchor)?
+
+`400` if `into` is missing/not a positive integer or equals `:id`; `404` if either account does
+not exist. Intended for the merge dialog (WP-B5) to show a confirmation summary and warn before
+an interleaving merge.
 
 ## UI Behaviors (AccountsPage)
 

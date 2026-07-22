@@ -1638,6 +1638,75 @@ paths:
         "404":
           description: Target or a source account not found
 
+  /api/accounts/{id}/merge-preview:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: Source account id (the account that would be merged away)
+    get:
+      summary: Preview merging this account into another (read-only)
+      description: >-
+        Dry-run of merging account {id} (the source) INTO the account given by
+        `into` (the survivor). Returns the row counts that would be repointed
+        (same categories POST /merge moves), the projected post-merge computed
+        balance — the anchor+delta definition evaluated over the union of both
+        accounts' active rows, in the survivor's native currency — and whether
+        the merge would interleave stamped balance histories
+        (`stampsInterleaved`), in which case the merge clears the survivor's
+        statement-balance anchor. No mutation.
+      operationId: previewAccountMerge
+      tags: [Accounts]
+      parameters:
+        - in: query
+          name: into
+          required: true
+          schema:
+            type: integer
+          description: Survivor account id (the account {id} would merge into)
+      responses:
+        "200":
+          description: Merge preview
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          into:
+                            type: integer
+                            description: Survivor account id
+                          source:
+                            type: integer
+                            description: Source account id
+                          reassigned:
+                            type: object
+                            description: Row counts that would move to the survivor
+                            properties:
+                              transactions: { type: integer }
+                              planned: { type: integer }
+                              portfolio: { type: integer }
+                              funding: { type: integer }
+                          projectedBalance:
+                            type: number
+                            description: Post-merge computed balance (anchor+delta over the union of both accounts' active rows)
+                          projectedBalanceCurrency:
+                            type: string
+                            description: The survivor's native currency (ISO-4217)
+                          stampsInterleaved:
+                            type: boolean
+                            description: Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor)
+        "400":
+          description: Missing/invalid `into`, or `into` equals {id}
+        "404":
+          description: Source or survivor account not found
+
   /api/accounts/{id}/opening-balance:
     parameters:
       - in: path
