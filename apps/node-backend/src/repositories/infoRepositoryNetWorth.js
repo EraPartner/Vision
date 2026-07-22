@@ -6,6 +6,7 @@ import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 import { computeDailySnapshots } from '../services/portfolio/snapshotBuilder.js';
 import { accountRepository } from './accountRepository.js';
+import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
 import { convertToCurrency } from '../services/currency/currencyConversionService.js';
 import { toNumber, toDecimal } from '../lib/money.js';
 import { todayAppDateString } from '../lib/timezone.js';
@@ -66,6 +67,16 @@ export const netWorthRepository = {
    * Bank balances are still derived live from the transactions table.
    * No network calls — all data from the database.
    *
+   * The liquid/liability *history* series is stamp-based (latest stamped
+   * `transactions.balance` ≤ each day), but the **current** point — headline,
+   * last chart point, latest table row — is overridden with the unified
+   * anchor+delta computed balance (`COMPUTED_BALANCE_LATERAL`, ADR-094 /
+   * WP-A1), the same single definition the accounts hub, dashboard widget and
+   * net-worth-by-account consume. The naive stamped walk it replaced silently
+   * dropped manual-only (never-stamped) in-net-worth accounts from the
+   * headline and froze stamped accounts at their last imported statement
+   * figure.
+   *
    * @param {string} [targetCurrency]
    * @param {{ liveInvestments?: number }} [opts]
    */
@@ -117,7 +128,11 @@ export const netWorthRepository = {
     // Postgres CURRENT_DATE follows the server timezone, not the app's.
     const todayYmd = todayAppDateString();
 
-    const bankHistoryResult = await query(`
+    // History walk (stamp-based, per WP-A1 decision) and the unified
+    // current-point balances (anchor+delta lateral) are independent — run in
+    // parallel.
+    const [bankHistoryResult, currentBalancesResult] = await Promise.all([
+      query(`
       WITH bounds AS (
         SELECT $1::date AS start_date, $2::date AS end_date
       ),
@@ -130,6 +145,9 @@ export const netWorthRepository = {
         -- tracking-only account (in_net_worth=false) does not contribute.
         -- is_liability splits negative debt balances (ADR-092) out of the
         -- "liquid assets" bucket so a mortgage is not counted as liquid cash.
+        -- The stamped-only probe below serves the HISTORY series only (WP-A1
+        -- decision); the current point is overridden after the walk with the
+        -- unified computed-balance lateral.
         SELECT a.id AS account_id, a.name AS bank_account,
                (a.type = 'liability') AS is_liability
         FROM accounts a
@@ -159,13 +177,50 @@ export const netWorthRepository = {
       ) lb ON true
       WHERE lb.balance IS NOT NULL
       ORDER BY d.day, a.account_id
-    `, [firstDataDateYmd, todayYmd]);
+    `, [firstDataDateYmd, todayYmd]),
+      // Unified current balance per in-net-worth account (WP-A1): the shared
+      // anchor+delta lateral, with NO `balance IS NOT NULL` population gate —
+      // a manual-only account (nothing stamped) falls back to Σ(amount) inside
+      // the lateral instead of vanishing from the headline. An account with no
+      // active rows contributes a harmless 0. The currency mirrors the
+      // bank-balances query: the most recent active row's, falling back to the
+      // account's own currency.
+      query(`
+      SELECT a.name AS bank_account,
+             (a.type = 'liability') AS is_liability,
+             COALESCE(lb.balance, 0) AS balance,
+             COALESCE(cur.currency, a.currency, 'EUR') AS currency
+      FROM accounts a
+      ${COMPUTED_BALANCE_LATERAL}
+      LEFT JOIN LATERAL (
+        SELECT t.currency
+        FROM transactions t
+        WHERE t.account_id = a.id AND t.is_active = true
+        ORDER BY t.date DESC, t.id DESC
+        LIMIT 1
+      ) cur ON true
+      WHERE a.in_net_worth = true
+    `),
+    ]);
 
-    let bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
-      mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
-      targetCurrency,
-      'day'
-    );
+    // Convert the current-point balances at today's date so the historical-rate
+    // lookup keys on the same day the headline represents.
+    const [bankHistoryConvertedInitial, currentBalancesConverted] = await Promise.all([
+      convertRowsWithHistoricalRateFallback(
+        mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
+        targetCurrency,
+        'day'
+      ),
+      convertRowsWithHistoricalRateFallback(
+        mapRowsForAmountConversion(
+          currentBalancesResult.rows.map((r) => ({ ...r, day: todayYmd })),
+          'balance'
+        ),
+        targetCurrency,
+        'day'
+      ),
+    ]);
+    let bankHistoryConverted = bankHistoryConvertedInitial;
 
     if (bankHistoryConverted.length === 0) {
       logger.debug('Net worth account balance history empty; using transaction flow fallback', {
@@ -272,6 +327,27 @@ export const netWorthRepository = {
     }
 
     const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
+
+    // WP-A1: override the *current* point's liquid/liability figures with the
+    // unified computed-balance definition (see the method doc). Only the last
+    // point moves — the history series deliberately stays stamp-based — so a
+    // manual-only account or post-anchor manual activity can introduce a step
+    // between the penultimate (stamped) and latest (computed) points. Skipped
+    // when the accounts query returned nothing (no in-net-worth accounts, e.g.
+    // an un-migrated ledger running on the transaction-flow fallback), keeping
+    // the walk/fallback-derived point instead.
+    if (currentBalancesConverted.length > 0 && sanitizedSnapshots.length > 0) {
+      let liquidNow = toDecimal(0);
+      let liabilitiesNow = toDecimal(0);
+      for (const row of currentBalancesConverted) {
+        if (row.is_liability) liabilitiesNow = liabilitiesNow.plus(toDecimal(row.amount_eur));
+        else liquidNow = liquidNow.plus(toDecimal(row.amount_eur));
+      }
+      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
+      last.liquid = roundToCents(toNumber(liquidNow));
+      last.liabilities = roundToCents(toNumber(liabilitiesNow));
+      last.netWorth = roundToCents(last.liquid + last.liabilities + last.investments);
+    }
 
     // Reconcile the most-recent point with the live portfolio summary. The
     // stored snapshot value is only rebuilt at startup (snapshotBuilder runs

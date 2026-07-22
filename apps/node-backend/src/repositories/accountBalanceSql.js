@@ -21,7 +21,16 @@
  * When nothing is stamped at all, it falls back to the full Σ(amount).
  *
  * The lateral always returns exactly one row (so a LEFT JOIN never drops the
- * account) exposing a single `balance` column. The account must be aliased `a`.
+ * account) exposing three columns. The account must be aliased `a`:
+ *   - `balance`           — the anchored running balance described above.
+ *   - `anchor_date`       — the stamped anchor row's date as a 'YYYY-MM-DD'
+ *                           string (to_char, so pg never hands back a
+ *                           local-midnight JS Date), SQL NULL when nothing is
+ *                           stamped. Provenance for "as of {date} bank
+ *                           statement + {n} entries since" (WP-A1).
+ *   - `post_anchor_count` — count of active rows strictly after the anchor;
+ *                           with no stamp it is the total active-row count
+ *                           (the "sum of {n} entries" case).
  */
 export const COMPUTED_BALANCE_LATERAL = `
   LEFT JOIN LATERAL (
@@ -31,17 +40,21 @@ export const COMPUTED_BALANCE_LATERAL = `
       WHERE t.account_id = a.id AND t.is_active = true AND t.balance IS NOT NULL
       ORDER BY t.date DESC, t.id DESC
       LIMIT 1
+    ),
+    delta AS (
+      SELECT COALESCE(SUM(t2.amount), 0) AS amount,
+             COUNT(*) AS post_anchor_count
+      FROM transactions t2
+      WHERE t2.account_id = a.id AND t2.is_active = true
+        AND (
+          NOT EXISTS (SELECT 1 FROM anchor)
+          OR (t2.date, t2.id) > (SELECT date, id FROM anchor)
+        )
     )
     SELECT COALESCE((SELECT balance FROM anchor), 0)
-         + COALESCE((
-             SELECT SUM(t2.amount)
-             FROM transactions t2
-             WHERE t2.account_id = a.id AND t2.is_active = true
-               AND (
-                 NOT EXISTS (SELECT 1 FROM anchor)
-                 OR (t2.date, t2.id) > (SELECT date, id FROM anchor)
-               )
-           ), 0) AS balance
+         + (SELECT amount FROM delta) AS balance,
+           (SELECT to_char(date, 'YYYY-MM-DD') FROM anchor) AS anchor_date,
+           (SELECT post_anchor_count FROM delta) AS post_anchor_count
   ) lb ON true
 `;
 

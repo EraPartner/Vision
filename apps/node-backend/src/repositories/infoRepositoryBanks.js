@@ -25,6 +25,17 @@ export const banksRepository = {
    * activity that leaves `transactions.balance` NULL. Grouped by account_id
    * (ADR-088); the label is sourced from `accounts.name` so the response
    * contract is unchanged while the bank_account string is being retired.
+   *
+   * Each account row additionally carries (WP-A1, additive — existing fields
+   * are untouched):
+   *   - `display_name`      — friendly label (falls back to `name`).
+   *   - `drift`             — statement_balance − computed balance in the
+   *                           account's native currency (same figure as the
+   *                           hub's drift badge); absent when no statement
+   *                           balance is stored.
+   *   - `anchor_date` / `post_anchor_count` — balance provenance from the
+   *     shared lateral ("as of {date} statement + {n} entries since" vs
+   *     "sum of {n} entries" when anchor_date is absent).
    */
   async getBankBalances(targetCurrency = 'EUR') {
     const accounts = [];
@@ -35,8 +46,14 @@ export const banksRepository = {
     const [latestBalanceResult, historyResult] = await Promise.all([
       query(`
         SELECT a.name AS bank_account,
+               COALESCE(a.display_name, a.name) AS display_name,
                tx.currency,
                COALESCE(lb.balance, 0) AS balance,
+               CASE WHEN a.statement_balance IS NOT NULL
+                    THEN a.statement_balance - COALESCE(lb.balance, 0)
+                    ELSE NULL END AS drift,
+               lb.anchor_date,
+               lb.post_anchor_count,
                tx.last_transaction AS date,
                tx.transaction_count,
                tx.first_transaction,
@@ -132,7 +149,17 @@ export const banksRepository = {
       const balance = roundToCents(row.amount_eur);
       accounts.push({
         bank_account: row.bank_account,
+        display_name: row.display_name || row.bank_account,
         balance,
+        // Native-currency drift, matching the hub's badge (accountRepository).
+        // SQL NULL (no statement balance) → undefined, never null (convention).
+        drift: row.drift == null ? undefined : roundToCents(toNumber(toDecimal(row.drift))),
+        // Provenance (WP-A1): anchor_date is already a YYYY-MM-DD string via
+        // to_char in the lateral; NULL (no stamp) → undefined.
+        anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
+        post_anchor_count: row.post_anchor_count == null
+          ? undefined
+          : parseInt(row.post_anchor_count, 10),
         transaction_count: parseInt(row.transaction_count, 10),
         first_transaction: row.first_transaction,
         last_transaction: row.last_transaction,
