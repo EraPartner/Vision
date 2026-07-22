@@ -19,7 +19,7 @@ import {
   getCashflowForecastData,
   getCashflowForecastDataRolling,
   getCashflowForecastDataByCategory,
-} from '../src/repositories/infoRepo.forecast.js';
+} from '../src/repositories/infoRepositoryForecast.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
 
 beforeEach(() => {
