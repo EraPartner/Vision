@@ -114,10 +114,7 @@ export function SnapshotDataTable({
       columns={columns}
       data={rows}
       maxHeight={520}
-      totalItems={totalItems}
-      isFetchingMore={isFetchingMore}
-      hasMore={hasMore}
-      onLoadMore={onLoadMore}
+      serverMode={{ pagination: { totalItems, isFetchingMore, hasMore, onLoadMore } }}
     />
   );
 }

@@ -244,9 +244,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
         subtitle={t('insights.detailsSubtitle')}
         columns={recipientDetailsColumns}
         data={displayedMerchants}
-        totalItems={totalMerchants}
-        hasMore={hasMore}
-        onLoadMore={handleLoadMore}
+        serverMode={{ pagination: { totalItems: totalMerchants, hasMore, onLoadMore: handleLoadMore } }}
         emptyMessage={t('insights.detailsEmpty')}
         maxHeight={700}
         rowHeight={48}

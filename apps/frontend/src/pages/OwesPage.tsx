@@ -466,10 +466,14 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             subtitle={t('owesPage.recentTransactionsSubtitle', { name: recipientName })}
             columns={columns}
             data={transactions}
-            totalItems={totalItems}
-            isFetchingMore={isFetchingMore}
-            onLoadMore={loadMore}
-            hasMore={hasMoreRef.current}
+            serverMode={{
+                pagination: {
+                    totalItems,
+                    isFetchingMore,
+                    onLoadMore: loadMore,
+                    hasMore: hasMoreRef.current,
+                },
+            }}
             maxHeight={320}
             rowHeight={42}
             emptyMessage={t('owesPage.noRecentTransactions')}

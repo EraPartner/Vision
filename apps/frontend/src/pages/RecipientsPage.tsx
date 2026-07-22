@@ -401,15 +401,16 @@ export default function RecipientsPage() {
                             description={t('recipientsPage.tableSubtitle', { n: 0 })}
                         />
                     )}
-                    totalItems={totalItems}
-                    isFetchingMore={isFetchingMore}
-                    onLoadMore={loadMore}
-                    hasMore={hasMoreRef.current}
-                    onSearchChange={setSearch}
-                    searchValue={search}
-                    onSortChange={handleSortChange}
-                    sortKeyProp={sortKey}
-                    sortDirProp={sortDir}
+                    serverMode={{
+                        sort: { onChange: handleSortChange, key: sortKey, dir: sortDir },
+                        search: { onChange: setSearch, value: search },
+                        pagination: {
+                            totalItems,
+                            isFetchingMore,
+                            onLoadMore: loadMore,
+                            hasMore: hasMoreRef.current,
+                        },
+                    }}
                     actions={tableActions}
                     maxHeight={700}
                     cancelEditingRef={cancelEditingRef}

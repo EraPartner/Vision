@@ -9,7 +9,7 @@ import {
     ContextMenuSeparator,
     ContextMenuShortcut,
 } from "@/components/ui/context-menu";
-import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { VirtualDataTable, type VirtualTableServerMode } from "@/components/shared/VirtualDataTable";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDialog";
@@ -27,16 +27,8 @@ import type { RawApiTransaction, TableTransaction } from "../types";
 interface TransactionsTableProps {
     transactions: TableTransaction[];
     allItems: RawApiTransaction[];
-    totalItems: number;
-    isFetchingMore: boolean;
-    hasMore: boolean;
-    loadMoreOffset: number;
-    search: string;
-    onSearchChange: (value: string) => void;
-    sortKey: string | null;
-    sortDir: "asc" | "desc" | null;
-    onSortChange: (key: string | null, dir: "asc" | "desc" | null) => void;
-    onLoadMore: () => void | Promise<void>;
+    /** Server sort + search + pagination config, forwarded to VirtualDataTable. */
+    serverMode: VirtualTableServerMode;
     onRowUpdate: (sourceIndex: number, updated: TableTransaction) => void;
     onOpenInfo: (row: TableTransaction) => void;
     onQuickLook: (row: TableTransaction) => void;
@@ -53,22 +45,12 @@ interface TransactionsTableProps {
     deletePending: boolean;
     selectedIds: Set<number>;
     onSelectionChange: (next: Set<number>) => void;
-    searchSuggestions?: (ctx: { query: string; close: () => void }) => React.ReactNode;
 }
 
 export function TransactionsTable({
     transactions,
     allItems,
-    totalItems,
-    isFetchingMore,
-    hasMore,
-    loadMoreOffset,
-    search,
-    onSearchChange,
-    sortKey,
-    sortDir,
-    onSortChange,
-    onLoadMore,
+    serverMode,
     onRowUpdate,
     onOpenInfo,
     onQuickLook,
@@ -85,10 +67,14 @@ export function TransactionsTable({
     deletePending,
     selectedIds,
     onSelectionChange,
-    searchSuggestions,
 }: TransactionsTableProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+
+    // Display values sourced from the same server-mode config the table runs on
+    // (always provided by TransactionsPage; fallbacks only satisfy the types).
+    const totalItems = serverMode.pagination?.totalItems ?? 0;
+    const search = serverMode.search?.value ?? "";
 
     const toggleSelect = useCallback((id: number) => {
         const next = new Set(selectedIds);
@@ -393,21 +379,11 @@ export function TransactionsTable({
                     ) : undefined}
                 />
             )}
-            totalItems={totalItems}
-            isFetchingMore={isFetchingMore}
-            onLoadMore={onLoadMore}
-            hasMore={hasMore}
-            loadMoreOffset={loadMoreOffset}
-            onSearchChange={onSearchChange}
-            searchValue={search}
-            onSortChange={onSortChange}
-            sortKeyProp={sortKey}
-            sortDirProp={sortDir}
+            serverMode={serverMode}
             actions={actions}
             maxHeight={700}
             cancelEditingRef={cancelEditingRef}
             onEditingChange={onEditingChange}
-            searchSuggestions={searchSuggestions}
         />
     );
 }
