@@ -410,66 +410,72 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
   `.trim();
 }
 
-/** Financial section renderers keyed by section ID. */
-const FINANCIAL_SECTION_RENDERERS = {
-  executiveSummary: renderExecutiveSummary,
-  cashflowTrend: renderCashflowTrend,
-  categoryBreakdown: renderCategoryBreakdown,
-  topRecipients: renderTopRecipients,
-  bankBalances: renderBankBalances,
-  plannedOutlook: renderPlannedOutlook,
-  rollingAverages: renderRollingAverages,
-};
+/**
+ * @typedef {{
+ *   id: string;
+ *   render: (data: any, ctx: { currency: string; period: Period }) => string;
+ *   default: boolean;
+ * }} ReportSection
+ */
 
-const DEFAULT_FINANCIAL_SECTIONS = [
-  'executiveSummary',
-  'cashflowTrend',
-  'categoryBreakdown',
-  'topRecipients',
-  'bankBalances',
-  'rollingAverages',
-  'plannedOutlook',
+/*
+ * Single source of truth for each report type's sections.
+ *
+ * Array order is the canonical section order: sections render in this order
+ * when the request omits `sections`, and the frontend export dialog lists
+ * them in this order (apps/frontend/src/components/reports/reportSections.ts
+ * hand-mirrors the IDs; tests/reportSectionCatalog.test.js fails the build if
+ * the two drift). `default: true` marks sections rendered when the request
+ * omits `sections`. The renderer lookup maps and default-order lists are
+ * DERIVED below — to add, remove, or reorder a section, edit only its array.
+ */
+
+/** @type {ReportSection[]} */
+export const FINANCIAL_REPORT_SECTIONS = [
+  { id: 'executiveSummary',  render: renderExecutiveSummary,  default: true },
+  { id: 'cashflowTrend',     render: renderCashflowTrend,     default: true },
+  { id: 'categoryBreakdown', render: renderCategoryBreakdown, default: true },
+  { id: 'topRecipients',     render: renderTopRecipients,     default: true },
+  { id: 'bankBalances',      render: renderBankBalances,      default: true },
+  { id: 'rollingAverages',   render: renderRollingAverages,   default: true },
+  { id: 'plannedOutlook',    render: renderPlannedOutlook,    default: true },
 ];
 
-/** Portfolio section renderers keyed by section ID. */
-const PORTFOLIO_SECTION_RENDERERS = {
-  portfolioExecutiveSummary: renderPortfolioExecutiveSummary,
-  portfolioAllocation:       renderPortfolioAllocation,
-  topHoldings:               renderTopHoldings,
-  performanceTrend:          renderPerformanceTrend,
-  assetClassDetail:          renderAssetClassDetail,
-  dividendIncome:            renderDividendIncome,
-};
-
-const DEFAULT_PORTFOLIO_SECTIONS = [
-  'portfolioExecutiveSummary',
-  'portfolioAllocation',
-  'topHoldings',
-  'performanceTrend',
-  'assetClassDetail',
-  'dividendIncome',
+/** @type {ReportSection[]} */
+export const PORTFOLIO_REPORT_SECTIONS = [
+  { id: 'portfolioExecutiveSummary', render: renderPortfolioExecutiveSummary, default: true },
+  { id: 'portfolioAllocation',       render: renderPortfolioAllocation,       default: true },
+  { id: 'topHoldings',               render: renderTopHoldings,               default: true },
+  { id: 'performanceTrend',          render: renderPerformanceTrend,          default: true },
+  { id: 'assetClassDetail',          render: renderAssetClassDetail,          default: true },
+  { id: 'dividendIncome',            render: renderDividendIncome,            default: true },
 ];
 
-/** Tax section renderers keyed by section ID. */
-const TAX_SECTION_RENDERERS = {
-  taxExecutiveSummary:   renderTaxExecutiveSummary,
-  taxTypeBreakdown:      renderTaxTypeBreakdown,
-  feeBreakdown:          renderFeeBreakdown,
-  taxByAssetClass:       renderTaxByAssetClass,
-  taxMonthlyTrend:       renderTaxMonthlyTrend,
-  topInvestmentsByCost:  renderTopInvestmentsByCost,
-  belgianRulesSummary:   renderBelgianRulesSummary,
-};
-
-const DEFAULT_TAX_SECTIONS = [
-  'taxExecutiveSummary',
-  'taxTypeBreakdown',
-  'taxByAssetClass',
-  'taxMonthlyTrend',
-  'topInvestmentsByCost',
-  'feeBreakdown',
-  'belgianRulesSummary',
+/** @type {ReportSection[]} */
+export const TAX_REPORT_SECTIONS = [
+  { id: 'taxExecutiveSummary',  render: renderTaxExecutiveSummary,  default: true },
+  { id: 'taxTypeBreakdown',     render: renderTaxTypeBreakdown,     default: true },
+  { id: 'taxByAssetClass',      render: renderTaxByAssetClass,      default: true },
+  { id: 'taxMonthlyTrend',      render: renderTaxMonthlyTrend,      default: true },
+  { id: 'topInvestmentsByCost', render: renderTopInvestmentsByCost, default: true },
+  { id: 'feeBreakdown',         render: renderFeeBreakdown,         default: true },
+  { id: 'belgianRulesSummary',  render: renderBelgianRulesSummary,  default: true },
 ];
+
+/** @param {ReportSection[]} sections @returns {Record<string, ReportSection['render']>} */
+const toRenderers = (sections) => Object.fromEntries(sections.map(({ id, render }) => [id, render]));
+
+/** @param {ReportSection[]} sections @returns {string[]} */
+const toDefaultIds = (sections) => sections.filter((s) => s.default).map((s) => s.id);
+
+const FINANCIAL_SECTION_RENDERERS = toRenderers(FINANCIAL_REPORT_SECTIONS);
+const DEFAULT_FINANCIAL_SECTIONS  = toDefaultIds(FINANCIAL_REPORT_SECTIONS);
+
+const PORTFOLIO_SECTION_RENDERERS = toRenderers(PORTFOLIO_REPORT_SECTIONS);
+const DEFAULT_PORTFOLIO_SECTIONS  = toDefaultIds(PORTFOLIO_REPORT_SECTIONS);
+
+const TAX_SECTION_RENDERERS = toRenderers(TAX_REPORT_SECTIONS);
+const DEFAULT_TAX_SECTIONS  = toDefaultIds(TAX_REPORT_SECTIONS);
 
 /**
  * Shared report-body builder. Picks the requested sections (or the type's
