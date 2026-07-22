@@ -531,6 +531,10 @@ components:
         balance:
           type: number
           format: double
+        running_balance:
+          type: number
+          format: double
+          description: Per-account running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true
         category_id:
           type: integer
         category_name:

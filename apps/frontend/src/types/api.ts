@@ -193,6 +193,8 @@ export interface Transaction {
     amount_eur?: number;
     currency?: string;
     balance?: number;
+    /** Per-account running balance (SQL window); only present when the list was fetched with include_balance=true (WP-B4). */
+    running_balance?: number;
     category_id?: number | null;
     category_name?: string; // Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
     comment?: string | null;

@@ -9,6 +9,7 @@ export const routeLoaders = {
     "/transactions": () => import("@/pages/TransactionsPage"),
     "/categories": () => import("@/pages/CategoriesPage"),
     "/accounts": () => import("@/pages/AccountsPage"),
+    "/accounts/:id": () => import("@/pages/AccountDetailPage"),
     "/recipients": () => import("@/pages/RecipientsPage"),
     "/planned": () => import("@/pages/PlannedPaymentsPage"),
     "/statistics": () => import("@/pages/StatisticsPage"),

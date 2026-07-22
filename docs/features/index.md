@@ -29,6 +29,7 @@ SORT title ASC
 ### Core Features
 - [[docs/features/views\|Views & Pages]] - Complete overview of all views and pages
 - [[docs/features/transactions\|Transactions]] - Core financial transaction management
+- [[docs/features/accounts\|Accounts]] - Grouped accounts hub, per-account running-balance ledger, provenance and reconciliation (ADR-107)
 - [[docs/features/import\|Imports]] - CSV import with deduplication
 
 ### Organization

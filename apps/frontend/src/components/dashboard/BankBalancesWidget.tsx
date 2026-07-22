@@ -47,11 +47,11 @@ export function BankBalancesWidget() {
     const { appSettings } = useAppSettings();
 
     // Clicking a per-account card opens the SAME account detail view the
-    // Accounts page uses (AccountDetailSheet), deep-linked by entity id — one
-    // concept, one code path (Accounts-rewrite Phase D). The widget no longer
-    // keys on the retiring transactions.bank_account string.
+    // Accounts page uses — the /accounts/:id ledger route (WP-B4), deep-linked
+    // by entity id. One concept, one code path (Accounts-rewrite Phase D). The
+    // widget no longer keys on the retiring transactions.bank_account string.
     const openAccountDetail = (accountId: number) => {
-        navigate(`/accounts?account=${accountId}`);
+        navigate(`/accounts/${accountId}`);
     };
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = new Intl.NumberFormat(locale);

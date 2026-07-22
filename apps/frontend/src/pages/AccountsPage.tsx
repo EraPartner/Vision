@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed, Receipt, Coins, ChevronRight } from "lucide-react";
-import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
+import { Landmark, MoreVertical, Receipt, Scale, ChevronRight, PanelRight } from "lucide-react";
+import { useAccounts } from "@/hooks/useAccounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -22,28 +22,18 @@ import {
     groupAccounts, sumConvertedBalances, computeNetCash, isPortfolioType,
     type AccountGroup,
 } from "@/features/accounts/groupAccounts";
-import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
-import { toAccountPayload, accountToFormValues } from "@/features/accounts/accountFormMapping";
-import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
-import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
-import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
+import { AddAccountDialog } from "@/features/accounts/AddAccountDialog";
 import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
-import { AccountDetailSheet } from "@/features/accounts/AccountDetailSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { toast } from "sonner";
 import type { Account } from "@/types/api";
 
 export default function AccountsPage() {
     const { t } = useLanguage();
     const navigate = useNavigate();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams] = useSearchParams();
     // Archived is a (collapsed) group now, not a toggle (WP-B3) — always fetch
     // the full population.
     const { data, isLoading, isError, error } = useAccounts({ active: "all" });
-    const updateMutation = useUpdateAccount();
-    const deleteMutation = useDeleteAccount();
-    const { confirm, ConfirmDialog } = useConfirmDialog();
     const fmtCur = useCurrencyFormatter();
     const balanceProvenance = useBalanceProvenance();
     const { appSettings } = useAppSettings();
@@ -51,32 +41,9 @@ export default function AccountsPage() {
     const { convertToTarget } = useCurrencyConverter(displayCurrency);
     const [archivedOpen, setArchivedOpen] = useState(false);
 
-    const requestDelete = async (a: Account) => {
-        const ok = await confirm({
-            title: t('accounts.delete.title'),
-            description: t('accounts.delete.description', { name: a.display_name || a.name }),
-            confirmLabel: t('common.delete'),
-            variant: 'destructive',
-        });
-        if (!ok) return;
-        deleteMutation.mutate(a.id, {
-            onError: (error) => {
-                // Still referenced (409): route to the close flow instead of
-                // dead-ending (lifecycle D5, ADR-088 addendum).
-                if ((error as { status?: number }).status === 409) {
-                    toast.info(t('accounts.delete.stillReferenced', { name: a.display_name || a.name }));
-                    setClosing(a);
-                }
-            },
-        });
-    };
-
-    const [editing, setEditing] = useState<Account | undefined>(undefined);
-    const [merging, setMerging] = useState<Account | undefined>(undefined);
-    const [closing, setClosing] = useState<Account | undefined>(undefined);
-    const [anchoring, setAnchoring] = useState<Account | undefined>(undefined);
+    // Only Reconcile remains a hub-level dialog (WP-B4): Edit / Merge / Close /
+    // Opening balance / Archive / Delete moved to the /accounts/:id header menu.
     const [reconciling, setReconciling] = useState<Account | undefined>(undefined);
-    const [detailing, setDetailing] = useState<Account | undefined>(undefined);
 
     const accounts = useMemo(() => data?.items ?? [], [data]);
 
@@ -92,38 +59,14 @@ export default function AccountsPage() {
         [accounts, convertToTarget],
     );
 
-    // Deep link from the dashboard BankBalancesWidget (?account=<id>): open the
-    // shared AccountDetailSheet for that entity, then strip the param so closing
-    // + reopening works and a refresh doesn't re-trigger it. One concept, one
-    // detail code path (Accounts-rewrite Phase D).
+    // Legacy deep link (?account=<id>) from before the /accounts/:id route:
+    // forward to the route (replace, so Back doesn't bounce through the hub).
+    // One concept, one detail code path (Accounts-rewrite Phase D → WP-B4).
     const detailParam = searchParams.get("account");
     useEffect(() => {
         if (!detailParam) return;
-        const match = accounts.find((a) => String(a.id) === detailParam);
-        if (!match) return;
-        setDetailing(match);
-        setSearchParams(
-            (prev) => {
-                const next = new URLSearchParams(prev);
-                next.delete("account");
-                return next;
-            },
-            { replace: true },
-        );
-    }, [detailParam, accounts, setSearchParams]);
-
-    const handleSave = (values: AccountFormValues) => {
-        if (!editing) return;
-        updateMutation.mutate(
-            // "update" mode PATCHes emptied fields as explicit null so the
-            // backend clears them — see toAccountPayload.
-            { id: editing.id, data: toAccountPayload(values, "update") },
-            { onSuccess: () => setEditing(undefined) },
-        );
-    };
-
-    const toggleArchive = (a: Account) =>
-        updateMutation.mutate({ id: a.id, data: { is_active: !a.is_active } });
+        navigate(`/accounts/${detailParam}`, { replace: true });
+    }, [detailParam, navigate]);
 
     // Filter by the account entity's id (ADR-088) — reads key on the FK, not
     // the retiring bank_account string.
@@ -155,15 +98,16 @@ export default function AccountsPage() {
             tabIndex={0}
             aria-label={t('accounts.openDetail', { name: a.display_name || a.name })}
             className={cn("glass-regular cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2", !a.is_active && "opacity-60")}
-            onClick={() => setDetailing(a)}
+            // Single click → the /accounts/:id ledger route (WP-B4).
+            onClick={() => navigate(`/accounts/${a.id}`)}
             onKeyDown={(e) => {
                 // Only act on the card itself — keyboard activation of
                 // inner controls (actions menu, drift badge) must not
-                // also open the detail sheet.
+                // also open the detail route.
                 if (e.target !== e.currentTarget) return;
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    setDetailing(a);
+                    navigate(`/accounts/${a.id}`);
                 }
             }}
         >
@@ -243,41 +187,24 @@ export default function AccountsPage() {
                             <MoreVertical className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
+                    {/* WP-B4: the hub card keeps open + reconcile; Edit / Merge /
+                        Close (+ opening balance, archive, delete) live in the
+                        /accounts/:id header menu now. The menu stays as the
+                        keyboard/touch-accessible equivalent of the card click. */}
                     <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                        {/* Keyboard/touch-accessible equivalent of the card's
-                            double-click-to-open shortcut. */}
+                        <DropdownMenuItem onClick={() => navigate(`/accounts/${a.id}`)}>
+                            <PanelRight className="mr-2 h-4 w-4" /> {t('accounts.viewDetails')}
+                        </DropdownMenuItem>
                         {canViewTransactions && (
                             <DropdownMenuItem onClick={() => openAccountTransactions(a)}>
                                 <Receipt className="mr-2 h-4 w-4" /> {t('accounts.openTransactions')}
                             </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => setEditing(a)}>
-                            <Pencil className="mr-2 h-4 w-4" /> {t('common.edit')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setAnchoring(a)}>
-                            <Coins className="mr-2 h-4 w-4" /> {t('accounts.openingBalance.action')}
-                        </DropdownMenuItem>
-                        {accounts.length > 1 && (
-                            <DropdownMenuItem onClick={() => setMerging(a)}>
-                                <GitMerge className="mr-2 h-4 w-4" /> {t('accounts.merge')}
+                        {a.drift != null && a.drift !== 0 && (
+                            <DropdownMenuItem onClick={() => setReconciling(a)}>
+                                <Scale className="mr-2 h-4 w-4" /> {t('accounts.reconcile.open')}
                             </DropdownMenuItem>
                         )}
-                        {a.is_active && (
-                            <DropdownMenuItem onClick={() => setClosing(a)}>
-                                <DoorClosed className="mr-2 h-4 w-4" /> {t('accounts.close.action')}
-                            </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onClick={() => toggleArchive(a)}>
-                            {a.is_active
-                                ? <><Archive className="mr-2 h-4 w-4" /> {t('accounts.archive')}</>
-                                : <><ArchiveRestore className="mr-2 h-4 w-4" /> {t('accounts.restore')}</>}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => requestDelete(a)}
-                        >
-                            <Trash2 className="mr-2 h-4 w-4" /> {t('common.delete')}
-                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </CardContent>
@@ -376,45 +303,6 @@ export default function AccountsPage() {
                 </div>
             )}
 
-            {editing && (
-                <AddAccountDialog
-                    key={editing.id}
-                    mode="edit"
-                    open={!!editing}
-                    onOpenChange={(o) => { if (!o) setEditing(undefined); }}
-                    isSaving={updateMutation.isPending}
-                    initialValues={accountToFormValues(editing)}
-                    onSave={handleSave}
-                />
-            )}
-
-            {merging && (
-                <MergeAccountDialog
-                    source={merging}
-                    accounts={accounts}
-                    open={!!merging}
-                    onOpenChange={(o) => { if (!o) setMerging(undefined); }}
-                />
-            )}
-
-            {closing && (
-                <CloseAccountDialog
-                    account={closing}
-                    accounts={accounts}
-                    open={!!closing}
-                    onOpenChange={(o) => { if (!o) setClosing(undefined); }}
-                />
-            )}
-
-            {anchoring && (
-                <OpeningBalanceDialog
-                    key={anchoring.id}
-                    account={anchoring}
-                    open={!!anchoring}
-                    onOpenChange={(o) => { if (!o) setAnchoring(undefined); }}
-                />
-            )}
-
             {reconciling && (
                 <ReconcileDialog
                     key={reconciling.id}
@@ -423,18 +311,6 @@ export default function AccountsPage() {
                     onOpenChange={(o) => { if (!o) setReconciling(undefined); }}
                 />
             )}
-
-            <AccountDetailSheet
-                account={detailing}
-                open={!!detailing}
-                onOpenChange={(o) => { if (!o) setDetailing(undefined); }}
-                onEdit={(a) => { setDetailing(undefined); setEditing(a); }}
-                onReconcile={(a) => { setDetailing(undefined); setReconciling(a); }}
-                onOpeningBalance={(a) => { setDetailing(undefined); setAnchoring(a); }}
-                onViewTransactions={(a) => { setDetailing(undefined); openAccountTransactions(a); }}
-            />
-
-            <ConfirmDialog />
         </div>
     );
 }

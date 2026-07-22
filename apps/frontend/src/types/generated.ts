@@ -3266,6 +3266,11 @@ export interface components {
             currency?: string;
             /** Format: double */
             balance?: number;
+            /**
+             * Format: double
+             * @description Per-account running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true
+             */
+            running_balance?: number;
             category_id?: number;
             /** @description Format: GENERAL:DETAIL */
             category_name?: string;

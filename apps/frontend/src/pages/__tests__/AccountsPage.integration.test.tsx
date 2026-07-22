@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
+import { Route, Routes } from "react-router-dom";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, ACCOUNT_STUB } from "@/test/msw/handlers";
@@ -116,5 +117,48 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         mockAccounts([]);
         renderWithApp(<AccountsPage />);
         expect(await screen.findByText(/no accounts yet/i)).toBeInTheDocument();
+    });
+
+    // ── WP-B4: card click → /accounts/:id; lifecycle verbs moved off the hub ──
+
+    function renderWithDetailRoute(initialEntries = ["/accounts"]) {
+        return renderWithApp(
+            <Routes>
+                <Route path="/accounts" element={<AccountsPage />} />
+                <Route path="/accounts/:id" element={<div>detail route</div>} />
+            </Routes>,
+            { initialEntries },
+        );
+    }
+
+    it("navigates to the /accounts/:id ledger route on a single card click", async () => {
+        mockAccounts();
+        renderWithDetailRoute();
+
+        const card = await screen.findByRole("button", { name: "Open details for KBC Checking" });
+        await userEvent.click(card);
+        expect(await screen.findByText("detail route")).toBeInTheDocument();
+    });
+
+    it("keeps the a11y dropdown with open + transactions, but without Edit/Merge/Close (moved to the detail header)", async () => {
+        mockAccounts();
+        renderWithDetailRoute();
+
+        const cash = await screen.findByRole("region", { name: "Cash & Savings" });
+        const card = within(cash).getByRole("button", { name: "Open details for KBC Checking" });
+        await userEvent.click(within(card).getByRole("button", { name: "Account actions" }));
+
+        expect(await screen.findByRole("menuitem", { name: /view details/i })).toBeInTheDocument();
+        expect(screen.getByRole("menuitem", { name: /view transactions/i })).toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /edit/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /merge/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /close account/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /delete/i })).not.toBeInTheDocument();
+    });
+
+    it("forwards the legacy ?account= deep-link to the detail route", async () => {
+        mockAccounts();
+        renderWithDetailRoute(["/accounts?account=2"]);
+        expect(await screen.findByText("detail route")).toBeInTheDocument();
     });
 });

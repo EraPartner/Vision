@@ -26,9 +26,10 @@ export const transactionKeys = {
     all: ['transactions'] as const,
     /** `useTransactions(params)` list cache (one entry per params object). */
     list: (params?: object) => ['transactions', params] as const,
-    /** Account-detail sheet's scoped list. */
-    accountDetail: (accountId: number | undefined) =>
-        ['transactions', 'account-detail', accountId] as const,
+    /** /accounts/:id running-balance ledger (WP-B4, replaced the detail
+     *  sheet's 'account-detail' family); `limit` grows via Load more. */
+    accountLedger: (accountId: number | undefined, limit: number) =>
+        ['transactions', 'account-ledger', accountId, limit] as const,
     /** Owes page: per-recipient settlement group. */
     owesRecipientGroup: (recipientId: number) =>
         ['transactions', 'owes-recipient-group', recipientId] as const,
