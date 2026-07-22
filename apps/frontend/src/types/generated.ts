@@ -124,6 +124,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{id}/merge-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source account id (the account that would be merged away) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Preview merging this account into another (read-only)
+         * @description Dry-run of merging account {id} (the source) INTO the account given by `into` (the survivor). Returns the row counts that would be repointed (same categories POST /merge moves), the projected post-merge computed balance — the anchor+delta definition evaluated over the union of both accounts' active rows, in the survivor's native currency — and whether the merge would interleave stamped balance histories (`stampsInterleaved`), in which case the merge clears the survivor's statement-balance anchor. No mutation.
+         */
+        get: operations["previewAccountMerge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/{id}/opening-balance": {
         parameters: {
             query?: never;
@@ -4036,6 +4059,66 @@ export interface operations {
                 };
             };
             /** @description Target or a source account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewAccountMerge: {
+        parameters: {
+            query: {
+                /** @description Survivor account id (the account {id} would merge into) */
+                into: number;
+            };
+            header?: never;
+            path: {
+                /** @description Source account id (the account that would be merged away) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Merge preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            /** @description Survivor account id */
+                            into?: number;
+                            /** @description Source account id */
+                            source?: number;
+                            /** @description Row counts that would move to the survivor */
+                            reassigned?: {
+                                transactions?: number;
+                                planned?: number;
+                                portfolio?: number;
+                                funding?: number;
+                            };
+                            /** @description Post-merge computed balance (anchor+delta over the union of both accounts' active rows) */
+                            projectedBalance?: number;
+                            /** @description The survivor's native currency (ISO-4217) */
+                            projectedBalanceCurrency?: string;
+                            /** @description Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor) */
+                            stampsInterleaved?: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid `into`, or `into` equals {id} */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source or survivor account not found */
             404: {
                 headers: {
                     [name: string]: unknown;
