@@ -314,15 +314,19 @@ async function decryptBackupV1(encryptedFilePath, keyOrPassphrase) {
 async function decryptBackupV2(encryptedFilePath, keyOrPassphrase) {
   const headerLen = BACKUP_ENC_MAGIC_V2.length + BACKUP_ENC_V2_SALT_BYTES + BACKUP_ENC_V2_IV_BYTES;
   const header = Buffer.alloc(headerLen);
-  const stat = await fs.promises.stat(encryptedFilePath);
-  if (stat.size < headerLen + BACKUP_ENC_V2_TAG_BYTES) {
-    throw new Error('Invalid encrypted backup: file too small.');
-  }
-  const tagOffset = stat.size - BACKUP_ENC_V2_TAG_BYTES;
   const tag = Buffer.alloc(BACKUP_ENC_V2_TAG_BYTES);
+  // Open first, then fstat the open handle — sizing the file by descriptor
+  // (not a second stat-by-path) so the size check and the offset reads below
+  // act on the same file, closing the check-then-open TOCTOU window.
+  let size;
   let handle;
   try {
     handle = await fs.promises.open(encryptedFilePath, 'r');
+    ({ size } = await handle.stat());
+    if (size < headerLen + BACKUP_ENC_V2_TAG_BYTES) {
+      throw new Error('Invalid encrypted backup: file too small.');
+    }
+    const tagOffset = size - BACKUP_ENC_V2_TAG_BYTES;
     const h = await handle.read(header, 0, headerLen, 0);
     if (h.bytesRead !== headerLen) throw new Error('Invalid encrypted backup header.');
     const t = await handle.read(tag, 0, BACKUP_ENC_V2_TAG_BYTES, tagOffset);
@@ -348,7 +352,7 @@ async function decryptBackupV2(encryptedFilePath, keyOrPassphrase) {
   decipher.setAuthTag(tag);
   const tempSqlPath = path.join(app.getPath('temp'), `vision_restore_${Date.now()}_${process.pid}.sql`);
 
-  const cipherTextLen = stat.size - headerLen - BACKUP_ENC_V2_TAG_BYTES;
+  const cipherTextLen = size - headerLen - BACKUP_ENC_V2_TAG_BYTES;
   try {
     await new Promise((resolve, reject) => {
       const input = fs.createReadStream(encryptedFilePath, { start: headerLen, end: headerLen + cipherTextLen - 1 });
