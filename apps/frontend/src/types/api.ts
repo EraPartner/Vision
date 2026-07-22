@@ -11,6 +11,8 @@
  * packages/shared-utils/src/money.js). Do not assume raw repository rows are
  * already numeric.
  */
+import type { AssetClass } from '@vision/types/assetClasses';
+import type { PortfolioTxnType } from '@vision/types/portfolioTxnTypes';
 
 export interface Link {
     rel: string;
@@ -365,8 +367,9 @@ export interface PlannedTransactionExecuteRequest {
 
 // ==================== Portfolio Types ====================
 
-export type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
-export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift' | 'split' | 'merger' | 'spinoff' | 'return_of_capital';
+// AssetClass / PortfolioTxnType derive from the canonical runtime arrays in
+// @vision/types; re-exported here so existing '@/types/api' imports keep working.
+export type { AssetClass, PortfolioTxnType };
 export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type PriceProvider = 'manual' | 'binance' | 'yahoo' | 'custom' | 'kinesis';
 

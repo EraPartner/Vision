@@ -1,14 +1,14 @@
 /**
  * Canonical portfolio transaction types.
  *
- * Single source of truth for the portfolio_txn_type value set, shared by the
+ * The value list is single-sourced in @vision/types/portfolioTxnTypes (shared
+ * with the frontend type unions); this module derives the Set consumed by the
  * import pipeline's type normalizer (services/portfolioImportPipeline/
  * portfolioTypeNormalizer.js), the import routes' Zod schema, and repository
  * payload validation (repositories/portfolioTxRepo.common.js) — a plain
  * constant, so it lives in lib/ where both layers may import it.
  */
-export const VALID_PORTFOLIO_TXN_TYPES = new Set([
-  'buy', 'sell', 'dividend', 'fee', 'tax', 'interest',
-  'rent_income', 'appreciation', 'gift', 'split', 'merger',
-  'spinoff', 'return_of_capital',
-]);
+import { PORTFOLIO_TXN_TYPES } from '@vision/types/portfolioTxnTypes';
+
+// Widened to Set<string>: callers probe raw, untrusted values with .has().
+export const VALID_PORTFOLIO_TXN_TYPES = new Set(/** @type {readonly string[]} */ (PORTFOLIO_TXN_TYPES));
