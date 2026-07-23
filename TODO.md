@@ -4576,7 +4576,7 @@ detection layer never touches an LLM, so it's unaffected either way.
       banner/card) and its rationale
     - Explicitly extends the no-external-calls guarantee + CI fetch-spy test to the new narration tool
 
-- [ ] Surfacing: Statistics page panel + button badge, no new banner or dashboard card 🔼 🔎 verified-present 2026-07-11
+- [x] Surfacing: Statistics page panel + button badge, no new banner or dashboard card 🔼 ✅ 2026-07-23 · `GET /api/info/insights-digest` (shared `insightsDigestService`) → `useInsightsDigest` hook → `InsightsDigestPanel` on the Statistics page (mirrors RecurringDetectionPanel UI: card, expand/collapse, per-row X dismiss) + `InsightsNavBadge` on the Statistics nav item (undismissed count, live-synced to panel dismisses). Client-side dismiss store `insightsDismiss.ts` with the two key shapes (`{recipientId,findingType}` permanent; `{categoryId,monthKey,dismissedAt,deviationAtDismiss}` 14-day + worsening re-alert). EN/NL i18n. No new dashboard banner/card. Backend 11 + FE 30 tests; full FE suite green.
     - New panel on the Statistics page mirroring `RecurringDetectionPanel.tsx`'s *UI* pattern only
       (today it only lives on `PlannedPaymentsPage.tsx`) — full card, expand/collapse, default
       expanded. **Not** the same dismiss data structure: the real panel dismisses via one permanent

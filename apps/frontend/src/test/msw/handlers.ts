@@ -381,6 +381,13 @@ export const defaultHandlers = [
     // (transaction-summary handler removed — Phase 9 deleted that route.)
     http.get(`${API_BASE}/api/info/transaction-count`, () => ok({ total_transactions: 0 })),
     http.get(`${API_BASE}/api/info/recurring-patterns`, () => ok({ patterns: [], total: 0 })),
+    http.get(`${API_BASE}/api/info/insights-digest`, () =>
+        ok({
+            subscriptionCreep: { new: [], priceChanges: [] },
+            categoryOutliers: [],
+            cashForecast: null,
+        }),
+    ),
     http.get(`${API_BASE}/api/info/banks`, () => ok({ banks: [] })),
     http.get(`${API_BASE}/api/info/supported-adapters`, () => ok({ adapters: [], total_count: 0 })),
     http.get(`${API_BASE}/api/info/inflation-rates`, () => ok([])),
