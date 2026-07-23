@@ -30,6 +30,7 @@ import {
   NAV_WORKSPACES,
   WORKSPACE_ROOT_URLS,
 } from "@/lib/navigation";
+import { InsightsNavBadge } from "@/components/layout/InsightsNavBadge";
 
 /**
  * The active-route accent rail as a shared layout element: framer-motion
@@ -211,6 +212,7 @@ export function AppSidebar() {
                           {isActive && <ActiveRail />}
                           <item.icon className={cn("h-4 w-4 transition-colors duration-[var(--duration-normal)]", isActive && "text-primary")} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
+                          {!collapsed && item.url === "/statistics" && <InsightsNavBadge />}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

@@ -12,23 +12,13 @@ import { transactionRepository } from '../../../repositories/transactionReposito
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents, addAll, roundMoney } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
+import { DEDUCTION_TYPES } from '../../tax/deductionClassifier.js';
+import { computeDeductionCandidates } from '../../tax/deductionCandidatesService.js';
 import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
 import { parsePositiveInt } from './_validate.js';
 
 const MIN_YEAR = 1970;
 const MAX_YEAR = 3000;
-
-const DEDUCTIBLE_KEYWORDS = Object.freeze([
-  'tax',
-  'donation',
-  'charity',
-  'pension',
-  'insurance',
-  'mortgage',
-  'childcare',
-  'tuition',
-  'medical',
-]);
 
 const DISCLAIMER_APPROX =
   'Approximation only. Vision does not apply Belgian tax rules, withholdings, exemptions, or lot-level cost basis. Figures are derived heuristically from ledger data — verify with your accountant.';
@@ -234,12 +224,14 @@ export const getCapitalGainsForYear = {
 };
 
 /**
- * Potentially tax-deductible outflows, identified by keyword match on
- * category_name (format "general:detail") in a year.
+ * Potentially tax-deductible outflows in a year, classified into specific
+ * Belgian deduction types by the explicit category-name classifier
+ * (services/tax/deductionClassifier.js). Categories the classifier does not
+ * recognize are excluded — precision over recall.
  */
 export const getDeductibles = {
   name: 'getDeductibles',
-  description: 'Potentially tax-deductible outflows grouped by category in a given year. Identified by keyword match on category name (tax, donation, charity, pension, insurance, mortgage, childcare, tuition, medical). Use for "what can I deduct".',
+  description: `Potentially tax-deductible outflows grouped by category in a given year, each classified into a specific Belgian deduction type (${DEDUCTION_TYPES.join(', ')}) via an explicit category-name classifier. Unrecognized categories are excluded. Use for "what can I deduct".`,
   parameters: {
     type: 'object',
     properties: {
@@ -254,55 +246,43 @@ export const getDeductibles = {
   },
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const year = parseYear(args.year);
-    const { from, to } = yearRange(year);
 
-    const rows = await transactionRepository.getAll({
-      startDate: from,
-      endDate: to,
-      limit: 100_000,
-      offset: 0,
-      active: true,
-    });
+    // Shared classify-and-aggregate step (also serves the REST review card).
+    const candidates = await computeDeductionCandidates({ year });
 
-    const byCategory = new Map();
-    let grandTotal = toDecimal(0);
-
-    for (const row of rows) {
-      const amount = toDecimal(row.amount ?? 0);
-      if (amount.gte(0)) continue; // outflows only
-
-      const label = (row.category_name || '').toLowerCase();
-      if (!label) continue;
-      if (!DEDUCTIBLE_KEYWORDS.some((kw) => label.includes(kw))) continue;
-
-      const key = row.category_name;
-      const entry = byCategory.get(key) || { category: key, total: toDecimal(0), count: 0 };
-      entry.total = entry.total.plus(amount.abs());
-      entry.count += 1;
-      byCategory.set(key, entry);
-      grandTotal = grandTotal.plus(amount.abs());
-    }
-
-    const data = Array.from(byCategory.values())
-      .map((e) => ({
-        category: e.category,
-        total: roundToCents(e.total).toNumber(),
-        count: e.count,
-      }))
+    // Flatten the nested groups back into the tool's flat per-category rows.
+    const data = candidates.byDeductionType
+      .flatMap((group) =>
+        group.categories.map((c) => ({
+          category: c.category,
+          deductionType: group.deductionType,
+          total: c.total,
+          count: c.count,
+        })),
+      )
       .sort((a, b) => b.total - a.total);
+
+    // Per-deduction-type roll-up WITHOUT the nested categories — the tool's
+    // existing meta contract (grouping by type, not by raw category).
+    const byDeductionType = candidates.byDeductionType.map(
+      ({ deductionType, total, categoryCount }) => ({ deductionType, total, categoryCount }),
+    );
+
+    const grandTotal = addAll(byDeductionType.map((t) => t.total));
 
     return {
       ok: true,
       data: data.slice(0, maxRows),
       meta: {
         year,
-        from,
-        to,
-        grandTotal: roundToCents(grandTotal).toNumber(),
+        from: candidates.from,
+        to: candidates.to,
+        grandTotal: roundMoney(grandTotal),
         categoryCount: data.length,
-        matchedKeywords: DEDUCTIBLE_KEYWORDS,
+        deductionTypes: DEDUCTION_TYPES,
+        byDeductionType,
         currency: 'EUR',
-        disclaimer: `${DISCLAIMER_APPROX} Matching is a keyword heuristic on category name — not every hit is actually deductible under Belgian tax law, and genuine deductibles without a matching keyword will be missed.`,
+        disclaimer: `${DISCLAIMER_APPROX} Categories are mapped to Belgian deduction types by an explicit name-based classifier (not substring guessing); unrecognized categories are excluded, so genuine deductibles with unusual names may be missed. Every classification is still an approximation the user must confirm — this is not tax advice.`,
         renderAs: 'bar',
         xField: 'category',
         yField: 'total',

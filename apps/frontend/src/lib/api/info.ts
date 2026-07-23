@@ -64,6 +64,123 @@ export async function getRecurringPatterns(): Promise<{
     }
 }
 
+/** New-subscription finding from the subscription-creep detector. */
+export interface SubscriptionCreepNew {
+    recipientId: number;
+    recipientName: string;
+    findingType: 'new';
+    latestAmount: number;
+    currency: string;
+    detectedPattern: string;
+    intervalDays: number;
+    predictedNext: string;
+    confidence: number;
+}
+
+/** Price-change finding from the subscription-creep detector. */
+export interface SubscriptionCreepPriceChange {
+    recipientId: number;
+    recipientName: string;
+    findingType: 'priceChange';
+    previousAmount: number;
+    newAmount: number;
+    percentChange: number;
+    direction: string;
+    currency: string;
+    confidence: number;
+}
+
+/** Current-month category overspend outlier vs the trailing baseline median. */
+export interface CategoryOutlier {
+    categoryId: number;
+    categoryName: string;
+    monthKey: string;
+    currentAmount: number;
+    baselineMedian: number;
+    deviation: number;
+    direction: string;
+}
+
+/** Month-end cash forecast insight (null when no forecast is available). */
+export interface CashForecast {
+    month: string;
+    currency: string;
+    monthEndProjected: number;
+    minProjected: number;
+    monthEndLow: number;
+    monthEndHigh: number;
+    crossesZero: boolean;
+    movedSignificantly: boolean;
+    prominence: string;
+    methodId: string;
+}
+
+export interface InsightsDigestResponse {
+    subscriptionCreep: {
+        new: SubscriptionCreepNew[];
+        priceChanges: SubscriptionCreepPriceChange[];
+    };
+    categoryOutliers: CategoryOutlier[];
+    cashForecast: CashForecast | null;
+}
+
+/** Pre-computed detection-layer findings for the Statistics insights panel (no LLM). */
+export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
+    try {
+        return await apiRequest('/api/info/insights-digest');
+    } catch (err) {
+        // Fail-soft: the insights digest is optional UI enrichment.
+        logger.warn('Insights digest unavailable; using empty result', err);
+        return {
+            subscriptionCreep: { new: [], priceChanges: [] },
+            categoryOutliers: [],
+            cashForecast: null,
+        };
+    }
+}
+
+/** One user category contributing to a deduction-type candidate group. */
+export interface DeductionCandidateCategory {
+    category: string;
+    total: number;
+    count: number;
+}
+
+/** One Belgian deduction type with its transaction-derived candidate total. */
+export interface DeductionTypeGroup {
+    deductionType: string;
+    total: number;
+    categoryCount: number;
+    /** Contributing categories, sorted by total desc. */
+    categories: DeductionCandidateCategory[];
+}
+
+export interface DeductionCandidatesResponse {
+    year: number;
+    from: string;
+    to: string;
+    currency: string;
+    /** Sorted by total desc; empty when nothing classifies. */
+    byDeductionType: DeductionTypeGroup[];
+}
+
+/** Transaction-derived Belgian deduction candidates for the tax review card. */
+export async function getDeductionCandidates(year: number): Promise<DeductionCandidatesResponse> {
+    try {
+        return await apiRequest('/api/info/deduction-candidates?year=' + year);
+    } catch (err) {
+        // Fail-soft: deduction candidates are optional UI enrichment.
+        logger.warn('Deduction candidates unavailable; using empty result', err);
+        return {
+            year,
+            from: `${year}-01-01`,
+            to: `${year}-12-31`,
+            currency: 'EUR',
+            byDeductionType: [],
+        };
+    }
+}
+
 export function getPortfolioPerformance(params?: {
     currency?: string;
     period?: string;

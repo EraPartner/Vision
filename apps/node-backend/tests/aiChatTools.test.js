@@ -56,6 +56,7 @@ import {
   getCapitalGainsForYear,
   getDeductibles,
 } from '../src/services/aiChat/tools/tax.js';
+import { DEDUCTION_TYPES } from '../src/services/tax/deductionClassifier.js';
 import { dispatchTool, getToolSchemas, getToolNames } from '../src/services/aiChat/tools/index.js';
 
 beforeEach(() => {
@@ -715,37 +716,56 @@ describe('getCapitalGainsForYear', () => {
 });
 
 describe('getDeductibles', () => {
-  it('keeps outflows whose category matches a deductible keyword', async () => {
+  it('classifies outflows into deduction types, groups by category, excludes unrecognized', async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
-      { amount: '-100', category_name: 'health:medical' },
-      { amount: '-50', category_name: 'health:medical' },
-      { amount: '-200', category_name: 'giving:donation' },
-      { amount: '-30', category_name: 'food:lunch' },         // no keyword, skip
-      { amount: '100', category_name: 'giving:donation' },    // inflow, skip
-      { amount: '-60', category_name: null },                 // no label, skip
+      { amount: '-90', category_name: 'PENSION:SAVINGS' },
+      { amount: '-30', category_name: 'PENSION:SAVINGS' },
+      { amount: '-200', category_name: 'GIVING:DONATION' },
+      { amount: '-75', category_name: 'INSURANCE:LIFE' },
+      { amount: '-25', category_name: 'PENSIOENSPAREN' },      // NL, same type other category
+      { amount: '-500', category_name: 'INSURANCE:CAR' },      // not deductible, skip
+      { amount: '-100', category_name: 'health:medical' },     // old heuristic matched this; now skip
+      { amount: '-40', category_name: 'GIFTS:BIRTHDAY' },      // present, not donation, skip
+      { amount: '-30', category_name: 'food:lunch' },          // skip
+      { amount: '100', category_name: 'GIVING:DONATION' },     // inflow, skip
+      { amount: '-60', category_name: null },                  // no label, skip
     ]);
 
     const result = await getDeductibles.run({ year: 2025 });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([
-      { category: 'giving:donation', total: 200, count: 1 },
-      { category: 'health:medical', total: 150, count: 2 },
+      { category: 'GIVING:DONATION', deductionType: 'charitableDonations', total: 200, count: 1 },
+      { category: 'PENSION:SAVINGS', deductionType: 'pensionSavings', total: 120, count: 2 },
+      { category: 'INSURANCE:LIFE', deductionType: 'lifeInsurance', total: 75, count: 1 },
+      { category: 'PENSIOENSPAREN', deductionType: 'pensionSavings', total: 25, count: 1 },
     ]);
-    expect(result.meta.grandTotal).toBe(350);
-    expect(result.meta.matchedKeywords).toContain('medical');
-    expect(result.meta.disclaimer).toMatch(/keyword heuristic/);
+    expect(result.meta.grandTotal).toBe(420);
+    expect(result.meta.categoryCount).toBe(4);
+    expect(result.meta.byDeductionType).toEqual([
+      { deductionType: 'charitableDonations', total: 200, categoryCount: 1 },
+      { deductionType: 'pensionSavings', total: 145, categoryCount: 2 },
+      { deductionType: 'lifeInsurance', total: 75, categoryCount: 1 },
+    ]);
+    expect(result.meta.matchedKeywords).toBeUndefined();
+    expect(result.meta.deductionTypes).toEqual(DEDUCTION_TYPES);
+    expect(result.meta.disclaimer).toMatch(/explicit name-based classifier/);
+    expect(result.meta.renderAs).toBe('bar');
+    expect(result.meta.xField).toBe('category');
+    expect(result.meta.yField).toBe('total');
   });
 
-  it('returns empty list when nothing matches', async () => {
+  it('returns empty list when nothing classifies', async () => {
     transactionRepository.getAll.mockResolvedValueOnce([
       { amount: '-10', category_name: 'food:coffee' },
+      { amount: '-300', category_name: 'INSURANCE:CAR' },
     ]);
 
     const result = await getDeductibles.run({ year: 2025 });
 
     expect(result.data).toEqual([]);
     expect(result.meta.grandTotal).toBe(0);
+    expect(result.meta.byDeductionType).toEqual([]);
   });
 });
 

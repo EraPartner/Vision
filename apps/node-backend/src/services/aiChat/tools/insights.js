@@ -15,6 +15,7 @@ import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
 import { parseEnum, parsePositiveInt } from './_validate.js';
 import { detectRecurringPatterns } from '../../recurringDetectionService.js';
+import { getInsightsDigest } from '../../insightsDigestService.js';
 
 /**
  * Current bank account balances + total net position.
@@ -313,6 +314,51 @@ export const getRecurringDetected = {
         count: shaped.length,
         currency: 'EUR',
         renderAs: 'table',
+      },
+    };
+  },
+};
+
+/**
+ * Combined insights digest — the narration layer's single read-only interface
+ * (ADR-110). Delegates aggregation of the ALREADY-COMPUTED findings of the
+ * three detection services to the shared insightsDigestService (also backing
+ * GET /api/info/insights-digest); it never recomputes anything itself.
+ *
+ * v1 passes no dismiss records (undismissed filtering is owned by the UI
+ * surfacing layer) and no previous month-end projection.
+ */
+export const insightsDigest = {
+  name: 'insightsDigest',
+  description: 'Pre-computed insight findings from the detection layer: new subscriptions, subscription price changes, category overspend outliers, and the month-end cash forecast. Use for "insights digest", "what\'s new", "anything unusual in my spending", "give me my financial insights for today". Narrate and prioritize the returned findings — never invent figures.',
+  parameters: {
+    type: 'object',
+    properties: {},
+  },
+  async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+    const { subscriptionCreep, categoryOutliers, cashForecast } = await getInsightsDigest();
+
+    // The services already cap subscription lists to 5 — still slice
+    // defensively so a service change can never blow past the tool-row cap.
+    const newSubscriptions = subscriptionCreep.new.slice(0, maxRows);
+    const priceChanges = subscriptionCreep.priceChanges.slice(0, maxRows);
+    const outliers = categoryOutliers.slice(0, maxRows);
+
+    return {
+      ok: true,
+      data: {
+        subscriptionCreep: { new: newSubscriptions, priceChanges },
+        categoryOutliers: outliers,
+        cashForecast: cashForecast ?? null,
+      },
+      meta: {
+        counts: {
+          newSubscriptions: newSubscriptions.length,
+          priceChanges: priceChanges.length,
+          categoryOutliers: outliers.length,
+        },
+        hasCashForecast: cashForecast != null,
+        renderAs: 'insightsDigest',
       },
     };
   },

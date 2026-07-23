@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http } from "msw";
+import { http, HttpResponse } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
@@ -178,6 +178,63 @@ describe("AIChatPage (integration)", () => {
 
         // After click, header title updates to the new conversation title
         expect(await screen.findByRole("heading", { name: /new conversation/i })).toBeInTheDocument();
+    });
+
+    it("clicking insights digest quick action sends the fixed prompt with tools forced on and insightsPreCall", async () => {
+        const user = userEvent.setup();
+        const conversation = {
+            id: "conv-digest",
+            title: "New Conversation",
+            model: "llama3",
+            createdAt: "2025-01-01T00:00:00.000Z",
+            updatedAt: "2025-01-01T00:00:00.000Z",
+        };
+        let capturedBody: Record<string, unknown> | null = null;
+
+        server.use(
+            http.get(`${API_BASE}/api/ai/status`, () =>
+                ok({ ok: true, baseUrl: "http://localhost:11434", defaultModel: "llama3", enabled: true }),
+            ),
+            http.post(`${API_BASE}/api/ai/conversations`, () =>
+                ok({ conversation, messages: [] }),
+            ),
+            http.get(`${API_BASE}/api/ai/conversations/conv-digest`, () =>
+                ok({ conversation, messages: [] }),
+            ),
+            http.post(`${API_BASE}/api/ai/chat/stream`, async ({ request }) => {
+                capturedBody = (await request.json()) as Record<string, unknown>;
+                const donePayload = {
+                    conversation,
+                    assistantMessage: {
+                        id: "msg-assistant-1",
+                        role: "assistant",
+                        content: "Here is your digest",
+                        createdAt: "2025-01-01T00:00:01.000Z",
+                    },
+                    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+                    iterations: 1,
+                };
+                return new HttpResponse(
+                    `event: done\ndata: ${JSON.stringify(donePayload)}\n\n`,
+                    { headers: { "Content-Type": "text/event-stream" } },
+                );
+            }),
+        );
+
+        renderWithApp(<AIChatPage />);
+
+        // Fresh conversation → empty state with the quick-action button
+        const digestBtn = await screen.findByRole("button", { name: /show my insights digest/i });
+        await waitFor(() => expect(digestBtn).not.toBeDisabled());
+        await user.click(digestBtn);
+
+        await waitFor(() => expect(capturedBody).not.toBeNull());
+        expect(capturedBody).toMatchObject({
+            conversationId: "conv-digest",
+            message: "Give me my insights digest for today — anything new or unusual in my spending?",
+            useTools: true,
+            insightsPreCall: true,
+        });
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────

@@ -120,4 +120,5 @@ export interface SendChatBody {
   message: string;
   model?: string;
   useTools?: boolean;
+  insightsPreCall?: boolean;
 }

@@ -4576,7 +4576,7 @@ detection layer never touches an LLM, so it's unaffected either way.
       banner/card) and its rationale
     - Explicitly extends the no-external-calls guarantee + CI fetch-spy test to the new narration tool
 
-- [ ] Surfacing: Statistics page panel + button badge, no new banner or dashboard card 🔼 🔎 verified-present 2026-07-11
+- [x] Surfacing: Statistics page panel + button badge, no new banner or dashboard card 🔼 ✅ 2026-07-23 · `GET /api/info/insights-digest` (shared `insightsDigestService`) → `useInsightsDigest` hook → `InsightsDigestPanel` on the Statistics page (mirrors RecurringDetectionPanel UI: card, expand/collapse, per-row X dismiss) + `InsightsNavBadge` on the Statistics nav item (undismissed count, live-synced to panel dismisses). Client-side dismiss store `insightsDismiss.ts` with the two key shapes (`{recipientId,findingType}` permanent; `{categoryId,monthKey,dismissedAt,deviationAtDismiss}` 14-day + worsening re-alert). EN/NL i18n. No new dashboard banner/card. Backend 11 + FE 30 tests; full FE suite green.
     - New panel on the Statistics page mirroring `RecurringDetectionPanel.tsx`'s *UI* pattern only
       (today it only lives on `PlannedPaymentsPage.tsx`) — full card, expand/collapse, default
       expanded. **Not** the same dismiss data structure: the real panel dismisses via one permanent
@@ -4616,7 +4616,7 @@ detection layer never touches an LLM, so it's unaffected either way.
       this item itself promotes to a prerequisite — all still '- [ ]'. Ship those first; there's nothing
       to surface until the return contract has a real producer.
 
-- [ ] On-demand narration: chat button + insights tool 🔼 🔎 verified-present 2026-07-11
+- [x] On-demand narration: chat button + insights tool 🔼 ✅ 2026-07-23 · `insightsDigest` tool (aggregates the 3 detectors into the `{subscriptionCreep, categoryOutliers, cashForecast}` contract, registered in TOOLS) + ADR-110 §4 server-side pre-call (`insightsPreCall` flag on `/api/ai/chat` + `/chat/stream` → `preCallTool` injects the digest before the model turn so it only narrates; fetch-spy no-external-calls test extended) + AIChatPage empty-state quick-action button (forces tools on, EN/NL i18n). Chose §4 pre-call over the soft-hint (ADR corrected); a complementary soft prompt hint remains for typed queries.
     - New read-only tool (detection layer above) registered in the existing `TOOLS` map
       (`apps/node-backend/src/services/aiChat/tools/index.js`)
     - New button in the AI chat UI (`apps/frontend/src/features/ai-chat/ChatComposer.tsx` or the empty
@@ -4637,7 +4637,7 @@ detection layer never touches an LLM, so it's unaffected either way.
       button from. Discovery of "something's new" is handled by the badge above, not by this reply, so
       there's no separate notification problem to solve here
 
-- [ ] Subscription-creep digest 🔽 🔎 verified-present 2026-07-11
+- [x] Subscription-creep digest 🔽 ✅ 2026-07-23 · `subscriptionCreepService.js` (pure diff layer over `detectRecurringPatterns`; expense-only; `new` = undismissed recurring expenses, `priceChanges` = undismissed patterns with amountChanges; independent `{recipientId, findingType}` dismissal, top-5-by-confidence cap; 9 unit tests). Persistence of dismiss records owned by the surfacing UI item.
     - Diff layer only, not new detection — `recurringDetectionService.detectRecurringPatterns()`
       already recomputes full history and already flags amount changes (`detectAmountChanges`)
     - Flag `recipientId`s without a matching `{recipientId, findingType:'new'}` dismiss record as new
@@ -4647,7 +4647,7 @@ detection layer never touches an LLM, so it's unaffected either way.
     - Cap the alert list (e.g. top 5 by confidence) so a long gap since the panel was last opened
       doesn't dump a wall of "news"
 
-- [ ] Category-level spend-outlier detection (new service) 🔽 🔎 verified-present 2026-07-11
+- [x] Category-level spend-outlier detection (new service) 🔽 ✅ 2026-07-23 · `categoryOutlierService.js` (median+MAD, modified-z 3.5 w/ near-zero-MAD €50 floor, like-for-like day-1..N windows, ≥4 populated prior months, 14-day dismiss suppression + worsening re-alert, 3-min cache; 11 unit tests). NOTE: threshold-vs-real-history backtest still deferred (no live data here) — calibrate 3.5 before user-facing enable.
     - Sibling to `recurringDetectionService.js`, not folded into it — different concern (magnitude
       distribution vs. interval pattern)
     - Baseline: median + MAD of monthly category totals over the last 6-7 months. Precedent is
@@ -4667,7 +4667,7 @@ detection layer never touches an LLM, so it's unaffected either way.
     - Cache the result the same way the recurring-patterns prerequisite fix above does — this also
       runs on every Statistics-page view
 
-- [ ] Month-end cash forecast surfacing 🔽 🔎 verified-present 2026-07-11
+- [x] Month-end cash forecast surfacing 🔽 ✅ 2026-07-23 · `cashForecastInsightService.js` (reuses the MC `computeCashflowForecast` from `forecast/index.js` — not the non-MC namesake; distills month-end P50, min-future dip → `crossesZero` overdraft flag, p10/p90 cumulative bounds, significant-move detection vs prior digest; prominence alert/standing; 12 unit tests). "Since last digest" delta takes `previousMonthEndProjected` from the caller (persistence owned by the surfacing item).
     - No new detection — call `computeCashflowForecast` from
       `services/calculations/forecast/index.js:255` (the Monte Carlo version the nightly
       `refreshCashflowForecastMc` job uses, which already checks `cashflowForecastMcRepository.get()`
@@ -4683,8 +4683,8 @@ detection layer never touches an LLM, so it's unaffected either way.
 
 Decoupled on purpose: no LLM needed, no scheduling machinery, ships on its own.
 
-- [ ] Replace `getDeductibles`'s keyword-substring heuristic with a category→CIR-92-deduction-type 🔎 verified-present 2026-07-11
-      mapping table 🔽
+- [x] Replace `getDeductibles`'s keyword-substring heuristic with a category→CIR-92-deduction-type ✅ 2026-07-23 · `services/tax/deductionClassifier.js`
+      mapping table 🔽 — `classifyDeduction(general, detail)` → one of 8 stable types (`pensionSavings`, `lifeInsurance`, `groupInsurance`, `charitableDonations`, `childcare`, `alimony`, `unionDues`, `mortgageInterest`) or null. Token-based (not substring), EN+NL, diacritic-insensitive, precision-first: `INSURANCE:CAR`/generic insurance/medical/tuition/bare gift/bare union/mortgage-repayment → null (all false positives the old heuristic hit). `getDeductibles` now tags each row with `deductionType` + a `meta.byDeductionType` roll-up for the item-7 review UI. 82 tests. NOTE: user-defined categories mean this is a curated best-effort default (design decision confirmed with the owner: curated map + confirm UI); the review UI is the safety net.
     - `apps/node-backend/src/services/aiChat/tools/tax.js:20-30` currently matches 9 hardcoded
       substrings against `category_name`; its own code comment already flags this as unreliable
       ("not every hit is actually deductible... genuine deductibles without a matching keyword will
@@ -4693,8 +4693,8 @@ Decoupled on purpose: no LLM needed, no scheduling machinery, ships on its own.
       (`apps/frontend/src/lib/belgianTax/constants.ts` — pension savings, life/group insurance,
       charitable donations, childcare, alimony), not fuzzy name matching
 
-- [ ] Surface mapped candidates as a reviewable list on the Tax Overview page (same pattern as 🔎 verified-present 2026-07-11
-      `RecurringDetectionPanel.tsx`) instead of chat-only 🔽
+- [x] Surface mapped candidates as a reviewable list on the Tax Overview page (same pattern as ✅ 2026-07-23
+      `RecurringDetectionPanel.tsx`) instead of chat-only 🔽 — `GET /api/info/deduction-candidates` (shared `deductionCandidatesService`) → `useDeductionCandidates(year)` hook → `DeductionCandidatesCard` on the Tax Overview page (mounted after `SuggestedDeductionsCard`). Confirm/reject **per deduction-type group**: Confirm SETS the mapped `BelgianTaxProfile` field to the transaction total AND flips the eligibility flag where one exists (type-safe map in `deductionCandidateFields.ts`, verified against `types.ts`) — no new tax math; Dismiss persists year-scoped in localStorage. Current profile value shown per row. 18 EN/NL i18n keys. 7 card tests + full suite green.
     - Confirm/reject per deduction-type group, not per transaction
     - A confirmed total writes into the existing `BelgianTaxProfile` field (e.g. `childcareCosts`,
       `apps/frontend/src/lib/belgianTax/types.ts:108` — verify each target field name against

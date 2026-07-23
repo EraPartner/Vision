@@ -180,6 +180,22 @@ export const plannedKeys = {
     recurringPatterns: ['recurringPatterns'] as const,
 };
 
+// ── AI-insights digest (detection layer, no LLM) ────────────────────────────
+
+export const insightsKeys = {
+    /** Shared by the Statistics panel and the badge — one cache entry. */
+    digest: ['insightsDigest'] as const,
+};
+
+// ── Tax (transaction-derived) ───────────────────────────────────────────────
+
+export const taxKeys = {
+    /** Invalidation prefix for every per-year deduction-candidates entry. */
+    deductionCandidatesAll: ['tax', 'deduction-candidates'] as const,
+    /** GET /api/info/deduction-candidates?year=… (one entry per year). */
+    deductionCandidates: (year: number) => ['tax', 'deduction-candidates', year] as const,
+};
+
 // ── Cash-flow forecast / bank balances ──────────────────────────────────────
 
 export const cashflowKeys = {

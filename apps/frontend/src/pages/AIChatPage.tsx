@@ -90,24 +90,42 @@ export default function AIChatPage() {
         ?? status?.defaultModel
         ?? null;
 
-    const handleSend = async (message: string) => {
-        let conversationId = selectedId;
-        if (!conversationId) {
-            try {
-                const created = await createMut.mutateAsync(
-                    activeModel ? { model: activeModel } : {},
-                );
-                conversationId = created.conversation.id;
-                setSelectedId(conversationId);
-            } catch {
-                return;
-            }
+    const ensureConversation = async (): Promise<string | null> => {
+        if (selectedId) return selectedId;
+        try {
+            const created = await createMut.mutateAsync(
+                activeModel ? { model: activeModel } : {},
+            );
+            setSelectedId(created.conversation.id);
+            return created.conversation.id;
+        } catch {
+            return null;
         }
+    };
+
+    const handleSend = async (message: string) => {
+        const conversationId = await ensureConversation();
+        if (!conversationId) return;
         await send({
             conversationId,
             message,
             model: activeModel ?? undefined,
             useTools,
+        });
+    };
+
+    // Canned insights-digest turn. Forces tools on regardless of the composer
+    // toggle (the digest is meaningless without the insights tool) and sets
+    // `insightsPreCall` so the backend pre-runs the insights tool.
+    const handleInsightsDigest = async () => {
+        const conversationId = await ensureConversation();
+        if (!conversationId) return;
+        await send({
+            conversationId,
+            message: t('aiChat.insightsDigestPrompt'),
+            model: activeModel ?? undefined,
+            useTools: true,
+            insightsPreCall: true,
         });
     };
 
@@ -123,6 +141,8 @@ export default function AIChatPage() {
             ? 'bg-success'
             : 'bg-destructive';
 
+    const composerDisabled = !status?.ok;
+
     const emptyState = (
         <div className="glass-regular mx-auto max-w-2xl rounded-2xl border !border-dashed border-border/50 px-6 py-10 text-center">
             <Sparkles className="mx-auto h-6 w-6 text-primary" />
@@ -132,10 +152,18 @@ export default function AIChatPage() {
             <p className="mt-1 text-xs text-muted-foreground">
                 {t('aiChat.emptyState')}
             </p>
+            <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={handleInsightsDigest}
+                disabled={composerDisabled}
+            >
+                <Sparkles className="h-4 w-4 text-primary" />
+                {t('aiChat.insightsDigestButton')}
+            </Button>
         </div>
     );
-
-    const composerDisabled = !status?.ok;
 
     return (
         <div className="flex h-[calc(100vh-8rem)] gap-4 p-4">

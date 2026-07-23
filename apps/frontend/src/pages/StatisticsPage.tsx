@@ -13,6 +13,7 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ChartCard } from "@/components/statistics/ChartCard";
+import { InsightsDigestPanel } from "@/components/statistics/InsightsDigestPanel";
 import { SummaryCards } from "@/components/statistics/SummaryCards";
 import { STATISTICS_WIDGETS } from "@/components/statistics/statisticsUtils";
 
@@ -153,6 +154,8 @@ export default function StatisticsPage() {
           />
         </div>
       </div>
+
+      <InsightsDigestPanel />
 
       {isVisible("summaryCards") && <SummaryCards data={data} />}
 
