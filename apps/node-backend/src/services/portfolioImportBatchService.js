@@ -10,7 +10,6 @@
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
 import investmentRepository from '../repositories/investmentRepository.js';
 import { query } from '../database/connection.js';
-import { deleteTradeCashLegs } from './portfolio/tradeCashLegService.js';
 import {
   getRowForInvestmentCreation,
   overrideInvestment,
@@ -66,8 +65,6 @@ export async function createInvestmentForRow({ batchId, rowId }) {
  * transaction id — the sequences are independent, so deleting every id
  * through the portfolio repo removed UNRELATED trades that happened to share
  * a cash row's number (and left the imported cash row in the ledger).
- * Trades also drop their ADR-090 cash leg (no FK cascade — the inheritance
- * schema can't support one).
  */
 export async function rollbackBatch(batchId) {
   const rows = await getCommittedRows(batchId);
@@ -78,7 +75,6 @@ export async function rollbackBatch(batchId) {
       const r = await query('DELETE FROM transactions WHERE id = $1', [id]);
       if ((r.rowCount ?? 0) > 0) deleted++;
     } else {
-      await deleteTradeCashLegs(id);
       const ok = await portfolioTransactionRepository.hardDelete(id);
       if (ok) deleted++;
     }

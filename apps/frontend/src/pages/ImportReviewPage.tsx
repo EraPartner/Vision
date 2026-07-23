@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { importKeys, invalidateTransactionData, plannedKeys } from "@/lib/queryKeys";
+import { useAccounts } from "@/hooks/useAccounts";
+import { importKeys, invalidateAccountDerived, invalidateTransactionData, plannedKeys } from "@/lib/queryKeys";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -83,6 +84,27 @@ function formatDate(raw: string): string {
   return String(raw).slice(0, 10);
 }
 
+/**
+ * Account identity is case/whitespace-insensitive (D1: `lower(btrim(name))`).
+ * Mirror that normalization when cross-referencing staged bank_account labels
+ * against the existing accounts list.
+ */
+function normalizeAccountName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+interface AccountDisclosureEntry {
+  /** Normalized key ("" = rows without an account label). */
+  key: string;
+  /** Display label as it appeared in the CSV (first spelling seen). */
+  label: string;
+  count: number;
+  /** No existing account matches this label — commit will create one. */
+  isNew: boolean;
+  /** Rows carried no bank_account label at all. */
+  isUnspecified: boolean;
+}
+
 export default function ImportReviewPage() {
   const { batchId: batchIdParam } = useParams<{ batchId: string }>();
   const batchId = Number(batchIdParam);
@@ -99,6 +121,40 @@ export default function ImportReviewPage() {
     queryFn: () => apiClient.getImportPreview(batchId),
     enabled: Number.isFinite(batchId),
   });
+
+  // WP-B6 import disclosure — which accounts will this batch write to, and
+  // will any of them be created on commit? Read-only: computed purely from the
+  // staged rows' bank_account labels cross-referenced against the accounts
+  // list under the D1 identity (lower/trim). No override picker.
+  const { data: accountsData } = useAccounts({ active: "all" });
+
+  const accountDisclosure = useMemo<AccountDisclosureEntry[]>(() => {
+    if (!preview) return [];
+    const buckets = new Map<string, { label: string; count: number }>();
+    for (const row of preview.groups.flatMap((g) => g.rows)) {
+      const label = (row.bank_account ?? "").trim();
+      const key = normalizeAccountName(label);
+      const bucket = buckets.get(key);
+      if (bucket) bucket.count += 1;
+      else buckets.set(key, { label, count: 1 });
+    }
+    const existing = new Set(
+      (accountsData?.items ?? []).map((a) => normalizeAccountName(a.name)),
+    );
+    return [...buckets.entries()]
+      .map(([key, { label, count }]) => ({
+        key,
+        label,
+        count,
+        isUnspecified: key === "",
+        // Only flag "new" once the accounts list has loaded — an empty Set
+        // while loading would badge every account as new for a frame.
+        isNew: key !== "" && accountsData != null && !existing.has(key),
+      }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [preview, accountsData]);
+
+  const newAccountCount = accountDisclosure.filter((e) => e.isNew).length;
 
   const overrideMutation = useMutation({
     mutationFn: ({ rowId, recipientId }: { rowId: number; recipientId: number | null }) =>
@@ -130,6 +186,20 @@ export default function ImportReviewPage() {
         toast.success(t("importReview.toast.autoLinked", { n: data.auto_linked_count }));
         queryClient.invalidateQueries({ queryKey: plannedKeys.matchSuggestions });
         queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
+      }
+      // WP-B6: committing rows under an unknown account label auto-creates the
+      // account (DB trigger, migration 0056). Nudge the user to the accounts
+      // hub to classify/name the new account(s), and refresh account-derived
+      // views so the hub shows them immediately.
+      if (newAccountCount > 0) {
+        invalidateAccountDerived(queryClient);
+        toast.success(t("importReview.toast.newAccounts", { n: newAccountCount }), {
+          action: {
+            label: t("importReview.toast.reviewAccounts"),
+            onClick: () => navigate("/accounts"),
+          },
+          duration: 10000,
+        });
       }
       queryClient.invalidateQueries({ queryKey: ["import-batches"] });
       // A commit inserts the staged rows into `transactions`; refresh the
@@ -315,6 +385,34 @@ export default function ImportReviewPage() {
           </span>
         )}
       </div>
+
+      {/* WP-B6 — per-account disclosure: where will this batch land? Read-only. */}
+      {accountDisclosure.length > 0 && (
+        <div className="space-y-1.5 rounded-lg border border-border/60 px-4 py-3">
+          {accountDisclosure.map((entry) => (
+            <div
+              key={entry.key || "__unspecified__"}
+              className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+            >
+              <span>{t("importReview.accounts.line", { n: entry.count })}</span>
+              <span
+                className={cn(
+                  entry.isUnspecified ? "italic" : "font-semibold text-foreground",
+                )}
+              >
+                {entry.isUnspecified
+                  ? t("importReview.accounts.unspecified")
+                  : entry.label}
+              </span>
+              {entry.isNew && (
+                <Badge variant="outline" className="text-xs border-success/60 text-success">
+                  {t("importReview.accounts.newBadge")}
+                </Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Groups accordion */}
       <Accordion type="multiple" className="space-y-2">

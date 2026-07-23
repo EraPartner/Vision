@@ -1,12 +1,18 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, GitMerge, AlertTriangle } from "lucide-react";
-import { useMergeAccounts } from "@/hooks/useAccounts";
+import { apiClient } from "@/lib/api";
+import { accountKeys } from "@/lib/queryKeys";
+import { useAccounts, useMergeAccounts } from "@/hooks/useAccounts";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { numberFormatToLocale } from "@/utils/currency";
 import type { Account } from "@/types/api";
 
 const label = (a: Account) => a.display_name || a.name;
@@ -15,20 +21,41 @@ const label = (a: Account) => a.display_name || a.name;
  * Merge `source` into another (survivor) account chosen by the user. The source's
  * transactions, planned transactions, holdings, and funding references move to the
  * survivor, and the source is deleted (ADR-088). Irreversible.
+ *
+ * Candidates come from the FULL population (`active: 'all'`, archived labeled) —
+ * independent of any hub filter (§3 F9). Once a survivor is chosen, the WP-A3
+ * read-only preview endpoint feeds "{n} transactions + {m} planned will move;
+ * resulting balance X" plus the interleaved-stamp warning.
  */
-export function MergeAccountDialog({ source, accounts, open, onOpenChange }: {
+export function MergeAccountDialog({ source, open, onOpenChange }: {
     source: Account;
-    accounts: Account[];
     open: boolean;
     onOpenChange: (o: boolean) => void;
 }) {
     const { t } = useLanguage();
+    const fmtCur = useCurrencyFormatter();
+    const { appSettings } = useAppSettings();
     const merge = useMergeAccounts();
     const [targetId, setTargetId] = useState<string>("");
     const [acknowledged, setAcknowledged] = useState(false);
 
-    const candidates = accounts.filter((a) => a.id !== source.id);
+    // Full population, archived included — the dialog must offer every possible
+    // survivor regardless of what the hub currently displays.
+    const { data } = useAccounts({ active: "all" });
+    const candidates = (data?.items ?? []).filter((a) => a.id !== source.id);
     const target = candidates.find((c) => String(c.id) === targetId);
+
+    // Read-only dry-run of this exact source→survivor pair (WP-A3 endpoint).
+    const preview = useQuery({
+        queryKey: accountKeys.mergePreview(source.id, target?.id ?? 0),
+        queryFn: () => apiClient.previewMerge(source.id, target!.id),
+        enabled: !!target,
+        staleTime: 30_000,
+    });
+
+    // Counts use the SAME locale the money formatter derives from the
+    // number-format setting, so "1.002 transactions" and "€ 1.002,00" agree.
+    const numFmt = new Intl.NumberFormat(numberFormatToLocale(appSettings.numberFormat));
 
     const reset = () => { setTargetId(""); setAcknowledged(false); };
 
@@ -57,10 +84,44 @@ export function MergeAccountDialog({ source, accounts, open, onOpenChange }: {
                         </SelectTrigger>
                         <SelectContent>
                             {candidates.map((a) => (
-                                <SelectItem key={a.id} value={String(a.id)}>{label(a)}</SelectItem>
+                                <SelectItem key={a.id} value={String(a.id)}>
+                                    {label(a)}{!a.is_active ? ` (${t('accounts.archived')})` : ''}
+                                </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
+                    {/* What-would-move preview (§3 F9) */}
+                    {target && (
+                        <div className="glass-thin rounded-xl p-3 text-sm">
+                            {preview.isError ? (
+                                <span className="text-destructive">{t('accounts.mergePreview.failed')}</span>
+                            ) : !preview.data ? (
+                                <span className="flex items-center gap-2 text-muted-foreground">
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    {t('accounts.mergePreview.loading')}
+                                </span>
+                            ) : (
+                                <>
+                                    <p>
+                                        {t('accounts.mergePreview.summary', {
+                                            transactions: numFmt.format(preview.data.reassigned.transactions),
+                                            planned: numFmt.format(preview.data.reassigned.planned),
+                                            balance: fmtCur(
+                                                preview.data.projectedBalance,
+                                                preview.data.projectedBalanceCurrency || target.currency,
+                                            ),
+                                        })}
+                                    </p>
+                                    {preview.data.stampsInterleaved && (
+                                        <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
+                                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                            {t('accounts.mergePreview.interleaved')}
+                                        </p>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
                     {/* Irreversibility is always called out, not only once a target is picked. */}
                     <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

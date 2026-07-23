@@ -54,6 +54,31 @@ export function mergeAccounts(targetId: number, sourceIds: number[]): Promise<Ac
     });
 }
 
+export interface AccountMergePreview {
+    into: number;
+    source: number;
+    /** Row counts that WOULD move (same categories POST /merge repoints). */
+    reassigned: { transactions: number; planned: number; portfolio: number; funding: number };
+    /** Post-merge computed balance over the union of both accounts' active rows. */
+    projectedBalance: number;
+    /** The survivor's native currency (ISO-4217). */
+    projectedBalanceCurrency: string;
+    /** Both accounts carry stamped balance histories with overlapping date ranges — the merge clears the survivor's statement anchor. */
+    stampsInterleaved: boolean;
+}
+
+/**
+ * Dry-run of merging `sourceId` INTO `targetId` (WP-A3 endpoint; read-only, no
+ * mutation). Feeds the merge dialog's "{n} transactions + {m} planned will
+ * move; resulting balance X" preview and the interleaved-stamp warning.
+ */
+export function previewMerge(sourceId: number, targetId: number): Promise<AccountMergePreview> {
+    return requestWithQuery<AccountMergePreview>(
+        `/api/accounts/${sourceId}/merge-preview`,
+        { into: targetId },
+    );
+}
+
 export interface OpeningBalanceInput {
     balance: number;
     date: string;

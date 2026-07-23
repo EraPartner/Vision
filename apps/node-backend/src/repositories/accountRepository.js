@@ -35,6 +35,8 @@ export const accountRepository = {
    * List accounts (optionally filtered by active status), each with its computed
    * balance (the anchored running balance — see COMPUTED_BALANCE_LATERAL), drift
    * vs the stored statement balance (ADR-094, null when no statement balance),
+   * balance provenance (`anchor_date` + `post_anchor_count`, WP-B2 — the
+   * "as of {date} statement · {n} entries since" / "sum of {n} entries" fields),
    * and has_transactions — whether the account has any active ledger rows
    * (portfolio accounts whose activity lives in portfolio_transactions have none).
    */
@@ -42,6 +44,8 @@ export const accountRepository = {
     let sql = `
       SELECT ${COLUMNS},
              lb.balance AS computed_balance,
+             lb.anchor_date,
+             lb.post_anchor_count,
              CASE WHEN a.statement_balance IS NOT NULL
                   THEN a.statement_balance - COALESCE(lb.balance, 0)
                   ELSE NULL END AS drift,
@@ -56,7 +60,17 @@ export const accountRepository = {
     else if (active === false) sql += ` AND a.is_active = false`;
     sql += ` ORDER BY a.name`;
     const result = await query(sql, []);
-    return result.rows;
+    // Provenance shaping (WP-B2, mirrors infoRepositoryBanks): anchor_date is
+    // already a 'YYYY-MM-DD' string via to_char in the lateral — SQL NULL
+    // (nothing stamped) becomes undefined, never null (convention: the backend
+    // never returns null). COUNT(*) arrives as a bigint string; emit a number.
+    return result.rows.map((row) => ({
+      ...row,
+      anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
+      post_anchor_count: row.post_anchor_count == null
+        ? undefined
+        : parseInt(row.post_anchor_count, 10),
+    }));
   },
 
   async getById(id) {

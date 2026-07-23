@@ -11,6 +11,7 @@ import { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useTransactionListData } from "@/features/transactions/hooks/useTransactionListData";
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
+import { AccountFilterCombobox } from "@/features/transactions/components/AccountFilterCombobox";
 import { TableActions } from "@/features/transactions/components/TableActions";
 import { TransactionsTable } from "@/features/transactions/components/TransactionsTable";
 import { TransactionSearchSuggestions, type QuickFilterParams } from "@/features/transactions/components/TransactionSearchSuggestions";
@@ -264,6 +265,23 @@ export default function TransactionsPage() {
         setSearchParams({ recipient_id: String(row.recipientId), filter_label: row.recipient });
     }, [setSearchParams]);
 
+    // Account filter (WP-B4, §3 F6): merges into the active filter set like the
+    // quick filters — account_id is the FK-exact filter (ADR-088), filter_label
+    // feeds the FilterBanner's human-readable descriptor.
+    const handleAccountFilterChange = useCallback((selection: { id: number; label: string } | null) => {
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (selection) {
+                next.set('account_id', String(selection.id));
+                next.set('filter_label', selection.label);
+            } else {
+                next.delete('account_id');
+                next.delete('filter_label');
+            }
+            return next;
+        });
+    }, [setSearchParams]);
+
     // Quick-filter suggestions merge their params into the active filter set
     // (additive — e.g. "all expense" + "amount 10–50") rather than replacing it.
     const handleApplyQuickFilter = useCallback((params: QuickFilterParams) => {
@@ -482,6 +500,10 @@ export default function TransactionsPage() {
                                 filter={currentFilter}
                                 onClearSelection={() => { setSelectedIds(new Set()); setSelectionMode('ids'); }}
                                 onPromoteToFilterMode={() => setSelectionMode('filter')}
+                            />
+                            <AccountFilterCombobox
+                                value={accountIdFilter}
+                                onChange={handleAccountFilterChange}
                             />
                             <TableActions showAll={showAll} onToggleShowAll={() => setShowAll(!showAll)} />
                         </>

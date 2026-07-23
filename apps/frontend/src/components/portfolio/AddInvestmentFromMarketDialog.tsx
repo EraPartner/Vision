@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Loader2 } from 'lucide-react';
 import { isUnitBased } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
-import { useAccounts } from '@/hooks/useAccounts';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
 import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
@@ -77,7 +76,6 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     taxes: '',
     fxRateToEur: '',
     note: '',
-    accountId: '',
     isRecurring: false,
     recurrenceInterval: 'monthly' as RecurrenceInterval,
     recurrenceEndDate: '',
@@ -91,12 +89,6 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     setNewInvestmentForm(makeNewInvestmentForm());
     setTransactionForm(makeTransactionForm());
   };
-
-  // Per-account positioning (ADR-091): tag the lot to an account (optional).
-  const { data: accountsData } = useAccounts({ active: 'true' });
-  // Trades = transfers (ADR-090): when the chosen account has a cash sleeve,
-  // the trade's cash leg settles in that account (same rule as AddPortfolioTxnDialog).
-  const selectedTradeAccount = (accountsData?.items ?? []).find((a) => String(a.id) === transactionForm.accountId);
 
   const handleCreateInvestment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,8 +181,6 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         fx_rate_to_eur: fxRateValue,
         currency: existingInvestment.currency,
         note: transactionForm.note.trim() || undefined,
-        ...(transactionForm.accountId ? { account_id: Number(transactionForm.accountId) } : {}),
-        ...(selectedTradeAccount?.has_cash_sleeve ? { cash_account_id: Number(transactionForm.accountId) } : {}),
         is_recurring: transactionForm.isRecurring,
         recurrence_interval: transactionForm.isRecurring ? transactionForm.recurrenceInterval : undefined,
         recurrence_end_date: transactionForm.isRecurring && transactionForm.recurrenceEndDate ? transactionForm.recurrenceEndDate : undefined,
@@ -363,7 +353,6 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                   </Select>
                 </div>
               )}
-              accounts={accountsData?.items ?? []}
               showUnits={showUnits}
               showFeesTaxes={showFeesTaxes}
               showRecurring={showRecurring}

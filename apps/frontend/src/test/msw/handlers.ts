@@ -363,9 +363,6 @@ export const defaultHandlers = [
             percentage_return: 0,
         }),
     ),
-    http.get(`${API_BASE}/api/info/net-worth/by-account`, () =>
-        ok({ currency: "EUR", accounts: [] }),
-    ),
     http.get(`${API_BASE}/api/info/net-worth`, () =>
         ok({
             current: { liquid: 0, investments: 0, netWorth: 0 },

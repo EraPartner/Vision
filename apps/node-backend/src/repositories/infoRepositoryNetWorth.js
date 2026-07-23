@@ -4,9 +4,7 @@
 
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
-import { computeDailySnapshots } from '../services/portfolio/snapshotBuilder.js';
-import { accountRepository } from './accountRepository.js';
-import { convertToCurrency } from '../services/currency/currencyConversionService.js';
+import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
 import { toNumber, toDecimal } from '../lib/money.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import {
@@ -20,51 +18,22 @@ import {
   sanitizeIsolatedDailyInvestmentSpikes,
 } from './infoRepositoryHelpers.js';
 
-/**
- * Read the persisted per-account holdings split (ADR-100, migration 0074) for
- * one currency, shaped as the same Map<accountKey, [{date, holdings}]> the live
- * replay produces. Returns null when the side table is absent or holds no rows
- * for the currency, so the caller falls back to a live computeDailySnapshots
- * replay. Rows are pre-sparse (only accounts holding value on a day) and stored
- * ordered by (account_key, snapshot_date).
- *
- * @param {string} target uppercase currency code
- * @returns {Promise<Map<string, {date: string, holdings: number}[]>|null>}
- */
-async function readPersistedAccountSeries(target) {
-  const tableExists = await query(`
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = current_schema()
-      AND table_name = 'portfolio_snapshot_accounts'
-    LIMIT 1
-  `);
-  if (tableExists.rows.length === 0) return null;
-
-  const result = await query(`
-    SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, account_key, value
-    FROM portfolio_snapshot_accounts
-    WHERE currency = $1
-    ORDER BY account_key, snapshot_date
-  `, [target]);
-
-  if (result.rows.length === 0) return null;
-
-  const seriesByAcct = new Map();
-  for (const row of result.rows) {
-    const key = row.account_key;
-    if (!seriesByAcct.has(key)) seriesByAcct.set(key, []);
-    seriesByAcct.get(key).push({ date: row.day, holdings: roundToCents(row.value) });
-  }
-  return seriesByAcct;
-}
-
 export const netWorthRepository = {
   /**
    * Net Worth (snapshot-backed) — reads investment values from pre-computed
    * portfolio_performance_snapshots (populated by portfolioPerformanceSnapshotService).
    * Bank balances are still derived live from the transactions table.
    * No network calls — all data from the database.
+   *
+   * The liquid/liability *history* series is stamp-based (latest stamped
+   * `transactions.balance` ≤ each day), but the **current** point — headline,
+   * last chart point, latest table row — is overridden with the unified
+   * anchor+delta computed balance (`COMPUTED_BALANCE_LATERAL`, ADR-094 /
+   * WP-A1), the same single definition the accounts hub and dashboard widget
+   * consume. The naive stamped walk it replaced silently
+   * dropped manual-only (never-stamped) in-net-worth accounts from the
+   * headline and froze stamped accounts at their last imported statement
+   * figure.
    *
    * @param {string} [targetCurrency]
    * @param {{ liveInvestments?: number }} [opts]
@@ -117,7 +86,11 @@ export const netWorthRepository = {
     // Postgres CURRENT_DATE follows the server timezone, not the app's.
     const todayYmd = todayAppDateString();
 
-    const bankHistoryResult = await query(`
+    // History walk (stamp-based, per WP-A1 decision) and the unified
+    // current-point balances (anchor+delta lateral) are independent — run in
+    // parallel.
+    const [bankHistoryResult, currentBalancesResult] = await Promise.all([
+      query(`
       WITH bounds AS (
         SELECT $1::date AS start_date, $2::date AS end_date
       ),
@@ -130,6 +103,9 @@ export const netWorthRepository = {
         -- tracking-only account (in_net_worth=false) does not contribute.
         -- is_liability splits negative debt balances (ADR-092) out of the
         -- "liquid assets" bucket so a mortgage is not counted as liquid cash.
+        -- The stamped-only probe below serves the HISTORY series only (WP-A1
+        -- decision); the current point is overridden after the walk with the
+        -- unified computed-balance lateral.
         SELECT a.id AS account_id, a.name AS bank_account,
                (a.type = 'liability') AS is_liability
         FROM accounts a
@@ -159,13 +135,50 @@ export const netWorthRepository = {
       ) lb ON true
       WHERE lb.balance IS NOT NULL
       ORDER BY d.day, a.account_id
-    `, [firstDataDateYmd, todayYmd]);
+    `, [firstDataDateYmd, todayYmd]),
+      // Unified current balance per in-net-worth account (WP-A1): the shared
+      // anchor+delta lateral, with NO `balance IS NOT NULL` population gate —
+      // a manual-only account (nothing stamped) falls back to Σ(amount) inside
+      // the lateral instead of vanishing from the headline. An account with no
+      // active rows contributes a harmless 0. The currency mirrors the
+      // bank-balances query: the most recent active row's, falling back to the
+      // account's own currency.
+      query(`
+      SELECT a.name AS bank_account,
+             (a.type = 'liability') AS is_liability,
+             COALESCE(lb.balance, 0) AS balance,
+             COALESCE(cur.currency, a.currency, 'EUR') AS currency
+      FROM accounts a
+      ${COMPUTED_BALANCE_LATERAL}
+      LEFT JOIN LATERAL (
+        SELECT t.currency
+        FROM transactions t
+        WHERE t.account_id = a.id AND t.is_active = true
+        ORDER BY t.date DESC, t.id DESC
+        LIMIT 1
+      ) cur ON true
+      WHERE a.in_net_worth = true
+    `),
+    ]);
 
-    let bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
-      mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
-      targetCurrency,
-      'day'
-    );
+    // Convert the current-point balances at today's date so the historical-rate
+    // lookup keys on the same day the headline represents.
+    const [bankHistoryConvertedInitial, currentBalancesConverted] = await Promise.all([
+      convertRowsWithHistoricalRateFallback(
+        mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
+        targetCurrency,
+        'day'
+      ),
+      convertRowsWithHistoricalRateFallback(
+        mapRowsForAmountConversion(
+          currentBalancesResult.rows.map((r) => ({ ...r, day: todayYmd })),
+          'balance'
+        ),
+        targetCurrency,
+        'day'
+      ),
+    ]);
+    let bankHistoryConverted = bankHistoryConvertedInitial;
 
     if (bankHistoryConverted.length === 0) {
       logger.debug('Net worth account balance history empty; using transaction flow fallback', {
@@ -273,6 +286,27 @@ export const netWorthRepository = {
 
     const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
 
+    // WP-A1: override the *current* point's liquid/liability figures with the
+    // unified computed-balance definition (see the method doc). Only the last
+    // point moves — the history series deliberately stays stamp-based — so a
+    // manual-only account or post-anchor manual activity can introduce a step
+    // between the penultimate (stamped) and latest (computed) points. Skipped
+    // when the accounts query returned nothing (no in-net-worth accounts, e.g.
+    // an un-migrated ledger running on the transaction-flow fallback), keeping
+    // the walk/fallback-derived point instead.
+    if (currentBalancesConverted.length > 0 && sanitizedSnapshots.length > 0) {
+      let liquidNow = toDecimal(0);
+      let liabilitiesNow = toDecimal(0);
+      for (const row of currentBalancesConverted) {
+        if (row.is_liability) liabilitiesNow = liabilitiesNow.plus(toDecimal(row.amount_eur));
+        else liquidNow = liquidNow.plus(toDecimal(row.amount_eur));
+      }
+      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
+      last.liquid = roundToCents(toNumber(liquidNow));
+      last.liabilities = roundToCents(toNumber(liabilitiesNow));
+      last.netWorth = roundToCents(last.liquid + last.liabilities + last.investments);
+    }
+
     // Reconcile the most-recent point with the live portfolio summary. The
     // stored snapshot value is only rebuilt at startup (snapshotBuilder runs
     // once in warmup), so on its own the Net Worth "Investments" headline
@@ -321,87 +355,5 @@ export const netWorthRepository = {
       monthlyChangePercent: roundToCents(monthlyChangePercent),
       snapshots: sanitizedSnapshots,
     };
-  },
-
-  /**
-   * Net worth expressed natively as Σ accounts (ADR-100): per in-net-worth account,
-   * the rebuilt daily HOLDINGS series (from the snapshot builder's per-account split,
-   * Σ accounts == the aggregate value by construction) plus current cash (ADR-094).
-   * Legacy lots with no account collapse into one `accountId: null` ("unassigned") row.
-   *
-   * @param {string} [targetCurrency]
-   */
-  async getNetWorthByAccount(targetCurrency = 'EUR') {
-    const target = (targetCurrency || 'EUR').toUpperCase();
-
-    // Prefer the persisted per-account split (migration 0074): a cheap indexed
-    // read of the same value_by_account the snapshot builder already computed,
-    // instead of replaying the full multi-year day-walk on every cache miss.
-    // Falls back to a live replay when the side table is missing or empty (an
-    // un-migrated DB, or before the first snapshot store) — same graceful
-    // degrade the FX-neutral column uses.
-    const [persistedSeries, accounts] = await Promise.all([
-      readPersistedAccountSeries(target),
-      accountRepository.getAll({ active: null }),
-    ]);
-
-    let holdingsSeriesByAcct = persistedSeries;
-    if (!holdingsSeriesByAcct) {
-      const snapshots = await computeDailySnapshots(target);
-      holdingsSeriesByAcct = new Map();
-      for (const s of snapshots) {
-        for (const [acctKey, value] of Object.entries(s.value_by_account || {})) {
-          if (!holdingsSeriesByAcct.has(acctKey)) holdingsSeriesByAcct.set(acctKey, []);
-          holdingsSeriesByAcct.get(acctKey).push({ date: s.snapshot_date, holdings: roundToCents(value) });
-        }
-      }
-    }
-    const lastHoldings = (key) => {
-      const series = holdingsSeriesByAcct.get(key);
-      return series && series.length ? series[series.length - 1].holdings : 0;
-    };
-
-    // Convert each account's cash sleeve concurrently rather than awaiting one
-    // FX lookup per account serially (SIMP-51). Order is preserved by map.
-    const rows = await Promise.all(
-      accounts
-        .filter((a) => a.in_net_worth)
-        .map(async (a) => {
-          const key = String(a.id);
-          const acctCur = (a.currency || 'EUR').toUpperCase();
-          const cashNative = Number(a.computed_balance) || 0;
-          const cash = roundToCents(
-            acctCur === target ? cashNative : toNumber(await convertToCurrency(cashNative, acctCur, target)),
-          );
-          const currentHoldings = lastHoldings(key);
-          return {
-            accountId: a.id,
-            name: a.display_name || a.name,
-            currency: acctCur,
-            cash,
-            currentHoldings,
-            currentTotal: roundToCents(cash + currentHoldings),
-            holdingsSeries: holdingsSeriesByAcct.get(key) || [],
-          };
-        }),
-    );
-
-    // Unassigned holdings (legacy lots, no account) — holdings only, no cash sleeve.
-    const unassigned = holdingsSeriesByAcct.get('unassigned');
-    if (unassigned && unassigned.length) {
-      const currentHoldings = unassigned[unassigned.length - 1].holdings;
-      rows.push({
-        accountId: null,
-        name: null,
-        currency: target,
-        cash: 0,
-        currentHoldings,
-        currentTotal: currentHoldings,
-        holdingsSeries: unassigned,
-      });
-    }
-
-    rows.sort((a, b) => b.currentTotal - a.currentTotal);
-    return { currency: target, accounts: rows };
   },
 };

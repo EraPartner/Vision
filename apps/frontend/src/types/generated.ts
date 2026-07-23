@@ -124,6 +124,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{id}/merge-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source account id (the account that would be merged away) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Preview merging this account into another (read-only)
+         * @description Dry-run of merging account {id} (the source) INTO the account given by `into` (the survivor). Returns the row counts that would be repointed (same categories POST /merge moves), the projected post-merge computed balance — the anchor+delta definition evaluated over the union of both accounts' active rows, in the survivor's native currency — and whether the merge would interleave stamped balance histories (`stampsInterleaved`), in which case the merge clears the survivor's statement-balance anchor. No mutation.
+         */
+        get: operations["previewAccountMerge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/{id}/opening-balance": {
         parameters: {
             query?: never;
@@ -353,26 +376,6 @@ export interface paths {
         };
         /** Get net worth summary */
         get: operations["getNetWorth"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/info/net-worth/by-account": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Net worth split by account (Σ-accounts, ADR-100)
-         * @description Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
-         */
-        get: operations["getNetWorthByAccount"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1485,28 +1488,6 @@ export interface paths {
         put?: never;
         /** Create transaction for investment */
         post: operations["createInvestmentTransaction"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/investments/{id}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Move this holding between accounts (in-specie, cost-basis-preserving)
-         * @description Moves the investment's lots from `from_account_id` to `to_account_id` (ADR-091). Omit `units` (or pass ≥ net) for a whole move (re-points all lots incl. history); pass `units` for a partial move (unit-based only — FIFO lot re-point + pro-rata boundary split). No sell/buy, no realized gain, no cash leg.
-         */
-        post: operations["moveHolding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3171,6 +3152,13 @@ export interface components {
             computed_balance?: number | null;
             /** @description statement_balance − computed_balance; null if no statement balance (ADR-094) */
             drift?: number | null;
+            /**
+             * Format: date
+             * @description YYYY-MM-DD date of the stamped statement balance anchoring computed_balance (WP-A1 provenance); absent when nothing is stamped. Only returned by the list endpoint.
+             */
+            anchor_date?: string;
+            /** @description Active ledger entries after the anchor, or all active entries when unstamped — the "{n} entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list endpoint. */
+            post_anchor_count?: number;
             /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
             has_transactions?: boolean;
             is_active: boolean;
@@ -3278,6 +3266,11 @@ export interface components {
             currency?: string;
             /** Format: double */
             balance?: number;
+            /**
+             * Format: double
+             * @description Per-account running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true
+             */
+            running_balance?: number;
             category_id?: number;
             /** @description Format: GENERAL:DETAIL */
             category_name?: string;
@@ -4036,6 +4029,66 @@ export interface operations {
                 };
             };
             /** @description Target or a source account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewAccountMerge: {
+        parameters: {
+            query: {
+                /** @description Survivor account id (the account {id} would merge into) */
+                into: number;
+            };
+            header?: never;
+            path: {
+                /** @description Source account id (the account that would be merged away) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Merge preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            /** @description Survivor account id */
+                            into?: number;
+                            /** @description Source account id */
+                            source?: number;
+                            /** @description Row counts that would move to the survivor */
+                            reassigned?: {
+                                transactions?: number;
+                                planned?: number;
+                                portfolio?: number;
+                                funding?: number;
+                            };
+                            /** @description Post-merge computed balance (anchor+delta over the union of both accounts' active rows) */
+                            projectedBalance?: number;
+                            /** @description The survivor's native currency (ISO-4217) */
+                            projectedBalanceCurrency?: string;
+                            /** @description Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor) */
+                            stampsInterleaved?: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid `into`, or `into` equals {id} */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source or survivor account not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4820,31 +4873,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["NetWorthResponse"];
-                    };
-                };
-            };
-        };
-    };
-    getNetWorthByAccount: {
-        parameters: {
-            query?: {
-                /** @description Target currency for conversion (alias: target_currency; default EUR) */
-                currency?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Per-account net-worth breakdown with holdings history */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: Record<string, never>;
                     };
                 };
             };
@@ -6875,49 +6903,6 @@ export interface operations {
                         data?: components["schemas"]["PortfolioTransaction"];
                     };
                 };
-            };
-        };
-    };
-    moveHolding: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    from_account_id: number;
-                    to_account_id: number;
-                    /** @description Units to move; omit for the whole position */
-                    units?: number | null;
-                    /**
-                     * @description Lot-selection strategy for a partial move; ignored for a whole move. Defaults to the service default when omitted.
-                     * @enum {string}
-                     */
-                    strategy?: "fifo" | "proportional";
-                };
-            };
-        };
-        responses: {
-            /** @description Move result (mode, movedUnits, lotsMoved, lotsSplit) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Investment or an account not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

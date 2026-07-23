@@ -13,7 +13,6 @@ import {
   getPortfolioPerformance,
   getPortfolioSummary,
   getNetWorth,
-  getNetWorthByAccount,
   getExchangeRates,
   refreshExchangeRates,
 } from "@/lib/api/info";
@@ -174,15 +173,6 @@ describe("info API client", () => {
     await getNetWorth({ currency: "EUR", limit: 10, offset: 5 });
     expect(url).toContain("limit=10");
     expect(url).toContain("offset=5");
-  });
-
-  it("getNetWorthByAccount fetches the by-account breakdown", async () => {
-    server.use(
-      http.get(`${API_BASE}/api/info/net-worth/by-account`, () =>
-        ok({ currency: "EUR", accounts: [] }),
-      ),
-    );
-    expect((await getNetWorthByAccount()).currency).toBe("EUR");
   });
 
   it("getExchangeRates appends db_only only when requested", async () => {

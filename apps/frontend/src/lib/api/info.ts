@@ -331,24 +331,6 @@ export function getNetWorth(params?: {
     return requestWithQuery('/api/info/net-worth', params);
 }
 
-/** Net worth as Σ accounts (ADR-100): per-account current cash + holdings and the rebuilt daily holdings history. */
-export interface NetWorthByAccountRow {
-    accountId: number | null;
-    name: string | null;
-    currency: string;
-    cash: number;
-    currentHoldings: number;
-    currentTotal: number;
-    holdingsSeries: { date: string; holdings: number }[];
-}
-export interface NetWorthByAccountResponse {
-    currency: string;
-    accounts: NetWorthByAccountRow[];
-}
-export function getNetWorthByAccount(params?: { currency?: string }): Promise<NetWorthByAccountResponse> {
-    return requestWithQuery('/api/info/net-worth/by-account', params);
-}
-
 export interface ExchangeRate {
     currency: string;
     rate_to_eur: number;

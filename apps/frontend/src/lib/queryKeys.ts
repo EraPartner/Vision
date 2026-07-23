@@ -26,9 +26,10 @@ export const transactionKeys = {
     all: ['transactions'] as const,
     /** `useTransactions(params)` list cache (one entry per params object). */
     list: (params?: object) => ['transactions', params] as const,
-    /** Account-detail sheet's scoped list. */
-    accountDetail: (accountId: number | undefined) =>
-        ['transactions', 'account-detail', accountId] as const,
+    /** /accounts/:id running-balance ledger (WP-B4, replaced the detail
+     *  sheet's 'account-detail' family); `limit` grows via Load more. */
+    accountLedger: (accountId: number | undefined, limit: number) =>
+        ['transactions', 'account-ledger', accountId, limit] as const,
     /** Owes page: per-recipient settlement group. */
     owesRecipientGroup: (recipientId: number) =>
         ['transactions', 'owes-recipient-group', recipientId] as const,
@@ -69,6 +70,10 @@ export const tagKeys = {
 export const accountKeys = {
     all: ['accounts'] as const,
     list: (params?: object) => ['accounts', params] as const,
+    /** Read-only merge dry-run (WP-B5 dialog preview). Under the 'accounts'
+     *  prefix so account mutations invalidate stale previews too. */
+    mergePreview: (sourceId: number, targetId: number) =>
+        ['accounts', 'merge-preview', sourceId, targetId] as const,
 };
 
 export const bankAccountKeys = {
@@ -231,8 +236,6 @@ export const netWorthKeys = {
     all: ['net-worth'] as const,
     byCurrency: (currency: string) => ['net-worth', currency] as const,
     table: (params: object) => ['net-worth', 'table', params] as const,
-    byAccountAll: ['net-worth-by-account'] as const,
-    byAccount: (currency: string) => ['net-worth-by-account', currency] as const,
 };
 
 // ── Portfolio ───────────────────────────────────────────────────────────────
@@ -343,14 +346,13 @@ export function invalidateTransactionData(queryClient: QueryClient) {
 }
 
 /**
- * Account CRUD changes balances/in_net_worth flags, so the net-worth views
- * must refetch too — NetWorthPage keeps both queries at a 2-minute staleTime,
+ * Account CRUD changes balances/in_net_worth flags, so the net-worth view
+ * must refetch too — NetWorthPage keeps its query at a 2-minute staleTime,
  * so a missed invalidation shows a stale total for up to 2 minutes.
  */
 export function invalidateAccountDerived(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: accountKeys.all });
     queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
-    queryClient.invalidateQueries({ queryKey: netWorthKeys.byAccountAll });
 }
 
 /**
@@ -385,8 +387,8 @@ export function invalidateAccountRepoint(queryClient: QueryClient) {
 
 /**
  * Everything derived from investments / portfolio transactions. Investment
- * CRUD also moves the net-worth total; both net-worth queries sit at a
- * 2-minute staleTime on NetWorthPage, so without this they show stale figures.
+ * CRUD also moves the net-worth total; the net-worth query sits at a
+ * 2-minute staleTime on NetWorthPage, so without this it shows stale figures.
  */
 export function invalidateInvestmentData(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });
@@ -394,5 +396,4 @@ export function invalidateInvestmentData(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
     queryClient.invalidateQueries({ queryKey: portfolioKeys.performanceAll });
     queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
-    queryClient.invalidateQueries({ queryKey: netWorthKeys.byAccountAll });
 }

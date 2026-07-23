@@ -188,6 +188,31 @@ describe('accountService.update', () => {
     expect(fields.closed_at).toBeInstanceOf(Date);
   });
 
+  it('closing also sets in_net_worth=false so the account leaves every aggregate (§1 F3)', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 1, is_active: true, in_net_worth: true });
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { is_active: false });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.is_active).toBe(false);
+    expect(fields.in_net_worth).toBe(false);
+  });
+
+  it('an explicit in_net_worth in the same close PATCH wins over the close default', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 1, is_active: true, in_net_worth: true });
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { is_active: false, in_net_worth: true });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.in_net_worth).toBe(true); // explicit intent respected
+  });
+
+  it('reactivating does NOT auto-restore in_net_worth (explicit user control)', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 1, is_active: false, in_net_worth: false });
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { is_active: true });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect('in_net_worth' in fields).toBe(false);
+  });
+
   it('keeps the original closed_at on a redundant re-archive', async () => {
     accountRepository.getById.mockResolvedValueOnce({ id: 1, is_active: false, closed_at: '2026-01-01T00:00:00Z' });
     accountRepository.update.mockResolvedValueOnce({ id: 1 });

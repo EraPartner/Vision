@@ -378,37 +378,13 @@ Notes:
 
 ---
 
-### GET /api/info/net-worth/by-account
+### ~~GET /api/info/net-worth/by-account~~ *(removed 2026-07-22 — WP-C1 / ADR-108)*
 
-Net worth split per account (Σ-accounts, ADR-100): each account's current cash + holdings and its rebuilt daily holdings history. The Σ over accounts equals the aggregate net worth by construction. Only accounts with `in_net_worth = true` contribute the cash side (ADR-089); legacy holdings with no account collapse into a single unassigned row (`accountId: null`, holdings only).
-
-**Query parameters:** `currency` (alias `target_currency`, default `EUR`) — all amounts are converted to this currency.
-
-**Notes:**
-
-- Route uses a modest per-route rate limiter (`30 requests / 60s` per key prefix) shared with the net-worth cache.
-- Per-account current cash is converted from each account's native currency at the latest rate; holdings come from the daily value-by-account split rebuilt by the holdings-history builder.
-
-**Response:** `200 OK`
-
-```json
-{
-  "currency": "EUR",
-  "accounts": [
-    {
-      "accountId": 1,
-      "name": "Brokerage",
-      "currency": "USD",
-      "cash": 1500.0,
-      "currentHoldings": 84000.0,
-      "currentTotal": 85500.0,
-      "holdingsSeries": [
-        { "date": "2026-06-18", "holdings": 84000.0 }
-      ]
-    }
-  ]
-}
-```
+> **Removed.** The Σ-accounts breakdown (ADR-100) was deleted with the per-account holdings
+> machinery: the snapshot builder no longer computes the `value_by_account` split, and the
+> `portfolio_snapshot_accounts` side table (migration 0074) is dormant (kept for a later
+> contraction migration). A per-broker net-worth surface returns later in Track C (WP-C5
+> current-point table from live partitions; WP-C7 persisted per-broker history).
 
 ---
 

@@ -6,7 +6,7 @@ path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
 last_modified: 2026-06-24
-tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, move-holding, adr-091, show-in-ticker, portfolio-ticker]
+tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
 related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
@@ -394,39 +394,13 @@ Create-path compatibility:
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
 
-### POST /api/investments/:id/move
+### ~~POST /api/investments/:id/move~~ *(removed 2026-07-22 — WP-C1 / ADR-108)*
 
-Move this holding between accounts — an **in-specie transfer that preserves cost basis** (no
-sell/buy, no realized gain, **no cash leg**), per ADR-091. Body:
-
-```json
-{
-  "from_account_id": 3,
-  "to_account_id": 7,
-  "units": 25,
-  "strategy": "fifo"
-}
-```
-
-**Fields:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `from_account_id` | integer | Yes | Source account |
-| `to_account_id` | integer | Yes | Destination account |
-| `units` | number | No | Units to move; omit for a whole move |
-| `strategy` | `'fifo'` \| `'proportional'` | No | Partial-move cost-basis strategy (default `'fifo'`) |
-
-**Move modes:**
-
-- **Whole move** (omit `units`, or `units` ≥ net, or non-unit-based asset): re-points every lot of `(investment, from_account)` — including history — to the target. One UPDATE.
-- **Partial move, FIFO (default)**: moves buy/gift lots oldest-first; the boundary lot is split pro-rata. Sells stay with the source.
-- **Partial move, proportional**: splits *every* lot by the same fraction (`units / net`), yielding an average-cost split. Useful for mutual fund–style holdings where FIFO lot identity is not meaningful.
-
-Inheritance-aware (`portfolio_transactions_base.account_id` + child-table `units`, or the flat
-table). Returns `{ investmentId, from, to, mode, strategy, movedUnits, lotsMoved, lotsSplit }`. `404` if the
-investment or either account is missing; `400` if `units` exceeds the holding or the investment has
-no lots in the source account. Implemented by `services/portfolio/moveHoldingService.js`.
+> **Removed.** The in-specie move endpoint (ADR-091 FIFO/proportional lot surgery,
+> `moveHoldingService`) was deleted; under ADR-108 an in-specie transfer becomes a whole-lot
+> **re-tag** (`UPDATE … SET account_id`) with basis travelling with the lot — the bulk re-tag
+> endpoint arrives in WP-C3. Reassigning a single lot is still possible via
+> `PATCH /api/investments/transactions/:txnId` with `account_id`.
 
 ### PATCH /api/investments/transactions/:txnId
 

@@ -26,6 +26,7 @@ import { query, queryPrepared } from '../src/database/connection.js';
 import { convertRowsToEur } from '../src/services/currency/currencyConversionService.js';
 import infoRepository from '../src/repositories/infoRepository.js';
 import { clearMvCache } from '../src/repositories/infoRepository.js';
+import { COMPUTED_BALANCE_LATERAL } from '../src/repositories/accountBalanceSql.js';
 
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
@@ -283,6 +284,133 @@ describe('InfoRepository', () => {
 
       expect(result.current.liquid).toBe(99);
       expect(result.current.netWorth).toBe(99);
+    });
+
+    // ── WP-A1: current point uses the unified computed-balance definition ──
+    //
+    // The unified current-balance query is discriminated by 'WITH anchor'
+    // (the shared lateral's CTE) — the stamped history walk has 'account_list'
+    // instead, so the two mocks can't cross-match. The 'WITH anchor' branch
+    // MUST come before the generic 'SELECT 1 FROM' branch: the lateral's
+    // no-stamp fallback contains `NOT EXISTS (SELECT 1 FROM anchor)`.
+    const mockUnifiedNetWorth = ({ firstDataDate, investmentsRows, walkRows, currentRows }) => {
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('WITH anchor')) return { rows: currentRows };
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: firstDataDate }] };
+        if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
+          return { rows: investmentsRows };
+        }
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return { rows: walkRows };
+        }
+        return { rows: [] };
+      });
+    };
+
+    it('overrides the current point with the unified anchor+delta balances (manual-only + stamped + liability)', async () => {
+      const todayKey = todayAppDateString();
+      const firstDayKey = addDaysYmd(todayKey, -2);
+      mockUnifiedNetWorth({
+        firstDataDate: firstDayKey,
+        investmentsRows: [{ day: todayKey, investments: '1000' }],
+        // The stamped walk only ever sees the imported-statement account and
+        // freezes it at the stamp (5000); the manual-only account and the
+        // post-anchor manual rows are invisible to it.
+        walkRows: [
+          { day: firstDayKey, bank_account: 'KBC', is_liability: false, balance: '4500', currency: 'EUR' },
+          { day: todayKey, bank_account: 'KBC', is_liability: false, balance: '5000', currency: 'EUR' },
+        ],
+        // The unified definition sees all three fixture accounts:
+        //  (a) manual-only (never stamped) → Σ(amount) = 200
+        //  (b) stamped + manual rows after the anchor → 5000 + 150 = 5150
+        //  (c) liability (in_net_worth, negative balance) → -300
+        currentRows: [
+          { bank_account: 'Cash', is_liability: false, balance: '200', currency: 'EUR' },
+          { bank_account: 'KBC', is_liability: false, balance: '5150', currency: 'EUR' },
+          { bank_account: 'Mortgage', is_liability: true, balance: '-300', currency: 'EUR' },
+        ],
+      });
+
+      const result = await infoRepository.getNetWorthFromSnapshots();
+
+      // Headline: population AND number come from the unified definition —
+      // the manual-only account is included, the stamped account advanced
+      // past its frozen stamp, the liability split out.
+      expect(result.current.liquid).toBe(5350);
+      expect(result.current.liabilities).toBe(-300);
+      expect(result.current.investments).toBe(1000);
+      expect(result.current.netWorth).toBe(6050);
+
+      // History stays stamp-based (WP-A1 decision): earlier points are
+      // untouched by the override.
+      expect(result.snapshots[0].liquid).toBe(4500);
+      expect(result.snapshots[0].liabilities).toBe(0);
+      // Only the latest point was reconciled to the unified definition.
+      const last = result.snapshots[result.snapshots.length - 1];
+      expect(last.liquid).toBe(5350);
+      expect(last.liabilities).toBe(-300);
+      expect(last.netWorth).toBe(6050);
+    });
+
+    it('applies the live-investments overlay on top of the unified current point', async () => {
+      const todayKey = todayAppDateString();
+      mockUnifiedNetWorth({
+        firstDataDate: todayKey,
+        investmentsRows: [{ day: todayKey, investments: '1000' }],
+        walkRows: [{ day: todayKey, bank_account: 'KBC', is_liability: false, balance: '5000', currency: 'EUR' }],
+        currentRows: [
+          { bank_account: 'KBC', is_liability: false, balance: '5150', currency: 'EUR' },
+          { bank_account: 'Mortgage', is_liability: true, balance: '-300', currency: 'EUR' },
+        ],
+      });
+
+      const result = await infoRepository.getNetWorthFromSnapshots('EUR', { liveInvestments: 2000 });
+
+      expect(result.current.liquid).toBe(5150);
+      expect(result.current.liabilities).toBe(-300);
+      expect(result.current.investments).toBe(2000);
+      expect(result.current.netWorth).toBe(6850);
+    });
+
+    it('keeps the walk-derived current point when no in-net-worth accounts exist', async () => {
+      const todayKey = todayAppDateString();
+      mockUnifiedNetWorth({
+        firstDataDate: todayKey,
+        investmentsRows: [],
+        walkRows: [{ day: todayKey, bank_account: 'Chase', is_liability: false, balance: '5000', currency: 'EUR' }],
+        currentRows: [],
+      });
+
+      const result = await infoRepository.getNetWorthFromSnapshots();
+
+      expect(result.current.liquid).toBe(5000);
+      expect(result.current.netWorth).toBe(5000);
+    });
+
+    it('sources the current point from the shared COMPUTED_BALANCE_LATERAL with no stamped-population gate', async () => {
+      const todayKey = todayAppDateString();
+      mockUnifiedNetWorth({
+        firstDataDate: todayKey,
+        investmentsRows: [],
+        walkRows: [],
+        currentRows: [],
+      });
+
+      await infoRepository.getNetWorthFromSnapshots();
+
+      const calls = query.mock.calls.map((c) => c[0]);
+      const currentSql = calls.find((sql) => typeof sql === 'string' && sql.includes('WITH anchor'));
+      expect(currentSql).toBeDefined();
+      // One SQL definition of "current balance" project-wide: the headline
+      // embeds the exact shared lateral the hub/widget/reconcile use…
+      expect(currentSql).toContain(COMPUTED_BALANCE_LATERAL.trim());
+      // …respects the net-worth population rule…
+      expect(currentSql).toContain('a.in_net_worth = true');
+      // …and carries NO `lb.balance IS NOT NULL` gate (that predicate exists
+      // only inside the lateral's anchor CTE and, deliberately, in the
+      // stamp-based HISTORY walk — not on the current point's population).
+      expect(currentSql).not.toContain('WHERE lb.balance IS NOT NULL');
     });
 
     it('should emit debug log with summary metrics', async () => {

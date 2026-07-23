@@ -65,7 +65,7 @@ function parseImportInput(schema, input) {
 
 // Brokerage import (ADR-095): a flag + the sleeve account every row lands on.
 // Multipart fields arrive as strings; coerce them. The account is required when
-// brokerage is on (cash rows + trade legs need a sleeve).
+// brokerage is on (cash rows need a ledger account to land on).
 const brokerageParamsSchema = z.looseObject({
   is_brokerage: z.unknown().optional().transform((value) => value === true || value === 'true'),
   account_id: z.unknown().optional().transform((value, ctx) => {

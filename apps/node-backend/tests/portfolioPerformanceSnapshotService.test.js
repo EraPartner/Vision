@@ -285,34 +285,6 @@ describe('portfolioPerformanceSnapshotService', () => {
     expect(String(txCall[0])).toContain("CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END");
   });
 
-  it('rescales per-account weights on a split so value_by_account proportions stay correct', async () => {
-    // 6 units in account 1, 4 in account 2 (total 10). 2:1 split → 20 units.
-    // A later sell of 4 (post-split) units from account 1 must leave 8 units in
-    // each account → an even 50/50 value split. Without the split-time rescale,
-    // the sell (post-split units) is applied to pre-split weights and skews it.
-    mockSnapshotQueries({
-      investments: [{ id: 1, currency: 'EUR', current_price: 5, asset_class: 'stock' }],
-      transactions: [
-        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 60, units: 6, currency: 'EUR', fx_rate_to_eur: null, account_id: 1 },
-        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 40, units: 4, currency: 'EUR', fx_rate_to_eur: null, account_id: 2 },
-        { investment_id: 1, day: '2026-01-02', type: 'split', amount: 0, units: 20, currency: 'EUR', fx_rate_to_eur: null },
-        { investment_id: 1, day: '2026-01-03', type: 'sell', amount: 20, units: 4, currency: 'EUR', fx_rate_to_eur: null, account_id: 1 },
-      ],
-      prices: [
-        { investment_id: 1, day: '2026-01-01', close_price: 10 },
-        { investment_id: 1, day: '2026-01-02', close_price: 5 },
-      ],
-    });
-
-    const snapshots = await computeAndStoreSnapshots('EUR');
-
-    // Day 3 (latest): 16 units × current_price 5 = 80 total, 8 units per account.
-    expect(snapshots[2].value).toBe(80);
-    const byAccount = snapshots[2].value_by_account;
-    expect(byAccount['1']).toBeCloseTo(40, 2);
-    expect(byAccount['2']).toBeCloseTo(40, 2);
-  });
-
   it('reduces invested on return_of_capital without changing units/value', async () => {
     mockSnapshotQueries({
       investments: [{ id: 1, currency: 'EUR', current_price: 10, asset_class: 'stock' }],

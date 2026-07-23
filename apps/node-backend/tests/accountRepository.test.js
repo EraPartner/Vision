@@ -34,6 +34,32 @@ describe('accountRepository', () => {
       await accountRepository.getAll({ active: false });
       expect(query.mock.calls[0][0]).toContain('a.is_active = false');
     });
+
+    it('selects the provenance columns from the shared lateral (WP-B2)', async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+      await accountRepository.getAll();
+      const sql = query.mock.calls[0][0];
+      expect(sql).toContain('lb.anchor_date');
+      expect(sql).toContain('lb.post_anchor_count');
+      expect(sql).toContain('lb.balance AS computed_balance');
+    });
+
+    it('shapes provenance: NULL anchor_date → undefined, bigint-string count → number', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          // (a) stamped anchor + entries since — count arrives as a pg bigint string
+          { id: 1, name: 'KBC', anchor_date: '2026-06-30', post_anchor_count: '2' },
+          // (b) nothing stamped — SQL NULL anchor, count = all active rows
+          { id: 2, name: 'Cash', anchor_date: null, post_anchor_count: '3' },
+        ],
+      });
+      const rows = await accountRepository.getAll();
+      expect(rows[0].anchor_date).toBe('2026-06-30');
+      expect(rows[0].post_anchor_count).toBe(2);
+      // Backend never returns null — SQL NULL maps to undefined at the boundary.
+      expect(rows[1].anchor_date).toBeUndefined();
+      expect(rows[1].post_anchor_count).toBe(3);
+    });
   });
 
   describe('getById / getByName', () => {

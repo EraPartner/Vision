@@ -47,6 +47,8 @@ export interface ImportStagingRow {
     currency: string | null;
     tx_date: string;
     memo: string | null;
+    /** Account label parsed from the CSV (WP-B6 import disclosure); absent on older servers. */
+    bank_account?: string | null;
     match_source: MatchSource | null;
     match_similarity: number | null;
     matched_pattern_id: number | null;

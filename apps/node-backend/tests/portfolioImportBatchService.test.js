@@ -12,10 +12,6 @@ vi.mock('../src/repositories/investmentRepository.js', () => ({
   default: {},
 }));
 
-vi.mock('../src/services/portfolio/tradeCashLegService.js', () => ({
-  deleteTradeCashLegs: vi.fn().mockResolvedValue(0),
-}));
-
 vi.mock('../src/repositories/portfolioImportBatchRepository.js', () => ({
   getRowForInvestmentCreation: vi.fn(),
   overrideInvestment: vi.fn(),
@@ -29,7 +25,6 @@ vi.mock('../src/repositories/portfolioImportBatchRepository.js', () => ({
 
 import { query } from '../src/database/connection.js';
 import portfolioTransactionRepository from '../src/repositories/portfolioTransactionRepository.js';
-import { deleteTradeCashLegs } from '../src/services/portfolio/tradeCashLegService.js';
 import { getCommittedRows, markBatchAborted } from '../src/repositories/portfolioImportBatchRepository.js';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
 
@@ -53,13 +48,12 @@ describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
     expect(markBatchAborted).toHaveBeenCalledWith(5);
   });
 
-  it('deletes a trade through the portfolio repo, dropping its ADR-090 cash leg first', async () => {
+  it('deletes a trade through the portfolio repo, never the transactions table', async () => {
     getCommittedRows.mockResolvedValue([{ id: 42, route: 'portfolio' }]);
 
     const res = await rollbackBatch(5);
 
     expect(res).toEqual({ deleted: 1 });
-    expect(deleteTradeCashLegs).toHaveBeenCalledWith(42);
     expect(portfolioTransactionRepository.hardDelete).toHaveBeenCalledWith(42);
     expect(query).not.toHaveBeenCalledWith('DELETE FROM transactions WHERE id = $1', [42]);
   });

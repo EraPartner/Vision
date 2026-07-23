@@ -463,6 +463,10 @@ router.get('/batches/:id/preview', async (req, res) => {
       currency: row.currency,
       tx_date: row.tx_date,
       memo: row.memo,
+      // Account label parsed from the CSV (WP-B6 import disclosure) — lets the
+      // review UI show "{n} transactions → {account}" and flag labels that will
+      // create a new account on commit (trigger in migration 0056).
+      bank_account: row.bank_account ?? null,
       match_source: row.match_source,
       match_similarity: row.match_similarity,
       matched_pattern_id: row.matched_pattern_id,
