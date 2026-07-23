@@ -4616,7 +4616,7 @@ detection layer never touches an LLM, so it's unaffected either way.
       this item itself promotes to a prerequisite — all still '- [ ]'. Ship those first; there's nothing
       to surface until the return contract has a real producer.
 
-- [ ] On-demand narration: chat button + insights tool 🔼 🔎 verified-present 2026-07-11
+- [x] On-demand narration: chat button + insights tool 🔼 ✅ 2026-07-23 · `insightsDigest` tool (aggregates the 3 detectors into the `{subscriptionCreep, categoryOutliers, cashForecast}` contract, registered in TOOLS) + ADR-110 §4 server-side pre-call (`insightsPreCall` flag on `/api/ai/chat` + `/chat/stream` → `preCallTool` injects the digest before the model turn so it only narrates; fetch-spy no-external-calls test extended) + AIChatPage empty-state quick-action button (forces tools on, EN/NL i18n). Chose §4 pre-call over the soft-hint (ADR corrected); a complementary soft prompt hint remains for typed queries.
     - New read-only tool (detection layer above) registered in the existing `TOOLS` map
       (`apps/node-backend/src/services/aiChat/tools/index.js`)
     - New button in the AI chat UI (`apps/frontend/src/features/ai-chat/ChatComposer.tsx` or the empty

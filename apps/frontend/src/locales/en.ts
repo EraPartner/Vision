@@ -324,6 +324,8 @@ const en: Record<string, string> = {
   'aiChat.emptyState': 'Start a conversation — ask about spending, portfolio returns, upcoming payments, or taxes. Everything runs locally on your machine.',
   'aiChat.emptyTitle': 'Ask anything about your finances',
   'aiChat.enterHint': 'Enter to send . Shift+Enter for a new line',
+  'aiChat.insightsDigestButton': 'Show my insights digest',
+  'aiChat.insightsDigestPrompt': 'Give me my insights digest for today — anything new or unusual in my spending?',
   'aiChat.loading': 'Loading...',
   'aiChat.model': 'Model',
   'aiChat.newConversation': 'New conversation',

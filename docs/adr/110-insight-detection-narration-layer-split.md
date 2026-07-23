@@ -180,6 +180,15 @@ it is outside this guarantee's scope by construction.
 - **Let the narrator read raw transactions / compute its own numbers.** Rejected — reintroduces
   hallucination risk that ADR-024's tool-calling architecture exists to eliminate.
 
+## Addendum (2026-07-23)
+
+**Addendum (2026-07-23) — §4 implemented.** The server-side pre-call from §4 is now implemented:
+the narration button sends `insightsPreCall: true`; the backend executes `insightsDigest` before
+the model turn and injects the result into context, so the model only narrates. A soft prompt hint
+is ALSO present in `prompts.js` as a complementary aid for when a user *types* an insights question
+in normal chat (the pre-call covers the button path); it is not the reliability mechanism §4
+rejected.
+
 ## Related
 - [[docs/adr/024-local-llm-chat|ADR-024: Local LLM Chat Integration]] — tool-calling architecture,
   privacy constraint, and no-external-calls guarantee this ADR builds on

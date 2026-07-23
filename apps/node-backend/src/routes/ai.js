@@ -73,11 +73,15 @@ const chatBodySchema = z.object({
     .refine((s) => s.length <= MAX_MESSAGE_LENGTH, `"message" must be <= ${MAX_MESSAGE_LENGTH} chars`),
   model: nonBlankString('"model" must be a non-empty string').nullish(),
   useTools: z.boolean({ error: '"useTools" must be a boolean' }).optional(),
+  // ADR-110 §4: when true, the backend executes `insightsDigest` server-side
+  // before the model turn so the model only narrates the injected findings.
+  insightsPreCall: z.boolean({ error: '"insightsPreCall" must be a boolean' }).optional(),
 }).transform((body) => ({
   conversationId: body.conversationId ?? null,
   message: body.message,
   model: body.model ?? null,
   useTools: body.useTools !== false,
+  insightsPreCall: body.insightsPreCall === true,
 }));
 
 const createConversationSchema = z.object({
@@ -271,6 +275,7 @@ router.post('/chat', async (req, res) => {
       message: parsed.message,
       model: parsed.model,
       useTools: parsed.useTools,
+      preCallTool: parsed.insightsPreCall ? 'insightsDigest' : null,
       signal: abortController.signal,
     });
     res.ok({
@@ -313,6 +318,7 @@ router.post('/chat/stream', async (req, res) => {
       message: parsed.message,
       model: parsed.model,
       useTools: parsed.useTools,
+      preCallTool: parsed.insightsPreCall ? 'insightsDigest' : null,
       signal: abortController.signal,
       streaming: true,
       onEvent: async (evt) => {

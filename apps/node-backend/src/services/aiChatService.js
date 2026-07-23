@@ -112,6 +112,10 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
  * @param {string} [args.message]          - the new user message text
  * @param {string|null} [args.model]          - override the model (else conversation/default)
  * @param {boolean} [args.useTools=true]
+ * @param {string|null} [args.preCallTool=null] - tool name to execute
+ *   server-side BEFORE the model turn (ADR-110 §4). Its result is injected
+ *   into the model's context so the model only narrates the already-fetched
+ *   findings instead of deciding whether to call the tool.
  * @param {AbortSignal} [args.signal]    - propagate cancellation
  * @param {boolean} [args.streaming=false] - when true, use `ollamaClient.chatStream`
  *   and emit per-chunk `token` events via `onEvent`.
@@ -134,6 +138,7 @@ export async function runChatTurn({
   message,
   model = null,
   useTools = true,
+  preCallTool = null,
   signal,
   streaming = false,
   onEvent,
@@ -158,6 +163,7 @@ export async function runChatTurn({
       message,
       model,
       useTools,
+      preCallTool,
       signal,
       streaming,
       onEvent,
@@ -184,13 +190,14 @@ export async function runChatTurn({
 }
 
 /**
- * @param {{ conversationId: any, message: any, model: any, useTools: any, signal: any, streaming: any, onEvent: any, ollamaClient: any }} args
+ * @param {{ conversationId: any, message: any, model: any, useTools: any, preCallTool: any, signal: any, streaming: any, onEvent: any, ollamaClient: any }} args
  */
 async function runChatTurnInner({
   conversationId,
   message,
   model,
   useTools,
+  preCallTool,
   signal,
   streaming,
   onEvent,
@@ -228,6 +235,46 @@ async function runChatTurnInner({
   // Request-scoped cache shared across every tool call in this chat turn so
   // tools that fetch the same heavy investment/transaction sets reuse one query.
   const toolCache = new Map();
+
+  // ADR-110 §4: server-side pre-call. Execute the tool BEFORE the model turn
+  // and inject its result into context so the model only narrates the
+  // already-fetched findings — it never decides whether to fetch. Mirrors the
+  // persist/emit/inject sequence the loop performs after a real tool_call.
+  // Tool schemas stay enabled for the ensuing turn. A pre-call failure must
+  // not kill the turn — log and fall through to the normal loop.
+  if (preCallTool) {
+    try {
+      await onEvent?.({ type: 'tool_call', data: { name: preCallTool, args: {} } });
+      const result = await dispatchTool(preCallTool, {}, { conversationId: conversation.id, cache: toolCache });
+      const toolRow = await aiChatRepository.appendMessage({
+        conversationId: conversation.id,
+        role: 'tool',
+        toolName: preCallTool,
+        toolArgs: {},
+        toolResult: result,
+      });
+      toolMessages.push(toolRow);
+      await onEvent?.({ type: 'tool_message', data: toolRow });
+
+      baseMessages.push({
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ function: { name: preCallTool, arguments: '{}' } }],
+      });
+      baseMessages.push({
+        role: 'tool',
+        name: preCallTool,
+        content: JSON.stringify(result),
+      });
+    } catch (err) {
+      logger.warn('[aiChat] server-side pre-call failed — continuing turn without injected result', {
+        conversationId: conversation.id,
+        tool: preCallTool,
+        code: err?.code,
+        message: err?.message,
+      });
+    }
+  }
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations += 1;

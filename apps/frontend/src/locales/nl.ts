@@ -324,6 +324,8 @@ const nl: Record<string, string> = {
   'aiChat.emptyState': 'Start een gesprek — stel vragen over uitgaven, rendement, geplande betalingen of belastingen. Alles draait lokaal op je machine.',
   'aiChat.emptyTitle': 'Stel elke vraag over je financiën',
   'aiChat.enterHint': 'Enter om te verzenden . Shift+Enter voor nieuwe regel',
+  'aiChat.insightsDigestButton': 'Toon mijn inzichten',
+  'aiChat.insightsDigestPrompt': 'Geef me mijn inzichtenoverzicht van vandaag — is er iets nieuws of ongewoons in mijn uitgaven?',
   'aiChat.loading': 'Laden...',
   'aiChat.model': 'Model',
   'aiChat.newConversation': 'Nieuw gesprek',

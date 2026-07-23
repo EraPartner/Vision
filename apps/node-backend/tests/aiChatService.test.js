@@ -467,6 +467,113 @@ describe('runChatTurn — tool-call loop', () => {
   });
 });
 
+describe('runChatTurn — server-side pre-call (ADR-110 §4)', () => {
+  const digest = {
+    subscriptionCreep: { new: [{ name: 'Netflix', amount: 12.99 }], priceChanges: [] },
+    categoryOutliers: [],
+    cashForecast: { endOfMonthP50: 1240 },
+  };
+
+  it('dispatches the pre-call tool, persists/emits it before the assistant turn, injects it into the model context, and returns the narration', async () => {
+    dispatchTool.mockResolvedValueOnce(digest);
+
+    const ollamaClient = makeMockOllama();
+    ollamaClient.chat.mockResolvedValueOnce({
+      content: 'One new subscription: Netflix at €12.99.',
+      toolCalls: [],
+      evalCount: 5, promptEvalCount: 3, totalDurationMs: 40,
+    });
+
+    const events = [];
+    const result = await runChatTurn({
+      message: 'Narrate my insights',
+      preCallTool: 'insightsDigest',
+      useTools: true,
+      ollamaClient,
+      onEvent: (e) => events.push(e.type),
+    });
+
+    // (a) tool dispatched server-side, row persisted, and events emitted
+    // BEFORE the assistant turn ran.
+    expect(dispatchTool).toHaveBeenCalledTimes(1);
+    expect(dispatchTool).toHaveBeenCalledWith(
+      'insightsDigest',
+      {},
+      expect.objectContaining({ conversationId: expect.any(String) }),
+    );
+    expect(dispatchTool.mock.invocationCallOrder[0]).toBeLessThan(
+      ollamaClient.chat.mock.invocationCallOrder[0],
+    );
+    expect(events).toEqual(['user_message', 'tool_call', 'tool_message', 'assistant_message']);
+    const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
+      ([arg]) => arg.role === 'tool',
+    );
+    expect(toolAppend[0]).toMatchObject({
+      role: 'tool',
+      toolName: 'insightsDigest',
+      toolArgs: {},
+      toolResult: digest,
+    });
+    expect(result.toolMessages).toHaveLength(1);
+
+    // (b) the single model call received the injected synthetic tool_call +
+    // role:'tool' digest message before being asked to generate — with tool
+    // schemas still enabled.
+    expect(ollamaClient.chat).toHaveBeenCalledTimes(1);
+    const chatArgs = ollamaClient.chat.mock.calls[0][0];
+    const syntheticIdx = chatArgs.messages.findIndex(
+      (m) => m.role === 'assistant' && Array.isArray(m.tool_calls),
+    );
+    const toolMsgIdx = chatArgs.messages.findIndex(
+      (m) => m.role === 'tool' && m.name === 'insightsDigest',
+    );
+    expect(syntheticIdx).toBeGreaterThanOrEqual(0);
+    expect(toolMsgIdx).toBe(syntheticIdx + 1);
+    expect(chatArgs.messages[syntheticIdx].tool_calls).toEqual([
+      { function: { name: 'insightsDigest', arguments: '{}' } },
+    ]);
+    expect(chatArgs.messages[toolMsgIdx].content).toBe(JSON.stringify(digest));
+    expect(chatArgs.tools).toBeDefined();
+    expect(chatArgs.tools.length).toBeGreaterThan(0);
+
+    // (c) the final assistant message is the narration.
+    expect(result.assistantMessage.content).toBe('One new subscription: Netflix at €12.99.');
+    expect(result.iterations).toBe(1);
+  });
+
+  it('does not crash the turn when the pre-call dispatch throws — logs and continues', async () => {
+    dispatchTool.mockRejectedValueOnce(new Error('digest exploded'));
+
+    const ollamaClient = makeMockOllama();
+    ollamaClient.chat.mockResolvedValueOnce({
+      content: 'plain reply', toolCalls: [], evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
+    });
+
+    const result = await runChatTurn({
+      message: 'Narrate my insights',
+      preCallTool: 'insightsDigest',
+      useTools: true,
+      ollamaClient,
+    });
+
+    expect(result.assistantMessage.content).toBe('plain reply');
+    expect(result.toolMessages).toHaveLength(0);
+    const sentMessages = ollamaClient.chat.mock.calls[0][0].messages;
+    expect(sentMessages.some((m) => m.role === 'tool')).toBe(false);
+  });
+
+  it('does not dispatch any pre-call when preCallTool is not set', async () => {
+    const ollamaClient = makeMockOllama();
+    ollamaClient.chat.mockResolvedValueOnce({
+      content: 'ok', toolCalls: [], evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
+    });
+
+    await runChatTurn({ message: 'hi', ollamaClient });
+
+    expect(dispatchTool).not.toHaveBeenCalled();
+  });
+});
+
 describe('runChatTurn — iteration cap', () => {
   it('returns fallback error assistant message when cap reached', async () => {
     const ollamaClient = makeMockOllama();
@@ -788,6 +895,26 @@ describe('no-external-calls guarantee', () => {
       ollamaClient,
     });
 
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not call fetch on the insights pre-call path (ADR-110 §4)', async () => {
+    const ollamaClient = {
+      chat: vi.fn().mockResolvedValue({
+        message: { role: 'assistant', content: 'Here is what stands out this month.' },
+        tool_calls: [],
+      }),
+    };
+
+    await runChatTurn({
+      conversationId: 'conv-1',
+      message: 'Narrate my insights',
+      preCallTool: 'insightsDigest',
+      useTools: true,
+      ollamaClient,
+    });
+
+    expect(dispatchTool).toHaveBeenCalledWith('insightsDigest', {}, expect.any(Object));
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

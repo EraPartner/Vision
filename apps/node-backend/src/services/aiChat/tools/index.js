@@ -50,6 +50,7 @@ import {
   getWatchlist,
   getCategories,
   getRecurringDetected,
+  insightsDigest,
 } from './insights.js';
 import { ToolValidationError } from './_validate.js';
 
@@ -83,6 +84,7 @@ export const TOOLS = Object.freeze({
   [getWatchlist.name]: getWatchlist,
   [getCategories.name]: getCategories,
   [getRecurringDetected.name]: getRecurringDetected,
+  [insightsDigest.name]: insightsDigest,
   [getNetCashflow.name]: getNetCashflow,
 });
 
