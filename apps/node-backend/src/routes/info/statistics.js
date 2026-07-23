@@ -8,16 +8,19 @@
  *   - GET /planned-expenses-next-month
  *   - GET /recurring-patterns
  *   - GET /insights-digest
+ *   - GET /deduction-candidates
  */
 
 import { Router } from 'express';
 import infoRepository from '../../services/infoService.js';
 import { detectRecurringPatterns } from '../../services/recurringDetectionService.js';
 import { getInsightsDigest } from '../../services/insightsDigestService.js';
+import { computeDeductionCandidates } from '../../services/tax/deductionCandidatesService.js';
 import { listAdapters } from '../../services/importPipeline/adapters/index.js';
 import { logger } from '../../config/logger.js';
 import { getTargetCurrency } from './_queryParams.js';
 import { assertOptionalId } from '../../middleware/validation.js';
+import { ValidationError } from '../../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -74,6 +77,41 @@ router.get('/insights-digest', async (req, res) => {
       subscriptionCreep: { new: [], priceChanges: [] },
       categoryOutliers: [],
       cashForecast: null,
+    });
+  }
+});
+
+/**
+ * Optional `year` query param → validated integer, or null when absent.
+ * Bounds match the AI-chat tax tools; malformed input (including trailing
+ * garbage parseInt would swallow, e.g. `2025abc`) is a 400, not a silent guess.
+ */
+function assertOptionalYear(value) {
+  if (value == null || value === '') return null;
+  const year = Number.parseInt(value, 10);
+  if (!Number.isInteger(year) || String(year) !== String(value).trim() || year < 1970 || year > 3000) {
+    throw new ValidationError('year must be an integer between 1970 and 3000');
+  }
+  return year;
+}
+
+// Transaction-derived Belgian deduction-type candidates for the Tax Overview
+// review card. `year` defaults to the current calendar year. Same graceful
+// degradation as the siblings above — an empty candidate list instead of a 500
+// (a malformed `year` still 400s: it is validated before the try).
+router.get('/deduction-candidates', async (req, res) => {
+  const year = assertOptionalYear(req.query.year) ?? new Date().getFullYear();
+  try {
+    const data = await computeDeductionCandidates({ year });
+    res.ok(data);
+  } catch (err) {
+    logger.error('Error computing deduction candidates; returning empty result', { error: err.message });
+    res.ok({
+      year,
+      from: `${year}-01-01`,
+      to: `${year}-12-31`,
+      currency: 'EUR',
+      byDeductionType: [],
     });
   }
 });

@@ -9,6 +9,7 @@ import {
   getTransactionCount,
   getRecurringPatterns,
   getInsightsDigest,
+  getDeductionCandidates,
   getPortfolioPerformance,
   getPortfolioSummary,
   getNetWorth,
@@ -93,6 +94,50 @@ describe("info API client", () => {
       subscriptionCreep: { new: [], priceChanges: [] },
       categoryOutliers: [],
       cashForecast: null,
+    });
+  });
+
+  it("getDeductionCandidates forwards the year and returns candidates on success", async () => {
+    const payload = {
+      year: 2025,
+      from: "2025-01-01",
+      to: "2025-12-31",
+      currency: "EUR",
+      byDeductionType: [
+        {
+          deductionType: "pensionSavings",
+          total: 120,
+          categoryCount: 1,
+          categories: [{ category: "PENSION:SAVINGS", total: 120, count: 2 }],
+        },
+      ],
+    };
+    let url = "";
+    server.use(
+      http.get(`${API_BASE}/api/info/deduction-candidates`, ({ request }) => {
+        url = request.url;
+        return ok(payload);
+      }),
+    );
+    const res = await getDeductionCandidates(2025);
+    expect(url).toContain("year=2025");
+    expect(res.byDeductionType).toHaveLength(1);
+    expect(res.byDeductionType[0].categories[0].category).toBe("PENSION:SAVINGS");
+  });
+
+  it("getDeductionCandidates fails soft to an empty result on error", async () => {
+    server.use(
+      http.get(`${API_BASE}/api/info/deduction-candidates`, () =>
+        HttpResponse.json({ ok: false, error: { message: "down" } }, { status: 500 }),
+      ),
+    );
+    const res = await getDeductionCandidates(2025);
+    expect(res).toEqual({
+      year: 2025,
+      from: "2025-01-01",
+      to: "2025-12-31",
+      currency: "EUR",
+      byDeductionType: [],
     });
   });
 

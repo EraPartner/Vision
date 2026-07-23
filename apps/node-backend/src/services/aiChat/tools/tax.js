@@ -8,12 +8,12 @@
  * approximation honestly.
  */
 
-import { parseCategoryName } from '@vision/shared-utils';
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents, addAll, roundMoney } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
-import { DEDUCTION_TYPES, classifyDeduction } from '../../tax/deductionClassifier.js';
+import { DEDUCTION_TYPES } from '../../tax/deductionClassifier.js';
+import { computeDeductionCandidates } from '../../tax/deductionCandidatesService.js';
 import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
 import { parsePositiveInt } from './_validate.js';
 
@@ -246,75 +246,38 @@ export const getDeductibles = {
   },
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const year = parseYear(args.year);
-    const { from, to } = yearRange(year);
 
-    const rows = await transactionRepository.getAll({
-      startDate: from,
-      endDate: to,
-      limit: 100_000,
-      offset: 0,
-      active: true,
-    });
+    // Shared classify-and-aggregate step (also serves the REST review card).
+    const candidates = await computeDeductionCandidates({ year });
 
-    const byCategory = new Map();
-    let grandTotal = toDecimal(0);
-
-    for (const row of rows) {
-      const amount = toDecimal(row.amount ?? 0);
-      if (amount.gte(0)) continue; // outflows only
-
-      if (!row.category_name) continue;
-      const { general, detail } = parseCategoryName(row.category_name);
-      const deductionType = classifyDeduction(general, detail);
-      if (!deductionType) continue; // not a recognized deductible
-
-      const key = row.category_name;
-      const entry = byCategory.get(key) || {
-        category: key,
-        deductionType,
-        total: toDecimal(0),
-        count: 0,
-      };
-      entry.total = entry.total.plus(amount.abs());
-      entry.count += 1;
-      byCategory.set(key, entry);
-      grandTotal = grandTotal.plus(amount.abs());
-    }
-
-    const data = Array.from(byCategory.values())
-      .map((e) => ({
-        category: e.category,
-        deductionType: e.deductionType,
-        total: roundToCents(e.total).toNumber(),
-        count: e.count,
-      }))
+    // Flatten the nested groups back into the tool's flat per-category rows.
+    const data = candidates.byDeductionType
+      .flatMap((group) =>
+        group.categories.map((c) => ({
+          category: c.category,
+          deductionType: group.deductionType,
+          total: c.total,
+          count: c.count,
+        })),
+      )
       .sort((a, b) => b.total - a.total);
 
-    // Per-deduction-type roll-up: the contract the Tax Overview review UI
-    // reads (groups by deduction type, not by raw category).
-    const typeAgg = new Map();
-    for (const e of byCategory.values()) {
-      const agg = typeAgg.get(e.deductionType) || { total: toDecimal(0), categoryCount: 0 };
-      agg.total = agg.total.plus(e.total);
-      agg.categoryCount += 1;
-      typeAgg.set(e.deductionType, agg);
-    }
-    const byDeductionType = Array.from(typeAgg.entries())
-      .map(([deductionType, agg]) => ({
-        deductionType,
-        total: roundToCents(agg.total).toNumber(),
-        categoryCount: agg.categoryCount,
-      }))
-      .sort((a, b) => b.total - a.total);
+    // Per-deduction-type roll-up WITHOUT the nested categories — the tool's
+    // existing meta contract (grouping by type, not by raw category).
+    const byDeductionType = candidates.byDeductionType.map(
+      ({ deductionType, total, categoryCount }) => ({ deductionType, total, categoryCount }),
+    );
+
+    const grandTotal = addAll(byDeductionType.map((t) => t.total));
 
     return {
       ok: true,
       data: data.slice(0, maxRows),
       meta: {
         year,
-        from,
-        to,
-        grandTotal: roundToCents(grandTotal).toNumber(),
+        from: candidates.from,
+        to: candidates.to,
+        grandTotal: roundMoney(grandTotal),
         categoryCount: data.length,
         deductionTypes: DEDUCTION_TYPES,
         byDeductionType,

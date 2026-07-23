@@ -182,6 +182,15 @@ export const insightsKeys = {
     digest: ['insightsDigest'] as const,
 };
 
+// ── Tax (transaction-derived) ───────────────────────────────────────────────
+
+export const taxKeys = {
+    /** Invalidation prefix for every per-year deduction-candidates entry. */
+    deductionCandidatesAll: ['tax', 'deduction-candidates'] as const,
+    /** GET /api/info/deduction-candidates?year=… (one entry per year). */
+    deductionCandidates: (year: number) => ['tax', 'deduction-candidates', year] as const,
+};
+
 // ── Cash-flow forecast / bank balances ──────────────────────────────────────
 
 export const cashflowKeys = {

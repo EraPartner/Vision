@@ -139,6 +139,48 @@ export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
     }
 }
 
+/** One user category contributing to a deduction-type candidate group. */
+export interface DeductionCandidateCategory {
+    category: string;
+    total: number;
+    count: number;
+}
+
+/** One Belgian deduction type with its transaction-derived candidate total. */
+export interface DeductionTypeGroup {
+    deductionType: string;
+    total: number;
+    categoryCount: number;
+    /** Contributing categories, sorted by total desc. */
+    categories: DeductionCandidateCategory[];
+}
+
+export interface DeductionCandidatesResponse {
+    year: number;
+    from: string;
+    to: string;
+    currency: string;
+    /** Sorted by total desc; empty when nothing classifies. */
+    byDeductionType: DeductionTypeGroup[];
+}
+
+/** Transaction-derived Belgian deduction candidates for the tax review card. */
+export async function getDeductionCandidates(year: number): Promise<DeductionCandidatesResponse> {
+    try {
+        return await apiRequest('/api/info/deduction-candidates?year=' + year);
+    } catch (err) {
+        // Fail-soft: deduction candidates are optional UI enrichment.
+        logger.warn('Deduction candidates unavailable; using empty result', err);
+        return {
+            year,
+            from: `${year}-01-01`,
+            to: `${year}-12-31`,
+            currency: 'EUR',
+            byDeductionType: [],
+        };
+    }
+}
+
 export function getPortfolioPerformance(params?: {
     currency?: string;
     period?: string;
