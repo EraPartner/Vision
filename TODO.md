@@ -4647,7 +4647,7 @@ detection layer never touches an LLM, so it's unaffected either way.
     - Cap the alert list (e.g. top 5 by confidence) so a long gap since the panel was last opened
       doesn't dump a wall of "news"
 
-- [ ] Category-level spend-outlier detection (new service) 🔽 🔎 verified-present 2026-07-11
+- [x] Category-level spend-outlier detection (new service) 🔽 ✅ 2026-07-23 · `categoryOutlierService.js` (median+MAD, modified-z 3.5 w/ near-zero-MAD €50 floor, like-for-like day-1..N windows, ≥4 populated prior months, 14-day dismiss suppression + worsening re-alert, 3-min cache; 11 unit tests). NOTE: threshold-vs-real-history backtest still deferred (no live data here) — calibrate 3.5 before user-facing enable.
     - Sibling to `recurringDetectionService.js`, not folded into it — different concern (magnitude
       distribution vs. interval pattern)
     - Baseline: median + MAD of monthly category totals over the last 6-7 months. Precedent is
