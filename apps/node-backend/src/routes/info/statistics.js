@@ -7,11 +7,13 @@
  *   - GET /transaction-summary
  *   - GET /planned-expenses-next-month
  *   - GET /recurring-patterns
+ *   - GET /insights-digest
  */
 
 import { Router } from 'express';
 import infoRepository from '../../services/infoService.js';
 import { detectRecurringPatterns } from '../../services/recurringDetectionService.js';
+import { getInsightsDigest } from '../../services/insightsDigestService.js';
 import { listAdapters } from '../../services/importPipeline/adapters/index.js';
 import { logger } from '../../config/logger.js';
 import { getTargetCurrency } from './_queryParams.js';
@@ -57,6 +59,22 @@ router.get('/recurring-patterns', async (req, res) => {
   } catch (err) {
     logger.error('Error detecting recurring patterns; returning empty result', { error: err.message });
     res.ok({ patterns: [], total: 0 });
+  }
+});
+
+// Pre-computed insight findings for the Statistics-page panel (no LLM) — same
+// graceful degradation as /recurring-patterns: empty digest instead of a 500.
+router.get('/insights-digest', async (req, res) => {
+  try {
+    const digest = await getInsightsDigest();
+    res.ok(digest);
+  } catch (err) {
+    logger.error('Error building insights digest; returning empty result', { error: err.message });
+    res.ok({
+      subscriptionCreep: { new: [], priceChanges: [] },
+      categoryOutliers: [],
+      cashForecast: null,
+    });
   }
 });
 

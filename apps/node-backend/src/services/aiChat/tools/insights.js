@@ -15,9 +15,7 @@ import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
 import { parseEnum, parsePositiveInt } from './_validate.js';
 import { detectRecurringPatterns } from '../../recurringDetectionService.js';
-import { detectSubscriptionCreep } from '../../subscriptionCreepService.js';
-import { detectCategoryOutliers } from '../../categoryOutlierService.js';
-import { getCashForecastInsight } from '../../cashForecastInsightService.js';
+import { getInsightsDigest } from '../../insightsDigestService.js';
 
 /**
  * Current bank account balances + total net position.
@@ -323,8 +321,9 @@ export const getRecurringDetected = {
 
 /**
  * Combined insights digest — the narration layer's single read-only interface
- * (ADR-110). Aggregates the ALREADY-COMPUTED findings of the three detection
- * services; it never recomputes anything itself.
+ * (ADR-110). Delegates aggregation of the ALREADY-COMPUTED findings of the
+ * three detection services to the shared insightsDigestService (also backing
+ * GET /api/info/insights-digest); it never recomputes anything itself.
  *
  * v1 passes no dismiss records (undismissed filtering is owned by the UI
  * surfacing layer) and no previous month-end projection.
@@ -337,17 +336,13 @@ export const insightsDigest = {
     properties: {},
   },
   async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const [subscriptionCreep, categoryOutliers, cashForecast] = await Promise.all([
-      detectSubscriptionCreep(),
-      detectCategoryOutliers(),
-      getCashForecastInsight(),
-    ]);
+    const { subscriptionCreep, categoryOutliers, cashForecast } = await getInsightsDigest();
 
     // The services already cap subscription lists to 5 — still slice
     // defensively so a service change can never blow past the tool-row cap.
-    const newSubscriptions = (subscriptionCreep?.new ?? []).slice(0, maxRows);
-    const priceChanges = (subscriptionCreep?.priceChanges ?? []).slice(0, maxRows);
-    const outliers = (Array.isArray(categoryOutliers) ? categoryOutliers : []).slice(0, maxRows);
+    const newSubscriptions = subscriptionCreep.new.slice(0, maxRows);
+    const priceChanges = subscriptionCreep.priceChanges.slice(0, maxRows);
+    const outliers = categoryOutliers.slice(0, maxRows);
 
     return {
       ok: true,

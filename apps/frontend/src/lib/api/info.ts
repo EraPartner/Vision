@@ -64,6 +64,81 @@ export async function getRecurringPatterns(): Promise<{
     }
 }
 
+/** New-subscription finding from the subscription-creep detector. */
+export interface SubscriptionCreepNew {
+    recipientId: number;
+    recipientName: string;
+    findingType: 'new';
+    latestAmount: number;
+    currency: string;
+    detectedPattern: string;
+    intervalDays: number;
+    predictedNext: string;
+    confidence: number;
+}
+
+/** Price-change finding from the subscription-creep detector. */
+export interface SubscriptionCreepPriceChange {
+    recipientId: number;
+    recipientName: string;
+    findingType: 'priceChange';
+    previousAmount: number;
+    newAmount: number;
+    percentChange: number;
+    direction: string;
+    currency: string;
+    confidence: number;
+}
+
+/** Current-month category overspend outlier vs the trailing baseline median. */
+export interface CategoryOutlier {
+    categoryId: number;
+    categoryName: string;
+    monthKey: string;
+    currentAmount: number;
+    baselineMedian: number;
+    deviation: number;
+    direction: string;
+}
+
+/** Month-end cash forecast insight (null when no forecast is available). */
+export interface CashForecast {
+    month: string;
+    currency: string;
+    monthEndProjected: number;
+    minProjected: number;
+    monthEndLow: number;
+    monthEndHigh: number;
+    crossesZero: boolean;
+    movedSignificantly: boolean;
+    prominence: string;
+    methodId: string;
+}
+
+export interface InsightsDigestResponse {
+    subscriptionCreep: {
+        new: SubscriptionCreepNew[];
+        priceChanges: SubscriptionCreepPriceChange[];
+    };
+    categoryOutliers: CategoryOutlier[];
+    cashForecast: CashForecast | null;
+}
+
+/** Pre-computed detection-layer findings for the Statistics insights panel (no LLM). */
+export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
+    try {
+        return await apiRequest('/api/info/insights-digest');
+    } catch (err) {
+        // Fail-soft: the insights digest is optional UI enrichment.
+        logger.warn('Insights digest unavailable; using empty result', err);
+        return {
+            subscriptionCreep: { new: [], priceChanges: [] },
+            categoryOutliers: [],
+            cashForecast: null,
+        };
+    }
+}
+
 export function getPortfolioPerformance(params?: {
     currency?: string;
     period?: string;

@@ -8,6 +8,7 @@ import {
   getDistinctBankAccounts,
   getTransactionCount,
   getRecurringPatterns,
+  getInsightsDigest,
   getPortfolioPerformance,
   getPortfolioSummary,
   getNetWorth,
@@ -66,6 +67,33 @@ describe("info API client", () => {
     );
     const res = await getRecurringPatterns();
     expect(res).toEqual({ patterns: [], total: 0 });
+  });
+
+  it("getInsightsDigest returns the digest on success", async () => {
+    const digest = {
+      subscriptionCreep: { new: [{ recipientId: 1 }], priceChanges: [] },
+      categoryOutliers: [{ categoryId: 7 }],
+      cashForecast: null,
+    };
+    server.use(http.get(`${API_BASE}/api/info/insights-digest`, () => ok(digest)));
+    const res = await getInsightsDigest();
+    expect(res.subscriptionCreep.new).toHaveLength(1);
+    expect(res.categoryOutliers).toHaveLength(1);
+    expect(res.cashForecast).toBeNull();
+  });
+
+  it("getInsightsDigest fails soft to an empty digest on error", async () => {
+    server.use(
+      http.get(`${API_BASE}/api/info/insights-digest`, () =>
+        HttpResponse.json({ ok: false, error: { message: "down" } }, { status: 500 }),
+      ),
+    );
+    const res = await getInsightsDigest();
+    expect(res).toEqual({
+      subscriptionCreep: { new: [], priceChanges: [] },
+      categoryOutliers: [],
+      cashForecast: null,
+    });
   });
 
   it("getPortfolioPerformance forwards currency + period", async () => {

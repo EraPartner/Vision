@@ -175,6 +175,13 @@ export const plannedKeys = {
     recurringPatterns: ['recurringPatterns'] as const,
 };
 
+// ── AI-insights digest (detection layer, no LLM) ────────────────────────────
+
+export const insightsKeys = {
+    /** Shared by the Statistics panel and the badge — one cache entry. */
+    digest: ['insightsDigest'] as const,
+};
+
 // ── Cash-flow forecast / bank balances ──────────────────────────────────────
 
 export const cashflowKeys = {
