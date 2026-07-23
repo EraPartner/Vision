@@ -21,6 +21,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Landmark, SlidersHorizontal } from "lucide-react";
 import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
 import SuggestedDeductionsCard from "@/components/tax/SuggestedDeductionsCard";
+import DeductionCandidatesCard from "@/components/tax/DeductionCandidatesCard";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -176,6 +177,7 @@ export default function TaxOverviewPage() {
               <div>
                 <SuggestedDeductionsCard />
               </div>
+              <DeductionCandidatesCard />
             </div>
 
             {isVisible("yearComparison") && <YearComparisonCard />}

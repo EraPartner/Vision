@@ -4693,8 +4693,8 @@ Decoupled on purpose: no LLM needed, no scheduling machinery, ships on its own.
       (`apps/frontend/src/lib/belgianTax/constants.ts` — pension savings, life/group insurance,
       charitable donations, childcare, alimony), not fuzzy name matching
 
-- [ ] Surface mapped candidates as a reviewable list on the Tax Overview page (same pattern as 🔎 verified-present 2026-07-11
-      `RecurringDetectionPanel.tsx`) instead of chat-only 🔽
+- [x] Surface mapped candidates as a reviewable list on the Tax Overview page (same pattern as ✅ 2026-07-23
+      `RecurringDetectionPanel.tsx`) instead of chat-only 🔽 — `GET /api/info/deduction-candidates` (shared `deductionCandidatesService`) → `useDeductionCandidates(year)` hook → `DeductionCandidatesCard` on the Tax Overview page (mounted after `SuggestedDeductionsCard`). Confirm/reject **per deduction-type group**: Confirm SETS the mapped `BelgianTaxProfile` field to the transaction total AND flips the eligibility flag where one exists (type-safe map in `deductionCandidateFields.ts`, verified against `types.ts`) — no new tax math; Dismiss persists year-scoped in localStorage. Current profile value shown per row. 18 EN/NL i18n keys. 7 card tests + full suite green.
     - Confirm/reject per deduction-type group, not per transaction
     - A confirmed total writes into the existing `BelgianTaxProfile` field (e.g. `childcareCosts`,
       `apps/frontend/src/lib/belgianTax/types.ts:108` — verify each target field name against

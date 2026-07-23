@@ -1,5 +1,6 @@
 export * from './types';
 export * from './constants';
+export * from './deductionCandidateFields';
 export { computeBelgianPIT } from './pit';
 export { computePropertyTaxEstimate } from './propertyTax';
 export {
