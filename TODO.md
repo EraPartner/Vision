@@ -4667,7 +4667,7 @@ detection layer never touches an LLM, so it's unaffected either way.
     - Cache the result the same way the recurring-patterns prerequisite fix above does — this also
       runs on every Statistics-page view
 
-- [ ] Month-end cash forecast surfacing 🔽 🔎 verified-present 2026-07-11
+- [x] Month-end cash forecast surfacing 🔽 ✅ 2026-07-23 · `cashForecastInsightService.js` (reuses the MC `computeCashflowForecast` from `forecast/index.js` — not the non-MC namesake; distills month-end P50, min-future dip → `crossesZero` overdraft flag, p10/p90 cumulative bounds, significant-move detection vs prior digest; prominence alert/standing; 12 unit tests). "Since last digest" delta takes `previousMonthEndProjected` from the caller (persistence owned by the surfacing item).
     - No new detection — call `computeCashflowForecast` from
       `services/calculations/forecast/index.js:255` (the Monte Carlo version the nightly
       `refreshCashflowForecastMc` job uses, which already checks `cashflowForecastMcRepository.get()`
