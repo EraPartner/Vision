@@ -138,6 +138,46 @@ describe("TransactionsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
+    it("applies the Account filter (WP-B4): picking an account queries with its account_id", async () => {
+        const user = userEvent.setup();
+        const captured: URLSearchParams[] = [];
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        { id: 7, name: "KBC Checking", display_name: "KBC Checking", currency: "EUR", type: "checking", is_active: true },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/transactions`, ({ request }) => {
+                captured.push(new URL(request.url).searchParams);
+                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+            }),
+        );
+        renderTransactionsPage();
+
+        const trigger = await screen.findByRole("combobox", { name: /filter by account/i });
+        await user.click(trigger);
+        await user.click(await screen.findByRole("option", { name: /kbc checking/i }));
+
+        // The list refetches with the FK-exact account filter (ADR-088)…
+        await waitFor(() => {
+            expect(captured.some((p) => p.get("account_id") === "7")).toBe(true);
+        });
+        // …and the filter banner names the account via filter_label.
+        expect(await screen.findByText(/filtered by/i)).toHaveTextContent(/kbc checking/i);
+
+        // Clearing via "All accounts" drops the filter again.
+        await user.click(screen.getByRole("combobox", { name: /filter by account/i }));
+        await user.click(await screen.findByRole("option", { name: /all accounts/i }));
+        await waitFor(() => {
+            const last = captured[captured.length - 1];
+            expect(last.get("account_id")).toBeNull();
+        });
+    });
+
     it("shows All Transactions section heading", async () => {
         renderTransactionsPage();
         // txPage.tableTitle = "All Transactions"

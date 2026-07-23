@@ -13,7 +13,7 @@
 
 import { Router } from 'express';
 import accountService from '../services/accountService.js';
-import { mergeAccounts } from '../services/accountMergeService.js';
+import { mergeAccounts, previewMerge } from '../services/accountMergeService.js';
 import { setOpeningBalance } from '../services/openingBalanceService.js';
 import { reconcileAccount } from '../services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
@@ -59,6 +59,20 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   await accountService.remove(id);
   invalidatePortfolioCaches();
   res.ok({ message: `Account ${id} deleted`, links: [] });
+});
+
+// Read-only preview of merging THIS account (:id, the source) INTO ?into=<targetId>
+// (the survivor): row counts that would move, the projected post-merge computed
+// balance (anchor+delta over the union of both accounts' active rows, in the
+// survivor's native currency), and whether the merge would interleave stamped
+// balance histories (§1 F2 — the guard that clears the survivor's statement
+// anchor). No mutation, so no cache invalidation.
+router.get('/:id/merge-preview', validateIdParam, async (req, res) => {
+  const sourceId = parseInt(req.params.id, 10);
+  // previewMerge validates the coerced value (positive integer, ≠ :id → 400).
+  const targetId = Number(req.query.into);
+  const result = await previewMerge(sourceId, targetId);
+  res.ok({ ...result, links: [] });
 });
 
 // Merge one or more source accounts into this (survivor) account: all references repoint to :id

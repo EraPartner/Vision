@@ -150,6 +150,58 @@ describe("AddTransactionDialog (integration)", () => {
         expect(screen.getByLabelText(/comment \(optional\)/i)).toBeInTheDocument();
     });
 
+    it("shows the backdated note when the chosen account's anchor is on/after the entered date (WP-B2)", async () => {
+        const user = userEvent.setup();
+
+        // Anchored account: the stamped statement date is far in the future, so
+        // the dialog's default date (today) is always on/before the anchor.
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 3,
+                            name: "Main",
+                            currency: "EUR",
+                            type: "checking",
+                            liquidity_class: "liquid",
+                            spendable: true,
+                            in_net_worth: true,
+                            tax_wrapper: "none",
+                            owner: "me",
+                            multi_currency_cash: false,
+                            has_cash_sleeve: false,
+                            is_active: true,
+                            created_at: "2025-01-01T00:00:00Z",
+                            updated_at: "2025-01-01T00:00:00Z",
+                            computed_balance: 100,
+                            anchor_date: "2099-12-31",
+                            post_anchor_count: 0,
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+        );
+
+        renderWithApp(<AddTransactionDialog />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        // No account chosen yet → no note.
+        expect(screen.queryByText(/balance won't change/i)).not.toBeInTheDocument();
+
+        // Pick the anchored account from the combobox.
+        await user.click(screen.getByLabelText(/bank account/i));
+        await user.click(await screen.findByText("Main"));
+
+        expect(
+            await screen.findByText(/dated before the .* bank statement/i),
+        ).toBeInTheDocument();
+    });
+
     it("shows duplicate error toast when server returns 409", async () => {
         const user = userEvent.setup();
         const toastSpy = vi.spyOn(toast, "error");

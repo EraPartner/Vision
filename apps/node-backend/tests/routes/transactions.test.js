@@ -125,6 +125,41 @@ describe('Transaction Routes', () => {
       );
       expect(res.json).toHaveBeenCalled();
     });
+
+    it('should thread include_balance to the repository and expose running_balance on rows (WP-B4)', async () => {
+      transactionRepository.getAllWithCount.mockResolvedValue({
+        rows: [{
+          id: 1, date: '2026-01-15', bank_account: 'Chase', amount: '-25.50',
+          recipient_id: 1, running_balance: '974.50',
+        }],
+        total: 1,
+      });
+
+      const req = { query: { include_balance: 'true', account_id: '3' } };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
+        expect.objectContaining({ includeBalance: true, accountId: 3 }),
+      );
+      expect(res.json.mock.calls[0][0].data.items[0].running_balance).toBe(974.5);
+    });
+
+    it('should omit the running_balance key entirely when include_balance is not set', async () => {
+      transactionRepository.getAllWithCount.mockResolvedValue({
+        rows: [{ id: 1, date: '2026-01-15', bank_account: 'Chase', amount: '25.50', recipient_id: 1 }],
+        total: 1,
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
+        expect.objectContaining({ includeBalance: false }),
+      );
+      expect('running_balance' in res.json.mock.calls[0][0].data.items[0]).toBe(false);
+    });
   });
 
   describe('GET /:id', () => {

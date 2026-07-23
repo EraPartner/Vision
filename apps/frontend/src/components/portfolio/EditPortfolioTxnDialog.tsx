@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { toYmd } from '@/components/shared/dateUtils';
 import { usePortfolio } from '@/hooks/usePortfolio';
-import { useAccounts } from '@/hooks/useAccounts';
 import { isUnitBased } from '@/utils/assetClass';
 import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
@@ -53,10 +52,6 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
   const [open, setOpen] = useState(false);
 
   const unitBased = isUnitBased(investment.assetClass);
-
-  // Per-account positioning (ADR-091): a lot's owning account is editable here so
-  // it no longer requires a raw API call to move a single lot between accounts.
-  const { data: accountsData } = useAccounts({ active: 'true' });
 
   const initialForm = () => ({
     date: normalizeYmdInput(transaction.date),
@@ -192,7 +187,6 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
                 <Input value={getTxnTypeLabel(t, transaction.type)} disabled />
               </div>
             )}
-            accounts={accountsData?.items ?? []}
             showUnits={showUnits}
             showFeesTaxes={showFeesTaxes}
             showRecurring={showRecurring}

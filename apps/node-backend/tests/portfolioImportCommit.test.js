@@ -7,7 +7,7 @@ vi.mock('../src/config/logger.js', () => ({
 }));
 
 // Transaction shim: runs the callback; a throw propagates (= rollback).
-// The repo + leg service are module-mocked, so the client goes unused.
+// The repo is module-mocked, so the client goes unused.
 vi.mock('../src/database/connection.js', () =>
   mockTxConnection({ query: vi.fn().mockResolvedValue({ rows: [] }) }));
 
@@ -19,14 +19,9 @@ vi.mock('../src/services/portfolio/fxResolve.js', () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
-vi.mock('../src/services/portfolio/tradeCashLegService.js', () => ({
-  createTradeCashLeg: vi.fn(),
-}));
-
 import { query } from '../src/database/connection.js';
 import portfolioTransactionRepository from '../src/repositories/portfolioTransactionRepository.js';
 import { autoResolveFxRateToEur } from '../src/services/portfolio/fxResolve.js';
-import { createTradeCashLeg } from '../src/services/portfolio/tradeCashLegService.js';
 import { commitBatch } from '../src/services/portfolioImportPipeline/commit.js';
 
 let matchedRows;
@@ -78,8 +73,6 @@ beforeEach(() => {
   portfolioTransactionRepository.create.mockResolvedValue({ id: 100 });
   autoResolveFxRateToEur.mockReset();
   autoResolveFxRateToEur.mockResolvedValue(undefined);
-  createTradeCashLeg.mockReset();
-  createTradeCashLeg.mockResolvedValue(900);
 });
 
 describe('commitBatch (portfolio)', () => {
@@ -167,43 +160,26 @@ describe('commitBatch (portfolio)', () => {
   });
 
   // ── Brokerage fan-out (ADR-095) ─────────────────────────────────────────────
-  it('brokerage trade row: creates the lot + its ADR-090 cash leg, no standalone cash row', async () => {
+  it('brokerage trade row: creates the lot only — no cash row, no synthetic leg (ADR-108)', async () => {
     isBrokerage = true;
     batchAccountId = 7;
     matchedRows = [row({ route: 'portfolio', type: 'buy', type_raw: 'buy' })];
     const res = await commitBatch({ batchId: 5 });
-    expect(res).toMatchObject({ imported: 1, legs: 1 });
-    expect(createTradeCashLeg).toHaveBeenCalledTimes(1);
-    expect(createTradeCashLeg.mock.calls[0][0].cashAccountId).toBe(7);
-    // No standalone cash INSERT for the trade (its leg is the cash effect).
+    expect(res).toMatchObject({ imported: 1 });
+    expect(portfolioTransactionRepository.create).toHaveBeenCalledTimes(1);
+    // No cash INSERT for the trade: imported statements carry the true cash
+    // movements as their own rows (synthetic ADR-090 legs are deleted).
     const cashInserts = query.mock.calls.filter(([s]) => /INSERT INTO transactions/.test(s));
     expect(cashInserts).toHaveLength(0);
   });
 
-  it('brokerage trade: rolls back the trade and errors the row when the cash leg fails (ADR-095 atomicity)', async () => {
-    isBrokerage = true;
-    batchAccountId = 7;
-    portfolioTransactionRepository.create.mockResolvedValueOnce({ id: 555, amount: -1000, fees: 0, taxes: 0 });
-    createTradeCashLeg.mockRejectedValueOnce(new Error('leg insert failed'));
-    matchedRows = [row({ route: 'portfolio', type: 'buy', type_raw: 'buy' })];
-
-    const res = await commitBatch({ batchId: 5 });
-    // The pair shares one DB transaction: the leg failure rejects the
-    // withTransaction callback, rolling the trade back with it — no
-    // compensating delete (which had a crash window between create and delete).
-    expect(res).toMatchObject({ imported: 0, errors: 1, legs: 0 });
-    expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
-    expect(marked[0]).toMatchObject({ status: 'error', message: expect.stringMatching(/cash leg/) });
-  });
-
-  it('brokerage cash row: inserts a cash transaction, no trade/leg', async () => {
+  it('brokerage cash row: inserts a cash transaction, no trade', async () => {
     isBrokerage = true;
     batchAccountId = 7;
     matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 1000, note: 'wire' })];
     const res = await commitBatch({ batchId: 5 });
-    expect(res).toMatchObject({ imported: 1, legs: 0 });
+    expect(res).toMatchObject({ imported: 1 });
     expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
-    expect(createTradeCashLeg).not.toHaveBeenCalled();
     const cashInserts = query.mock.calls.filter(([s]) => /INSERT INTO transactions/.test(s));
     expect(cashInserts).toHaveLength(1);
   });

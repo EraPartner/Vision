@@ -310,6 +310,13 @@ components:
           type: number
           nullable: true
           description: statement_balance − computed_balance; null if no statement balance (ADR-094)
+        anchor_date:
+          type: string
+          format: date
+          description: YYYY-MM-DD date of the stamped statement balance anchoring computed_balance (WP-A1 provenance); absent when nothing is stamped. Only returned by the list endpoint.
+        post_anchor_count:
+          type: integer
+          description: Active ledger entries after the anchor, or all active entries when unstamped — the "{n} entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list endpoint.
         has_transactions:
           type: boolean
           description: Whether the account has any active ledger rows; only returned by the list endpoint.
@@ -524,6 +531,10 @@ components:
         balance:
           type: number
           format: double
+        running_balance:
+          type: number
+          format: double
+          description: Per-account running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true
         category_id:
           type: integer
         category_name:
@@ -1638,6 +1649,75 @@ paths:
         "404":
           description: Target or a source account not found
 
+  /api/accounts/{id}/merge-preview:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: Source account id (the account that would be merged away)
+    get:
+      summary: Preview merging this account into another (read-only)
+      description: >-
+        Dry-run of merging account {id} (the source) INTO the account given by
+        `into` (the survivor). Returns the row counts that would be repointed
+        (same categories POST /merge moves), the projected post-merge computed
+        balance — the anchor+delta definition evaluated over the union of both
+        accounts' active rows, in the survivor's native currency — and whether
+        the merge would interleave stamped balance histories
+        (`stampsInterleaved`), in which case the merge clears the survivor's
+        statement-balance anchor. No mutation.
+      operationId: previewAccountMerge
+      tags: [Accounts]
+      parameters:
+        - in: query
+          name: into
+          required: true
+          schema:
+            type: integer
+          description: Survivor account id (the account {id} would merge into)
+      responses:
+        "200":
+          description: Merge preview
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          into:
+                            type: integer
+                            description: Survivor account id
+                          source:
+                            type: integer
+                            description: Source account id
+                          reassigned:
+                            type: object
+                            description: Row counts that would move to the survivor
+                            properties:
+                              transactions: { type: integer }
+                              planned: { type: integer }
+                              portfolio: { type: integer }
+                              funding: { type: integer }
+                          projectedBalance:
+                            type: number
+                            description: Post-merge computed balance (anchor+delta over the union of both accounts' active rows)
+                          projectedBalanceCurrency:
+                            type: string
+                            description: The survivor's native currency (ISO-4217)
+                          stampsInterleaved:
+                            type: boolean
+                            description: Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor)
+        "400":
+          description: Missing/invalid `into`, or `into` equals {id}
+        "404":
+          description: Source or survivor account not found
+
   /api/accounts/{id}/opening-balance:
     parameters:
       - in: path
@@ -2420,31 +2500,6 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/NetWorthResponse"
-
-  /api/info/net-worth/by-account:
-    get:
-      summary: Net worth split by account (Σ-accounts, ADR-100)
-      description: Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
-      operationId: getNetWorthByAccount
-      tags: [Info]
-      parameters:
-        - in: query
-          name: currency
-          schema:
-            type: string
-          description: "Target currency for conversion (alias: target_currency; default EUR)"
-      responses:
-        "200":
-          description: Per-account net-worth breakdown with holdings history
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        type: object
 
   /api/saved-charts:
     get:
@@ -4442,48 +4497,6 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PortfolioTransaction"
-
-  /api/investments/{id}/move:
-    parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-    post:
-      summary: Move this holding between accounts (in-specie, cost-basis-preserving)
-      description: Moves the investment's lots from `from_account_id` to `to_account_id` (ADR-091). Omit `units` (or pass ≥ net) for a whole move (re-points all lots incl. history); pass `units` for a partial move (unit-based only — FIFO lot re-point + pro-rata boundary split). No sell/buy, no realized gain, no cash leg.
-      operationId: moveHolding
-      tags: [Investments]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [from_account_id, to_account_id]
-              properties:
-                from_account_id:
-                  type: integer
-                to_account_id:
-                  type: integer
-                units:
-                  type: number
-                  nullable: true
-                  description: Units to move; omit for the whole position
-                strategy:
-                  type: string
-                  enum: [fifo, proportional]
-                  description: Lot-selection strategy for a partial move; ignored for a whole move. Defaults to the service default when omitted.
-      responses:
-        "200":
-          description: Move result (mode, movedUnits, lotsMoved, lotsSplit)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-        "404":
-          description: Investment or an account not found
 
   /api/investments/{id}/summary:
     parameters:

@@ -200,9 +200,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       units: Number(row.units) || 0,
       currency: row.currency,
       fxRateToEur: row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
-      // Per-account positioning (ADR-091): the lot's owning account ('unassigned'
-      // for legacy NULLs). Used to split each day's value Σ accounts (ADR-100).
-      accountKey: row.account_id == null ? 'unassigned' : String(Number(row.account_id)),
     });
   }
   // Stable sort each day: non-sells (buy/gift/split/…) first, sells last.
@@ -327,28 +324,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   const unitsByInvestment = {};
-  // Per-account positioning (ADR-091/ADR-100): a relative weight per (investment,
-  // account) — units for unit assets, net invested for non-unit — used to split
-  // each day's per-investment value across accounts. Σ shares == 1 per investment,
-  // so Σ accounts == the aggregate value by construction (the parity guarantee).
-  const weightByAcctInv = new Map();
-  const bumpWeight = (invId, acctKey, delta) => {
-    let m = weightByAcctInv.get(invId);
-    if (!m) { m = new Map(); weightByAcctInv.set(invId, m); }
-    m.set(acctKey, (m.get(acctKey) || 0) + delta);
-  };
-  const splitByAccount = (target, invId, value) => {
-    const m = weightByAcctInv.get(invId);
-    if (!m) return;
-    let totalW = 0;
-    for (const w of m.values()) totalW += w > 0 ? w : 0;
-    if (totalW <= 0) return;
-    for (const [acctKey, w] of m) {
-      if (w <= 0) continue;
-      const share = toDecimal(w).div(totalW);
-      target.set(acctKey, (target.get(acctKey) ?? toDecimal(0)).plus(value.times(share)));
-    }
-  };
   // Cost-weighted average purchase-date FX multiplier per unit investment:
   // m̄ = Σ(buyAmount_i × m_i) / Σ(buyAmount_i), where m_i is the txn-date
   // conversion to the target currency. Valuing units×price at m̄ instead of
@@ -398,8 +373,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.plus(converted);
         else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.plus(converted);
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
-        // Per-account weight: units for unit assets, net invested for non-unit.
-        bumpWeight(tx.investmentId, tx.accountKey, inv ? tx.units : converted.toNumber());
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
 
         if (inv && tx.amount > 0) {
@@ -424,8 +397,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         // min(units, totalUnits)) so a later buy isn't offset by a negative.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         unitsByInvestment[tx.investmentId] = heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
-        // Reduce the selling account's weight (the sell carries its account).
-        bumpWeight(tx.investmentId, tx.accountKey, inv ? -tx.units : converted.negated().toNumber());
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
 
         const fxs = fxNeutralState.get(tx.investmentId);
@@ -442,16 +413,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         if (heldUnits > 0 && tx.units > 0) {
           unitsByInvestment[tx.investmentId] = tx.units;
-          // Rescale every account's weight by the same newTotal/oldTotal factor
-          // so per-account weights stay expressed in post-split units (parity
-          // guarantee, ADR-100). Without this, a later per-account buy/sell —
-          // which carries post-split units — mixes unit scales and skews the
-          // value_by_account proportions.
-          const m = weightByAcctInv.get(tx.investmentId);
-          if (m) {
-            const factor = tx.units / heldUnits;
-            for (const [acctKey, w] of m) m.set(acctKey, w * factor);
-          }
         }
       } else if (tx.type === 'return_of_capital') {
         // Returns capital, reducing net invested (mirrors calculateCostBasis
@@ -465,11 +426,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         } else if (nonUnitS) {
           // Non-unit classes (savings/bond/real_estate) hold no units, so the
           // heldUnits gate never fires. Mirror the sell branch: reduce net
-          // invested and the returning account's weight, so invested/value
-          // stop being overstated forever after a return of capital.
+          // invested, so invested/value stop being overstated forever after a
+          // return of capital.
           cumulativeInvested = cumulativeInvested.minus(converted);
           nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
-          bumpWeight(tx.investmentId, tx.accountKey, converted.negated().toNumber());
         }
       } else if (tx.type === 'interest' && nonUnitS) {
         // Resets the accrual clock to match calculateAccruedInterest.
@@ -486,7 +446,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     let stocksEtfsValue = toDecimal(0);
     let cryptoValue = toDecimal(0);
     let metalsValue = toDecimal(0);
-    const valueByAccount = new Map(); // acctKey → Decimal (ADR-100 per-account split)
 
     const isLatestDay = day === todayYmd;
 
@@ -512,7 +471,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       const invValueNative = toDecimal(units).times(price);
       const invValue = convertAmount(invValueNative, inv.currency, undefined, day);
       totalValue = totalValue.plus(invValue);
-      splitByAccount(valueByAccount, inv.id, invValue);
       if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue = stocksEtfsValue.plus(invValue);
       else if (inv.assetClass === 'crypto') cryptoValue = cryptoValue.plus(invValue);
       else if (inv.assetClass === 'metals') metalsValue = metalsValue.plus(invValue);
@@ -562,7 +520,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
       if (invValue.gt(0)) {
         fixedIncomeValue = fixedIncomeValue.plus(invValue);
-        splitByAccount(valueByAccount, inv.id, invValue);
       }
     }
     totalValue = totalValue.plus(fixedIncomeValue);
@@ -592,13 +549,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       cumulative_inflation: roundMoney(cumulativeInflation.minus(1).times(100), 2),
       inflation_adjusted_value: cumulativeInflation.gt(0)
         ? roundMoney(totalValue.div(cumulativeInflation)) : roundMoney(totalValue),
-      // Per-account holdings split (ADR-100). Σ value_by_account == value by
-      // construction. Persisted by computeAndStoreSnapshots into the
-      // portfolio_snapshot_accounts side table (migration 0074) so
-      // getNetWorthByAccount reads it instead of replaying this day-walk.
-      value_by_account: Object.fromEntries(
-        [...valueByAccount].map(([k, v]) => [k, roundMoney(v)]),
-      ),
     });
   }
 
@@ -636,68 +586,6 @@ async function hasFxNeutralColumn() {
 }
 
 /**
- * Whether the portfolio_snapshot_accounts side table exists (migration 0074).
- * Migrations are user-applied, so the writer degrades gracefully on databases
- * that haven't run it yet — the per-account split is simply not persisted and
- * getNetWorthByAccount falls back to a live replay.
- */
-async function hasSnapshotAccountsTable() {
-  const result = await query(`
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = current_schema()
-      AND table_name = 'portfolio_snapshot_accounts'
-    LIMIT 1
-  `);
-  return result.rows.length > 0;
-}
-
-/**
- * Persist the per-account holdings split (ADR-100) for one currency inside the
- * caller's transaction. Atomic replace: DELETE + batched INSERTs, mirroring the
- * aggregate snapshot writer so the split never diverges from the snapshots it
- * accompanies. Rows are sparse — only accounts holding value on a day appear.
- *
- * @param {import('pg').PoolClient} client
- * @param {object[]} snapshots
- * @param {string} targetCurrency
- * @returns {Promise<number>} number of per-account rows written
- */
-async function storeAccountSplit(client, snapshots, targetCurrency) {
-  await client.query('DELETE FROM portfolio_snapshot_accounts WHERE currency = $1', [targetCurrency]);
-
-  // Flatten each day's value_by_account map into (date, account_key, value) rows.
-  const rows = [];
-  for (const snap of snapshots) {
-    const byAccount = snap.value_by_account || {};
-    for (const [accountKey, value] of Object.entries(byAccount)) {
-      const numeric = Number(value) || 0;
-      if (numeric === 0) continue; // sparse: skip zero-value entries
-      rows.push([snap.snapshot_date, accountKey, numeric]);
-    }
-  }
-
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const values = [];
-    const params = [];
-    let p = 1;
-    for (const [snapshotDate, accountKey, value] of batch) {
-      values.push(`($${p++},$${p++},$${p++},$${p++},NOW())`);
-      params.push(snapshotDate, targetCurrency, accountKey, value);
-    }
-    await client.query(`
-      INSERT INTO portfolio_snapshot_accounts (snapshot_date, currency, account_key, value, computed_at)
-      VALUES ${values.join(', ')}
-      ON CONFLICT (snapshot_date, currency, account_key) DO UPDATE SET
-        value = EXCLUDED.value, computed_at = NOW()
-    `, params);
-  }
-
-  return rows.length;
-}
-
-/**
  * Recompute all daily snapshots and persist to portfolio_performance_snapshots.
  *
  * @param {string} targetCurrency
@@ -715,11 +603,6 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
   const includeFxNeutral = await hasFxNeutralColumn();
   if (!includeFxNeutral) {
     logger.warn('portfolio_performance_snapshots.value_fx_neutral missing — apply migration 0039 to store the FX-neutral series');
-  }
-
-  const includeAccountSplit = await hasSnapshotAccountsTable();
-  if (!includeAccountSplit) {
-    logger.warn('portfolio_snapshot_accounts missing — apply migration 0074 to persist the per-account split (getNetWorthByAccount will replay live until then)');
   }
 
   const columns = [
@@ -766,13 +649,6 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
         VALUES ${values.join(', ')}
         ON CONFLICT (snapshot_date, currency) DO UPDATE SET ${updateSet}
       `, params);
-    }
-
-    // Persist the per-account holdings split (ADR-100) in the same transaction,
-    // so getNetWorthByAccount reads it instead of replaying the full day-walk.
-    if (includeAccountSplit) {
-      const accountRows = await storeAccountSplit(client, snapshots, targetCurrency);
-      logger.info('Per-account snapshot split stored', { rows: accountRows });
     }
   });
 

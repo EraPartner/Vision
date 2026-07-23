@@ -14,7 +14,8 @@ import {useCategories} from "@/hooks/useCategories";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { DatePicker } from "@/components/shared/DatePicker";
-import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { useAccounts } from "@/hooks/useAccounts";
 import { createAddTransactionFormState } from "@/components/forms/addTransactionForm";
 import { parseLocaleNumber } from "@/utils/currency";
 import { AccountCombobox } from "@/components/shared/AccountCombobox";
@@ -26,8 +27,26 @@ export function AddTransactionDialog() {
     const createMutation = useCreateTransaction();
     const {data: recipientsData} = useRecipients({limit: 200, active: true});
     const {data: categoriesData} = useCategories({limit: 200, active: true});
+    // Same cached list the AccountCombobox reads (identical query key) — used to
+    // resolve the chosen account's statement anchor for the backdated note below.
+    const {data: accountsData} = useAccounts({ active: "true" });
 
     const [form, setForm] = useState(() => createAddTransactionFormState(appSettings.defaultCurrency));
+
+    // Backdated-entry provenance note (WP-B2): the computed balance anchors on
+    // the most recent stamped bank-statement balance and only adds entries
+    // *after* it, so an entry dated on/before that anchor won't move the
+    // balance. Resolve the combobox's name value on the D1 normalized identity
+    // (lower/trim), the same way AccountCombobox marks its selection; both
+    // dates are YYYY-MM-DD strings, so plain string compare orders correctly.
+    const normalizedChosen = form.bank_account.trim().toLowerCase();
+    const chosenAccount = normalizedChosen
+        ? accountsData?.items.find((a) => a.name.trim().toLowerCase() === normalizedChosen)
+        : undefined;
+    const backdatedAnchorDate =
+        chosenAccount?.anchor_date && form.transaction_date && form.transaction_date <= chosenAccount.anchor_date
+            ? chosenAccount.anchor_date
+            : undefined;
 
     // Deep link: /transactions?new=1 opens the dialog (native menu ⌘N + dock
     // menu "New Transaction"). Param is consumed so back/refresh don't reopen.
@@ -137,6 +156,14 @@ export function AddTransactionDialog() {
                             <Input id="tx_currency" placeholder={t('addTxn.currencyPlaceholder')} maxLength={10} value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
                         </div>
                     </div>
+
+                    {backdatedAnchorDate && (
+                        <p className="text-xs text-muted-foreground">
+                            {t('addTxn.backdatedBeforeAnchor', {
+                                date: formatDateStringWithAppSettings(backdatedAnchorDate, appSettings.dateFormat),
+                            })}
+                        </p>
+                    )}
 
                     <div className="space-y-2">
                         <Label htmlFor="tx_recipient">{t('form.addTransaction.recipient')}</Label>

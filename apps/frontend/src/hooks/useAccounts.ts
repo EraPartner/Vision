@@ -53,12 +53,18 @@ export function useMergeAccounts() {
     return useMutation({
         mutationFn: ({ targetId, sourceIds }: { targetId: number; sourceIds: number[] }) =>
             apiClient.mergeAccounts(targetId, sourceIds),
-        onSuccess: () => {
+        onSuccess: (result) => {
             // A merge repoints transactions / planned / holdings / funding across accounts, so it
             // touches every account-derived view plus the transaction, planned and portfolio trees.
             // Invalidate exactly those (not the whole cache) — see invalidateAccountRepoint.
             invalidateAccountRepoint(queryClient);
-            toast.success(t('accounts.merged'));
+            // Receipt with the REAL repointed counts from the merge result (§3 F9).
+            toast.success(t('accounts.merged'), {
+                description: t('accounts.mergedReceipt', {
+                    transactions: result.reassigned.transactions,
+                    planned: result.reassigned.planned,
+                }),
+            });
         },
         onError: (error: Error) => {
             toast.error(t('accounts.mergeFailedTitle'), { description: error.message });

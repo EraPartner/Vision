@@ -31,7 +31,6 @@ import {
   refreshInvestmentPrices,
   updateInvestment,
   deleteInvestment,
-  moveHolding,
   getInvestmentPriceHistory,
   getPortfolioTransactions,
   getPortfolioTransactionsBulk,
@@ -280,28 +279,6 @@ describe("portfolio API client", () => {
   it("deleteInvestment resolves on void", async () => {
     server.use(http.delete(`${API_BASE}/api/investments/4`, () => ok(null)));
     await expect(deleteInvestment(4)).resolves.toBeUndefined();
-  });
-
-  it("moveHolding POSTs the move body", async () => {
-    let body: unknown = null;
-    server.use(
-      http.post(`${API_BASE}/api/investments/4/move`, async ({ request }) => {
-        body = await request.json();
-        return ok({
-          investmentId: 4,
-          from: 1,
-          to: 2,
-          mode: "whole",
-          strategy: "fifo",
-          movedUnits: 10,
-          lotsMoved: 1,
-          lotsSplit: 0,
-        });
-      }),
-    );
-    const res = await moveHolding(4, { from_account_id: 1, to_account_id: 2, strategy: "fifo" });
-    expect(body).toMatchObject({ from_account_id: 1, to_account_id: 2, strategy: "fifo" });
-    expect(res.movedUnits).toBe(10);
   });
 
   it("getInvestmentPriceHistory forwards range params", async () => {

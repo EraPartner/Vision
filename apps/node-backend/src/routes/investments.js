@@ -20,7 +20,6 @@ import {
   deleteTransaction,
   updateTransaction,
   getInvestmentSummary,
-  moveHolding,
 } from '../controllers/investmentController.js';
 
 const router = Router();
@@ -36,7 +35,6 @@ router.get('/transactions',   getBulkTransactions);
 router.get('/:id/price-history', validateIdParam, getPriceHistory);
 router.get('/:id/transactions',  validateIdParam, listTransactions);
 router.post('/:id/transactions', validateIdParam, createTransaction);
-router.post('/:id/move',         validateIdParam, moveHolding);
 router.get('/:id/summary',       validateIdParam, getInvestmentSummary);
 router.get('/:id',               validateIdParam, getInvestment);
 router.patch('/:id',             validateIdParam, updateInvestment);

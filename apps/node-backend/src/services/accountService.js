@@ -221,6 +221,14 @@ export const accountService = {
     // it. Server-stamped only — sanitize() never accepts closed_at from the body.
     if (fields.is_active === false && current.is_active) {
       fields.closed_at = new Date();
+      // §1 F3 aggregate semantics: `in_net_worth` governs aggregates,
+      // `is_active` governs UI listing — so closing an account also drops it
+      // from every aggregate (net worth, bank-balances widget). An explicit
+      // in_net_worth in the same PATCH wins (respect
+      // explicit intent). Reactivating deliberately does NOT auto-restore
+      // in_net_worth: whether a reopened account should count again is a user
+      // decision, made explicitly via PATCH { in_net_worth: true }.
+      if (!('in_net_worth' in fields)) fields.in_net_worth = false;
     } else if (fields.is_active === true) {
       fields.closed_at = null;
     }

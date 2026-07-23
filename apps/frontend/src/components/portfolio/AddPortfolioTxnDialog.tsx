@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Loader2 } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
-import { useAccounts } from '@/hooks/useAccounts';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
 import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
@@ -49,7 +48,6 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     taxes: '',
     fxRateToEur: '',
     note: '',
-    accountId: '',
     isRecurring: false,
     recurrenceInterval: 'monthly' as RecurrenceInterval,
     recurrenceEndDate: '',
@@ -57,16 +55,9 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
 
   const reset = () => setForm({
     type: 'buy', date: toYmd(new Date()),
-    amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', fxRateToEur: '', note: '', accountId: '',
+    amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', fxRateToEur: '', note: '',
     isRecurring: false, recurrenceInterval: 'monthly', recurrenceEndDate: '',
   });
-
-  // Per-account positioning (ADR-091): tag the lot to an account (optional).
-  const { data: accountsData } = useAccounts({ active: 'true' });
-  // Trades = transfers (ADR-090): when the chosen account has a cash sleeve, the
-  // trade's cash leg settles in that account. (Sleeve-less wallets need a funding
-  // account chosen at entry — a follow-on; no auto cash leg for now.)
-  const selectedTradeAccount = (accountsData?.items ?? []).find((a) => String(a.id) === form.accountId);
 
   const amountInput = parsePositive(form.amount);
   const unitsInput = parsePositive(form.units);
@@ -127,8 +118,6 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
         fx_rate_to_eur: fxRateValue,
         currency: investment.currency,
         note: form.note.trim() || undefined,
-        ...(form.accountId ? { account_id: Number(form.accountId) } : {}),
-        ...(selectedTradeAccount?.has_cash_sleeve ? { cash_account_id: Number(form.accountId) } : {}),
         is_recurring: form.isRecurring,
         recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,
         recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
@@ -179,7 +168,6 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
                 </Select>
               </div>
             )}
-            accounts={accountsData?.items ?? []}
             showUnits={showUnits}
             showFeesTaxes={showFeesTaxes}
             showRecurring={showRecurring}

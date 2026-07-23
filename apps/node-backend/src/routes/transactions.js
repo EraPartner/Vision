@@ -609,6 +609,14 @@ function formatTransaction(row) {
     amount_eur: amountEur,
     currency: row.currency,
     balance: row.balance != null ? toNumber(toDecimal(row.balance)) : null,
+    // Per-account running balance — present only when the list was queried
+    // with include_balance=true (SQL window in transactionRepository, ADR-088
+    // partition; first consumed by the /accounts/:id ledger route, WP-B4).
+    // Key omitted entirely on non-windowed reads so single-row GET/create/
+    // update responses are unchanged.
+    ...(row.running_balance != null && {
+      running_balance: toNumber(toDecimal(row.running_balance)),
+    }),
     category_id: row.effective_category_id ?? row.category_id,
     category_name: row.category_name || null,
     comment: row.comment,

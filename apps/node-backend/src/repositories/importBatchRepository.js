@@ -93,6 +93,7 @@ export async function getPreviewRows(batchId) {
             isr.currency,
             to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
             isr.memo,
+            isr.bank_account,
             isr.match_source,
             isr.match_similarity,
             isr.matched_pattern_id,

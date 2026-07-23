@@ -3,9 +3,9 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-06-17
-last_modified: 2026-06-17
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078, auto-link, planned-match]
+updated: 2026-07-23
+last_modified: 2026-07-23
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078, auto-link, planned-match, account-disclosure, wp-b6, july-2026]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
 related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/FileHeadersPanel.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/csvSeparator.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
@@ -348,6 +348,17 @@ Duplicate detection checks:
 - At commit, the category written into `transactions.category_id` is `COALESCE(staging.override_category_id, recipient.default_category_id, NULL)`.
 - The runtime fallback `COALESCE(t.category_id, r.default_category_id)` in `transactionRepository` is preserved for backwards compatibility with rows committed before ADR-046 (which carry `category_id = NULL`).
 - See [[docs/adr/046-import-review-category-assignment|ADR-046]] for full decision context.
+
+### Account Disclosure (WP-B6, July 2026)
+
+The review page (`ImportReviewPage`) discloses, before commit, which accounts the batch will write to:
+
+- The preview endpoint (`GET /api/import/batches/:id/preview`) now returns each staged row's `bank_account` label (the account label parsed from the CSV; already stored by `stage.js`, previously not exposed).
+- The page groups staged rows by that label and renders a per-account summary line — "{n} transactions → **{account}**" — near the match-source totals. Rows without a label are bucketed under a muted "unspecified account" line.
+- Each distinct label is cross-referenced against the existing accounts list (`GET /api/accounts?active=all`) under the D1 normalized identity (`lower(btrim(name))`). A label matching no existing account gets a "new account will be created" badge — committing such rows auto-creates the account via the DB trigger from migration `0056`.
+- **Read-only**: the disclosure has no account override/picker; it only states where the batch will land.
+- **Post-commit nudge**: when the committed batch created ≥1 new account, a follow-up success toast ("This import created {n} new account(s)") carries a "Review accounts" action that navigates to the accounts hub (`/accounts`) so the user can classify/name the new accounts. Account-derived query caches are invalidated so the hub shows them immediately.
+- i18n keys: `importReview.accounts.*` (line, newBadge, unspecified) and `importReview.toast.newAccounts` / `importReview.toast.reviewAccounts` (en + nl).
 
 ### 5. Transaction Creation
 - Creates transactions in main table
