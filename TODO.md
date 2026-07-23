@@ -4637,7 +4637,7 @@ detection layer never touches an LLM, so it's unaffected either way.
       button from. Discovery of "something's new" is handled by the badge above, not by this reply, so
       there's no separate notification problem to solve here
 
-- [ ] Subscription-creep digest 🔽 🔎 verified-present 2026-07-11
+- [x] Subscription-creep digest 🔽 ✅ 2026-07-23 · `subscriptionCreepService.js` (pure diff layer over `detectRecurringPatterns`; expense-only; `new` = undismissed recurring expenses, `priceChanges` = undismissed patterns with amountChanges; independent `{recipientId, findingType}` dismissal, top-5-by-confidence cap; 9 unit tests). Persistence of dismiss records owned by the surfacing UI item.
     - Diff layer only, not new detection — `recurringDetectionService.detectRecurringPatterns()`
       already recomputes full history and already flags amount changes (`detectAmountChanges`)
     - Flag `recipientId`s without a matching `{recipientId, findingType:'new'}` dismiss record as new
