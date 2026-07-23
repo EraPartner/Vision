@@ -8,27 +8,17 @@
  * approximation honestly.
  */
 
+import { parseCategoryName } from '@vision/shared-utils';
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents, addAll, roundMoney } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
+import { DEDUCTION_TYPES, classifyDeduction } from '../../tax/deductionClassifier.js';
 import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
 import { parsePositiveInt } from './_validate.js';
 
 const MIN_YEAR = 1970;
 const MAX_YEAR = 3000;
-
-const DEDUCTIBLE_KEYWORDS = Object.freeze([
-  'tax',
-  'donation',
-  'charity',
-  'pension',
-  'insurance',
-  'mortgage',
-  'childcare',
-  'tuition',
-  'medical',
-]);
 
 const DISCLAIMER_APPROX =
   'Approximation only. Vision does not apply Belgian tax rules, withholdings, exemptions, or lot-level cost basis. Figures are derived heuristically from ledger data — verify with your accountant.';
@@ -234,12 +224,14 @@ export const getCapitalGainsForYear = {
 };
 
 /**
- * Potentially tax-deductible outflows, identified by keyword match on
- * category_name (format "general:detail") in a year.
+ * Potentially tax-deductible outflows in a year, classified into specific
+ * Belgian deduction types by the explicit category-name classifier
+ * (services/tax/deductionClassifier.js). Categories the classifier does not
+ * recognize are excluded — precision over recall.
  */
 export const getDeductibles = {
   name: 'getDeductibles',
-  description: 'Potentially tax-deductible outflows grouped by category in a given year. Identified by keyword match on category name (tax, donation, charity, pension, insurance, mortgage, childcare, tuition, medical). Use for "what can I deduct".',
+  description: `Potentially tax-deductible outflows grouped by category in a given year, each classified into a specific Belgian deduction type (${DEDUCTION_TYPES.join(', ')}) via an explicit category-name classifier. Unrecognized categories are excluded. Use for "what can I deduct".`,
   parameters: {
     type: 'object',
     properties: {
@@ -271,12 +263,18 @@ export const getDeductibles = {
       const amount = toDecimal(row.amount ?? 0);
       if (amount.gte(0)) continue; // outflows only
 
-      const label = (row.category_name || '').toLowerCase();
-      if (!label) continue;
-      if (!DEDUCTIBLE_KEYWORDS.some((kw) => label.includes(kw))) continue;
+      if (!row.category_name) continue;
+      const { general, detail } = parseCategoryName(row.category_name);
+      const deductionType = classifyDeduction(general, detail);
+      if (!deductionType) continue; // not a recognized deductible
 
       const key = row.category_name;
-      const entry = byCategory.get(key) || { category: key, total: toDecimal(0), count: 0 };
+      const entry = byCategory.get(key) || {
+        category: key,
+        deductionType,
+        total: toDecimal(0),
+        count: 0,
+      };
       entry.total = entry.total.plus(amount.abs());
       entry.count += 1;
       byCategory.set(key, entry);
@@ -286,8 +284,26 @@ export const getDeductibles = {
     const data = Array.from(byCategory.values())
       .map((e) => ({
         category: e.category,
+        deductionType: e.deductionType,
         total: roundToCents(e.total).toNumber(),
         count: e.count,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    // Per-deduction-type roll-up: the contract the Tax Overview review UI
+    // reads (groups by deduction type, not by raw category).
+    const typeAgg = new Map();
+    for (const e of byCategory.values()) {
+      const agg = typeAgg.get(e.deductionType) || { total: toDecimal(0), categoryCount: 0 };
+      agg.total = agg.total.plus(e.total);
+      agg.categoryCount += 1;
+      typeAgg.set(e.deductionType, agg);
+    }
+    const byDeductionType = Array.from(typeAgg.entries())
+      .map(([deductionType, agg]) => ({
+        deductionType,
+        total: roundToCents(agg.total).toNumber(),
+        categoryCount: agg.categoryCount,
       }))
       .sort((a, b) => b.total - a.total);
 
@@ -300,9 +316,10 @@ export const getDeductibles = {
         to,
         grandTotal: roundToCents(grandTotal).toNumber(),
         categoryCount: data.length,
-        matchedKeywords: DEDUCTIBLE_KEYWORDS,
+        deductionTypes: DEDUCTION_TYPES,
+        byDeductionType,
         currency: 'EUR',
-        disclaimer: `${DISCLAIMER_APPROX} Matching is a keyword heuristic on category name — not every hit is actually deductible under Belgian tax law, and genuine deductibles without a matching keyword will be missed.`,
+        disclaimer: `${DISCLAIMER_APPROX} Categories are mapped to Belgian deduction types by an explicit name-based classifier (not substring guessing); unrecognized categories are excluded, so genuine deductibles with unusual names may be missed. Every classification is still an approximation the user must confirm — this is not tax advice.`,
         renderAs: 'bar',
         xField: 'category',
         yField: 'total',

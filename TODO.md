@@ -4683,8 +4683,8 @@ detection layer never touches an LLM, so it's unaffected either way.
 
 Decoupled on purpose: no LLM needed, no scheduling machinery, ships on its own.
 
-- [ ] Replace `getDeductibles`'s keyword-substring heuristic with a category→CIR-92-deduction-type 🔎 verified-present 2026-07-11
-      mapping table 🔽
+- [x] Replace `getDeductibles`'s keyword-substring heuristic with a category→CIR-92-deduction-type ✅ 2026-07-23 · `services/tax/deductionClassifier.js`
+      mapping table 🔽 — `classifyDeduction(general, detail)` → one of 8 stable types (`pensionSavings`, `lifeInsurance`, `groupInsurance`, `charitableDonations`, `childcare`, `alimony`, `unionDues`, `mortgageInterest`) or null. Token-based (not substring), EN+NL, diacritic-insensitive, precision-first: `INSURANCE:CAR`/generic insurance/medical/tuition/bare gift/bare union/mortgage-repayment → null (all false positives the old heuristic hit). `getDeductibles` now tags each row with `deductionType` + a `meta.byDeductionType` roll-up for the item-7 review UI. 82 tests. NOTE: user-defined categories mean this is a curated best-effort default (design decision confirmed with the owner: curated map + confirm UI); the review UI is the safety net.
     - `apps/node-backend/src/services/aiChat/tools/tax.js:20-30` currently matches 9 hardcoded
       substrings against `category_name`; its own code comment already flags this as unreliable
       ("not every hit is actually deductible... genuine deductibles without a matching keyword will
