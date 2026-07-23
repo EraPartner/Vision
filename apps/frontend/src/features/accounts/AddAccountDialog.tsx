@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,10 @@ import { Plus, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useCreateAccount } from "@/hooks/useAccounts";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiClient } from "@/lib/api";
+import { invalidateAccountDerived, invalidateTransactionData } from "@/lib/queryKeys";
+import { parseDecimal } from "@/lib/decimal";
+import { toYmd } from "@/components/shared/dateUtils";
 import type { AccountType, AccountOwner, AccountLiquidityClass, AccountTaxWrapper } from "@/types/api";
 import { SUPPORTED_CURRENCIES as CURRENCIES } from "@/utils/currency";
 import { toAccountPayload } from "./accountFormMapping";
@@ -35,11 +40,13 @@ const ACCOUNT_TYPES: AccountType[] = [
 ];
 const OWNERS: AccountOwner[] = ["me", "partner", "joint"];
 const LIQUIDITY: AccountLiquidityClass[] = ["liquid", "semi_liquid", "illiquid"];
-const TAX_WRAPPERS: AccountTaxWrapper[] = ["none", "pension", "tax_advantaged"];
 
 // Flag fields that flagsForType pre-fills. Once the user edits one of these
 // directly, a later type change must not clobber their choice — ADR-089
 // defaults are only suggestions for fields the user hasn't touched.
+// has_cash_sleeve/tax_wrapper stay listed although their inputs were removed
+// from the dialog (§3 F7, consumer-less): they can no longer be "touched", so
+// a type change always applies their type-driven payload defaults.
 const FLAG_KEYS = ["liquidity_class", "spendable", "has_cash_sleeve", "tax_wrapper"] as const;
 type FlagKey = typeof FLAG_KEYS[number];
 
@@ -77,6 +84,7 @@ type AddAccountDialogProps =
 
 export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
     const isEditMode = props.mode === "edit";
     const editProps = isEditMode ? props : undefined;
 
@@ -94,15 +102,58 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         isEditMode ? props.initialValues : EMPTY,
     );
 
+    // Optional opening balance on create (§3 F4) — after the account is created
+    // this lands as the visible transfer_source='opening' ledger row via the
+    // existing POST /accounts/:id/opening-balance path. Not part of
+    // AccountFormValues: edit mode uses the OpeningBalanceDialog instead.
+    const [openingBalance, setOpeningBalance] = useState("");
+    const [openingBalanceDate, setOpeningBalanceDate] = useState(() => toYmd(new Date()));
+
+    const stampOpeningBalance = useMutation({
+        mutationFn: (input: { id: number; balance: number; date: string; currency: string }) =>
+            apiClient.setOpeningBalance(input.id, {
+                balance: input.balance,
+                date: input.date,
+                currency: input.currency,
+            }),
+        onSuccess: (result) => {
+            // The anchor is a real ledger row — balances/net worth and the
+            // transaction lists all restate (same fan-out as OpeningBalanceDialog).
+            invalidateAccountDerived(queryClient);
+            invalidateTransactionData(queryClient);
+            if (result.warning) toast.warning(t('accounts.openingBalance.saved'), { description: result.warning });
+            else toast.success(t('accounts.openingBalance.saved'));
+        },
+        onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: e.message }),
+    });
+
     // Flag fields the user has edited by hand this session; a type change leaves
     // these alone and only applies flagsForType defaults to untouched fields.
     const [touchedFlags, setTouchedFlags] = useState<Set<FlagKey>>(new Set());
+
+    // display_name mirrors name until the user edits it by hand (§3 F7
+    // auto-suggest). Only in create mode — an existing account's display name
+    // is its own value and must never be clobbered by a name edit.
+    const [displayNameEdited, setDisplayNameEdited] = useState(isEditMode);
 
     const set = <K extends keyof AccountFormValues>(key: K, value: AccountFormValues[K]) => {
         if ((FLAG_KEYS as readonly string[]).includes(key as string)) {
             setTouchedFlags(prev => new Set(prev).add(key as FlagKey));
         }
         setForm(f => ({ ...f, [key]: value }));
+    };
+
+    const onNameChange = (name: string) => {
+        setForm(f => ({
+            ...f,
+            name,
+            ...(displayNameEdited ? {} : { display_name: name }),
+        }));
+    };
+
+    const onDisplayNameChange = (display_name: string) => {
+        setDisplayNameEdited(true);
+        setForm(f => ({ ...f, display_name }));
     };
 
     const onTypeChange = (type: AccountType) => {
@@ -140,12 +191,26 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         if (isEditMode) {
             editProps?.onSave(values);
         } else {
+            const openingAmount = openingBalance.trim() ? parseDecimal(openingBalance) : null;
             createMutation.mutate(
                 toAccountPayload(values, "create"),
                 {
-                    onSuccess: () => {
+                    onSuccess: (created) => {
+                        // Opening balance entered on create → stamp the visible
+                        // 'opening' ledger row on the new account (§3 F4).
+                        if (openingAmount != null && Number.isFinite(openingAmount) && openingBalanceDate) {
+                            stampOpeningBalance.mutate({
+                                id: created.id,
+                                balance: openingAmount,
+                                date: openingBalanceDate,
+                                currency: values.currency,
+                            });
+                        }
                         setForm(EMPTY);
                         setTouchedFlags(new Set());
+                        setDisplayNameEdited(false);
+                        setOpeningBalance("");
+                        setOpeningBalanceDate(toYmd(new Date()));
                         setShowAdvanced(false);
                         setCreateOpen(false);
                     },
@@ -158,14 +223,17 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const onOpenChange = editProps?.onOpenChange ?? setCreateOpen;
     const isPending = editProps?.isSaving ?? createMutation.isPending;
 
-    const switchRow = (key: keyof AccountFormValues, label: string) => (
-        <div className="flex items-center justify-between py-1.5">
-            <Label htmlFor={`acct-${key}`} className="font-normal">{label}</Label>
-            <Switch
-                id={`acct-${key}`}
-                checked={form[key] as boolean}
-                onCheckedChange={(v) => set(key, v as AccountFormValues[typeof key])}
-            />
+    const switchRow = (key: keyof AccountFormValues, label: string, hint?: string) => (
+        <div className="py-1.5">
+            <div className="flex items-center justify-between">
+                <Label htmlFor={`acct-${key}`} className="font-normal">{label}</Label>
+                <Switch
+                    id={`acct-${key}`}
+                    checked={form[key] as boolean}
+                    onCheckedChange={(v) => set(key, v as AccountFormValues[typeof key])}
+                />
+            </div>
+            {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
         </div>
     );
 
@@ -187,9 +255,10 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         placeholder={t('accounts.field.namePlaceholder')}
                         maxLength={200}
                         value={form.name}
-                        onChange={(e) => set("name", e.target.value)}
+                        onChange={(e) => onNameChange(e.target.value)}
                         required
                     />
+                    <p className="text-xs text-muted-foreground">{t('accounts.field.nameHint')}</p>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="acct-display">{t('accounts.field.displayName')}</Label>
@@ -198,7 +267,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                         placeholder={t('accounts.field.displayNamePlaceholder')}
                         maxLength={200}
                         value={form.display_name}
-                        onChange={(e) => set("display_name", e.target.value)}
+                        onChange={(e) => onDisplayNameChange(e.target.value)}
                     />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -238,6 +307,43 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                     </Select>
                 </div>
 
+                {/* Opening balance on create (§3 F4) — stamps the visible
+                    'opening' ledger row after creation. Liability accounts
+                    call it what it is: outstanding debt. */}
+                {!isEditMode && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <Label htmlFor="acct-opening-balance">
+                                {form.type === "liability"
+                                    ? t('accounts.openingBalance.createDebtLabel')
+                                    : t('accounts.openingBalance.createLabel')}
+                            </Label>
+                            <Input
+                                id="acct-opening-balance"
+                                type="text"
+                                inputMode="decimal"
+                                pattern="^-?[0-9]+([.,][0-9]+)?$"
+                                placeholder={t('accounts.openingBalance.createPlaceholder')}
+                                value={openingBalance}
+                                onChange={(e) => setOpeningBalance(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="acct-opening-date">{t('accounts.openingBalance.dateLabel')}</Label>
+                            <Input
+                                id="acct-opening-date"
+                                type="date"
+                                required={!!openingBalance.trim()}
+                                value={openingBalanceDate}
+                                onChange={(e) => setOpeningBalanceDate(e.target.value)}
+                            />
+                        </div>
+                        <p className="col-span-2 -mt-1 text-xs text-muted-foreground">
+                            {t('accounts.openingBalance.createHint')}
+                        </p>
+                    </div>
+                )}
+
                 <button
                     type="button"
                     className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -260,6 +366,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <p className="text-xs text-muted-foreground">{t('accounts.field.ownerHint')}</p>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="acct-liquidity">{t('accounts.field.liquidityClass')}</Label>
@@ -271,24 +378,15 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <p className="text-xs text-muted-foreground">{t('accounts.field.liquidityHint')}</p>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="acct-tax">{t('accounts.field.taxWrapper')}</Label>
-                            <Select value={form.tax_wrapper} onValueChange={(v) => set("tax_wrapper", v as AccountTaxWrapper)}>
-                                <SelectTrigger id="acct-tax"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {TAX_WRAPPERS.map((w) => (
-                                        <SelectItem key={w} value={w}>{t(`accounts.taxWrapper.${w}`)}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {/* tax_wrapper / has_cash_sleeve / multi_currency_cash inputs removed
+                            (§3 F7): nothing consumes them, so the dialog stops asking. The
+                            payload still carries their type-driven defaults untouched. */}
                         <div className="divide-y divide-border/40">
-                            {switchRow("spendable", t('accounts.field.spendable'))}
+                            {switchRow("spendable", t('accounts.field.spendable'), t('accounts.field.spendableHint'))}
                             {switchRow("in_net_worth", t('accounts.field.inNetWorth'))}
-                            {switchRow("has_cash_sleeve", t('accounts.field.hasCashSleeve'))}
-                            {switchRow("multi_currency_cash", t('accounts.field.multiCurrencyCash'))}
                         </div>
                         <div className="grid grid-cols-2 gap-3 pt-1">
                             <div className="space-y-2">

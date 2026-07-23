@@ -14,8 +14,10 @@
  * server date filter, which would truncate the window's history and produce
  * wrong balances.
  *
- * Account actions Edit / Merge / Close (+ opening balance, archive, delete)
- * relocated here from the hub cards; hub cards keep open + reconcile.
+ * Account actions live in the header menu (relocated off the hub cards, WP-B4).
+ * Lifecycle is deliberately two verbs (§3 F5): Edit… + Close (Archive folded
+ * into Close; Reopen while closed), plus Delete only when the account has no
+ * transactions — otherwise a disabled row routes the user to Close.
  */
 import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -34,7 +36,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Sparkline } from "@/components/charts";
 import {
-    Archive, ArchiveRestore, ArrowLeft, Coins, DoorClosed, GitMerge, Landmark,
+    ArchiveRestore, ArrowLeft, Coins, DoorClosed, GitMerge, Landmark,
     Lock, MoreVertical, Pencil, Receipt, Trash2, X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -172,8 +174,11 @@ export default function AccountDetailPage() {
         );
     };
 
-    const toggleArchive = (a: Account) =>
-        updateMutation.mutate({ id: a.id, data: { is_active: !a.is_active } });
+    // Reopen a closed account. Note: the WP-A3 close semantics dropped it from
+    // aggregates (in_net_worth=false) and reopening does NOT auto-restore that —
+    // the user re-opts-in via Edit if wanted.
+    const reopen = (a: Account) =>
+        updateMutation.mutate({ id: a.id, data: { is_active: true } });
 
     const requestDelete = async (a: Account) => {
         const ok = await confirm({
@@ -235,7 +240,7 @@ export default function AccountDetailPage() {
         { label: t("accounts.field.currency"), value: a.currency },
         { label: t("accounts.field.owner"), value: t(`accounts.owner.${a.owner}`) },
         { label: t("accounts.field.liquidityClass"), value: t(`accounts.liquidity.${a.liquidity_class}`) },
-        { label: t("accounts.field.taxWrapper"), value: t(`accounts.taxWrapper.${a.tax_wrapper}`) },
+        // tax_wrapper is consumer-less and hidden from the UI (§3 F7) — not shown here either.
         ...(a.institution ? [{ label: t("accounts.field.institution"), value: a.institution }] : []),
         { label: t("accounts.field.spendable"), value: a.spendable ? t("common.yes") : t("common.no") },
         { label: t("accounts.field.inNetWorth"), value: a.in_net_worth ? t("common.yes") : t("common.no") },
@@ -289,22 +294,37 @@ export default function AccountDetailPage() {
                                         <GitMerge className="mr-2 h-4 w-4" /> {t("accounts.merge")}
                                     </DropdownMenuItem>
                                 )}
-                                {a.is_active && (
+                                {/* ONE lifecycle verb (§3 F5): Close (= archive + drop from
+                                    aggregates, WP-A3) while active, Reopen while closed. */}
+                                {a.is_active ? (
                                     <DropdownMenuItem onClick={() => setClosing(true)}>
                                         <DoorClosed className="mr-2 h-4 w-4" /> {t("accounts.close.action")}
                                     </DropdownMenuItem>
+                                ) : (
+                                    <DropdownMenuItem onClick={() => reopen(a)}>
+                                        <ArchiveRestore className="mr-2 h-4 w-4" /> {t("accounts.restore")}
+                                    </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem onClick={() => toggleArchive(a)}>
-                                    {a.is_active
-                                        ? <><Archive className="mr-2 h-4 w-4" /> {t("accounts.archive")}</>
-                                        : <><ArchiveRestore className="mr-2 h-4 w-4" /> {t("accounts.restore")}</>}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => requestDelete(a)}
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" /> {t("common.delete")}
-                                </DropdownMenuItem>
+                                {/* Delete only exists for an account with no transactions;
+                                    otherwise a disabled row explains the close route (§3 F5). */}
+                                {a.has_transactions === false ? (
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => requestDelete(a)}
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" /> {t("common.delete")}
+                                    </DropdownMenuItem>
+                                ) : (
+                                    <DropdownMenuItem disabled>
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        <span className="flex flex-col">
+                                            <span>{t("common.delete")}</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {t("accounts.delete.hasTransactions")}
+                                            </span>
+                                        </span>
+                                    </DropdownMenuItem>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </>
@@ -530,7 +550,6 @@ export default function AccountDetailPage() {
             {merging && (
                 <MergeAccountDialog
                     source={a}
-                    accounts={accounts}
                     open={merging}
                     onOpenChange={(o) => { if (!o) setMerging(false); }}
                 />
@@ -538,7 +557,6 @@ export default function AccountDetailPage() {
             {closing && (
                 <CloseAccountDialog
                     account={a}
-                    accounts={accounts}
                     open={closing}
                     onOpenChange={(o) => { if (!o) setClosing(false); }}
                 />

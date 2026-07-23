@@ -153,6 +153,53 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         expect(screen.getByRole("menuitem", { name: /close account/i })).toBeInTheDocument();
     });
 
+    // ── WP-B5 §3 F5: ONE Close verb; Delete gated on has_transactions ────────
+
+    it("offers a single Close verb (no separate Archive) and disables Delete with an explanation when the account has transactions", async () => {
+        mockApi();
+        renderDetail("/accounts/1"); // CHECKING: has_transactions: true, active
+        await screen.findByRole("heading", { name: "KBC Checking", level: 1 });
+
+        await userEvent.click(screen.getByRole("button", { name: "Account actions" }));
+        await screen.findByRole("menuitem", { name: /edit/i });
+
+        // One lifecycle verb: Close. The old Archive item is folded into it.
+        expect(screen.getByRole("menuitem", { name: /close account/i })).toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /^archive$/i })).not.toBeInTheDocument();
+
+        // Delete is present but disabled, with the close-instead explanation.
+        const del = screen.getByRole("menuitem", { name: /delete/i });
+        expect(del).toHaveAttribute("aria-disabled", "true");
+        expect(del).toHaveTextContent(/has transactions — close instead/i);
+    });
+
+    it("enables Delete for an account without transactions", async () => {
+        mockApi();
+        renderDetail("/accounts/2"); // BROKER: has_transactions: false
+        await screen.findByRole("heading", { name: "Degiro", level: 1 });
+
+        await userEvent.click(screen.getByRole("button", { name: "Account actions" }));
+        const del = await screen.findByRole("menuitem", { name: /delete/i });
+        expect(del).not.toHaveAttribute("aria-disabled", "true");
+
+        await userEvent.click(del);
+        // The confirm dialog opens instead of a dead disabled row.
+        expect(await screen.findByText("Delete account?")).toBeInTheDocument();
+    });
+
+    it("shows Reopen (not Close/Archive) for a closed account", async () => {
+        mockApi({
+            accounts: [{ ...CHECKING, id: 4, name: "Shut", display_name: "Shut", is_active: false }],
+        });
+        renderDetail("/accounts/4");
+        await screen.findByRole("heading", { name: "Shut", level: 1 });
+
+        await userEvent.click(screen.getByRole("button", { name: "Account actions" }));
+        expect(await screen.findByRole("menuitem", { name: /reopen/i })).toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /close account/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /^archive$/i })).not.toBeInTheDocument();
+    });
+
     it("renders the drift chip and opens the Reconcile dialog from it", async () => {
         mockApi();
         renderDetail("/accounts/3");

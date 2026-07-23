@@ -22,13 +22,14 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Check, Loader2, Plus } from 'lucide-react';
+import { Check, Coins, Loader2, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { ReconcileMode } from '@/lib/api/accounts';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { useBalanceProvenance } from '@/features/accounts/balanceProvenance';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
+import { toYmd } from '@/components/shared/dateUtils';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
 
@@ -61,7 +62,31 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
     onError: (e: Error) => toast.error(t('accounts.reconcile.failed'), { description: e.message }),
   });
 
-  const busy = reconcile.isPending;
+  // §3 F4 backfill: when NO statement anchor is stamped yet (anchor_date
+  // absent — list-endpoint provenance, WP-A1), offer an ADDITIVE third path
+  // that records the statement figure as the account's opening-balance anchor
+  // (same POST /accounts/:id/opening-balance the OpeningBalanceDialog uses).
+  const canBackfillOpening = !account.anchor_date && account.statement_balance != null;
+  const backfill = useMutation({
+    mutationFn: () =>
+      apiClient.setOpeningBalance(account.id, {
+        balance: statement,
+        date: account.statement_balance_date
+          ? account.statement_balance_date.slice(0, 10)
+          : toYmd(new Date()),
+        currency: account.currency,
+      }),
+    onSuccess: (result) => {
+      invalidateAccountDerived(queryClient);
+      invalidateTransactionData(queryClient);
+      if (result.warning) toast.warning(t('accounts.openingBalance.saved'), { description: result.warning });
+      else toast.success(t('accounts.openingBalance.saved'));
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: e.message }),
+  });
+
+  const busy = reconcile.isPending || backfill.isPending;
   const pendingMode = reconcile.variables;
 
   return (
@@ -128,6 +153,27 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
               {t('accounts.reconcile.adjustSubmit')}
             </Button>
           </div>
+          {canBackfillOpening && (
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{t('accounts.reconcile.backfillTitle')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('accounts.reconcile.backfillDescription', {
+                  balance: fmtCur(statement, account.currency),
+                })}
+              </p>
+              <Button
+                variant="outline"
+                className="mt-1 w-full"
+                disabled={busy}
+                onClick={() => backfill.mutate()}
+              >
+                {backfill.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  : <Coins className="h-4 w-4 mr-1" />}
+                {t('accounts.reconcile.backfillSubmit')}
+              </Button>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="pt-2">

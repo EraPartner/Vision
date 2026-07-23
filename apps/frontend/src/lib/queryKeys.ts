@@ -70,6 +70,10 @@ export const tagKeys = {
 export const accountKeys = {
     all: ['accounts'] as const,
     list: (params?: object) => ['accounts', params] as const,
+    /** Read-only merge dry-run (WP-B5 dialog preview). Under the 'accounts'
+     *  prefix so account mutations invalidate stale previews too. */
+    mergePreview: (sourceId: number, targetId: number) =>
+        ['accounts', 'merge-preview', sourceId, targetId] as const,
 };
 
 export const bankAccountKeys = {
