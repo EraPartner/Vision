@@ -203,3 +203,34 @@ describe('splitRepository emits coerced money on every write path', () => {
     expect(splits.every((s) => s.amount_paid === 0)).toBe(true);
   });
 });
+
+// The split lists only page when the caller asks: an absent limit must leave
+// the query unbounded so the pre-pagination clients keep seeing every row.
+describe('splitRepository opt-in LIMIT/OFFSET', () => {
+  const cases = [
+    ['getSplitsByTransaction', (page) => splitRepository.getSplitsByTransaction(2, page)],
+    ['getOwedByRecipient', (page) => splitRepository.getOwedByRecipient(7, page)],
+    ['getPayments', (page) => splitRepository.getPayments(7, page)],
+  ];
+
+  it.each(cases)('%s emits no LIMIT when unpaginated', async (_name, call) => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await call(undefined);
+    expect(query.mock.calls[0][0]).not.toContain('LIMIT');
+    expect(query.mock.calls[0][1]).toHaveLength(1);
+  });
+
+  it.each(cases)('%s appends LIMIT/OFFSET after the existing params', async (_name, call) => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await call({ limit: 10, offset: 20 });
+    expect(query.mock.calls[0][0]).toContain('LIMIT $2 OFFSET $3');
+    expect(query.mock.calls[0][1].slice(1)).toEqual([10, 20]);
+  });
+
+  it('counts coerce the pg bigint string to a number', async () => {
+    query.mockResolvedValue({ rows: [{ count: '13' }] });
+    expect(await splitRepository.countSplitsByTransaction(2)).toBe(13);
+    expect(await splitRepository.countOwedByRecipient(7)).toBe(13);
+    expect(await splitRepository.countPayments(7)).toBe(13);
+  });
+});

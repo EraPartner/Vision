@@ -1,7 +1,15 @@
 /**
  * /api/info/net-worth:
  *   - Returns full snapshot array when no pagination params.
- *   - Returns newest-first slice + pagination meta when limit/offset supplied.
+ *   - Returns a newest-first slice when limit/offset are supplied.
+ *
+ * Pagination facts travel in the response BODY (snapshotsTotal / snapshotsLimit
+ * / snapshotsOffset), the one convention the API uses — this endpoint was the
+ * last emitter of the parallel `meta.pagination` shape, which is now retired
+ * (packages/types/src/api.js). The body is a composite (current totals + the
+ * snapshot series), not a bare collection, so the list fields are prefixed with
+ * the list they describe rather than being the bare `total/limit/offset` a
+ * `{items, total}` collection body uses.
  */
 
 import { Router } from 'express';
@@ -14,7 +22,7 @@ import {
   resolveCacheWithInflight,
 } from '../../services/info/cache.js';
 import { resolveLivePortfolioValue } from '../../services/info/liveSummary.js';
-import { parsePagination } from '../../lib/pagination.js';
+import { parseOptionalPagination } from '../../lib/pagination.js';
 
 const router = Router();
 
@@ -35,15 +43,14 @@ router.get(
       },
     });
 
-    const hasLimit = Object.prototype.hasOwnProperty.call(req.query, 'limit');
-    const hasOffset = Object.prototype.hasOwnProperty.call(req.query, 'offset');
+    const page = parseOptionalPagination(req.query, { defaultLimit: 50, maxLimit: 5000 });
 
-    if (!hasLimit && !hasOffset) {
+    if (!page) {
       res.ok(data);
       return;
     }
 
-    const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
+    const { limit, offset } = page;
 
     const allSnapshots = Array.isArray(data?.snapshots) ? data.snapshots : [];
     // Page newest-first by indexing from the end — avoids copying and
@@ -51,15 +58,18 @@ router.get(
     const len = allSnapshots.length;
     const pageStart = Math.min(offset, len);
     const pageEnd = Math.min(offset + limit, len);
-    const page = [];
+    const pageSnapshots = [];
     for (let i = pageStart; i < pageEnd; i++) {
-      page.push(allSnapshots[len - 1 - i]);
+      pageSnapshots.push(allSnapshots[len - 1 - i]);
     }
 
-    res.ok(
-      { ...data, snapshots: page, snapshotsTotal: allSnapshots.length },
-      { pagination: { total: allSnapshots.length, limit, offset } },
-    );
+    res.ok({
+      ...data,
+      snapshots: pageSnapshots,
+      snapshotsTotal: allSnapshots.length,
+      snapshotsLimit: limit,
+      snapshotsOffset: offset,
+    });
   },
 );
 

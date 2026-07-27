@@ -39,8 +39,13 @@ List accounts.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | active | `true` \| `false` \| `all` | `true` | Filter by active status |
+| limit | integer | — (unbounded) | Page size, capped at 1000 |
+| offset | integer | `0` | Rows to skip |
 
-Returns `{ items: Account[], total, links }`.
+Returns `{ items: Account[], total, links }`. Pagination is **opt-in**: send neither
+`limit` nor `offset` and the response holds every matching account (`total` = that
+count, no `limit`/`offset` keys). Send either and the body adds `limit` + `offset`
+while `total` stays the full match count.
 
 ### GET /api/accounts/:id
 

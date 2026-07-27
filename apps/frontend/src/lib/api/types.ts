@@ -102,8 +102,15 @@ export interface NetWorthResponse {
     monthlyChange: number;
     monthlyChangePercent: number;
     snapshots: NetWorthSnapshot[];
-    /** Total number of snapshots server-side (only set when pagination params sent). */
+    /**
+     * Pagination facts for `snapshots`, in the body (the one API-wide
+     * convention — there is no `meta.pagination`). All three are set only when
+     * the request supplied limit/offset; without them `snapshots` is the
+     * complete series.
+     */
     snapshotsTotal?: number;
+    snapshotsLimit?: number;
+    snapshotsOffset?: number;
 }
 
 export type ChartType = 'line' | 'bar' | 'area';

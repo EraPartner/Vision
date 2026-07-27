@@ -1,7 +1,8 @@
 /**
  * Account routes (ADR-088).
  *
- * GET    /api/accounts        — list (filter by ?active=true|false|all, default true)
+ * GET    /api/accounts        — list (filter by ?active=true|false|all, default true;
+ *                               optional ?limit/?offset — absent means the full list)
  * GET    /api/accounts/:id    — fetch one
  * POST   /api/accounts        — create
  * PATCH  /api/accounts/:id    — update (partial)
@@ -20,14 +21,18 @@ import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { ValidationError } from '../middleware/errorHandler.js';
+import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
 const router = Router();
 
+// Pagination is opt-in: without limit/offset this still answers the complete
+// list (the accounts hub renders all of them), so no client is truncated.
 router.get('/', async (req, res) => {
   const { active = 'true' } = req.query;
   const activeFilter = active === 'all' ? null : active !== 'false';
-  const accounts = await accountService.list({ active: activeFilter });
-  res.ok({ items: accounts, total: accounts.length, links: [] });
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const { items, total } = await accountService.list({ active: activeFilter, ...(page ?? {}) });
+  res.ok({ ...listBody(items, total, page), links: [] });
 });
 
 router.get('/:id', validateIdParam, async (req, res) => {

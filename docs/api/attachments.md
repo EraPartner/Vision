@@ -59,13 +59,18 @@ Upload a file attachment to a transaction.
 
 ### GET /api/attachments/transaction/:id
 
-List all attachments for a transaction.
+List attachments for a transaction.
 
 **Path Parameters:**
 - `id` (integer, required): Transaction ID
 
 **Query Parameters:**
-- None
+- `limit` (integer, optional, capped at 1000): page size
+- `offset` (integer, optional, default 0): rows to skip
+
+Pagination is opt-in — with neither param the response lists every attachment on the
+transaction and `total` is that count. With either, the body also carries `limit` and
+`offset`, and `total` stays the full attachment count.
 
 **Response (200 OK):**
 ```json

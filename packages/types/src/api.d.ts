@@ -7,19 +7,13 @@ import type { ApiErrorCodeValue } from './errors.js';
 export { ApiErrorCode } from './errors.js';
 export type { ApiErrorCodeValue } from './errors.js';
 
-export interface ResponsePagination {
-  total: number;
-  limit: number;
-  /** Page-based pagination cursor (1-indexed). Mutually exclusive with offset. */
-  page?: number;
-  /** Offset-based pagination cursor (0-indexed row count). Mutually exclusive with page. */
-  offset?: number;
-  hasMore?: boolean;
-}
-
+/**
+ * Pagination lives in the response BODY (`{items, total, limit?, offset?}`),
+ * never in `meta` — see the note in api.js. There is intentionally no
+ * `ResponsePagination` type here.
+ */
 export interface ResponseMeta {
   requestId?: string;
-  pagination?: ResponsePagination;
   extra?: Record<string, unknown>;
 }
 

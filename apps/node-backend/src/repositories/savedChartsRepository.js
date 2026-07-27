@@ -1,5 +1,5 @@
 import { query } from '../database/connection.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { buildSetClauses, buildLimitOffset } from '../lib/sqlClauses.js';
 
 // date_range_* are DATE columns — emitted via to_char so the wire carries the
 // calendar day, not a pg Date that JSON-serializes to the previous day east of UTC.
@@ -18,9 +18,25 @@ function mapRow(r) {
 }
 
 const savedChartsRepository = {
-  async getAll() {
-    const result = await query(`SELECT ${COLUMNS} FROM saved_charts ORDER BY created_at ASC`);
+  /**
+   * List saved charts. `limit` is optional and defaults to unbounded — the
+   * chart picker loads every saved chart, so only an explicit limit/offset
+   * narrows the result.
+   *
+   * @param {{ limit?: number|null, offset?: number }} [page]
+   */
+  async getAll({ limit = null, offset = 0 } = {}) {
+    const params = [];
+    const sql = `SELECT ${COLUMNS} FROM saved_charts ORDER BY created_at ASC`
+      + buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     return result.rows.map(mapRow);
+  },
+
+  /** Row count — the `total` for a paginated list. */
+  async getCount() {
+    const result = await query('SELECT COUNT(*) FROM saved_charts');
+    return parseInt(result.rows[0].count, 10);
   },
 
   async getById(id) {

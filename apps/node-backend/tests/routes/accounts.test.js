@@ -167,3 +167,50 @@ describe('POST /:id/merge — source_ids are rejected, not filtered', () => {
     expect(mergeAccounts).toHaveBeenCalledWith(1, []);
   });
 });
+
+describe('Account Routes — GET / pagination is opt-in', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // The accounts hub has no paging UI and asks for no limit/offset; the route
+  // must keep answering the complete list (and must not echo limit/offset).
+  it('returns the full list and no limit/offset when neither param is sent', async () => {
+    accountService.list.mockResolvedValue({ items: [{ id: 1 }, { id: 2 }], total: 2 });
+    const res = createMockResponse();
+    await routeHandlers['get:/']({ query: {} }, res);
+
+    expect(accountService.list).toHaveBeenCalledWith({ active: true });
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      data: { items: [{ id: 1 }, { id: 2 }], total: 2, links: [] },
+    });
+  });
+
+  it('treats an empty limit param as absent', async () => {
+    accountService.list.mockResolvedValue({ items: [{ id: 1 }], total: 1 });
+    const res = createMockResponse();
+    await routeHandlers['get:/']({ query: { limit: '' } }, res);
+
+    expect(accountService.list).toHaveBeenCalledWith({ active: true });
+    expect(res.json.mock.calls[0][0].data.limit).toBeUndefined();
+  });
+
+  it('pages and reports the full total when limit/offset are supplied', async () => {
+    accountService.list.mockResolvedValue({ items: [{ id: 3 }], total: 12 });
+    const res = createMockResponse();
+    await routeHandlers['get:/']({ query: { active: 'all', limit: '1', offset: '2' } }, res);
+
+    expect(accountService.list).toHaveBeenCalledWith({ active: null, limit: 1, offset: 2 });
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      data: { items: [{ id: 3 }], total: 12, limit: 1, offset: 2, links: [] },
+    });
+  });
+
+  it('clamps limit to the per-resource cap', async () => {
+    accountService.list.mockResolvedValue({ items: [], total: 0 });
+    const res = createMockResponse();
+    await routeHandlers['get:/']({ query: { limit: '99999' } }, res);
+
+    expect(accountService.list).toHaveBeenCalledWith({ active: true, limit: 1000, offset: 0 });
+  });
+});

@@ -7,6 +7,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
+import { buildLimitOffset } from '../lib/sqlClauses.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import {
   computeOwedSummary,
@@ -171,9 +172,15 @@ export const splitRepository = {
   },
 
   /**
-   * Get all splits for a specific transaction.
+   * Get the splits for a specific transaction. `limit` is optional and defaults
+   * to unbounded — the split editor shows every row of the transaction it is
+   * editing, so only an explicit limit/offset narrows the result.
+   *
+   * @param {number} transactionId
+   * @param {{ limit?: number|null, offset?: number }} [page]
    */
-  async getSplitsByTransaction(transactionId) {
+  async getSplitsByTransaction(transactionId, { limit = null, offset = 0 } = {}) {
+    const params = [transactionId];
     const sql = `
       SELECT ts.*, r.name AS recipient_name,
              COALESCE(SUM(sp.amount), 0) AS amount_paid
@@ -183,9 +190,18 @@ export const splitRepository = {
       WHERE ts.transaction_id = $1
       GROUP BY ts.id, r.name
       ORDER BY ts.created_at
-    `;
-    const result = await query(sql, [transactionId]);
+    ` + buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     return result.rows.map(formatSplit);
+  },
+
+  /** Split count for a transaction — the `total` for a paginated list. */
+  async countSplitsByTransaction(transactionId) {
+    const result = await query(
+      'SELECT COUNT(*) FROM transaction_splits WHERE transaction_id = $1',
+      [transactionId],
+    );
+    return parseInt(result.rows[0].count, 10);
   },
 
   /**
@@ -200,6 +216,14 @@ export const splitRepository = {
    * are kept in agg_split_outstanding (for historical totals) but joined
    * back via transaction_splits.is_settled here so fully-settled rows
    * drop out of the owed view.
+   */
+  /**
+   * Returns the FULL summary — no SQL LIMIT here on purpose. The rows are
+   * projected, filtered (zero-remaining groups drop out) and re-sorted by
+   * computeOwedSummary after the aggregate, so a LIMIT pushed into the query
+   * would page pre-projection rows and hand back the wrong slice; the route
+   * slices the computed array instead. Cardinality is one row per recipient
+   * with outstanding splits, not per split.
    */
   async getOwedSummary() {
     // Collapse alias recipients into their primary so linked recipients show
@@ -224,9 +248,15 @@ export const splitRepository = {
   },
 
   /**
-   * Get detailed unsettled splits for a specific recipient.
+   * Get detailed unsettled splits for a specific recipient. `limit` is optional
+   * and defaults to unbounded — the owed-detail drawer lists the recipient's
+   * whole outstanding history, so only an explicit limit/offset narrows it.
+   *
+   * @param {number} recipientId
+   * @param {{ limit?: number|null, offset?: number }} [page]
    */
-  async getOwedByRecipient(recipientId) {
+  async getOwedByRecipient(recipientId, { limit = null, offset = 0 } = {}) {
+    const params = [recipientId];
     const sql = `
       ${RECIPIENT_GROUP_CTE}
       SELECT ts.*,
@@ -246,8 +276,8 @@ export const splitRepository = {
       ) sp_agg ON true
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
       ORDER BY t.date DESC
-    `;
-    const result = await query(sql, [recipientId]);
+    ` + buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     return result.rows.map(row => ({
       ...formatSplit(row),
       transaction_date: row.transaction_date,
@@ -259,6 +289,21 @@ export const splitRepository = {
       amount_paid: toNumber(toDecimal(row.amount_paid)),
       remaining: toNumber(subtract(row.amount, row.amount_paid)),
     }));
+  },
+
+  /**
+   * Count a recipient's unsettled splits (same alias-group + settled filter as
+   * getOwedByRecipient) — the `total` for a paginated list.
+   */
+  async countOwedByRecipient(recipientId) {
+    const sql = `
+      ${RECIPIENT_GROUP_CTE}
+      SELECT COUNT(*)
+      FROM transaction_splits ts
+      WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
+    `;
+    const result = await query(sql, [recipientId]);
+    return parseInt(result.rows[0].count, 10);
   },
 
   /**
@@ -409,12 +454,28 @@ export const splitRepository = {
   },
 
   /**
-   * Get payments for a split.
+   * Get payments for a split. `limit` is optional and defaults to unbounded —
+   * the payment history panel lists them all, so only an explicit limit/offset
+   * narrows the result.
+   *
+   * @param {number} splitId
+   * @param {{ limit?: number|null, offset?: number }} [page]
    */
-  async getPayments(splitId) {
-    const sql = `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC`;
-    const result = await query(sql, [splitId]);
+  async getPayments(splitId, { limit = null, offset = 0 } = {}) {
+    const params = [splitId];
+    const sql = `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC`
+      + buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     return result.rows.map(formatPayment);
+  },
+
+  /** Payment count for a split — the `total` for a paginated list. */
+  async countPayments(splitId) {
+    const result = await query(
+      'SELECT COUNT(*) FROM split_payments WHERE split_id = $1',
+      [splitId],
+    );
+    return parseInt(result.rows[0].count, 10);
   },
 
   /**

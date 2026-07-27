@@ -12,7 +12,7 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
-import { buildInsert, buildSetClauses } from '../lib/sqlClauses.js';
+import { buildInsert, buildSetClauses, buildLimitOffset } from '../lib/sqlClauses.js';
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
@@ -39,8 +39,12 @@ export const accountRepository = {
    * "as of {date} statement · {n} entries since" / "sum of {n} entries" fields),
    * and has_transactions — whether the account has any active ledger rows
    * (portfolio accounts whose activity lives in portfolio_transactions have none).
+   *
+   * `limit` is optional and defaults to unbounded — the accounts list has always
+   * served every row and the hub UI has no paging, so only an explicit
+   * limit/offset narrows it (buildLimitOffset).
    */
-  async getAll({ active = null } = {}) {
+  async getAll({ active = null, limit = null, offset = 0 } = {}) {
     let sql = `
       SELECT ${COLUMNS},
              lb.balance AS computed_balance,
@@ -59,7 +63,9 @@ export const accountRepository = {
     if (active === true) sql += ` AND a.is_active = true`;
     else if (active === false) sql += ` AND a.is_active = false`;
     sql += ` ORDER BY a.name`;
-    const result = await query(sql, []);
+    const params = [];
+    sql += buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     // Provenance shaping (WP-B2, mirrors infoRepositoryBanks): anchor_date is
     // already a 'YYYY-MM-DD' string via to_char in the lateral — SQL NULL
     // (nothing stamped) becomes undefined, never null (convention: the backend
@@ -71,6 +77,20 @@ export const accountRepository = {
         ? undefined
         : parseInt(row.post_anchor_count, 10),
     }));
+  },
+
+  /**
+   * Count accounts matching the active filter — the `total` for a paginated
+   * list (the unpaginated path uses the returned row count instead).
+   *
+   * @param {{ active?: boolean|null }} [opts]
+   */
+  async getCount({ active = null } = {}) {
+    let sql = `SELECT COUNT(*) FROM accounts a WHERE 1=1`;
+    if (active === true) sql += ` AND a.is_active = true`;
+    else if (active === false) sql += ` AND a.is_active = false`;
+    const result = await query(sql, []);
+    return parseInt(result.rows[0].count, 10);
   },
 
   async getById(id) {

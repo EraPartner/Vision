@@ -14,6 +14,30 @@ servers:
 
 # ─── Shared envelope & list wrappers ─────────────────────────────────────────
 components:
+  parameters:
+    # Opt-in pagination for list endpoints that historically returned every row.
+    # Both are optional and, when neither is sent, the response carries the full
+    # collection (and no limit/offset fields) — exactly the pre-pagination
+    # behaviour, so existing clients are never silently truncated.
+    OptionalLimit:
+      in: query
+      name: limit
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+      description: >
+        Page size. Omit (together with offset) to receive the whole collection.
+        Values above the endpoint's cap are clamped.
+    OptionalOffset:
+      in: query
+      name: offset
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+      description: Rows to skip. Omit (together with limit) to receive the whole collection.
+
   schemas:
 
     # ADR-026 API envelope
@@ -52,9 +76,26 @@ components:
         title:
           type: string
 
-    PaginationMeta:
+    # Pagination travels in the response BODY, mixed in alongside `items` —
+    # never in the envelope's `meta`. `total` is the full match count, not the
+    # length of the page.
+    PaginationFields:
       type: object
       required: [total, limit, offset]
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    # Same fields, for lists whose pagination is OPT-IN: a request that sends
+    # neither limit nor offset gets the complete collection back (and then
+    # neither field appears, because there is no page to describe).
+    OptionalPaginationFields:
+      type: object
+      required: [total]
       properties:
         total:
           type: integer
@@ -114,7 +155,7 @@ components:
 
     CategoryList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/PaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -191,7 +232,7 @@ components:
 
     RecipientList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/PaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -227,7 +268,7 @@ components:
 
     TagList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/PaginationFields"
         - type: object
           required: [items]
           properties:
@@ -336,7 +377,7 @@ components:
 
     AccountList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/OptionalPaginationFields"
         - type: object
           required: [items]
           properties:
@@ -344,6 +385,10 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/Account"
+            links:
+              type: array
+              items:
+                $ref: "#/components/schemas/Link"
 
     AccountCreate:
       type: object
@@ -631,7 +676,7 @@ components:
 
     TransactionList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/PaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -846,7 +891,7 @@ components:
 
     PlannedTransactionList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/PaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -941,7 +986,7 @@ components:
 
     InvestmentList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/PaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -1003,7 +1048,7 @@ components:
 
     PortfolioTransactionList:
       allOf:
-        - $ref: "#/components/schemas/PaginationMeta"
+        - $ref: "#/components/schemas/PaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -1073,7 +1118,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/NetWorthSnapshot"
+        # Pagination facts for the embedded `snapshots` list, in the body (the
+        # single API-wide convention). Present only when the request paginated.
         snapshotsTotal:
+          type: integer
+        snapshotsLimit:
+          type: integer
+        snapshotsOffset:
           type: integer
 
     # ─── Saved Charts ────────────────────────────────────────────────────────
@@ -1201,16 +1252,17 @@ components:
           format: date-time
 
     # Envelope `data` for the split-list endpoints (res.ok({ items, total })).
+    # limit/offset appear only when the caller paginated (opt-in).
     SplitList:
-      type: object
-      required: [items, total]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Split"
-        total:
-          type: integer
+      allOf:
+        - $ref: "#/components/schemas/OptionalPaginationFields"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Split"
 
     # Aggregated "who owes what" row from computeOwedSummary. No currency is
     # carried here — the summary sums across a recipient's splits.
@@ -1230,6 +1282,33 @@ components:
           type: number
         split_count:
           type: integer
+
+    # One unsettled split of a recipient (GET /api/splits/owed/{id}) — a Split
+    # enriched with the fields of the transaction it was carved out of.
+    SplitOwedDetail:
+      allOf:
+        - $ref: "#/components/schemas/Split"
+        - type: object
+          required: [transaction_date, transaction_amount, transaction_currency, remaining]
+          properties:
+            transaction_date:
+              type: string
+              format: date
+            transaction_memo:
+              type: string
+              nullable: true
+            transaction_amount:
+              type: number
+            transaction_currency:
+              type: string
+            bank_account:
+              type: string
+              nullable: true
+            transaction_recipient_name:
+              type: string
+              nullable: true
+            remaining:
+              type: number
 
     # ─── Attachments ─────────────────────────────────────────────────────────
     Attachment:
@@ -1648,9 +1727,11 @@ paths:
             type: string
             enum: ["true", "false", "all"]
           description: Filter by active status (default true)
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Account list
+          description: Account list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -2603,13 +2684,14 @@ paths:
           name: currency
           schema:
             type: string
-        - in: query
-          name: limit
-          schema:
-            type: integer
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Net worth with history
+          description: >
+            Net worth with history. `snapshots` holds every snapshot unless
+            limit/offset are supplied, in which case it is a newest-first page
+            and snapshotsTotal/snapshotsLimit/snapshotsOffset describe it.
           content:
             application/json:
               schema:
@@ -2625,9 +2707,12 @@ paths:
       summary: List saved charts
       operationId: getSavedCharts
       tags: [Charts]
+      parameters:
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Saved chart list
+          description: Saved chart list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -2636,15 +2721,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              $ref: "#/components/schemas/SavedChart"
-                          total:
-                            type: integer
+                        allOf:
+                          - $ref: "#/components/schemas/OptionalPaginationFields"
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/SavedChart"
     post:
       summary: Create saved chart
       operationId: createSavedChart
@@ -4842,9 +4927,12 @@ paths:
       summary: List split amounts owed per recipient
       operationId: getSplitsOwed
       tags: [Splits]
+      parameters:
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Owed summary per recipient
+          description: Owed summary per recipient (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -4853,9 +4941,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/SplitOwed"
+                        allOf:
+                          - $ref: "#/components/schemas/OptionalPaginationFields"
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/SplitOwed"
 
   /api/splits/owed/{id}:
     parameters:
@@ -4868,13 +4962,29 @@ paths:
       summary: Get owed detail for recipient
       operationId: getSplitOwedByRecipient
       tags: [Splits]
+      parameters:
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Owed detail
+          description: Owed detail (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/OptionalPaginationFields"
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/SplitOwedDetail"
 
   /api/splits/owed/{id}/export/csv:
     parameters:
@@ -4906,9 +5016,12 @@ paths:
       summary: Get splits for a transaction
       operationId: getSplitsByTransaction
       tags: [Splits]
+      parameters:
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Split list
+          description: Split list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -5052,9 +5165,12 @@ paths:
       summary: List payments for a split
       operationId: getSplitPayments
       tags: [Splits]
+      parameters:
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Payment list
+          description: Payment list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -5063,15 +5179,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              $ref: "#/components/schemas/SplitPayment"
-                          total:
-                            type: integer
+                        allOf:
+                          - $ref: "#/components/schemas/OptionalPaginationFields"
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/SplitPayment"
 
   /api/splits/{id}/settle:
     parameters:
@@ -5123,9 +5239,12 @@ paths:
       summary: List attachments for a transaction
       operationId: getTransactionAttachments
       tags: [Attachments]
+      parameters:
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Attachment list
+          description: Attachment list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -5134,9 +5253,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/Attachment"
+                        allOf:
+                          - $ref: "#/components/schemas/OptionalPaginationFields"
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/Attachment"
     post:
       summary: Upload an attachment for a transaction
       operationId: uploadAttachment
@@ -5749,7 +5874,7 @@ paths:
                     properties:
                       data:
                         allOf:
-                          - $ref: "#/components/schemas/PaginationMeta"
+                          - $ref: "#/components/schemas/PaginationFields"
                           - type: object
                             required: [items]
                             properties:
@@ -6170,7 +6295,7 @@ paths:
                     properties:
                       data:
                         allOf:
-                          - $ref: "#/components/schemas/PaginationMeta"
+                          - $ref: "#/components/schemas/PaginationFields"
                           - type: object
                             required: [items]
                             properties:

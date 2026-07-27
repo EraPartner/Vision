@@ -3040,10 +3040,15 @@ export interface components {
             method: string;
             title?: string;
         };
-        PaginationMeta: {
+        PaginationFields: {
             total: number;
             limit: number;
             offset: number;
+        };
+        OptionalPaginationFields: {
+            total: number;
+            limit?: number;
+            offset?: number;
         };
         Category: {
             id: number;
@@ -3068,7 +3073,7 @@ export interface components {
             description?: string;
             is_active?: boolean;
         };
-        CategoryList: components["schemas"]["PaginationMeta"] & {
+        CategoryList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Category"][];
             links: components["schemas"]["Link"][];
         };
@@ -3100,7 +3105,7 @@ export interface components {
             notes?: string;
             is_active?: boolean;
         };
-        RecipientList: components["schemas"]["PaginationMeta"] & {
+        RecipientList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Recipient"][];
             links: components["schemas"]["Link"][];
         };
@@ -3114,7 +3119,7 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        TagList: components["schemas"]["PaginationMeta"] & {
+        TagList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Tag"][];
         };
         TagCreate: {
@@ -3172,8 +3177,9 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        AccountList: components["schemas"]["PaginationMeta"] & {
+        AccountList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Account"][];
+            links?: components["schemas"]["Link"][];
         };
         AccountCreate: {
             name: string;
@@ -3315,7 +3321,7 @@ export interface components {
             /** @description Tag slugs to assign (replaces existing tags when present) */
             tags?: string[];
         };
-        TransactionList: components["schemas"]["PaginationMeta"] & {
+        TransactionList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Transaction"][];
             links: components["schemas"]["Link"][];
         };
@@ -3419,7 +3425,7 @@ export interface components {
             /** @description Tag slugs to assign */
             tags?: string[];
         };
-        PlannedTransactionList: components["schemas"]["PaginationMeta"] & {
+        PlannedTransactionList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["PlannedTransaction"][];
             links: components["schemas"]["Link"][];
         };
@@ -3464,7 +3470,7 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        InvestmentList: components["schemas"]["PaginationMeta"] & {
+        InvestmentList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Investment"][];
             links: components["schemas"]["Link"][];
         };
@@ -3493,7 +3499,7 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        PortfolioTransactionList: components["schemas"]["PaginationMeta"] & {
+        PortfolioTransactionList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["PortfolioTransaction"][];
             links: components["schemas"]["Link"][];
         };
@@ -3524,6 +3530,8 @@ export interface components {
             monthlyChangePercent: number;
             snapshots: components["schemas"]["NetWorthSnapshot"][];
             snapshotsTotal?: number;
+            snapshotsLimit?: number;
+            snapshotsOffset?: number;
         };
         SavedChart: {
             id: number;
@@ -3589,9 +3597,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
-        SplitList: {
+        SplitList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Split"][];
-            total: number;
         };
         SplitOwed: {
             recipient_id: number;
@@ -3600,6 +3607,16 @@ export interface components {
             total_paid: number;
             remaining: number;
             split_count: number;
+        };
+        SplitOwedDetail: components["schemas"]["Split"] & {
+            /** Format: date */
+            transaction_date: string;
+            transaction_memo?: string | null;
+            transaction_amount: number;
+            transaction_currency: string;
+            bank_account?: string | null;
+            transaction_recipient_name?: string | null;
+            remaining: number;
         };
         Attachment: {
             id: number;
@@ -3734,7 +3751,12 @@ export interface components {
         };
     };
     responses: never;
-    parameters: never;
+    parameters: {
+        /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+        OptionalLimit: number;
+        /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+        OptionalOffset: number;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -3893,6 +3915,10 @@ export interface operations {
             query?: {
                 /** @description Filter by active status (default true) */
                 active?: "true" | "false" | "all";
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
             };
             header?: never;
             path?: never;
@@ -3900,7 +3926,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Account list */
+            /** @description Account list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4902,7 +4928,10 @@ export interface operations {
         parameters: {
             query?: {
                 currency?: string;
-                limit?: number;
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
             };
             header?: never;
             path?: never;
@@ -4910,7 +4939,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Net worth with history */
+            /** @description Net worth with history. `snapshots` holds every snapshot unless limit/offset are supplied, in which case it is a newest-first page and snapshotsTotal/snapshotsLimit/snapshotsOffset describe it. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4925,23 +4954,27 @@ export interface operations {
     };
     getSavedCharts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Saved chart list */
+            /** @description Saved chart list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
+                        data?: components["schemas"]["OptionalPaginationFields"] & {
                             items: components["schemas"]["SavedChart"][];
-                            total: number;
                         };
                     };
                 };
@@ -7193,21 +7226,28 @@ export interface operations {
     };
     getSplitsOwed: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Owed summary per recipient */
+            /** @description Owed summary per recipient (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["SplitOwed"][];
+                        data?: components["schemas"]["OptionalPaginationFields"] & {
+                            items: components["schemas"]["SplitOwed"][];
+                        };
                     };
                 };
             };
@@ -7215,7 +7255,12 @@ export interface operations {
     };
     getSplitOwedByRecipient: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -7224,13 +7269,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owed detail */
+            /** @description Owed detail (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["OptionalPaginationFields"] & {
+                            items: components["schemas"]["SplitOwedDetail"][];
+                        };
+                    };
                 };
             };
         };
@@ -7259,7 +7308,12 @@ export interface operations {
     };
     getSplitsByTransaction: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -7268,7 +7322,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Split list */
+            /** @description Split list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7396,7 +7450,12 @@ export interface operations {
     };
     getSplitPayments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -7405,16 +7464,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Payment list */
+            /** @description Payment list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
+                        data?: components["schemas"]["OptionalPaginationFields"] & {
                             items: components["schemas"]["SplitPayment"][];
-                            total: number;
                         };
                     };
                 };
@@ -7467,7 +7525,12 @@ export interface operations {
     };
     getTransactionAttachments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -7476,14 +7539,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Attachment list */
+            /** @description Attachment list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Attachment"][];
+                        data?: components["schemas"]["OptionalPaginationFields"] & {
+                            items: components["schemas"]["Attachment"][];
+                        };
                     };
                 };
             };
@@ -8180,7 +8245,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["PaginationMeta"] & {
+                        data?: components["schemas"]["PaginationFields"] & {
                             items: components["schemas"]["ImportBatch"][];
                         };
                     };
@@ -8600,7 +8665,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["PaginationMeta"] & {
+                        data?: components["schemas"]["PaginationFields"] & {
                             items: components["schemas"]["PortfolioImportBatch"][];
                         };
                     };

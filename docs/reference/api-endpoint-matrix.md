@@ -35,7 +35,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/accounts` | List accounts (`?active=true\|false\|all`, default true) (ADR-088) | — | [[docs/api/accounts\|Accounts]] |
+| GET | `/api/accounts` | List accounts (`?active=true\|false\|all`, default true; optional `limit`/`offset` — omit both for the full list) (ADR-088) | — | [[docs/api/accounts\|Accounts]] |
 | POST | `/api/accounts` | Create account | — | [[docs/api/accounts\|Accounts]] |
 | GET | `/api/accounts/:id` | Get single account | — | [[docs/api/accounts\|Accounts]] |
 | PATCH | `/api/accounts/:id` | Update account (partial) | — | [[docs/api/accounts\|Accounts]] |
@@ -226,7 +226,7 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
 | POST | `/api/attachments/transaction/:id` | Upload attachment | 60 req/min | [[docs/api/attachments\|Attachments]] |
-| GET | `/api/attachments/transaction/:id` | List attachments for transaction | 60 req/min | [[docs/api/attachments\|Attachments]] |
+| GET | `/api/attachments/transaction/:id` | List attachments for transaction (optional `limit`/`offset`; omit both for all) | 60 req/min | [[docs/api/attachments\|Attachments]] |
 | GET | `/api/attachments/:id/download` | Download attachment file | 60 req/min | [[docs/api/attachments\|Attachments]] |
 | DELETE | `/api/attachments/:id` | Delete attachment | 60 req/min | [[docs/api/attachments\|Attachments]] |
 
@@ -234,7 +234,7 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/saved-charts` | List all | — | [[docs/api/savedCharts\|Saved Charts]] |
+| GET | `/api/saved-charts` | List all (optional `limit`/`offset`; omit both for all) | — | [[docs/api/savedCharts\|Saved Charts]] |
 | POST | `/api/saved-charts` | Create | — | [[docs/api/savedCharts\|Saved Charts]] |
 | PATCH | `/api/saved-charts/:id` | Update | — | [[docs/api/savedCharts\|Saved Charts]] |
 | DELETE | `/api/saved-charts/:id` | Delete | — | [[docs/api/savedCharts\|Saved Charts]] |
@@ -263,14 +263,14 @@ All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/splits/owed` | Owed summary | — | [[docs/api/splits\|Splits]] |
-| GET | `/api/splits/owed/:id` | Owed by recipient | — | [[docs/api/splits\|Splits]] |
+| GET | `/api/splits/owed` | Owed summary (optional `limit`/`offset`; omit both for all) | — | [[docs/api/splits\|Splits]] |
+| GET | `/api/splits/owed/:id` | Owed by recipient (optional `limit`/`offset`; omit both for all) | — | [[docs/api/splits\|Splits]] |
 | GET | `/api/splits/owed/:id/export/csv` | Export owed CSV | — | [[docs/api/splits\|Splits]] |
-| GET | `/api/splits/transaction/:id` | Splits for transaction | — | [[docs/api/splits\|Splits]] |
+| GET | `/api/splits/transaction/:id` | Splits for transaction (optional `limit`/`offset`; omit both for all) | — | [[docs/api/splits\|Splits]] |
 | POST | `/api/splits` | Create split | — | [[docs/api/splits\|Splits]] |
 | POST | `/api/splits/batch` | Create multiple splits | — | [[docs/api/splits\|Splits]] |
 | POST | `/api/splits/:id/pay` | Record payment | — | [[docs/api/splits\|Splits]] |
-| GET | `/api/splits/:id/payments` | Get payments | — | [[docs/api/splits\|Splits]] |
+| GET | `/api/splits/:id/payments` | Get payments (optional `limit`/`offset`; omit both for all) | — | [[docs/api/splits\|Splits]] |
 | POST | `/api/splits/:id/settle` | Mark settled | — | [[docs/api/splits\|Splits]] |
 | POST | `/api/splits/owed/:id/settle-all` | Settle all for recipient | — | [[docs/api/splits\|Splits]] |
 | DELETE | `/api/splits/:id` | Delete split | — | [[docs/api/splits\|Splits]] |

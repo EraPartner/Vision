@@ -13,6 +13,7 @@ import splitRepository from '../services/splitService.js';
 import { validateIdParam, validateId } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { escapeCsvValue } from '../lib/csv.js';
+import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -151,14 +152,27 @@ function resolveActor(req) {
   return req.get('x-actor') || req.user?.id || null;
 }
 
+// Pagination is opt-in on every list below: without limit/offset the whole
+// collection is returned exactly as before, so no existing client is truncated.
+//
+// The owed summary is derived in JS after the aggregate (see the repository),
+// so this one pages the computed array rather than the query; `total` is still
+// the full group count.
 router.get('/owed', async (req, res) => {
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const summary = await splitRepository.getOwedSummary();
-  res.ok({ items: summary, total: summary.length });
+  const items = page ? summary.slice(page.offset, page.offset + page.limit) : summary;
+  res.ok(listBody(items, summary.length, page));
 });
 
 router.get('/owed/:id', validateIdParam, async (req, res) => {
-  const splits = await splitRepository.getOwedByRecipient(parseRouteId(req));
-  res.ok({ items: splits, total: splits.length });
+  const recipientId = parseRouteId(req);
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const splits = await splitRepository.getOwedByRecipient(recipientId, page ?? {});
+  const total = page
+    ? await splitRepository.countOwedByRecipient(recipientId)
+    : splits.length;
+  res.ok(listBody(splits, total, page));
 });
 
 router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
@@ -177,8 +191,13 @@ router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
 });
 
 router.get('/transaction/:id', validateIdParam, async (req, res) => {
-  const splits = await splitRepository.getSplitsByTransaction(parseRouteId(req));
-  res.ok({ items: splits, total: splits.length });
+  const transactionId = parseRouteId(req);
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const splits = await splitRepository.getSplitsByTransaction(transactionId, page ?? {});
+  const total = page
+    ? await splitRepository.countSplitsByTransaction(transactionId)
+    : splits.length;
+  res.ok(listBody(splits, total, page));
 });
 
 router.post('/', async (req, res) => {
@@ -242,8 +261,11 @@ router.post('/:id/pay', validateIdParam, async (req, res) => {
 });
 
 router.get('/:id/payments', validateIdParam, async (req, res) => {
-  const payments = await splitRepository.getPayments(parseRouteId(req));
-  res.ok({ items: payments, total: payments.length });
+  const splitId = parseRouteId(req);
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const payments = await splitRepository.getPayments(splitId, page ?? {});
+  const total = page ? await splitRepository.countPayments(splitId) : payments.length;
+  res.ok(listBody(payments, total, page));
 });
 
 router.post('/:id/settle', validateIdParam, async (req, res) => {

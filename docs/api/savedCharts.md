@@ -38,7 +38,11 @@ Endpoints for saving and managing custom chart configurations for analytics.
 Retrieve all saved chart configurations for the workspace.
 
 **Response:** `200 OK` — canonical collection body `{ items, total }` inside the
-envelope's `data`. The list is unpaginated, so `total` is the row count.
+envelope's `data`.
+
+Pagination is **opt-in** via `?limit=` (capped at 1000) and `?offset=`. With neither
+param the response holds every saved chart and `total` is the row count; with either,
+the body adds `limit` + `offset` and `total` becomes the full row count behind the page.
 
 ```json
 {

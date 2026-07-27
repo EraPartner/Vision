@@ -13,7 +13,10 @@ vi.mock('../../src/repositories/splitRepository.js', () => ({
   default: {
     getOwedSummary: vi.fn(),
     getOwedByRecipient: vi.fn(),
+    countOwedByRecipient: vi.fn(),
     getSplitsByTransaction: vi.fn(),
+    countSplitsByTransaction: vi.fn(),
+    countPayments: vi.fn(),
     getOwedExportRowsByRecipient: vi.fn(),
     getTransactionSplitTotals: vi.fn(),
     createSplitAtomic: vi.fn(),
@@ -55,6 +58,23 @@ describe('Splits Routes', () => {
       });
     });
 
+    // The summary is derived in JS, so the route slices the computed array —
+    // `total` must still be the full group count, not the page length.
+    it('slices the computed summary when limit/offset are supplied', async () => {
+      splitRepository.getOwedSummary.mockResolvedValue([
+        { recipient_id: 1 }, { recipient_id: 2 }, { recipient_id: 3 },
+      ]);
+
+      const req = { params: {}, query: { limit: '1', offset: '1' }, get: () => null };
+      const res = mockResponse();
+      await routeHandlers['get:/owed'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ recipient_id: 2 }], total: 3, limit: 1, offset: 1 },
+      });
+    });
+
     it('propagates error when owed summary fails', async () => {
       splitRepository.getOwedSummary.mockRejectedValue(new Error('boom'));
 
@@ -72,10 +92,25 @@ describe('Splits Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/owed/:id'](req, res);
 
-      expect(splitRepository.getOwedByRecipient).toHaveBeenCalledWith(7);
+      expect(splitRepository.getOwedByRecipient).toHaveBeenCalledWith(7, {});
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
         data: { items: [{ id: 1, split_id: 4 }], total: 1 },
+      });
+    });
+
+    it('pages owed detail when limit/offset are supplied', async () => {
+      splitRepository.getOwedByRecipient.mockResolvedValue([{ id: 2, split_id: 5 }]);
+      splitRepository.countOwedByRecipient.mockResolvedValue(31);
+
+      const req = { params: { id: '7' }, query: { limit: '1', offset: '10' }, get: () => null };
+      const res = mockResponse();
+      await routeHandlers['get:/owed/:id'](req, res);
+
+      expect(splitRepository.getOwedByRecipient).toHaveBeenCalledWith(7, { limit: 1, offset: 10 });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ id: 2, split_id: 5 }], total: 31, limit: 1, offset: 10 },
       });
     });
 
@@ -374,10 +409,27 @@ describe('Splits Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/transaction/:id'](req, res);
 
-      expect(splitRepository.getSplitsByTransaction).toHaveBeenCalledWith(2);
+      // No limit/offset on the request → the repository is left unbounded and
+      // the response carries no limit/offset (the body IS the whole list).
+      expect(splitRepository.getSplitsByTransaction).toHaveBeenCalledWith(2, {});
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
         data: { items: [{ id: 8, transaction_id: 2 }], total: 1 },
+      });
+    });
+
+    it('slices and reports the full total when limit/offset are supplied', async () => {
+      splitRepository.getSplitsByTransaction.mockResolvedValue([{ id: 9, transaction_id: 2 }]);
+      splitRepository.countSplitsByTransaction.mockResolvedValue(7);
+
+      const req = { params: { id: '2' }, query: { limit: '1', offset: '3' }, get: () => null };
+      const res = mockResponse();
+      await routeHandlers['get:/transaction/:id'](req, res);
+
+      expect(splitRepository.getSplitsByTransaction).toHaveBeenCalledWith(2, { limit: 1, offset: 3 });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ id: 9, transaction_id: 2 }], total: 7, limit: 1, offset: 3 },
       });
     });
 
@@ -469,10 +521,25 @@ describe('Splits Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:id/payments'](req, res);
 
-      expect(splitRepository.getPayments).toHaveBeenCalledWith(7);
+      expect(splitRepository.getPayments).toHaveBeenCalledWith(7, {});
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
         data: { items: [{ id: 3, split_id: 7, amount: 6 }], total: 1 },
+      });
+    });
+
+    it('pages payments when limit/offset are supplied', async () => {
+      splitRepository.getPayments.mockResolvedValue([{ id: 4, split_id: 7, amount: 2 }]);
+      splitRepository.countPayments.mockResolvedValue(12);
+
+      const req = { params: { id: '7' }, query: { limit: '1', offset: '1' }, get: () => null };
+      const res = mockResponse();
+      await routeHandlers['get:/:id/payments'](req, res);
+
+      expect(splitRepository.getPayments).toHaveBeenCalledWith(7, { limit: 1, offset: 1 });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ id: 4, split_id: 7, amount: 2 }], total: 12, limit: 1, offset: 1 },
       });
     });
 

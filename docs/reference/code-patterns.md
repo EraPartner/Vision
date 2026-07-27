@@ -684,6 +684,7 @@ router.get('/', async (req, res) => {
 | **Payload wrapping** | `res.ok({items, total, ...})` wraps the list payload inside `data`; never `res.ok(items)` |
 | **Parallel fetch** | Use `Promise.all([getAll, getCount])` to avoid N+1 queries |
 | **Frontend unwrapping** | API client returns `body.data` automatically; consumer receives `{items, total, ...}` |
+| **Pagination lives in the body** | `{items, total, limit, offset}` inside `data` — never `meta.pagination`. The envelope-level variant was documented once, emitted by exactly one endpoint, and has been retired ([[packages/types/src/api.js]]) |
 
 ### Common Patterns
 
@@ -697,6 +698,25 @@ res.ok({ items: summary, total: summary.length });
 // With metadata
 res.ok({ items, total }, { source: 'mv', computedAt: '...' });
 ```
+
+### Adding pagination to a list that never had it
+
+A list endpoint that has always returned every row cannot simply adopt
+`parsePagination` — its `defaultLimit` would truncate every existing client on the
+next deploy. Use the opt-in pair from [[apps/node-backend/src/lib/pagination.js]]:
+
+```js
+// null when the caller sent neither limit nor offset ⇒ serve the whole list.
+const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+const items = await repository.getAll({ active, ...(page ?? {}) });
+// Unbounded query ⇒ the rows ARE the total; skip the COUNT round-trip.
+const total = page ? await repository.getCount({ active }) : items.length;
+res.ok(listBody(items, total, page));   // adds limit/offset only when paging
+```
+
+Repository side: build the tail with `buildLimitOffset(params, { limit, offset })`
+([[apps/node-backend/src/lib/sqlClauses.js]]) so a `null` limit emits no `LIMIT`
+clause at all, rather than a large default that silently caps the result.
 
 ### Frontend Consumption
 

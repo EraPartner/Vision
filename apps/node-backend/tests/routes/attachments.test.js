@@ -18,6 +18,7 @@ vi.mock('../../src/services/attachmentRecordService.js', () => ({
     create: vi.fn(),
     findById: vi.fn(),
     listByTransaction: vi.fn(),
+    countByTransaction: vi.fn(),
     deleteById: vi.fn(),
   },
 }));
@@ -135,6 +136,41 @@ describe('Attachment routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(attachmentRepository.deleteById).not.toHaveBeenCalled();
+    });
+  });
+
+  // Pagination is opt-in: the attachment strip sends no limit/offset and must
+  // keep receiving every file on the transaction.
+  describe('GET /transaction/:id', () => {
+    it('lists every attachment (unbounded query, no limit/offset echoed)', async () => {
+      attachmentRepository.listByTransaction.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+      const res = mockResponse();
+      await routeHandlers['get:/transaction/:id']({ params: { id: '5' }, query: {} }, res);
+
+      expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(5, {});
+      expect(attachmentRepository.countByTransaction).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ id: 1 }, { id: 2 }], total: 2 },
+      });
+    });
+
+    it('pages and reports the full total when limit/offset are supplied', async () => {
+      attachmentRepository.listByTransaction.mockResolvedValue([{ id: 2 }]);
+      attachmentRepository.countByTransaction.mockResolvedValue(4);
+
+      const res = mockResponse();
+      await routeHandlers['get:/transaction/:id'](
+        { params: { id: '5' }, query: { limit: '1', offset: '1' } },
+        res,
+      );
+
+      expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(5, { limit: 1, offset: 1 });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ id: 2 }], total: 4, limit: 1, offset: 1 },
+      });
     });
   });
 });
