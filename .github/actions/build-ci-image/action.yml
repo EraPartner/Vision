@@ -1,0 +1,67 @@
+name: Build the vision:ci Docker image
+description: >
+  Single definition of the CI image build, shared by the producer (ci.yml's
+  `build-image`, whose only product is the GHA build cache) and the consumers
+  (trivy-scan, docker-verify, test-live-api-contracts), which rebuild the image
+  from that cache with `load: true`.
+
+  There is deliberately no image tarball artifact any more: uploading the
+  ~1 GB `docker save` output on every run is what exhausted the Actions
+  artifact-storage quota, and a failing upload failed `build-image`, which
+  skipped the whole Docker tier.
+
+  Keeping the build in ONE file is load-bearing, not cosmetic. BuildKit keys
+  `type=gha` cache entries on the build inputs, so a consumer whose context /
+  Dockerfile / build-args / platforms differ by even one character misses the
+  cache the producer just wrote and pays a full cold rebuild. If the build has
+  to change, change it here — never in one caller.
+inputs:
+  load:
+    description: >
+      "true" materialises the result into the local docker image store as
+      `vision:ci` (what every consumer wants: trivy scans that tag and
+      docker-compose.ci.yml points the `app` service at it). "false" builds
+      without exporting an image at all — used by the producer, which only
+      needs the layers to land in the cache.
+    required: false
+    default: "false"
+  cache-to:
+    description: >
+      buildx cache export spec. ONLY the producer sets this
+      (`type=gha,mode=max`); consumers leave it empty so a cache-hit rebuild
+      never writes back over the entries it just read.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v3
+
+    # Two properties make the consumer builds actual cache hits:
+    #
+    #  1. `type=gha` without an explicit `scope=` uses buildx's default scope
+    #     ("buildkit") on both sides, and Actions cache entries written by one
+    #     job are readable by every other job on the same ref — so what
+    #     `build-image` exports is what these builds import.
+    #  2. Every other build input below is identical for producer and consumer
+    #     because they come from this one file. `context: .` only (no `file:`,
+    #     no `build-args:`, no `platforms:`) matches the Dockerfile as it is
+    #     built today: default ./Dockerfile, default host platform, and its
+    #     single ARG (VITE_DEVTOOLS) left at its in-Dockerfile default of
+    #     false. Adding a build-arg to one side only would silently halve the
+    #     pipeline's cache hit rate.
+    #
+    # This stays a JS action rather than a raw `docker buildx build` in a
+    # `run:` step on purpose: the GHA cache backend authenticates with
+    # ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL, which the runner exposes to
+    # actions but NOT to `run:` steps. A raw buildx command would quietly build
+    # with no cache at all.
+    - name: Build Docker image
+      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      with:
+        context: .
+        load: ${{ inputs.load }}
+        tags: vision:ci
+        cache-from: type=gha
+        cache-to: ${{ inputs.cache-to }}

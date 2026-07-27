@@ -552,8 +552,21 @@ jobs:
           echo "All quality gates passed."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build Docker image once — reused by trivy-scan, docker-verify, live-contracts.
+  # Build Docker image once — the expensive `docker build` happens here and the
+  # Docker-tier jobs below re-materialise the result from the GHA build cache.
   # Only runs after all quality gates pass.
+  #
+  # The hand-off is a CACHE, not an artifact. This job used to export
+  # `type=docker,dest=/tmp/vision-ci.tar` and upload the ~1 GB tarball, which
+  # every downstream job downloaded. That upload is what hit the Actions
+  # artifact-storage quota, and a quota failure failed `build-image` — taking
+  # the whole Docker tier ('skipped') with it. Now nothing is uploaded: this job
+  # only exports layers with `cache-to: type=gha,mode=max`, and each consumer
+  # runs the identical build with `load: true`, which is a full cache hit.
+  #
+  # Worst case (GHA's 10 GB cache eviction drops the entries mid-run) a consumer
+  # rebuilds from scratch: slow, but correct — and no worse than the uncached
+  # rebuild `docker-verify` silently did on every single run before this change.
   # ─────────────────────────────────────────────────────────────────────────────
   build-image:
     name: Build Docker Image
@@ -566,25 +579,14 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      # The producer: builds with no image export at all (`load: false`, no
+      # `outputs:`) — its only product is the cache the consumers read. The
+      # build itself is defined once, in the action, so producer and consumers
+      # cannot drift into different cache keys. See that file's header.
+      - name: Build Docker image (exports layers to the GHA cache)
+        uses: ./.github/actions/build-ci-image
         with:
-          context: .
-          load: false
-          outputs: type=docker,dest=/tmp/vision-ci.tar
-          tags: vision:ci
-          cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Upload image artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
-        with:
-          name: docker-image
-          path: /tmp/vision-ci.tar
-          retention-days: 1
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Trivy — container image CVE scan (HIGH/CRITICAL)
@@ -592,7 +594,11 @@ jobs:
   trivy-scan:
     name: Trivy Scan
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Headroom for the documented worst case: if the GHA cache entries were
+    # evicted between build-image and here, the restore step is a genuine cold
+    # build (~10 min) rather than a materialisation, and the old 15 min would
+    # have turned "slow" into a red required check.
+    timeout-minutes: 25
     needs: [build-image]
     permissions:
       contents: read
@@ -600,14 +606,13 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      - name: Download image artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+      # Cache-hit rebuild of the image `build-image` just exported — same build
+      # inputs, so this is a materialisation, not a real build. Leaves
+      # `vision:ci` in the local image store for the scans below.
+      - name: Restore vision:ci from the build cache
+        uses: ./.github/actions/build-ci-image
         with:
-          name: docker-image
-          path: /tmp
-
-      - name: Load Docker image
-        run: docker load < /tmp/vision-ci.tar
+          load: "true"
 
       - name: Run Trivy vulnerability scan (table — fail on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -642,7 +647,8 @@ jobs:
   docker-verify:
     name: Docker Verify
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # +10 for a possible cold rebuild in the restore step — see trivy-scan.
+    timeout-minutes: 25
     needs: [build-image]
     permissions:
       contents: read
@@ -654,30 +660,42 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
+      # Cache-hit rebuild of the image `build-image` exported; `vision-image`
+      # below is what makes compose consume this exact image instead of
+      # rebuilding the app from source itself.
+      - name: Restore vision:ci from the build cache
+        uses: ./.github/actions/build-ci-image
+        with:
+          load: "true"
+
       - name: Bring up the compose stack
         uses: ./.github/actions/compose-up
         with:
-          image-artifact: docker-image
           vision-image: vision:ci
 
       # The release path bakes alembic into the image and runs migrations on
       # boot — by the time /health is green, the schema is at HEAD. Round-trip
       # one revision down and back up to catch non-reversible migrations *now*,
       # not at release time. Same class of bug as the v1.0.2 named-volume miss.
+      #
+      # Same `-f` pair as the bring-up in ./.github/actions/compose-up — the
+      # stack was created from both files, so every later invocation must name
+      # both or compose resolves a different service definition.
       - name: Verify migration reversibility (downgrade -1, upgrade head)
         run: |
           set -e
+          COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.ci.yml)
           echo "Current revision before round-trip:"
-          docker compose exec -T app /venv/bin/alembic -c /app/config/alembic.ini current
+          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini current
           echo "Downgrading one revision..."
-          docker compose exec -T app /venv/bin/alembic -c /app/config/alembic.ini downgrade -1
+          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini downgrade -1
           echo "Re-upgrading to head..."
-          docker compose exec -T app /venv/bin/alembic -c /app/config/alembic.ini upgrade head
+          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini upgrade head
           echo "Round-trip OK."
 
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Live API contracts — run MSW fixture schemas against the real backend.
@@ -687,7 +705,8 @@ jobs:
   test-live-api-contracts:
     name: Test (Live API Contracts)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # +10 for a possible cold rebuild in the restore step — see trivy-scan.
+    timeout-minutes: 30
     needs: [build-image]
     if: ${{ !github.event.pull_request.draft }}
     permissions:
@@ -699,10 +718,16 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
+      # See docker-verify above — cache-hit rebuild, then compose consumes the
+      # loaded `vision:ci` via docker-compose.ci.yml.
+      - name: Restore vision:ci from the build cache
+        uses: ./.github/actions/build-ci-image
+        with:
+          load: "true"
+
       - name: Bring up the compose stack
         uses: ./.github/actions/compose-up
         with:
-          image-artifact: docker-image
           vision-image: vision:ci
 
       - name: Setup toolchain
@@ -716,9 +741,10 @@ jobs:
         env:
           LIVE_API_BASE: http://localhost:3002
 
+      # Both `-f` files, as in docker-verify — the stack was created from both.
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
 
   # ─────────────────────────────────────────────────────────────────────────────
   # CI Complete — aggregates the Docker-tier results so branch protection has a

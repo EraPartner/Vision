@@ -329,36 +329,56 @@ functions 85 / lines 88`) over the files tests actually reach.
 
 ### Docker-Tier Jobs
 
-These run only after `quality-gate` is green. `build-image` builds the release
-image **once** and the rest consume it as an artifact, so the expensive build
-happens a single time per run.
+These run only after `quality-gate` is green. `build-image` pays for the image
+build **once**; the rest re-materialise that build from the GitHub Actions build
+cache rather than downloading it.
 
-#### 11. **build-image** — Build the Release Docker Image (once)
+##### The image hand-off is a cache, not an artifact
+
+`build-image` used to `docker save` the image to `/tmp/vision-ci.tar` and upload
+it with `actions/upload-artifact`, and each downstream job downloaded and
+`docker load`ed it. That ~1 GB upload per run is what exhausted the Actions
+artifact-storage quota, and a failed upload failed `build-image` — which
+skipped the entire Docker tier.
+
+Today no image artifact exists. `build-image` builds with
+`cache-to: type=gha,mode=max` and exports **no image at all**; each consumer
+re-runs the identical build with `load: true`, which is a full cache hit and
+leaves `vision:ci` in that runner's image store.
+
+The build itself lives in one place — `.github/actions/build-ci-image` — used
+by the producer and all three consumers. This is deliberate: BuildKit keys
+`type=gha` cache entries on the build inputs, so a consumer whose context,
+Dockerfile, build-args or platforms differ from the producer's would silently
+miss the cache and pay a full cold rebuild. **Change the image build in that
+action, never in an individual job.**
+
+Worst case, GHA's 10 GB cache eviction drops the entries mid-run and a consumer
+does a real rebuild — correct, just slow (the Docker-tier job timeouts carry
+headroom for exactly this), and no worse than the uncached rebuild
+`docker-verify` used to do on every run anyway.
+
+#### 11. **build-image** — Warm the Image Build Cache (once)
 
 ```yaml
 build-image:
   name: Build Docker Image
-  needs: [quality-gate]
+  needs: [changes, quality-gate]
   steps:
     - uses: actions/checkout@v4
-    - uses: docker/setup-buildx-action@v3
-    - uses: docker/build-push-action@v7
+    # → docker/setup-buildx-action@v3 + docker/build-push-action@v7 with
+    #   context: ., tags: vision:ci, cache-from: type=gha, load: false
+    - uses: ./.github/actions/build-ci-image
       with:
-        context: .
-        outputs: type=docker,dest=/tmp/vision-ci.tar
-        tags: vision:ci
-        cache-from: type=gha
         cache-to: type=gha,mode=max
-    - uses: actions/upload-artifact@v4
-      with: { name: docker-image, path: /tmp/vision-ci.tar }
 ```
 
-The image tarball is uploaded as an artifact reused by `trivy-scan`,
-`docker-verify`, and `test-live-api-contracts`.
+`cache-to` is set **only** here: the consumers read the cache and must not
+write back over the entries they just read.
 
 #### 12. **trivy-scan** — Container Image CVE Scan
 
-Loads the `build-image` artifact and scans it for OS/system-library
+Restores `vision:ci` from the build cache and scans it for OS/system-library
 vulnerabilities (HIGH/CRITICAL), uploading SARIF to the GitHub Security tab.
 
 ```yaml
@@ -368,9 +388,9 @@ trivy-scan:
     contents: read
     security-events: write
   steps:
-    - uses: actions/download-artifact@v4
-      with: { name: docker-image, path: /tmp }
-    - run: docker load < /tmp/vision-ci.tar
+    - uses: actions/checkout@v4
+    - uses: ./.github/actions/build-ci-image
+      with: { load: "true" }
     - uses: aquasecurity/trivy-action@v0.36.0
       with: { image-ref: vision:ci, severity: HIGH,CRITICAL, exit-code: '1' }
 ```
@@ -382,36 +402,50 @@ found. **Mitigation:** upgrade the `FROM` base image or patch the package.
 
 #### 13. **docker-verify** — Container Health Check
 
-Builds the Docker image and verifies the backend starts successfully.
+Restores `vision:ci` from the build cache, brings the compose stack up on it,
+and verifies the backend starts and migrates cleanly.
 
 ```yaml
 docker-verify:
-  runs-on: ubuntu-latest
+  runs-on: ubuntu-24.04
+  needs: [build-image]
+  env:
+    COMPOSE_PROJECT_NAME: vision_ci   # never touch the real `vision` volumes
   steps:
     - uses: actions/checkout@v4
-    - name: Build image
-      run: docker build -t vision:test .
-    - name: Start compose
+    - uses: ./.github/actions/build-ci-image
+      with: { load: "true" }
+    - uses: ./.github/actions/compose-up       # stub .env, up -d, poll /health
+      with: { vision-image: "vision:ci" }
+    - name: Verify migration reversibility (downgrade -1, upgrade head)
       run: |
-        docker-compose -f docker-compose.yml up -d
-        sleep 5
-    - name: Poll health
-      run: |
-        for i in {1..30}; do
-          if curl -f http://localhost:3002/health; then
-            echo "✓ Backend health check passed"
-            exit 0
-          fi
-          sleep 2
-        done
-        echo "✗ Backend health check failed"
-        exit 1
+        COMPOSE="docker compose -f docker-compose.yml -f docker-compose.ci.yml"
+        $COMPOSE exec -T app /venv/bin/alembic -c /app/config/alembic.ini downgrade -1
+        $COMPOSE exec -T app /venv/bin/alembic -c /app/config/alembic.ini upgrade head
+    - name: Tear down
+      if: always()
+      run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
 ```
 
+**`docker-compose.ci.yml` is why the hand-off works.** `docker-compose.yml`'s
+`app` service is `build: .` with no `image:` key, so compose names the image it
+builds after the project and ignores anything CI prepared — before this overlay
+existed, both compose jobs quietly rebuilt the app from source and the
+`VISION_IMAGE` export did nothing. The CI-only overlay adds
+`image: ${VISION_IMAGE:-vision:ci}` so compose runs the image the job just
+restored — the same bits `trivy-scan` scanned. It is passed by
+`.github/actions/compose-up` whenever `vision-image` is set, and **every later
+`docker compose` call in the job must name both `-f` files.**
+
+The overlay is CI-only: do not add it to the `docker:dev` / `docker:clean`
+scripts, to `packaging/electron/resources/`, or to `install-demo.sh`. It is not
+covered by the `verify-compose-sync` mirror check either — that check compares
+the base file's named volumes and project name, and the overlay declares
+neither.
+
 **What it verifies:**
-- Docker image builds without errors
-- PostgreSQL database starts
-- Backend service boots and responds to health check
+- The built image boots: PostgreSQL starts, the backend responds on `/health`
+- Migrations are reversible (`downgrade -1` → `upgrade head` round-trip)
 - All services are reachable on expected ports
 
 **Failure:** Indicates a runtime issue; must be resolved before merging.
@@ -427,14 +461,15 @@ test-live-api-contracts:
   if: ${{ !github.event.pull_request.draft }}
   steps:
     - uses: actions/checkout@v4
-    - name: Download image artifact
-      uses: actions/download-artifact@v4
-    - name: Load Docker image
-      run: docker load < /tmp/vision-ci.tar
-    - name: Start services with Docker Compose
-      run: docker compose -f docker-compose.yml up -d
+    - uses: ./.github/actions/build-ci-image
+      with: { load: "true" }
+    - uses: ./.github/actions/compose-up
+      with: { vision-image: "vision:ci" }   # → adds docker-compose.ci.yml
     - name: Run live API contract tests
       run: cd apps/frontend && bun run vitest run src/test/live-contracts/live-contracts.test.ts
+    - name: Tear down
+      if: always()
+      run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
 ```
 
 **What it tests:**
