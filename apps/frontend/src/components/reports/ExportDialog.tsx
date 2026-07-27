@@ -33,6 +33,7 @@ import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import { todayYmd } from '@/lib/timezone';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -171,7 +172,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
       setOpen(false);
     } catch (err: unknown) {
       toast.error(t('statsPage.report.downloadError'), {
-        description: err instanceof Error ? err.message : String(err),
+        description: apiErrorToMessage(err, t),
       });
     } finally {
       setIsSubmitting(false);

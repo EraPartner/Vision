@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import { aiKeys } from '@/lib/queryKeys';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { aiChatStreamStore, type SendBody } from '@/lib/aiChatStreamStore';
 import type {
@@ -41,7 +42,7 @@ export function useCreateConversation() {
             queryClient.setQueryData(aiKeys.conversation(data.conversation.id), data);
         },
         onError: (error: Error) => {
-            toast.error(t('aiChat.createFailed'), { description: error.message });
+            toast.error(t('aiChat.createFailed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -61,7 +62,7 @@ export function useRenameConversation() {
             );
         },
         onError: (error: Error) => {
-            toast.error(t('aiChat.renameFailed'), { description: error.message });
+            toast.error(t('aiChat.renameFailed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -78,7 +79,7 @@ export function useDeleteConversation() {
             toast.success(t('aiChat.deleted'));
         },
         onError: (error: Error) => {
-            toast.error(t('aiChat.deleteFailed'), { description: error.message });
+            toast.error(t('aiChat.deleteFailed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -99,8 +100,8 @@ export function useSendChatMessage(conversationId: string | null) {
 
     const send = useCallback(
         (body: SendBody): Promise<ChatDoneEvent | null> => {
-            return aiChatStreamStore.send(body, queryClient, (message) => {
-                toast.error(t('aiChat.sendFailed'), { description: message });
+            return aiChatStreamStore.send(body, queryClient, (error) => {
+                toast.error(t('aiChat.sendFailed'), { description: apiErrorToMessage(error, t) });
             });
         },
         [queryClient, t],

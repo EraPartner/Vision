@@ -3,6 +3,7 @@ import {apiClient} from '@/lib/api';
 import {aggregationKeys, recipientKeys, transactionKeys} from '@/lib/queryKeys';
 import type {RecipientCreate, RecipientUpdate} from '@/types/api';
 import {toast} from 'sonner';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import {useLanguage} from '@/contexts/LanguageContext';
 
 export function useRecipients(params?: {
@@ -36,7 +37,7 @@ export function useCreateRecipient() {
             }
         },
         onError: (error: Error) => {
-            toast.error(t('recipients.createFailedTitle'), { description: error.message });
+            toast.error(t('recipients.createFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -52,7 +53,7 @@ export function useUpdateRecipient() {
             queryClient.invalidateQueries({queryKey: recipientKeys.all});
         },
         onError: (error: Error) => {
-            toast.error(t('recipients.updateFailedTitle'), { description: error.message });
+            toast.error(t('recipients.updateFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -68,7 +69,7 @@ export function useDeleteRecipient() {
             toast.success(t('recipients.deleted'));
         },
         onError: (error: Error) => {
-            toast.error(t('recipients.deleteFailedTitle'), { description: error.message });
+            toast.error(t('recipients.deleteFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -106,7 +107,7 @@ export function useMergeRecipients() {
             }
         },
         onError: (error: Error) => {
-            toast.error(t('recipients.mergeFailedTitle'), { description: error.message });
+            toast.error(t('recipients.mergeFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -126,7 +127,7 @@ export function useUnmergeRecipient() {
             toast.success(t('recipients.unmerged'));
         },
         onError: (error: Error) => {
-            toast.error(t('recipients.unmergeFailedTitle'), { description: error.message });
+            toast.error(t('recipients.unmergeFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }

@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import { settingKeys } from '@/lib/queryKeys';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { RebalancePlan } from '@/lib/api/crossWorkspace';
 
@@ -34,7 +35,7 @@ export function useRebalancePlans() {
   const save = useMutation({
     mutationFn: (next: RebalancePlan[]) => apiClient.saveSetting(SETTING_KEY, next),
     onError: (error: Error) => {
-      toast.error(t('rebalance.plan.saveFailed'), { description: error.message });
+      toast.error(t('rebalance.plan.saveFailed'), { description: apiErrorToMessage(error, t) });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });

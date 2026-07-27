@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api';
 import { tagKeys } from '@/lib/queryKeys';
 import type { TagCreate } from '@/types/api';
 import { toast } from 'sonner';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export function useTags(params?: { is_active?: boolean }) {
@@ -23,7 +24,7 @@ export function useCreateTag() {
             queryClient.invalidateQueries({ queryKey: tagKeys.all });
         },
         onError: (error: Error) => {
-            toast.error(t('tags.createFailed'), { description: error.message });
+            toast.error(t('tags.createFailed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }

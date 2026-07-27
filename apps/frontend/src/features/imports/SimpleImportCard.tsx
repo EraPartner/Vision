@@ -7,6 +7,7 @@
  */
 
 import { useState, type ComponentType } from "react";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Card,
@@ -72,8 +73,7 @@ export function SimpleImportCard<R extends SimpleImportResult>({
       toast.success(successToast(data), { icon: <CheckCircle2 className="h-4 w-4" /> });
       setFile(null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : undefined;
-      toast.error(t(importFailedKey), { description: msg });
+      toast.error(t(importFailedKey), { description: apiErrorToMessage(err, t) });
     } finally {
       setLoading(false);
     }

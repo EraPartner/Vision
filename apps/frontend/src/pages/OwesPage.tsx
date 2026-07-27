@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useOwedSummary, useOwedByRecipient, useRecordPayment, useSettleSplit, useDeleteSplit, useSettleAllSplitsByRecipient } from "@/hooks/useSplits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -179,8 +180,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
             downloadBlob(blob, filename);
             toast.success(t('owesPage.export.success'));
         } catch (error) {
-            const message = error instanceof Error ? error.message : t('owesPage.export.failed');
-            toast.error(t('owesPage.export.failed'), { description: message });
+            toast.error(t('owesPage.export.failed'), { description: apiErrorToMessage(error, t) });
         } finally {
             setIsExportingCsv(false);
         }

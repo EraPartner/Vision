@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useCreateAccount } from "@/hooks/useAccounts";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { apiClient } from "@/lib/api";
 import { invalidateAccountDerived, invalidateTransactionData } from "@/lib/queryKeys";
@@ -124,7 +125,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
             if (result.warning) toast.warning(t('accounts.openingBalance.saved'), { description: result.warning });
             else toast.success(t('accounts.openingBalance.saved'));
         },
-        onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: e.message }),
+        onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: apiErrorToMessage(e, t) }),
     });
 
     // Flag fields the user has edited by hand this session; a type change leaves

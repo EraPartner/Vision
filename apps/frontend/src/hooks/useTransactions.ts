@@ -20,6 +20,7 @@ import type {
     TransactionUpdate,
 } from '@/types/api';
 import {toast} from 'sonner';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import {useLanguage} from '@/contexts/LanguageContext';
 
 interface UseTransactionsParams {
@@ -85,7 +86,7 @@ export function useCreateTransaction() {
         },
         onError: (error: Error, _vars, context) => {
             if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);
-            toast.error(t('transactions.createFailedTitle'), { description: error.message });
+            toast.error(t('transactions.createFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
         onSettled: () => {
             invalidateTransactionData(queryClient);
@@ -142,7 +143,7 @@ export function useUpdateTransaction() {
         },
         onError: (error: Error, _vars, context) => {
             if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);
-            toast.error(t('transactions.updateFailedTitle'), { description: error.message });
+            toast.error(t('transactions.updateFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
         onSettled: () => {
             invalidateTransactionData(queryClient);
@@ -202,7 +203,7 @@ export function useDeleteTransaction() {
                         toast.success(t('transactions.restored'));
                     } catch (error) {
                         toast.error(t('transactions.restoreFailedTitle'), {
-                            description: error instanceof Error ? error.message : String(error),
+                            description: apiErrorToMessage(error, t),
                         });
                     }
                 };
@@ -216,7 +217,7 @@ export function useDeleteTransaction() {
         },
         onError: (error: Error, _id, context) => {
             if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);
-            toast.error(t('transactions.deleteFailedTitle'), { description: error.message });
+            toast.error(t('transactions.deleteFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
         onSettled: () => {
             invalidateTransactionData(queryClient);
@@ -236,7 +237,7 @@ export function useBulkTagTransactions() {
             toast.success(t('tags.bulkApplied'));
         },
         onError: (error: Error) => {
-            toast.error(t('tags.bulkFailed'), { description: error.message });
+            toast.error(t('tags.bulkFailed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -252,7 +253,7 @@ export function useBulkDeleteTransactions() {
             toast.success(t('txPage.bulk.deleted', { n: result.deleted }));
         },
         onError: (error: Error) => {
-            toast.error(t('txPage.bulk.failed'), { description: error.message });
+            toast.error(t('txPage.bulk.failed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -270,7 +271,7 @@ export function useBulkUpdateTransactions() {
             toast.success(t('txPage.bulk.updated', { n: result.updated }));
         },
         onError: (error: Error) => {
-            toast.error(t('txPage.bulk.failed'), { description: error.message });
+            toast.error(t('txPage.bulk.failed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -288,7 +289,7 @@ export function useBulkExportTransactions() {
             toast.success(t('txPage.bulk.exported'));
         },
         onError: (error: Error) => {
-            toast.error(t('txPage.bulk.failed'), { description: error.message });
+            toast.error(t('txPage.bulk.failed'), { description: apiErrorToMessage(error, t) });
         },
     });
 }

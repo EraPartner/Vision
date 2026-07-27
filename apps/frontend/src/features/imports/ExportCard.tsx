@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { requestBlob } from "@/lib/api/helpers";
 import { downloadBlob } from "@/lib/downloadBlob";
@@ -57,8 +58,7 @@ export function ExportCard() {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('importPage.toast.exportFailed');
-      toast.error(t('importPage.toast.exportFailed'), { description: message });
+      toast.error(t('importPage.toast.exportFailed'), { description: apiErrorToMessage(error, t) });
     } finally {
       setExportingFormat(null);
     }

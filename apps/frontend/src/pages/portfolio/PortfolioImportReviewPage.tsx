@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export function PortfolioImportReviewPage() {
       });
       navigate("/portfolio");
     },
-    onError: (err: Error) => toast.error(t("importPage.toast.serverError"), { description: err.message }),
+    onError: (err: Error) => toast.error(t("importPage.toast.serverError"), { description: apiErrorToMessage(err, t) }),
   });
 
   const groupKey = (g: PortfolioPreviewGroup) =>
@@ -58,7 +59,7 @@ export function PortfolioImportReviewPage() {
       }
       await refresh();
     } catch (err) {
-      toast.error(t("importPage.toast.serverError"), { description: (err as Error).message });
+      toast.error(t("importPage.toast.serverError"), { description: apiErrorToMessage(err, t) });
     } finally {
       setBusyGroup(null);
     }
@@ -79,7 +80,7 @@ export function PortfolioImportReviewPage() {
       await refresh();
       toast.success(t("portfolioImport.toast.holdingCreated"));
     } catch (err) {
-      toast.error(t("importPage.toast.serverError"), { description: (err as Error).message });
+      toast.error(t("importPage.toast.serverError"), { description: apiErrorToMessage(err, t) });
     } finally {
       setBusyGroup(null);
     }

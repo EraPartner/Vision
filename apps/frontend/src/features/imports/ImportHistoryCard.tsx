@@ -6,6 +6,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { importKeys } from "@/lib/queryKeys";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
@@ -83,8 +84,7 @@ function RollbackButton({
       );
       onRolledBack();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(t("importHistory.rollbackFailed"), { description: msg });
+      toast.error(t("importHistory.rollbackFailed"), { description: apiErrorToMessage(err, t) });
     } finally {
       setRolling(false);
     }
@@ -204,8 +204,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
   // repeated failures still notify.
   useEffect(() => {
     if (!isError) return;
-    const msg = error instanceof Error ? error.message : String(error);
-    toast.error(t("importHistory.loadFailed"), { description: msg });
+    toast.error(t("importHistory.loadFailed"), { description: apiErrorToMessage(error, t) });
   }, [isError, error, t]);
 
   const invalidate = useCallback(

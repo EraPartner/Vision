@@ -17,6 +17,7 @@ import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getDbStats, vacuumTable } from '@/lib/api/admin';
 import type { DbTableStat } from '@/lib/api/admin';
@@ -143,7 +144,7 @@ export default function DbMaintenancePage() {
         },
         onError: (err: Error, table) => {
             const label = table ?? t('dbMaintenance.allTables');
-            toast.error(t('dbMaintenance.vacuumFailed'), { description: `${label}: ${err.message}` });
+            toast.error(t('dbMaintenance.vacuumFailed'), { description: `${label}: ${apiErrorToMessage(err, t)}` });
         },
         onSettled: () => setVacuumingTable(null),
     });

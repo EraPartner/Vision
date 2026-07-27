@@ -22,6 +22,7 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import {
@@ -262,7 +263,7 @@ export default function TableDataEditorPage() {
     const previewMutation = useMutation({
         mutationFn: () => previewTableMutation(table, changes),
         onSuccess: (res) => { setPreviewStatements(res.statements); setPreviewOpen(true); },
-        onError: (err: Error) => toast.error(t('dbEditor.previewFailed'), { description: err.message }),
+        onError: (err: Error) => toast.error(t('dbEditor.previewFailed'), { description: apiErrorToMessage(err, t) }),
     });
 
     const commitMutation = useMutation({
@@ -273,7 +274,7 @@ export default function TableDataEditorPage() {
             discardAll();
             qc.invalidateQueries({ queryKey: adminKeys.dbTableAll(table) });
         },
-        onError: (err: Error) => toast.error(t('dbEditor.commitFailed'), { description: err.message }),
+        onError: (err: Error) => toast.error(t('dbEditor.commitFailed'), { description: apiErrorToMessage(err, t) }),
     });
 
     const total = data?.total ?? 0;

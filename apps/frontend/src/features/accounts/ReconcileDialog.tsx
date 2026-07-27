@@ -45,6 +45,7 @@ import type { ReconcileMode } from '@/lib/api/accounts';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { useBalanceProvenance } from '@/features/accounts/balanceProvenance';
 import { statementYmd } from '@/features/accounts/driftBadge';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
@@ -155,7 +156,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
       toast.success(t('accounts.reconcile.readingSaved'));
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(t('accounts.reconcile.readingFailed'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('accounts.reconcile.readingFailed'), { description: apiErrorToMessage(e, t) }),
   });
 
   const reconcile = useMutation({
@@ -188,7 +189,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
       // longer holds for up to the 2-minute staleTime.
       invalidateAccountDerived(queryClient);
       invalidateTransactionData(queryClient);
-      toast.error(t('accounts.reconcile.failed'), { description: e.message });
+      toast.error(t('accounts.reconcile.failed'), { description: apiErrorToMessage(e, t) });
     },
   });
 
@@ -211,7 +212,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
       else toast.success(t('accounts.openingBalance.saved'));
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: apiErrorToMessage(e, t) }),
   });
 
   const busy = reconcile.isPending || backfill.isPending || saveReading.isPending;

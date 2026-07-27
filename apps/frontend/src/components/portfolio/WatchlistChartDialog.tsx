@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { AreaChart, type AreaSeries, type AreaReferenceLine } from "@/components/charts";
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
@@ -103,7 +104,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
       setEditingPrice(false);
       setNewTargetPrice("");
     } catch (e) {
-      toast.error(t('watchlist.updateFailed'), { description: (e as Error).message });
+      toast.error(t('watchlist.updateFailed'), { description: apiErrorToMessage(e, t) });
     }
   };
 

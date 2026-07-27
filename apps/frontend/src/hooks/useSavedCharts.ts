@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type SavedChart, type SavedChartCreate } from '@/lib/api';
 import { toast } from 'sonner';
 import { savedChartKeys } from '@/lib/queryKeys';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export type { SavedChart };
@@ -24,7 +25,7 @@ export function useCreateSavedChart() {
       toast.success(t('charts.saved'));
     },
     onError: (error: Error) => {
-      toast.error(t('charts.saveFailed'), { description: error.message });
+      toast.error(t('charts.saveFailed'), { description: apiErrorToMessage(error, t) });
     },
   });
 }
@@ -39,7 +40,7 @@ export function useUpdateSavedChart() {
       queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
     },
     onError: (error: Error) => {
-      toast.error(t('charts.updateFailed'), { description: error.message });
+      toast.error(t('charts.updateFailed'), { description: apiErrorToMessage(error, t) });
     },
   });
 }
@@ -54,7 +55,7 @@ export function useDeleteSavedChart() {
       toast.success(t('charts.deleted'));
     },
     onError: (error: Error) => {
-      toast.error(t('charts.deleteFailed'), { description: error.message });
+      toast.error(t('charts.deleteFailed'), { description: apiErrorToMessage(error, t) });
     },
   });
 }
