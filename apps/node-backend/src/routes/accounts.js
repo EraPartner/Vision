@@ -19,6 +19,7 @@ import { reconcileAccount } from '../services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { validateIdParam } from '../middleware/validation.js';
+import { ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -77,11 +78,23 @@ router.get('/:id/merge-preview', validateIdParam, async (req, res) => {
 
 // Merge one or more source accounts into this (survivor) account: all references repoint to :id
 // and the sources are deleted (ADR-088). Body: { source_ids: number[] }.
+//
+// All-or-nothing, like the transactions.js bulk endpoints: a non-integer entry
+// used to be silently dropped and the remaining sources merged anyway (an
+// irreversible write the client never asked for), so the whole request is now
+// rejected with a 400 naming the offending entries. Accepted values still go
+// through parseInt, so a valid body merges exactly what it did before.
 router.post('/:id/merge', validateIdParam, async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
-  const sourceIds = Array.isArray(req.body?.source_ids)
-    ? req.body.source_ids.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n))
-    : [];
+  const rawSourceIds = Array.isArray(req.body?.source_ids) ? req.body.source_ids : [];
+  const sourceIds = rawSourceIds.map((x) => parseInt(x, 10));
+  const rejected = [];
+  sourceIds.forEach((id, index) => {
+    if (!Number.isInteger(id)) rejected.push(`source_ids[${index}] (${JSON.stringify(rawSourceIds[index])})`);
+  });
+  if (rejected.length > 0) {
+    throw new ValidationError(`source_ids must contain only integers, no accounts were merged: ${rejected.join('; ')}`);
+  }
   const result = await mergeAccounts(targetId, sourceIds);
   // Merge deletes the source accounts and repoints their references, changing
   // the net-worth + bank-balances aggregates; bust the caches (shared seam).

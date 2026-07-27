@@ -197,7 +197,7 @@ describe('Splits Routes', () => {
       const req = {
         body: {
           transaction_id: 1,
-          // Both rows drop out of normalization (missing recipient_id / amount).
+          // Both rows fail row validation (missing recipient_id / amount).
           splits: [
             { amount: 10 },
             { recipient_id: 3 },
@@ -219,7 +219,7 @@ describe('Splits Routes', () => {
           transaction_id: 1,
           splits: [
             { recipient_id: 2, amount: 20, note: 'x' },
-            { recipient_id: null, amount: 20, note: 'ignored' },
+            { recipient_id: 4, amount: 5, note: 'y' },
           ],
         },
         get: () => null,
@@ -229,13 +229,55 @@ describe('Splits Routes', () => {
 
       expect(splitRepository.createSplitsBatchAtomic).toHaveBeenCalledWith({
         transaction_id: 1,
-        splits: [{ recipient_id: 2, amount: 20, note: 'x' }],
+        splits: [
+          { recipient_id: 2, amount: 20, note: 'x' },
+          { recipient_id: 4, amount: 5, note: 'y' },
+        ],
       });
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
         data: { items: [{ id: 1 }], total: 1 },
       });
+    });
+
+    // All-or-nothing (bulk-operation semantics): a batch mixing valid and
+    // malformed rows used to commit the valid subset silently. It must now be
+    // rejected wholesale, with the 400 naming each offending index.
+    it('rejects the whole batch when one row of several is malformed, writing nothing', async () => {
+      const req = {
+        body: {
+          transaction_id: 1,
+          splits: [
+            { recipient_id: 2, amount: 20, note: 'x' },
+            { recipient_id: null, amount: 20, note: 'dropped before this fix' },
+            { recipient_id: 3, amount: 5 },
+          ],
+        },
+        get: () => null,
+      };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/batch'](req, res)).rejects.toThrow(/splits\[1\]/);
+      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
+      expect(splitRepository.writeAudit).not.toHaveBeenCalled();
+    });
+
+    it('names every offending index when several rows are malformed', async () => {
+      const req = {
+        body: {
+          transaction_id: 1,
+          splits: [
+            { recipient_id: 2, amount: 20 },
+            { recipient_id: 'abc', amount: 5 },
+            { recipient_id: 3, amount: 'not-a-number' },
+          ],
+        },
+        get: () => null,
+      };
+      await expect(routeHandlers['post:/batch'](req, mockResponse()))
+        .rejects.toThrow(/splits\[1\].*recipient_id.*splits\[2\].*amount/s);
+      expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
 
     // Pins for the zod swap (ZOD-08): normalization keeps parseInt-style id
@@ -274,10 +316,7 @@ describe('Splits Routes', () => {
       });
     });
 
-    it('drops null and non-object rows during normalization', async () => {
-      splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
-      splitRepository.writeAudit.mockResolvedValue();
-
+    it('rejects the batch on null and non-object rows instead of dropping them', async () => {
       const req = {
         body: {
           transaction_id: 1,
@@ -285,12 +324,9 @@ describe('Splits Routes', () => {
         },
         get: () => null,
       };
-      await routeHandlers['post:/batch'](req, mockResponse());
-
-      expect(splitRepository.createSplitsBatchAtomic).toHaveBeenCalledWith({
-        transaction_id: 1,
-        splits: [{ recipient_id: 2, amount: 10, note: undefined }],
-      });
+      await expect(routeHandlers['post:/batch'](req, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+      expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
   });
 

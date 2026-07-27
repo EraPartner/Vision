@@ -56,6 +56,7 @@ import { setOpeningBalance } from '../../src/services/openingBalanceService.js';
 import { reconcileAccount } from '../../src/services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../../src/services/aggregationRefresh.js';
 import { invalidatePortfolioCaches } from '../../src/services/info/cache.js';
+import { ValidationError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/accounts.js');
 
 describe('Account Routes — portfolio cache invalidation', () => {
@@ -107,5 +108,59 @@ describe('Account Routes — portfolio cache invalidation', () => {
     await routeHandlers['post:/:id/reconcile']({ params: { id: '1' }, body: { mode: 'accept' } }, res);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
     expect(scheduleAggregationRefresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A merge deletes the source accounts, so a partially-applied merge is an
+// irreversible write the client never asked for. Bulk requests are
+// all-or-nothing (the transactions.js bulk-{tag,update} pattern): a malformed
+// source id rejects the request with a 400 naming it, instead of being
+// filtered out while the remaining sources merge anyway.
+describe('POST /:id/merge — source_ids are rejected, not filtered', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('merges a fully-valid body unchanged (parseInt coercion preserved)', async () => {
+    mergeAccounts.mockResolvedValue({ into: 1, merged: [2, 3] });
+    const res = createMockResponse();
+    await routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [2, '3'] } }, res);
+    expect(mergeAccounts).toHaveBeenCalledWith(1, [2, 3]);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      data: { into: 1, merged: [2, 3], links: [] },
+    });
+  });
+
+  it('rejects with 400 when one source id of several is not an integer, merging nothing', async () => {
+    const res = createMockResponse();
+    await expect(
+      routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [2, 'abc', 3] } }, res),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(mergeAccounts).not.toHaveBeenCalled();
+    expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
+  });
+
+  it('names each offending entry (index and raw value) in the 400', async () => {
+    const res = createMockResponse();
+    await expect(
+      routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [2, 'abc', null] } }, res),
+    ).rejects.toThrow(/source_ids\[1\] \("abc"\).*source_ids\[2\] \(null\)/s);
+    expect(mergeAccounts).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-integer forms that parseInt cannot coerce (null, objects, empty string)', async () => {
+    for (const bad of [null, {}, '', [], undefined]) {
+      const res = createMockResponse();
+      await expect(
+        routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [bad] } }, res),
+      ).rejects.toBeInstanceOf(ValidationError);
+    }
+    expect(mergeAccounts).not.toHaveBeenCalled();
+  });
+
+  it('leaves the non-array / missing source_ids path to the service (empty list)', async () => {
+    mergeAccounts.mockResolvedValue({ into: 1, merged: [] });
+    const res = createMockResponse();
+    await routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: {} }, res);
+    expect(mergeAccounts).toHaveBeenCalledWith(1, []);
   });
 });
