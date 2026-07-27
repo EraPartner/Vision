@@ -18,6 +18,10 @@ export async function get({ userId, month, filterHash }) {
   return res.rows[0];
 }
 
+/**
+ * @param {Date|string|number} computedAt TIMESTAMPTZ — pg hands this back as a `Date`.
+ * @returns {boolean}
+ */
 export function isFresh(computedAt) {
   return Date.now() - new Date(computedAt).getTime() < CACHE_TTL_MS;
 }
@@ -57,7 +61,7 @@ export async function getActiveUserIds() {
     const res = await query(
       `SELECT DISTINCT user_id FROM cashflow_forecast_accuracy`,
     );
-    const ids = res.rows.map((r) => r.user_id);
+    const ids = res.rows.map((/** @type {any} */ r) => r.user_id);
     if (!ids.includes('anonymous')) ids.push('anonymous');
     return ids;
   } catch {

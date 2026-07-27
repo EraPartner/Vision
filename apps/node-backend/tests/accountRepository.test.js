@@ -60,6 +60,32 @@ describe('accountRepository', () => {
       expect(rows[1].anchor_date).toBeUndefined();
       expect(rows[1].post_anchor_count).toBe(3);
     });
+
+    // Pagination is opt-in — no limit means no LIMIT clause, so the historical
+    // "every account" behaviour is preserved byte for byte.
+    it('emits no LIMIT/OFFSET when no limit is supplied', async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+      await accountRepository.getAll({ active: true });
+      // (the balance lateral has its own literal LIMIT — assert on the
+      // parameterized tail this helper appends, not on the word)
+      expect(query.mock.calls[0][0]).not.toContain('LIMIT $');
+      expect(query.mock.calls[0][1]).toEqual([]);
+    });
+
+    it('appends a parameterized LIMIT/OFFSET when a limit is supplied', async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+      await accountRepository.getAll({ active: true, limit: 25, offset: 50 });
+      expect(query.mock.calls[0][0]).toContain('LIMIT $1 OFFSET $2');
+      expect(query.mock.calls[0][1]).toEqual([25, 50]);
+    });
+  });
+
+  describe('getCount', () => {
+    it('counts with the same active filter and coerces the bigint string', async () => {
+      query.mockResolvedValueOnce({ rows: [{ count: '42' }] });
+      expect(await accountRepository.getCount({ active: false })).toBe(42);
+      expect(query.mock.calls[0][0]).toContain('a.is_active = false');
+    });
   });
 
   describe('getById / getByName', () => {

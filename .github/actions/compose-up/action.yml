@@ -1,22 +1,26 @@
 name: Bring up the Docker Compose stack
 description: >
-  Optionally download and load a CI image artifact, write the stub .env,
-  `docker compose up -d` the stack, and poll the backend /health endpoint.
-  Shared by ci.yml (docker-verify, test-live-api-contracts) and e2e.yml.
-  Callers set COMPOSE_PROJECT_NAME at the job level to isolate the stack
-  from the real `vision` project so teardown can never touch real data.
+  Write the stub .env, `docker compose up -d` the stack, and poll the backend
+  /health endpoint. Shared by ci.yml (docker-verify, test-live-api-contracts)
+  and e2e.yml. Callers set COMPOSE_PROJECT_NAME at the job level to isolate the
+  stack from the real `vision` project so teardown can never touch real data.
+
+  Callers that have already put an image in the local image store pass
+  `vision-image`; callers that have not (e2e.yml) omit it and let compose build
+  the app from source.
 inputs:
-  image-artifact:
-    description: >
-      Name of an uploaded docker-image artifact to download and `docker load`.
-      Empty skips both steps (compose then builds the app image implicitly).
-    required: false
-    default: ""
   vision-image:
     description: >
-      Value exported as VISION_IMAGE before `docker compose up`. Empty leaves
-      the variable unset. (Currently a no-op — docker-compose.yml's app
-      service has no `image:` key; see the TODO.md entry on VISION_IMAGE.)
+      Tag of an already-built app image, e.g. `vision:ci`. When set, the
+      bring-up adds the docker-compose.ci.yml overlay — which gives the `app`
+      service the `image:` key the base file lacks — and exports the tag as
+      VISION_IMAGE for it, so compose runs THIS image instead of rebuilding the
+      app from source. Empty (e2e.yml) uses the base file alone and lets
+      compose build.
+
+      Callers that set this must also name both `-f` files on any later
+      `docker compose` invocation in the job (`exec`, `down`); see ci.yml's
+      docker-verify.
     required: false
     default: ""
   extra-env:
@@ -34,18 +38,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Download image artifact
-      if: ${{ inputs.image-artifact != '' }}
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
-      with:
-        name: ${{ inputs.image-artifact }}
-        path: /tmp
-
-    - name: Load Docker image
-      if: ${{ inputs.image-artifact != '' }}
-      shell: bash
-      run: docker load < /tmp/vision-ci.tar
-
     - name: Create stub .env for Docker Compose
       shell: bash
       env:
@@ -59,16 +51,23 @@ runs:
     # A plain `up -d` (NOT `up -d --build`) — on the ubuntu-24.04 runner's
     # Compose, `up -d --build` fails env_file resolution with "env file
     # .../.env not found" even though the stub .env exists. Compose still
-    # builds the `app` image implicitly when it is not already present.
+    # builds the `app` image implicitly when it is not already present, which
+    # is both what the e2e branch relies on and the fallback for the overlay
+    # branch if the tagged image is somehow missing.
     - name: Start services with Docker Compose
       shell: bash
       env:
         VISION_IMAGE_INPUT: ${{ inputs.vision-image }}
       run: |
         if [ -n "$VISION_IMAGE_INPUT" ]; then
+          # The overlay is what makes the export bite: it adds the `image:` key
+          # docker-compose.yml's `app` service does not have, so compose stops
+          # ignoring the prebuilt image and rebuilding from source.
           export VISION_IMAGE="$VISION_IMAGE_INPUT"
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d
+        else
+          docker compose -f docker-compose.yml up -d
         fi
-        docker compose -f docker-compose.yml up -d
 
     - name: Wait for /health to respond
       shell: bash

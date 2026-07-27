@@ -12,6 +12,7 @@ vi.mock('express', () => ({
 vi.mock('../../src/repositories/savedChartsRepository.js', () => ({
   default: {
     getAll: vi.fn(),
+    getCount: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -41,7 +42,27 @@ describe('Saved Charts Routes', () => {
 
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: [{ id: 1 }] });
+      // No limit/offset on the request → unbounded query, canonical collection
+      // shape { items, total } with total = row count and no COUNT round-trip.
+      expect(savedChartsRepository.getAll).toHaveBeenCalledWith({});
+      expect(savedChartsRepository.getCount).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [{ id: 1 }], total: 1 } });
+    });
+
+    it('pages and reports the full total when limit/offset are supplied', async () => {
+      savedChartsRepository.getAll.mockResolvedValue([{ id: 2 }]);
+      savedChartsRepository.getCount.mockResolvedValue(5);
+
+      const req = { query: { limit: '1', offset: '1' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/'](req, res);
+
+      expect(savedChartsRepository.getAll).toHaveBeenCalledWith({ limit: 1, offset: 1 });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ id: 2 }], total: 5, limit: 1, offset: 1 },
+      });
     });
 
     it('propagates error when repository fails', async () => {

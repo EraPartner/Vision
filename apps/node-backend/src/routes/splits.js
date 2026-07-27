@@ -13,6 +13,7 @@ import splitRepository from '../services/splitService.js';
 import { validateIdParam, validateId } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { escapeCsvValue } from '../lib/csv.js';
+import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -60,10 +61,11 @@ const validatedIdField = (field) => z.unknown().transform((value, ctx) => {
   return result.value;
 });
 
-// One /batch row. Rows that fail this schema are FILTERED out (batch keeps
-// going), not rejected — normalizeBatchSplitInputs safeParses per row. Finite
-// non-positive amounts survive normalization (the repo rejects them), exactly
-// like the old filter.
+// One /batch row. A row that fails this schema rejects the WHOLE request with
+// a 400 naming the offending index — bulk writes are all-or-nothing, matching
+// the transactions.js bulk-tag/bulk-update pattern (validate everything up
+// front, then write). Finite non-positive amounts still parse here (the repo
+// rejects them), so valid batches normalize exactly as before.
 const batchSplitRowSchema = z.object({
   recipient_id: validatedIdField('recipient_id'),
   amount: z.unknown().transform((value, ctx) => {
@@ -110,37 +112,67 @@ const payBodySchema = z.looseObject({}).superRefine((data, ctx) => {
   }
 });
 
+function formatIssues(error, separator) {
+  return error.issues
+    .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+    .join(separator);
+}
+
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
 function parseSplitsBody(schema, body) {
   const result = schema.safeParse(body);
   if (!result.success) {
-    const msg = result.error.issues
-      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
-      .join('; ');
-    throw new ValidationError(msg);
+    throw new ValidationError(formatIssues(result.error, '; '));
   }
   return result.data;
 }
 
+// All-or-nothing: every row must parse. A malformed row used to be silently
+// dropped and the rest committed, so a client could not tell that part of its
+// batch never landed; now any bad row aborts the request before a single write.
+// Every offending row is collected first so the 400 names them all — one
+// round-trip to fix the whole payload, rather than one per bad row.
 function normalizeBatchSplitInputs(splits) {
-  return splits
-    .map((split) => batchSplitRowSchema.safeParse(split))
-    .filter((result) => result.success)
-    .map((result) => result.data);
+  const prepared = [];
+  const rejected = [];
+
+  splits.forEach((split, index) => {
+    const result = batchSplitRowSchema.safeParse(split);
+    if (result.success) prepared.push(result.data);
+    else rejected.push(`splits[${index}] (${formatIssues(result.error, ', ')})`);
+  });
+
+  if (rejected.length > 0) {
+    throw new ValidationError(`Invalid splits, no splits were created: ${rejected.join('; ')}`);
+  }
+  return prepared;
 }
 
 function resolveActor(req) {
   return req.get('x-actor') || req.user?.id || null;
 }
 
+// Pagination is opt-in on every list below: without limit/offset the whole
+// collection is returned exactly as before, so no existing client is truncated.
+//
+// The owed summary is derived in JS after the aggregate (see the repository),
+// so this one pages the computed array rather than the query; `total` is still
+// the full group count.
 router.get('/owed', async (req, res) => {
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const summary = await splitRepository.getOwedSummary();
-  res.ok({ items: summary, total: summary.length });
+  const items = page ? summary.slice(page.offset, page.offset + page.limit) : summary;
+  res.ok(listBody(items, summary.length, page));
 });
 
 router.get('/owed/:id', validateIdParam, async (req, res) => {
-  const splits = await splitRepository.getOwedByRecipient(parseRouteId(req));
-  res.ok({ items: splits, total: splits.length });
+  const recipientId = parseRouteId(req);
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const splits = await splitRepository.getOwedByRecipient(recipientId, page ?? {});
+  const total = page
+    ? await splitRepository.countOwedByRecipient(recipientId)
+    : splits.length;
+  res.ok(listBody(splits, total, page));
 });
 
 router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
@@ -159,8 +191,13 @@ router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
 });
 
 router.get('/transaction/:id', validateIdParam, async (req, res) => {
-  const splits = await splitRepository.getSplitsByTransaction(parseRouteId(req));
-  res.ok({ items: splits, total: splits.length });
+  const transactionId = parseRouteId(req);
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const splits = await splitRepository.getSplitsByTransaction(transactionId, page ?? {});
+  const total = page
+    ? await splitRepository.countSplitsByTransaction(transactionId)
+    : splits.length;
+  res.ok(listBody(splits, total, page));
 });
 
 router.post('/', async (req, res) => {
@@ -180,13 +217,11 @@ router.post('/', async (req, res) => {
 router.post('/batch', async (req, res) => {
   const { transaction_id, splits } = parseSplitsBody(batchSplitsSchema, req.body);
 
+  // Throws on any malformed row, so nothing is written unless every row is
+  // valid; a batch whose rows ALL fail is covered by the same 400 (it can
+  // never reach the repository as an empty `splits`, since the body schema
+  // already rejects an empty array).
   const preparedSplits = normalizeBatchSplitInputs(/** @type {unknown[]} */ (splits));
-  // Client sent rows but every one was dropped by normalization (missing
-  // recipient_id/amount) — that's a bad request, not a legitimately-empty
-  // batch. Fail loud instead of returning a 201 { total: 0 } success envelope.
-  if (preparedSplits.length === 0) {
-    throw new ValidationError('No valid splits: each split requires recipient_id and amount');
-  }
   const created = await splitRepository.createSplitsBatchAtomic({
     transaction_id,
     splits: preparedSplits,
@@ -226,8 +261,11 @@ router.post('/:id/pay', validateIdParam, async (req, res) => {
 });
 
 router.get('/:id/payments', validateIdParam, async (req, res) => {
-  const payments = await splitRepository.getPayments(parseRouteId(req));
-  res.ok({ items: payments, total: payments.length });
+  const splitId = parseRouteId(req);
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const payments = await splitRepository.getPayments(splitId, page ?? {});
+  const total = page ? await splitRepository.countPayments(splitId) : payments.length;
+  res.ok(listBody(payments, total, page));
 });
 
 router.post('/:id/settle', validateIdParam, async (req, res) => {
@@ -277,7 +315,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
       amount: splitBefore.amount,
     },
   });
-  res.ok({ message: 'Split deleted' });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 export default router;

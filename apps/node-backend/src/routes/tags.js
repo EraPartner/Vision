@@ -43,10 +43,13 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   res.ok({ ...updated, links: [] });
 });
 
+// Deactivation, not a hard delete: the row survives with is_active = false, so
+// this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
+// "DELETE responses").
 router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const deleted = await tagService.softDelete(id);
-  res.ok({ message: `Tag ${id} deactivated`, tag: deleted, links: [] });
+  const deactivated = await tagService.softDelete(id);
+  res.ok({ ...deactivated, links: [] });
 });
 
 export default router;

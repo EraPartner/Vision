@@ -47,7 +47,11 @@ coverage/
 postgres_data/
 Backups/
 *.csv
-*.db*
+# SQLite artifacts only — a bare *.db* also swallowed tests named *.db.test.js
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
 htmlcov/
 *.tmp
 

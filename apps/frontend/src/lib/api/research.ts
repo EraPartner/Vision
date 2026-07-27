@@ -192,8 +192,12 @@ export function saveResearchMappings(input: {
     return researchSend<MappingsResponse>('/api/research/mappings', 'POST', input);
 }
 
-export function deleteResearchMapping(id: number): Promise<ResearchResult<{ removed: boolean }>> {
-    return researchSend<{ removed: boolean }>(`/api/research/mappings/${id}`, 'DELETE');
+/**
+ * Delete a stored mapping. Responds 204 No Content — no body, and therefore no
+ * provenance meta, so this goes through `apiRequest` rather than `researchSend`.
+ */
+export async function deleteResearchMapping(id: number): Promise<void> {
+    await apiRequest<void>(`/api/research/mappings/${id}`, { method: 'DELETE' });
 }
 
 export function auditResearchMappings(input: {
@@ -217,10 +221,9 @@ export function setResearchProviderKey(provider: string, apiKey: string): Promis
     });
 }
 
-export function clearResearchProviderKey(
-    provider: string,
-): Promise<{ removed: boolean } & ProviderKeysResponse> {
-    return apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
+/** Clear a provider key. Responds 204 No Content — callers refetch the statuses. */
+export async function clearResearchProviderKey(provider: string): Promise<void> {
+    await apiRequest<void>(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
         method: 'DELETE',
     });
 }

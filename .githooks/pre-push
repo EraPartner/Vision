@@ -6,7 +6,8 @@
 # Bypass:        git push --no-verify     or     SKIP_HOOKS=1 git push
 # Skip just one: SKIP_TESTS=1 / SKIP_TYPECHECK=1 git push
 #
-# Checks: frontend typecheck . backend typecheck . endpoint-matrix . locales . backend tests
+# Checks: frontend typecheck . backend typecheck (+ noImplicitAny ratchet) .
+#         endpoint-matrix . locales . backend tests
 #
 # Output is ASCII-only on purpose (see the note in pre-commit).
 
@@ -54,6 +55,9 @@ run() { # <label> <command...>
 if [ "${SKIP_TYPECHECK:-}" != "1" ]; then
   run "typecheck (frontend)" bun run --filter vision-frontend typecheck
   run "typecheck (backend)"  sh -c 'cd apps/node-backend && bunx tsc -p tsconfig.check.json'
+  # noImplicitAny ratchet over the same program, scoped to the paths listed in
+  # scripts/checkjs-ratchet.js (data-layer row contracts + annotated repositories).
+  run "typecheck (backend ratchet)" sh -c 'cd apps/node-backend && bun scripts/checkjs-ratchet.js'
 fi
 
 run "endpoint matrix" node scripts/check-endpoint-matrix.js

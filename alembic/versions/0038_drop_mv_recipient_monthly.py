@@ -32,6 +32,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # CASCADE also removes mv_recipient_monthly_idx.
+    # destructive-ok: shipped 2026-06-01, annotated retroactively. Derived data only — the MV is
+    # rebuilt from transactions, holds nothing of its own, and its last reader was removed in the
+    # same release. Downgrade recreates the 0035 definition.
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_recipient_monthly CASCADE;")
 
 

@@ -285,11 +285,17 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
-      const result = res.json.mock.calls[0][0].data;
+      const body = res.json.mock.calls[0][0];
+      const result = body.data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-05');
       expect(result.snapshots[1].date).toBe('2026-03-04');
       expect(result.snapshotsTotal).toBe(5);
+      // Pagination facts live in the body, not in envelope meta — the
+      // meta.pagination convention is retired (packages/types/src/api.js).
+      expect(result.snapshotsLimit).toBe(2);
+      expect(result.snapshotsOffset).toBe(0);
+      expect(body.meta).toBeUndefined();
     });
 
     it('should honor offset for pagination', async () => {
@@ -314,6 +320,7 @@ describe('Info Routes', () => {
       expect(result.snapshots[0].date).toBe('2026-03-02');
       expect(result.snapshots[1].date).toBe('2026-03-01');
       expect(result.snapshotsTotal).toBe(4);
+      expect(result.snapshotsOffset).toBe(2);
     });
 
     it('should return full unpaginated history when no limit/offset params', async () => {
@@ -331,10 +338,15 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
-      const result = res.json.mock.calls[0][0].data;
+      const body = res.json.mock.calls[0][0];
+      const result = body.data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-01');
+      // Unpaginated: no pagination fields at all — the body IS the whole series.
       expect(result.snapshotsTotal).toBeUndefined();
+      expect(result.snapshotsLimit).toBeUndefined();
+      expect(result.snapshotsOffset).toBeUndefined();
+      expect(body.meta).toBeUndefined();
     });
   });
 

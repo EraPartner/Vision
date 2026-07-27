@@ -148,37 +148,42 @@ Portfolio parser configs reuse the `custom_parser_configs` table with `kind = 'p
 
 ### GET /api/portfolio/import/parsers
 
-List all saved portfolio parser configurations.
+List all saved portfolio parser configurations. Collection GETs use the
+canonical `{items, total}` body; this list is unpaginated, so `total` is the
+row count.
 
 **Response:**
 ```json
 {
   "ok": true,
-  "data": [
-    {
-      "id": 5,
-      "name": "Degiro Trades",
-      "config": {
-        "date_format": "%d-%m-%Y",
-        "separator": ",",
-        "encoding": "utf-8",
-        "skip_rows": 0,
-        "default_asset_class": "stock",
-        "default_type": "buy",
-        "type_mapping": {},
-        "column_mapping": {
-          "date": "Date",
-          "symbol": "Symbol",
-          "units": "Quantity",
-          "price": "Price",
-          "amount": "Value",
-          "fees": "Transaction and/or third party costs"
-        }
-      },
-      "created_at": "2026-06-15T10:00:00Z",
-      "updated_at": "2026-06-15T10:00:00Z"
-    }
-  ]
+  "data": {
+    "items": [
+      {
+        "id": 5,
+        "name": "Degiro Trades",
+        "config": {
+          "date_format": "%d-%m-%Y",
+          "separator": ",",
+          "encoding": "utf-8",
+          "skip_rows": 0,
+          "default_asset_class": "stock",
+          "default_type": "buy",
+          "type_mapping": {},
+          "column_mapping": {
+            "date": "Date",
+            "symbol": "Symbol",
+            "units": "Quantity",
+            "price": "Price",
+            "amount": "Value",
+            "fees": "Transaction and/or third party costs"
+          }
+        },
+        "created_at": "2026-06-15T10:00:00Z",
+        "updated_at": "2026-06-15T10:00:00Z"
+      }
+    ],
+    "total": 1
+  }
 }
 ```
 
@@ -248,8 +253,10 @@ Delete a saved portfolio parser.
 List portfolio import batches, newest first.
 
 **Query Parameters:**
-- `limit` (integer, optional) — max rows to return (default 50)
+- `limit` (integer, optional) — max rows to return (default 50, clamped to 200)
 - `offset` (integer, optional) — pagination offset (default 0)
+
+**Response:** canonical paginated collection body — `{ items, total, limit, offset }`.
 
 ---
 

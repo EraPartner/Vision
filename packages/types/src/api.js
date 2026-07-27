@@ -12,23 +12,36 @@
 export { ApiErrorCode } from './errors.js';
 
 /**
- * Pagination cursor. Endpoints use either `page` or `offset`, never both.
+ * Pagination lives in the response BODY, not in `meta`.
  *
- * @typedef {object} ResponsePagination
- * @property {number} total
- * @property {number} limit
- * @property {number} [page]
- * @property {number} [offset]
- * @property {boolean} [hasMore]
+ * A collection endpoint answers `{ items, total }`, and adds `limit` + `offset`
+ * whenever the request actually paginated — `total` is always the full match
+ * count, never the length of the page. Endpoints that only recently gained
+ * pagination keep answering the complete list when no limit/offset is supplied
+ * (lib/pagination.js::parseOptionalPagination), so `limit`/`offset` are absent
+ * exactly when the body already holds everything.
+ *
+ *   { ok: true, data: { items: [...], total: 128, limit: 50, offset: 50 } }
+ *
+ * A composite payload that embeds one list (e.g. /api/info/net-worth) prefixes
+ * the same fields with the list they describe: `snapshotsTotal`,
+ * `snapshotsLimit`, `snapshotsOffset`.
+ *
+ * There is deliberately no `meta.pagination`: an earlier `ResponsePagination`
+ * typedef documented one, but a single endpoint ever emitted it while every
+ * other list used the body, so the envelope-level variant was dropped rather
+ * than migrated onto (see docs/reference/code-patterns.md, "List Response
+ * Envelope Pattern").
  */
 
 /**
- * Optional response metadata. Paginated endpoints populate `pagination`;
- * every response may carry `requestId` once correlation middleware lands.
+ * Optional response metadata. Every response may carry `requestId` (stamped by
+ * the correlation middleware); `extra` is a free-form escape hatch for facts
+ * about the response itself, e.g. `{ source: 'mv' }`. Pagination does NOT
+ * belong here — see the note above.
  *
  * @typedef {object} ResponseMeta
  * @property {string} [requestId]
- * @property {ResponsePagination} [pagination]
  * @property {Record<string, unknown>} [extra]
  */
 

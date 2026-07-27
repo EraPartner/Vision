@@ -333,8 +333,16 @@ Get net worth combining bank balances + portfolio value.
 |-----------|------|-------------|
 | `currency` | string | Target 3-letter currency code for converted snapshots (default: EUR) |
 | `target_currency` | string | Alias for `currency` |
+| `limit` | integer | Optional page size for `snapshots` (capped at 5000) |
+| `offset` | integer | Optional rows to skip in `snapshots` (default 0) |
 
 Notes:
+- Snapshot pagination is opt-in and reported in the **response body**: with neither
+  `limit` nor `offset`, `snapshots` is the complete series and no pagination fields
+  are emitted. With either, `snapshots` is a newest-first page and the body carries
+  `snapshotsTotal` / `snapshotsLimit` / `snapshotsOffset`. (This endpoint previously
+  also emitted an envelope-level `meta.pagination`; that convention is retired —
+  see [[packages/types/src/api.js]].)
 - Route applies per-currency in-memory response caching (TTL 60s) to reduce repeated heavy repository recomputation on dashboard refreshes.
 - Concurrent requests for the same currency are deduplicated in-flight and share the same repository promise.
 - Route uses a modest per-route rate limiter (`30 requests / 60s` per key prefix) to protect expensive net-worth computations.

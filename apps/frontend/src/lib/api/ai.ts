@@ -58,8 +58,10 @@ export async function getOllamaModels(): Promise<OllamaModel[]> {
     return response.models ?? [];
 }
 
-export function getConversations(): Promise<ConversationSummary[]> {
-    return apiRequest('/api/ai/conversations');
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getConversations(): Promise<ConversationSummary[]> {
+    const { items } = await apiRequest<{ items: ConversationSummary[]; total: number }>('/api/ai/conversations');
+    return items;
 }
 
 export function getConversation(id: string): Promise<ConversationDetail> {

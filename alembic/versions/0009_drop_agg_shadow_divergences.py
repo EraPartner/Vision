@@ -20,6 +20,9 @@ depends_on = None
 def upgrade():
     op.execute(sa.text("DROP INDEX IF EXISTS idx_asd_created_at"))
     op.execute(sa.text("DROP INDEX IF EXISTS idx_asd_endpoint"))
+    # destructive-ok: shipped 2026-04-24, annotated retroactively. Diagnostic-only table; the
+    # shadow middleware that was its sole writer/reader was removed in the same release after
+    # parity was proven at full traffic (see this migration's docstring). No user data.
     op.execute(sa.text("DROP TABLE IF EXISTS agg_shadow_divergences"))
 
 

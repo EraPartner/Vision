@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-06-29
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule.
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint]
+updated: 2026-07-27
+tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
+aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers]
 ---
 
 # Code Patterns Reference
@@ -614,11 +614,12 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   res.ok(updated);
 });
 
-// DELETE /api/entities/:id
+// DELETE /api/entities/:id — hard delete answers 204 with no body (see
+// "DELETE Response Pattern" below for the soft-delete / side-effect exceptions)
 router.delete('/:id', validateIdParam, async (req, res) => {
   const deleted = await entityRepository.hardDelete(parseInt(req.params.id, 10));
   if (!deleted) throw new NotFoundError('Entity not found');
-  res.ok({ id: parseInt(req.params.id, 10) });
+  res.status(204).send();
 });
 
 export default router;
@@ -633,7 +634,7 @@ export default router;
 | **ID validation** | `validateIdParam` middleware on all `/:id` routes |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`) |
 | **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
-| **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` |
+| **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]) |
 | **Route ordering** | Static routes (e.g., `/providers`) BEFORE `/:id` routes |
 | **Rate limiting** | Per-route limiters for heavy endpoints (e.g., export, search) |
 | **Export** | `export default router` |
@@ -683,6 +684,7 @@ router.get('/', async (req, res) => {
 | **Payload wrapping** | `res.ok({items, total, ...})` wraps the list payload inside `data`; never `res.ok(items)` |
 | **Parallel fetch** | Use `Promise.all([getAll, getCount])` to avoid N+1 queries |
 | **Frontend unwrapping** | API client returns `body.data` automatically; consumer receives `{items, total, ...}` |
+| **Pagination lives in the body** | `{items, total, limit, offset}` inside `data` — never `meta.pagination`. The envelope-level variant was documented once, emitted by exactly one endpoint, and has been retired ([[packages/types/src/api.js]]) |
 
 ### Common Patterns
 
@@ -697,6 +699,25 @@ res.ok({ items: summary, total: summary.length });
 res.ok({ items, total }, { source: 'mv', computedAt: '...' });
 ```
 
+### Adding pagination to a list that never had it
+
+A list endpoint that has always returned every row cannot simply adopt
+`parsePagination` — its `defaultLimit` would truncate every existing client on the
+next deploy. Use the opt-in pair from [[apps/node-backend/src/lib/pagination.js]]:
+
+```js
+// null when the caller sent neither limit nor offset ⇒ serve the whole list.
+const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+const items = await repository.getAll({ active, ...(page ?? {}) });
+// Unbounded query ⇒ the rows ARE the total; skip the COUNT round-trip.
+const total = page ? await repository.getCount({ active }) : items.length;
+res.ok(listBody(items, total, page));   // adds limit/offset only when paging
+```
+
+Repository side: build the tail with `buildLimitOffset(params, { limit, offset })`
+([[apps/node-backend/src/lib/sqlClauses.js]]) so a `null` limit emits no `LIMIT`
+clause at all, rather than a large default that silently caps the result.
+
 ### Frontend Consumption
 
 ```typescript
@@ -705,6 +726,128 @@ const { items, total } = await apiClient.getEntities({ limit: 50 });
 
 items.forEach(item => console.log(item));  // items is already the array
 ```
+
+---
+
+## DELETE Response Pattern
+
+**Source:** [[apps/node-backend/src/routes/categories.js|categories.js]], [[apps/node-backend/src/routes/tags.js|tags.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
+
+DELETE success responses previously used six different shapes (`204` empty, `{message}`, `{deleted:true}`, `{removed}`, `{ok:true}`, `{patternId}`), which made a generic delete-mutation hook impossible. One rule now applies:
+
+> **A hard delete answers `204 No Content` with no body. A 200 body is allowed only when the operation is *not* a plain delete and the body carries something the caller cannot derive.**
+
+```js
+// Hard delete — the row is gone; nothing to report.
+router.delete('/:id', validateIdParam, async (req, res) => {
+  const deleted = await entityRepository.hardDelete(parseInt(req.params.id, 10));
+  if (!deleted) throw new NotFoundError('Entity not found');
+  res.status(204).send();
+});
+
+// Soft delete / deactivate — the row survives with is_active = false, so the
+// caller gets the updated entity back (same shape as PATCH).
+router.delete('/:id', validateIdParam, async (req, res) => {
+  const deactivated = await tagService.softDelete(parseInt(req.params.id, 10));
+  res.ok({ ...deactivated, links: [] });
+});
+
+// Side-effect-reporting delete — a rollback deletes N other rows; the UI
+// renders the count, so it is a real payload.
+res.ok({ deleted, recipientsRemoved });
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| **204 has no envelope** | `res.status(204).send()`, never `res.ok(...)`. Per [[docs/adr/026-unified-api-response-envelope|ADR-026]] the envelope is a property of JSON bodies; a 204 has no body to wrap |
+| **Not-found still throws** | `throw new NotFoundError(...)` → the error envelope is unaffected. 204 applies to the success path only |
+| **Idempotent deletes** | Where an already-removed row is deliberately not an error (`/api/research/mappings/:id`, `/api/research/provider-keys/:provider`), answer 204 regardless — do not leak a `{removed:false}` body |
+| **No echo bodies** | Never return the id/params the caller just sent (`{patternId}`), a bare `{ok:true}`, or a human-readable `{message}`. None of it is information |
+| **Frontend clients return `void`** | `await apiRequest<void>(path, { method: 'DELETE' })`. `apiRequest` short-circuits on 204 and resolves `undefined`; a client typed to return a body would be lying |
+| **openapi.yaml** | Document `"204": { description: No Content }` with no `content:` block, then re-run `bun run generate:types` |
+
+### The Exceptions
+
+Only these four justify a 200 body. Each is annotated in-route with a pointer back here.
+
+| Endpoint | Body | Why not 204 |
+|----------|------|-------------|
+| `DELETE /api/tags/:id` | the deactivated tag | Soft delete — `is_active` flips, the row survives, and the caller wants the new state |
+| `DELETE /api/recipients/:id/bank-accounts/:accountId` | the deactivated bank account | Same soft delete; mirrors the sibling `set-primary` response |
+| `DELETE /api/import/batches/:id` | `{ deleted, recipientsRemoved }` | Rollback, not a delete of the addressed resource — the counts are rendered by the import history card |
+| `DELETE /api/portfolio/import/batches/:id` | `{ deleted }` | Same rollback semantics |
+
+Side-effect-count bodies keep their existing key names; unifying response keys across endpoints is a separate concern from this convention.
+
+### When Adding a DELETE Route
+
+1. Hard delete? → `res.status(204).send()`, `"204"` in `openapi.yaml`, frontend client returns `Promise<void>`.
+2. Soft delete / deactivate? → `res.ok({ ...entity, links: [] })` and say so in a route comment.
+3. Reporting counts the UI displays? → `res.ok({ ...counts })` and say so in a route comment.
+4. Anything else (a message, an echoed id, `{ok:true}`) is not a reason — use 204.
+
+---
+
+## Wire Casing Convention (snake_case bodies)
+
+**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/recipients.js|recipients.js]], [[apps/node-backend/src/routes/research.js|research.js]]
+
+Request and response bodies were split by router: the domain API speaks snake_case (`transaction_ids`, `alias_ids`, `instrument_key`) while a handful of later routers speak camelCase (`conversationId`, `chartType`, `targetWeights`). One rule now applies:
+
+> **snake_case is the wire convention. Request bodies, response bodies, and query parameters use snake_case keys — matching the DB column names the majority of them mirror. camelCase stays inside the process: services, repositories, and frontend types.**
+
+```js
+// Route: snake_case in, camelCase from there inward.
+router.post('/portfolio-forecast', async (req, res) => {
+  const body = req.body ?? {};
+  const result = await runPortfolioForecast({
+    horizonMonths: body.horizon_months,          // wire → internal, once, at the edge
+    monthlyContribution: body.monthly_contribution,
+  });
+  res.ok(result);                                // response keys are snake_case too
+});
+```
+
+```ts
+// Frontend client owns the same translation on its side.
+return researchSend<PortfolioForecast>('/api/research/portfolio-forecast', 'POST', {
+  horizon_months: input.horizonMonths,
+  monthly_contribution: input.monthlyContribution,
+});
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| **snake_case on the wire** | Request bodies, response bodies, and query params. It matches the DB columns most payloads mirror, so a row can be returned without a rename pass |
+| **Translate at the edge** | The route handler is the only place the two spellings meet. Services and repositories never see wire keys; the frontend client maps them back to camelCase for React |
+| **Never dual-accept** | Accepting `horizon_months ?? horizonMonths` ships two undocumented contracts and doubles the surface every future validator has to cover. Pick snake_case; the camel key is simply an unknown field |
+| **New routers are snake_case** | No matter which neighbour they sit next to in `routes/`. A grandfathered router is not a precedent |
+| **openapi.yaml is the check** | The documented spelling is the contract. If a handler reads a key `openapi.yaml` does not list, one of the two is wrong |
+
+### Grandfathered Exceptions
+
+These predate the rule and keep camelCase — including **new endpoints added to them** — until a dedicated migration retires the list. Do not half-migrate one: a router with both spellings is worse than a router that is consistently camel.
+
+| Surface | camelCase keys | Direction |
+|---------|----------------|-----------|
+| [[apps/node-backend/src/routes/ai.js|ai.js]] | `conversationId`, `useTools` | request + response |
+| [[apps/node-backend/src/routes/savedCharts.js|savedCharts.js]] | `chartType`, `chartVariant`, `timeBucket`, `categoryIds`, `dateRangeStart`, … | request + response |
+| [[apps/node-backend/src/routes/crossWorkspace.js|crossWorkspace.js]] | `targetWeights`, `availableCash` | request + response |
+| [[apps/node-backend/src/routes/admin.js|admin.js]] DB-editor routes | `changes`, `dryRun`, `orderBy` ([[docs/adr/101-db-data-editor|ADR-101]]) | request |
+| [[apps/node-backend/src/routes/marketLookup.js|marketLookup.js]] | `changePercent`, `dayHigh`, `prevClose`, `publishedAt`, … | response only — passthrough of the upstream provider shape |
+| [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]] rollback bodies | `{ deleted, recipientsRemoved }` on `DELETE /api/import/batches/:id` and `DELETE /api/portfolio/import/batches/:id` | response only |
+
+Everything else in `importRoutes.js` is snake_case (`auto_linked_count`); only the two rollback bodies are grandfathered.
+
+### When Adding a Route
+
+1. New router? → snake_case bodies, no exceptions.
+2. New endpoint in a grandfathered router? → match that router's camelCase, so the router stays internally consistent.
+3. Tempted to accept both spellings? → don't. Fix the caller instead; a wire contract with two spellings has no documented shape.
 
 ---
 

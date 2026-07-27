@@ -7,10 +7,48 @@ import { toWireDate } from '../lib/dateFormat.js';
 import { coerceNumericFields } from '../lib/money.js';
 import { buildSetClauses, buildUpdateSql } from '../lib/sqlClauses.js';
 
+/** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
+
+/**
+ * The caller-facing create payload — one key per column in
+ * INVESTMENT_INSERT_FIELDS. Every field except `name` / `asset_class` is
+ * optional and falls back to a per-column default.
+ *
+ * @typedef {object} InvestmentCreateFields
+ * @property {string} name
+ * @property {string} asset_class
+ * @property {string|null} [symbol]
+ * @property {string} [currency]
+ * @property {number|string|null} [current_price]
+ * @property {number|string|null} [interest_rate]
+ * @property {string|null} [maturity_date] 'YYYY-MM-DD'
+ * @property {string|null} [location]
+ * @property {string|null} [municipality]
+ * @property {number|string|null} [cadastral_income]
+ * @property {number|string|null} [municipality_tax_rate]
+ * @property {string|null} [notes]
+ * @property {string|null} [price_provider]
+ * @property {string|null} [price_provider_id]
+ * @property {string|null} [price_provider_url]
+ * @property {string|null} [price_provider_latest_url]
+ * @property {string|null} [price_provider_latest_path]
+ * @property {string|null} [price_provider_history_url]
+ * @property {string|null} [price_provider_history_path]
+ * @property {string|null} [price_provider_history_ts_path]
+ * @property {string|null} [price_provider_history_price_path]
+ */
+
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so rows match the `number` API/TS types (the inheritance create/update paths
 // all return through getById, so coercing the methods below covers them too).
 const INVESTMENT_NUMERIC_FIELDS = ['current_price', 'interest_rate', 'cadastral_income', 'municipality_tax_rate'];
+/**
+ * Coerce an `investments` row to its emitted shape: the four NUMERIC columns
+ * become numbers and the DATE `maturity_date` a calendar-day string.
+ *
+ * @param {any} row
+ * @returns {InvestmentRow}
+ */
 const mapInvestmentRow = (row) => {
   const mapped = coerceNumericFields(row, INVESTMENT_NUMERIC_FIELDS);
   // DATE column: calendar-day string, not a raw pg Date (previous-day ISO
@@ -19,9 +57,12 @@ const mapInvestmentRow = (row) => {
   return mapped;
 };
 
+/** @type {boolean|undefined} */
 let _hasInvestmentInheritanceSchema;
+/** @type {boolean|undefined} */
 let _hasMetalsInheritanceTable;
 
+/** @returns {Promise<boolean>} true on legacy table-inheritance installs (ADR-109). */
 async function hasInvestmentInheritanceSchema() {
   if (_hasInvestmentInheritanceSchema !== undefined) return _hasInvestmentInheritanceSchema;
 
@@ -35,6 +76,7 @@ export function __resetInvestmentSchemaCache() {
   _hasMetalsInheritanceTable = undefined;
 }
 
+/** @returns {Promise<boolean>} */
 async function hasMetalsInheritanceTable() {
   if (_hasMetalsInheritanceTable !== undefined) return _hasMetalsInheritanceTable;
   const result = await query("SELECT to_regclass('public.metals_investments') AS metals_investments");
@@ -42,6 +84,10 @@ async function hasMetalsInheritanceTable() {
   return _hasMetalsInheritanceTable;
 }
 
+/**
+ * @param {any} err
+ * @returns {boolean}
+ */
 function isNonUpdatableInvestmentsViewError(err) {
   const msg = err?.message || '';
   return msg.includes('cannot update view "investments"')
@@ -49,6 +95,11 @@ function isNonUpdatableInvestmentsViewError(err) {
     || msg.includes("cannot delete from view \"investments\"");
 }
 
+/**
+ * @param {any} err
+ * @param {string} [columnName]
+ * @returns {boolean}
+ */
 function isUndefinedColumnError(err, columnName) {
   if (err?.code !== '42703') return false;
   const msg = err?.message || '';
@@ -56,6 +107,10 @@ function isUndefinedColumnError(err, columnName) {
   return msg.includes(`column "${columnName}"`);
 }
 
+/**
+ * @param {any} err
+ * @returns {boolean}
+ */
 function isMissingInheritanceRelationError(err) {
   if (err?.code === '42P01') return true;
   const msg = err?.message || '';
@@ -69,6 +124,11 @@ function isMissingInheritanceRelationError(err) {
     || msg.includes('relation "metals_investments" does not exist');
 }
 
+/**
+ * @param {any} err
+ * @param {string} childTable
+ * @returns {boolean}
+ */
 function isDuplicateInvestmentIdError(err, childTable) {
   if (err?.code !== '23505') return false;
   const msg = err?.message || '';
@@ -84,6 +144,7 @@ async function resyncInvestmentsBaseIdSequence() {
   );
 }
 
+/** @type {Record<string, string>} */
 const INHERITED_TABLE_BY_ASSET_CLASS = {
   stock: 'stock_investments',
   etf: 'etf_investments',
@@ -94,6 +155,10 @@ const INHERITED_TABLE_BY_ASSET_CLASS = {
   bond: 'bond_investments',
 };
 
+/**
+ * @param {string} assetClass
+ * @returns {Promise<string|undefined>}
+ */
 async function resolveChildTable(assetClass) {
   if (assetClass !== 'metals') return INHERITED_TABLE_BY_ASSET_CLASS[assetClass];
   const hasMetalsTable = await hasMetalsInheritanceTable();
@@ -117,6 +182,7 @@ const BASE_ALLOWED_FIELDS = [
   'price_updated_at',
 ];
 
+/** @type {Record<string, string[]>} */
 const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
   stock: ['symbol', 'current_price'],
   etf: ['symbol', 'current_price'],
@@ -133,6 +199,7 @@ const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
 // investments_base in the inheritance schema (everything except the
 // asset-class-specific child columns). create() and createThroughInheritanceTables()
 // previously spelled these out as modernValues/legacyValues/baseValues/legacyBaseValues.
+/** @type {Array<{ column: string, base?: boolean, value: (f: any) => any }>} */
 const INVESTMENT_INSERT_FIELDS = [
   { column: 'name', base: true, value: (f) => f.name },
   { column: 'symbol', value: (f) => f.symbol || null },
@@ -166,14 +233,27 @@ const INVESTMENT_LEGACY_BASE_FIELDS = INVESTMENT_BASE_FIELDS.slice(0, 6);
 /** Column names for a create() payload — the caller-facing field set. */
 const INVESTMENT_CREATE_COLUMNS = INVESTMENT_INSERT_FIELDS.map((f) => f.column);
 
+/**
+ * @param {Array<{ column: string }>} fieldSpecs
+ * @returns {string[]}
+ */
 function investmentColumns(fieldSpecs) {
   return fieldSpecs.map((f) => f.column);
 }
 
+/**
+ * @param {Array<{ value: (f: any) => any }>} fieldSpecs
+ * @param {any} source
+ * @returns {any[]}
+ */
 function investmentValues(fieldSpecs, source) {
   return fieldSpecs.map((f) => f.value(source));
 }
 
+/**
+ * @param {number} count
+ * @returns {string}
+ */
 function investmentPlaceholders(count) {
   return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(', ');
 }
@@ -194,17 +274,30 @@ export function pickInvestmentCreateFields(body) {
   return picked;
 }
 
+/**
+ * @param {string} message
+ * @returns {Error & { code?: string }}
+ */
 function makeValidationError(message) {
   const err = /** @type {Error & { code?: string }} */ (new Error(message));
   err.code = 'VALIDATION_ERROR';
   return err;
 }
 
+/**
+ * @param {any} value
+ * @returns {any} the trimmed/upper-cased string, or `value` unchanged when not a string
+ */
 function normalizeSymbol(value) {
   if (typeof value !== 'string') return value;
   return value.trim().toUpperCase();
 }
 
+/**
+ * @param {string} symbol
+ * @param {number} excludeId
+ * @returns {Promise<void>}
+ */
 async function ensureSymbolIsUnique(symbol, excludeId) {
   const result = await query(
     'SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1',
@@ -216,6 +309,12 @@ async function ensureSymbolIsUnique(symbol, excludeId) {
   }
 }
 
+/**
+ * @param {number} id
+ * @param {Record<string, any>} fields
+ * @param {(id: number) => Promise<InvestmentRow|null>} getByIdFn
+ * @returns {Promise<InvestmentRow|null>}
+ */
 async function updateThroughInheritanceTables(id, fields, getByIdFn) {
   try {
     const existing = await getByIdFn(id);
@@ -244,6 +343,11 @@ async function updateThroughInheritanceTables(id, fields, getByIdFn) {
   }
 }
 
+/**
+ * @param {InvestmentCreateFields & Record<string, any>} fields
+ * @param {(id: number) => Promise<InvestmentRow|null>} getByIdFn
+ * @returns {Promise<InvestmentRow|null>}
+ */
 async function createThroughInheritanceTables(fields, getByIdFn) {
   const {
     asset_class,
@@ -269,7 +373,9 @@ async function createThroughInheritanceTables(fields, getByIdFn) {
   const baseColumns = investmentColumns(INVESTMENT_BASE_FIELDS);
   const baseValues = investmentValues(INVESTMENT_BASE_FIELDS, source);
 
+  /** @type {string[]} */
   const childColumns = [];
+  /** @type {any[]} */
   const childValues = [];
 
   if (asset_class === 'stock' || asset_class === 'etf' || asset_class === 'crypto' || asset_class === 'metals') {
@@ -332,6 +438,10 @@ async function createThroughInheritanceTables(fields, getByIdFn) {
   }
 }
 
+/**
+ * @param {number} id
+ * @returns {Promise<boolean>}
+ */
 async function hardDeleteThroughInheritanceTables(id) {
   try {
     const result = await query('DELETE FROM investments_base WHERE id = $1', [id]);
@@ -350,6 +460,11 @@ async function hardDeleteThroughInheritanceTables(id) {
 const TICKER_PREF_SELECT = 'COALESCE(tp.show_in_ticker, true) AS show_in_ticker';
 const TICKER_PREF_JOIN = 'LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id';
 
+/**
+ * @param {number} id
+ * @param {boolean} show
+ * @returns {Promise<void>}
+ */
 async function setTickerPreference(id, show) {
   await query(
     `INSERT INTO investment_ticker_prefs (investment_id, show_in_ticker)
@@ -360,6 +475,10 @@ async function setTickerPreference(id, show) {
 }
 
 export const investmentRepository = {
+  /**
+   * @param {{ limit?: number, offset?: number, assetClass?: string|null, active?: boolean }} [filters]
+   * @returns {Promise<InvestmentRow[]>}
+   */
   async getAll({ limit = 50, offset = 0, assetClass = null, active = true } = {}) {
     let sql = `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE 1=1`;
     const params = [];
@@ -378,6 +497,10 @@ export const investmentRepository = {
     return result.rows.map(mapInvestmentRow);
   },
 
+  /**
+   * @param {{ assetClass?: string|null, active?: boolean }} [filters]
+   * @returns {Promise<number>}
+   */
   async getCount({ assetClass = null, active = true } = {}) {
     let sql = `SELECT count(*) FROM investments WHERE 1=1`;
     const params = [];
@@ -390,6 +513,10 @@ export const investmentRepository = {
     return parseInt(result.rows[0].count, 10);
   },
 
+  /**
+   * @param {{ limit?: number, offset?: number, assetClass?: string|null, active?: boolean }} [filters]
+   * @returns {Promise<{ rows: InvestmentRow[], total: number }>}
+   */
   async getAllWithCount({ limit = 50, offset = 0, assetClass = null, active = true } = {}) {
     let sql = `
       SELECT i.*, ${TICKER_PREF_SELECT}, COUNT(*) OVER () AS total_count
@@ -411,10 +538,14 @@ export const investmentRepository = {
 
     const result = await query(sql, params);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map(({ total_count: _total_count, ...row }) => mapInvestmentRow(row));
+    const rows = result.rows.map((/** @type {any} */ { total_count: _total_count, ...row }) => mapInvestmentRow(row));
     return { rows, total };
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<InvestmentRow|null>}
+   */
   async getById(id) {
     const result = await query(
       `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE i.id = $1`,
@@ -423,6 +554,10 @@ export const investmentRepository = {
     return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
   },
 
+  /**
+   * @param {InvestmentCreateFields} fields
+   * @returns {Promise<InvestmentRow|null>}
+   */
   async create({ name, symbol, asset_class, currency = 'EUR', current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path }) {
     // Apply the same input hygiene as update(): reject an empty name (the
     // backend previously accepted '' silently) and normalise the symbol
@@ -503,6 +638,11 @@ export const investmentRepository = {
     }
   },
 
+  /**
+   * @param {number} id
+   * @param {Record<string, any> & { show_in_ticker?: boolean }} fields
+   * @returns {Promise<InvestmentRow|null>}
+   */
   async update(id, fields) {
     const allowed = ['name', 'symbol', 'currency', 'current_price', 'interest_rate', 'maturity_date', 'location', 'municipality', 'cadastral_income', 'municipality_tax_rate', 'notes', 'is_active', 'price_provider', 'price_provider_id', 'price_provider_url', 'price_provider_latest_url', 'price_provider_latest_path', 'price_provider_history_url', 'price_provider_history_path', 'price_provider_history_ts_path', 'price_provider_history_price_path', 'price_updated_at'];
     const existing = await this.getById(id);
@@ -556,6 +696,11 @@ export const investmentRepository = {
     }
   },
 
+  /**
+   * @param {number} id
+   * @param {{ current_price: number|string|null, price_updated_at: string|Date|null }} fields
+   * @returns {Promise<InvestmentRow|null>}
+   */
   async updatePrice(id, { current_price, price_updated_at }) {
     const fields = { current_price, price_updated_at };
     // Mirror update(): only go through the inheritance tables when that schema
@@ -628,6 +773,7 @@ export const investmentRepository = {
     }
   },
 
+  /** @returns {Promise<Date|null>} TIMESTAMPTZ — a `Date`, not a string. */
   async getLatestPriceUpdatedAt() {
     const result = await query(
       `SELECT MAX(price_updated_at) AS latest
@@ -639,6 +785,10 @@ export const investmentRepository = {
     return result.rows[0]?.latest ?? null;
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<boolean>}
+   */
   async hardDelete(id) {
     if (await hasInvestmentInheritanceSchema()) {
       try {

@@ -33,7 +33,15 @@ vi.mock('../../src/services/attachmentRecordService.js', () => mockAttachmentRec
 
 vi.mock('../../src/services/attachmentService.js', () => mockAttachmentService());
 
+vi.mock('../../src/services/transferReconciliationService.js', () => ({
+  scheduleReconcile: vi.fn(),
+  getTransferSuggestions: vi.fn(),
+  markTransfer: vi.fn(),
+  unmarkTransfer: vi.fn(),
+}));
+
 import transactionRepository from '../../src/repositories/transactionRepository.js';
+import { unmarkTransfer, scheduleReconcile } from '../../src/services/transferReconciliationService.js';
 import { query as dbQuery } from '../../src/database/connection.js';
 import { isManualDuplicate } from '../../src/services/deduplication.js';
 import { convertRowsToEur } from '../../src/services/currency/currencyConversionService.js';
@@ -572,14 +580,16 @@ describe('Transaction Routes', () => {
   });
 
   describe('DELETE /:id', () => {
-    it('should delete and return success', async () => {
+    it('should delete and return 204 with no body', async () => {
       transactionRepository.hardDelete.mockResolvedValue(true);
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].data.message).toContain('deleted permanently');
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
     it('should return 404 for non-existent', async () => {
@@ -619,6 +629,20 @@ describe('Transaction Routes', () => {
       await callHandler(routeHandlers['delete:/:id'], req, res);
 
       expect(removeAttachmentFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('DELETE /transfers/:id', () => {
+    it('clears the transfer mark and returns 204 with no body', async () => {
+      const req = { params: { id: '10' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/transfers/:id'](req, res);
+
+      expect(unmarkTransfer).toHaveBeenCalledWith(10);
+      expect(scheduleReconcile).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
   });
 });

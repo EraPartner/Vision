@@ -372,7 +372,9 @@ router.post('/transfers', async (req, res) => {
 router.delete('/transfers/:id', validateIdParam, async (req, res) => {
   await unmarkTransfer(parseInt(req.params.id, 10));
   scheduleReconcile();
-  res.ok({ ok: true });
+  // Deleting the transfer mark reports nothing the caller can't derive →
+  // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 // GET /api/transactions
@@ -584,7 +586,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   if (!deleted) {
     throw new NotFoundError(`Transaction with ID ${id} not found`);
   }
-  res.ok({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 /**

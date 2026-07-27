@@ -48,6 +48,10 @@ const paginatedOf = <T extends z.ZodTypeAny>(item: T) =>
         links: z.array(LinkSchema),
     });
 
+/** `{ items, total }` — the canonical body for unpaginated collection GETs. */
+const collectionSchema = (item: z.ZodTypeAny = z.unknown()) =>
+    z.object({ items: z.array(item), total: z.number().int().nonnegative() });
+
 const CategoryItemSchema = z.object({
     id: z.number().int(),
     general: z.string().min(1),
@@ -371,9 +375,9 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         );
     });
 
-    it("GET /api/admin/endpoint-liveness returns array", async () => {
+    it("GET /api/admin/endpoint-liveness returns { items, total }", async () => {
         const data = await get("/api/admin/endpoint-liveness");
-        validate(z.array(z.unknown()), data, "GET /api/admin/endpoint-liveness");
+        validate(collectionSchema(), data, "GET /api/admin/endpoint-liveness");
     });
 
     it("GET /api/admin/database/stats returns shape", async () => {
@@ -388,9 +392,9 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         );
     });
 
-    it("GET /api/admin/providers/health returns array", async () => {
+    it("GET /api/admin/providers/health returns { items, total }", async () => {
         const data = await get("/api/admin/providers/health");
-        validate(z.array(z.unknown()), data, "GET /api/admin/providers/health");
+        validate(collectionSchema(), data, "GET /api/admin/providers/health");
     });
 
     it("GET /api/admin/metrics/requests returns array", async () => {
@@ -398,17 +402,19 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(z.array(z.unknown()), data, "GET /api/admin/metrics/requests");
     });
 
-    it("GET /api/admin/endpoints returns array", async () => {
+    it("GET /api/admin/endpoints returns { items, total }", async () => {
         const data = await get("/api/admin/endpoints");
-        validate(z.array(z.unknown()), data, "GET /api/admin/endpoints");
+        validate(collectionSchema(), data, "GET /api/admin/endpoints");
     });
 
-    it("GET /api/import/batches returns shape", async () => {
+    it("GET /api/import/batches returns { items, total, limit, offset }", async () => {
         const data = await get("/api/import/batches");
         validate(
             z.object({
-                batches: z.array(z.unknown()),
+                items: z.array(z.unknown()),
                 total: z.number().int().nonnegative(),
+                limit: z.number().int().positive(),
+                offset: z.number().int().nonnegative(),
             }),
             data,
             "GET /api/import/batches",
@@ -420,9 +426,9 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/splits/owed");
     });
 
-    it("GET /api/saved-charts returns charts array", async () => {
+    it("GET /api/saved-charts returns { items, total }", async () => {
         const data = await get("/api/saved-charts");
-        validate(z.array(z.unknown()), data, "GET /api/saved-charts");
+        validate(collectionSchema(), data, "GET /api/saved-charts");
     });
 
     it("GET /api/recipients/clusters returns clusters", async () => {

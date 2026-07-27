@@ -7,12 +7,48 @@
  *   eliminating the old INSERT RETURNING + separate getById pattern.
  * - getAllWithCount() uses COUNT(*) OVER () window function so pagination callers
  *   get rows and total count in one DB call instead of two.
+ *
+ * Row shapes are declared against the shared contracts in `src/types/rows.js`;
+ * mind that `amount`/`balance` are pg NUMERIC (strings) and `date` is a `Date`.
  */
 
 import { query, queryPrepared, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { buildTransactionWhere } from '../lib/filterBuilder.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
+
+/** @typedef {import('../types/rows.js').TransactionRow} TransactionRow */
+/** @typedef {import('../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow */
+/** @typedef {import('../types/rows.js').UnlinkedTransactionRow} UnlinkedTransactionRow */
+
+/**
+ * Filters shared by getAll / getCount / getAllWithCount / getUncategorised*.
+ * Every field is optional; `null` means "not filtered".
+ *
+ * @typedef {object} TransactionFilters
+ * @property {number|null} [transactionId]
+ * @property {number} [limit]
+ * @property {number} [offset]
+ * @property {string|null} [startDate] 'YYYY-MM-DD'
+ * @property {string|null} [endDate] 'YYYY-MM-DD'
+ * @property {number|null} [accountId]
+ * @property {string|null} [bankAccount]
+ * @property {number|null} [categoryId]
+ * @property {number[]|null} [categoryIds]
+ * @property {number|null} [recipientId]
+ * @property {number|null} [recipientGroupId]
+ * @property {string|null} [recipientName]
+ * @property {string|null} [search]
+ * @property {boolean} [active]
+ * @property {string|null} [sortBy]
+ * @property {'asc'|'desc'|null} [sortDir]
+ * @property {boolean} [includeBalance]
+ * @property {'income'|'expense'|null} [transactionType]
+ * @property {number|null} [amountMin]
+ * @property {number|null} [amountMax]
+ * @property {boolean} [amountSigned]
+ * @property {string[]|null} [tagSlugs]
+ */
 
 // Shared JOIN fragment used by every multi-join query
 const TRANSACTION_JOINS = `
@@ -58,6 +94,7 @@ const REVERT_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = false, transf
             WHERE id = $1 AND transfer_peer_id = $2 AND transfer_source = 'auto'`;
 
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
+/** @type {Record<string, string>} */
 const TRANSACTION_SORT_COLUMNS = {
   date: 't.date',
   amount: 't.amount',
@@ -73,6 +110,13 @@ const TRANSACTION_SORT_COLUMNS = {
   currency: 't.currency',
 };
 
+/**
+ * Attach the `tags` sub-collection to transaction rows in one extra round-trip.
+ * Takes raw `result.rows` (pg is untyped, hence `any[]`) and narrows on the way out.
+ *
+ * @param {any[]} rows
+ * @returns {Promise<EnrichedTransactionRow[]>}
+ */
 async function attachTagsToRows(rows) {
   if (rows.length === 0) return rows;
   const ids = rows.map((r) => r.id);
@@ -92,6 +136,14 @@ async function attachTagsToRows(rows) {
   return rows.map((r) => ({ ...r, tags: tagMap.get(r.id) ?? [] }));
 }
 
+/**
+ * Replace a transaction's tag junction rows inside the caller's transaction.
+ *
+ * @param {import('../types/rows.js').QueryRunner} client
+ * @param {number} transactionId
+ * @param {string[]|null|undefined} slugs
+ * @returns {Promise<void>}
+ */
 async function setTransactionTags(client, transactionId, slugs) {
   await client.query('DELETE FROM transaction_tags WHERE transaction_id = $1', [transactionId]);
   if (!slugs || slugs.length === 0) return;
@@ -112,6 +164,9 @@ async function setTransactionTags(client, transactionId, slugs) {
 export const transactionRepository = {
   /**
    * Get transactions with pagination and filtering.
+   *
+   * @param {TransactionFilters} [filters]
+   * @returns {Promise<EnrichedTransactionRow[]>}
    */
   async getAll({
     transactionId = null,
@@ -180,6 +235,9 @@ export const transactionRepository = {
 
   /**
    * Get total count with optional filters (reuses the same WHERE builder as getAll).
+   *
+   * @param {TransactionFilters} [filters]
+   * @returns {Promise<number>} `COUNT(*)` arrives as a bigint string; parsed here.
    */
   async getCount({
     transactionId = null,
@@ -211,6 +269,9 @@ export const transactionRepository = {
 
   /**
    * Get uncategorised transactions (recipient has no default category and transaction has no category).
+   *
+   * @param {TransactionFilters} [filters]
+   * @returns {Promise<EnrichedTransactionRow[]>}
    */
   async getUncategorised({ limit = 50, offset = 0, startDate = null, endDate = null, accountId = null, bankAccount = null, recipientId = null, recipientName = null } = {}) {
     // "Uncategorised" means the full 3-level effective category is NULL — own
@@ -251,6 +312,9 @@ export const transactionRepository = {
    * - `rows` preserve uncategorised filtering semantics from getUncategorised().
    * - `total` preserves historical route semantics from getCount(), which may include
    *   additional filters such as search/category that are not applied to uncategorised rows.
+   *
+   * @param {TransactionFilters} [filters]
+   * @returns {Promise<{ rows: EnrichedTransactionRow[], total: number }>}
    */
   async getUncategorisedWithCount({
     transactionId = null,
@@ -350,14 +414,17 @@ export const transactionRepository = {
     const result = await query(sql, params);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     const rows = result.rows
-      .filter((row) => row.id != null)
-      .map(({ total_count: _total_count, ...row }) => row);
+      .filter((/** @type {any} */ row) => row.id != null)
+      .map((/** @type {any} */ { total_count: _total_count, ...row }) => row);
 
     return { rows: await attachTagsToRows(rows), total };
   },
 
   /**
    * Get a single transaction by ID.
+   *
+   * @param {number} id
+   * @returns {Promise<EnrichedTransactionRow|null>}
    */
   async getById(id) {
     const sql = `
@@ -381,6 +448,18 @@ export const transactionRepository = {
    *
    * Uses a CTE to INSERT the row and immediately JOIN with recipients/categories so
    * callers get the complete representation without a second SELECT (getById) call.
+   *
+   * @param {object} input
+   * @param {string} input.transaction_date 'YYYY-MM-DD'
+   * @param {string|null} [input.bank_account] Upper-cased before insert.
+   * @param {number|null} [input.recipient_id]
+   * @param {number|string} input.amount
+   * @param {string|null} [input.memo] Upper-cased before insert.
+   * @param {string|null} [input.currency] Defaults to 'EUR' (the column is NOT NULL — migration 0046).
+   * @param {number|null} [input.category_id]
+   * @param {string|null} [input.comment]
+   * @param {string[]|null} [input.tags] `null` means "do not touch tags".
+   * @returns {Promise<EnrichedTransactionRow|null>}
    */
   async create({ transaction_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, tags = null }) {
     // `balance` is intentionally absent: manual transactions leave it NULL so the
@@ -435,7 +514,8 @@ export const transactionRepository = {
    * Get transactions AND total count in a single DB round-trip using COUNT(*) OVER ().
    * Use this instead of calling getAll() + getCount() separately in paginated views.
    *
-   * Returns: { rows: [...], total: number }
+   * @param {TransactionFilters} [filters]
+   * @returns {Promise<{ rows: EnrichedTransactionRow[], total: number }>} `total` is `COUNT(*)::int`, a real number.
    */
   async getAllWithCount({
     transactionId = null,
@@ -516,6 +596,10 @@ export const transactionRepository = {
    * Update a transaction.
    * When `tags` is present in fields, junction rows are replaced atomically.
    * When `tags` is absent, existing tags are untouched.
+   *
+   * @param {number} id
+   * @param {Record<string, any> & { tags?: string[] }} fields
+   * @returns {Promise<EnrichedTransactionRow|null>}
    */
   async update(id, fields) {
     const { tags, ...txFields } = fields;
@@ -605,6 +689,9 @@ export const transactionRepository = {
 
   /**
    * Hard delete a transaction.
+   *
+   * @param {number} id
+   * @returns {Promise<boolean>} true when a row was removed
    */
   async hardDelete(id) {
     const result = await queryPrepared('tx_hard_delete', 'DELETE FROM transactions WHERE id = $1', [id]);
@@ -615,6 +702,10 @@ export const transactionRepository = {
   // execution. Feeds the match-suggestions read endpoint so already-cleared
   // transactions never resurface as candidates. Returns the cluster root so the
   // matcher can compare against planned-payment clusters directly.
+  /**
+   * @param {{ sinceDate: string }} args `sinceDate` is a 'YYYY-MM-DD' lower bound
+   * @returns {Promise<UnlinkedTransactionRow[]>}
+   */
   async listRecentUnlinked({ sinceDate }) {
     const result = await query(
       `SELECT t.id,
@@ -652,6 +743,9 @@ export const transactionRepository = {
    * Stamped-balance date range per account. Run BEFORE an account-merge repoint,
    * while rows still carry their original account_id — the repoint erases that
    * provenance. Backs the overlapping-stamp guard (§1 F2).
+   * `min_date`/`max_date` are `to_char`-formatted, so calendar-day strings.
+   *
+   * @param {number[]} accountIds
    * @returns {Promise<{account_id:number,min_date:string,max_date:string}[]>}
    */
   async getStampedDateRangesByAccount(accountIds) {
@@ -664,6 +758,11 @@ export const transactionRepository = {
    * Also stamps `bank_account` with the survivor's name so the dual-write
    * trigger (migration 0051) keeps account_id at the target and a later edit
    * can't re-resolve the old name into a fresh account (un-merge).
+   *
+   * @param {number} targetId
+   * @param {string} targetName
+   * @param {number[]} sourceIds
+   * @returns {Promise<number>} rows repointed
    */
   async repointAccount(targetId, targetName, sourceIds) {
     const result = await query(
@@ -673,7 +772,13 @@ export const transactionRepository = {
     return result.rowCount ?? 0;
   },
 
-  /** Repoint transactions off merged alias recipients onto the primary. */
+  /**
+   * Repoint transactions off merged alias recipients onto the primary.
+   *
+   * @param {number} primaryId
+   * @param {number[]} aliasIds
+   * @returns {Promise<number>} rows repointed
+   */
   async repointRecipient(primaryId, aliasIds) {
     const result = await query(
       `UPDATE transactions
@@ -695,6 +800,9 @@ export const transactionRepository = {
    * (amount, date) index added in migration 0044. Pairs the user explicitly
    * rejected (transfer_dismissals, migration 0070) are excluded — the PAIR, not
    * the rows: each leg stays matchable with every other candidate.
+   *
+   * @param {number} windowDays
+   * @returns {Promise<{ outId: number, inId: number }[]>}
    */
   async listTransferCandidatePairs(windowDays) {
     const { rows } = await query(
@@ -739,6 +847,9 @@ export const transactionRepository = {
    * Release auto-pairs whose legs no longer satisfy the match rule (e.g. an
    * amount or date was edited). The predicate is symmetric, so both legs of a
    * now-invalid pair qualify and are released together.
+   *
+   * @param {number} windowDays
+   * @returns {Promise<void>}
    */
   async releaseInvalidAutoTransferPairs(windowDays) {
     await query(
@@ -764,7 +875,12 @@ export const transactionRepository = {
     );
   },
 
-  /** Display rows for the ambiguous-match suggestions endpoint. */
+  /**
+   * Display rows for the ambiguous-match suggestions endpoint.
+   *
+   * @param {number[]} ids
+   * @returns {Promise<Pick<TransactionRow, 'id'|'date'|'amount'|'currency'|'bank_account'|'memo'|'recipient_id'>[]>}
+   */
   async listTransferSuggestionRows(ids) {
     const { rows } = await query(
       `SELECT id, date, amount, currency, bank_account, memo, recipient_id
@@ -778,13 +894,23 @@ export const transactionRepository = {
    * Mark one leg of an auto-detected pair. Guarded against clobbering a
    * concurrent manual mark or an already-paired row; returns rows affected so
    * the caller can detect a half-applied pair.
+   *
+   * @param {number} id
+   * @param {number} peerId
+   * @returns {Promise<number>} rows affected (0 when the guard rejected the mark)
    */
   async markAutoTransferLeg(id, peerId) {
     const result = await query(MARK_AUTO_LEG_SQL, [id, peerId]);
     return result.rowCount ?? 0;
   },
 
-  /** Mark one leg of a manual pair (unconditional — caller released prior peers). */
+  /**
+   * Mark one leg of a manual pair (unconditional — caller released prior peers).
+   *
+   * @param {number} id
+   * @param {number} peerId
+   * @returns {Promise<number>} rows affected
+   */
   async markManualTransferLeg(id, peerId) {
     const result = await query(MARK_MANUAL_LEG_SQL, [id, peerId]);
     return result.rowCount ?? 0;
@@ -794,13 +920,22 @@ export const transactionRepository = {
    * Undo a leg WE just auto-marked (guarded on the peer we set + source='auto')
    * so a half-applied pair is never committed when the sibling leg's guarded
    * UPDATE misses.
+   *
+   * @param {number} id
+   * @param {number} peerId
+   * @returns {Promise<number>} rows affected
    */
   async revertAutoTransferLeg(id, peerId) {
     const result = await query(REVERT_AUTO_LEG_SQL, [id, peerId]);
     return result.rowCount ?? 0;
   },
 
-  /** Lock both legs of a manual mark and read what markTransfer validates. */
+  /**
+   * Lock both legs of a manual mark and read what markTransfer validates.
+   *
+   * @param {number[]} ids
+   * @returns {Promise<Pick<TransactionRow, 'id'|'amount'|'account_id'|'is_active'>[]>}
+   */
   async lockTransferLegs(ids) {
     const { rows } = await query(
       `SELECT id, amount, account_id, is_active FROM transactions WHERE id = ANY($1) FOR UPDATE`,
@@ -813,6 +948,9 @@ export const transactionRepository = {
    * Release any existing peer of the given legs before re-pairing them, so a
    * prior counterpart isn't stranded as a phantom one-way transfer. The
    * stranded peer goes back to open (NULL), not dismissed.
+   *
+   * @param {number[]} ids
+   * @returns {Promise<number>} rows released
    */
   async releaseTransferPeersOf(ids) {
     const result = await query(
@@ -823,7 +961,12 @@ export const transactionRepository = {
     return result.rowCount ?? 0;
   },
 
-  /** Lock a row and read its peer pointer (unmarkTransfer's reciprocity check). */
+  /**
+   * Lock a row and read its peer pointer (unmarkTransfer's reciprocity check).
+   *
+   * @param {number} id
+   * @returns {Promise<number|undefined>} the peer id; `undefined` when the row is gone OR unpaired (the `?? undefined` collapses both)
+   */
   async lockTransferPeerPointer(id) {
     const { rows } = await query(
       'SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE',
@@ -832,7 +975,13 @@ export const transactionRepository = {
     return rows[0]?.transfer_peer_id ?? undefined;
   },
 
-  /** Record a rejected pairing (sticky, per-pair — migration 0070). */
+  /**
+   * Record a rejected pairing (sticky, per-pair — migration 0070).
+   *
+   * @param {number} aId
+   * @param {number} bId
+   * @returns {Promise<void>}
+   */
   async insertTransferDismissal(aId, bId) {
     await query(
       `INSERT INTO transfer_dismissals (txn_a_id, txn_b_id)
@@ -842,7 +991,12 @@ export const transactionRepository = {
     );
   },
 
-  /** Reset a single leg back to open. */
+  /**
+   * Reset a single leg back to open.
+   *
+   * @param {number} id
+   * @returns {Promise<number>} rows affected
+   */
   async clearTransferMark(id) {
     const result = await query(
       `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
@@ -862,6 +1016,14 @@ export const transactionRepository = {
    * identity then). See commit.js for the full rationale — the predicate is
    * load-bearing for import idempotency and is moved here verbatim.
    *
+   * @param {object} probe
+   * @param {string} probe.date 'YYYY-MM-DD'
+   * @param {number|string} probe.amount
+   * @param {number|null} probe.recipientId
+   * @param {string} probe.memo Already TRIM'd by the caller (compared to `COALESCE(TRIM(t.memo), '')`).
+   * @param {string|null} probe.bankAccount
+   * @param {string|null} probe.txHash
+   * @param {number|string} probe.batchId
    * @returns {Promise<number|undefined>} the duplicate's id, or undefined
    */
   async findImportDuplicate({ date, amount, recipientId, memo, bankAccount, txHash, batchId }) {
@@ -891,6 +1053,19 @@ export const transactionRepository = {
    * partial unique index on tx_hash to stay race-safe against a concurrent
    * import. A conflict yields no row.
    *
+   * @param {object} row
+   * @param {string} row.date 'YYYY-MM-DD'
+   * @param {string|null} row.bankAccount
+   * @param {number|null} row.recipientId
+   * @param {number|null} row.categoryId
+   * @param {number|string} row.amount
+   * @param {string|null} row.memo
+   * @param {string|null} row.currency
+   * @param {number|string|null} row.balance Bank-stamped running balance (anchors ADR-094).
+   * @param {string|null} row.comment
+   * @param {number|string|null} row.importBatchId
+   * @param {number|null} row.matchedPatternId
+   * @param {string|null} row.txHash
    * @returns {Promise<number|undefined>} inserted id, or undefined on conflict
    */
   async insertImportedRow({ date, bankAccount, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash }) {

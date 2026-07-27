@@ -68,6 +68,7 @@ import {
   createEmptyConversation,
   deleteConversation,
   getConversationWithMessages,
+  listConversations,
   renameConversation,
   runChatTurn,
 } from '../../src/services/aiChatService.js';
@@ -504,6 +505,29 @@ describe('POST /api/ai/chat body validation', () => {
 // ──────────────────────────────────────────
 describe('AI conversation routes validation', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  // Used to answer with a bare array as `data`; now the canonical `{ items,
+  // total }` collection body (unpaginated, so `total` is the row count).
+  describe('GET /conversations', () => {
+    it('returns { items, total }', async () => {
+      const rows = [{ id: UUID, title: 'One' }, { id: UUID, title: 'Two' }];
+      listConversations.mockResolvedValue(rows);
+
+      const res = mockResponse();
+      await routeHandlers['get:/conversations']({}, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: rows, total: 2 } });
+    });
+
+    it('reports total 0 for an empty list', async () => {
+      listConversations.mockResolvedValue([]);
+
+      const res = mockResponse();
+      await routeHandlers['get:/conversations']({}, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [], total: 0 } });
+    });
+  });
 
   describe('POST /conversations', () => {
     it('creates with optional title/model absent (even without a body)', async () => {

@@ -1,0 +1,7 @@
+{
+  "//": "noImplicitAny variant of tsconfig.check.json, consumed ONLY by scripts/checkjs-ratchet.js. It deliberately extends the base config rather than restating an `include`, so both checks compile the IDENTICAL program (same files, same module resolution, same ambient @types discovery). Narrowing `include` to one directory would silently drop the transitive imports that make node globals resolve, and the two gates would then disagree about the same source file. The ratchet script decides WHICH files' implicit-any errors are fatal — see RATCHETED in that script.",
+  "extends": "./tsconfig.check.json",
+  "compilerOptions": {
+    "noImplicitAny": true
+  }
+}

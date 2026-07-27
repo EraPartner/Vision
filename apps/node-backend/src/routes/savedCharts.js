@@ -10,6 +10,7 @@ import { z } from 'zod';
 import savedChartsRepository from '../services/savedChartsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -126,9 +127,14 @@ function parseChartId(req) {
   return id;
 }
 
+// Canonical collection shape `{items, total}`. Pagination is opt-in: without
+// limit/offset this still answers every saved chart (the chart picker lists them
+// all), and `total` is the row count — no COUNT round-trip needed.
 router.get('/', async (req, res) => {
-  const charts = await savedChartsRepository.getAll();
-  res.ok(charts);
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const charts = await savedChartsRepository.getAll(page ?? {});
+  const total = page ? await savedChartsRepository.getCount() : charts.length;
+  res.ok(listBody(charts, total, page));
 });
 
 router.post('/', async (req, res) => {

@@ -124,7 +124,9 @@ Update a recipient.
 
 ### DELETE /api/recipients/:id
 
-Soft delete a recipient (sets is_active = false).
+Permanently delete a recipient (hard delete).
+
+**Response:** `204 No Content` — empty body, no envelope. `404` if not found.
 
 ### POST /api/recipients/:id/merge
 
@@ -352,10 +354,7 @@ Update an existing pattern.
 
 **Request Body:** Any subset of `pattern`, `pattern_kind`, `case_sensitive`, `priority`, `notes`.
 
-**Response:** `200 OK`
-```json
-{ "patternId": 1 }
-```
+**Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
 **Error Response (400):**
 ```json
@@ -427,7 +426,8 @@ Update a bank account's details.
 
 ### DELETE /api/recipients/:id/bank-accounts/:accountId
 
-Soft delete a bank account (sets `is_active = false`).
+Soft delete a bank account (sets `is_active = false`). Returns `200` with the deactivated account
+— see [[docs/api/recipientBankAccounts#DELETE /api/recipients/:recipientId/bank-accounts/:accountId|Recipient Bank Accounts API]].
 
 ### POST /api/recipients/:id/bank-accounts/:accountId/set-primary
 

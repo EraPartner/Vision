@@ -7,6 +7,9 @@ import { coerceNumericFields } from '../lib/money.js';
 import { toYmd } from '../utils/portfolioMath.js';
 import { buildListWhereClause } from './portfolioTxRepo.common.js';
 
+/** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
+/** @typedef {import('../types/rows.js').PortfolioTransactionSummaryRow} PortfolioTransactionSummaryRow */
+
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so portfolio transaction rows match their `number` API/TS types.
 const PORTFOLIO_TX_NUMERIC_FIELDS = ['amount', 'units', 'price_per_unit', 'fees', 'taxes', 'fx_rate_to_eur'];
@@ -16,6 +19,13 @@ const PORTFOLIO_TX_NUMERIC_FIELDS = ['amount', 'units', 'price_per_unit', 'fees'
 // date back one day earlier per save) or NaNs on it (parseLocalDateFromYmd).
 // Emit calendar-day strings — the API/TS contract is `string` here.
 const PORTFOLIO_TX_DATE_FIELDS = ['date', 'recurrence_end_date'];
+/**
+ * Coerce a `portfolio_transactions` row to its emitted shape: NUMERIC columns
+ * become numbers and both DATE columns 'YYYY-MM-DD' strings.
+ *
+ * @param {any} row
+ * @returns {PortfolioTransactionRow}
+ */
 export const mapPortfolioTxRow = (row) => {
   const mapped = coerceNumericFields(row, PORTFOLIO_TX_NUMERIC_FIELDS);
   for (const field of PORTFOLIO_TX_DATE_FIELDS) {
@@ -24,6 +34,10 @@ export const mapPortfolioTxRow = (row) => {
   return mapped;
 };
 
+/**
+ * @param {{ investmentId?: number|null, type?: string|null, limit?: number, offset?: number }} [filters]
+ * @returns {Promise<PortfolioTransactionRow[]>}
+ */
 export async function getAll({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
   const { where, params, nextParam } = buildListWhereClause({ investmentId, type });
   let sql = `SELECT * FROM portfolio_transactions ${where}`;
@@ -36,6 +50,10 @@ export async function getAll({ investmentId = null, type = null, limit = 200, of
   return result.rows.map(mapPortfolioTxRow);
 }
 
+/**
+ * @param {{ investmentId?: number|null, type?: string|null, limit?: number, offset?: number }} [filters]
+ * @returns {Promise<{ rows: PortfolioTransactionRow[], total: number }>}
+ */
 export async function getAllWithCount({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
   const { where, params, nextParam } = buildListWhereClause({ investmentId, type });
   let idx = nextParam;
@@ -51,10 +69,20 @@ export async function getAllWithCount({ investmentId = null, type = null, limit 
   const queryParams = [...params, limit, offset];
   const result = await query(sql, queryParams);
   const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-  const rows = result.rows.map(({ total_count: _total_count, ...row }) => mapPortfolioTxRow(row));
+  const rows = result.rows.map((/** @type {any} */ { total_count: _total_count, ...row }) => mapPortfolioTxRow(row));
   return { rows, total };
 }
 
+/**
+ * @param {{
+ *   investmentIds?: Array<number|string>,
+ *   type?: string|null,
+ *   perInvestmentLimit?: number,
+ *   limit?: number|null,
+ *   offset?: number,
+ * }} [filters]
+ * @returns {Promise<PortfolioTransactionRow[]>}
+ */
 export async function getAllByInvestmentIds({
   investmentIds = [],
   type = null,
@@ -63,8 +91,8 @@ export async function getAllByInvestmentIds({
   offset = 0,
 } = {}) {
   const normalizedIds = Array.from(new Set((investmentIds || [])
-    .map((id) => Number.parseInt(id, 10))
-    .filter((id) => Number.isInteger(id) && id > 0)));
+    .map((/** @type {any} */ id) => Number.parseInt(id, 10))
+    .filter((/** @type {number} */ id) => Number.isInteger(id) && id > 0)));
 
   if (normalizedIds.length === 0) return [];
 
@@ -80,6 +108,7 @@ export async function getAllByInvestmentIds({
       FROM portfolio_transactions pt
       WHERE pt.investment_id = ANY($1::int[])
   `;
+  /** @type {any[]} */
   const params = [normalizedIds, safePerInvestmentLimit];
   let idx = 3;
 
@@ -113,8 +142,13 @@ export async function getAllByInvestmentIds({
   return result.rows.map(mapPortfolioTxRow);
 }
 
+/**
+ * @param {{ investmentId?: number|null, investmentIds?: Array<number|string>|null, type?: string|null }} [filters]
+ * @returns {Promise<number>}
+ */
 export async function getCount({ investmentId = null, investmentIds = null, type = null } = {}) {
   let sql = `SELECT count(*) FROM portfolio_transactions WHERE 1=1`;
+  /** @type {any[]} */
   const params = [];
   let idx = 1;
 
@@ -123,8 +157,8 @@ export async function getCount({ investmentId = null, investmentIds = null, type
     params.push(investmentId);
   } else if (Array.isArray(investmentIds) && investmentIds.length > 0) {
     const normalizedIds = Array.from(new Set(investmentIds
-      .map((id) => Number.parseInt(id, 10))
-      .filter((id) => Number.isInteger(id) && id > 0)));
+      .map((/** @type {any} */ id) => Number.parseInt(id, 10))
+      .filter((/** @type {number} */ id) => Number.isInteger(id) && id > 0)));
     if (normalizedIds.length > 0) {
       sql += ` AND investment_id = ANY($${idx++}::int[])`;
       params.push(normalizedIds);
@@ -136,6 +170,10 @@ export async function getCount({ investmentId = null, investmentIds = null, type
   return parseInt(result.rows[0].count, 10);
 }
 
+/**
+ * @param {number} id
+ * @returns {Promise<PortfolioTransactionRow|null>}
+ */
 export async function getById(id) {
   const result = await query('SELECT * FROM portfolio_transactions WHERE id = $1', [id]);
   return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
@@ -210,6 +248,10 @@ export async function getRowsForPortfolioMath({
 
 const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = ['total_amount', 'total_units', 'total_fees', 'total_taxes'];
 
+/**
+ * @param {number} investmentId
+ * @returns {Promise<PortfolioTransactionSummaryRow[]>}
+ */
 export async function getSummary(investmentId) {
   const result = await query(`
     SELECT
@@ -223,7 +265,7 @@ export async function getSummary(investmentId) {
     WHERE investment_id = $1
     GROUP BY type
   `, [investmentId]);
-  return result.rows.map((row) => ({
+  return result.rows.map((/** @type {any} */ row) => ({
     ...coerceNumericFields(row, PORTFOLIO_SUMMARY_NUMERIC_FIELDS),
     count: parseInt(row.count, 10),
   }));

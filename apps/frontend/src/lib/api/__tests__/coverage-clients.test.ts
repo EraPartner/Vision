@@ -102,8 +102,14 @@ describe("tags API client", () => {
     expect(tag.color).toBe("#fff");
   });
 
-  it("deleteTag resolves on a void response", async () => {
-    server.use(http.delete(`${API_BASE}/api/tags/7`, () => ok(null)));
+  // Soft delete: the backend answers 200 with the deactivated tag, which this
+  // client intentionally discards.
+  it("deleteTag resolves on the deactivated-tag response", async () => {
+    server.use(
+      http.delete(`${API_BASE}/api/tags/7`, () =>
+        ok({ id: 7, name: "T", is_active: false, links: [] }),
+      ),
+    );
     await expect(deleteTag(7)).resolves.toBeUndefined();
   });
 
@@ -194,7 +200,7 @@ describe("accounts API client", () => {
   });
 
   it("deleteAccount resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/accounts/9`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/accounts/9`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteAccount(9)).resolves.toBeUndefined();
   });
 
@@ -292,7 +298,7 @@ describe("planned-transactions API client", () => {
   });
 
   it("deletePlannedTransaction resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/planned-transactions/11`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/planned-transactions/11`, () => new HttpResponse(null, { status: 204 })));
     await expect(deletePlannedTransaction(11)).resolves.toBeUndefined();
   });
 
@@ -336,13 +342,17 @@ describe("attachments API client", () => {
     expect(res.items[0].filename).toBe("r.pdf");
   });
 
-  it("deleteAttachment DELETEs by id", async () => {
+  it("deleteAttachment DELETEs by id and resolves on 204", async () => {
+    let hit = 0;
     server.use(
-      http.delete(`${API_BASE}/api/attachments/2`, () => ok({ deleted: true })),
+      http.delete(`${API_BASE}/api/attachments/2`, () => {
+        hit += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
-    const res = await deleteAttachment(2);
-    // apiRequest unwraps the envelope `data` directly into the returned value.
-    expect(res).toMatchObject({ deleted: true });
+    // Hard delete → 204 No Content, so there is no body to unwrap.
+    await expect(deleteAttachment(2)).resolves.toBeUndefined();
+    expect(hit).toBe(1);
   });
 
   it("getAttachmentDownloadUrl builds the absolute download URL", () => {
@@ -380,7 +390,10 @@ describe("portfolioImports API client", () => {
   it("listPortfolioParserConfigs returns saved configs", async () => {
     server.use(
       http.get(`${API_BASE}/api/portfolio/import/parsers`, () =>
-        ok([{ id: 1, name: "Degiro", kind: "custom", config, created_at: "", updated_at: "" }]),
+        ok({
+          items: [{ id: 1, name: "Degiro", kind: "custom", config, created_at: "", updated_at: "" }],
+          total: 1,
+        }),
       ),
     );
     const res = await listPortfolioParserConfigs();
@@ -410,8 +423,8 @@ describe("portfolioImports API client", () => {
   });
 
   it("deletePortfolioParserConfig resolves on a void DELETE", async () => {
-    server.use(http.delete(`${API_BASE}/api/portfolio/import/parsers/2`, () => ok(null)));
-    await expect(deletePortfolioParserConfig(2)).resolves.toBeNull();
+    server.use(http.delete(`${API_BASE}/api/portfolio/import/parsers/2`, () => new HttpResponse(null, { status: 204 })));
+    await expect(deletePortfolioParserConfig(2)).resolves.toBeUndefined();
   });
 
   it("getPortfolioImportPreview returns groups + totals", async () => {

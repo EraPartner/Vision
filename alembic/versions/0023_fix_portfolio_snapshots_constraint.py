@@ -34,6 +34,9 @@ def upgrade() -> None:
     """)
 
     # 3. Drop the broken trigger that references updated_at (column doesn't exist)
+    # destructive-ok: shipped 2026-05-05, annotated retroactively. The trigger was already
+    # non-functional — it referenced an updated_at column that does not exist on this table, so it
+    # raised on every UPDATE. Dropping it removes a fault, not behaviour. No data touched.
     op.execute("""
         DROP TRIGGER IF EXISTS update_portfolio_performance_snapshots_computed_at
             ON portfolio_performance_snapshots;

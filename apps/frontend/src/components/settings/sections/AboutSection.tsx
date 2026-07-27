@@ -24,7 +24,8 @@ type UpdateStatus = {
     published_at?: string;
     release_notes?: string;
     html_url?: string;
-    update_mode?: 'source' | 'docker' | 'dev';
+    /** 'docker-compose' comes from the HTTP route — non-Electron, no in-app installer. */
+    update_mode?: 'source' | 'docker' | 'dev' | 'docker-compose';
     error?: string;
 } | null;
 
@@ -118,6 +119,13 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
             const result = await apiClient.installShellUpdate();
             if (result === null) {
                 toast.info(t('settings.app.updateAutoApply'));
+                setApplyPhase('idle');
+                return;
+            }
+            // No installable source-launcher asset on this release — the main
+            // process opened the release page. A redirect, not a failure.
+            if (result.manual_download) {
+                toast.info(t('update.manualDownload'));
                 setApplyPhase('idle');
                 return;
             }

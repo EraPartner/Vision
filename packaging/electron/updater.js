@@ -8,7 +8,7 @@
 // threaded in via init() so the live values are observed at call time, exactly
 // as when this code lived in main.js.
 
-const { app, dialog } = require('electron');
+const { app, dialog, shell } = require('electron');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -216,6 +216,25 @@ function pickSourceLauncherZip(release) {
   return assets.find((a) => /vision-source-launcher-.*-arm64\.zip$/i.test(a?.name || '')) || null;
 }
 
+// Fallback for releases that carry no source-launcher ZIP: send the user to the
+// release page so they can update by hand. Every release published before the
+// pipeline started building that asset is in this bucket permanently, so this
+// path is not hypothetical. Only https://github.com/ URLs from the API response
+// are honoured — anything else falls back to the canonical releases page rather
+// than handing an unexpected scheme to the OS.
+function openReleasePage(htmlUrl) {
+  const fallback = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+  const url = typeof htmlUrl === 'string' && /^https:\/\/github\.com\//i.test(htmlUrl)
+    ? htmlUrl
+    : fallback;
+  try {
+    shell.openExternal(url);
+  } catch (err) {
+    console.warn('Failed to open release page:', err?.message || err);
+  }
+  return url;
+}
+
 function pickChecksumAsset(release, zipName) {
   const assets = Array.isArray(release?.assets) ? release.assets : [];
   const wanted = `${zipName}.sha256`.toLowerCase();
@@ -255,20 +274,29 @@ async function prepareShellUpdateInstaller() {
   const currentVersion = getCurrentVersionTag();
   const sourceLauncherAsset = pickSourceLauncherZip(release);
 
-  if (!latestVersion || !sourceLauncherAsset?.browser_download_url) {
-    return { up_to_date: true, error: 'No compatible source launcher update asset found.' };
+  if (!latestVersion) {
+    return { up_to_date: true, error: 'Could not determine the latest release version.' };
   }
 
+  const releaseInfo = {
+    current_version: currentVersion,
+    latest_version: latestVersion,
+    html_url: release?.html_url,
+    release_notes: release?.body || '',
+    published_at: release?.published_at,
+    source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
+  };
+
   if (compareVersions(latestVersion, currentVersion) <= 0) {
-    return {
-      up_to_date: true,
-      current_version: currentVersion,
-      latest_version: latestVersion,
-      html_url: release?.html_url,
-      release_notes: release?.body || '',
-      published_at: release?.published_at,
-      source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
-    };
+    return { up_to_date: true, ...releaseInfo };
+  }
+
+  // Newer release, but it ships no source-launcher ZIP for us to install from.
+  // This used to return up_to_date:true, which made the startup prompt reappear
+  // every launch and dead-ended both the Settings and notification Install
+  // buttons. Tell the caller to send the user to the release page instead.
+  if (!sourceLauncherAsset?.browser_download_url) {
+    return { up_to_date: false, manual_download: true, ...releaseInfo };
   }
 
   const tempRoot = path.join(app.getPath('temp'), `vision_shell_update_${Date.now()}_${process.pid}`);
@@ -333,16 +361,7 @@ async function prepareShellUpdateInstaller() {
       hostPid: process.pid,
     });
 
-    return {
-      up_to_date: false,
-      current_version: currentVersion,
-      latest_version: latestVersion,
-      html_url: release?.html_url,
-      release_notes: release?.body || '',
-      published_at: release?.published_at,
-      source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
-      installerPath,
-    };
+    return { up_to_date: false, ...releaseInfo, installerPath };
   } catch (err) {
     // Clean up temp dir on any error — on success tempRoot is intentionally kept
     // because installerPath lives inside it and must remain until the user runs it.
@@ -390,6 +409,16 @@ async function installPreparedShellUpdate() {
     shellUpdateCheckInFlight = true;
     try {
       const prepared = await prepareShellUpdateInstaller();
+      if (prepared.manual_download) {
+        const url = openReleasePage(prepared.html_url);
+        return {
+          success: false,
+          manual_download: true,
+          html_url: url,
+          version: prepared.latest_version || '',
+          error: ctx.t('update.manualDownload'),
+        };
+      }
       if (prepared.up_to_date || !prepared.installerPath) {
         return { success: false, error: 'No newer shell update is currently available.' };
       }
@@ -451,6 +480,11 @@ function setupManualShellUpdater() {
 
       ctx.notify(ctx.t('update.downloading'));
       const prepared = await prepareShellUpdateInstaller();
+      if (prepared.manual_download) {
+        openReleasePage(prepared.html_url);
+        ctx.notify(ctx.t('update.manualDownload'));
+        return;
+      }
       if (prepared.up_to_date || !prepared.installerPath) return;
       pendingShellUpdate = prepared;
 

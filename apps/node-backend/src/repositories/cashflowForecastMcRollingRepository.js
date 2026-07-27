@@ -19,6 +19,10 @@ export async function get({ userId, todayIso, daysBack, daysForward, filterHash 
   return res.rows[0];
 }
 
+/**
+ * @param {Date|string|number} computedAt TIMESTAMPTZ — pg hands this back as a `Date`.
+ * @returns {boolean}
+ */
 export function isFresh(computedAt) {
   return Date.now() - new Date(computedAt).getTime() < CACHE_TTL_MS;
 }

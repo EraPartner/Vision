@@ -37,8 +37,12 @@ export function normalizeParserName(name) {
 export function registerParserRoutes(router, { kind, normalizeConfig, label = '' }) {
   const conflictMessage = (name) => `A ${label}parser named "${name}" already exists`;
 
+  // Canonical collection shape `{items, total}`. Unpaginated, so `total` is
+  // just the row count — it exists so pagination can be added without a
+  // breaking response-shape change.
   router.get('/parsers', async (req, res) => {
-    res.ok(await customParserConfigRepository.getAll(kind));
+    const items = await customParserConfigRepository.getAll(kind);
+    res.ok({ items, total: items.length });
   });
 
   router.post('/parsers', async (req, res) => {

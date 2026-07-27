@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/repositories/accountRepository.js', () => {
   const repo = {
     getAll: vi.fn(),
+    getCount: vi.fn(),
     getById: vi.fn(),
     getByName: vi.fn(),
     create: vi.fn(),
@@ -379,7 +380,25 @@ describe('accountService.list / get', () => {
   it('passes the active filter through', async () => {
     accountRepository.getAll.mockResolvedValueOnce([]);
     await accountService.list({ active: false });
-    expect(accountRepository.getAll).toHaveBeenCalledWith({ active: false });
+    expect(accountRepository.getAll).toHaveBeenCalledWith({ active: false, limit: null, offset: 0 });
+  });
+
+  // Absent pagination keeps the pre-pagination contract: the query is
+  // unbounded, so the rows returned ARE the total and no COUNT is issued.
+  it('lists every account and derives total from the rows when unpaginated', async () => {
+    accountRepository.getAll.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+    const result = await accountService.list();
+    expect(result).toEqual({ items: [{ id: 1 }, { id: 2 }], total: 2 });
+    expect(accountRepository.getCount).not.toHaveBeenCalled();
+  });
+
+  it('counts separately when a page is requested, so total is the full match count', async () => {
+    accountRepository.getAll.mockResolvedValueOnce([{ id: 1 }]);
+    accountRepository.getCount.mockResolvedValueOnce(9);
+    const result = await accountService.list({ active: true, limit: 1, offset: 2 });
+    expect(accountRepository.getAll).toHaveBeenCalledWith({ active: true, limit: 1, offset: 2 });
+    expect(accountRepository.getCount).toHaveBeenCalledWith({ active: true });
+    expect(result).toEqual({ items: [{ id: 1 }], total: 9 });
   });
 
   it('throws NotFound for a missing account', async () => {

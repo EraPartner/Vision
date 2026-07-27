@@ -18,6 +18,9 @@ depends_on = None
 
 
 def upgrade():
+    # destructive-ok: shipped 2026-04-24, annotated retroactively. Runtime toggles were removed
+    # app-wide in the same release (see docstring + docs/adr/035-remove-feature-flags), so nothing
+    # reads feature_flags any more. Config table, not user data; downgrade recreates it.
     op.execute(sa.text("DROP TRIGGER IF EXISTS set_feature_flags_updated_at ON feature_flags"))
     op.execute(sa.text("DROP INDEX IF EXISTS idx_feature_flags_key"))
     op.execute(sa.text("DROP TABLE IF EXISTS feature_flags"))

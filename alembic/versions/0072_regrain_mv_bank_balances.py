@@ -41,6 +41,9 @@ def upgrade() -> None:
     # Drop the stale (bank_account, currency)-grained MV so createMaterializedViews
     # recreates it grained on (account_id, currency) on the next boot. The unique
     # index is dropped together with the view.
+    # destructive-ok: shipped 2026-07-11, annotated retroactively. Derived data only; the MV is
+    # rebuilt from transactions by materializedViewService on the same boot that applies this
+    # migration, on the new grain. A stale MV is the failure mode being fixed, not created.
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_bank_balances CASCADE;")
 
 

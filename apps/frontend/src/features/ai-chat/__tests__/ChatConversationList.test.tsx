@@ -29,7 +29,7 @@ const secondConversation: ConversationSummary = {
 
 function stubConversations(items: ConversationSummary[]) {
     server.use(
-        http.get(`${API_BASE}/api/ai/conversations`, () => ok(items)),
+        http.get(`${API_BASE}/api/ai/conversations`, () => ok({ items, total: items.length })),
     );
 }
 

@@ -69,6 +69,19 @@ All split lifecycle events are recorded in `split_audit` table via `splitReposit
 
 Actor is resolved via: `x-actor` header → `req.user?.id` → `null`.
 
+## List Pagination (opt-in)
+
+Every list endpoint below (`GET /owed`, `GET /owed/:id`, `GET /transaction/:id`,
+`GET /:id/payments`) answers the canonical collection body `{ items, total }` and
+accepts optional `?limit=` (capped at 1000) and `?offset=` (default 0).
+
+Send neither and the response holds the **complete** collection, with `total` equal to
+the number of items returned — the behaviour these endpoints have always had. Send
+either and the body additionally carries `limit` and `offset`, with `total` remaining
+the full match count behind the page. `GET /owed` is derived in JS after the SQL
+aggregate, so it pages the computed summary rather than the query; the wire contract
+is identical.
+
 ## Endpoints
 
 ### GET /api/splits/owed
@@ -485,13 +498,7 @@ Splits are physically deleted (not soft-deleted). The deletion is permanent and 
 |-------|------|-------------|
 | `id` | number | Split ID (positive integer) |
 
-**Response:** `200 OK`
-
-```json
-{
-  "message": "Split deleted"
-}
-```
+**Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
 **Error Response:** `404 Not Found`
 

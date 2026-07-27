@@ -75,8 +75,10 @@ export function vacuumTable(table: string | null): Promise<{ vacuumed: string }>
 
 // ── Provider Health ───────────────────────────────────────────────────────────
 
-export function getProviderHealth(): Promise<ProviderHealth[]> {
-    return apiRequest<ProviderHealth[]>('/api/admin/providers/health');
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getProviderHealth(): Promise<ProviderHealth[]> {
+    const { items } = await apiRequest<{ items: ProviderHealth[]; total: number }>('/api/admin/providers/health');
+    return items;
 }
 
 export function probeProvider(provider: string): Promise<ProbeResult> {
@@ -93,7 +95,9 @@ export function getRequestMetrics(): Promise<RouteMetric[]> {
 
 // ── Endpoint Manifest ─────────────────────────────────────────────────────────
 
-export function getEndpointManifest(): Promise<EndpointEntry[]> {
-    return apiRequest<EndpointEntry[]>('/api/admin/endpoints');
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getEndpointManifest(): Promise<EndpointEntry[]> {
+    const { items } = await apiRequest<{ items: EndpointEntry[]; total: number }>('/api/admin/endpoints');
+    return items;
 }
 

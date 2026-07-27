@@ -12,7 +12,10 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
-import { buildInsert, buildSetClauses } from '../lib/sqlClauses.js';
+import { buildInsert, buildSetClauses, buildLimitOffset } from '../lib/sqlClauses.js';
+
+/** @typedef {import('../types/rows.js').AccountRow} AccountRow */
+/** @typedef {import('../types/rows.js').AccountWithBalanceRow} AccountWithBalanceRow */
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
@@ -39,8 +42,15 @@ export const accountRepository = {
    * "as of {date} statement · {n} entries since" / "sum of {n} entries" fields),
    * and has_transactions — whether the account has any active ledger rows
    * (portfolio accounts whose activity lives in portfolio_transactions have none).
+   *
+   * `limit` is optional and defaults to unbounded — the accounts list has always
+   * served every row and the hub UI has no paging, so only an explicit
+   * limit/offset narrows it (buildLimitOffset).
+   *
+   * @param {{ active?: boolean|null, limit?: number|null, offset?: number }} [opts]
+   * @returns {Promise<AccountWithBalanceRow[]>}
    */
-  async getAll({ active = null } = {}) {
+  async getAll({ active = null, limit = null, offset = 0 } = {}) {
     let sql = `
       SELECT ${COLUMNS},
              lb.balance AS computed_balance,
@@ -59,12 +69,15 @@ export const accountRepository = {
     if (active === true) sql += ` AND a.is_active = true`;
     else if (active === false) sql += ` AND a.is_active = false`;
     sql += ` ORDER BY a.name`;
-    const result = await query(sql, []);
+    /** @type {any[]} */
+    const params = [];
+    sql += buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     // Provenance shaping (WP-B2, mirrors infoRepositoryBanks): anchor_date is
     // already a 'YYYY-MM-DD' string via to_char in the lateral — SQL NULL
     // (nothing stamped) becomes undefined, never null (convention: the backend
     // never returns null). COUNT(*) arrives as a bigint string; emit a number.
-    return result.rows.map((row) => ({
+    return result.rows.map((/** @type {any} */ row) => ({
       ...row,
       anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
       post_anchor_count: row.post_anchor_count == null
@@ -73,11 +86,34 @@ export const accountRepository = {
     }));
   },
 
+  /**
+   * Count accounts matching the active filter — the `total` for a paginated
+   * list (the unpaginated path uses the returned row count instead).
+   *
+   * @param {{ active?: boolean|null }} [opts]
+   * @returns {Promise<number>}
+   */
+  async getCount({ active = null } = {}) {
+    let sql = `SELECT COUNT(*) FROM accounts a WHERE 1=1`;
+    if (active === true) sql += ` AND a.is_active = true`;
+    else if (active === false) sql += ` AND a.is_active = false`;
+    const result = await query(sql, []);
+    return parseInt(result.rows[0].count, 10);
+  },
+
+  /**
+   * @param {number} id
+   * @returns {Promise<AccountRow|undefined>}
+   */
   async getById(id) {
     const result = await query(`SELECT ${COLUMNS} FROM accounts WHERE id = $1`, [id]);
     return result.rows[0] ?? undefined;
   },
 
+  /**
+   * @param {string} name Matched case/whitespace-insensitively (D1).
+   * @returns {Promise<AccountRow|undefined>}
+   */
   async getByName(name) {
     // Identity is case/whitespace-insensitive (D1) — match how the sync
     // trigger and resolveOrCreateByName resolve labels.
@@ -91,6 +127,9 @@ export const accountRepository = {
   /**
    * Insert an account. Only whitelisted, defined fields are written; everything
    * else falls back to the column default (e.g. type='checking', owner='me').
+   *
+   * @param {Record<string, any>} fields
+   * @returns {Promise<AccountRow>}
    */
   async create(fields) {
     const { columns: cols, placeholders, params } = buildInsert(fields, { allowed: WRITABLE, quote: true });
@@ -103,7 +142,13 @@ export const accountRepository = {
     return result.rows[0];
   },
 
-  /** Update an account; returns the updated row, or undefined if not found. */
+  /**
+   * Update an account; returns the updated row, or undefined if not found.
+   *
+   * @param {number} id
+   * @param {Record<string, any>} fields
+   * @returns {Promise<AccountRow|undefined>}
+   */
   async update(id, fields) {
     const { clauses: setClauses, params, nextIdx: i } = buildSetClauses(fields, { allowed: WRITABLE, quote: true });
     if (setClauses.length === 0) return this.getById(id);
@@ -145,6 +190,9 @@ export const accountRepository = {
    * Hard-delete an account. Raises Postgres 23503 if transactions or planned
    * transactions still reference it (account_id FK is ON DELETE RESTRICT) — the
    * caller turns that into a 409 (archive instead). Returns the id, or undefined.
+   *
+   * @param {number} id
+   * @returns {Promise<number|undefined>}
    */
   async remove(id) {
     const result = await query('DELETE FROM accounts WHERE id = $1 RETURNING id', [id]);
@@ -154,6 +202,7 @@ export const accountRepository = {
   /**
    * Lock the merge survivor and read the name the repoints stamp onto
    * `bank_account` (ADR-088). FOR UPDATE so concurrent merges serialize.
+   * @param {number} id
    * @returns {Promise<{id:number,name:string}|undefined>}
    */
   async lockByIdForMerge(id) {
@@ -161,13 +210,24 @@ export const accountRepository = {
     return result.rows[0] ?? undefined;
   },
 
-  /** Lock the merge sources; returns the ids that exist (caller diffs for 404s). */
+  /**
+   * Lock the merge sources; returns the ids that exist (caller diffs for 404s).
+   *
+   * @param {number[]} ids
+   * @returns {Promise<{id:number}[]>}
+   */
   async lockByIdsForMerge(ids) {
     const result = await query('SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE', [ids]);
     return result.rows;
   },
 
-  /** Accounts that used a merged source as their funding/settlement account. */
+  /**
+   * Accounts that used a merged source as their funding/settlement account.
+   *
+   * @param {number} targetId
+   * @param {number[]} sourceIds
+   * @returns {Promise<number>} rows repointed
+   */
   async repointFundingAccount(targetId, sourceIds) {
     const result = await query(
       `UPDATE accounts SET funding_account_id = $1 WHERE funding_account_id = ANY($2::int[])`,
@@ -179,6 +239,9 @@ export const accountRepository = {
   /**
    * Clear a statement anchor invalidated by an interleaved-stamp merge (§1 F2).
    * Per-row `balance` stamps are historical facts and stay untouched.
+   *
+   * @param {number} id
+   * @returns {Promise<number>} rows affected
    */
   async clearStatementAnchor(id) {
     const result = await query(
@@ -192,6 +255,10 @@ export const accountRepository = {
   /**
    * Delete the merged-away sources. The account_id FKs are ON DELETE RESTRICT,
    * so this only succeeds once every reference has been repointed.
+   *
+   * @param {number[]} sourceIds
+   * @param {number} targetId
+   * @returns {Promise<number>} rows deleted
    */
   async deleteMergedSources(sourceIds, targetId) {
     const result = await query(
@@ -207,6 +274,9 @@ export const accountRepository = {
    * so explicit creation and trigger-driven creation converge on the same row.
    * On conflict the existing row keeps its stored casing (no-op update purely
    * to RETURNING the id in one round-trip).
+   *
+   * @param {string} name
+   * @returns {Promise<number|undefined>} undefined when `name` trims to empty
    */
   async resolveOrCreateByName(name) {
     const trimmed = String(name).trim();

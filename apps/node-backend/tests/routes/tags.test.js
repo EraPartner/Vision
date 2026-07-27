@@ -179,14 +179,16 @@ describe('PATCH /api/tags/:id', () => {
 describe('DELETE /api/tags/:id', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('soft-deletes and returns a message with the tag', async () => {
+  // Soft delete, so 200 + the deactivated entity rather than 204 (see
+  // docs/reference/code-patterns.md, "DELETE responses").
+  it('soft-deletes and returns 200 with the deactivated tag', async () => {
     tagRepository.softDelete.mockResolvedValue({ id: 1, slug: 'rome', is_active: false });
     const req = { params: { id: '1' } };
     const res = mockResponse();
     await routeHandlers['delete:/:id'](req, res);
     const data = res.json.mock.calls[0][0].data;
-    expect(data.message).toContain('deactivated');
-    expect(data.tag.slug).toBe('rome');
+    expect(data).toMatchObject({ id: 1, slug: 'rome', is_active: false, links: [] });
+    expect(res.status).not.toHaveBeenCalledWith(204);
   });
 
   it('returns 404 when tag not found', async () => {

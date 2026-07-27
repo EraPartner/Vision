@@ -55,7 +55,7 @@ afterEach(() => server.resetHandlers());
 
 describe("saved charts API client", () => {
   it("getSavedCharts fetches the list", async () => {
-    server.use(http.get(`${API_BASE}/api/saved-charts`, () => ok([{ id: 1, name: "C" }])));
+    server.use(http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [{ id: 1, name: "C" }], total: 1 })));
     expect((await getSavedCharts())[0].id).toBe(1);
   });
 
@@ -77,7 +77,7 @@ describe("saved charts API client", () => {
   });
 
   it("deleteSavedChart resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/saved-charts/2`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/saved-charts/2`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteSavedChart(2)).resolves.toBeUndefined();
   });
 });
@@ -116,7 +116,7 @@ describe("categories API client", () => {
   });
 
   it("deleteCategory resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/categories/9`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/categories/9`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteCategory(9)).resolves.toBeUndefined();
   });
 });
@@ -214,7 +214,7 @@ describe("splits API client", () => {
   });
 
   it("deleteSplit resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/splits/3`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/splits/3`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteSplit(3)).resolves.toBeUndefined();
   });
 });
@@ -248,7 +248,7 @@ describe("market API client", () => {
   });
 
   it("deleteWatchlistItem resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/watchlist/1`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/watchlist/1`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteWatchlistItem(1)).resolves.toBeUndefined();
   });
 

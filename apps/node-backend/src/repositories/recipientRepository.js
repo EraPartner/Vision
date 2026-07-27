@@ -15,7 +15,26 @@ import { query } from '../database/connection.js';
 import { normalizeForMatching } from '../lib/textNormalization.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
+/** @typedef {import('../types/rows.js').RecipientRow} RecipientRow */
+/** @typedef {import('../types/rows.js').EnrichedRecipientRow} EnrichedRecipientRow */
+
+/**
+ * Filters shared by getAll / getCount.
+ *
+ * @typedef {object} RecipientFilters
+ * @property {number} [limit]
+ * @property {number} [offset]
+ * @property {string|null} [name]
+ * @property {number|null} [defaultCategoryId]
+ * @property {string|null} [search]
+ * @property {boolean} [active]
+ * @property {boolean} [uncategorized]
+ * @property {string|null} [sortBy]
+ * @property {'asc'|'desc'|null} [sortDir]
+ */
+
 // Allowed sort columns for recipients (maps frontend key -> SQL expression)
+/** @type {Record<string, string>} */
 const RECIPIENT_SORT_COLUMNS = {
   name: 'r.name',
   default_category_name: `CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END`,
@@ -25,7 +44,12 @@ const RECIPIENT_SORT_COLUMNS = {
   is_active: 'r.is_active',
 };
 
-/** Build the shared WHERE clause and params array for filter-based queries. */
+/**
+ * Build the shared WHERE clause and params array for filter-based queries.
+ *
+ * @param {RecipientFilters} filters
+ * @returns {{ sql: string, params: any[], nextParam: number }}
+ */
 function buildWhereClause({ name, defaultCategoryId, search, active, uncategorized }) {
   let sql = `WHERE 1=1`;
   const params = [];
@@ -73,6 +97,10 @@ function buildWhereClause({ name, defaultCategoryId, search, active, uncategoriz
 }
 
 export const recipientRepository = {
+  /**
+   * @param {RecipientFilters} [filters]
+   * @returns {Promise<EnrichedRecipientRow[]>}
+   */
   async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false, sortBy = null, sortDir = null } = {}) {
     const { sql: where, params, nextParam: p } = buildWhereClause({ name, defaultCategoryId, search, active, uncategorized });
 
@@ -112,6 +140,10 @@ export const recipientRepository = {
     return result.rows;
   },
 
+  /**
+   * @param {RecipientFilters} [filters]
+   * @returns {Promise<number>}
+   */
   async getCount({ name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false } = {}) {
     const { sql: where, params } = buildWhereClause({ name, defaultCategoryId, search, active, uncategorized });
 
@@ -124,6 +156,10 @@ export const recipientRepository = {
     return parseInt(result.rows[0].count, 10);
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<EnrichedRecipientRow|null>}
+   */
   async getById(id) {
     const sql = `
       SELECT r.*,
@@ -153,6 +189,10 @@ export const recipientRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {string} name Raw display name; normalized before the lookup.
+   * @returns {Promise<RecipientRow|null>}
+   */
   async getByName(name) {
     const normalized = normalizeForMatching(name);
     const result = await query(
@@ -171,6 +211,9 @@ export const recipientRepository = {
    *     - If the row exists, RETURNING is empty (DO NOTHING path).
    *  2. On conflict (empty result), fall back to a single SELECT to retrieve the
    *     existing row's id — still only 2 round-trips max vs the old 3-4.
+   *
+   * @param {{ name: string }} input
+   * @returns {Promise<{ recipient: EnrichedRecipientRow|null, created: boolean }>}
    */
   async createOrGet({ name }) {
     const upperName = name.toUpperCase().trim();
@@ -210,8 +253,9 @@ export const recipientRepository = {
   },
 
   /**
-   * @param {any} id
-   * @param {{ name?: any, default_category_id?: any, notes?: any, is_active?: any }} fields
+   * @param {number} id
+   * @param {{ name?: string|null, default_category_id?: number|null, notes?: string|null, is_active?: boolean|null }} fields
+   * @returns {Promise<EnrichedRecipientRow|null>}
    */
   async update(id, { name, default_category_id, notes, is_active }) {
     // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
@@ -263,6 +307,10 @@ export const recipientRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<boolean>}
+   */
   async hardDelete(id) {
     const result = await query('DELETE FROM recipients WHERE id = $1', [id]);
     return result.rowCount > 0;
@@ -270,17 +318,22 @@ export const recipientRepository = {
 
   /**
    * Merge: set primary_recipient_id on alias recipients pointing to a primary.
+   *
+   * @param {number} primaryId
+   * @param {number[]} aliasIds
+   * @returns {Promise<number[]>} the alias ids actually flagged
    */
   async mergeRecipients(primaryId, aliasIds) {
     if (!aliasIds.length) return [];
     const placeholders = aliasIds.map((_, i) => `$${i + 2}`).join(',');
     const sql = `UPDATE recipients SET primary_recipient_id = $1, updated_at = NOW() WHERE id IN (${placeholders}) AND id != $1 RETURNING id`;
     const result = await query(sql, [primaryId, ...aliasIds]);
-    return result.rows.map(r => r.id);
+    return result.rows.map((/** @type {any} */ r) => r.id);
   },
 
   /**
    * Lock the merge primary so concurrent merges into it serialize cleanly.
+   * @param {number} id
    * @returns {Promise<{id:number}|undefined>}
    */
   async lockByIdForMerge(id) {
@@ -292,6 +345,8 @@ export const recipientRepository = {
    * Flag alias rows as pointing at the primary, preserving the historical alias
    * relationship for the Recipients UI + /:id/aliases. Distinct from
    * mergeRecipients() above, which the older non-atomic route path still uses.
+   * @param {number} primaryId
+   * @param {number[]} aliasIds
    * @returns {Promise<number[]>} the alias ids actually flagged
    */
   async flagAliasesOf(primaryId, aliasIds) {
@@ -304,7 +359,7 @@ export const recipientRepository = {
         RETURNING id`,
       [primaryId, aliasIds],
     );
-    return result.rows.map((r) => r.id);
+    return result.rows.map((/** @type {any} */ r) => r.id);
   },
 
   /**
@@ -312,6 +367,10 @@ export const recipientRepository = {
    * the now-merged aliases — onto the new primary. Without this, merging C→B
    * then B→A leaves C pointing at B (a depth-2 chain) that the one-level read
    * layer cannot resolve, so C vanishes from A's group.
+   *
+   * @param {number} primaryId
+   * @param {number[]} aliasIds
+   * @returns {Promise<number>} rows repointed
    */
   async repointGrandchildAliases(primaryId, aliasIds) {
     const result = await query(
@@ -327,6 +386,9 @@ export const recipientRepository = {
 
   /**
    * Unmerge: remove primary_recipient_id from a recipient.
+   *
+   * @param {number} id
+   * @returns {Promise<boolean>}
    */
   async unmergeRecipient(id) {
     const sql = `UPDATE recipients SET primary_recipient_id = NULL, updated_at = NOW() WHERE id = $1 RETURNING id`;
@@ -336,6 +398,9 @@ export const recipientRepository = {
 
   /**
    * Get all aliases for a primary recipient.
+   *
+   * @param {number} primaryId
+   * @returns {Promise<(RecipientRow & { default_category_name: string|null })[]>}
    */
   async getAliases(primaryId) {
     const sql = `
@@ -353,6 +418,9 @@ export const recipientRepository = {
   /**
    * Resolve recipient ids to their cluster root (primary_recipient_id ?? id).
    * Returns a Map<recipientId, clusterRootId> for the ids that exist.
+   *
+   * @param {Array<number|null|undefined>|null|undefined} recipientIds
+   * @returns {Promise<Map<number, number>>}
    */
   async getClusterRootMap(recipientIds) {
     const ids = [...new Set((recipientIds || []).filter((id) => id != null))];

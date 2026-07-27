@@ -37,9 +37,9 @@ export async function uploadAttachment(transactionId: number, file: File): Promi
     return { item: envelope.data };
 }
 
-/** Delete an attachment by ID. */
-export function deleteAttachment(attachmentId: number): Promise<{ item: { deleted: boolean } }> {
-    return apiRequest(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
+/** Delete an attachment by ID. Responds 204 No Content — nothing to unwrap. */
+export async function deleteAttachment(attachmentId: number): Promise<void> {
+    await apiRequest<void>(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
 }
 
 /** Build the URL to download/view an attachment in the browser. */

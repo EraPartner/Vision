@@ -52,7 +52,10 @@ export const tagService = {
   /**
    * Update a tag's color and/or active status.
    *
-   * @param {number | string} id
+   * The route parses `:id` with `parseInt` before calling in, so this really is
+   * a number by the time it reaches the repository.
+   *
+   * @param {number} id
    * @param {{ color?: string | null, is_active?: boolean | null }} [updates]
    */
   async update(id, { color, is_active } = {}) {

@@ -123,6 +123,13 @@ export async function checkForUpdates(): Promise<{
     release_notes?: string;
     html_url?: string;
     error?: string;
+    /**
+     * How this deployment installs updates. Electron supplies 'source' | 'docker'
+     * | 'dev' over IPC; the HTTP route (reached only outside Electron) reports
+     * 'docker-compose', which has no in-app installer — the user runs
+     * `docker compose pull` themselves.
+     */
+    update_mode?: 'source' | 'docker' | 'dev' | 'docker-compose';
 }> {
     const updater = getElectronUpdater();
     if (updater?.checkRelease) {
@@ -137,7 +144,19 @@ export async function triggerDockerUpdate(): Promise<{ success: boolean; wasNew:
     return updater.pullImage();
 }
 
-export async function installShellUpdate(): Promise<{ success: boolean; version?: string; error?: string } | null> {
+export async function installShellUpdate(): Promise<{
+    success: boolean;
+    version?: string;
+    error?: string;
+    /**
+     * Set when the release carries no source-launcher asset to install from
+     * (every release published before the pipeline started building one). The
+     * main process has already opened `html_url` in the browser — the UI should
+     * say so rather than report a failure.
+     */
+    manual_download?: boolean;
+    html_url?: string;
+} | null> {
     const updater = getElectronUpdater();
     if (!updater?.installShellUpdate) return null;
     return updater.installShellUpdate();

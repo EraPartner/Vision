@@ -1,0 +1,27 @@
+# CI-ONLY overlay — never part of a user-facing stack.
+#
+# Do not add it to the docker:dev / docker:clean scripts in package.json, to
+# packaging/electron/resources/, or to install-demo.sh: it pins an image tag
+# that only exists on a CI runner. It is also NOT mirrored into
+# packaging/electron/resources/docker-compose.yml — that mirror covers the base
+# file's named volumes and project name, neither of which this file touches.
+#
+# Why it exists: docker-compose.yml's `app` service is `build: .` with no
+# `image:` key, so compose names the image it builds after the project
+# (`<project>-app`) and ignores any image CI prepared ahead of time. Every job
+# that brought the stack up therefore rebuilt the app from source, uncached —
+# both slower than the build it was handed AND a different image from the one
+# trivy-scan scanned (Dockerfile's `apk upgrade --no-cache` floats, so the two
+# builds can genuinely differ). Pinning `image:` here makes compose consume the
+# image the job materialised from the GHA build cache.
+#
+# `build:` is inherited from docker-compose.yml and cannot be unset by an
+# override. That is harmless and doubles as the safety net: if `vision:ci` is
+# somehow absent, compose builds it from source (slow but correct) rather than
+# failing on a pull of an image that was never pushed anywhere.
+services:
+  app:
+    # Set by .github/actions/compose-up from its `vision-image` input. The
+    # default keeps every other compose invocation in the job (`exec`, `down`,
+    # `logs` — which do not re-export the variable) resolving to the same tag.
+    image: ${VISION_IMAGE:-vision:ci}

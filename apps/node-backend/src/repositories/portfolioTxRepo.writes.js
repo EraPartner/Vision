@@ -21,6 +21,12 @@ import {
   hardDeleteThroughInheritanceTables,
 } from './portfolioTxRepo.common.js';
 
+/** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
+
+/**
+ * @param {import('./portfolioTxRepo.common.js').PortfolioTransactionInput} input
+ * @returns {Promise<PortfolioTransactionRow|null>}
+ */
 export async function create({ investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency = 'EUR', note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, preloaded_asset_class }) {
   let assetClass = preloaded_asset_class;
   if (!assetClass) {
@@ -116,6 +122,11 @@ export async function create({ investment_id, type, date, amount, units, price_p
   }
 }
 
+/**
+ * @param {number} id
+ * @param {Record<string, any>} fields
+ * @returns {Promise<PortfolioTransactionRow|null>}
+ */
 export async function update(id, fields) {
   const allowed = ['date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes', 'currency', 'note', 'is_recurring', 'recurrence_interval', 'recurrence_end_date', 'fx_rate_to_eur', 'account_id'];
 
@@ -218,6 +229,10 @@ export async function update(id, fields) {
   }
 }
 
+/**
+ * @param {number} id
+ * @returns {Promise<boolean>}
+ */
 export async function hardDelete(id) {
   if (await hasPortfolioTransactionInheritanceSchema()) {
     try {

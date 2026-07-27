@@ -247,30 +247,34 @@ These four endpoints manage persisted named custom CSV parser configurations. Se
 
 ### GET /api/import/parsers
 
-List all saved parser configurations.
+List all saved parser configurations. Collection GETs use the canonical
+`{items, total}` body; this list is unpaginated, so `total` is the row count.
 
 **Response:**
 ```json
 {
   "ok": true,
-  "data": [
-    {
-      "id": 1,
-      "name": "My Savings Bank",
-      "config": {
-        "dateColumn": "Date",
-        "dateFormat": "DD/MM/YYYY",
-        "recipientColumn": "Description",
-        "amountColumn": "Amount",
-        "memoColumn": "Memo",
-        "separator": ";",
-        "encoding": "utf-8",
-        "skipRows": 0
-      },
-      "created_at": "2026-06-01T10:00:00Z",
-      "updated_at": "2026-06-01T10:00:00Z"
-    }
-  ]
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "name": "My Savings Bank",
+        "config": {
+          "dateColumn": "Date",
+          "dateFormat": "DD/MM/YYYY",
+          "recipientColumn": "Description",
+          "amountColumn": "Amount",
+          "memoColumn": "Memo",
+          "separator": ";",
+          "encoding": "utf-8",
+          "skipRows": 0
+        },
+        "created_at": "2026-06-01T10:00:00Z",
+        "updated_at": "2026-06-01T10:00:00Z"
+      }
+    ],
+    "total": 1
+  }
 }
 ```
 

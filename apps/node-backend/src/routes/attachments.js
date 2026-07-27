@@ -19,6 +19,7 @@ import {
 } from '../services/attachmentService.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 import { logger } from '../config/logger.js';
 
 const router = Router();
@@ -102,12 +103,17 @@ router.post(
 
 /**
  * GET /api/attachments/transaction/:id
- * List all attachments for a transaction.
+ * List attachments for a transaction. Pagination is opt-in: without
+ * limit/offset every attachment is returned, as before.
  */
 router.get('/transaction/:id', validateIdParam, async (req, res) => {
   const transactionId = parseInt(req.params.id, 10);
-  const attachments = await attachmentRepository.listByTransaction(transactionId);
-  res.ok({ items: attachments, total: attachments.length });
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const attachments = await attachmentRepository.listByTransaction(transactionId, page ?? {});
+  const total = page
+    ? await attachmentRepository.countByTransaction(transactionId)
+    : attachments.length;
+  res.ok(listBody(attachments, total, page));
 });
 
 // ── Download ───────────────────────────────────────────────────────────────────
@@ -178,7 +184,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
     });
   }
 
-  res.ok({ deleted: true });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 export default router;

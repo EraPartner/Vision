@@ -32,6 +32,10 @@ const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
 const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
+// Update mode reported to HTTP clients. See buildUpdateCheckPayload for why this
+// is a constant rather than something detected per-request.
+const UPDATE_MODE_DOCKER_COMPOSE = 'docker-compose';
+
 /**
  * Fetch the latest GitHub Release metadata.
  * Returns a plain object — callers handle errors.
@@ -91,6 +95,15 @@ function buildUpdateCheckPayload(release, currentVersion) {
       published_at: release.published_at,
       release_notes: release.body || '',
       html_url: release.html_url,
+      // Anything reaching this HTTP route is a non-Electron client: inside the
+      // desktop shell the frontend short-circuits to the electronUpdater IPC
+      // (apps/frontend/src/lib/api/electron.ts → checkForUpdates), which
+      // supplies its own 'source'/'docker'/'dev' mode. So the only consumer
+      // here is a self-hosted docker-compose (or bare web) deployment, which
+      // updates from the command line — never via an in-app installer. Without
+      // this field the frontend defaulted to 'source' and offered an Install
+      // button that no-oped outside Electron.
+      update_mode: UPDATE_MODE_DOCKER_COMPOSE,
     },
     latestVersion,
     upToDate,
@@ -292,9 +305,11 @@ router.post('/database/tables/:table/mutate', adminMutateLimiter, async (req, re
 
 // ── Provider Health ───────────────────────────────────────────────────────────
 
+// Canonical collection shape `{items, total}` (unpaginated — `total` is the
+// row count, present so pagination can land without breaking the shape).
 router.get('/providers/health', async (_req, res) => {
-  const providers = await listProviderHealth();
-  res.ok(providers);
+  const items = await listProviderHealth();
+  res.ok({ items, total: items.length });
 });
 
 router.post('/providers/:provider/probe', adminMutateLimiter, async (req, res) => {
@@ -311,13 +326,15 @@ router.get('/metrics/requests', (_req, res) => {
 
 // ── Endpoint Manifest ─────────────────────────────────────────────────────────
 
+// Both manifest endpoints use the canonical `{items, total}` collection shape.
 router.get('/endpoints', (_req, res) => {
-  res.ok(getRouteManifest());
+  const items = getRouteManifest();
+  res.ok({ items, total: items.length });
 });
 
 router.get('/endpoint-liveness', (_req, res) => {
-  const manifest = getRouteManifest();
-  res.ok(manifest.map((entry) => ({ ...entry, live: true })));
+  const items = getRouteManifest().map((entry) => ({ ...entry, live: true }));
+  res.ok({ items, total: items.length });
 });
 
 export default router;

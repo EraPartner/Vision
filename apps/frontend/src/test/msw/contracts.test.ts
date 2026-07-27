@@ -53,6 +53,18 @@ async function mutateEnvelope(
     return json.data;
 }
 
+/**
+ * Assert a hard delete answers 204 No Content with a genuinely empty body —
+ * the repo-wide DELETE convention (docs/reference/code-patterns.md, "DELETE
+ * responses"). A 204 carries no ADR-026 envelope, so there is nothing to
+ * schema-validate; the contract IS the absence of a body.
+ */
+async function expectNoContent(path: string): Promise<void> {
+    const res = await fetch(`${BASE}${path}`, { method: "DELETE" });
+    expect(res.status, `expected 204 for DELETE ${path}`).toBe(204);
+    expect(await res.text(), `expected empty body for DELETE ${path}`).toBe("");
+}
+
 function validate<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
     const result = schema.safeParse(data);
     if (!result.success) {
@@ -196,17 +208,6 @@ const PlannedTransactionItemSchema = z.object({
     links: z.array(z.unknown()),
 });
 
-// ── Delete response schemas ───────────────────────────────────────────────────
-
-const DeleteResponseSchema = z.object({
-    message: z.string(),
-    links: z.array(z.unknown()),
-});
-
-const TransactionDeleteResponseSchema = DeleteResponseSchema.extend({
-    details: z.object({ method: z.string() }).optional(),
-});
-
 // ── Other endpoint schemas ────────────────────────────────────────────────────
 
 const SettingsSchema = z.record(z.string(), z.unknown());
@@ -243,10 +244,17 @@ const NewsArticleSchema = z.object({
 });
 const MarketNewsSchema = z.object({ articles: z.array(NewsArticleSchema) });
 
+// Canonical collection body: { items, total, limit, offset }.
 const ImportBatchesSchema = z.object({
-    batches: z.array(z.object({}).passthrough()),
+    items: z.array(z.object({}).passthrough()),
     total: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
 });
+
+/** `{ items, total }` — the canonical body for unpaginated collection GETs. */
+const collectionSchema = (item: z.ZodTypeAny = z.unknown()) =>
+    z.object({ items: z.array(item), total: z.number().int().nonnegative() });
 
 const PortfolioTotalsSchema = z.object({
     totalPortfolioValue: z.number(),
@@ -280,7 +288,7 @@ describe("MSW handler contracts", () => {
         ["GET /api/market/news conforms to news schema", MarketNewsSchema, "/api/market/news", "market/news"],
         ["GET /api/import/batches conforms to batches schema", ImportBatchesSchema, "/api/import/batches", "import/batches"],
         ["GET /api/portfolio/summary conforms to portfolio-summary schema", PortfolioSummarySchema, "/api/portfolio/summary", "portfolio/summary"],
-        ["GET /api/admin/endpoint-liveness conforms to array schema", z.array(z.unknown()), "/api/admin/endpoint-liveness", "admin/endpoint-liveness"],
+        ["GET /api/admin/endpoint-liveness conforms to collection schema", collectionSchema(), "/api/admin/endpoint-liveness", "admin/endpoint-liveness"],
         ["GET /api/planned conforms to array schema", z.array(z.unknown()), "/api/planned", "planned"],
     ])("%s", async (_name, schema, path, label) => {
         validate(schema, await getEnvelope(path), label);
@@ -320,13 +328,13 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
 // ── E2: Mutation contract tests ───────────────────────────────────────────────
 
 describe("Mutation handler contracts (E2)", () => {
-    describe.each<[string, string, z.ZodTypeAny, z.ZodTypeAny]>([
-        ["transactions", "/api/transactions", TransactionItemSchema, TransactionDeleteResponseSchema],
-        ["categories", "/api/categories", CategoryItemSchema, DeleteResponseSchema],
-        ["recipients", "/api/recipients", RecipientItemSchema, DeleteResponseSchema],
-        ["investments", "/api/investments", InvestmentItemSchema, DeleteResponseSchema],
-        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema, DeleteResponseSchema],
-    ])("%s", (label, path, ItemSchema, DeleteSchema) => {
+    describe.each<[string, string, z.ZodTypeAny]>([
+        ["transactions", "/api/transactions", TransactionItemSchema],
+        ["categories", "/api/categories", CategoryItemSchema],
+        ["recipients", "/api/recipients", RecipientItemSchema],
+        ["investments", "/api/investments", InvestmentItemSchema],
+        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema],
+    ])("%s", (label, path, ItemSchema) => {
         it(`POST ${path} response matches item schema`, async () => {
             validate(ItemSchema, await mutateEnvelope("POST", path, {}), `POST ${label}`);
         });
@@ -335,9 +343,24 @@ describe("Mutation handler contracts (E2)", () => {
             validate(ItemSchema, await mutateEnvelope("PATCH", `${path}/1`, {}), `PATCH ${label}`);
         });
 
-        it(`DELETE ${path}/:id response matches delete response schema`, async () => {
-            validate(DeleteSchema, await mutateEnvelope("DELETE", `${path}/1`), `DELETE ${label}`);
+        it(`DELETE ${path}/:id answers 204 with no body`, async () => {
+            await expectNoContent(`${path}/1`);
         });
+    });
+
+    // Hard deletes outside the five CRUD resources above. Same contract: 204,
+    // empty body, no envelope.
+    it.each([
+        ["/api/accounts/1"],
+        ["/api/ai/conversations/conv-1"],
+        ["/api/attachments/1"],
+        ["/api/investments/transactions/1"],
+        ["/api/recipients/1/patterns/1"],
+        ["/api/saved-charts/1"],
+        ["/api/splits/1"],
+        ["/api/watchlist/1"],
+    ])("DELETE %s answers 204 with no body", async (path) => {
+        await expectNoContent(path);
     });
 });
 
@@ -446,7 +469,7 @@ describe("Missing GET endpoint contracts (E4)", () => {
             "GET /api/import/batches returns expected shape",
             "/api/import/batches",
             "GET /api/import/batches",
-            z.object({ batches: z.array(z.unknown()), total: z.number() }),
+            ImportBatchesSchema,
         ],
         [
             "GET /api/import/batches/:id/preview returns expected shape",
@@ -505,10 +528,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             }),
         ],
         [
-            "GET /api/ai/conversations returns array",
+            "GET /api/ai/conversations returns { items, total }",
             "/api/ai/conversations",
             "GET /api/ai/conversations",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
         [
             "GET /api/info/portfolio-performance returns expected shape",
@@ -569,10 +592,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.array(z.unknown()),
         ],
         [
-            "GET /api/admin/endpoint-liveness returns array",
+            "GET /api/admin/endpoint-liveness returns { items, total }",
             "/api/admin/endpoint-liveness",
             "GET /api/admin/endpoint-liveness",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
         [
             "GET /api/admin/database/stats returns expected shape",
@@ -581,10 +604,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.object({ tables: z.array(z.unknown()), db_size: z.null() }),
         ],
         [
-            "GET /api/admin/providers/health returns array",
+            "GET /api/admin/providers/health returns { items, total }",
             "/api/admin/providers/health",
             "GET /api/admin/providers/health",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
         [
             "GET /api/admin/metrics/requests returns array",
@@ -593,10 +616,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.array(z.unknown()),
         ],
         [
-            "GET /api/admin/endpoints returns array",
+            "GET /api/admin/endpoints returns { items, total }",
             "/api/admin/endpoints",
             "GET /api/admin/endpoints",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
     ])("%s", async (_name, path, label, schema) => {
         validate(schema, await getEnvelope(path), label);
@@ -820,10 +843,10 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             z.object({ items: z.array(z.unknown()), total: z.number() }),
         ],
         [
-            "GET /api/saved-charts returns charts array",
+            "GET /api/saved-charts returns { items, total }",
             "/api/saved-charts",
             "GET /api/saved-charts",
-            z.object({ charts: z.array(z.unknown()) }),
+            collectionSchema(),
         ],
         [
             "GET /api/splits/transaction/:id returns items array",
@@ -870,7 +893,7 @@ describe("Phase F1: extended mutation contracts", () => {
     it.each<
         [
             string,
-            "POST" | "PATCH" | "PUT" | "DELETE",
+            "POST" | "PATCH" | "PUT",
             string,
             Record<string, unknown> | undefined,
             string,
@@ -906,14 +929,6 @@ describe("Phase F1: extended mutation contracts", () => {
             { title: "Test" },
             "POST /api/ai/conversations",
             ConversationWithMessagesSchema,
-        ],
-        [
-            "DELETE /api/ai/conversations/:id returns message",
-            "DELETE",
-            "/api/ai/conversations/conv-1",
-            undefined,
-            "DELETE /api/ai/conversations/:id",
-            MessageSchema,
         ],
         [
             "POST /api/info/exchange-rates/refresh returns refresh result",
@@ -970,14 +985,6 @@ describe("Phase F1: extended mutation contracts", () => {
                 investment_id: z.number(),
                 type: z.string(),
             }),
-        ],
-        [
-            "DELETE /api/investments/transactions/:id returns message",
-            "DELETE",
-            "/api/investments/transactions/1",
-            undefined,
-            "DELETE /api/investments/transactions/:id",
-            MessageSchema,
         ],
         [
             "POST /api/recipients/:id/merge returns merged shape",
@@ -1041,14 +1048,6 @@ describe("Phase F1: extended mutation contracts", () => {
             z.object({ id: z.number(), name: z.string() }),
         ],
         [
-            "DELETE /api/saved-charts/:id returns message",
-            "DELETE",
-            "/api/saved-charts/1",
-            undefined,
-            "DELETE /api/saved-charts/:id",
-            MessageSchema,
-        ],
-        [
             "POST /api/splits/batch returns items",
             "POST",
             "/api/splits/batch",
@@ -1069,14 +1068,6 @@ describe("Phase F1: extended mutation contracts", () => {
                 amount: z.number(),
                 is_paid: z.boolean(),
             }),
-        ],
-        [
-            "DELETE /api/splits/:id returns message",
-            "DELETE",
-            "/api/splits/1",
-            undefined,
-            "DELETE /api/splits/:id",
-            MessageSchema,
         ],
         [
             "POST /api/splits/:id/pay returns message",
@@ -1123,14 +1114,6 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "PATCH /api/watchlist/:id",
             z.object({ id: z.number(), symbol: z.string() }),
-        ],
-        [
-            "DELETE /api/watchlist/:id returns message",
-            "DELETE",
-            "/api/watchlist/1",
-            undefined,
-            "DELETE /api/watchlist/:id",
-            MessageSchema,
         ],
         [
             "POST /api/planned-transactions/:id/execute returns updated planned",

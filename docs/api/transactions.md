@@ -288,14 +288,9 @@ Implementation notes:
 
 Permanently delete a transaction (hard delete).
 
-**Response:**
-```json
-{
-  "message": "Transaction deleted permanently",
-  "details": { "method": "hard delete" },
-  "links": []
-}
-```
+**Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
+
+**Error Response:** `404 Not Found` when the transaction does not exist.
 
 ### POST /api/transactions/bulk-delete
 

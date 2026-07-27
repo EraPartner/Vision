@@ -134,6 +134,8 @@ export default defineConfig(({ mode }) => ({
                 'src/lib/**/*.{ts,tsx}',
                 'src/pages/**/*.{ts,tsx}',
                 'src/utils/**/*.{ts,tsx}',
+                'src/features/**/*.{ts,tsx}',
+                'src/contexts/**/*.{ts,tsx}',
             ],
             exclude: [
                 '**/*.test.{ts,tsx}',
@@ -145,14 +147,18 @@ export default defineConfig(({ mode }) => ({
             // Ratchet gate — tracks current actual coverage so regressions are
             // caught immediately. Bump after each phase adds meaningful tests;
             // never lower these values. Set a 2-3 pt buffer below the measured
-            // figure to absorb v8 line-attribution variance between runs.
-            // Last measured (2026-05-29, 1.4k-test suite):
-            //   statements 52.47 % | branches 43.74 % | functions 44.31 % | lines 54.7 %
+            // figure to absorb v8 line-attribution variance between runs
+            // (convention: floor(measured) minus 2).
+            // Last measured (2026-07-27, 2.1k-test suite, after adding
+            // src/features/** and src/contexts/** to the include list above —
+            // both had tests all along but were absent from the list, so
+            // neither their covered nor their uncovered lines were counted):
+            //   statements 56.86 % | branches 47.04 % | functions 49.3 % | lines 59.04 %
             thresholds: {
-                statements: 50,
-                branches: 41,
-                functions: 42,
-                lines: 52,
+                statements: 54,
+                branches: 45,
+                functions: 47,
+                lines: 57,
             },
         },
     },

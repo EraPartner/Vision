@@ -162,14 +162,16 @@ describe('Recipient Routes', () => {
   });
 
   describe('DELETE /:id', () => {
-    it('should delete recipient', async () => {
+    it('should delete recipient and return 204 with no body', async () => {
       recipientRepository.hardDelete.mockResolvedValue(true);
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].data.message).toContain('deleted permanently');
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundError for non-existent', async () => {
@@ -306,6 +308,18 @@ describe('Recipient Routes', () => {
       await expect(routeHandlers['delete:/:id/patterns/:patternId'](req, res))
         .rejects.toBeInstanceOf(ValidationError);
       expect(deletePattern).not.toHaveBeenCalled();
+    });
+
+    it('DELETE /:id/patterns/:patternId returns 204 with no body', async () => {
+      const req = { params: { id: '1', patternId: '77' } };
+      const res = mockResponse();
+
+      await routeHandlers['delete:/:id/patterns/:patternId'](req, res);
+
+      expect(deletePattern).toHaveBeenCalledWith(77);
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
   });
 });

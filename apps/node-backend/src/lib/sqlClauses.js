@@ -114,3 +114,25 @@ export function buildInsert(fields, { allowed, startIdx = 1, quote = false, mapC
 
   return { columns, placeholders, params };
 }
+
+/**
+ * Append a parameterized `LIMIT … OFFSET …` tail, or nothing at all when the
+ * caller did not ask for a page.
+ *
+ * `limit == null` means "unbounded" — the list routes that only recently gained
+ * pagination must keep returning the full collection when the request carries no
+ * limit/offset (see lib/pagination.js::parseOptionalPagination), so the clause
+ * has to disappear rather than fall back to a default page size. Pushes onto the
+ * caller's `params` array so placeholder numbering follows the existing filters.
+ *
+ * @param {unknown[]} params - query params built so far (mutated)
+ * @param {{ limit?: number|null, offset?: number|null }} [page]
+ * @returns {string} SQL tail (leading space) — '' when unbounded
+ */
+export function buildLimitOffset(params, { limit = null, offset = 0 } = {}) {
+  if (limit == null) return '';
+  params.push(limit);
+  const limitIdx = params.length;
+  params.push(offset ?? 0);
+  return ` LIMIT $${limitIdx} OFFSET $${params.length}`;
+}

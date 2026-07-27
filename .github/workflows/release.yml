@@ -291,11 +291,56 @@ jobs:
           sed "s/__VERSION__/${VER}/g" packaging/release/README.md \
             > "$OUT/README.md"
 
+      # The in-app shell updater (repo/source mode) installs from this ZIP.
+      # Its layout is dictated by packaging/electron/updater.js, NOT by taste:
+      #   - the asset name must match /vision-source-launcher-.*-arm64\.zip$/i
+      #     (pickSourceLauncherZip, updater.js:214-217)
+      #   - after `ditto -x -k` the extracted tree must contain
+      #     `unsigned/Vision/package.json` — that directory is rsynced over the
+      #     user's clone as the new source root (updater.js:319-324)
+      #   - `unsigned/launch.command`, when present, is copied to the install
+      #     root as the double-clickable launcher (updater.js:320,331)
+      #   - every entry must be a relative, non-traversing path (updater.js:305-315)
+      # `git archive HEAD` gives exactly the tagged source tree — no node_modules,
+      # no packaging/electron/dist, none of the electron-builder output produced
+      # by the steps above. Generated locales are deliberately absent: the
+      # installed tree regenerates them via `electron:prod` → generate-locales.
+      - name: Build source-launcher bundle for the in-app updater
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VER="${TAG#v}"
+          OUT="$GITHUB_WORKSPACE/dist/release"
+          ZIP="$OUT/vision-source-launcher-${VER}-arm64.zip"
+          STAGE="$RUNNER_TEMP/source-launcher"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/unsigned/Vision"
+          git archive --format=tar HEAD | tar -x -C "$STAGE/unsigned/Vision"
+          cp packaging/electron/unsigned/launch.command "$STAGE/unsigned/launch.command"
+          chmod +x "$STAGE/unsigned/launch.command"
+          ( cd "$STAGE" && zip -r -q -X "$ZIP" unsigned )
+
+          # Guard the contract above — a silently malformed bundle would strand
+          # source-mode users exactly like the missing asset did.
+          unzip -Z1 "$ZIP" > "$STAGE/entries.txt"
+          for want in unsigned/Vision/package.json unsigned/Vision/docker-compose.yml unsigned/launch.command; do
+            if ! grep -qxF "$want" "$STAGE/entries.txt"; then
+              echo "ERROR: source-launcher ZIP is missing required entry: $want"
+              exit 1
+            fi
+          done
+          if grep -qE '^/|(^|/)\.\.(/|$)' "$STAGE/entries.txt"; then
+            echo "ERROR: source-launcher ZIP contains an absolute or traversing path"
+            exit 1
+          fi
+          echo "Source-launcher bundle OK: $(basename "$ZIP") ($(wc -l < "$STAGE/entries.txt") entries)"
+
       - name: Compute SHA256 checksums
         run: |
           set -euo pipefail
           cd dist/release
-          for f in Vision-*.dmg Vision-*.zip vision-setup.command README.md; do
+          for f in Vision-*.dmg Vision-*.zip vision-source-launcher-*.zip vision-setup.command README.md; do
             shasum -a 256 "$f" > "${f}.sha256"
             echo "--- ${f} ---"
             cat "${f}.sha256"
@@ -346,6 +391,7 @@ jobs:
           files: |
             dist/mac/Vision-*.dmg
             dist/mac/Vision-*.zip
+            dist/mac/vision-source-launcher-*.zip
             dist/mac/vision-setup.command
             dist/mac/README.md
             dist/mac/*.sha256

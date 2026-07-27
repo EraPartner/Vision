@@ -77,7 +77,7 @@ describe("ImportPage (integration)", () => {
 
     it("shows empty import history message when no batches exist", async () => {
         renderWithApp(<ImportPage />);
-        // MSW returns { batches: [], total: 0 } — ImportHistoryCard shows empty message
+        // MSW returns { items: [], total: 0 } — ImportHistoryCard shows empty message
         expect(
             await screen.findByText(/no imports yet/i),
         ).toBeInTheDocument();

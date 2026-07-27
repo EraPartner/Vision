@@ -170,9 +170,18 @@ async function assertFundingAccountValid(fundingAccountId, selfId) {
 }
 
 export const accountService = {
-  /** List accounts (active=true|false|null for all). */
-  async list({ active = null } = {}) {
-    return accountRepository.getAll({ active });
+  /**
+   * List accounts (active=true|false|null for all) as `{items, total}`.
+   *
+   * `limit` is optional: absent (the default, and what every current caller
+   * sends) means the full list, so `total` is just the row count and the extra
+   * COUNT round-trip is skipped. A supplied limit/offset pages the rows while
+   * `total` stays the full match count.
+   */
+  async list({ active = null, limit = null, offset = 0 } = {}) {
+    const items = await accountRepository.getAll({ active, limit, offset });
+    const total = limit == null ? items.length : await accountRepository.getCount({ active });
+    return { items, total };
   },
 
   async get(id) {

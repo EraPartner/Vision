@@ -25,6 +25,10 @@ def upgrade() -> None:
     op.execute(sa.text(
         "ALTER TABLE attachments DROP CONSTRAINT IF EXISTS attachments_transaction_id_fkey"
     ))
+    # destructive-ok: shipped 2026-05-05, annotated retroactively. This IS a narrowing
+    # (BIGINT -> INTEGER), and deliberately so: the column is an FK to transactions.id, which is
+    # SERIAL/int4, so no value outside INTEGER range can ever have been stored. The USING clause
+    # would raise rather than silently truncate if one somehow had. Downgrade widens back.
     op.execute(sa.text(
         "ALTER TABLE attachments "
         "ALTER COLUMN transaction_id TYPE INTEGER USING transaction_id::INTEGER"

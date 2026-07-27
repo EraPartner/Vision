@@ -77,6 +77,9 @@ def upgrade() -> None:
 
     # Drop the income/spending MVs so createMaterializedViews recreates them with
     # the transfer-excluding definitions. mv_bank_balances keeps transfers.
+    # destructive-ok: shipped 2026-06-18, annotated retroactively. Covers all three DROPs below.
+    # Derived data only, rebuilt from transactions by materializedViewService.createMaterializedViews
+    # on the same boot that applies this migration — the recreation is the point of the drop.
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE;")
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_category_totals CASCADE;")
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_cashflow_daily CASCADE;")

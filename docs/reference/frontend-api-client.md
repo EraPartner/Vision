@@ -153,8 +153,10 @@ export interface ResponseMeta {
   requestId?: string;
   computedAt?: string;
   source?: 'mv' | 'live';
-  pagination?: { total: number; page: number; limit: number };
 }
+// Pagination is NOT in meta — a list's data body is
+// `{ items, total, limit?, offset? }` (limit/offset only when the request
+// paginated). See packages/types/src/api.js.
 
 export interface ApiError {
   code: ApiErrorCode;
@@ -268,7 +270,8 @@ export const apiClient = {
 **Current state:**
 - All methods call `request<T>()` from `client.ts` (unwrapping handled)
 - No mutation patterns — immutable updates return new objects
-- Pagination logic moved from frontend conditionals to `meta.pagination` in response
+- Pagination logic moved from frontend conditionals to the list body the server returns
+  (`{ items, total, limit?, offset? }`)
 - Backward compatibility maintained: existing call sites using `import { apiClient }` work unchanged
 
 ## OpenAPI Type Generation (Phase 2.4)
@@ -383,7 +386,7 @@ const getTransactions = async (params) => {
 // Current (Phase 1+):
 async getTransactions(params?: TransactionQueryParams): Promise<TransactionsListResponse> {
   const body = await this.request<TransactionsListResponse>(`/api/transactions?...`);
-  // body.data is the array; meta.pagination is separate
+  // body.data is `{ items, total, limit?, offset? }` — pagination travels with the list
   return body.data; // pure value, no mutation
 }
 ```

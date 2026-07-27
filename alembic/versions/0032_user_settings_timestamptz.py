@@ -56,6 +56,9 @@ def upgrade() -> None:
                   AND column_name = 'created_at'
                   AND data_type = 'timestamp without time zone'
             ) THEN
+                -- destructive-ok: shipped 2026-05-11, annotated retroactively. TIMESTAMP ->
+                -- TIMESTAMPTZ is a widening reinterpretation, not a narrowing: no precision is
+                -- lost and the guarded IF EXISTS makes it a no-op once already converted.
                 ALTER TABLE user_settings
                     ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
             END IF;
@@ -73,6 +76,9 @@ def upgrade() -> None:
                   AND column_name = 'updated_at'
                   AND data_type = 'timestamp without time zone'
             ) THEN
+                -- destructive-ok: shipped 2026-05-11, annotated retroactively. Same widening
+                -- reinterpretation as created_at above; naive values are read as UTC, matching how
+                -- the backend wrote them. Guarded, so it is a no-op on already-converted shapes.
                 ALTER TABLE user_settings
                     ALTER COLUMN updated_at TYPE TIMESTAMPTZ USING updated_at AT TIME ZONE 'UTC';
             END IF;

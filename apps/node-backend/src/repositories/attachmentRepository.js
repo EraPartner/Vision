@@ -7,6 +7,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { buildLimitOffset } from '../lib/sqlClauses.js';
 
 function formatRow(row) {
   return {
@@ -31,16 +32,31 @@ export const attachmentRepository = {
   },
 
   /**
-   * List all attachments for a transaction, newest first.
+   * List attachments for a transaction, newest first. `limit` is optional and
+   * defaults to unbounded — the attachment strip renders every file on the
+   * transaction, so only an explicit limit/offset narrows the result.
+   *
+   * @param {number} transactionId
+   * @param {{ limit?: number|null, offset?: number }} [page]
    */
-  async listByTransaction(transactionId) {
+  async listByTransaction(transactionId, { limit = null, offset = 0 } = {}) {
+    const params = [transactionId];
     const sql = `
       SELECT * FROM attachments
       WHERE transaction_id = $1
       ORDER BY created_at DESC
-    `;
-    const result = await query(sql, [transactionId]);
+    ` + buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     return result.rows.map(formatRow);
+  },
+
+  /** Attachment count for a transaction — the `total` for a paginated list. */
+  async countByTransaction(transactionId) {
+    const result = await query(
+      'SELECT COUNT(*) FROM attachments WHERE transaction_id = $1',
+      [transactionId],
+    );
+    return parseInt(result.rows[0].count, 10);
   },
 
   /**
