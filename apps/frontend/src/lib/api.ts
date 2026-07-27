@@ -281,7 +281,7 @@ export type {
     ToolResultPayload,
 } from '@/types/aiChat';
 export type { SavedParserConfig, CustomParserConfigPayload } from '@/lib/api/imports';
-export type { SplitItem, SplitPayment } from '@/lib/api/splits';
+export type { SplitItem, SplitPayment, SplitCreateInput, OwedSummaryItem, OwedDetailItem } from '@/lib/api/splits';
 export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, PatternSuggestion } from '@/lib/api/recipients';
 export type { ExchangeRate, ExchangeRatesData, PortfolioSummaryItem, PortfolioSummaryResponse, PortfolioSummaryTotals } from '@/lib/api/info';
 export type { RebalanceRequest, RebalanceResponse, ModelPortfolio } from '@/lib/api/crossWorkspace';

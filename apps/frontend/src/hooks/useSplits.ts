@@ -4,7 +4,7 @@ import { splitKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { SplitCreateInput } from '@/types/splits';
+import type { SplitCreateInput } from '@/lib/api/splits';
 
 export function useOwedSummary() {
     return useQuery({

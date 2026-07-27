@@ -3568,53 +3568,108 @@ export interface components {
         Split: {
             id: number;
             transaction_id: number;
-            description: string;
-            total_amount: number;
-            currency: string;
-            shares?: Record<string, never>[];
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at?: string;
-        };
-        SplitOwed: {
             recipient_id: number;
-            recipient_name: string;
-            total_owed: number;
-            currency: string;
-        };
-        Attachment: {
-            id: number;
-            transaction_id: number;
-            filename: string;
-            mime_type: string;
-            size: number;
-            /** Format: date-time */
-            created_at: string;
-        };
-        WatchlistItem: {
-            id: number;
-            symbol: string;
-            name: string;
-            currency: string;
-            current_price?: number;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at?: string;
-        };
-        AiConversation: {
-            id: string;
-            title: string;
+            recipient_name?: string | null;
+            amount: number;
+            amount_paid: number;
+            note?: string | null;
+            is_settled: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
         };
-        AiMessage: {
+        SplitPayment: {
+            id: number;
+            split_id: number;
+            amount: number;
+            note?: string | null;
+            /** Format: date */
+            paid_at: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SplitList: {
+            items: components["schemas"]["Split"][];
+            total: number;
+        };
+        SplitOwed: {
+            recipient_id: number;
+            recipient_name: string;
+            total_owed: number;
+            total_paid: number;
+            remaining: number;
+            split_count: number;
+        };
+        Attachment: {
+            id: number;
+            transaction_id: number;
+            filename: string;
+            stored_path: string;
+            mime_type: string;
+            size_bytes: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        WatchlistItem: {
+            id: number;
+            name: string;
+            symbol?: string | null;
             /** @enum {string} */
-            role: "user" | "assistant" | "system";
-            content: string;
+            asset_class: "stock" | "etf" | "crypto" | "metals";
+            target_price: number;
+            currency: string;
+            notes?: string | null;
+            price_provider_id?: string | null;
+            /** @description Live price snapshotted when the item was added (ADR-097 backtest). */
+            added_price?: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AiConversation: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            model: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AiMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            conversationId: string;
+            /** @enum {string} */
+            role: "user" | "assistant" | "tool" | "system";
+            content: string | null;
+            toolName?: string | null;
+            toolArgs?: {
+                [key: string]: unknown;
+            } | null;
+            toolResult?: {
+                [key: string]: unknown;
+            } | null;
+            /** @enum {string} */
+            status: "complete" | "streaming" | "aborted" | "error";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AiTokenUsage: {
+            evalCount: number | null;
+            promptEvalCount: number | null;
+            totalDurationMs: number | null;
+        };
+        OllamaModel: {
+            name: string;
+            size: number | null;
+            family: string | null;
+            parameterSize: string | null;
+            quantization: string | null;
+            modifiedAt: string | null;
         };
         PortfolioImportBatch: {
             id: string;
@@ -7233,7 +7288,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Split"][];
+                        data?: components["schemas"]["SplitList"];
                     };
                 };
             };
@@ -7293,7 +7348,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["SplitList"];
+                    };
                 };
             };
         };
@@ -7345,7 +7402,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["SplitPayment"];
+                    };
                 };
             };
         };
@@ -7367,7 +7426,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: components["schemas"]["SplitPayment"][];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -7640,7 +7704,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            models: components["schemas"]["OllamaModel"][];
+                        };
+                    };
                 };
             };
         };
@@ -7788,7 +7856,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["AiMessage"];
+                        data?: {
+                            conversation: components["schemas"]["AiConversation"];
+                            userMessage: components["schemas"]["AiMessage"];
+                            toolMessages: components["schemas"]["AiMessage"][];
+                            assistantMessage: components["schemas"]["AiMessage"];
+                            usage: components["schemas"]["AiTokenUsage"];
+                            iterations: number;
+                        };
                     };
                 };
             };

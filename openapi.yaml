@@ -1145,24 +1145,33 @@ components:
         value: {}
 
     # ─── Splits ──────────────────────────────────────────────────────────────
+    # A transaction_splits row as emitted by splitRepository's formatSplit:
+    # a per-recipient share of one transaction. There is no description /
+    # total_amount / currency / shares — those described a split model the
+    # backend has never implemented.
     Split:
       type: object
-      required: [id, transaction_id, description, total_amount, currency, created_at]
+      required: [id, transaction_id, recipient_id, amount, amount_paid, is_settled, created_at, updated_at]
       properties:
         id:
           type: integer
         transaction_id:
           type: integer
-        description:
+        recipient_id:
+          type: integer
+        recipient_name:
           type: string
-        total_amount:
+          nullable: true
+        amount:
           type: number
-        currency:
+        # Σ split_payments.amount for this split; 0 on a freshly created split.
+        amount_paid:
+          type: number
+        note:
           type: string
-        shares:
-          type: array
-          items:
-            type: object
+          nullable: true
+        is_settled:
+          type: boolean
         created_at:
           type: string
           format: date-time
@@ -1170,9 +1179,44 @@ components:
           type: string
           format: date-time
 
+    # A split_payments row (POST /api/splits/{id}/pay, GET /{id}/payments).
+    SplitPayment:
+      type: object
+      required: [id, split_id, amount, paid_at, created_at]
+      properties:
+        id:
+          type: integer
+        split_id:
+          type: integer
+        amount:
+          type: number
+        note:
+          type: string
+          nullable: true
+        paid_at:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+
+    # Envelope `data` for the split-list endpoints (res.ok({ items, total })).
+    SplitList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Split"
+        total:
+          type: integer
+
+    # Aggregated "who owes what" row from computeOwedSummary. No currency is
+    # carried here — the summary sums across a recipient's splits.
     SplitOwed:
       type: object
-      required: [recipient_id, recipient_name, total_owed, currency]
+      required: [recipient_id, recipient_name, total_owed, total_paid, remaining, split_count]
       properties:
         recipient_id:
           type: integer
@@ -1180,13 +1224,17 @@ components:
           type: string
         total_owed:
           type: number
-        currency:
-          type: string
+        total_paid:
+          type: number
+        remaining:
+          type: number
+        split_count:
+          type: integer
 
     # ─── Attachments ─────────────────────────────────────────────────────────
     Attachment:
       type: object
-      required: [id, transaction_id, filename, mime_type, size, created_at]
+      required: [id, transaction_id, filename, stored_path, mime_type, size_bytes, created_at]
       properties:
         id:
           type: integer
@@ -1194,29 +1242,49 @@ components:
           type: integer
         filename:
           type: string
+        # On-disk location; the file bytes are not stored in the database.
+        stored_path:
+          type: string
         mime_type:
           type: string
-        size:
+        size_bytes:
           type: integer
         created_at:
           type: string
           format: date-time
 
     # ─── Watchlist ────────────────────────────────────────────────────────────
+    # Mirrors the `watchlist` table as mapped by watchlistRepository. It has no
+    # current_price column: live quotes are fetched separately and never merged
+    # into this row.
     WatchlistItem:
       type: object
-      required: [id, symbol, name, currency, created_at]
+      required: [id, name, asset_class, target_price, currency, created_at, updated_at]
       properties:
         id:
           type: integer
-        symbol:
-          type: string
         name:
           type: string
+        symbol:
+          type: string
+          nullable: true
+        asset_class:
+          type: string
+          enum: [stock, etf, crypto, metals]
+        target_price:
+          type: number
         currency:
           type: string
-        current_price:
+        notes:
+          type: string
+          nullable: true
+        price_provider_id:
+          type: string
+          nullable: true
+        added_price:
+          description: Live price snapshotted when the item was added (ADR-097 backtest).
           type: number
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -1225,30 +1293,101 @@ components:
           format: date-time
 
     # ─── AI ──────────────────────────────────────────────────────────────────
+    # ai_conversations row. Column aliases are camelCase on the wire
+    # (aiChatRepository's CONVERSATION_COLUMNS), not snake_case.
     AiConversation:
       type: object
-      required: [id, title, created_at, updated_at]
+      required: [id, title, model, createdAt, updatedAt]
       properties:
         id:
           type: string
+          format: uuid
         title:
           type: string
-        created_at:
+        model:
+          type: string
+        createdAt:
           type: string
           format: date-time
-        updated_at:
+        updatedAt:
           type: string
           format: date-time
 
+    # ai_messages row (aiChatRepository's MESSAGE_COLUMNS). Tool turns carry
+    # toolName/toolArgs/toolResult and a null content.
     AiMessage:
       type: object
-      required: [role, content]
+      required: [id, conversationId, role, content, status, createdAt]
       properties:
+        id:
+          type: string
+          format: uuid
+        conversationId:
+          type: string
+          format: uuid
         role:
           type: string
-          enum: [user, assistant, system]
+          enum: [user, assistant, tool, system]
         content:
           type: string
+          nullable: true
+        toolName:
+          type: string
+          nullable: true
+        toolArgs:
+          type: object
+          additionalProperties: true
+          nullable: true
+        toolResult:
+          type: object
+          additionalProperties: true
+          nullable: true
+        status:
+          type: string
+          enum: [complete, streaming, aborted, error]
+        createdAt:
+          type: string
+          format: date-time
+
+    # Usage counters forwarded from the Ollama response; null until the first
+    # model reply lands, or when the provider omits the counter.
+    AiTokenUsage:
+      type: object
+      required: [evalCount, promptEvalCount, totalDurationMs]
+      properties:
+        evalCount:
+          type: integer
+          nullable: true
+        promptEvalCount:
+          type: integer
+          nullable: true
+        totalDurationMs:
+          type: integer
+          nullable: true
+
+    # One installed model, projected from Ollama /api/tags by the backend's
+    # ollama client — not the daemon's raw row.
+    OllamaModel:
+      type: object
+      required: [name, size, family, parameterSize, quantization, modifiedAt]
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+          nullable: true
+        family:
+          type: string
+          nullable: true
+        parameterSize:
+          type: string
+          nullable: true
+        quantization:
+          type: string
+          nullable: true
+        modifiedAt:
+          type: string
+          nullable: true
 
     # ─── Portfolio Import ─────────────────────────────────────────────────────
     PortfolioImportBatch:
@@ -4804,9 +4943,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/Split"
+                        $ref: "#/components/schemas/SplitList"
 
   /api/splits:
     post:
@@ -4871,7 +5008,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SplitList"
 
   /api/splits/{id}:
     parameters:
@@ -4922,7 +5064,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SplitPayment"
 
   /api/splits/{id}/payments:
     parameters:
@@ -4941,7 +5088,20 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/SplitPayment"
+                          total:
+                            type: integer
 
   /api/splits/{id}/settle:
     parameters:
@@ -5176,7 +5336,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [models]
+                        properties:
+                          models:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/OllamaModel"
 
   /api/ai/conversations:
     get:
@@ -5297,7 +5468,23 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/AiMessage"
+                        type: object
+                        required: [conversation, userMessage, toolMessages, assistantMessage, usage, iterations]
+                        properties:
+                          conversation:
+                            $ref: "#/components/schemas/AiConversation"
+                          userMessage:
+                            $ref: "#/components/schemas/AiMessage"
+                          toolMessages:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AiMessage"
+                          assistantMessage:
+                            $ref: "#/components/schemas/AiMessage"
+                          usage:
+                            $ref: "#/components/schemas/AiTokenUsage"
+                          iterations:
+                            type: integer
 
   /api/ai/chat/stream:
     post:

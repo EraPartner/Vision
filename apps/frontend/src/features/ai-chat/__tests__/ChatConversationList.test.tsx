@@ -17,7 +17,6 @@ const baseConversation: ConversationSummary = {
     model: "llama3",
     createdAt: "2025-01-01T10:00:00.000Z",
     updatedAt: "2025-01-02T10:00:00.000Z",
-    messageCount: 4,
 };
 
 const secondConversation: ConversationSummary = {
@@ -26,7 +25,6 @@ const secondConversation: ConversationSummary = {
     model: "llama3",
     createdAt: "2025-01-03T10:00:00.000Z",
     updatedAt: "2025-01-04T10:00:00.000Z",
-    messageCount: 2,
 };
 
 function stubConversations(items: ConversationSummary[]) {

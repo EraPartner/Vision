@@ -69,7 +69,7 @@ Pass-through of `GET /api/tags` from Ollama.
 
 List conversations newest-first. All fields use camelCase (e.g., `createdAt`, `updatedAt`).
 
-**Response 200:** Array of `{ id, title, model, createdAt, updatedAt, messageCount }`.
+**Response 200:** Array of `{ id, title, model, createdAt, updatedAt }`. There is no message count in the payload — the list query selects only these five columns.
 
 ## POST /api/ai/conversations
 

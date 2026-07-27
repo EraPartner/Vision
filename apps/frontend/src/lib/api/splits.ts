@@ -1,17 +1,33 @@
 import { apiRequest } from '@/lib/api/client';
 import { requestBlob } from '@/lib/api/helpers';
 
+/**
+ * Canonical home for the splits API types. `@/types/splits.ts` used to hold a
+ * second, drifted copy of these shapes; it has been folded in here so there is
+ * one definition per wire shape.
+ *
+ * Every field below mirrors what `splitRepository.formatSplit` actually emits
+ * (apps/node-backend/src/repositories/splitRepository.js) — including
+ * `amount_paid`, which this module previously mistyped as `paid_amount`.
+ */
 export interface SplitItem {
     id: number;
     transaction_id: number;
     recipient_id: number;
     amount: number;
-    note?: string | null;
-    paid_amount: number;
+    note: string | null;
+    amount_paid: number;
     is_settled: boolean;
     created_at: string;
     updated_at: string;
-    recipient_name?: string | null;
+    recipient_name: string | null;
+}
+
+/** Body row for POST /api/splits and POST /api/splits/batch. */
+export interface SplitCreateInput {
+    recipient_id: number;
+    amount: number;
+    note?: string;
 }
 
 /** Aggregated "who owes what" row from GET /api/splits/owed (computeOwedSummary). */
@@ -32,15 +48,15 @@ export interface OwedDetailItem extends SplitItem {
     transaction_currency: string;
     bank_account?: string | null;
     transaction_recipient_name?: string | null;
-    amount_paid: number;
     remaining: number;
 }
 
+/** A split_payments row as emitted by `splitRepository.formatPayment`. */
 export interface SplitPayment {
     id: number;
     split_id: number;
     amount: number;
-    note?: string | null;
+    note: string | null;
     paid_at: string;
     created_at: string;
 }

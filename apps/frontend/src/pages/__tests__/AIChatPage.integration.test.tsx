@@ -211,7 +211,7 @@ describe("AIChatPage (integration)", () => {
                         content: "Here is your digest",
                         createdAt: "2025-01-01T00:00:01.000Z",
                     },
-                    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+                    usage: { evalCount: 1, promptEvalCount: 1, totalDurationMs: 2 },
                     iterations: 1,
                 };
                 return new HttpResponse(
