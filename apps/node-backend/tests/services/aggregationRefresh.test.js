@@ -1,11 +1,24 @@
 /**
  * Phase-1 aggregation-layer smoke tests.
  *
- * Validates that the migration artifacts introduced in alembic 0026 exist
- * (MV, agg tables, triggers, trgm index) and that the orchestrator's
- * public surface is stable.
+ * Validates that the aggregation artifacts the migration chain is supposed to
+ * leave behind actually exist (agg tables, their triggers, the trgm index) and
+ * that the orchestrator's public surface is stable.
  *
  * DB-backed cases gate on TEST_DATABASE_URL per Phase 0 fixture contract.
+ *
+ * NB: the DB-backed block below was written against the pre-squash chain and had
+ * NEVER executed — TEST_DATABASE_URL was set nowhere, so it skipped in CI and
+ * locally alike. Wiring the Postgres service into CI ran it for the first time
+ * and three of its four cases failed against a real migrated database, because
+ * they asserted artifacts the current chain no longer produces:
+ *   - `mv_recipient_monthly` was added in 0035 and DROPPED in 0038 (unread view,
+ *     pure write amplification) — asserting its presence is now backwards.
+ *   - the agg_split_outstanding triggers are named `trg_split_outstanding_sync` /
+ *     `trg_split_payment_outstanding_sync` (0019), not `trg_agg_*`.
+ *   - the recipients trgm index is `idx_recipients_name_trgm` on `name` (0001),
+ *     not `idx_recipients_normalized_name_trgm` on `normalized_name`.
+ * The assertions below are re-derived from the schema the chain actually builds.
  */
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -34,21 +47,17 @@ describe('services/aggregationRefresh — module surface', () => {
 });
 
 describe.skipIf(!hasTestDatabase())(
-  'services/aggregationRefresh — migration 0026 artifacts',
+  'services/aggregationRefresh — aggregation-layer schema artifacts',
   () => {
-    it('creates mv_recipient_monthly with a unique index', async () => {
+    it('leaves no materialized view behind for the app to refresh', async () => {
+      // 0038 dropped mv_recipient_monthly and 0082 dropped mv_bank_balances,
+      // both as unread views whose per-mutation refresh was pure write
+      // amplification. The refresh set is now empty by design; a new MV
+      // appearing here means someone reintroduced that cost without wiring a
+      // reader, which is the exact regression those migrations exist to prevent.
       const pool = getTestPool();
-      const mv = await pool.query(
-        `SELECT 1 FROM pg_matviews WHERE matviewname = 'mv_recipient_monthly'`,
-      );
-      expect(mv.rowCount).toBe(1);
-
-      const idx = await pool.query(
-        `SELECT 1 FROM pg_indexes
-         WHERE tablename = 'mv_recipient_monthly'
-           AND indexdef ILIKE '%UNIQUE%'`,
-      );
-      expect(idx.rowCount).toBeGreaterThan(0);
+      const mvs = await pool.query('SELECT matviewname FROM pg_matviews');
+      expect(mvs.rows.map((r) => r.matviewname)).toEqual([]);
     });
 
     // agg_recipient_totals was dropped in 0080_drop_agg_recipient_totals; its
@@ -63,25 +72,32 @@ describe.skipIf(!hasTestDatabase())(
       );
       expect(table.rowCount).toBe(1);
 
+      // Assert the trigger sits on the expected table, not just that a name
+      // exists somewhere — a trigger on the wrong relation keeps the aggregate
+      // stale while still satisfying a name-only probe.
       const triggers = await pool.query(
-        `SELECT tgname FROM pg_trigger
-         WHERE tgname IN (
-           'trg_agg_split_outstanding_split',
-           'trg_agg_split_outstanding_payment'
-         ) AND NOT tgisinternal
-         ORDER BY tgname`,
+        `SELECT c.relname AS table_name, t.tgname
+           FROM pg_trigger t
+           JOIN pg_class c ON c.oid = t.tgrelid
+          WHERE NOT t.tgisinternal
+            AND t.tgname IN ('trg_split_outstanding_sync', 'trg_split_payment_outstanding_sync')
+          ORDER BY t.tgname`,
       );
-      expect(triggers.rowCount).toBe(2);
+      expect(triggers.rows).toEqual([
+        { table_name: 'transaction_splits', tgname: 'trg_split_outstanding_sync' },
+        { table_name: 'split_payments', tgname: 'trg_split_payment_outstanding_sync' },
+      ]);
     });
 
-    it('creates pg_trgm GIN index on recipients.normalized_name', async () => {
+    it('creates a pg_trgm GIN index on recipients.name', async () => {
       const pool = getTestPool();
       const idx = await pool.query(
-        `SELECT 1 FROM pg_indexes
+        `SELECT indexdef FROM pg_indexes
          WHERE tablename = 'recipients'
-           AND indexname = 'idx_recipients_normalized_name_trgm'`,
+           AND indexname = 'idx_recipients_name_trgm'`,
       );
       expect(idx.rowCount).toBe(1);
+      expect(idx.rows[0].indexdef).toMatch(/USING gin \(name gin_trgm_ops\)/);
     });
 
     it('refreshAggregations completes without error against a migrated DB', async () => {

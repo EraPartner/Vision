@@ -3,11 +3,12 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-05-05
-last-updated: 2026-05-05
-last_updated_timestamp: 2026-05-05T00:00:00Z
+updated: 2026-07-27
+last-updated: 2026-07-27
+last_updated_timestamp: 2026-07-27T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
+wired_real_db_harness: 2026-07-27
 tags:
   - testing
   - vitest
@@ -73,6 +74,23 @@ bun vitest run src/path/to/test.test.js
 # Run tests matching pattern
 bun vitest run --test-name-pattern="testName"
 ```
+
+#### Against a real Postgres
+
+Suites gated on `TEST_DATABASE_URL` (see [Database Fixture Helper](#database-fixture-helper-phase-0)) **skip** in a plain `bun test` run. To execute them, use the disposable-database wrapper — it starts a throwaway `postgres:18-alpine` container, migrates it to head, exports the environment and runs vitest, then removes the container on exit:
+
+```bash
+# Whole backend suite, DB-backed cases included
+bun run test:db
+
+# A single DB-backed suite (arguments are forwarded to vitest)
+bun run test:db tests/services/transferReconciliation.db.test.js
+
+# Keep the container after the run to inspect it
+VISION_TEST_DB_KEEP=1 bun run test:db
+```
+
+Requires Docker and the Python Alembic toolchain (`pip install -r config/requirements.txt`) — migrations are Alembic even though the backend is Node. If `TEST_DATABASE_URL` is already exported the script uses that database as-is and starts no container.
 
 ### Frontend Tests
 
@@ -638,9 +656,26 @@ it.skipIf(!hasTestDatabase())('database-dependent test', async () => {
 });
 ```
 
-The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip gracefully in CI/local environments without the test database.
+The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip gracefully in environments without the test database.
 
-Reference: [[docs/reference/code-patterns#Database Fixture]], [[apps/node-backend/tests/setup/db.js]]
+**Where the database comes from:**
+
+| Context | Provider | Migrated by |
+|---------|----------|-------------|
+| CI — `Test (Backend)` job | `services.postgres` (`postgres:18-alpine`) in `.github/workflows/ci.yml` | "Migrate the test database to head" step |
+| Local | throwaway container started by `scripts/with-test-db.sh` (`bun run test:db`) | the same script |
+
+Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
+
+**`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the *test* pool (`getTestPool()`), but the code under test queries through the *app* pool (`src/database/connection.js`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
+
+**Cleanup convention.** Prefer per-test `DELETE` of the tables the suite touches over `TRUNCATE ... CASCADE`: the cascade off `transactions` reaches a dozen unrelated tables and costs ~350 ms per test in ACCESS EXCLUSIVE locks versus ~3 ms for targeted deletes. A wrapping transaction is the other option, but it does not suit services that open their own `withTransaction` or that reconcile the whole corpus rather than a scoped batch — there, other tests' rows would still be visible. Whatever the strategy, the suite must leave no rows behind.
+
+**Coverage differs between modes.** Skipped DB suites lower measured coverage, so a no-DB `--coverage` run reports below CI. The thresholds in `vitest.config.js` track the *no-DB* figure deliberately — see the comment there before bumping them.
+
+**Migrations are required, and a bare `alembic upgrade head` will not do it.** Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, and this chain's revision identifiers are longer, so a fresh database dies on the third revision with `value too long for type character varying(32)`. Use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.js`), which runs the same `runMigrations()` path the app runs on boot and preflights that table at `VARCHAR(64)` first.
+
+Reference: [[docs/reference/code-patterns#Database Fixture]], [[apps/node-backend/tests/setup/db.js]], [[apps/node-backend/tests/services/transferReconciliation.db.test.js]]
 
 ### Property Test Pattern (Phase 8)
 

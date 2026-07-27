@@ -340,6 +340,20 @@ jobs:
           json-summary-path: apps/frontend/coverage/coverage-summary.json
           json-final-path: apps/frontend/coverage/coverage-final.json
 
+  # Backend vitest runs in exactly ONE job (this one) — `quality-gate` is a pure
+  # results aggregator and runs no tests — so the real-Postgres service is wired
+  # here and nowhere else. Duplicating it into another job would only pay the
+  # migration cost twice for the same assertions.
+  #
+  # The service turns the `tests/setup/db.js` opt-in seam ON: suites gated behind
+  # `describe.skipIf(!hasTestDatabase())` execute for real instead of silently
+  # skipping. TEST_DATABASE_URL and DATABASE_URL point at the SAME database on
+  # purpose — DB-backed suites seed through the test pool (TEST_DATABASE_URL) but
+  # the service under test queries through the app pool (DATABASE_URL), so they
+  # must be the same database or the seed is invisible to the code being tested.
+  #
+  # This database is disposable and exclusive to this job — suites may wipe any
+  # table they touch; nothing here is shared with another job or persisted.
   test-backend:
     name: Test (Backend)
     needs: [changes]
@@ -349,11 +363,50 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    services:
+      postgres:
+        # Kept in step with the `db` service in docker-compose.yml — testing
+        # against a different major than production defeats the point of using a
+        # real engine (partial indexes, trigger semantics, MV behaviour).
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: vision_test
+          POSTGRES_PASSWORD: vision_test
+          POSTGRES_DB: vision_test
+        ports:
+          - 5432:5432
+        # Steps must not start before the cluster accepts connections: the
+        # migration step is the first thing to touch it and has no retry loop of
+        # its own (unlike the app's boot-time checkConnection backoff).
+        options: >-
+          --health-cmd "pg_isready -U vision_test -d vision_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://vision_test:vision_test@localhost:5432/vision_test
+      TEST_DATABASE_URL: postgresql://vision_test:vision_test@localhost:5432/vision_test
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
       - name: Setup toolchain
         uses: ./.github/actions/setup
+
+      # Migrations are Alembic (Python) even though the backend is Node, so the
+      # bun toolchain alone cannot build the schema.
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Alembic toolchain
+        run: pip install -r config/requirements.txt
+
+      # Runs the SAME migration path the app runs on boot (src/database/migrate.js),
+      # not a bare `alembic upgrade head` — see the header of db-migrate.js for why
+      # a bare invocation cannot migrate a fresh database in this repo.
+      - name: Migrate the test database to head
+        run: bun run apps/node-backend/scripts/db-migrate.js
 
       - name: Cache electron npm dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4

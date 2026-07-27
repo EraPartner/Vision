@@ -36,8 +36,19 @@ export default defineConfig({
       // these values. Set a 2-3 pt buffer below the measured figure to absorb
       // v8 line-attribution variance between runs (convention: floor(measured)
       // minus 2).
-      // Last measured (2026-07-27, 3.0k-test suite, with the include list above):
-      //   statements 80.25 % | branches 70.35 % | functions 78.5 % | lines 82.16 %
+      //
+      // Coverage now depends on whether TEST_DATABASE_URL is set: the DB-backed
+      // suites (tests/setup/db.js seam) skip without it, so a plain local run
+      // measures LOWER than CI, which always has the Postgres service. Always
+      // set these thresholds from the no-DB figure — deriving them from a CI
+      // number would leave `bun vitest run --coverage` failing on any machine
+      // without a database.
+      //
+      // Last measured (2026-07-27, 3.1k-test suite, with the include list above):
+      //   without TEST_DATABASE_URL (the figure the thresholds track):
+      //     statements 80.52 % | branches 70.62 % | functions 78.97 % | lines 82.45 %
+      //   with TEST_DATABASE_URL (CI):
+      //     statements 80.74 % | branches 70.75 % | functions 79.33 % | lines 82.67 %
       thresholds: {
         statements: 78,
         branches: 68,

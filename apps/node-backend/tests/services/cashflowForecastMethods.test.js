@@ -35,6 +35,32 @@ import {
 } from '../../src/services/calculations/forecast/accuracyStore.js';
 import { fnv1aHash, makeRng, gaussian } from '../../src/services/calculations/forecast/prng.js';
 
+// accuracyStore silently degrades to an in-memory Map when its table is missing
+// OR when Postgres is simply unreachable (ECONNREFUSED). The `accuracyStore`
+// cases below assert that in-memory behaviour — `_resetForTests()` clears only
+// the Map — so until now they passed purely because no test environment ever had
+// a database. With a real Postgres wired into CI they hit the live repository
+// instead: `_resetForTests()` stopped isolating anything (rows persisted across
+// tests and across runs) and the DB rows came back snake_cased, so `asOfMonth`
+// read `undefined`. Force the documented fallback explicitly with a table-missing
+// error (42P01) so these cases exercise the same path deterministically whether
+// or not a database is reachable.
+vi.mock('../../src/repositories/cashflowForecastAccuracyRepository.js', () => {
+  const undefinedTable = () => {
+    const err = new Error('relation "cashflow_forecast_accuracy" does not exist');
+    err.code = '42P01';
+    return Promise.reject(err);
+  };
+  return {
+    default: {
+      upsert: undefinedTable,
+      getHistory: undefinedTable,
+      getLatestByMethod: undefinedTable,
+      getAllHistory: undefinedTable,
+    },
+  };
+});
+
 function syntheticHistory({ startIso = '2024-01-01', days = 365 * 2, amplitude = 10, noise = 0 } = {}) {
   const start = Date.UTC(
     ...startIso.split('-').map((v, i) => (i === 1 ? Number(v) - 1 : Number(v))),
