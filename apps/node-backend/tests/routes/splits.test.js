@@ -555,7 +555,7 @@ describe('Splits Routes', () => {
       await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('returns success payload when split is deleted', async () => {
+    it('returns 204 with no body when split is deleted', async () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 1, transaction_id: 2, recipient_id: 3, amount: 10 });
       splitRepository.deleteSplit.mockResolvedValue(true);
       splitRepository.writeAudit.mockResolvedValue();
@@ -564,7 +564,9 @@ describe('Splits Routes', () => {
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { message: 'Split deleted' } });
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
     it('propagates error when deleting split fails', async () => {

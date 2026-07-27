@@ -53,11 +53,15 @@ router.patch('/:id/bank-accounts/:accountId', validateIdParam, async (req, res) 
   res.ok({ ...updated, links: [] });
 });
 
+// Deactivation, not a hard delete: the row survives with is_active = false, so
+// this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
+// "DELETE responses") — same shape as set-primary below.
 router.delete('/:id/bank-accounts/:accountId', validateIdParam, async (req, res) => {
   const accountId = parseAccountId(req.params.accountId);
-  const deleted = await recipientBankAccountRepository.softDelete(accountId);
-  if (!deleted) throw new NotFoundError('Bank account not found');
-  res.ok({ message: `Bank account ${accountId} deactivated`, links: [] });
+  const deactivated = await recipientBankAccountRepository.softDelete(accountId);
+  if (!deactivated) throw new NotFoundError('Bank account not found');
+  const account = await recipientBankAccountRepository.getById(accountId);
+  res.ok({ ...account, links: [] });
 });
 
 router.post('/:id/bank-accounts/:accountId/set-primary', validateIdParam, async (req, res) => {

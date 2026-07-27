@@ -106,7 +106,7 @@ describe("recipients API client", () => {
   });
 
   it("deleteRecipient resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/recipients/9`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/recipients/9`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteRecipient(9)).resolves.toBeUndefined();
   });
 
@@ -153,11 +153,17 @@ describe("recipients API client", () => {
     expect((await updateRecipientPattern(5, 77, { priority: 2 })).patternId).toBe(77);
   });
 
-  it("deleteRecipientPattern DELETEs by pattern id", async () => {
+  it("deleteRecipientPattern DELETEs by pattern id and resolves on 204", async () => {
+    let hit = 0;
     server.use(
-      http.delete(`${API_BASE}/api/recipients/5/patterns/77`, () => ok({ patternId: 77 })),
+      http.delete(`${API_BASE}/api/recipients/5/patterns/77`, () => {
+        hit += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
-    expect((await deleteRecipientPattern(5, 77)).patternId).toBe(77);
+    // Hard delete → 204 No Content, so there is no body to unwrap.
+    await expect(deleteRecipientPattern(5, 77)).resolves.toBeUndefined();
+    expect(hit).toBe(1);
   });
 
   it("previewRecipientPattern posts and returns match counts", async () => {
@@ -212,7 +218,7 @@ describe("transactions API client", () => {
   });
 
   it("deleteTransaction resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/transactions/10`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/transactions/10`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteTransaction(10)).resolves.toBeUndefined();
   });
 
@@ -277,7 +283,7 @@ describe("portfolio API client", () => {
   });
 
   it("deleteInvestment resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/investments/4`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/investments/4`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteInvestment(4)).resolves.toBeUndefined();
   });
 
@@ -361,8 +367,8 @@ describe("imports API client", () => {
   });
 
   it("deleteCustomParserConfig DELETEs", async () => {
-    server.use(http.delete(`${API_BASE}/api/import/parsers/2`, () => ok(null)));
-    await expect(deleteCustomParserConfig(2)).resolves.toBeNull();
+    server.use(http.delete(`${API_BASE}/api/import/parsers/2`, () => new HttpResponse(null, { status: 204 })));
+    await expect(deleteCustomParserConfig(2)).resolves.toBeUndefined();
   });
 
   it("listImportBatches passes limit/offset in the query string", async () => {

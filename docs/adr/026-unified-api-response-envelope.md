@@ -196,7 +196,7 @@ All 15 route files (`apps/node-backend/src/routes/*.js`) plus investment control
 - **100% adoption of `res.ok(...)`** for JSON success responses across all 108 endpoints
 - **Documented exceptions:**
   1. `routes/splits.js:99` — CSV download via `res.send(csv)`. Binary/text response envelope N/A; client receives raw CSV body. Annotated with comment citing ADR-026.
-  2. `res.status(204).send()` — bodyless 204 No Content responses in savedCharts, watchlist, ai, investmentController routes. Per ADR-026, 204s are superseded by `{ ok: true, data: null }`, but these legacy call sites predate envelope adoption. Scheduled for Phase 2 cleanup.
+  2. `res.status(204).send()` — bodyless 204 No Content responses in savedCharts, watchlist, ai, investmentController routes. See the amendment below; these are no longer exceptions but the convention for hard deletes.
 
 No code changes required beyond the splits.js comment — documentation confirms 100% envelope conformance with two formally documented exceptions.
 
@@ -219,6 +219,16 @@ Aggregation route handlers in `apps/node-backend/src/routes/aggregations.js` now
 - **Aggregation routes** → `res.ok({ data: T, meta: { source, computedAt } })` → frontend unwraps to `{ data: T, meta: { source, computedAt } }`
 
 The double-nesting allows aggregation calc modules to return their own domain envelope (carrying `source` and `computedAt` freshness) while staying compatible with the unified transport envelope. The frontend type `AggregationEnvelope<T>` expects this shape after transport unwrap, and freshness indicators (materialized view staleness, live computation) are now always available in `envelope.meta.source`. See [[apps/node-backend/src/routes/aggregations.js|aggregations.js]] and [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]].
+
+**Amendment — 204 for hard deletes (2026-07-27):**
+
+The "HTTP Semantics" rule above says `204 No Content` is NOT used and that empty success is `{ ok: true, data: null }`. That is now amended for DELETE only: **a hard delete answers `204 No Content` with no body**, and a 200 body is kept only where the operation is not a plain delete (soft delete/deactivate returning the entity; a rollback returning side-effect counts the UI renders).
+
+The pre-amendment state was six different DELETE success shapes across resources — `204` empty, `{message,…}`, `{deleted:true}`, `{removed}`, `{ok:true}`, `{patternId}` — which made a generic delete-mutation hook on the frontend impossible. Returning `{ ok: true, data: null }` would have unified them at the cost of a body that carries nothing; 204 unifies them and says the same thing in the status line. The envelope rule is otherwise unchanged: it governs JSON bodies, and a 204 has none. Error responses are unaffected — a missing row still throws `NotFoundError` and serializes to the standard failure envelope.
+
+The frontend transport already short-circuits on 204 (`apps/frontend/src/lib/api/client.ts`) and resolves `undefined`, so delete clients are typed `Promise<void>`.
+
+Full rule, exception list, and the "adding a DELETE route" checklist: [[docs/reference/code-patterns#DELETE Response Pattern|Code Patterns — DELETE Response Pattern]].
 
 ## Related
 

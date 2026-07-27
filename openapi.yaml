@@ -1597,7 +1597,7 @@ paths:
       tags: [Tags]
       responses:
         "200":
-          description: Deleted tag
+          description: The deactivated tag (soft delete — the row survives)
           content:
             application/json:
               schema:
@@ -1741,12 +1741,8 @@ paths:
       operationId: deleteAccount
       tags: [Accounts]
       responses:
-        "200":
-          description: Deleted account
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
         "404":
           description: Account not found
         "409":
@@ -2175,12 +2171,8 @@ paths:
       operationId: deleteTransaction
       tags: [Transactions]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/categories:
     get:
@@ -2300,12 +2292,8 @@ paths:
       operationId: deleteCategory
       tags: [Categories]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/recipients:
     get:
@@ -2425,12 +2413,8 @@ paths:
       operationId: deleteRecipient
       tags: [Recipients]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/settings:
     get:
@@ -2533,12 +2517,8 @@ paths:
       operationId: deleteSetting
       tags: [Settings]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/investments:
     get:
@@ -3006,12 +2986,8 @@ paths:
           required: true
           schema: { type: integer }
       responses:
-        "200":
-          description: Transfer mark cleared
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content (transfer mark cleared)
 
   /api/transactions/export/csv:
     get:
@@ -3367,12 +3343,8 @@ paths:
       operationId: deleteRecipientPattern
       tags: [Recipients]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/recipients/{id}/bank-accounts:
     parameters:
@@ -3469,12 +3441,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
     delete:
-      summary: Delete bank account
+      summary: Deactivate bank account (soft delete)
       operationId: deleteRecipientBankAccount
       tags: [Recipients]
       responses:
         "200":
-          description: Deleted
+          description: The deactivated bank account (soft delete — the row survives)
           content:
             application/json:
               schema:
@@ -3717,12 +3689,8 @@ paths:
       operationId: deletePlannedTransaction
       tags: [PlannedTransactions]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/planned-transactions/{id}/execute:
     parameters:
@@ -5027,12 +4995,8 @@ paths:
       operationId: deleteSplit
       tags: [Splits]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/splits/{id}/pay:
     parameters:
@@ -5229,12 +5193,8 @@ paths:
       operationId: deleteAttachment
       tags: [Attachments]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   # ─── Reports ─────────────────────────────────────────────────────────────────
   /api/reports/financial:
@@ -5788,12 +5748,12 @@ paths:
                       data:
                         $ref: "#/components/schemas/ImportBatch"
     delete:
-      summary: Delete import batch
+      summary: Rollback import batch (deletes committed transactions, marks batch aborted)
       operationId: deleteImportBatch
       tags: [Import]
       responses:
         "200":
-          description: Deleted
+          description: "Rollback result: { deleted, recipientsRemoved }"
           content:
             application/json:
               schema:
@@ -6202,7 +6162,7 @@ paths:
       tags: [PortfolioImport]
       responses:
         "200":
-          description: Rollback result
+          description: "Rollback result: { deleted }"
           content:
             application/json:
               schema:
@@ -7040,12 +7000,8 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
-          description: "{ removed: boolean }"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content (idempotent — an unknown id is not an error)
         "400":
           description: valid mapping id required
   # Research provider API keys (Settings, ADR-079)
@@ -7104,11 +7060,7 @@ paths:
             type: string
             enum: [twelve_data, finnhub, fmp, alpha_vantage]
       responses:
-        "200":
-          description: "{ removed, providers }"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content (refetch GET /provider-keys for the new statuses)
         "400":
           description: unknown provider

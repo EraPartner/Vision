@@ -77,11 +77,14 @@ describe('Account Routes — portfolio cache invalidation', () => {
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
   });
 
-  it('delete busts the portfolio caches', async () => {
+  it('delete busts the portfolio caches and answers 204 with no body', async () => {
     accountService.remove.mockResolvedValue(undefined);
     const res = createMockResponse();
     await routeHandlers['delete:/:id']({ params: { id: '1' } }, res);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.send).toHaveBeenCalledWith();
+    expect(res.json).not.toHaveBeenCalled();
   });
 
   it('merge busts the portfolio caches', async () => {

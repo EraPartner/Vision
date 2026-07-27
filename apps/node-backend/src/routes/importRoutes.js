@@ -405,6 +405,9 @@ router.delete('/batches/:id', async (req, res) => {
     }
   }
 
+  // Not a plain delete: a rollback reports side-effect counts the import history
+  // card renders ("N transactions removed"), so it keeps a 200 body
+  // (docs/reference/code-patterns.md, "DELETE responses").
   res.ok({ deleted, recipientsRemoved });
 });
 

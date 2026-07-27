@@ -88,7 +88,7 @@ describe("ai conversation API client", () => {
   });
 
   it("deleteConversation resolves on void", async () => {
-    server.use(http.delete(`${API_BASE}/api/ai/conversations/:id`, () => ok(null)));
+    server.use(http.delete(`${API_BASE}/api/ai/conversations/:id`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteConversation("x")).resolves.toBeUndefined();
   });
 

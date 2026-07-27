@@ -98,7 +98,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   const deleted = await recipientRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError('Recipient not found');
   scheduleRefresh();
-  res.ok({ message: `Recipient ${id} deleted permanently`, links: [] });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 router.post('/:id/merge', validateIdParam, async (req, res) => {
@@ -205,7 +206,8 @@ router.delete('/:id/patterns/:patternId', validateIdParam, async (req, res) => {
   const patternId = parseInt(req.params.patternId, 10);
   if (!Number.isInteger(patternId) || patternId <= 0) throw new ValidationError('Invalid patternId');
   await deletePattern(patternId);
-  res.ok({ patternId });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 export default router;

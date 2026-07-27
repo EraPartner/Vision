@@ -30,9 +30,12 @@ export function aggOk<T>(data: T, computedAt: string = AGG_COMPUTED_AT) {
     return ok({ data, meta: { computedAt, source: "live" as const } });
 }
 
-/** Delete-endpoint stub: ok({ message }). */
-export function deleted(message: string) {
-    return ok({ message });
+/**
+ * Hard-delete stub: 204 No Content, no envelope.
+ * See docs/reference/code-patterns.md, "DELETE responses".
+ */
+export function noContent() {
+    return new HttpResponse(null, { status: 204 });
 }
 
 // ── Mutation fixture stubs — minimal valid shapes matching backend formatters ─
@@ -403,42 +406,30 @@ export const defaultHandlers = [
 
     http.post(`${API_BASE}/api/transactions`, () => ok(TRANSACTION_STUB)),
     http.patch(`${API_BASE}/api/transactions/:id`, () => ok(TRANSACTION_STUB)),
-    http.delete(`${API_BASE}/api/transactions/:id`, () =>
-        ok({ message: "Transaction deleted permanently", details: { method: "hard delete" }, links: [] }),
-    ),
+    http.delete(`${API_BASE}/api/transactions/:id`, () => noContent()),
 
     http.post(`${API_BASE}/api/categories`, () => ok(CATEGORY_STUB)),
     http.patch(`${API_BASE}/api/categories/:id`, () => ok(CATEGORY_STUB)),
-    http.delete(`${API_BASE}/api/categories/:id`, () =>
-        ok({ message: "Category 1 deleted permanently", links: [] }),
-    ),
+    http.delete(`${API_BASE}/api/categories/:id`, () => noContent()),
 
     http.post(`${API_BASE}/api/recipients`, () => ok(RECIPIENT_STUB)),
     http.patch(`${API_BASE}/api/recipients/:id`, () => ok(RECIPIENT_STUB)),
-    http.delete(`${API_BASE}/api/recipients/:id`, () =>
-        ok({ message: "Recipient 1 deleted permanently", links: [] }),
-    ),
+    http.delete(`${API_BASE}/api/recipients/:id`, () => noContent()),
 
     http.post(`${API_BASE}/api/investments`, () => ok(INVESTMENT_STUB)),
     http.patch(`${API_BASE}/api/investments/:id`, () => ok(INVESTMENT_STUB)),
-    http.delete(`${API_BASE}/api/investments/:id`, () =>
-        ok({ message: "Investment 1 deleted permanently", links: [] }),
-    ),
+    http.delete(`${API_BASE}/api/investments/:id`, () => noContent()),
 
     http.post(`${API_BASE}/api/accounts`, () => ok(ACCOUNT_STUB)),
     http.patch(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
-    http.delete(`${API_BASE}/api/accounts/:id`, () =>
-        ok({ message: "Account 1 archived", links: [] }),
-    ),
+    http.delete(`${API_BASE}/api/accounts/:id`, () => noContent()),
     http.post(`${API_BASE}/api/accounts/:id/merge`, () =>
         ok({ into: 1, merged: [2], reassigned: { transactions: 0, planned: 0, portfolio: 0, funding: 0 } }),
     ),
 
     http.post(`${API_BASE}/api/planned-transactions`, () => ok(PLANNED_TRANSACTION_STUB)),
     http.patch(`${API_BASE}/api/planned-transactions/:id`, () => ok(PLANNED_TRANSACTION_STUB)),
-    http.delete(`${API_BASE}/api/planned-transactions/:id`, () =>
-        ok({ message: "Planned transaction 1 deleted permanently", links: [] }),
-    ),
+    http.delete(`${API_BASE}/api/planned-transactions/:id`, () => noContent()),
     http.post(`${API_BASE}/api/planned-transactions/:id/execute`, () =>
         ok({ ...PLANNED_TRANSACTION_STUB, is_executed: true }),
     ),
@@ -470,9 +461,7 @@ export const defaultHandlers = [
             messages: [],
         }),
     ),
-    http.delete(`${API_BASE}/api/ai/conversations/:id`, () =>
-        deleted("Conversation deleted"),
-    ),
+    http.delete(`${API_BASE}/api/ai/conversations/:id`, () => noContent()),
     http.get(`${API_BASE}/api/ai/models`, () => ok({ models: [] })),
 
     // Attachments
@@ -483,9 +472,7 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/attachments/:id`, () =>
         new Response(new Blob(["data"], { type: "application/pdf" }), { status: 200 }),
     ),
-    http.delete(`${API_BASE}/api/attachments/:id`, () =>
-        deleted("Attachment deleted"),
-    ),
+    http.delete(`${API_BASE}/api/attachments/:id`, () => noContent()),
 
     // Categories sub-routes
     http.post(`${API_BASE}/api/categories/assign`, () =>
@@ -565,9 +552,7 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/investments/transactions/:id`, () =>
         ok({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
     ),
-    http.delete(`${API_BASE}/api/investments/transactions/:id`, () =>
-        deleted("Transaction deleted"),
-    ),
+    http.delete(`${API_BASE}/api/investments/transactions/:id`, () => noContent()),
 
     // Recipients sub-routes
     http.get(`${API_BASE}/api/recipients/clusters`, () => ok({ clusters: [] })),
@@ -587,9 +572,7 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
         ok({ patternId: 1 }),
     ),
-    http.delete(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
-        ok({ patternId: 1 }),
-    ),
+    http.delete(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () => noContent()),
     http.post(`${API_BASE}/api/recipients/:id/patterns/preview`, () =>
         ok({ matches: [] }),
     ),
@@ -613,9 +596,7 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/saved-charts/:id`, () =>
         ok({ id: 1, name: "Updated", config: {}, created_at: "2025-01-01T00:00:00Z" }),
     ),
-    http.delete(`${API_BASE}/api/saved-charts/:id`, () =>
-        deleted("Chart deleted"),
-    ),
+    http.delete(`${API_BASE}/api/saved-charts/:id`, () => noContent()),
 
     // Splits sub-routes
     http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [] })),
@@ -623,9 +604,7 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/splits/:id`, () =>
         ok({ id: 1, transaction_id: 1, recipient_id: 1, amount: 0, note: null, is_paid: false, paid_at: null, created_at: "2025-01-01T00:00:00Z" }),
     ),
-    http.delete(`${API_BASE}/api/splits/:id`, () =>
-        deleted("Split deleted"),
-    ),
+    http.delete(`${API_BASE}/api/splits/:id`, () => noContent()),
     http.post(`${API_BASE}/api/splits/:id/pay`, () =>
         ok({ message: "Paid" }),
     ),
@@ -661,9 +640,7 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/watchlist/:id`, () =>
         ok({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
     ),
-    http.delete(`${API_BASE}/api/watchlist/:id`, () =>
-        deleted("Watchlist item deleted"),
-    ),
+    http.delete(`${API_BASE}/api/watchlist/:id`, () => noContent()),
 
     // Recipients delete (already handled above) — clusters, etc. covered
 

@@ -433,7 +433,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseRouteId(req);
   const deleted = await plannedTransactionRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Planned transaction ${id} not found`);
-  res.ok({ message: `Planned transaction ${id} deleted permanently`, links: [] });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 // DATE columns arrive from pg as local-midnight Date objects; JSON-serialized

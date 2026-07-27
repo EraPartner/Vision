@@ -620,7 +620,8 @@ Persist user-confirmed mappings (upsert one row per provider, default `status=co
 
 ### DELETE /api/research/mappings/:id
 
-Delete one stored mapping. **Response:** `{ removed: boolean }`.
+Delete one stored mapping. **Response:** `204 No Content` — empty body, and idempotent: an id with
+no stored mapping is not an error.
 
 ### POST /api/research/mappings/audit
 
@@ -644,7 +645,9 @@ Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data`
 
 ### DELETE /api/research/provider-keys/:provider
 
-Clears the stored key (the env var, if set, then applies again). Returns `{ removed, providers }`.
+Clears the stored key (the env var, if set, then applies again). **Response:** `204 No Content` —
+refetch `GET /api/research/provider-keys` for the updated statuses. Idempotent: clearing an unset
+key is not an error. `400` on unknown provider.
 
 ## Aggregation Layer Architecture
 

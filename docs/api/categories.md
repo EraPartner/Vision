@@ -124,6 +124,8 @@ Update a category.
 
 Permanently delete a category (hard delete).
 
+**Response:** `204 No Content` — empty body, no envelope. `404` if not found.
+
 ### POST /api/categories/:id/assign
 
 Assign a category to multiple recipients by ID.

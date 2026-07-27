@@ -111,6 +111,7 @@ Validation behavior:
 Delete a setting key.
 
 Response semantics:
+- `204 No Content` with an empty body on success.
 - Returns `404` with `Setting '<key>' not found` when deleting a non-existing key.
 
 ## Common Settings

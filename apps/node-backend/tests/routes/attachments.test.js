@@ -96,6 +96,47 @@ describe('Attachment routes', () => {
       expect(logger.warn).toHaveBeenCalled();
     });
   });
+
+  describe('DELETE /:id', () => {
+    it('deletes the row and the file and answers 204 with no body', async () => {
+      attachmentRepository.findById.mockResolvedValue({ id: 7, stored_path: 'attachments/1/receipt.png' });
+      attachmentRepository.deleteById.mockResolvedValue(true);
+      removeAttachmentFile.mockResolvedValue(undefined);
+
+      const res = mockResponse();
+      await routeHandlers['delete:/:id']({ params: { id: '7' } }, res);
+
+      expect(attachmentRepository.deleteById).toHaveBeenCalledWith(7);
+      expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt.png');
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
+    });
+
+    // The row is already gone; an orphaned file is logged, not surfaced.
+    it('still answers 204 when the file removal fails', async () => {
+      attachmentRepository.findById.mockResolvedValue({ id: 7, stored_path: 'attachments/1/receipt.png' });
+      attachmentRepository.deleteById.mockResolvedValue(true);
+      removeAttachmentFile.mockRejectedValue(new Error('EACCES'));
+
+      const res = mockResponse();
+      await routeHandlers['delete:/:id']({ params: { id: '7' } }, res);
+
+      expect(logger.warn).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.json).not.toHaveBeenCalled();
+    });
+
+    it('404s when the attachment does not exist', async () => {
+      attachmentRepository.findById.mockResolvedValue(null);
+
+      const res = mockResponse();
+      await callHandler(routeHandlers['delete:/:id'], { params: { id: '99' } }, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(attachmentRepository.deleteById).not.toHaveBeenCalled();
+    });
+  });
 });
 
 function mockResponse() {

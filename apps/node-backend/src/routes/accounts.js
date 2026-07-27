@@ -59,7 +59,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   await accountService.remove(id);
   invalidatePortfolioCaches();
-  res.ok({ message: `Account ${id} deleted`, links: [] });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 // Read-only preview of merging THIS account (:id, the source) INTO ?into=<targetId>

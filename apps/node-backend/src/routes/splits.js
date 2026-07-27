@@ -293,7 +293,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
       amount: splitBefore.amount,
     },
   });
-  res.ok({ message: 'Split deleted' });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 export default router;

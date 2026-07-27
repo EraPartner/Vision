@@ -51,6 +51,7 @@ vi.mock('../../src/services/research/fundamentalsScorecard.js', () => ({
 
 import { researchAggregator } from '../../src/services/research/researchAggregator.js';
 import { researchMappingService } from '../../src/services/research/researchMappingService.js';
+import { clearKey, listKeyStatuses } from '../../src/services/research/researchProviderKeyService.js';
 import { ValidationError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/research.js');
 
@@ -150,12 +151,40 @@ describe('Research route parameter guards', () => {
       }
     });
 
-    it('DELETE /mappings/:id keeps parseInt id coercion', async () => {
+    it('DELETE /mappings/:id keeps parseInt id coercion and answers 204', async () => {
       researchMappingService.remove.mockResolvedValue(true);
-      await routeHandlers['delete:/mappings/:id']({ params: { id: '12abc' } }, createMockResponse());
+      const res = createMockResponse();
+      await routeHandlers['delete:/mappings/:id']({ params: { id: '12abc' } }, res);
       expect(researchMappingService.remove).toHaveBeenCalledWith(12);
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
       await expect(routeHandlers['delete:/mappings/:id']({ params: { id: 'abc' } }, createMockResponse()))
         .rejects.toThrow('valid mapping id required');
+    });
+
+    // Idempotent: an already-removed mapping is still 204, not 404.
+    it('DELETE /mappings/:id answers 204 when nothing was removed', async () => {
+      researchMappingService.remove.mockResolvedValue(false);
+      const res = createMockResponse();
+      await routeHandlers['delete:/mappings/:id']({ params: { id: '5' } }, res);
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.json).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('DELETE /provider-keys/:provider', () => {
+    it('clears the key and answers 204 with no body', async () => {
+      clearKey.mockResolvedValue(true);
+      const res = createMockResponse();
+      await routeHandlers['delete:/provider-keys/:provider']({ params: { provider: 'finnhub' } }, res);
+
+      expect(clearKey).toHaveBeenCalledWith('finnhub');
+      // The statuses are refetched by the caller — the delete must not re-read them.
+      expect(listKeyStatuses).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
   });
 

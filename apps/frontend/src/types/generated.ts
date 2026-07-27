@@ -778,7 +778,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete bank account */
+        /** Deactivate bank account (soft delete) */
         delete: operations["deleteRecipientBankAccount"];
         options?: never;
         head?: never;
@@ -2192,7 +2192,7 @@ export interface paths {
         get: operations["getImportBatch"];
         put?: never;
         post?: never;
-        /** Delete import batch */
+        /** Rollback import batch (deletes committed transactions, marks batch aborted) */
         delete: operations["deleteImportBatch"];
         options?: never;
         head?: never;
@@ -3803,7 +3803,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted tag */
+            /** @description The deactivated tag (soft delete — the row survives) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3988,14 +3988,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted account */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
             /** @description Account not found */
             404: {
@@ -4385,14 +4383,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -4523,14 +4519,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -4661,14 +4655,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -4826,14 +4818,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -5323,14 +5313,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Transfer mark cleared */
-            200: {
+            /** @description No Content (transfer mark cleared) */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -5638,14 +5626,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -5748,7 +5734,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
+            /** @description The deactivated bank account (soft delete — the row survives) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5964,14 +5950,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -7366,14 +7350,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -7575,14 +7557,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -8228,7 +8208,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
+            /** @description Rollback result: { deleted, recipientsRemoved } */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8643,7 +8623,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Rollback result */
+            /** @description Rollback result: { deleted } */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9650,14 +9630,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description { removed: boolean } */
-            200: {
+            /** @description No Content (idempotent — an unknown id is not an error) */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
             /** @description valid mapping id required */
             400: {
@@ -9734,14 +9712,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description { removed, providers } */
-            200: {
+            /** @description No Content (refetch GET /provider-keys for the new statuses) */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
             /** @description unknown provider */
             400: {

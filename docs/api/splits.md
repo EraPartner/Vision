@@ -485,13 +485,7 @@ Splits are physically deleted (not soft-deleted). The deletion is permanent and 
 |-------|------|-------------|
 | `id` | number | Split ID (positive integer) |
 
-**Response:** `200 OK`
-
-```json
-{
-  "message": "Split deleted"
-}
-```
+**Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
 **Error Response:** `404 Not Found`
 

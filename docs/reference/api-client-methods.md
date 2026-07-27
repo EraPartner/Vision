@@ -170,7 +170,7 @@ The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines
 | `recordSplitPayment(splitId, amount, note?, paid_at?)` | POST /api/splits/:id/pay | Split payment |
 | `settleSplit(splitId)` | POST /api/splits/:id/settle | Settled split |
 | `settleAllSplitsByRecipient(recipientId)` | POST /api/splits/owed/:id/settle-all | `{ settled_count }` |
-| `deleteSplit(splitId)` | DELETE /api/splits/:id | Deleted split |
+| `deleteSplit(splitId)` | DELETE /api/splits/:id | `void` |
 
 ### Saved Charts
 

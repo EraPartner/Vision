@@ -213,6 +213,8 @@ Implementation note (Phase 3 — verified Phase 5):
 
 Permanently delete a planned transaction.
 
+**Response:** `204 No Content` — empty body, no envelope. `404` if not found.
+
 ### GET /api/planned-transactions/match-suggestions
 
 > [!info] Registered before `/:id` in the router to prevent route-parameter capture.

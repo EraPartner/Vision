@@ -110,8 +110,9 @@ export function updateRecipientPattern(recipientId: number, patternId: number, d
     });
 }
 
-export function deleteRecipientPattern(recipientId: number, patternId: number): Promise<{ patternId: number }> {
-    return apiRequest(`/api/recipients/${recipientId}/patterns/${patternId}`, { method: 'DELETE' });
+/** Delete a pattern. Responds 204 No Content — nothing to unwrap. */
+export async function deleteRecipientPattern(recipientId: number, patternId: number): Promise<void> {
+    await apiRequest<void>(`/api/recipients/${recipientId}/patterns/${patternId}`, { method: 'DELETE' });
 }
 
 export function previewRecipientPattern(recipientId: number, data: Pick<RecipientPatternCreate, 'pattern' | 'pattern_kind' | 'case_sensitive'>): Promise<{ matchCount: number; recipientIds: number[] }> {

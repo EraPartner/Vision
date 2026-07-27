@@ -163,14 +163,16 @@ describe('Category Routes', () => {
   });
 
   describe('DELETE /:id', () => {
-    it('should delete and return success message', async () => {
+    it('should delete and return 204 with no body', async () => {
       categoryRepository.hardDelete.mockResolvedValue(true);
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].data.message).toContain('deleted permanently');
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundError for non-existent', async () => {

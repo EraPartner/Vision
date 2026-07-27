@@ -290,7 +290,8 @@ router.delete('/:key', async (req, res) => {
   const { key } = req.params;
   const deleted = await settingsRepository.delete(key);
   if (!deleted) throw new NotFoundError(`Setting '${key}' not found`);
-  res.ok({ deleted: true });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 export default router;

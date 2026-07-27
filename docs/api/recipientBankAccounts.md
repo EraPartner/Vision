@@ -178,11 +178,16 @@ Soft delete (deactivate) a bank account.
 | `recipientId` | number | Recipient ID (positive integer) |
 | `accountId` | number | Bank account ID (positive integer) |
 
-**Response:** `200 OK`
+**Response:** `200 OK` — the deactivated bank account. A soft delete keeps the row, so the
+updated entity is returned rather than a `204` (see
+[[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
 ```json
 {
-  "message": "Bank account 1 deactivated",
+  "id": 1,
+  "recipient_id": 7,
+  "account_number": "BE68539007547034",
+  "is_active": false,
   "links": []
 }
 ```

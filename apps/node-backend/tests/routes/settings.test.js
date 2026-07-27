@@ -341,7 +341,7 @@ describe('Settings Routes', () => {
       await expect(routeHandlers['delete:/:key'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('returns deleted true when setting exists', async () => {
+    it('returns 204 with no body when setting exists', async () => {
       settingsRepository.delete.mockResolvedValue(true);
 
       const req = { params: { key: 'theme_settings' } };
@@ -349,7 +349,9 @@ describe('Settings Routes', () => {
 
       await routeHandlers['delete:/:key'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { deleted: true } });
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalledWith();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
     it('propagates error when deleting setting fails', async () => {

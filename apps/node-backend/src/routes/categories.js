@@ -87,7 +87,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   const deleted = await categoryRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Category ${id} not found`);
   scheduleRefresh();
-  res.ok({ message: `Category ${id} deleted permanently`, links: [] });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 router.post('/:id/assign', validateIdParam, async (req, res) => {

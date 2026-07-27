@@ -92,7 +92,7 @@ decision (`PATCH { in_net_worth: true }`).
 
 ### DELETE /api/accounts/:id
 
-Delete an account. Delete is only possible with zero referencing rows (the `account_id` FKs are
+Returns `204 No Content` with an empty body on success. Delete is only possible with zero referencing rows (the `account_id` FKs are
 `ON DELETE RESTRICT`): an account that still has transactions, planned transactions, or portfolio
 lots returns `409` with a message routing the caller to **close** the account instead (lifecycle
 D5: active → closed → only-if-empty deleted). The UI opens `CloseAccountDialog` on that 409.

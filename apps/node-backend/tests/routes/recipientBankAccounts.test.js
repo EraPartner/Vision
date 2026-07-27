@@ -181,14 +181,20 @@ describe('Recipient Bank Account Routes', () => {
       await expect(routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('should deactivate account and return message when delete succeeds', async () => {
+    // Soft delete, so 200 + the deactivated entity rather than 204 (see
+    // docs/reference/code-patterns.md, "DELETE responses").
+    it('should deactivate account and return the deactivated entity', async () => {
       bankAccountRepo.softDelete.mockResolvedValue(true);
+      bankAccountRepo.getById.mockResolvedValue({ id: 15, account_number: 'BE01', is_active: false });
 
       const req = { params: { id: '1', accountId: '15' } };
       const res = mockResponse();
       await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { message: 'Bank account 15 deactivated', links: [] } });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { id: 15, account_number: 'BE01', is_active: false, links: [] },
+      });
     });
 
     it('should propagate thrown error when delete throws', async () => {

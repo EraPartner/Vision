@@ -74,7 +74,9 @@ Body (at least one field):
 
 ### `DELETE /api/tags/:id`
 
-Returns `204` with no body when soft-delete succeeds.
+Soft delete (sets `is_active = false`). Returns `200` with the deactivated tag — the row survives,
+so the caller gets its new state rather than a `204` (see
+[[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
 ## Attaching tags to transactions
 

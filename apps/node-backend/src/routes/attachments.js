@@ -178,7 +178,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
     });
   }
 
-  res.ok({ deleted: true });
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
 });
 
 export default router;

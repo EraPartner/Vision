@@ -247,8 +247,10 @@ router.post('/mappings', async (req, res) => {
 router.delete('/mappings/:id', async (req, res) => {
   const id = Number.parseInt(req.params.id, 10);
   if (!Number.isInteger(id) || id <= 0) throw new ValidationError('valid mapping id required');
-  const removed = await researchMappingService.remove(id);
-  res.ok({ removed });
+  // Idempotent hard delete (an already-removed mapping is not an error) →
+  // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  await researchMappingService.remove(id);
+  res.status(204).send();
 });
 
 // POST /api/research/mappings/audit  { instrument_key, key_type }
@@ -280,9 +282,12 @@ router.put('/provider-keys/:provider', async (req, res) => {
 
 // DELETE /api/research/provider-keys/:provider
 router.delete('/provider-keys/:provider', async (req, res) => {
-  const removed = await researchProviderKeyService.clearKey(req.params.provider);
-  const providers = await researchProviderKeyService.listKeyStatuses();
-  res.ok({ removed, providers });
+  // Idempotent hard delete (clearing an unset key is not an error) → 204 No
+  // Content (docs/reference/code-patterns.md, "DELETE responses"). The Settings
+  // UI refetches GET /provider-keys after a clear, so the response carries no
+  // key statuses of its own.
+  await researchProviderKeyService.clearKey(req.params.provider);
+  res.status(204).send();
 });
 
 export default router;

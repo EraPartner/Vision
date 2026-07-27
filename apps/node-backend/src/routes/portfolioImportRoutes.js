@@ -349,6 +349,9 @@ router.delete('/batches/:id', async (req, res) => {
   }
   const { deleted } = await rollbackBatch(id);
   logger.info('[portfolio-import] batch rolled back', { batchId: id, deleted });
+  // Not a plain delete: a rollback reports the side-effect count the caller
+  // surfaces, so it keeps a 200 body (docs/reference/code-patterns.md,
+  // "DELETE responses").
   res.ok({ deleted });
 });
 
