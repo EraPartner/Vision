@@ -156,6 +156,47 @@ export async function overrideCategory({ batchId, rowId, categoryId }) {
 }
 
 /**
+ * Staging-row status transitions written by the commit phase. Composed inside
+ * commitBatch's per-chunk withTransaction, so the ambient context routes them
+ * onto the chunk's client and they roll back with it.
+ *
+ * @param {number|string} rowId
+ * @returns {Promise<number>} rowCount
+ */
+export async function markStagingRowDuplicate(rowId) {
+    const { rowCount } = await query(
+        `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
+        [rowId]
+    );
+    return rowCount ?? 0;
+}
+
+/**
+ * @param {number|string} rowId
+ * @returns {Promise<number>} rowCount
+ */
+export async function markStagingRowCommitted(rowId) {
+    const { rowCount } = await query(
+        `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
+        [rowId]
+    );
+    return rowCount ?? 0;
+}
+
+/**
+ * @param {number|string} rowId
+ * @param {string} message  already truncated by the caller
+ * @returns {Promise<number>} rowCount
+ */
+export async function markStagingRowError(rowId, message) {
+    const { rowCount } = await query(
+        `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,
+        [rowId, message]
+    );
+    return rowCount ?? 0;
+}
+
+/**
  * @param {number} categoryId
  * @returns {Promise<boolean>}
  */

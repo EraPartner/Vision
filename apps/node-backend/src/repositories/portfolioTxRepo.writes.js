@@ -8,6 +8,7 @@ import { buildSetClauses } from '../lib/sqlClauses.js';
 import { getById, mapPortfolioTxRow } from './portfolioTxRepo.reads.js';
 import {
   hasPortfolioTransactionInheritanceSchema,
+  getAccountIdRelation,
   markInheritanceSchemaPresent,
   isNonUpdatablePortfolioTransactionsViewError,
   isMissingInheritanceRelationError,
@@ -234,4 +235,22 @@ export async function hardDelete(id) {
     markInheritanceSchemaPresent();
     return hardDeleteThroughInheritanceTables(id);
   }
+}
+
+/**
+ * Repoint portfolio lots from merged-away source accounts onto the survivor
+ * (ADR-088 account merge). Writes through the inheritance base when present —
+ * the UPDATE cascades to the child tables — and the flat table otherwise.
+ *
+ * @param {number} targetId
+ * @param {number[]} sourceIds
+ * @returns {Promise<number>} rows repointed
+ */
+export async function repointAccount(targetId, sourceIds) {
+  const relation = await getAccountIdRelation();
+  const result = await query(
+    `UPDATE ${relation} SET account_id = $1 WHERE account_id = ANY($2::int[])`,
+    [targetId, sourceIds],
+  );
+  return result.rowCount ?? 0;
 }

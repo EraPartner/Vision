@@ -1,17 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mockLogger } from './helpers/mockLogger.js'
-import { mockConnection } from './helpers/repoMocks.js'
+import { mockTxConnection } from './helpers/repoMocks.js'
 import { validateBatch } from '../src/services/importPipeline/validate.js'
 import { stageBatch } from '../src/services/importPipeline/stage.js'
 import { matchBatch } from '../src/services/importPipeline/match.js'
 import { commitBatch } from '../src/services/importPipeline/commit.js'
-import { query, withTransaction } from '../src/database/connection.js'
+import { query, poolQuery } from '../src/database/connection.js'
 import { getAdapter } from '../src/services/importPipeline/adapters/index.js'
 import { findBestRecipientMatches } from '../src/services/calculations/normalization.js'
 import { loadActivePatterns, applyPatterns } from '../src/services/recipientPatternService.js'
 import { refreshAggregations } from '../src/services/aggregationRefresh.js'
 
-vi.mock('../src/database/connection.js', () => mockConnection())
+// Ambient-aware connection mock: commitBatch's per-row writes now go through
+// repositories, which issue module-level query() inside withTransaction — the
+// ambient context routes those onto `mockClient`, alongside the SAVEPOINT
+// ceremony the pipeline still issues on the client directly.
+const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }))
+vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient))
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
 }))
@@ -30,12 +35,10 @@ vi.mock('../src/services/aggregationRefresh.js', () => ({
   refreshAggregations: vi.fn(),
 }))
 
-let mockClient
-
 beforeEach(() => {
   vi.clearAllMocks()
-  mockClient = { query: vi.fn().mockResolvedValue({ rows: [] }) }
-  withTransaction.mockImplementation(async (fn) => fn(mockClient))
+  mockClient.query.mockReset()
+  mockClient.query.mockResolvedValue({ rows: [] })
   refreshAggregations.mockResolvedValue(undefined)
 })
 
@@ -178,8 +181,12 @@ describe('commitBatch', () => {
     recipient_default_category_id: 3,
   }
 
+  // Primes the POOL sink, not the exported spy: commitBatch's per-row work now
+  // runs through repositories inside the chunk transaction, and the ambient
+  // context routes those onto `mockClient`. Priming the pool keeps this ordered
+  // sequence matched to the three genuinely pooled statements.
   function setupCommit(row) {
-    query
+    poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='committing'
       .mockResolvedValueOnce({ rows: [row] }) // SELECT matched
       .mockResolvedValueOnce({ rows: [] }) // UPDATE counters

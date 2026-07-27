@@ -474,6 +474,17 @@ export const splitRepository = {
     const result = await runner.query(sql, params);
     return result.rows[0];
   },
+
+  /** Repoint splits off merged alias recipients onto the primary (ADR-014). */
+  async repointRecipient(primaryId, aliasIds) {
+    const result = await query(
+      `UPDATE transaction_splits
+          SET recipient_id = $1
+        WHERE recipient_id = ANY($2::int[])`,
+      [primaryId, aliasIds],
+    );
+    return result.rowCount ?? 0;
+  },
 };
 
 function formatSplit(row) {

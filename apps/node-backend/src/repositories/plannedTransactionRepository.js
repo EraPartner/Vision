@@ -649,6 +649,43 @@ export const plannedTransactionRepository = {
       await insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries);
     });
   },
+
+  /**
+   * Repoint planned transactions off merged-away source accounts onto the
+   * survivor, stamping `bank_account` so the dual-write trigger (migration
+   * 0051) keeps account_id at the target (ADR-088).
+   */
+  async repointAccount(targetId, targetName, sourceIds) {
+    const result = await query(
+      `UPDATE planned_transactions SET account_id = $1, bank_account = $2 WHERE account_id = ANY($3::int[])`,
+      [targetId, targetName, sourceIds],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /**
+   * Does planned_transactions carry recipient_id? Very old schemas predate the
+   * column, and the recipient merge must skip the repoint rather than fail.
+   */
+  async hasRecipientIdColumn() {
+    const result = await query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_name = 'planned_transactions' AND column_name = 'recipient_id'
+       LIMIT 1`,
+    );
+    return result.rows.length > 0;
+  },
+
+  /** Repoint planned transactions off merged alias recipients onto the primary. */
+  async repointRecipient(primaryId, aliasIds) {
+    const result = await query(
+      `UPDATE planned_transactions
+            SET recipient_id = $1
+          WHERE recipient_id = ANY($2::int[])`,
+      [primaryId, aliasIds],
+    );
+    return result.rowCount ?? 0;
+  },
 };
 
 export default plannedTransactionRepository;
