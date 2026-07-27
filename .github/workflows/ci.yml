@@ -1,37 +1,113 @@
 name: CI
 
 on:
+  # NOTE: this workflow deliberately has NO paths filter. "CI Complete" is the
+  # required status check, and a filter that excluded a whole diff would skip the
+  # workflow entirely, so "CI Complete" would never report and the PR would sit
+  # blocked forever (this is exactly what happened to docs-only PRs while
+  # `paths-ignore: [docs/**, *.md]` was set here).
+  #
+  # Path filtering now happens INSIDE the workflow: the `changes` job classifies
+  # the diff and the expensive tiers are gated on `changes.outputs.code`, while
+  # `changes`, `secrets-scan`, `quality-gate` and `ci-complete` always run. That
+  # keeps a single required check that always reports on every diff.
+  #
+  # Do NOT reintroduce a top-level `paths`/`paths-ignore` filter here, and do NOT
+  # solve docs-only skipping with a second workflow that also names a job
+  # "CI Complete": a mixed docs+code PR matches both filters, both workflows run,
+  # and two checks share the required name — the no-op one can report success
+  # before the real pipeline finishes, which is a merge-gate bypass.
   push:
     branches: ["main"]
-    # NOTE: "CI Complete" is a required status check. A diff that matches every
-    # pattern here skips the whole workflow, so "CI Complete" never reports and
-    # such a PR is left pending / blocked from merging. We deliberately keep the
-    # markdown ignore ROOT-ONLY ("*.md", not "**/*.md"): widening it would make
-    # nested-doc-only PRs skip CI and strand the required check. Properly
-    # skipping nested-docs PRs needs a companion no-op success workflow with the
-    # inverted paths (tracked in TODO.md) — do not widen this without it.
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
   pull_request:
     branches: ["main"]
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
 
-concurrency:
-  group: ci-${{ github.ref }}
-  # Only cancel superseded PR runs; never cancel a push to main/tags mid-run
-  # (those runs gate merges/releases and must complete).
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-# Deny all permissions by default; each job opts in to only what it needs.
 permissions: {}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # Secrets scan — gitleaks on push/PR diff range
   # ─────────────────────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Detect Changes — classifies the diff so the code/Docker tiers can be skipped
+  # on documentation-only changes WITHOUT stranding the required "CI Complete"
+  # check (see the note on the triggers above).
+  #
+  # "docs" means the `docs/` tree or a ROOT-level *.md. Anything else — including
+  # a nested *.md outside docs/, e.g. apps/frontend/README.md — counts as code,
+  # because such files can be referenced by builds or tooling.
+  #
+  # Fails safe: if the base cannot be resolved for any reason, `code` is 'true'
+  # and the full pipeline runs.
+  # ─────────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: classify
+        # Values reach the script through env, never via ${{ }} interpolation
+        # into `run:` — same convention as the rest of this workflow.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"; head="$PR_HEAD_SHA"
+          else
+            base="$PUSH_BEFORE"; head="$PUSH_SHA"
+          fi
+
+          # New branch / unknown base / missing objects → run everything.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null \
+             || ! git cat-file -e "$head^{commit}" 2>/dev/null; then
+            echo "Base not resolvable (base='$base') — running the full pipeline."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$base" "$head")
+          if [ -z "$changed" ]; then
+            echo "Empty diff — running the full pipeline."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changed files:"; echo "$changed" | sed 's/^/  /'
+
+          code=false
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              docs/*) ;;        # docs tree            → docs
+              */*)  code=true ;; # any other nested path → code
+              *.md) ;;          # root-level markdown  → docs
+              *)    code=true ;; # any other root file  → code
+            esac
+          done <<< "$changed"
+
+          if [ "$code" = "true" ]; then
+            echo "Classified as: code (full pipeline)"
+          else
+            echo "Classified as: docs-only (code and Docker tiers will skip)"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   secrets-scan:
     name: Secrets Scan
     runs-on: ubuntu-24.04
@@ -60,6 +136,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   deps-audit:
     name: Deps Audit (JS)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -80,6 +158,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   pip-audit:
     name: Deps Audit (Python)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -100,6 +180,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -121,6 +203,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   typecheck:
     name: Type Check
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -143,6 +227,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   typecheck-backend:
     name: Type Check (Backend)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -164,6 +250,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   verify-generated:
     name: Verify Generated Artifacts
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -205,6 +293,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   build-frontend:
     name: Build (Frontend)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -223,6 +313,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test-frontend:
     name: Test (Frontend)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -250,6 +342,8 @@ jobs:
 
   test-backend:
     name: Test (Backend)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -292,6 +386,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   verify-compose-sync:
     name: Verify Compose Volume Sync
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -333,6 +429,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     needs:
+      - changes
       - secrets-scan
       - deps-audit
       - pip-audit
@@ -349,6 +446,13 @@ jobs:
       - name: Check all gates passed
         run: |
           results='${{ toJson(needs.*.result) }}'
+          # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the ten
+          # code jobs are gated off by `changes.outputs.code`, so they report
+          # 'skipped' and this gate must still pass. `changes` and `secrets-scan`
+          # always run, so a genuine upstream break still shows as
+          # failure/cancelled. Do not tighten this to "must equal success"
+          # without also special-casing the docs-only path — that would put
+          # docs-only PRs straight back to permanently blocked.
           if echo "$results" | grep -qE '"(failure|cancelled)"'; then
             echo "Quality gate failed. Job results: $results"
             exit 1
@@ -363,7 +467,8 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [quality-gate]
+    needs: [changes, quality-gate]
+    if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
     steps:
@@ -530,11 +635,42 @@ jobs:
     name: CI Complete
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [trivy-scan, docker-verify, test-live-api-contracts]
+    needs: [changes, secrets-scan, quality-gate, trivy-scan, docker-verify, test-live-api-contracts]
     if: always()
     steps:
       - name: Check Docker-tier stages passed
+        env:
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
         run: |
+          echo "changes(code):           ${{ needs.changes.result }} (code=$CODE_CHANGED)"
+          echo "secrets-scan:            ${{ needs.secrets-scan.result }}"
+          echo "quality-gate:            ${{ needs.quality-gate.result }}"
+
+          # `changes` and `secrets-scan` run on EVERY diff, docs included — a
+          # leaked credential in a markdown file must still fail CI.
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "CI failed: changes did not succeed (got '${{ needs.changes.result }}')."
+            exit 1
+          fi
+          if [ "${{ needs.secrets-scan.result }}" != "success" ]; then
+            echo "CI failed: secrets-scan did not succeed (got '${{ needs.secrets-scan.result }}')."
+            exit 1
+          fi
+          if [ "${{ needs.quality-gate.result }}" != "success" ]; then
+            echo "CI failed: quality-gate did not succeed (got '${{ needs.quality-gate.result }}')."
+            exit 1
+          fi
+
+          # Documentation-only diff: the code and Docker tiers are intentionally
+          # skipped, so there is nothing further to assert. This job still runs
+          # and reports, which is the whole point — "CI Complete" is the required
+          # check and must never be left pending.
+          if [ "$CODE_CHANGED" != "true" ]; then
+            echo "Docs-only diff — code and Docker tiers intentionally skipped."
+            echo "All CI stages complete (docs-only)."
+            exit 0
+          fi
+
           echo "trivy-scan:              ${{ needs.trivy-scan.result }}"
           echo "docker-verify:           ${{ needs.docker-verify.result }}"
           echo "test-live-api-contracts: ${{ needs.test-live-api-contracts.result }}"
