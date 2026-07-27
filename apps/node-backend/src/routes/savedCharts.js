@@ -126,9 +126,11 @@ function parseChartId(req) {
   return id;
 }
 
+// Canonical collection shape `{items, total}`; unpaginated, so `total` is the
+// row count (present so pagination can land without breaking the shape).
 router.get('/', async (req, res) => {
   const charts = await savedChartsRepository.getAll();
-  res.ok(charts);
+  res.ok({ items: charts, total: charts.length });
 });
 
 router.post('/', async (req, res) => {

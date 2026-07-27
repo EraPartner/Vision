@@ -40,9 +40,20 @@ vi.mock('../../src/services/priceProviderService.js', () => ({
   sanitizePersistedKinesisHistory: vi.fn(),
 }));
 
+vi.mock('../../src/services/providerHealthService.js', () => ({
+  listProviderHealth: vi.fn(),
+  probeProvider: vi.fn(),
+}));
+
+vi.mock('../../src/services/routeManifest.js', () => ({
+  getRouteManifest: vi.fn(),
+}));
+
 import { checkConnection, getTableCount } from '../../src/database/connection.js';
 import { getSettings } from '../../src/config/config.js';
 import { sanitizePersistedKinesisHistory } from '../../src/services/priceProviderService.js';
+import { listProviderHealth } from '../../src/services/providerHealthService.js';
+import { getRouteManifest } from '../../src/services/routeManifest.js';
 import https from 'https';
 await import('../../src/routes/admin.js');
 
@@ -300,6 +311,52 @@ describe('Admin Routes', () => {
       const req = { query: {} };
       const res = mockResponse();
       await expect(routeHandlers['post:/investments/kinesis/sanitize-history'](req, res)).rejects.toThrow('boom');
+    });
+  });
+
+  // The three admin collection GETs used to answer with a bare array as `data`.
+  // They now use the canonical `{ items, total }` collection body (unpaginated,
+  // so `total` is the row count).
+  describe('collection response shape', () => {
+    it('GET /providers/health returns { items, total }', async () => {
+      const providers = [{ provider: 'yahoo', kind: 'price' }, { provider: 'ecb', kind: 'fx' }];
+      listProviderHealth.mockResolvedValue(providers);
+
+      const res = mockResponse();
+      await routeHandlers['get:/providers/health']({}, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: providers, total: 2 } });
+    });
+
+    it('GET /endpoints returns { items, total }', async () => {
+      const manifest = [{ method: 'GET', path: '/api/health' }];
+      getRouteManifest.mockReturnValue(manifest);
+
+      const res = mockResponse();
+      await routeHandlers['get:/endpoints']({}, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: manifest, total: 1 } });
+    });
+
+    it('GET /endpoint-liveness returns { items, total } with live flags', async () => {
+      getRouteManifest.mockReturnValue([{ method: 'GET', path: '/api/health' }]);
+
+      const res = mockResponse();
+      await routeHandlers['get:/endpoint-liveness']({}, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { items: [{ method: 'GET', path: '/api/health', live: true }], total: 1 },
+      });
+    });
+
+    it('GET /endpoints reports total 0 for an empty manifest', async () => {
+      getRouteManifest.mockReturnValue([]);
+
+      const res = mockResponse();
+      await routeHandlers['get:/endpoints']({}, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [], total: 0 } });
     });
   });
 

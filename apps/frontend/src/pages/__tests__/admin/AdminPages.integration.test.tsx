@@ -155,16 +155,19 @@ describe("Admin pages (integration)", () => {
     it("ProviderHealthPage renders provider row when API returns data", async () => {
         server.use(
             http.get(`${API_BASE}/api/admin/providers/health`, () =>
-                ok([{
-                    provider: "alphavantage",
-                    kind: "price",
-                    label: "Alpha Vantage",
-                    last_success_at: null,
-                    last_error_at: null,
-                    last_error: null,
-                    consecutive_failures: 0,
-                    updated_at: null,
-                }]),
+                ok({
+                    items: [{
+                        provider: "alphavantage",
+                        kind: "price",
+                        label: "Alpha Vantage",
+                        last_success_at: null,
+                        last_error_at: null,
+                        last_error: null,
+                        consecutive_failures: 0,
+                        updated_at: null,
+                    }],
+                    total: 1,
+                }),
             ),
         );
         renderWithApp(<ProviderHealthPage />);
@@ -174,16 +177,19 @@ describe("Admin pages (integration)", () => {
     it("ProviderHealthPage shows failing provider with non-zero consecutive_failures", async () => {
         server.use(
             http.get(`${API_BASE}/api/admin/providers/health`, () =>
-                ok([{
-                    provider: "ecb",
-                    kind: "fx",
-                    label: "ECB",
-                    last_success_at: null,
-                    last_error_at: "2025-01-01T00:00:00.000Z",
-                    last_error: "timeout",
-                    consecutive_failures: 3,
-                    updated_at: null,
-                }]),
+                ok({
+                    items: [{
+                        provider: "ecb",
+                        kind: "fx",
+                        label: "ECB",
+                        last_success_at: null,
+                        last_error_at: "2025-01-01T00:00:00.000Z",
+                        last_error: "timeout",
+                        consecutive_failures: 3,
+                        updated_at: null,
+                    }],
+                    total: 1,
+                }),
             ),
         );
         renderWithApp(<ProviderHealthPage />);
@@ -207,7 +213,7 @@ describe("Admin pages (integration)", () => {
     it("EndpointLivenessPage renders route row when API returns data", async () => {
         server.use(
             http.get(`${API_BASE}/api/admin/endpoints`, () =>
-                ok([{ method: "GET", path: "/api/transactions" }]),
+                ok({ items: [{ method: "GET", path: "/api/transactions" }], total: 1 }),
             ),
         );
         renderWithApp(<EndpointLivenessPage />);
@@ -230,16 +236,19 @@ describe("Admin pages (integration)", () => {
     it("AdminOverviewPage shows failing count when providers have failures", async () => {
         server.use(
             http.get(`${API_BASE}/api/admin/providers/health`, () =>
-                ok([{
-                    provider: "ecb",
-                    kind: "fx",
-                    label: "ECB",
-                    last_success_at: null,
-                    last_error_at: null,
-                    last_error: null,
-                    consecutive_failures: 1,
-                    updated_at: null,
-                }]),
+                ok({
+                    items: [{
+                        provider: "ecb",
+                        kind: "fx",
+                        label: "ECB",
+                        last_success_at: null,
+                        last_error_at: null,
+                        last_error: null,
+                        consecutive_failures: 1,
+                        updated_at: null,
+                    }],
+                    total: 1,
+                }),
             ),
         );
         renderWithApp(<AdminOverviewPage />);
@@ -263,16 +272,19 @@ describe("Admin pages (integration)", () => {
         const toastSpy = vi.spyOn(toast, "success");
         server.use(
             http.get(`${API_BASE}/api/admin/providers/health`, () =>
-                ok([{
-                    provider: "alphavantage",
-                    kind: "price",
-                    label: "Alpha Vantage",
-                    last_success_at: null,
-                    last_error_at: null,
-                    last_error: null,
-                    consecutive_failures: 0,
-                    updated_at: null,
-                }]),
+                ok({
+                    items: [{
+                        provider: "alphavantage",
+                        kind: "price",
+                        label: "Alpha Vantage",
+                        last_success_at: null,
+                        last_error_at: null,
+                        last_error: null,
+                        consecutive_failures: 0,
+                        updated_at: null,
+                    }],
+                    total: 1,
+                }),
             ),
             http.post(`${API_BASE}/api/admin/providers/alphavantage/probe`, () =>
                 ok({

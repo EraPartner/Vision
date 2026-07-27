@@ -390,7 +390,10 @@ describe("portfolioImports API client", () => {
   it("listPortfolioParserConfigs returns saved configs", async () => {
     server.use(
       http.get(`${API_BASE}/api/portfolio/import/parsers`, () =>
-        ok([{ id: 1, name: "Degiro", kind: "custom", config, created_at: "", updated_at: "" }]),
+        ok({
+          items: [{ id: 1, name: "Degiro", kind: "custom", config, created_at: "", updated_at: "" }],
+          total: 1,
+        }),
       ),
     );
     const res = await listPortfolioParserConfigs();

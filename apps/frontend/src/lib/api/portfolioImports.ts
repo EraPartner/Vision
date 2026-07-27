@@ -234,8 +234,10 @@ export function importPortfolioCSVWithProgress(
 }
 
 // --- Saved portfolio parsers ---
-export function listPortfolioParserConfigs(): Promise<SavedPortfolioParserConfig[]> {
-  return apiRequest<SavedPortfolioParserConfig[]>('/api/portfolio/import/parsers');
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function listPortfolioParserConfigs(): Promise<SavedPortfolioParserConfig[]> {
+  const { items } = await apiRequest<{ items: SavedPortfolioParserConfig[]; total: number }>('/api/portfolio/import/parsers');
+  return items;
 }
 
 export function createPortfolioParserConfig(name: string, config: PortfolioCustomConfig): Promise<SavedPortfolioParserConfig> {

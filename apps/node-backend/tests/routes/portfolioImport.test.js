@@ -74,7 +74,7 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-import { getBatch, getPreviewRows } from '../../src/services/portfolioImportBatchService.js';
+import { getBatch, getPreviewRows, listBatches } from '../../src/services/portfolioImportBatchService.js';
 import { ValidationError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/portfolioImportRoutes.js');
 
@@ -106,5 +106,27 @@ describe('Portfolio Import Routes — batch/row id guards', () => {
 
     await expect(routeHandlers['post:/batches/:id/rows/:rowId/investment-override'](req, res))
       .rejects.toBeInstanceOf(ValidationError);
+  });
+});
+
+describe('Portfolio Import Routes — collection response shape', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('GET /batches returns the canonical { items, total, limit, offset } body', async () => {
+    listBatches.mockResolvedValue({ batches: [{ id: 1, status: 'complete' }], total: 1 });
+    const res = createMockResponse();
+
+    await routeHandlers['get:/batches']({ query: {} }, res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.ok).toBe(true);
+    // The old `batches` wire key is gone; the service still speaks `batches`.
+    expect(body.data.batches).toBeUndefined();
+    expect(body.data).toEqual({
+      items: [{ id: 1, status: 'complete' }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
   });
 });

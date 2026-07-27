@@ -196,7 +196,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
     placeholderData: keepPreviousData,
   });
 
-  const batches = data?.batches ?? [];
+  const batches = data?.items ?? [];
   const total = data?.total ?? 0;
 
   // Preserve the old catch-block behavior: surface a toast whenever a load

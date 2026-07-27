@@ -292,9 +292,11 @@ router.post('/database/tables/:table/mutate', adminMutateLimiter, async (req, re
 
 // ── Provider Health ───────────────────────────────────────────────────────────
 
+// Canonical collection shape `{items, total}` (unpaginated — `total` is the
+// row count, present so pagination can land without breaking the shape).
 router.get('/providers/health', async (_req, res) => {
-  const providers = await listProviderHealth();
-  res.ok(providers);
+  const items = await listProviderHealth();
+  res.ok({ items, total: items.length });
 });
 
 router.post('/providers/:provider/probe', adminMutateLimiter, async (req, res) => {
@@ -311,13 +313,15 @@ router.get('/metrics/requests', (_req, res) => {
 
 // ── Endpoint Manifest ─────────────────────────────────────────────────────────
 
+// Both manifest endpoints use the canonical `{items, total}` collection shape.
 router.get('/endpoints', (_req, res) => {
-  res.ok(getRouteManifest());
+  const items = getRouteManifest();
+  res.ok({ items, total: items.length });
 });
 
 router.get('/endpoint-liveness', (_req, res) => {
-  const manifest = getRouteManifest();
-  res.ok(manifest.map((entry) => ({ ...entry, live: true })));
+  const items = getRouteManifest().map((entry) => ({ ...entry, live: true }));
+  res.ok({ items, total: items.length });
 });
 
 export default router;

@@ -55,7 +55,7 @@ afterEach(() => server.resetHandlers());
 
 describe("saved charts API client", () => {
   it("getSavedCharts fetches the list", async () => {
-    server.use(http.get(`${API_BASE}/api/saved-charts`, () => ok([{ id: 1, name: "C" }])));
+    server.use(http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [{ id: 1, name: "C" }], total: 1 })));
     expect((await getSavedCharts())[0].id).toBe(1);
   });
 

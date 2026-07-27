@@ -48,7 +48,7 @@ describe("ImportHistoryCard", () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches`, () =>
                 ok({
-                    batches: [
+                    items: [
                         makeBatch({ id: 1, source_filename: "jan.csv" }),
                         makeBatch({
                             id: 2,
@@ -73,7 +73,7 @@ describe("ImportHistoryCard", () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches`, () =>
                 ok({
-                    batches: [
+                    items: [
                         makeBatch({
                             id: 1,
                             source_filename: "rollbackable.csv",
@@ -107,7 +107,7 @@ describe("ImportHistoryCard", () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches`, () =>
                 ok({
-                    batches: [
+                    items: [
                         makeBatch({
                             id: 7,
                             source_filename: "march.csv",
@@ -144,7 +144,7 @@ describe("ImportHistoryCard", () => {
             http.get(`${API_BASE}/api/import/batches`, () => {
                 listCalls += 1;
                 return ok({
-                    batches: [
+                    items: [
                         makeBatch({
                             id: 42,
                             source_filename: "rollback-me.csv",
@@ -191,7 +191,7 @@ describe("ImportHistoryCard", () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches`, () =>
                 ok({
-                    batches: [
+                    items: [
                         makeBatch({
                             id: 99,
                             source_filename: "keep.csv",
@@ -237,7 +237,7 @@ describe("ImportHistoryCard", () => {
 
         server.use(
             http.get(`${API_BASE}/api/import/batches`, () =>
-                ok({ batches: manyBatches, total: 25 }),
+                ok({ items: manyBatches, total: 25 }),
             ),
         );
 

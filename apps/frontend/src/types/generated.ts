@@ -4939,7 +4939,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["SavedChart"][];
+                        data?: {
+                            items: components["schemas"]["SavedChart"][];
+                            total: number;
+                        };
                     };
                 };
             };
@@ -7709,7 +7712,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["AiConversation"][];
+                        data?: {
+                            items: components["schemas"]["AiConversation"][];
+                            total: number;
+                        };
                     };
                 };
             };
@@ -8033,7 +8039,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["CustomParserConfig"][];
+                        data?: {
+                            items: components["schemas"]["CustomParserConfig"][];
+                            total: number;
+                        };
                     };
                 };
             };
@@ -8153,7 +8162,11 @@ export interface operations {
     };
     getImportBatches: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page size (default 50, clamped to 200) */
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8167,7 +8180,9 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["ImportBatch"][];
+                        data?: components["schemas"]["PaginationMeta"] & {
+                            items: components["schemas"]["ImportBatch"][];
+                        };
                     };
                 };
             };
@@ -8445,7 +8460,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["PortfolioParserConfig"][];
+                        data?: {
+                            items: components["schemas"]["PortfolioParserConfig"][];
+                            total: number;
+                        };
                     };
                 };
             };
@@ -8582,7 +8600,9 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["PortfolioImportBatch"][];
+                        data?: components["schemas"]["PaginationMeta"] & {
+                            items: components["schemas"]["PortfolioImportBatch"][];
+                        };
                     };
                 };
             };
@@ -9081,13 +9101,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Provider health map */
+            /** @description Provider health rows */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: Record<string, never>[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -9149,7 +9174,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: {
+                                method?: string;
+                                path?: string;
+                            }[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -9169,7 +9202,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: {
+                                method?: string;
+                                path?: string;
+                                live?: boolean;
+                            }[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };

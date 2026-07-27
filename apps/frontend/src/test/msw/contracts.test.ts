@@ -244,10 +244,17 @@ const NewsArticleSchema = z.object({
 });
 const MarketNewsSchema = z.object({ articles: z.array(NewsArticleSchema) });
 
+// Canonical collection body: { items, total, limit, offset }.
 const ImportBatchesSchema = z.object({
-    batches: z.array(z.object({}).passthrough()),
+    items: z.array(z.object({}).passthrough()),
     total: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
 });
+
+/** `{ items, total }` — the canonical body for unpaginated collection GETs. */
+const collectionSchema = (item: z.ZodTypeAny = z.unknown()) =>
+    z.object({ items: z.array(item), total: z.number().int().nonnegative() });
 
 const PortfolioTotalsSchema = z.object({
     totalPortfolioValue: z.number(),
@@ -281,7 +288,7 @@ describe("MSW handler contracts", () => {
         ["GET /api/market/news conforms to news schema", MarketNewsSchema, "/api/market/news", "market/news"],
         ["GET /api/import/batches conforms to batches schema", ImportBatchesSchema, "/api/import/batches", "import/batches"],
         ["GET /api/portfolio/summary conforms to portfolio-summary schema", PortfolioSummarySchema, "/api/portfolio/summary", "portfolio/summary"],
-        ["GET /api/admin/endpoint-liveness conforms to array schema", z.array(z.unknown()), "/api/admin/endpoint-liveness", "admin/endpoint-liveness"],
+        ["GET /api/admin/endpoint-liveness conforms to collection schema", collectionSchema(), "/api/admin/endpoint-liveness", "admin/endpoint-liveness"],
         ["GET /api/planned conforms to array schema", z.array(z.unknown()), "/api/planned", "planned"],
     ])("%s", async (_name, schema, path, label) => {
         validate(schema, await getEnvelope(path), label);
@@ -462,7 +469,7 @@ describe("Missing GET endpoint contracts (E4)", () => {
             "GET /api/import/batches returns expected shape",
             "/api/import/batches",
             "GET /api/import/batches",
-            z.object({ batches: z.array(z.unknown()), total: z.number() }),
+            ImportBatchesSchema,
         ],
         [
             "GET /api/import/batches/:id/preview returns expected shape",
@@ -521,10 +528,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             }),
         ],
         [
-            "GET /api/ai/conversations returns array",
+            "GET /api/ai/conversations returns { items, total }",
             "/api/ai/conversations",
             "GET /api/ai/conversations",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
         [
             "GET /api/info/portfolio-performance returns expected shape",
@@ -585,10 +592,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.array(z.unknown()),
         ],
         [
-            "GET /api/admin/endpoint-liveness returns array",
+            "GET /api/admin/endpoint-liveness returns { items, total }",
             "/api/admin/endpoint-liveness",
             "GET /api/admin/endpoint-liveness",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
         [
             "GET /api/admin/database/stats returns expected shape",
@@ -597,10 +604,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.object({ tables: z.array(z.unknown()), db_size: z.null() }),
         ],
         [
-            "GET /api/admin/providers/health returns array",
+            "GET /api/admin/providers/health returns { items, total }",
             "/api/admin/providers/health",
             "GET /api/admin/providers/health",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
         [
             "GET /api/admin/metrics/requests returns array",
@@ -609,10 +616,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.array(z.unknown()),
         ],
         [
-            "GET /api/admin/endpoints returns array",
+            "GET /api/admin/endpoints returns { items, total }",
             "/api/admin/endpoints",
             "GET /api/admin/endpoints",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
     ])("%s", async (_name, path, label, schema) => {
         validate(schema, await getEnvelope(path), label);
@@ -836,10 +843,10 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             z.object({ items: z.array(z.unknown()), total: z.number() }),
         ],
         [
-            "GET /api/saved-charts returns charts array",
+            "GET /api/saved-charts returns { items, total }",
             "/api/saved-charts",
             "GET /api/saved-charts",
-            z.object({ charts: z.array(z.unknown()) }),
+            collectionSchema(),
         ],
         [
             "GET /api/splits/transaction/:id returns items array",

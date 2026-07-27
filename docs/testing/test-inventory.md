@@ -98,8 +98,8 @@ Expanded to cover additional boot-time endpoints so more pages render without pe
 | `/api/aggregations/:name` | Null envelope | **Phase A** |
 | `/api/info/exchange-rates` | { rates, fallback_rates, base, date } | **Phase A** |
 | `/api/market/news` | { articles: [] } | **Phase A** |
-| `/api/import/batches` | { batches: [], total: 0 } | **Phase A** |
-| `/api/admin/endpoint-liveness` | Empty array | Phase 0 |
+| `/api/import/batches` | { items: [], total: 0, limit, offset } | **Phase A** |
+| `/api/admin/endpoint-liveness` | { items: [], total: 0 } | Phase 0 |
 
 ### Hook Unit Tests (2026-05-01, updated 2026-05-03)
 

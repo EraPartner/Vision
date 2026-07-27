@@ -46,7 +46,7 @@ describe("ai conversation API client", () => {
   });
 
   it("getConversations returns summaries", async () => {
-    server.use(http.get(`${API_BASE}/api/ai/conversations`, () => ok([{ id: "a" }])));
+    server.use(http.get(`${API_BASE}/api/ai/conversations`, () => ok({ items: [{ id: "a" }], total: 1 })));
     expect((await getConversations())[0].id).toBe("a");
   });
 

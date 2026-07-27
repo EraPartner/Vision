@@ -3,8 +3,10 @@ import type { SavedChart, SavedChartCreate } from '@/lib/api/types';
 
 export type { SavedChart, SavedChartCreate };
 
-export function getSavedCharts(): Promise<SavedChart[]> {
-    return apiRequest('/api/saved-charts');
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getSavedCharts(): Promise<SavedChart[]> {
+    const { items } = await apiRequest<{ items: SavedChart[]; total: number }>('/api/saved-charts');
+    return items;
 }
 
 export function createSavedChart(payload: SavedChartCreate): Promise<SavedChart> {

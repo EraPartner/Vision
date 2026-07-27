@@ -326,10 +326,12 @@ registerParserRoutes(router, {
 
 // --- Batch history + rollback -------------------------------------------------
 
+// Canonical collection shape `{items, total, limit, offset}` — the service
+// keeps its `batches` key internally, only the wire key is normalised.
 router.get('/batches', async (req, res) => {
   const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
   const { batches, total } = await listBatches({ limit, offset });
-  res.ok({ batches, total, limit, offset });
+  res.ok({ items: batches, total, limit, offset });
 });
 
 router.get('/batches/:id', async (req, res) => {

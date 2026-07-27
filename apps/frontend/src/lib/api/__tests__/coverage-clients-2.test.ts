@@ -345,7 +345,7 @@ describe("portfolio API client", () => {
 
 describe("imports API client", () => {
   it("listCustomParserConfigs fetches configs", async () => {
-    server.use(http.get(`${API_BASE}/api/import/parsers`, () => ok([{ id: 1, name: "C" }])));
+    server.use(http.get(`${API_BASE}/api/import/parsers`, () => ok({ items: [{ id: 1, name: "C" }], total: 1 })));
     expect((await listCustomParserConfigs())[0].name).toBe("C");
   });
 

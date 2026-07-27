@@ -326,7 +326,7 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
 
     http.get(`${API_BASE}/api/import/batches`, () =>
-        ok({ batches: [], total: 0 }),
+        ok({ items: [], total: 0, limit: 50, offset: 0 }),
     ),
     http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
         ok({
@@ -354,7 +354,7 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/ai/status`, () =>
         ok({ ok: false, baseUrl: "", defaultModel: "", enabled: false }),
     ),
-    http.get(`${API_BASE}/api/ai/conversations`, () => ok([])),
+    http.get(`${API_BASE}/api/ai/conversations`, () => ok({ items: [], total: 0 })),
 
     http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
         ok({
@@ -392,13 +392,13 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/info/supported-adapters`, () => ok({ adapters: [], total_count: 0 })),
     http.get(`${API_BASE}/api/info/inflation-rates`, () => ok([])),
 
-    http.get(`${API_BASE}/api/admin/endpoint-liveness`, () => ok([])),
+    http.get(`${API_BASE}/api/admin/endpoint-liveness`, () => ok({ items: [], total: 0 })),
     http.get(`${API_BASE}/api/admin/database/stats`, () =>
         ok({ tables: [], db_size: null }),
     ),
-    http.get(`${API_BASE}/api/admin/providers/health`, () => ok([])),
+    http.get(`${API_BASE}/api/admin/providers/health`, () => ok({ items: [], total: 0 })),
     http.get(`${API_BASE}/api/admin/metrics/requests`, () => ok([])),
-    http.get(`${API_BASE}/api/admin/endpoints`, () => ok([])),
+    http.get(`${API_BASE}/api/admin/endpoints`, () => ok({ items: [], total: 0 })),
 
     // ── Mutation stubs ───────────────────────────────────────────────────────
     // These prevent onUnhandledRequest:"error" and are validated by contract
@@ -589,7 +589,7 @@ export const defaultHandlers = [
     ),
 
     // Saved charts
-    http.get(`${API_BASE}/api/saved-charts`, () => ok({ charts: [] })),
+    http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [], total: 0 })),
     http.post(`${API_BASE}/api/saved-charts`, () =>
         ok({ id: 1, name: "Test chart", config: {}, created_at: "2025-01-01T00:00:00Z" }),
     ),

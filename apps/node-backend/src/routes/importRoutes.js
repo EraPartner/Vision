@@ -369,10 +369,13 @@ router.post('/categories', csvUpload.single('file'), async (req, res) => {
 // ─── Batch history + rollback ─────────────────────────────────────────────────
 
 // GET /api/import/batches
+//
+// Collection GETs use the canonical `{items, total, limit, offset}` body (the
+// service still speaks `batches` internally; only the wire key is normalised).
 router.get('/batches', async (req, res) => {
   const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
   const { batches, total } = await listBatches({ limit, offset });
-  res.ok({ batches, total, limit, offset });
+  res.ok({ items: batches, total, limit, offset });
 });
 
 // GET /api/import/batches/:id

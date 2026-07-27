@@ -540,31 +540,35 @@ Apply update and restart the application (backwards compatibility endpoint).
 
 List health records for all tracked data providers.
 
-**Response:** `200 OK`
+**Response:** `200 OK` — canonical collection body `{ items, total }`. The list
+is unpaginated, so `total` is the row count.
 
 ```json
-[
-  {
-    "provider": "binance",
-    "kind": "price",
-    "label": "Binance",
-    "last_success_at": "2026-04-24T10:30:00Z",
-    "last_error_at": null,
-    "last_error": null,
-    "consecutive_failures": 0,
-    "updated_at": "2026-04-24T10:30:00Z"
-  },
-  {
-    "provider": "ecb",
-    "kind": "fx",
-    "label": "ECB",
-    "last_success_at": "2026-04-24T09:00:00Z",
-    "last_error_at": "2026-04-24T08:45:00Z",
-    "last_error": "Fetch timeout after 5000ms",
-    "consecutive_failures": 1,
-    "updated_at": "2026-04-24T09:00:00Z"
-  }
-]
+{
+  "items": [
+    {
+      "provider": "binance",
+      "kind": "price",
+      "label": "Binance",
+      "last_success_at": "2026-04-24T10:30:00Z",
+      "last_error_at": null,
+      "last_error": null,
+      "consecutive_failures": 0,
+      "updated_at": "2026-04-24T10:30:00Z"
+    },
+    {
+      "provider": "ecb",
+      "kind": "fx",
+      "label": "ECB",
+      "last_success_at": "2026-04-24T09:00:00Z",
+      "last_error_at": "2026-04-24T08:45:00Z",
+      "last_error": "Fetch timeout after 5000ms",
+      "consecutive_failures": 1,
+      "updated_at": "2026-04-24T09:00:00Z"
+    }
+  ],
+  "total": 2
+}
 ```
 
 Providers: `binance`, `yahoo`, `kinesis` (price); `ecb`, `open.er-api` (fx); `statbel`, `eurostat` (inflation).
@@ -664,14 +668,17 @@ Retrieve rolling request metrics per route from the in-memory window (last 15 mi
 
 Return a static manifest of all registered Express routes.
 
-**Response:** `200 OK`
+**Response:** `200 OK` — canonical collection body `{ items, total }`.
 
 ```json
-[
-  { "method": "GET", "path": "/api/transactions" },
-  { "method": "POST", "path": "/api/transactions" },
-  { "method": "PATCH", "path": "/api/transactions/:id" }
-]
+{
+  "items": [
+    { "method": "GET", "path": "/api/transactions" },
+    { "method": "POST", "path": "/api/transactions" },
+    { "method": "PATCH", "path": "/api/transactions/:id" }
+  ],
+  "total": 3
+}
 ```
 
 **Notes:**
@@ -685,14 +692,17 @@ Return a static manifest of all registered Express routes.
 
 Return the static route manifest annotated with a `live: true` flag for each entry, confirming that all registered endpoints are reachable.
 
-**Response:** `200 OK`
+**Response:** `200 OK` — canonical collection body `{ items, total }`.
 
 ```json
-[
-  { "method": "GET", "path": "/api/transactions", "live": true },
-  { "method": "POST", "path": "/api/transactions", "live": true },
-  { "method": "PATCH", "path": "/api/transactions/:id", "live": true }
-]
+{
+  "items": [
+    { "method": "GET", "path": "/api/transactions", "live": true },
+    { "method": "POST", "path": "/api/transactions", "live": true },
+    { "method": "PATCH", "path": "/api/transactions/:id", "live": true }
+  ],
+  "total": 3
+}
 ```
 
 **Notes:**

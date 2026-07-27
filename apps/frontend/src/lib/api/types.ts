@@ -163,7 +163,7 @@ export interface ImportBatch {
 }
 
 export interface BatchListResponse {
-    batches: ImportBatch[];
+    items: ImportBatch[];
     total: number;
     limit: number;
     offset: number;

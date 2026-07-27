@@ -41,7 +41,8 @@ describe('Saved Charts Routes', () => {
 
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: [{ id: 1 }] });
+      // Canonical collection shape: { items, total } (total = row count here).
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [{ id: 1 }], total: 1 } });
     });
 
     it('propagates error when repository fails', async () => {

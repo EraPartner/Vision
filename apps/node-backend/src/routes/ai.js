@@ -216,9 +216,12 @@ router.get('/models', async (req, res) => {
 });
 
 // GET /api/ai/conversations
+//
+// Canonical collection shape `{items, total}`; unpaginated, so `total` is the
+// row count (present so pagination can land without breaking the shape).
 router.get('/conversations', async (req, res) => {
   const rows = await listConversations();
-  res.ok(rows);
+  res.ok({ items: rows, total: rows.length });
 });
 
 // POST /api/ai/conversations

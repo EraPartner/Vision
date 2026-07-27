@@ -188,8 +188,13 @@ export interface SavedParserConfig {
     updated_at: string;
 }
 
-export function listCustomParserConfigs(): Promise<SavedParserConfig[]> {
-    return apiRequest<SavedParserConfig[]>('/api/import/parsers');
+/**
+ * Collection GETs return the canonical `{items, total}` body; callers of this
+ * helper only need the rows, so the envelope is unwrapped here.
+ */
+export async function listCustomParserConfigs(): Promise<SavedParserConfig[]> {
+    const { items } = await apiRequest<{ items: SavedParserConfig[]; total: number }>('/api/import/parsers');
+    return items;
 }
 
 export function createCustomParserConfig(

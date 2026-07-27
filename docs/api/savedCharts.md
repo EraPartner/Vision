@@ -37,28 +37,32 @@ Endpoints for saving and managing custom chart configurations for analytics.
 
 Retrieve all saved chart configurations for the workspace.
 
-**Response:** `200 OK`
+**Response:** `200 OK` — canonical collection body `{ items, total }` inside the
+envelope's `data`. The list is unpaginated, so `total` is the row count.
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "Monthly Groceries",
-    "chart_type": "bar",
-    "chart_variant": "stacked",
-    "time_bucket": "monthly",
-    "category_ids": [1, 2, 3],
-    "recipient_ids": [10, 11],
-    "tag_ids": [3, 7],
-    "all_categories": false,
-    "all_recipients": false,
-    "all_tags": false,
-    "date_range_start": "2025-01-01",
-    "date_range_end": null,
-    "created_at": "2026-01-01T00:00:00Z",
-    "updated_at": "2026-01-01T00:00:00Z"
-  }
-]
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Monthly Groceries",
+      "chart_type": "bar",
+      "chart_variant": "stacked",
+      "time_bucket": "monthly",
+      "category_ids": [1, 2, 3],
+      "recipient_ids": [10, 11],
+      "tag_ids": [3, 7],
+      "all_categories": false,
+      "all_recipients": false,
+      "all_tags": false,
+      "date_range_start": "2025-01-01",
+      "date_range_end": null,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "total": 1
+}
 ```
 
 ---

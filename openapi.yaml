@@ -2636,9 +2636,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/SavedChart"
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/SavedChart"
+                          total:
+                            type: integer
     post:
       summary: Create saved chart
       operationId: createSavedChart
@@ -5325,9 +5331,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/AiConversation"
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AiConversation"
+                          total:
+                            type: integer
     post:
       summary: Create AI conversation
       operationId: createAiConversation
@@ -5620,9 +5632,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/CustomParserConfig"
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/CustomParserConfig"
+                          total:
+                            type: integer
     post:
       summary: Create a saved custom CSV parser config
       operationId: createCustomParser
@@ -5709,6 +5727,16 @@ paths:
       summary: List import batches
       operationId: getImportBatches
       tags: [Import]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: Page size (default 50, clamped to 200)
+        - in: query
+          name: offset
+          schema:
+            type: integer
       responses:
         "200":
           description: Batch list
@@ -5720,9 +5748,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/ImportBatch"
+                        allOf:
+                          - $ref: "#/components/schemas/PaginationMeta"
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/ImportBatch"
 
   /api/import/batches/{id}:
     parameters:
@@ -6020,9 +6054,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/PortfolioParserConfig"
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/PortfolioParserConfig"
+                          total:
+                            type: integer
     post:
       summary: Create a saved portfolio parser config; 409 on duplicate name
       operationId: createPortfolioParser
@@ -6129,9 +6169,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/PortfolioImportBatch"
+                        allOf:
+                          - $ref: "#/components/schemas/PaginationMeta"
+                          - type: object
+                            required: [items]
+                            properties:
+                              items:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/PortfolioImportBatch"
 
   /api/portfolio/import/batches/{id}:
     parameters:
@@ -6537,11 +6583,24 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Provider health map
+          description: Provider health rows
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                          total:
+                            type: integer
 
   /api/admin/providers/{provider}/probe:
     parameters:
@@ -6586,7 +6645,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                method: { type: string }
+                                path: { type: string }
+                          total:
+                            type: integer
 
   /api/admin/endpoint-liveness:
     get:
@@ -6599,7 +6674,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                method: { type: string }
+                                path: { type: string }
+                                live: { type: boolean }
+                          total:
+                            type: integer
 
   # ─── Research (ADR-079) ───────────────────────────────────────────────────────
   /api/research/search:

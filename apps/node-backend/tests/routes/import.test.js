@@ -552,7 +552,10 @@ describe('Import Routes', () => {
       expect(listBatches).toHaveBeenCalledWith({ limit: 50, offset: 0 });
       const body = res.json.mock.calls[0][0];
       expect(body.ok).toBe(true);
-      expect(body.data.batches).toHaveLength(1);
+      // Canonical collection shape: { items, total, limit, offset } — the old
+      // `batches` key is gone from the wire (the service still uses it).
+      expect(body.data.batches).toBeUndefined();
+      expect(body.data.items).toHaveLength(1);
       expect(body.data.total).toBe(1);
       expect(body.data.limit).toBe(50);
       expect(body.data.offset).toBe(0);
@@ -923,7 +926,8 @@ describe('Saved custom parser routes', () => {
       customParserConfigRepository.getAll.mockResolvedValue(items);
       const res = mockResponse();
       await routeHandlers['get:/parsers']({ query: {} }, res);
-      expect(res.json.mock.calls[0][0].data).toEqual(items);
+      // Canonical collection shape: { items, total } (total = row count here).
+      expect(res.json.mock.calls[0][0].data).toEqual({ items, total: 1 });
     });
   });
 
