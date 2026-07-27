@@ -235,9 +235,12 @@ function applyLoanPatchDefaults(fields, existing) {
 
     fields.loan_regular_payment_amount = generatedLoanSchedule.regular_payment_amount;
     fields.loan_first_payment_date = generatedLoanSchedule.first_due_date;
-    if (fields.amount === undefined) {
-      fields.amount = -Math.abs(generatedLoanSchedule.regular_payment_amount);
-    }
+    // The schedule was just regenerated, so the installment amount is ALWAYS
+    // re-derived from it — a defined client `amount` is ignored, exactly like
+    // POST. Keeping a stale client value here desynced `amount` from
+    // `loan_regular_payment_amount` whenever principal/rate/term changed (or
+    // on convert-to-loan via PATCH).
+    fields.amount = -Math.abs(generatedLoanSchedule.regular_payment_amount);
     if (fields.planned_date === undefined) {
       fields.planned_date = generatedLoanSchedule.first_due_date;
     }
