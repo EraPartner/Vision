@@ -3,13 +3,13 @@ title: Codebase Research Audit — 2026-07-27
 type: audit
 status: active
 date: 2026-07-27
-tags: [audit, correctness, performance, security, devops, testing, architecture, accessibility, ui-ux, money-hygiene, concurrency, belgian-tax, insights]
-description: Multi-stream research audit across correctness, performance, security, DevOps, testing, concurrency, UI/UX and accessibility, architecture, and the never-audited #122 insight layer. Twelve research streams; findings triaged NEW / KNOWN-OPEN and independently verified against the tree at da4be60.
+tags: [audit, correctness, performance, security, devops, testing, architecture, accessibility, ui-ux, documentation, money-hygiene, concurrency, belgian-tax, insights]
+description: Multi-stream research audit across correctness, performance, security, DevOps, testing, concurrency, UI/UX and accessibility, architecture, documentation drift, and the never-audited #122 insight layer. Thirteen research streams; findings triaged NEW / KNOWN-OPEN and independently verified against the tree at da4be60.
 ---
 
 # Codebase Research Audit — 2026-07-27
 
-**Tree audited:** `da4be60` (2026-07-23) · **Method:** 12 research streams, each given the prior-audit registers in `TODO.md` so it would not re-file dispositioned claims, plus a cross-stream de-duplication brief · **Verification:** every CRITICAL and every load-bearing HIGH below was independently re-checked against the tree before being recorded here.
+**Tree audited:** `da4be60` (2026-07-23) · **Method:** 13 research streams, each given the prior-audit registers in `TODO.md` so it would not re-file dispositioned claims, plus a cross-stream de-duplication brief · **Verification:** every CRITICAL and every load-bearing HIGH below was independently re-checked against the tree before being recorded here.
 
 ---
 
@@ -142,8 +142,8 @@ flowchart TB
     RT --> MW
     SV --> EXT
 
-    RT -.->|"VIOLATION: routes reach<br/>repositories directly"| RP
-    RP -.->|"VIOLATION: business logic<br/>in repositories"| RP
+    SV -.->|"42 files import database directly<br/>26 with mutation SQL — UNGUARDED"| DB
+    RP -.->|"7 edges: repositories<br/>import services — ADR-006 rule 4"| SV
 
     style SU fill:#7f1d1d,color:#fff
     style TY fill:#78350f,color:#fff
@@ -154,7 +154,7 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-    T["push to main · PR to main<br/>paths-ignore: docs/**, *.md"]
+    T["push to main · PR to main<br/>paths-ignore: docs/**, *.md<br/><i>(as audited at da4be60 — removed by #128,<br/>replaced with an in-workflow changes job)</i>"]
 
     subgraph t1["Tier 1 — 11 parallel jobs"]
         A1["secrets-scan · deps-audit · pip-audit"]
@@ -338,7 +338,7 @@ Idempotency here is genuinely protected — by `uniq_transactions_tx_hash` plus 
 
 ## 4. Findings
 
-Severity counts: **12 CRITICAL · 45 HIGH · 55 MEDIUM · 20 LOW**. Every CRITICAL below was re-verified against the tree.
+Severity counts: **14 CRITICAL · 52 HIGH · 72 MEDIUM · 23 LOW**. Every CRITICAL below was re-verified against the tree.
 
 ### 4.1 CRITICAL
 
@@ -497,6 +497,45 @@ The most important framing in this audit: **#122's defects are of a different ki
 
 **Credit where due:** the privacy posture held. ADR-110 §5 was honoured, the new tool is read-only, the fetch-spy was extended, and no markdown renderer or outbound call was introduced — so the ceiling remains "the model says something wrong". `deductionClassifier` is the best-engineered file in the PR (pure, deterministic, frozen rule table, 30 tests) and is one rule reorder plus three word-list edits from being right.
 
+### 4.7 Documentation drift
+
+277 tracked `.md` + 26 `.puml`. Two corrections to earlier sections of this document: `docs/diagrams/` holds **26** `.puml` (the 27th file is `index.md`), and the boot-time migration runner is `apps/node-backend/src/main.js:490` — `packaging/electron/main.js` only contains comments about it.
+
+**CRITICAL — the endpoint-matrix guard compares two integers, so two live endpoints exist in no document and CI reports "in sync".** `check-endpoint-matrix.js:36` is `if (declared !== operationCount)`, where `operationCount` is a *regex count* of method keys in `openapi.yaml` and `declared` is a frontmatter integer. It never parses YAML, never compares a path, and never reads `routes/`. So "in sync: 212 operations" means only *"the number in the doc equals the regex count in the spec."* #122's `GET /api/info/insights-digest` and `/deduction-candidates` — live and consumed by `lib/api/info.ts` — appear in **none** of the spec, `docs/api/`, or the matrix. Real surface is **214**. Fix: diff the route table ↔ spec ↔ matrix as *sets*, not counts.
+
+**CRITICAL — #120 and #122 shipped ~7,000 lines and touched zero documentation.** Grep for `categoryOutlier|subscriptionCreep|insightsDigest|deductionClassifier|sectionCatalog|ASSET_CLASSES` across `docs/features|architecture|components|reference` returns nothing. ADR-110 exists — so the *decision* is recorded while the *interface and behaviour* are not. #121, by contrast, updated 7 docs correctly, which proves the process works when followed.
+
+**`openapi.yaml` is the weakest artifact in the repo**, and the hand-written prose docs are *more* accurate:
+- Four operations declare JSON and send something else (three reports → `application/pdf`; `POST /api/import/csv/stream` → SSE).
+- Five request bodies are wrong, **two fatally**: `POST /api/import/csv` documents `bank` while the handler requires `bank_name` — a spec-conformant client gets a guaranteed 400. And because `z.object()` strips unknowns, a spec-conformant *reports* request silently degrades to defaults and returns a PDF **for the wrong period with HTTP 200**.
+- **79% of operations declare no failure at all** — zero `401`, `403`, `500`, `502`, `503` anywhere, despite `globalRateLimiter` and `csrfGuard` being mounted on everything.
+- **No `securitySchemes` whatsoever**, so the timing-safe `Authorization: Bearer` admin auth over 17 routes is undiscoverable from the spec.
+- `servers.url` is `localhost:3000`; the real port is 3002.
+
+**The knowledge base is unusable outside Obsidian, and the vault config isn't committed.** 5,116 `[[wikilinks]]` against **47** standard markdown links, 16 `dataview` fences, 343 callouts of which 213 use GitHub-unsupported types — and no `.obsidian/` is tracked. In `docs/index.md`, 189 of 190 links are wikilinks, so the persona router, the 13-row area table and the 22-row resource table are **entirely unclickable on GitHub**, and four sections render as inert grey code blocks showing raw DQL. Five ADRs are reachable *only* via a dataview query. Meanwhile `README.md` contains **exactly two links** (`LICENSE` and `openapi.yaml`) and never points into `docs/` at all — so a 242-line troubleshooting guide exists and cannot be found. Both hubs are disconnected in both directions.
+
+**Every documentation link in `.github/CONTRIBUTING.md` 404s** — six resolve one directory too shallow (`.github/docs/...`) — and the onward path then sends readers to **`CLAUDE.md`** and **`AGENTS.md`**, *neither of which exists in the repo*. `REVIEW.md:5` names `CLAUDE.md` as the authority for "the *why* behind each item", and `REVIEW.md:45` mandates updating docs "via `vision-kb-updater`", an agent that exists nowhere.
+
+**Other findings**
+- **224 of 5,106 wikilinks are broken**, dominated by two un-propagated code moves (#117's `services/` → `lib/`, and the `alembic/versions/` → `legacy_versions/` split — where links now resolve to *different* migrations). Plus 90 dead heading anchors, 41 into `code-patterns.md` alone.
+- **#121 was titled "ADR-108 deletion" and touched zero ADR files.** ADR-108 still reads `status: accepted`, and six documents instruct readers to restore deleted functionality via `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` — a flag with **zero occurrences** in the entire codebase. This is exactly the failure the append-only ADR convention exists to prevent.
+- **`docs/architecture/electron.md:202,870` documents an `electron-builder` `files` array missing `compose.js` and `updater.js`** — following it ships an app that cannot start its backend. It also proves #120's split *grew* `packaging/electron` from 4,908 to 5,110 LOC.
+- **The ADR index's dataview hides 51 of 110 ADRs** because `WHERE status = "Accepted"` is case-sensitive and 37 use lowercase while 14 have no `status:` at all. The narrative section names only 11 — **63 of 110 are named nowhere**. Eight ADRs marked `Proposed` are shipped in production; eight supersessions are one-way (ADR-108 claims five and **all five targets contain zero occurrences of "108"**).
+- **19 of 26 diagrams are stale, 0 are rendered, 0 are lint-checked, and no `.puml` has been touched in 106 commits** while 51 commits touched `apps/` and `alembic/`. Dominant errors: a phantom service cluster repeated across six diagrams, three dropped DB objects still drawn live, ADR-109 never propagated, and the `accounts` table absent from five diagrams.
+- **Freshness metadata rots in exactly one direction**: of 19 docs genuinely edited after the graft boundary, **17 have an `updated:` older than their own last edit and none are ahead.** `docs/index.md`'s own "Recent Updates" widget filters `date >= today - 7 days`, so it returns empty *because of* the rot it exists to surface.
+- **`docs/guides/cicd-pipelines.md:29-40` teaches the exact `paths-ignore` configuration `ci.yml` now forbids**, and its job graph has no `changes` job — so it is wrong at the root. Its samples also show unpinned actions on `ubuntu-latest`, teaching against the repo's own most-emphasised supply-chain convention.
+- **#128 made the only documentation guard skippable by editing the document it guards**: `verify-generated` is now gated on `code == 'true'`, and `api-endpoint-matrix.md` lives under `docs/`. Ungating that one step costs seconds.
+- **The documented dev quick-start cannot work** — `docker:dev` then `bun run dev` both bind 3002, and `setup.md` then supplies a "Port Already in Use" section treating the symptom its own instructions cause. The frontend port is documented three ways (8080 / 5173 / 5174).
+- **49 of 579 cited code paths don't exist**, including nine `ui/` primitives and two hooks documented with full copy-pasteable API sections — the highest-cost failure mode in component docs.
+- **`docs/architecture/index.md` carries ~11 wrong enumerations**, including "AES-256-**CBC**" against the real GCM (contradicting both `README.md` and its own line 50), "15 route files" against 30, and three different answers for the backup table count (31 / 44 / **53**).
+- `docs/performance/materialized-views.md` documents two dropped objects as live and contradicts itself within one file. `docs/glossary.md:37` defines **Kinesis as "US Stocks"** — it is a precious-metals feed.
+- **`REVIEW.md`'s two verifiable CI claims are both true** (the migration round-trip and the compose-volume sync) — but the round-trip runs `downgrade -1` exactly *once*, while commits routinely land up to ten migrations, so only the newest migration's `downgrade()` is ever exercised.
+- `TODO.md` mixes four incompatible document types in 1.2 MB and appears in most diffs; it is also the *only* record of the ADR-108 deletion and the sole home of the "don't re-audit" registers every audit pass depends on.
+
+**Highest-value new diagram, confirmed:** a **generated current-schema ER diagram**. 82 migrations deep there is no correct current-schema view anywhere — the only candidate draws three dropped objects, omits `accounts`, and teaches the ADR-109-superseded inheritance shape, while `data-model.md` is prose-only and stops at migration 0062. It should be *generated* from `information_schema` + `pg_constraint` + `pg_matviews` and diffed in CI, with money-column precision annotated since that boundary is an open CRITICAL. Then: the insight-layer pipeline (zero docs today), a request-lifecycle sequence (which *is* the checklist for the missing `openapi.yaml` error responses), a corrected CI gate graph, a rebuilt recurrence state machine, and one C4-L2 container diagram to replace four overlapping stale ones.
+
+**Mechanical guards, ranked.** Exactly **one** of 277 docs is mechanically verified today, and its check is an integer comparison. There is no markdown lint, link check, spell check, or docs build anywhere. Highest yield first: (1) a ~40-line wikilink + relative-link resolver — catches all 224 broken links, the 16 renderer-broken ones, the 8 ADR slug typos, the missing `CLAUDE.md`/`AGENTS.md`, and every future refactor-induced break; (2) extend the endpoint-matrix guard from counting to set comparison and ungate it; (3) a spec-vs-handler contract test via `express-openapi-validator`; (4) an ADR hygiene linter for status enum, supersession bidirectionality, and slug resolvability; (5) generate the enumerations that keep drifting from the Zod schema, `App.tsx`, and `package.json`, using the `verify-generated` pattern that already exists. Every one extends machinery the repo already has.
+
 ## 5. Cross-cutting themes
 
 1. **The correct implementation almost always exists adjacent to the defective one.** Every other `fetch` has a timeout; Binance's cache key has the window; `getNews` caps fan-out at 10; `Money` guards an empty currency code while `useCurrencyFormatter` doesn't; `AddToWatchlistDialog` documents and guards `parseDecimal`'s 0-fallback while `PlannedPaymentForm` doesn't; `useMergeRecipients` invalidates derived trees while `useUpdateRecipient` doesn't; `accountMergeService` locks all rows while `mergeRecipients` locks one. These are **consistency gaps, not knowledge gaps** — cheap to fix, and lintable.
@@ -538,7 +577,14 @@ The most important framing in this audit: **#122's defects are of a different ki
 
 ## 7. Coverage and limits
 
-**Stream coverage.** Twelve research streams ran in total. Four were terminated by a session limit on the first pass and were **re-run to completion**: UI/UX and accessibility (§4.4), architecture and code design (§4.5), and the #122 insights depth pass (§4.6). The **documentation drift audit** is the one area still outstanding — diagram coverage and format are addressed (§3, and the PlantUML/GitHub finding), but a systematic doc-claim-vs-code drift register across the 292 `docs/` files and 112 ADRs is not in this document. Known doc drift found incidentally by other streams *is* recorded (the auto-migration claim, the venv path, `db:revision` autogenerate, the `down -v` and `docker:clean:reset` README items, and the reports endpoints being materially wrong in `openapi.yaml`).
+**Stream coverage — complete.** Thirteen research streams ran. Four were terminated by a session limit on the first pass and were all **re-run to completion**: UI/UX and accessibility (§4.4), architecture and code design (§4.5), the #122 insights depth pass (§4.6), and documentation drift (§4.7). Every surface originally requested is now covered.
+
+**This document corrected itself twice.** The documentation stream audited *this file* and found two errors, both now fixed:
+
+1. **§3.1's dependency graph asserted a layer violation that cannot exist.** It drew "routes reach repositories directly". Verified: `apps/node-backend/eslint.config.js:134` sets `vision-local/no-repo-direct-from-route` to `'error'`, and `routes → repositories` is **0**. The single `routes → database` edge is `admin.js:18`, carrying an inline `eslint-disable` and a documented ADR-067 exemption. §4.5 measured the same zero — so the diagram contradicted the prose. It now shows the *real* unguarded edges (`services → database`, 42 files; `repositories → services`, 7).
+2. **§3.2's CI graph is now historical.** It was accurate at `da4be60` but `paths-ignore` was removed by #128 mid-audit; the node is annotated accordingly.
+
+Recording this rather than quietly patching it, because it is the same failure mode the audit documents elsewhere: an authoritative-looking claim in a fresh document, with nothing that lint-checks docs, would have been cited as fact and could have triggered remediation on a non-problem.
 
 **One correction to a sibling stream, worth recording.** The package-adoption verification reported PKG-01 (the `cn()` sweep) as having "drifted 109 → 1 → 2, with no lint rule, so it will keep re-accumulating." That is wrong. Both remaining sites (`AccountsPage.tsx:143`, `AccountDetailPage.tsx:370`) are the *same deliberate pattern*, and `AccountsPage.tsx:140-142` carries an explicit comment explaining it: `badgeVariants` sets `text-[11px]`, the appended `text-xs` intentionally overrides it, and `cn()`'s tailwind-merge would resolve the font-size differently. It is a documented exception, not drift. It also interlocks with §4.4's type-scale finding — defining a real `fontSize` scale would let `cn()` merge correctly and remove the need for the exception.
 
