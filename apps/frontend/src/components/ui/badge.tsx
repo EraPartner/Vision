@@ -19,6 +19,10 @@ const badgeVariants = cva(
                     "border-transparent bg-accent/20 text-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--accent)/0.35)] hover:bg-accent/25",
                 success:
                     "border-transparent bg-success/15 text-success shadow-[inset_0_0_0_1px_hsl(var(--success)/0.3)]",
+                // Amber "needs attention, not broken" tone — same palette the
+                // merge/close warning callouts already use (no new colours).
+                warning:
+                    "border-amber-500/40 bg-amber-500/15 text-amber-600 hover:bg-amber-500/20 dark:text-amber-500",
             },
         },
         defaultVariants: {

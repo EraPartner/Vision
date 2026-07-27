@@ -7,6 +7,7 @@ import { Route, Routes } from "react-router-dom";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, ACCOUNT_STUB } from "@/test/msw/handlers";
+import { toYmd } from "@/components/shared/dateUtils";
 import AccountDetailPage from "@/pages/AccountDetailPage";
 
 const API_BASE = "http://localhost:3002";
@@ -209,6 +210,60 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         expect(chip.textContent).toMatch(/\+.*15,50/);
         await userEvent.click(chip);
         expect(await screen.findByRole("dialog", { name: "Reconcile balance" })).toBeInTheDocument();
+    });
+
+    // ── WP-B5 §3 F1: chip carries the statement date + a stale tone; the
+    //    Reconcile dialog's second exit lands on this page's ?since= view ─────
+
+    it("carries the statement date on the chip and reports a long-stale reading in warning tone", async () => {
+        // DRIFTING's statement is dated 2025-03-01 — far past the ~45-day window.
+        mockApi();
+        renderDetail("/accounts/3");
+        await screen.findByRole("heading", { name: "Drifty", level: 1 });
+
+        const chip = screen.getByRole("button", { name: "Reconcile balance" });
+        expect(chip.textContent).toContain("statement 01/03/2025");
+        expect(chip.className).toMatch(/amber/);
+        expect(chip.className).not.toMatch(/text-destructive/);
+    });
+
+    it("keeps a recent statement's drift in destructive tone", async () => {
+        const recent = new Date();
+        recent.setDate(recent.getDate() - 5);
+        const recentYmd = toYmd(recent);
+        mockApi({
+            accounts: [{
+                ...DRIFTING,
+                // Bare YYYY-MM-DD — accountRepository.js emits the DATE via to_char.
+                statement_balance_date: recentYmd,
+            }],
+        });
+        renderDetail("/accounts/3");
+        await screen.findByRole("heading", { name: "Drifty", level: 1 });
+
+        const chip = screen.getByRole("button", { name: "Reconcile balance" });
+        expect(chip.className).toMatch(/text-destructive/);
+        expect(chip.className).not.toMatch(/amber/);
+    });
+
+    it("narrows this page to ?since= when the Reconcile dialog's 'show transactions since' exit is taken", async () => {
+        mockApi();
+        renderDetail("/accounts/3");
+        await screen.findByRole("heading", { name: "Drifty", level: 1 });
+
+        await userEvent.click(screen.getByRole("button", { name: "Reconcile balance" }));
+        await screen.findByRole("dialog", { name: "Reconcile balance" });
+
+        // The stored statement day (2025-03-01) drives the deep-link…
+        await userEvent.click(
+            await screen.findByRole("button", { name: /show transactions since 01\/03\/2025/i }),
+        );
+
+        // …and the ledger below narrows to it, banner and all.
+        expect(await screen.findByText(/showing transactions since/i)).toBeInTheDocument();
+        const table = screen.getByRole("table");
+        expect(within(table).getByText("Albert Heijn")).toBeInTheDocument();
+        expect(within(table).queryByText("Employer BV")).not.toBeInTheDocument();
     });
 
     it("shows the Holdings placeholder (and no cash balance) for portfolio-type accounts", async () => {

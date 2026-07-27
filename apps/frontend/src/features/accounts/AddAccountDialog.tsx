@@ -172,7 +172,8 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         // which is unmounted while collapsed — so a bare `return` here would be a
         // silent dead-end. Expand the section (revealing the required field) and
         // surface a toast instead of failing invisibly.
-        if (form.statementBalance && !form.statementBalanceDate) {
+        // (Edit only — create no longer renders the statement fields, §3 F1.)
+        if (isEditMode && form.statementBalance && !form.statementBalanceDate) {
             setShowAdvanced(true);
             toast.error(t('accounts.field.statementBalance'), {
                 description: t('accounts.field.statementBalanceDate'),
@@ -186,6 +187,9 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
             display_name: form.display_name.trim(),
             institution: form.institution.trim(),
             currency: form.currency.trim().toUpperCase() || "EUR",
+            // Belt-and-braces: a create payload must never carry a statement
+            // reading, whatever a stale form value says.
+            ...(isEditMode ? {} : { statementBalance: "", statementBalanceDate: "" }),
         };
 
         if (isEditMode) {
@@ -388,16 +392,23 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                             {switchRow("spendable", t('accounts.field.spendable'), t('accounts.field.spendableHint'))}
                             {switchRow("in_net_worth", t('accounts.field.inNetWorth'))}
                         </div>
-                        <div className="grid grid-cols-2 gap-3 pt-1">
-                            <div className="space-y-2">
-                                <Label htmlFor="acct-stmt-bal">{t('accounts.field.statementBalance')}</Label>
-                                <Input id="acct-stmt-bal" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" value={form.statementBalance} onChange={(e) => set("statementBalance", e.target.value)} />
+                        {/* Statement reading — EDIT ONLY (§3 F1). On create these
+                            two raw fields only minted instant drift against an
+                            empty ledger; a new account records its starting
+                            figure through the opening-balance field above, and a
+                            later statement through the Reconcile dialog. */}
+                        {isEditMode && (
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                                <div className="space-y-2">
+                                    <Label htmlFor="acct-stmt-bal">{t('accounts.field.statementBalance')}</Label>
+                                    <Input id="acct-stmt-bal" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" value={form.statementBalance} onChange={(e) => set("statementBalance", e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="acct-stmt-date">{t('accounts.field.statementBalanceDate')}</Label>
+                                    <Input id="acct-stmt-date" type="date" required={!!form.statementBalance} value={form.statementBalanceDate} onChange={(e) => set("statementBalanceDate", e.target.value)} />
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="acct-stmt-date">{t('accounts.field.statementBalanceDate')}</Label>
-                                <Input id="acct-stmt-date" type="date" required={!!form.statementBalance} value={form.statementBalanceDate} onChange={(e) => set("statementBalanceDate", e.target.value)} />
-                            </div>
-                        </div>
+                        )}
                     </div>
                 )}
 

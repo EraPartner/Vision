@@ -15,6 +15,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
+import { useDriftBadge } from "@/features/accounts/driftBadge";
+import { badgeVariants } from "@/components/ui/badge";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--chart-1))",
@@ -69,6 +71,9 @@ export function BankBalancesWidget() {
     // Balance provenance subline (WP-B2) — the entity payload carries
     // anchor_date/post_anchor_count, same fields the Accounts hub cards read.
     const balanceProvenance = useBalanceProvenance();
+    // Drift chip (§3 F1) — the SAME text + stale-tone rule the Accounts hub
+    // badge uses, so the dashboard can't disagree with the hub about a drift.
+    const driftBadge = useDriftBadge();
 
     // The ~365-point × N-accounts chart dataset (and its derived series/legend)
     // is expensive to build and produced a fresh `data`/`series` identity on
@@ -202,7 +207,14 @@ export function BankBalancesWidget() {
                     </div>
                     <p className={cn("text-xs font-medium mt-2 flex items-center gap-1", isPositive ? "amount-gain" : "amount-loss")}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {t('bankWidget.acrossAccounts', { n: balanceCards.length.toString() })}
+                        {/* The count MUST describe the population summed into the
+                            total right above it (§3 F3). `total_net_position` is
+                            the sum over exactly `data.accounts` (server-side:
+                            non-liability, in_net_worth, with ledger activity), so
+                            the count is that array's length — NOT the balance
+                            cards below, which are a differently gated
+                            (active-only, non-zero-balance) entity population. */}
+                        {t('bankWidget.acrossAccounts', { n: accounts.length.toString() })}
                     </p>
                 </CardContent>
             </Card>
@@ -218,6 +230,7 @@ export function BankBalancesWidget() {
                         const label = a.display_name || a.name;
                         const txCount = countByAccountName.get(a.name);
                         const provenanceText = balanceProvenance(a);
+                        const drift = driftBadge(a);
                         return (
                             <Card
                                 key={a.id}
@@ -258,6 +271,16 @@ export function BankBalancesWidget() {
                                     {txCount != null && (
                                         <div className="text-xs text-muted-foreground mt-1">
                                             {t('bankWidget.transactions', { n: integerLocaleFormatter.format(txCount) })}
+                                        </div>
+                                    )}
+                                    {drift && (
+                                        // Read-only chip: the card itself is the
+                                        // button (→ /accounts/:id), where the drift
+                                        // chip IS clickable and opens Reconcile.
+                                        <div className="mt-1.5">
+                                            <span className={badgeVariants({ variant: drift.variant })} title={drift.tooltip}>
+                                                {drift.label}
+                                            </span>
                                         </div>
                                     )}
                                 </CardContent>

@@ -18,6 +18,7 @@ import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
+import { useDriftBadge } from "@/features/accounts/driftBadge";
 import {
     groupAccounts, sumConvertedBalances, computeNetCash, isPortfolioType,
     type AccountGroup,
@@ -36,6 +37,9 @@ export default function AccountsPage() {
     const { data, isLoading, isError, error } = useAccounts({ active: "all" });
     const fmtCur = useCurrencyFormatter();
     const balanceProvenance = useBalanceProvenance();
+    // Drift badge text + tone (§3 F1) — shared with the detail header and the
+    // dashboard widget so wording and the stale threshold can't diverge.
+    const driftBadge = useDriftBadge();
     const { appSettings } = useAppSettings();
     const displayCurrency = appSettings.defaultCurrency || "EUR";
     const { convertToTarget } = useCurrencyConverter(displayCurrency);
@@ -90,6 +94,9 @@ export default function AccountsPage() {
         // land — a "€0,00" computed ledger balance is misleading, so show a
         // placeholder instead (§3 F8).
         const portfolioPlaceholder = isPortfolioType(a.type);
+        // Drift chip content: "Drift +€15,50 · statement 03/06/2026", in warning
+        // tone once that statement reading is older than ~45 days (§3 F1).
+        const drift = driftBadge(a);
         return (
         <Tooltip key={a.id}>
         <TooltipTrigger asChild>
@@ -130,7 +137,7 @@ export default function AccountsPage() {
                         )}
                         <span>{a.currency}</span>
                         {a.institution && <span>· {a.institution}</span>}
-                        {a.drift != null && a.drift !== 0 && (
+                        {drift && (
                             // Clicking the drift badge opens the reconcile dialog
                             // (statement vs computed + delta → accept / adjust).
                             <Tooltip>
@@ -140,14 +147,14 @@ export default function AccountsPage() {
                                         // Kept as a template literal: badgeVariants sets text-[11px] and the
                                         // appended text-xs deliberately overrides it; cn()'s tailwind-merge
                                         // would resolve the font-size differently, so preserve the raw join.
-                                        className={`${badgeVariants({ variant: "destructive" })} cursor-pointer text-xs`}
+                                        className={`${badgeVariants({ variant: drift.variant })} cursor-pointer text-xs`}
                                         aria-label={t('accounts.reconcile.open')}
                                         onClick={(e) => { e.stopPropagation(); setReconciling(a); }}
                                     >
-                                        {t('accounts.drift')}: {a.drift > 0 ? "+" : ""}{fmtCur(a.drift, a.currency)}
+                                        {drift.label}
                                     </button>
                                 </TooltipTrigger>
-                                <TooltipContent>{t('accounts.driftTooltip')}</TooltipContent>
+                                <TooltipContent>{drift.tooltip}</TooltipContent>
                             </Tooltip>
                         )}
                     </div>
@@ -200,7 +207,7 @@ export default function AccountsPage() {
                                 <Receipt className="mr-2 h-4 w-4" /> {t('accounts.openTransactions')}
                             </DropdownMenuItem>
                         )}
-                        {a.drift != null && a.drift !== 0 && (
+                        {drift && (
                             <DropdownMenuItem onClick={() => setReconciling(a)}>
                                 <Scale className="mr-2 h-4 w-4" /> {t('accounts.reconcile.open')}
                             </DropdownMenuItem>
