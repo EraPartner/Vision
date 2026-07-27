@@ -3,11 +3,11 @@ title: Database Migration Guide
 type: guide
 status: active
 date: 2026-04-21
-updated: 2026-04-27
-tags: [guide, database, migrations, alembic, postgresql, phase-1]
+updated: 2026-07-27
+tags: [guide, database, migrations, alembic, postgresql, phase-1, destructive-ddl, ci]
 description: How to create, run, and manage database migrations using Alembic
 aliases: [migration-guide, alembic-guide, database-schema, schema-changes]
-related_code: ["alembic/", "alembic/env.py", "config/alembic.ini", "docker-entrypoint.sh"]
+related_code: ["alembic/", "alembic/env.py", "alembic/manual/", "alembic/script.py.mako", "config/alembic.ini", "docker-entrypoint.sh", "scripts/check-destructive-migrations.py"]
 ---
 
 # Database Migration Guide
@@ -73,9 +73,65 @@ This creates a new file in `alembic/versions/` with an auto-incrementing number 
 
 1. **Always provide a downgrade** — Every migration should be reversible
 2. **Test both directions** — Run `upgrade` and `downgrade` locally before committing
-3. **Don't auto-execute** — Let users run migrations manually; never run them automatically in application code
+3. **Assume it runs unattended** — `docker-entrypoint.sh` runs `alembic upgrade head` on every container start, so anything in `alembic/versions/` applies to every installation on the next restart, before the coupled code necessarily ships. Never write a migration whose safety depends on someone choosing when to run it; application code must not trigger migrations either
 4. **Use idempotent operations** — Where possible, check if changes already exist before applying
 5. **Handle dependencies** — For view/trigger changes, drop dependencies before altering types, then recreate
+6. **Mark destructive DDL** — Anything that drops or retypes needs a `destructive-ok:` marker, or it belongs out-of-band; see [[#destructive-ddl-and-the-destructive-ok-marker|below]]
+
+## Destructive DDL and the `destructive-ok` marker
+
+> [!danger] Migrations in `alembic/versions/` auto-apply on boot
+> `docker-entrypoint.sh` runs `alembic upgrade head` **unconditionally on every container start**. A migration is therefore not "shipped when someone runs it" — it reaches every self-hosted database on the next restart, *whether or not the application code that depends on it has been deployed*. There is no soak window, no staging tier, and no DBA in the loop.
+
+This is not hypothetical. `0055_drop_bank_account_string` was written as a "gated, apply-after-soak" contract-phase migration and dropped `transactions.bank_account`, `planned_transactions.bank_account`, the dual-write trigger and `mv_bank_balances`. Because it sat in the chain, it applied immediately — without the coupled read/write code — and **crashed startup**. `0055` is now a no-op, `0056_restore_bank_account_after_premature_drop` is its recovery, and the doctrine is recorded in [[docs/adr/088-account-entity|ADR-088]].
+
+### The rule
+
+Destructive DDL inside `upgrade()` must carry a marker on (or within a few lines above) the statement:
+
+```python
+def upgrade() -> None:
+    # destructive-ok: mv is derived-only and rebuilt by materializedViewService on the
+    # same boot; its last reader was removed in this release (ADR-094).
+    op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_example CASCADE;")
+```
+
+Inside a raw-SQL string, use the SQL comment form — both are accepted:
+
+```python
+    op.execute("""
+        -- destructive-ok: feature removed app-wide in the same release; no readers remain.
+        DROP TABLE legacy_thing;
+    """)
+```
+
+The reason is free text (minimum 10 characters, so `# destructive-ok: ok` does not count) and should cite an ADR, a runbook, or the migration that made the drop safe. The marker is **not** a rubber stamp — it exists to force one question at authoring time:
+
+> Does the code that stops reading this ship **before** this migration auto-applies on a user's machine?
+
+If the answer is no, **do not add a marker** — the change does not belong in the chain at all.
+
+### The escape hatch: `alembic/manual/`
+
+A destructive change whose safety depends on code being deployed first goes in `alembic/manual/<name>/` as `up.sql` + `down.sql` + a `README.md` stating the preconditions. Alembic never sees that directory (it is not in `version_locations`), so nothing auto-applies it; the user or maintainer runs it by hand in lockstep with the code. `alembic/manual/contract_drop_bank_account/` is the worked example — it is the ADR-088 contract phase that `0055` should have been.
+
+### What is flagged
+
+The checker is `scripts/check-destructive-migrations.py`, enforced by the `verify-destructive-migrations` CI job (parallel to `verify-compose-sync`) and runnable locally with `bun run db:check-destructive`.
+
+| Flagged | Not flagged |
+|---------|-------------|
+| `op.drop_table` / `DROP TABLE` (always — recreating still loses rows) | `DROP INDEX` / `op.drop_index` — rebuildable, holds no data |
+| `op.drop_column` / `DROP COLUMN` (always) | `DROP CONSTRAINT` / `op.drop_constraint` — loosens the schema, destroys nothing |
+| `DROP MATERIALIZED VIEW` / `VIEW` / `TRIGGER` / `FUNCTION` / `TYPE` — *unless the same `upgrade()` recreates an object of that name* (DROP-then-CREATE is a replace, not a destruction) | `DROP DEFAULT` / `DROP NOT NULL` |
+| `op.alter_column(..., type_=...)` and raw `ALTER COLUMN ... TYPE` — **always**, widening or not | anything inside `downgrade()` — the rollback path is destructive by definition |
+| | `alembic/legacy_versions/` and `alembic/manual/` — neither auto-applies |
+
+Type changes are flagged unconditionally because static analysis cannot tell `NUMERIC(15,2) → NUMERIC(18,4)` (safe) from `NUMERIC(18,4) → NUMERIC(8,2)` (silent truncation). Writing the marker is cheaper than the checker guessing wrong.
+
+Migrations that shipped before this gate existed carry retroactive markers recording *why they were safe at the time* — they are annotations, not new permissions. The marker binds to a statement, not to a file, so adding a new drop to an old migration is still caught.
+
+Self-test the checker with `python3 scripts/check-destructive-migrations.py --self-test`; list current findings without failing with `--list`.
 
 ## Running Migrations
 

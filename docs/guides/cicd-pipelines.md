@@ -3,9 +3,9 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-06-17
-tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, ci-complete, live-api-contracts, branch-protection]
-description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, and release automation with checksums
+updated: 2026-07-27
+tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
+description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
 related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", "config/gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
 ---
@@ -169,6 +169,35 @@ Named volumes in Docker Compose define persistent data storage. If a volume is a
 **Policy:** Blocks quality gate if volumes diverge; must add all new named volumes to both compose files before merging.
 
 **Related:** [[docs/adr/051-docker-compose-sync-named-volumes|ADR-046]] (v1.0.2 attachments bug analysis + fix)
+
+---
+
+#### 3b. **verify-destructive-migrations** — Unmarked Destructive DDL Check
+
+Scans every file in `alembic/versions/` for destructive DDL in `upgrade()` that carries no explicit `# destructive-ok: <reason>` marker.
+
+```yaml
+verify-destructive-migrations:
+  name: Verify Destructive Migrations
+  runs-on: ubuntu-24.04
+  timeout-minutes: 5
+  steps:
+    - uses: actions/checkout@v4
+    - name: Self-test the checker
+      run: python3 scripts/check-destructive-migrations.py --self-test
+    - name: Check migrations for unmarked destructive DDL
+      run: python3 scripts/check-destructive-migrations.py
+```
+
+**Why it's critical:**
+
+`docker-entrypoint.sh` runs `alembic upgrade head` unconditionally on every boot, so a migration in the chain reaches every self-hosted database on the next container start — with or without the application code that depends on it. `0055_drop_bank_account_string` dropped columns, a trigger and a materialized view ahead of its coupled code and **crashed startup**; `0055` is now a no-op and `0056` is its recovery. Until this job existed, the only thing preventing a repeat was a docstring and developer memory of that one incident.
+
+Flags `DROP TABLE` / `DROP COLUMN` (always), unreplaced `DROP` of a view/matview/trigger/function/type, and every `ALTER COLUMN ... TYPE`. Ignores `DROP INDEX`/`DROP CONSTRAINT`, `downgrade()` bodies, and the non-auto-applied `alembic/legacy_versions/` and `alembic/manual/` trees.
+
+**Policy:** Blocks quality gate. Either mark the statement with a reason (citing an ADR/runbook), or — if running code still reads what is being dropped — move the change out of the chain into `alembic/manual/<name>/`. The checker is stdlib-only Python, so the job needs no `setup-python` step.
+
+**Related:** [[docs/guides/migrations#destructive-ddl-and-the-destructive-ok-marker|Migration Guide: Destructive DDL]] · [[docs/adr/088-account-entity|ADR-088]]
 
 ---
 
@@ -446,6 +475,7 @@ quality-gate:
     - test-frontend
     - test-backend
     - verify-compose-sync
+    - verify-destructive-migrations
   if: always()
   steps:
     - name: Check all gates passed
@@ -458,7 +488,7 @@ quality-gate:
 ```
 
 **Checks:**
-- All eleven prerequisite jobs must pass: `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `typecheck-backend`, `verify-generated`, `build-frontend`, `test-frontend`, `test-backend`, `verify-compose-sync`
+- All twelve prerequisite jobs must pass: `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `typecheck-backend`, `verify-generated`, `build-frontend`, `test-frontend`, `test-backend`, `verify-compose-sync`, `verify-destructive-migrations`
 - Runs regardless of individual failures (`if: always()`) but fails if any needed job failed
 - Blocks expensive Docker image build until quality gates are green
 

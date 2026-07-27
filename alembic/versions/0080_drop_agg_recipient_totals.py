@@ -38,6 +38,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # destructive-ok: shipped 2026-07-14, annotated retroactively. Covers the trigger, both
+    # functions and the table below. agg_recipient_totals is a derived rollup of transactions with
+    # no remaining readers (verified — see docstring); nothing user-authored is lost, and
+    # downgrade() rebuilds table, trigger, functions and backfill.
     op.execute("DROP TRIGGER IF EXISTS trg_agg_recipient_totals_sync ON transactions;")
     op.execute("DROP FUNCTION IF EXISTS fn_agg_recipient_totals_sync() CASCADE;")
     op.execute(

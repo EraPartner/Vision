@@ -38,6 +38,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # The unique index mv_bank_balances_idx is owned by the view — CASCADE drops it too.
+    # destructive-ok: shipped 2026-07-19, annotated retroactively. Derived data with zero readers
+    # (grep evidence in the docstring; ADR-094 rejected its semantics), and the coupled change —
+    # materializedViewService no longer creating/refreshing it — shipped in the same release, so
+    # boot does not try to refresh a view this removed. Downgrade recreates it WITH NO DATA.
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_bank_balances CASCADE;")
 
 

@@ -124,6 +124,9 @@ def _drop_views(conn) -> None:
         JOIN pg_class   t ON t.oid   = d.refobjid AND t.relname = 'transactions'
         JOIN pg_namespace n ON n.oid  = c.relnamespace AND n.nspname = 'public'
     """))
+    # destructive-ok: shipped 2026-05-05, annotated retroactively. Materialized views hold only
+    # derived data; every view dropped here is recreated from _VIEWS_DDL by _create_views() before
+    # this migration returns (Postgres cannot retype a column a view depends on in place).
     for row in result:
         conn.execute(sa.text(f"DROP MATERIALIZED VIEW IF EXISTS {row[0]} CASCADE"))
 
@@ -137,6 +140,9 @@ def _create_views(conn) -> None:
 def upgrade() -> None:
     conn = op.get_bind()
     _drop_views(conn)
+    # destructive-ok: shipped 2026-05-05, annotated retroactively. WIDENING, not narrowing:
+    # NUMERIC(15,2) -> NUMERIC(18,4) grows both precision and scale, so no existing value can be
+    # truncated. The reverse direction lives in downgrade(), where losing scale is expected.
     conn.execute(sa.text(
         "ALTER TABLE transactions ALTER COLUMN amount TYPE NUMERIC(18,4)"
     ))

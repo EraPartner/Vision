@@ -483,6 +483,35 @@ jobs:
           echo "Compose project name sync OK."
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Destructive migrations — `docker-entrypoint.sh` runs `alembic upgrade head`
+  # unconditionally on every boot, so a DROP in alembic/versions/ reaches every
+  # self-hosted database on the next container start, with or without the code
+  # that depends on it. That is exactly how 0055 dropped bank_account ahead of
+  # its coupled code and crashed startup (ADR-088; 0055 neutered, 0056 recovery).
+  # This gate makes destructive DDL state its case instead of relying on someone
+  # remembering that incident.
+  # ─────────────────────────────────────────────────────────────────────────────
+  verify-destructive-migrations:
+    name: Verify Destructive Migrations
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+
+      # No setup-python step on purpose: the checker is stdlib-only (ast + re) and
+      # ubuntu-24.04 ships python3, so this stays as dependency-free as the awk in
+      # verify-compose-sync above.
+      - name: Self-test the checker
+        run: python3 scripts/check-destructive-migrations.py --self-test
+
+      - name: Check migrations for unmarked destructive DDL
+        run: python3 scripts/check-destructive-migrations.py
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Quality Gate — all quality checks must pass before Docker builds run.
   # Prevents wasting expensive Docker build time on broken commits.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -503,12 +532,13 @@ jobs:
       - test-frontend
       - test-backend
       - verify-compose-sync
+      - verify-destructive-migrations
     if: always()
     steps:
       - name: Check all gates passed
         run: |
           results='${{ toJson(needs.*.result) }}'
-          # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the ten
+          # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the eleven
           # code jobs are gated off by `changes.outputs.code`, so they report
           # 'skipped' and this gate must still pass. `changes` and `secrets-scan`
           # always run, so a genuine upstream break still shows as

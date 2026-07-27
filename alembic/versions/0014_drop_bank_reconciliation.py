@@ -18,6 +18,9 @@ depends_on = None
 
 
 def upgrade():
+    # destructive-ok: shipped 2026-04-26, annotated retroactively. The bank-reconciliation feature
+    # was removed from the application in the same release, so no running code reads these tables,
+    # their triggers, or the enum (see docstring). Downgrade recreates the full structure.
     for table in ('bank_statements', 'reconciliation_entries'):
         op.execute(sa.text(
             f"DROP TRIGGER IF EXISTS update_{table}_updated_at ON {table}"

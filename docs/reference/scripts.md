@@ -3,8 +3,8 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-06-26
-tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill]
+updated: 2026-07-27
+tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
 ---
@@ -86,6 +86,7 @@ Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source
 | `db:stamp` | `venv/bin/alembic -c config/alembic.ini stamp head` | Mark DB at a revision without running migrations. |
 | `db:revision` | `venv/bin/alembic … revision --autogenerate -m` | Create a new migration. |
 | `db:index-stats` | `bun run apps/node-backend/scripts/index-stats.js` | Dump per-index usage stats from `pg_stat_user_indexes`. |
+| `db:check-destructive` | `python3 scripts/check-destructive-migrations.py` | Static scan of `alembic/versions/` (does **not** touch the database): fails on destructive DDL in `upgrade()` — `DROP TABLE`/`DROP COLUMN`, an unreplaced view/trigger/function/type drop, or any `ALTER COLUMN … TYPE` — that carries no `# destructive-ok: <reason>` marker. Migrations auto-apply on every boot, so this is the guard against repeating the 0055 premature-drop crash. Add `--self-test` to exercise the checker's own fixtures, `--list` to inventory findings without failing. Enforced in CI by `verify-destructive-migrations`. See [[docs/guides/migrations#destructive-ddl-and-the-destructive-ok-marker\|Migration Guide]]. |
 | `db:precision-drift` | `bun run apps/node-backend/scripts/check-precision-drift.js` | Static source scan (does **not** touch the database): flags `transactions ↔ *_raw_transactions` joins doing rounding-sensitive `amount` arithmetic, so a future NUMERIC widening has evidence. Prints nothing today. |
 | `quotes:densify` | `bun run apps/node-backend/scripts/densify-asset-history.js` | One-time gap-fill: runs `backfillHoldingGaps` across all investments to heal sparse `asset_price_history`, then recomputes portfolio snapshots if new rows were written. Safe to re-run (idempotent). Run once after upgrading from a version where Binance history was capped at 365 days. See [[docs/adr/065-daily-gap-fill-dense-asset-history\|ADR-065]]. |
 
@@ -164,6 +165,7 @@ bun run validate-locales
 ```bash
 bun run db:revision -- "describe_change"
 # edit alembic/versions/<n>_describe_change.py
+bun run db:check-destructive   # CI gate: any DROP / retype needs a `destructive-ok:` marker
 bun run db:upgrade
 ```
 
