@@ -744,11 +744,26 @@ look-changing one.
   - "Monthly, ends Dec 2026, max 12" generates due bills forever.
   - Fix: add `recurrence_end_date`/`max_occurrences` columns, thread them through `mapToCreateAPI`/`mapToUpdateAPI`/`mapFromAPI`, and check them in `plannedExecutionService`'s advance logic.
 
-- [ ] **Planned amount has no sign control — a positive "bill" renders as income and can never auto-match** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Planned amount has no sign control — a positive "bill" renders as income and can never auto-match** ⏫ ✅ 2026-07-27 · 4f12932 (intent confirmed from code before fixing — server force-negates loan installments, cashflowForecast buckets negative=expense/positive=income, plannedMatchService rejects sign mismatches. Form now holds an unsigned magnitude + an explicit expense/income ToggleGroup (expense default, gain/loss tokens; loans locked to expense — server derives their amount), recombining sign on save; edit path splits the stored sign back out so an untouched re-save is a byte-identical no-op. 8-test unit suite added; two integration assertions that encoded the bug flipped. Independently adversarially verified (all sign paths, -0/NaN/negative-bypass, loan POST/PATCH double-negation, producers/consumers, i18n) — CONFIRMED-CORRECT; comment overstatement corrected in 718c627. Verifier caveats filed as the three findings below)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Bare unsigned input (`PlannedPaymentForm.tsx:145`), stored as typed (`usePlannedPayments.ts:144`); loans are force-negated server-side (`plannedTransactions.js:194`), implying expenses-negative. Typing `150` for rent → "+€150" (`PlannedPaymentsPage.tsx:219`), inflates cashflow forecasts, and `plannedMatchService.js:64` (sign mismatch) guarantees it never matches the real −150 txn.
   - **Caveat: the intended sign convention for non-loan planned payments is undocumented — confirm intent before fixing.**
   - Fix: add an explicit income/expense toggle to the form and negate on save for expenses, once intent is confirmed.
+
+- [ ] **RecurringDetectionPanel hardcodes expense sign — a detected recurring income becomes a negative planned payment that can never auto-match** 🔼
+  - ↪ _from: Orchestration session 2026-07-27 · planned-sign fix verification_
+  - `apps/frontend/src/components/planned/RecurringDetectionPanel.tsx:150` — `amount: pattern.latestAmount * -1`, and detected amounts are `.abs()`'d server-side (`recurringDetectionService.js:240-242`), so sign information is lost before the panel and the panel assumes expense. Salary/rent-received patterns become negative planned payments; `plannedMatchService` then rejects the sign mismatch against the real positive txn — same bug class as the fixed form finding, different producer.
+  - Fix: carry the dominant sign of the detected pattern through the detection payload (or infer from the source transactions) and use it when creating the planned payment.
+
+- [ ] **Loan PATCH keeps a stale client `amount` when the repayment schedule is regenerated** 🔽
+  - ↪ _from: Orchestration session 2026-07-27 · planned-sign fix verification_
+  - `apps/node-backend/src/routes/plannedTransactions.js:236-240` — editing `loan_principal`/rate/term regenerates the schedule and updates `loan_regular_payment_amount`, but a defined client `fields.amount` is kept as-is (only an *undefined* amount is re-derived), so `amount` desyncs from `loan_regular_payment_amount`. Same on convert-to-loan via PATCH. Pre-existing behavior, unchanged in magnitude by the sign-control fix (which strictly improved the convert case).
+  - Fix: when `is_loan` and any schedule input changed, always re-derive `amount = -|regular_payment_amount|` server-side, ignoring the client value.
+
+- [ ] **Planned-payment form state is sticky across consecutive "New" opens — including the new visible direction toggle** 🔽
+  - ↪ _from: Orchestration session 2026-07-27 · planned-sign fix verification_
+  - `apps/frontend/src/pages/PlannedPaymentsPage.tsx:467-473` — the form is keyed `editing?.id ?? "new"`, so back-to-back creates never remount and all `useState` initializers survive (name, amount, notes… pre-existing; the direction toggle is now the most visible sticky field: create an income row, reopen "New", toggle still says Income).
+  - Fix: reset key per open (e.g. an incrementing counter when opening in create mode) or reset state on `open` transition.
 
 - [x] **AddInvestmentDialog: initial purchase silently dropped (success toast) — or guaranteed 400 after the investment row already exists** ⏫ ✅ 2026-07-11 · 750022d
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
