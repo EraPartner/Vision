@@ -163,12 +163,17 @@ Each account card in `AccountsPage` (`apps/frontend/src/pages/AccountsPage.tsx`)
 the field is present in the API response. The balance label carries a `title` tooltip
 (i18n key `accounts.balanceTooltip`).
 
-### Drift badge — signed, currency-formatted
+### Drift badge — signed, currency-formatted, dated, age-aware
 
 When `statement_balance` is set and `drift` is non-zero, the drift badge on the account card
-displays a signed, currency-formatted amount -- for example "Drift: +€15.50" or "Drift: −€3.00".
-The badge has a `title` tooltip (i18n key `accounts.driftTooltip`) explaining what the figure
-represents. See [[docs/adr/094-balance-reconciliation-drift|ADR-094]] for the drift semantics.
+displays a signed, currency-formatted amount with the statement's as-of date -- for example
+"Drift +€15,50 · statement 03/06/2026". A reading **older than 45 days** renders the badge in
+warning (amber) tone rather than destructive, with its own tooltip (i18n key
+`accounts.driftStaleTooltip`); a fresh reading keeps the destructive tone and the
+`accounts.driftTooltip` tooltip. The label/tone logic is shared (`useDriftBadge`,
+`apps/frontend/src/features/accounts/driftBadge.ts`) across the hub cards, the account detail
+header, and the dashboard `BankBalancesWidget` chips. See
+[[docs/adr/094-balance-reconciliation-drift|ADR-094]] for the drift semantics.
 
 ### AddAccountDialog — name-required guard
 
@@ -190,8 +195,14 @@ allowed -- the note is informational only.
 | Key | Purpose |
 |-----|---------|
 | `accounts.balanceTooltip` | Tooltip on the balance figure in the account card |
-| `accounts.driftTooltip` | Tooltip on the drift badge in the account card |
+| `accounts.driftTooltip` | Tooltip on a fresh drift badge |
 | `accounts.mergeTypeMismatch` | Amber note in MergeAccountDialog when target type differs from source |
+
+Later additions (drift badge rework, WP-B1 completion): `accounts.driftBadge` ("Drift {amount}"),
+`accounts.driftBadgeStatement` ("statement {date}"), `accounts.driftStaleTooltip` (stale-reading
+tooltip); the bare `accounts.drift` key was removed with its last consumer. The Reconcile dialog's
+strings live under `accounts.reconcile.*` (fresh-reading input, live preview, backdated warning,
+"show transactions since" exit).
 
 ## Data model
 
