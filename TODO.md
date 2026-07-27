@@ -760,7 +760,7 @@ look-changing one.
   - `apps/node-backend/src/routes/plannedTransactions.js:236-240` — editing `loan_principal`/rate/term regenerates the schedule and updates `loan_regular_payment_amount`, but a defined client `fields.amount` is kept as-is (only an *undefined* amount is re-derived), so `amount` desyncs from `loan_regular_payment_amount`. Same on convert-to-loan via PATCH. Pre-existing behavior, unchanged in magnitude by the sign-control fix (which strictly improved the convert case).
   - Fix: when `is_loan` and any schedule input changed, always re-derive `amount = -|regular_payment_amount|` server-side, ignoring the client value.
 
-- [ ] **Planned-payment form state is sticky across consecutive "New" opens — including the new visible direction toggle** 🔽
+- [x] **Planned-payment form state is sticky across consecutive "New" opens — including the new visible direction toggle** 🔽 ✅ 2026-07-27 · 8f4ebbb (createFormKey counter bumped on each New open keys fresh creates so the form remounts blank; integration test pins direction-back-to-Expense + empty name on reopen; no visual change)
   - ↪ _from: Orchestration session 2026-07-27 · planned-sign fix verification_
   - `apps/frontend/src/pages/PlannedPaymentsPage.tsx:467-473` — the form is keyed `editing?.id ?? "new"`, so back-to-back creates never remount and all `useState` initializers survive (name, amount, notes… pre-existing; the direction toggle is now the most visible sticky field: create an income row, reopen "New", toggle still says Income).
   - Fix: reset key per open (e.g. an incrementing counter when opening in create mode) or reset state on `open` transition.
