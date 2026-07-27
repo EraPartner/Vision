@@ -209,6 +209,20 @@ describe('Admin Routes', () => {
       expect(payload).toHaveProperty('current_version');
     });
 
+    it('should report docker-compose update mode (HTTP clients are never Electron)', async () => {
+      // Inside the desktop shell the frontend short-circuits to the Electron
+      // IPC updater, so anything hitting this route is a self-hosted
+      // docker-compose deployment with no in-app installer. Omitting the field
+      // made the frontend default to 'source' and render a dead Install button.
+      mockGitHubReleaseBody(JSON.stringify({ tag_name: 'v9.9.9' }));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/update/check'](req, res);
+
+      expect(res.json.mock.calls[0][0].data.update_mode).toBe('docker-compose');
+    });
+
     it('should include version metadata in update check response', async () => {
       mockGitHubReleaseBody(JSON.stringify({ tag_name: 'v2.1.0' }));
 

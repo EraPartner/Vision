@@ -32,6 +32,10 @@ const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
 const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
+// Update mode reported to HTTP clients. See buildUpdateCheckPayload for why this
+// is a constant rather than something detected per-request.
+const UPDATE_MODE_DOCKER_COMPOSE = 'docker-compose';
+
 /**
  * Fetch the latest GitHub Release metadata.
  * Returns a plain object — callers handle errors.
@@ -91,6 +95,15 @@ function buildUpdateCheckPayload(release, currentVersion) {
       published_at: release.published_at,
       release_notes: release.body || '',
       html_url: release.html_url,
+      // Anything reaching this HTTP route is a non-Electron client: inside the
+      // desktop shell the frontend short-circuits to the electronUpdater IPC
+      // (apps/frontend/src/lib/api/electron.ts → checkForUpdates), which
+      // supplies its own 'source'/'docker'/'dev' mode. So the only consumer
+      // here is a self-hosted docker-compose (or bare web) deployment, which
+      // updates from the command line — never via an in-app installer. Without
+      // this field the frontend defaulted to 'source' and offered an Install
+      // button that no-oped outside Electron.
+      update_mode: UPDATE_MODE_DOCKER_COMPOSE,
     },
     latestVersion,
     upToDate,

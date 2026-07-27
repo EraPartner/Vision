@@ -508,7 +508,7 @@ Vision supports **three deployment modes**, each with a distinct update path. Se
 | Mode | Condition | Update Method | Artifacts |
 |------|-----------|----------------|-----------|
 | **dev** | `app.isPackaged === false && !useRepoMode` | File watcher → Docker rebuild | (automatic via file system) |
-| **source** | `app.isPackaged === true && useRepoMode === 'true'` | Shell script installer from GitHub | `vision-x.y.z.zip` + `vision-x.y.z.zip.sha256` |
+| **source** | `app.isPackaged === true && useRepoMode === 'true'` | Shell script installer from GitHub | `vision-source-launcher-x.y.z-arm64.zip` + `.sha256` |
 | **docker** | `app.isPackaged === true` (default) | `docker-compose pull` → restart | Docker image at `ghcr.io/erapartner/vision:<tag>` |
 
 #### IPC Handlers

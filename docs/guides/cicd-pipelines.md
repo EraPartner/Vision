@@ -659,6 +659,9 @@ package-mac:
 - `Vision-x.y.z-arm64-mac.zip` — Installer ZIP
 - `Vision-x.y.z-arm64-mac.zip.sha256` — SHA256 checksum
 - `Vision-x.y.z-arm64.dmg` — Native macOS installer
+- `vision-source-launcher-x.y.z-arm64.zip` (+ `.sha256`) — source tree (`unsigned/Vision/`)
+  plus `unsigned/launch.command`, consumed by the in-app shell updater in source/repo
+  mode. Layout is fixed by `packaging/electron/updater.js`; the build step asserts it.
 
 **Failure:** Indicates macOS build or signing issue; must fix before re-releasing.
 

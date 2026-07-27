@@ -25,7 +25,12 @@ interface UpdateStatus {
     published_at?: string;
     release_notes?: string;
     html_url?: string;
-    update_mode?: 'source' | 'docker' | 'dev';
+    /**
+     * 'source' | 'docker' | 'dev' come from the Electron IPC updater. The HTTP
+     * route — the only source outside Electron — reports 'docker-compose',
+     * which has no in-app installer: the operator runs `docker compose pull`.
+     */
+    update_mode?: 'source' | 'docker' | 'dev' | 'docker-compose';
 }
 
 type ApplyPhase = "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
@@ -118,6 +123,16 @@ export function UpdateNotification() {
                 return;
             }
 
+            // The release has no installable source-launcher asset — the main
+            // process opened the release page instead. That is a redirect, not
+            // a failure, so don't shout at the user with an error toast.
+            if (result.manual_download) {
+                toast.info(t('update.manualDownload'));
+                setPhase("idle");
+                setDialogOpen(false);
+                return;
+            }
+
             if (!result.success) {
                 toast.error(t('update.failed'), { description: result.error });
                 setPhase("idle");
@@ -141,6 +156,12 @@ export function UpdateNotification() {
     if (!status || status.up_to_date) return null;
 
     const isApplying = phase !== "idle" && phase !== "done";
+    // Only the Electron shell can actually install an update from inside the
+    // app. In a browser (docker-compose self-host, or the web build) every
+    // install path is a no-op — installShellUpdate() returns null and
+    // triggerDockerUpdate() has no IPC bridge — so we show the command the
+    // operator has to run instead of a button that does nothing.
+    const canInstallInApp = apiClient.isElectron();
 
     const phaseLabel = () => {
         switch (phase) {
@@ -195,6 +216,16 @@ export function UpdateNotification() {
                         </div>
                     )}
 
+                    {/* Non-Electron deployments update from the command line */}
+                    {!canInstallInApp && (
+                        <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+                            <p className="text-muted-foreground">{t('update.dockerComposeHint')}</p>
+                            <code className="mt-1.5 block break-all font-mono text-xs text-foreground">
+                                docker compose pull &amp;&amp; docker compose up -d
+                            </code>
+                        </div>
+                    )}
+
                     {/* Phase indicator */}
                     {isApplying && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -224,13 +255,15 @@ export function UpdateNotification() {
                         >
                             {t('update.later')}
                         </Button>
-                        <Button onClick={handleInstall} disabled={isApplying} className="gap-2">
-                            {isApplying ? (
-                                <><Loader2 className="h-4 w-4 animate-spin" /> {phaseLabel()}</>
-                            ) : (
-                                <><Download className="h-4 w-4" /> {t('update.install')}</>
-                            )}
-                        </Button>
+                        {canInstallInApp && (
+                            <Button onClick={handleInstall} disabled={isApplying} className="gap-2">
+                                {isApplying ? (
+                                    <><Loader2 className="h-4 w-4 animate-spin" /> {phaseLabel()}</>
+                                ) : (
+                                    <><Download className="h-4 w-4" /> {t('update.install')}</>
+                                )}
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
