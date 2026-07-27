@@ -240,6 +240,58 @@ describe("AddInvestmentFromMarketDialog", () => {
         await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
 
+    it("keeps the half-filled new-investment form when dismissed", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
+
+        // Act — walk to the create step, rename, dismiss, reopen
+        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await screen.findByRole("dialog");
+        const createNewBtn = await screen.findByText(/create new/i);
+        await user.click(createNewBtn.closest("button") ?? createNewBtn);
+        const nameInput = await screen.findByLabelText(/name/i);
+        await user.clear(nameInput);
+        await user.type(nameInput, "Apple long-term");
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await user.click(screen.getByRole("button", { name: /add investment/i }));
+
+        // Assert — still on the create step, with the typed name intact
+        await screen.findByRole("dialog");
+        expect(await screen.findByDisplayValue("Apple long-term")).toBeInTheDocument();
+    });
+
+    it("re-seeds from the quote when the page looks up a different symbol", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        const { rerender } = renderWithApp(<AddInvestmentFromMarketDialog quote={QUOTE} />);
+
+        // Act — dirty the form, dismiss, then let the page swap the quote
+        await user.click(await screen.findByRole("button", { name: /add investment/i }));
+        await screen.findByRole("dialog");
+        const createNewBtn = await screen.findByText(/create new/i);
+        await user.click(createNewBtn.closest("button") ?? createNewBtn);
+        const nameInput = await screen.findByLabelText(/name/i);
+        await user.clear(nameInput);
+        await user.type(nameInput, "Apple long-term");
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+        rerender(
+            <AddInvestmentFromMarketDialog
+                quote={{ ...QUOTE, symbol: "MSFT", name: "Microsoft Corp.", price: 410 }}
+            />,
+        );
+        await user.click(screen.getByRole("button", { name: /add investment/i }));
+
+        // Assert — back to the choose step for MSFT; Apple's draft is gone, so
+        // the old price/name can never be submitted under the new symbol
+        await screen.findByRole("dialog");
+        expect(screen.queryByDisplayValue("Apple long-term")).not.toBeInTheDocument();
+        expect(await screen.findByText(/create new/i)).toBeInTheDocument();
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {

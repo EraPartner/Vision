@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import {
   AlertTriangle, Check, Link2, RefreshCw, ShieldCheck, Trash2,
 } from "lucide-react";
@@ -164,7 +165,7 @@ export function ResearchMappingDialog({
           </div>
 
           {resolveMutation.isPending ? (
-            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+            <div {...loadingSurfaceProps} className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
           ) : proposals.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">{t('research.mapping.noProposals')}</p>
           ) : (
@@ -237,7 +238,7 @@ export function ResearchMappingDialog({
           </div>
 
           {loadingExisting ? (
-            <Skeleton className="h-10 w-full" />
+            <Skeleton {...loadingSurfaceProps} className="h-10 w-full" />
           ) : existing.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">{t('research.mapping.noExisting')}</p>
           ) : (

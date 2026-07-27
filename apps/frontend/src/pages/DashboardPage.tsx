@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags, AlertTriangle } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats, useMonthlySummary } from "@/hooks/useFilteredDashboardStats";
@@ -303,7 +304,7 @@ export default function DashboardPage() {
     // queries load, so the hero stats appear the moment they arrive instead
     // of gating the whole page on the slowest query.
     const statSkeleton = (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div {...loadingSurfaceProps} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
                 <Card key={i} className="glass-regular micro-lift">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
@@ -320,7 +321,7 @@ export default function DashboardPage() {
     );
 
     const recentSkeleton = (
-        <Card>
+        <Card {...loadingSurfaceProps}>
             <CardHeader>
                 <Skeleton className="h-6 w-44" />
                 <Skeleton className="h-4 w-32 mt-1" />

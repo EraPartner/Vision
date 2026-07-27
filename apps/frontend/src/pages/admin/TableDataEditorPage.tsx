@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
 import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
+import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -344,7 +345,10 @@ export default function TableDataEditorPage() {
 
             {/* Grid */}
             <Card className="glass-chrome overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* The skeleton rows live inside <tbody>, where a wrapper
+                    element would be invalid HTML — the scroll container around
+                    the table carries the status role, only while loading. */}
+                <div {...(query.isLoading ? loadingSurfaceProps : {})} className="overflow-x-auto">
                     <Table>
                         <TableHeader className="bg-foreground/[0.015]">
                             {/* Column titles + sort */}

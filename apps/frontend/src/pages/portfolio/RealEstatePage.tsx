@@ -17,6 +17,7 @@ import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 
@@ -58,7 +59,7 @@ export default function RealEstatePage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div {...loadingSurfaceProps} className="space-y-6">
         <PageHeader title={t('realestate.title')} icon={Building2} />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-64 w-full" />

@@ -356,6 +356,86 @@ describe("EditPortfolioTxnDialog", () => {
         expect(capturedBody?.account_id).toBe(5);
     });
 
+    // ─── Unsaved edits survive dismissal ───────────────────────────────────
+
+    /** The Radix overlay — clicking it is the "stray click next to the dialog". */
+    const overlay = () =>
+        document.querySelector<HTMLElement>(".fixed.inset-0.backdrop-blur-md")!;
+
+    it("keeps unsaved edits when dismissed by an outside click", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act — retype the units, then lose the dialog to a stray click
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        const unitsInput = await screen.findByLabelText(/units/i);
+        await user.clear(unitsInput);
+        await user.type(unitsInput, "42");
+        await user.click(overlay());
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await user.click(screen.getByRole("button", { name: /^edit$/i }));
+
+        // Assert — the edit is still there, not reverted to the stored 10
+        await screen.findByRole("dialog");
+        expect(await screen.findByLabelText(/units/i)).toHaveValue("42");
+    });
+
+    it("re-seeds from the transaction when opened for a different one", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        const { rerender } = renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act — dirty the form, dismiss, then point this instance at another txn
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        const unitsInput = await screen.findByLabelText(/units/i);
+        await user.clear(unitsInput);
+        await user.type(unitsInput, "42");
+        await user.click(overlay());
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+        const otherTxn = { ...TRANSACTION, id: 202, units: 7, price_per_unit: 30, amount: 210 };
+        rerender(<EditPortfolioTxnDialog investment={INVESTMENT} transaction={otherTxn} />);
+        await user.click(screen.getByRole("button", { name: /^edit$/i }));
+
+        // Assert — keeping input must never mean showing the previous txn's values
+        await screen.findByRole("dialog");
+        expect(await screen.findByLabelText(/units/i)).toHaveValue("7");
+        expect(screen.getByLabelText(/total amount/i)).toHaveValue("210");
+    });
+
+    it("re-seeds a pristine dialog from the latest transaction data", async () => {
+        // Arrange — same id, values changed underneath (a refetch after a save)
+        const user = userEvent.setup();
+        const { rerender } = renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        await user.click(overlay());
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+        rerender(
+            <EditPortfolioTxnDialog
+                investment={INVESTMENT}
+                transaction={{ ...TRANSACTION, units: 15, price_per_unit: 60, amount: 900 }}
+            />,
+        );
+        await user.click(screen.getByRole("button", { name: /^edit$/i }));
+
+        // Assert — nothing was typed, so the fresh server values win
+        await screen.findByRole("dialog");
+        expect(await screen.findByLabelText(/units/i)).toHaveValue("15");
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {

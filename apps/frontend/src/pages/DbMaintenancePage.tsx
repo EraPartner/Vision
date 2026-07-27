@@ -13,6 +13,7 @@ import { formatDateTimeWithAppSettings } from '@/components/shared/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -218,7 +219,10 @@ export default function DbMaintenancePage() {
                 <CardHeader>
                     <CardTitle className="text-base">{t('dbMaintenance.tableStats')}</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
+                {/* The skeleton rows live inside <tbody>, where a wrapper
+                    element would be invalid HTML — the CardContent around the
+                    table carries the status role instead, only while loading. */}
+                <CardContent {...(isLoading ? loadingSurfaceProps : {})} className="p-0">
                     <Table>
                         <TableHeader>
                             <TableRow>

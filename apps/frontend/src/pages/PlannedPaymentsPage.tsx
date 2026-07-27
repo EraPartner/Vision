@@ -7,6 +7,7 @@ import { Plus, CalendarClock, Clock, Repeat, Trash2, Pencil, ToggleLeft, ToggleR
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { RecurringDetectionPanel } from "@/components/planned/RecurringDetectionPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -391,7 +392,7 @@ export default function PlannedPaymentsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-8 animate-in">
+      <div {...loadingSurfaceProps} className="space-y-8 animate-in">
         <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (

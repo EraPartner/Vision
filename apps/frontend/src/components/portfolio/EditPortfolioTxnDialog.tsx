@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
 import type { PortfolioTransaction, PortfolioTransactionCreate } from '@/types/api';
 import { getTxnTypeLabel } from '@/types/portfolio';
+import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
 
@@ -68,9 +69,17 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
     recurrenceEndDate: normalizeYmdInput(transaction.recurrence_end_date),
   });
 
-  const [form, setForm] = useState(initialForm);
+  // Edits survive a dismissal (overlay click / Escape / ✕) — see
+  // useDialogFormState. The prefill still has to be right, so the form re-seeds
+  // when this instance is pointed at a different transaction, and whenever a
+  // pristine dialog is reopened (picking up the values a save just persisted).
+  const { form, setForm, reset, dirty } = useDialogFormState(initialForm);
+  useReseedOnIdentityChange(transaction.id, reset);
 
-  const reset = () => setForm(initialForm());
+  const handleOpenChange = (v: boolean) => {
+    if (v && !dirty) reset();
+    setOpen(v);
+  };
 
   const isBuySell = transaction.type === 'buy' || transaction.type === 'sell';
   const isGift = transaction.type === 'gift';
@@ -151,6 +160,7 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
         recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
       } as Partial<PortfolioTransactionCreate>);
       toast.success(t('txnEdit.toast.updated', { type: getTxnTypeLabel(t, transaction.type as PortfolioTxnType) }));
+      reset();
       setOpen(false);
     } catch {
       // handled in hook
@@ -158,13 +168,7 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ?? <Button variant="outline">{t('common.edit')}</Button>}
       </DialogTrigger>
@@ -199,7 +203,7 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
           />
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+            <Button type="button" variant="outline" onClick={() => { reset(); setOpen(false); }}>{t('common.cancel')}</Button>
             <Button type="submit" disabled={isUpdatingTransaction}>
               {isUpdatingTransaction && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('common.save')}

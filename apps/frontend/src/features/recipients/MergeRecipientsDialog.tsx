@@ -78,8 +78,13 @@ export function MergeRecipientsDialog({open, onOpenChange}: MergeRecipientsDialo
         setAliasIds([]);
     };
 
+    // No reset on dismissal: Radix reports an overlay click and Escape through
+    // the same callback as a deliberate close, so resetting there threw away a
+    // painstakingly assembled alias list on one stray click. The dialog stays
+    // mounted while closed, so the selection is still there on reopen; reset()
+    // belongs to Cancel and to a merge that succeeded.
     return (
-        <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">

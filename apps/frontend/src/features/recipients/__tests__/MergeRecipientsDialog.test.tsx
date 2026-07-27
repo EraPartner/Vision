@@ -182,6 +182,56 @@ describe("MergeRecipientsDialog", () => {
         expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
+    it("keeps the assembled selection when dismissed with Escape", async () => {
+        // Arrange — Escape reports through the same callback as a real close, so
+        // resetting there threw away the whole alias list on one stray key.
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () => ok(RECIPIENTS_LIST)),
+        );
+        const onOpenChange = vi.fn();
+        const { rerender } = renderWithApp(
+            <MergeRecipientsDialog open onOpenChange={onOpenChange} />,
+        );
+
+        // Act — pick Alice as primary, dismiss, reopen
+        await user.click(await screen.findByText("Alice"));
+        await screen.findByRole("button", { name: /clear selection/i });
+        await user.keyboard("{Escape}");
+        rerender(<MergeRecipientsDialog open={false} onOpenChange={onOpenChange} />);
+        rerender(<MergeRecipientsDialog open onOpenChange={onOpenChange} />);
+
+        // Assert — the chosen primary is still chosen
+        expect(
+            await screen.findByRole("button", { name: /clear selection/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("Cancel clears the selection", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () => ok(RECIPIENTS_LIST)),
+        );
+        const onOpenChange = vi.fn();
+        const { rerender } = renderWithApp(
+            <MergeRecipientsDialog open onOpenChange={onOpenChange} />,
+        );
+
+        // Act — Cancel is a deliberate discard, unlike a dismissal
+        await user.click(await screen.findByText("Alice"));
+        await screen.findByRole("button", { name: /clear selection/i });
+        await user.click(screen.getByRole("button", { name: /cancel/i }));
+        rerender(<MergeRecipientsDialog open={false} onOpenChange={onOpenChange} />);
+        rerender(<MergeRecipientsDialog open onOpenChange={onOpenChange} />);
+
+        // Assert — back to step 1, no primary selected
+        await screen.findByText("Alice");
+        expect(
+            screen.queryByRole("button", { name: /clear selection/i }),
+        ).not.toBeInTheDocument();
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("Escape key calls onOpenChange(false)", async () => {

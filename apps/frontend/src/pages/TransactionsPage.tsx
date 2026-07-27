@@ -5,6 +5,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
@@ -390,7 +391,7 @@ export default function TransactionsPage() {
         return (
             <div className="space-y-8 animate-in">
                 <PageHeader title={t('txPage.title')} subtitle={t('txPage.subtitle')} icon={Receipt} />
-                <Card>
+                <Card {...loadingSurfaceProps}>
                     <CardHeader className="pb-3">
                         <Skeleton className="h-6 w-44" />
                         <Skeleton className="h-4 w-28 mt-1" />

@@ -9,6 +9,7 @@ import { cashflowKeys } from "@/lib/queryKeys";
 import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -139,7 +140,7 @@ export function BankBalancesWidget() {
                     <Landmark className="h-5 w-5 text-primary" />
                     <CardTitle>{t('bankWidget.title')}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent {...loadingSurfaceProps} className="space-y-4">
                     <Skeleton className="h-24 w-full rounded-xl" />
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {[...Array(3)].map((_, i) => (

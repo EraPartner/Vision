@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Pencil, Trash2, TrendingUp } from "lucide-react";
 import {
   LineChart, type LineSeries,
@@ -280,7 +281,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
 
       <CardContent>
         {isLoading ? (
-          <Skeleton className="h-[350px] w-full" />
+          <Skeleton {...loadingSurfaceProps} className="h-[350px] w-full" />
         ) : isEmpty ? (
           <div className="flex items-center justify-center h-[300px] text-muted-foreground">
             <div className="text-center space-y-2">

@@ -8,6 +8,7 @@ import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurr
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -107,7 +108,7 @@ export default function NetWorthPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div {...loadingSurfaceProps} className="space-y-6">
         <PageHeader title={t('networth.title')} icon={Wallet} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (

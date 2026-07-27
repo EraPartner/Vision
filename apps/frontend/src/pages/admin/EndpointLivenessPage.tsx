@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
+import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -90,7 +91,9 @@ export default function EndpointLivenessPage() {
                         />
                     </div>
                 </CardHeader>
-                <CardContent className="p-0">
+                {/* TableSkeletonRows renders <tr>s, so the status role goes on
+                    the CardContent around the table, only while loading. */}
+                <CardContent {...(manifestLoading ? loadingSurfaceProps : {})} className="p-0">
                     <Table>
                         <TableHeader>
                             <TableRow>

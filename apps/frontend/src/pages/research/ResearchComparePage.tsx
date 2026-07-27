@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -388,7 +389,7 @@ export default function ResearchComparePage() {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <Skeleton className="h-[340px] w-full rounded-lg" />
+                  <Skeleton {...loadingSurfaceProps} className="h-[340px] w-full rounded-lg" />
                 ) : chartData.length > 0 ? (
                   <LineChart
                     data={chartData}
@@ -456,7 +457,7 @@ export default function ResearchComparePage() {
                 </CardHeader>
                 <CardContent>
                   {isLoading ? (
-                    <Skeleton className="h-40 w-full rounded-lg" />
+                    <Skeleton {...loadingSurfaceProps} className="h-40 w-full rounded-lg" />
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm border-separate border-spacing-1">
@@ -510,7 +511,7 @@ export default function ResearchComparePage() {
               </CardHeader>
               <CardContent>
                 {fundamentalsLoading ? (
-                  <Skeleton className="h-48 w-full rounded-lg" />
+                  <Skeleton {...loadingSurfaceProps} className="h-48 w-full rounded-lg" />
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>

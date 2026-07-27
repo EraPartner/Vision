@@ -8,6 +8,7 @@ import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
+import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -172,7 +173,9 @@ export default function ProviderHealthPage() {
                 <CardHeader>
                     <CardTitle className="text-base">{t('admin.providers.tableTitle')}</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
+                {/* TableSkeletonRows renders <tr>s, so the status role goes on
+                    the CardContent around the table, only while loading. */}
+                <CardContent {...(isLoading ? loadingSurfaceProps : {})} className="p-0">
                     <Table>
                         <TableHeader>
                             <TableRow>

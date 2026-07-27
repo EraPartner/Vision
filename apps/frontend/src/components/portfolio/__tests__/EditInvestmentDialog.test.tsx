@@ -210,6 +210,56 @@ describe("EditInvestmentDialog", () => {
         );
     });
 
+    // ─── Unsaved edits survive dismissal ───────────────────────────────────
+
+    /** The Radix overlay — clicking it is the "stray click next to the dialog". */
+    const overlay = () =>
+        document.querySelector<HTMLElement>(".fixed.inset-0.backdrop-blur-md")!;
+
+    it("keeps unsaved edits when dismissed by an outside click", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
+
+        // Act — rename, then lose the dialog to a stray click
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        const nameInput = screen.getByDisplayValue("MSCI World ETF");
+        await user.clear(nameInput);
+        await user.type(nameInput, "World Equity");
+        await user.click(overlay());
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await user.click(screen.getByRole("button", { name: /^edit$/i }));
+
+        // Assert — the rename survived
+        await screen.findByRole("dialog");
+        expect(screen.getByDisplayValue("World Equity")).toBeInTheDocument();
+    });
+
+    it("re-seeds from the investment when opened for a different one", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        const { rerender } = renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
+
+        // Act — dirty the form, dismiss, then point this instance at another holding
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        const nameInput = screen.getByDisplayValue("MSCI World ETF");
+        await user.clear(nameInput);
+        await user.type(nameInput, "World Equity");
+        await user.click(overlay());
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+        const other: InvestmentSummary = { ...INVESTMENT, id: 99, name: "Gold ETC", symbol: "SGLN" };
+        rerender(<EditInvestmentDialog investment={other} />);
+        await user.click(screen.getByRole("button", { name: /^edit$/i }));
+
+        // Assert — keeping input must never mean editing the wrong holding
+        await screen.findByRole("dialog");
+        expect(screen.getByDisplayValue("Gold ETC")).toBeInTheDocument();
+        expect(screen.queryByDisplayValue("World Equity")).not.toBeInTheDocument();
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {

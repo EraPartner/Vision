@@ -136,7 +136,12 @@ export function StatCard({
                 )}
             </CardHeader>
             <CardContent className={statContentVariants({ size })}>
-                <div className={cn(statValueVariants({ size }), valueClassName)}>
+                {/* aria-busy, not role="status": stat cards come in rows of
+                    four that all flip to `loading` together, and one live
+                    region per card would announce "Loading" four times. The
+                    page's stat grid carries loadingSurfaceProps and announces
+                    once for the row. */}
+                <div aria-busy={loading || undefined} className={cn(statValueVariants({ size }), valueClassName)}>
                     {loading ? (
                         <Skeleton className={size === "compact" ? "h-6 w-20" : "h-9 w-28"} />
                     ) : typeof displayValue === "string" ? (

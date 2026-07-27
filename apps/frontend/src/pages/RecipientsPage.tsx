@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users, Regex } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useUpdateRecipient, useDeleteRecipient, useUnmergeRecipient } from "@/hooks/useRecipients";
@@ -316,7 +317,7 @@ export default function RecipientsPage() {
         return (
             <div className="space-y-8 animate-in">
                 <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
-                <Card>
+                <Card {...loadingSurfaceProps}>
                     <CardHeader className="pb-3">
                         <Skeleton className="h-6 w-44" />
                     </CardHeader>

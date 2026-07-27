@@ -13,6 +13,7 @@ import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/
 import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { toYmd } from '@/components/shared/dateUtils';
+import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
 interface Props {
@@ -38,7 +39,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     return ['buy', 'sell', 'fee', 'tax'];
   })();
 
-  const [form, setForm] = useState({
+  const initialForm = () => ({
     type: 'buy' as PortfolioTxnType,
     date: toYmd(new Date()),
     amount: '',
@@ -53,11 +54,16 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     recurrenceEndDate: '',
   });
 
-  const reset = () => setForm({
-    type: 'buy', date: toYmd(new Date()),
-    amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', fxRateToEur: '', note: '',
-    isRecurring: false, recurrenceInterval: 'monthly', recurrenceEndDate: '',
-  });
+  // Typed input survives a dismissal (overlay click / Escape / ✕) — see
+  // useDialogFormState. Reopening a pristine form re-seeds it so the default
+  // date is still today; a dirty one is left exactly as the user left it.
+  const { form, setForm, reset, dirty } = useDialogFormState(initialForm);
+  useReseedOnIdentityChange(investment.id, reset);
+
+  const handleOpenChange = (v: boolean) => {
+    if (v && !dirty) reset();
+    setOpen(v);
+  };
 
   const amountInput = parsePositive(form.amount);
   const unitsInput = parsePositive(form.units);
@@ -135,7 +141,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
   const showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(form.type);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ?? (
           <Button size="sm" variant="outline" className="gap-1.5">
@@ -180,7 +186,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
           />
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('addPortTxn.cancel')}</Button>
+            <Button type="button" variant="outline" onClick={() => { reset(); setOpen(false); }}>{t('addPortTxn.cancel')}</Button>
             <Button type="submit" disabled={isAddingTransaction}>
               {isAddingTransaction && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('addPortTxn.record')}

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
@@ -106,7 +107,7 @@ export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamental
 
   if (isFetching && !result) {
     return (
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div {...loadingSurfaceProps} className="grid gap-2 sm:grid-cols-2">
         {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
       </div>
     );

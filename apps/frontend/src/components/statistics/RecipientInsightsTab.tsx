@@ -6,6 +6,7 @@ import { aggregationKeys } from "@/lib/queryKeys";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { parseISO } from "@/components/shared/dateUtils";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
@@ -137,7 +138,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div {...loadingSurfaceProps} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-28" />)}
         </div>

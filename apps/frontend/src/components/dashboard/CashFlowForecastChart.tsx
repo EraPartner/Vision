@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getChartColor } from "@/components/charts/palette";
@@ -337,7 +338,7 @@ export function CashFlowForecastChart({
             {rollingPresets}
             {controls}
             {isLoading && (
-                <Skeleton className="w-full h-[320px] rounded-lg" />
+                <Skeleton {...loadingSurfaceProps} className="w-full h-[320px] rounded-lg" />
             )}
             {error && (
                 <div className="flex items-center justify-center h-[320px] text-sm text-destructive">
