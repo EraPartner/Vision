@@ -185,15 +185,18 @@ router.get('/scorecard', async (req, res) => {
 
 // POST /api/research/portfolio-forecast — Monte-Carlo portfolio value projection.
 // On-demand, never persisted (ADR-079 storage boundary). Deterministic per seed.
+// Body keys are snake_case only — the camelCase spellings this handler used to
+// also accept were a second, undocumented contract. See "Wire Casing
+// Convention" in docs/reference/code-patterns.md.
 router.post('/portfolio-forecast', async (req, res) => {
   const body = req.body ?? {};
   const result = await runPortfolioForecast({
-    horizonMonths: body.horizon_months ?? body.horizonMonths,
-    monthlyContribution: body.monthly_contribution ?? body.monthlyContribution,
+    horizonMonths: body.horizon_months,
+    monthlyContribution: body.monthly_contribution,
     paths: body.paths,
-    forwardBlend: body.forward_blend ?? body.forwardBlend,
+    forwardBlend: body.forward_blend,
     method: /** @type {'parametric'|'block_bootstrap'|undefined} */ (single(body.method) || undefined),
-    targetValue: body.target_value ?? body.targetValue,
+    targetValue: body.target_value,
     currency: single(body.currency) || undefined,
     seed: single(body.seed) || undefined,
   });
