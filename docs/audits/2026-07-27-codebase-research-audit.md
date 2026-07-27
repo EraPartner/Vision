@@ -3,13 +3,13 @@ title: Codebase Research Audit — 2026-07-27
 type: audit
 status: active
 date: 2026-07-27
-tags: [audit, correctness, performance, security, devops, testing, architecture, money-hygiene, concurrency]
-description: Multi-stream research audit across correctness, performance, security, DevOps, testing, concurrency, and refactor fidelity. Nine parallel research streams, findings triaged NEW / KNOWN-OPEN and spot-verified against the tree at da4be60.
+tags: [audit, correctness, performance, security, devops, testing, architecture, accessibility, ui-ux, money-hygiene, concurrency, belgian-tax, insights]
+description: Multi-stream research audit across correctness, performance, security, DevOps, testing, concurrency, UI/UX and accessibility, architecture, and the never-audited #122 insight layer. Twelve research streams; findings triaged NEW / KNOWN-OPEN and independently verified against the tree at da4be60.
 ---
 
 # Codebase Research Audit — 2026-07-27
 
-**Tree audited:** `da4be60` (2026-07-23) · **Method:** 9 parallel research streams, each given the prior-audit registers in `TODO.md` so it would not re-file dispositioned claims · **Verification:** every CRITICAL and every load-bearing HIGH below was independently re-checked against the tree before being recorded here.
+**Tree audited:** `da4be60` (2026-07-23) · **Method:** 12 research streams, each given the prior-audit registers in `TODO.md` so it would not re-file dispositioned claims, plus a cross-stream de-duplication brief · **Verification:** every CRITICAL and every load-bearing HIGH below was independently re-checked against the tree before being recorded here.
 
 ---
 
@@ -36,11 +36,40 @@ Each finding is tagged **NEW** or **KNOWN-OPEN**. Findings marked ✅ *verified*
 
 ---
 
-## 2. The headline: three guardrails that report green over the bug class they exist to catch
+## 2. The two headlines
+
+### 2.0 The tax deduction classifier misfiles real categories, and the wrong figure lands on a legal filing ✅ NEW · **CRITICAL**
+
+`apps/node-backend/src/services/tax/deductionClassifier.js`. Verified **by execution**, not by reading:
+
+| Category | Classified as | Should be |
+|---|---|---|
+| `RETIREMENT:HOME` | `pensionSavings` | nothing — nursing-home fees |
+| `INCOME:PENSION` | `pensionSavings` | nothing — a *received* pension |
+| `SAVINGS:RETIREMENT` | `pensionSavings` | nothing |
+| `GROEPSVERZEKERING:PENSIOEN` | `pensionSavings` | `groupInsurance` — 2nd vs 3rd pillar, **different boxes on the return** |
+| `INSURANCE:GROUP TRAVEL` | `groupInsurance` | nothing — a generic group policy |
+| `SCHENKING:KINDEREN` | `charitableDonations` | nothing — *schenking* is subject to gift tax |
+| `UNION:DUES` | `null` | `unionDues` — unreachable |
+| `CHILD:CARE` | `null` | `childcare` — unreachable |
+| `INSURANCE:GROUP LIFE` | `groupInsurance` | ✓ correct |
+| `PENSIOENSPAREN:BKCP`, `GIFTEN:OXFAM` | correct | ✓ controls |
+
+Three distinct defects:
+
+1. **Bare-token over-matching.** Rule #1 makes bare `PENSION` / `PENSIOEN` / `RETIREMENT` unconditional matches, even though the same file deliberately excludes bare `MORTGAGE`, `UNION`, `GIFT`, `INSURANCE` and `MAINTENANCE` as too ambiguous. `SCHENKING` sits in `CHARITY_WORDS` despite being the Belgian legal term for a *taxable* gift.
+2. **Rule precedence.** The file documents its own principle — "`groupInsurance` is checked BEFORE `lifeInsurance` so an employer-scheme name lands in the more specific bucket" — and then doesn't apply it to pension. `GROUP LIFE` works; `GROUP PENSION` doesn't. **The asymmetry is the proof**: the documented case is the tested case.
+3. **Phrase rules never span the `general:detail` boundary.** `hasAnyPhrase` searches `cat.general` or `cat.detail` but never the concatenation, so the most natural way to enter a two-word concept in this app is unmatchable. `unionDues` is worst: its word list is **Dutch-only**, so the phrase route is the only English path and it is unreachable.
+
+**Why it matters more than a normal misclassification.** `DeductionCandidatesCard` Confirm writes with **SET** semantics (`{ [amountField]: group.total }`) plus an eligibility flag — it replaces a figure the user may have typed from a real certificate, with no confirmation and no undo. `pit.ts` then *caps* the displayed credit, so the on-screen tax number stays plausible while the stored field — the one the user transcribes onto their return — is wrong. A user categorising a parent's nursing home as `RETIREMENT:HOME` at €2,400/month gets "Pension savings — €28,800" offered and written.
+
+**Fix:** require a qualifying second token for the bare pension forms; move the `groupInsurance` rule above `pensionSavings`; drop `SCHENKING`; give `hasAnyPhrase` `cat.all` as a third search target; add English `UNION`/`DUES` words. Then add negative tests for all eight rows above — the existing 30 tests encode the author's mental model, not a user's naming habits.
+
+### 2.1 Three guardrails that report green over the bug class they exist to catch
 
 This is the throughline of the entire audit. Fix these first, because they are why everything in §4 accumulated.
 
-### 2.1 `check-precision-drift.js` cannot detect any drift that is actually present ✅ NEW
+#### (a) `check-precision-drift.js` cannot detect any drift that is actually present ✅ NEW
 
 `apps/node-backend/scripts/check-precision-drift.js` runs clean. It is structurally unable to fire:
 
@@ -52,7 +81,7 @@ This is the throughline of the entire audit. Fix these first, because they are w
 
 The real asymmetric boundary in the schema is `portfolio_transactions.amount NUMERIC(18,4)` → `transactions.amount NUMERIC(15,2)`, crossed at `services/portfolioImportPipeline/commit.js:137` via `Number(row.amount)`. That file contains no `*_raw_transactions` token, so the file-level gate excludes it outright.
 
-### 2.2 The `no-raw-money-arithmetic` ESLint rule is blind to every drift site in the repo ✅ NEW
+#### (b) The `no-raw-money-arithmetic` ESLint rule is blind to every drift site in the repo ✅ NEW
 
 `apps/node-backend/eslint.config.js:76-104`:
 
@@ -64,7 +93,7 @@ The real asymmetric boundary in the schema is `portfolio_transactions.amount NUM
 
 **Fix both:** add `AssignmentExpression` with compound operators, match `MemberExpression` property names, widen the name list, promote to `error` with `--max-warnings 0`, and extend a config over `packages/*/src/**/*.js`. For the drift script, parse the migrations into a column→precision map and flag any path moving a value between differing scales.
 
-### 2.3 Two of seven backend property tests assert against reimplementations inside the test file ✅ NEW
+#### (c) Two of seven backend property tests assert against reimplementations inside the test file ✅ NEW
 
 `apps/node-backend/tests/property/categoryTotal.property.test.js` and `monthlyYearly.property.test.js` import **only `vitest`** — nothing from `src/`. They define local reducers (`aggregate()` at `:45`, `rollupYearly()` at `:47`) and assert conservation laws against those. They are self-consistent by construction and **cannot fail for any production reason**, while `tests/golden/INVENTORY.md` records the corresponding modules as property-covered.
 
@@ -309,7 +338,7 @@ Idempotency here is genuinely protected — by `uniq_transactions_tx_hash` plus 
 
 ## 4. Findings
 
-Severity counts: **11 CRITICAL · 34 HIGH · 31 MEDIUM · 14 LOW**. Every CRITICAL below was re-verified against the tree.
+Severity counts: **12 CRITICAL · 45 HIGH · 55 MEDIUM · 20 LOW**. Every CRITICAL below was re-verified against the tree.
 
 ### 4.1 CRITICAL
 
@@ -400,6 +429,74 @@ Severity counts: **11 CRITICAL · 34 HIGH · 31 MEDIUM · 14 LOW**. Every CRITIC
 
 ---
 
+### 4.4 UI/UX and accessibility
+
+Audited under the **binding design constraint** (ADR-105): the rich aurora/glass/jewel aesthetic is deliberate and was re-instated after a flatten redesign was reverted. Every fix below is either visually free or states its visual cost and offers a free alternative.
+
+**Contrast — measured, not estimated.** I recomputed these from the real tokens; all match to two decimals:
+
+| Pair | Ratio | |
+|---|---:|---|
+| `--gain`/`--accent` `38 58% 52%` on `--card` white | **2.60:1** | FAIL |
+| same on `--background` | **2.41:1** | FAIL |
+| `--warning` `38 80% 50%` on `--card` | **2.33:1** | FAIL |
+| `--loss`/`--destructive` on `--card` | 5.17:1 | PASS |
+| dark `--accent` on dark card | 9.87:1 | PASS |
+
+The gold is legible only in dark mode. `colorblindGainLoss: false` is the **default**, so the shipped default palette *is* the failing pair; even the Okabe-Ito opt-in is short in light mode (gain 4.20:1, loss 3.84:1). Proposed light-mode lightness changes compute to 4.67:1 and 4.72:1. The failure is asymmetric — losses read fine, **gains vanish** — across ~200 render sites.
+
+Theme variants are structurally worse: **nordDark `--loss` is 2.20–2.96:1** (every expense figure), and **solarizedLight's `foreground` — primary body text — is 4.39:1** with `muted-foreground` at 2.19:1, the worst pair in the app. `high-contrast` is genuinely clean (worst 4.50:1), so a compliant path exists; the defaults and palette-fidelity variants are the problem.
+
+**Other HIGH/MEDIUM findings**
+
+- **The accounts hub card is a `role="button"` containing two real buttons** (`AccountsPage.tsx:96-113` wrapping the drift chip at `:138` and the ⋮ menu at `:180`) — an axe `nested-interactive` **serious** violation. Its `aria-label` is name-only, so a screen reader announces "Open Checking details, button" and **never the balance** — the only reason the card exists. Notably the author *was* aware of the nesting (the `onKeyDown` comment at `:104-106` handles event bubbling correctly) — the interaction logic is careful, the ARIA semantics are the gap. Fix: plain `<div>` + a real `<Link>` on the account name. Visually free, and gains cmd/middle-click.
+- **The drift chip fails WCAG 2.5.3 Label in Name** — `aria-label="Open reconcile"` over visible text `Drift: +€412,50`; the accessible name shares no words with the visible label and drops the amount. Same at `AccountDetailPage.tsx:371`.
+- **The two heaviest new pages are outside the axe sweep.** `e2e/pages.ts` covers 10 routes; `/accounts` (490 rewritten lines) and `/accounts/:id` (584 new) are absent, as are `/tax`, `/settings`, `/portfolio/net-worth`, `/ai-chat`. The gate already fails on serious violations, so the `nested-interactive` bug would have been caught the day it landed — the route just isn't scanned. Compounded by `TODO.md:3924`: the suite has **never executed**.
+- **`aria-invalid` and validation `aria-describedby` appear zero times in the entire frontend.** Money fields' `pattern="^-?[0-9]+([.,][0-9]+)?$"` also *rejects* `1.234,56` — exactly what a Dutch user pastes back — and because the field sits in a `<form>`, failure triggers Chromium's untranslated "Please match the requested format." The app's own `parseLocaleNumber` handles grouped input correctly; the `pattern` is stricter than the parser it feeds.
+- **Three `aria-live` regions app-wide.** Dismissals, "Applied" swaps, load-more appends and error swap-ins are all silent; `PageError` has no `role="alert"`.
+- **Both new insight surfaces render `null` on API failure** — indistinguishable from "no insights". For tax this is substantive: absence reads as "no deductions found", a wrong claim about the user's return.
+- **Both new accounts pages surface raw API error strings** with no retry, bypassing the app's own `PageError` — a Dutch user gets Chromium's English `"Failed to fetch"`.
+- **Bulk recategorize / reassign-recipient / activate have no confirmation** while delete and deactivate do — and in filter mode the scope is *every matching transaction*. The asymmetry teaches users the app confirms dangerous things, which here it doesn't.
+- **Dismissals are permanent with no undo and no un-dismiss surface anywhere.** For deduction candidates the key is `{year, type}`, so one stray click on a ghost "Dismiss" 4px from a primary "Confirm" permanently hides a deductible group for that tax year.
+- **52 raw `hsl()` chart literals** bypass `--chart-1…8`, so portfolio charts stay Tailwind-default under every theme variant *including high-contrast*. `#121` added a fresh one (`AccountDetailPage.tsx:62`) after the finding was already filed, and the identical case was fixed once before in `ToolResultCard.tsx`.
+- **`sr-only` strings live untranslated in the shadcn primitives** — "Close" on all 46 dialogs and sheets (`dialog.tsx:51`, `sheet.tsx:64`), the highest-frequency SR interaction in the product. `aria-label="PK"` is worse than nothing: it spells out "P K".
+- **Reduced motion stops at the custom classes** — 63 `animate-spin` and 14 hover transforms still animate.
+- **The Statistics nav label silently lost truncation** when #122 appended a `Badge` (a `<div>`) after the label span, breaking `[&>span:last-child]:truncate`.
+
+### 4.5 Architecture and code design
+
+**Layering.** Import cycles: **0** in the backend, **1** in the frontend (`accountFormMapping.ts ↔ AddAccountDialog.tsx`, type-only). But the picture is inverted from the documented ideal:
+
+- **The one enforced boundary rule guards the only clean edge.** `no-repo-direct-from-route` applies to `src/routes/**` and forbids `repositories/`/`database/` — measured `routes → repositories` = **0**. Unguarded and dirty: `services → database` **42 files** (26 with mutation SQL), `repositories → services` 7, `repositories → middleware` 4, `controllers → repositories` 2. `investmentController.js` is *specifically* outside the glob. The frontend has **zero** structural lint, no cycle check, and no `madge`/`dependency-cruiser` in any manifest — so the "madge clean" claim has no standing guard behind it.
+- **#117 was a route cleanup, not a layering fix.** Its own commit message targets "zero raw SQL left in the route" — and the destination was a *service*. `transactionBulkService.js` now issues `UPDATE transactions SET`, `DELETE FROM transactions`, `INSERT INTO transaction_tags`, while `transactionRepository.js` has **no bulk methods**. Two SQL homes per hot table.
+- **`noImplicitAny` ratchet measured** (closing a long-standing resume point): baseline **0** errors, with `noImplicitAny` **3,282**. 1,896 are one-line parameter annotations; **430 are TS2339 property-does-not-exist** — accesses the compiler already believes are wrong. By directory: services 1,641 / routes 665 / repositories 639 / lib 89 / middleware 63 / controllers 58. Tractable ordering: `lib` + `middleware` + `controllers` + `database` = 212 errors buys four directories.
+- **Five competing "today" clocks**, with `todayAppDateString()` (Brussels) and SQL `CURRENT_DATE` (UTC, 57 sites / 11 files) coexisting **inside single functions** in six files. `Dockerfile` pins the process to UTC, so the app-tz helper is the only Brussels clock — a guaranteed one-day divergence between 00:00 and 02:00 Brussels. Two comments assert the opposite. Dev machines (local TZ = Brussels) make the skew disappear, so it is invisible in local testing.
+- **The only full Belgian PIT engine lives in the frontend.** `lib/belgianTax/` is 1,940 LOC; the backend keeps a hand-copied rate table whose header says "must remain in sync" with **no test or CI gate**, and the tax PDF renders client-POSTed `precomputedPIT` next to backend-sourced rates. The tables currently agree — the risk is structural. The server cannot recompute or audit a figure the user files against.
+- **Money is a bare number**: 35 money-bearing frontend types carry **no** currency field, 13 have `currency?`, only 7 require it. `formatCurrency` substitutes a module-global mutable default, so a USD row whose currency was dropped renders with € and no error.
+- **`@vision/types` is 2 of 8 PG enums (25%)**, and the vocabulary has *already* forked: `'bi-weekly'` vs `'biweekly'` disagree between two backend modules. Adding one account type is a **12-file, 5-subsystem edit** with silent partial failure. #121 shipped the newest enum family the old way — the pattern is losing ground.
+- **`components/` → `features/` is ~28% done and was marked complete.** Only the *symptom* cleared: #121 deleted `features/portfolio/`'s single file. `components/tax/` (36 files) is larger than any `features/` directory, and `frontend-architecture.md` now misdescribes the state in both directions.
+- **`generated.ts` is not at the seam**: 9,680 LOC, **one** importer, asserting over 8 of 46 schemas via a guard that is explicitly optionality-tolerant. The consumed seam is hand-written `types/api.ts`.
+- Also: `services/` flat-file count *grew* 46 → 51 across the four "refactor" commits (#122's four cohesive insight services landed flat while `services/tax/` was created in the same commit); seven info repositories import a currency service (ADR-006 rule 4); validation now has **five** competing idioms with #121 introducing Zod-in-the-service-layer; the repository not-found sentinel is an exact 21/21 `null`/`undefined` split with two repositories using both internally.
+
+### 4.6 The #122 insights layer — semantic, not mechanical, defects
+
+The most important framing in this audit: **#122's defects are of a different kind.** Older findings are mechanical (an off-by-one, a missing index). These compute X correctly and then *tell the user it is Y*. All pass lint, typecheck and a green suite, because the tests assert what the code computes rather than what the label claims.
+
+- **CRITICAL — `monthEndProjected` is month-to-date net cashflow, labelled "Projected month-end balance".** ✅ Verified: `forecast/index.js:63` is `let cum = 0`, `cashForecastInsightService.js` has **zero** references to any balance source, and `en.json:981` reads *"Projected month-end balance: {amount}"* with an **"Overdraft risk"** warning at `:983`. A user with €14,000 across two accounts who is net-negative mid-month gets a false overdraft alert — and `crossesZero` is the only thing that can set `prominence: 'alert'`, so it drives a **standing badge count on every page of the app**.
+- **HIGH — the confidence interval is ~√H too wide.** `monthEndLow`/`High` sum per-day p10/p90 values, which is the probability of *every* day going wrong together, not a quantile of the sum. Measured at H=20: folded p10 −6,318 vs true −2,347, **overstated 4.46×** (√20 ≈ 4.47). The MC simulation already holds per-path cumulative sums; the information is discarded. The test pins only band *ordering*, which the wrong implementation satisfies.
+- **HIGH — the subscription "previous price" is the historical median, not a price ever paid.** Netflix at €8.99×6 → €10.99 → €12.99 renders "~~€8.99~~ → €12.99 +44.5%" when the real last change was +18.2%.
+- **HIGH — category outliers compare days 1..N but are labelled "this month" and "usually".** On the 3rd of a month with a €260 stock-up run, the panel renders "€260.00 this month · usually €41.50" for a user whose real groceries run ~€450/month. Early in each month N is tiny and MAD ~€1, so almost any purchase is a >50σ "outlier"; the detector is simultaneously blind and hair-trigger. Iglewicz–Hoaglin is applied at n=4–6 where it requires n≥10.
+- **HIGH — the nav badge runs the full digest, including a 12-month × 7-method backtest, on every page.** `InsightsNavBadge` is mounted in the always-rendered sidebar, and `aggregationRefresh` clears the MC cache on every transaction change — so the first page load after any import recomputes 1,000 MC paths plus a 7×12 walk-forward **on the event loop** and writes 7 accuracy rows under a phantom `'anonymous'` user. ADR-110 §3 explicitly promises the badge "never re-runs detection just to draw a dot".
+- **MEDIUM-HIGH — the narration layer sees dismissed findings.** ADR-110 §1 states dismissal is a detection-layer concept so "the narration layer never even sees a dismissed finding". Dismissals live only in localStorage, so `dismissRecords` is always `[]` server-side: ~90 lines of backend suppression logic are **unreachable in production**, 5 tests cover that dead path, and the AI chat narrates findings the user explicitly dismissed. The two copies have also already diverged (`>=` vs `>`) in a file whose header claims to mirror the backend constants.
+- **MEDIUM — the 5-item cap is applied before dismissal**, so subscriptions ranked 6+ are permanently unreachable and the panel then asserts *"you're all caught up."*
+- **MEDIUM — `deviation` is emitted on two incompatible scales** (a dimensionless z-score, and 0.6745 × euros on the flat-baseline branch), then sorted against each other and compared to the same re-alert margin. On the flat branch the 14-day suppression a user asked for is defeated by the next **75-cent** purchase.
+- **MEDIUM — the AI tool card renders an empty body.** `meta.renderAs: 'insightsDigest'` matches none of the four known render modes, and because it *is* set the `??` fallback never fires. Setting an unrecognised value is strictly worse than omitting it. This deletes the user's ability to check the model's prose against the tool payload — the mitigation that made the narration path acceptable.
+- **MEDIUM — `invalidateTransactionData` misses both of #122's new query families**, so with a 3-min `staleTime` *and* a 3-min backend TTL the panel can assert a deleted €900 overspend for ~6 minutes.
+- **MEDIUM — mid-year Confirm writes a year-to-date total as if annual.** In July, 7 monthly €75 transfers offer "Pension savings — €525", written as the year's figure with nothing indicating the period is incomplete.
+- Also: `'FOOD' || ':' || NULL` is `NULL` in Postgres, so every general-only category collapses to the display name **"Unknown"**; `confidence` is a pattern-*regularity* score reused as newsworthiness ranking, and it **penalises** findings with a price change — pushing exactly the newsworthy ones toward truncation.
+
+**Credit where due:** the privacy posture held. ADR-110 §5 was honoured, the new tool is read-only, the fetch-spy was extended, and no markdown renderer or outbound call was introduced — so the ceiling remains "the model says something wrong". `deductionClassifier` is the best-engineered file in the PR (pure, deterministic, frozen rule table, 30 tests) and is one rule reorder plus three word-list edits from being right.
+
 ## 5. Cross-cutting themes
 
 1. **The correct implementation almost always exists adjacent to the defective one.** Every other `fetch` has a timeout; Binance's cache key has the window; `getNews` caps fan-out at 10; `Money` guards an empty currency code while `useCurrencyFormatter` doesn't; `AddToWatchlistDialog` documents and guards `parseDecimal`'s 0-fallback while `PlannedPaymentForm` doesn't; `useMergeRecipients` invalidates derived trees while `useUpdateRecipient` doesn't; `accountMergeService` locks all rows while `mergeRecipients` locks one. These are **consistency gaps, not knowledge gaps** — cheap to fix, and lintable.
@@ -414,7 +511,9 @@ Severity counts: **11 CRITICAL · 34 HIGH · 31 MEDIUM · 14 LOW**. Every CRITIC
 
 6. **Defence-in-depth built on top of a missing primitive.** The container hardening, SSRF guard, SQL parameterization, and Electron renderer isolation are genuinely high quality — better than most codebases this size. They sit on an authentication model that is purely positional, so one Host-header check and one real credential would make all that work pay off.
 
-7. **Two defences hold only by accident.** Prompt injection is contained to social engineering *solely* because no markdown renderer exists anywhere in the tree — add one with `rehype-raw` and it becomes live exfiltration. SVG upload is blocked only because `fileSniff.js` happens not to recognise it, while `ALLOWED_MIME_PREFIXES` includes `image/` and downloads serve `Content-Disposition: inline`. Neither is documented or tested.
+7. **The newest code fails semantically, not mechanically — and that is harder to catch.** Everything in §4.6 computes correctly and then mislabels the result: month-to-date cashflow called a "balance", a three-day median called "usually", a historical median called a "previous price", nursing-home fees called "pension savings". Every one passes lint, typecheck and a green test suite, because the tests assert what the code computes rather than what the label claims. The root cause is a missing contract: findings carry bare numbers with no units, no currency, no window and no provenance, and the i18n layer then supplies the semantics from a translator's guess. One shape change fixes the class — every emitted figure gets `{ value, currency, periodFrom, periodTo, basis }` and the strings render those fields instead of asserting a period. Note the craftsmanship here is visibly *high* (Iglewicz–Hoaglin cited by name, Decimal used consistently, like-for-like windowing reasoned through), which is exactly what makes it dangerous: the code reads as reviewed. Nobody audited the seam between computation and presentation, and #122 introduced more of those seams than any prior commit.
+
+8. **Two defences hold only by accident.** Prompt injection is contained to social engineering *solely* because no markdown renderer exists anywhere in the tree — add one with `rehype-raw` and it becomes live exfiltration. SVG upload is blocked only because `fileSniff.js` happens not to recognise it, while `ALLOWED_MIME_PREFIXES` includes `image/` and downloads serve `Content-Disposition: inline`. Neither is documented or tested.
 
 ---
 
@@ -439,7 +538,9 @@ Severity counts: **11 CRITICAL · 34 HIGH · 31 MEDIUM · 14 LOW**. Every CRITIC
 
 ## 7. Coverage and limits
 
-**Honest gaps in this pass.** Four research streams were terminated by a session limit before reporting: **UI/UX and accessibility**, **documentation and diagram audit**, **architecture and layering**, and the **insights-layer / Belgian-tax-pre-fill depth pass on #122**. Those four areas are therefore *not* covered here beyond what the other streams touched incidentally. The #122 gap matters most: `categoryOutlierService`, `cashForecastInsightService`, `subscriptionCreepService`, and `tax/deductionClassifier` are brand-new, never-audited, and statistical — and the one #122 finding that did surface (`getCashForecastInsight` running a full 12-month × 7-method backtest per digest and writing accuracy rows as `'anonymous'`) suggests the area is worth the pass.
+**Stream coverage.** Twelve research streams ran in total. Four were terminated by a session limit on the first pass and were **re-run to completion**: UI/UX and accessibility (§4.4), architecture and code design (§4.5), and the #122 insights depth pass (§4.6). The **documentation drift audit** is the one area still outstanding — diagram coverage and format are addressed (§3, and the PlantUML/GitHub finding), but a systematic doc-claim-vs-code drift register across the 292 `docs/` files and 112 ADRs is not in this document. Known doc drift found incidentally by other streams *is* recorded (the auto-migration claim, the venv path, `db:revision` autogenerate, the `down -v` and `docker:clean:reset` README items, and the reports endpoints being materially wrong in `openapi.yaml`).
+
+**One correction to a sibling stream, worth recording.** The package-adoption verification reported PKG-01 (the `cn()` sweep) as having "drifted 109 → 1 → 2, with no lint rule, so it will keep re-accumulating." That is wrong. Both remaining sites (`AccountsPage.tsx:143`, `AccountDetailPage.tsx:370`) are the *same deliberate pattern*, and `AccountsPage.tsx:140-142` carries an explicit comment explaining it: `badgeVariants` sets `text-[11px]`, the appended `text-xs` intentionally overrides it, and `cn()`'s tailwind-merge would resolve the font-size differently. It is a documented exception, not drift. It also interlocks with §4.4's type-scale finding — defining a real `fontSize` scale would let `cn()` merge correctly and remove the need for the exception.
 
 **Claims that need a populated environment before action.** All bundle-size figures are estimates from module counts — `node_modules` is absent from this checkout, so add `rollup-plugin-visualizer` before acting. Sequential-scan and index-redundancy claims derive from reading migrations against predicate shapes, not `EXPLAIN (ANALYZE, BUFFERS)`; `scripts/index-stats.js` — whose own header describes a follow-up drop migration that was never written — has **never been run against real data**, so run it before dropping any index. Frontend re-render counts are derived from `maxHeight`/`rowHeight`/`overscan` arithmetic, not a Profiler trace.
 
