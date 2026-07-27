@@ -47,13 +47,13 @@ export function parsePagination(query = {}, { defaultLimit = 50, maxLimit } = {}
  * next 50". Empty-string params (`?limit=`) count as absent: a client that
  * renders a form field it left blank gets the full list, not a surprise page.
  *
- * @param {Record<string, unknown>} [query]
+ * @param {Record<string, unknown> | undefined} query
  * @param {{ defaultLimit?: number, maxLimit: number }} options
  * @returns {{ limit: number, offset: number } | null}
  */
-export function parseOptionalPagination(query = {}, { defaultLimit, maxLimit }) {
+export function parseOptionalPagination(query, { defaultLimit, maxLimit }) {
   const supplied = (key) => {
-    const value = query[key];
+    const value = query?.[key];
     return value !== undefined && value !== null && value !== '';
   };
   if (!supplied('limit') && !supplied('offset')) return null;
