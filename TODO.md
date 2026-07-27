@@ -750,7 +750,7 @@ look-changing one.
   - **Caveat: the intended sign convention for non-loan planned payments is undocumented — confirm intent before fixing.**
   - Fix: add an explicit income/expense toggle to the form and negate on save for expenses, once intent is confirmed.
 
-- [ ] **RecurringDetectionPanel hardcodes expense sign — a detected recurring income becomes a negative planned payment that can never auto-match** 🔼
+- [x] **RecurringDetectionPanel hardcodes expense sign — a detected recurring income becomes a negative planned payment that can never auto-match** 🔼 ✅ 2026-07-27 · f44de00 (panel now recombines |latestAmount| with the pattern's server-emitted `direction` — no payload change needed since detection already groups per recipient+sign; MSW end-to-end tests pin the POST body sign both directions; adversarially verified incl. plannedMatchService sign predicate accepting the income row)
   - ↪ _from: Orchestration session 2026-07-27 · planned-sign fix verification_
   - `apps/frontend/src/components/planned/RecurringDetectionPanel.tsx:150` — `amount: pattern.latestAmount * -1`, and detected amounts are `.abs()`'d server-side (`recurringDetectionService.js:240-242`), so sign information is lost before the panel and the panel assumes expense. Salary/rent-received patterns become negative planned payments; `plannedMatchService` then rejects the sign mismatch against the real positive txn — same bug class as the fixed form finding, different producer.
   - Fix: carry the dominant sign of the detected pattern through the detection payload (or infer from the source transactions) and use it when creating the planned payment.
