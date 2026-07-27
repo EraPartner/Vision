@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
@@ -97,7 +98,7 @@ export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply,
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading && <Skeleton className="h-[420px] w-full" />}
+        {isLoading && <Skeleton {...loadingSurfaceProps} className="h-[420px] w-full" />}
         {isError && (
           <div className="flex items-center justify-center h-40 text-sm text-destructive">
             {t("statsPage.sankey.noData")}

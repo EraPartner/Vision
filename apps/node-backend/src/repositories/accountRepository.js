@@ -152,6 +152,56 @@ export const accountRepository = {
   },
 
   /**
+   * Lock the merge survivor and read the name the repoints stamp onto
+   * `bank_account` (ADR-088). FOR UPDATE so concurrent merges serialize.
+   * @returns {Promise<{id:number,name:string}|undefined>}
+   */
+  async lockByIdForMerge(id) {
+    const result = await query('SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE', [id]);
+    return result.rows[0] ?? undefined;
+  },
+
+  /** Lock the merge sources; returns the ids that exist (caller diffs for 404s). */
+  async lockByIdsForMerge(ids) {
+    const result = await query('SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE', [ids]);
+    return result.rows;
+  },
+
+  /** Accounts that used a merged source as their funding/settlement account. */
+  async repointFundingAccount(targetId, sourceIds) {
+    const result = await query(
+      `UPDATE accounts SET funding_account_id = $1 WHERE funding_account_id = ANY($2::int[])`,
+      [targetId, sourceIds],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /**
+   * Clear a statement anchor invalidated by an interleaved-stamp merge (§1 F2).
+   * Per-row `balance` stamps are historical facts and stay untouched.
+   */
+  async clearStatementAnchor(id) {
+    const result = await query(
+      `UPDATE accounts SET statement_balance = NULL, statement_balance_date = NULL, updated_at = NOW()
+         WHERE id = $1`,
+      [id],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /**
+   * Delete the merged-away sources. The account_id FKs are ON DELETE RESTRICT,
+   * so this only succeeds once every reference has been repointed.
+   */
+  async deleteMergedSources(sourceIds, targetId) {
+    const result = await query(
+      'DELETE FROM accounts WHERE id = ANY($1::int[]) AND id <> $2',
+      [sourceIds, targetId],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /**
    * Resolve an account id by name, creating the row if absent. Mirrors the
    * dual-write trigger's normalization — identity is lower(btrim(name)), D1 —
    * so explicit creation and trigger-driven creation converge on the same row.

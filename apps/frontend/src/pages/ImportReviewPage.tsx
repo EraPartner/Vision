@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { importKeys, invalidateAccountDerived, invalidateTransactionData, plannedKeys } from "@/lib/queryKeys";
@@ -210,7 +211,7 @@ export default function ImportReviewPage() {
       navigate("/import");
     },
     onError: (err: Error) => {
-      toast.error(t("importReview.toast.commitFailed"), { description: err.message });
+      toast.error(t("importReview.toast.commitFailed"), { description: apiErrorToMessage(err, t) });
     },
   });
 
@@ -255,7 +256,7 @@ export default function ImportReviewPage() {
       queryClient.invalidateQueries({ queryKey: importKeys.preview(batchId) });
     } catch (err) {
       toast.error(t("importReview.toast.overrideFailed"), {
-        description: err instanceof Error ? err.message : undefined,
+        description: apiErrorToMessage(err, t),
       });
       setGroupOverrides((prev) => {
         const next = new Map(prev);
@@ -296,13 +297,13 @@ export default function ImportReviewPage() {
           });
         } catch (persistErr) {
           toast.error(t("importReview.toast.persistDefaultFailed"), {
-            description: persistErr instanceof Error ? persistErr.message : undefined,
+            description: apiErrorToMessage(persistErr, t),
           });
         }
       }
     } catch (err) {
       toast.error(t("importReview.toast.categoryOverrideFailed"), {
-        description: err instanceof Error ? err.message : undefined,
+        description: apiErrorToMessage(err, t),
       });
       updateGroupState(groupKey, { categorySaving: false }, fallback);
     }

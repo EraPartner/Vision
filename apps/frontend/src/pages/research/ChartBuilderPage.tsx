@@ -12,6 +12,7 @@ import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { ComposedChart, LineChart, getChartColor, type ComposedSeries, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -492,7 +493,7 @@ export default function ChartBuilderPage() {
         <Card className="glass-regular">
           <CardContent className="pt-6">
             {isLoading ? (
-              <Skeleton className="h-[400px] w-full rounded-lg" />
+              <Skeleton {...loadingSurfaceProps} className="h-[400px] w-full rounded-lg" />
             ) : rows.length > 0 ? (
               <ComposedChart<Row>
                 data={rows}

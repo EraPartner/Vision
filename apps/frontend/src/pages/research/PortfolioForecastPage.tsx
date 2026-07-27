@@ -12,6 +12,7 @@ import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -209,8 +210,12 @@ export default function PortfolioForecastPage() {
 
       {!unavailable && (
         <>
-          {/* Summary */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Summary — the four StatCards go busy together, so the grid
+              announces once for the row instead of each card announcing. */}
+          <div
+            {...(isFetching && !forecast ? loadingSurfaceProps : {})}
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          >
             <StatCard
               icon={Wallet}
               title={t("research.forecast.projectedMedian")}
@@ -255,7 +260,7 @@ export default function PortfolioForecastPage() {
             </CardHeader>
             <CardContent>
               {isFetching && !forecast ? (
-                <Skeleton className="h-[360px] w-full rounded-lg" />
+                <Skeleton {...loadingSurfaceProps} className="h-[360px] w-full rounded-lg" />
               ) : rows.length > 0 ? (
                 <LineChart<ForecastRow>
                   data={rows}

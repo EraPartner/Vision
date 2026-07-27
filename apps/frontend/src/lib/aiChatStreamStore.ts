@@ -189,7 +189,11 @@ class AiChatStreamStore {
     async send(
         body: SendBody,
         queryClient: QueryClient,
-        onError: (message: string) => void,
+        // Handed the raw thrown value, not a string: the caller has `t` in scope
+        // and routes it through `apiErrorToMessage` so a dead backend shows human
+        // copy instead of "Failed to fetch". The raw text is still kept on the
+        // stream state for logs/devtools.
+        onError: (error: unknown) => void,
     ): Promise<ChatDoneEvent | null> {
         const id = body.conversationId;
 
@@ -275,7 +279,7 @@ class AiChatStreamStore {
             this.streams.set(id, { ...current, isStreaming: false, error: message });
             this.aborts.delete(id);
             this.emit();
-            onError(message);
+            onError(err);
             return null;
         }
     }

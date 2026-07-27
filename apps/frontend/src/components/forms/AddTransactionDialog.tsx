@@ -19,6 +19,11 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { createAddTransactionFormState } from "@/components/forms/addTransactionForm";
 import { parseLocaleNumber } from "@/utils/currency";
 import { AccountCombobox } from "@/components/shared/AccountCombobox";
+import { FieldError } from "@/components/ui/field-error";
+import { fieldErrorProps, useFieldErrors, type FieldErrorMap } from "@/hooks/useFieldErrors";
+
+/** Visual order — decides which field gets focus on a blocked submit. */
+const FIELD_ORDER = ["tx_date", "tx_amount", "tx_bank", "tx_recipient"] as const;
 
 export function AddTransactionDialog() {
     const { t } = useLanguage();
@@ -62,31 +67,38 @@ export function AddTransactionDialog() {
         }, { replace: true });
     }, [wantsNew, setSearchParams]);
 
+    // Validation is recomputed every render but only *shown* once a submit has
+    // been blocked (see useFieldErrors), so a corrected field clears itself.
+    // These are the same conditions that used to return early / fire a toast —
+    // the toast is gone because the message now lives on the field itself,
+    // where a screen reader is taken to it. Server errors still toast, below.
+    const amountValue = parseLocaleNumber(form.amount);
+    const fieldErrors: FieldErrorMap = {
+        tx_date: !form.transaction_date ? t('validation.required') : undefined,
+        tx_amount: !form.amount
+            ? t('validation.required')
+            : !Number.isFinite(amountValue)
+                ? (t('addTxn.invalidAmount') || 'Invalid amount')
+                // Sign is the expense/income marker, so 0 is meaningless — the
+                // backend rejects it too; catching it here gives a proper message.
+                : amountValue === 0
+                    ? t('addTxn.zeroAmount')
+                    : undefined,
+        // The bank-account field is a combobox and has no native `required`
+        // message of its own.
+        tx_bank: !form.bank_account.trim() ? t('portfolio.move.selectAccount') : undefined,
+        tx_recipient: !form.recipient_id ? t('validation.required') : undefined,
+    };
+    const { visibleErrors, checkValid, resetErrors } = useFieldErrors(fieldErrors, FIELD_ORDER);
+
     const resetForm = () => {
         setForm(createAddTransactionFormState(appSettings.defaultCurrency));
+        resetErrors();
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.transaction_date || !form.recipient_id || !form.amount) return;
-        // The bank-account field became a combobox, losing the native `required`
-        // message — surface an explicit error instead of a silent return.
-        if (!form.bank_account.trim()) {
-            toast.error(t('addTxn.bankAccount'), { description: t('portfolio.move.selectAccount') });
-            return;
-        }
-
-        const amountValue = parseLocaleNumber(form.amount);
-        if (!Number.isFinite(amountValue)) {
-            toast.error(t('addTxn.invalidAmount') || 'Invalid amount');
-            return;
-        }
-        // Sign is the expense/income marker, so 0 is meaningless — the backend
-        // rejects it too; catching it here gives a proper message.
-        if (amountValue === 0) {
-            toast.error(t('addTxn.zeroAmount'));
-            return;
-        }
+        if (!checkValid()) return;
 
         createMutation.mutate(
             {
@@ -130,14 +142,18 @@ export function AddTransactionDialog() {
                         <div className="space-y-2">
                             <Label htmlFor="tx_date">{t('form.addTransaction.date')}</Label>
                             <DatePicker
+                                id="tx_date"
                                 value={form.transaction_date ? parseLocalDateFromYmd(form.transaction_date) : undefined}
                                 onChange={(date) => setForm(f => ({ ...f, transaction_date: date ? toYmd(date) : "" }))}
                                 placeholder={t('plannedPage.link.pickDate')}
+                                {...fieldErrorProps("tx_date", visibleErrors.tx_date)}
                             />
+                            <FieldError field="tx_date" message={visibleErrors.tx_date} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_amount">{t('form.addTransaction.amount')}</Label>
-                            <Input id="tx_amount" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" placeholder={t('form.addTransaction.amountPlaceholder')} value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} required />
+                            <Input id="tx_amount" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" placeholder={t('form.addTransaction.amountPlaceholder')} value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} required {...fieldErrorProps("tx_amount", visibleErrors.tx_amount)} />
+                            <FieldError field="tx_amount" message={visibleErrors.tx_amount} />
                         </div>
                     </div>
 
@@ -149,7 +165,9 @@ export function AddTransactionDialog() {
                                 value={form.bank_account}
                                 onChange={(name) => setForm(f => ({...f, bank_account: name}))}
                                 placeholder={t('addTxn.bankAccountPlaceholder')}
+                                {...fieldErrorProps("tx_bank", visibleErrors.tx_bank)}
                             />
+                            <FieldError field="tx_bank" message={visibleErrors.tx_bank} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_currency">{t('form.addTransaction.bank')}</Label>
@@ -168,13 +186,14 @@ export function AddTransactionDialog() {
                     <div className="space-y-2">
                         <Label htmlFor="tx_recipient">{t('form.addTransaction.recipient')}</Label>
                         <Select value={form.recipient_id} onValueChange={(v) => setForm(f => ({...f, recipient_id: v}))}>
-                            <SelectTrigger id="tx_recipient"><SelectValue placeholder={t('form.addTransaction.recipient')} /></SelectTrigger>
+                            <SelectTrigger id="tx_recipient" {...fieldErrorProps("tx_recipient", visibleErrors.tx_recipient)}><SelectValue placeholder={t('form.addTransaction.recipient')} /></SelectTrigger>
                             <SelectContent>
                                 {recipientsData?.items.map((r) => (
                                     <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
+                        <FieldError field="tx_recipient" message={visibleErrors.tx_recipient} />
                     </div>
 
                     <div className="space-y-2">

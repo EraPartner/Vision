@@ -133,6 +133,35 @@ export const recipientBankAccountRepository = {
     return result.rowCount > 0;
   },
 
+  /**
+   * Recipient merge: drop alias bank accounts that would collide with one the
+   * primary already owns on uq_rba_account_number (migration 0029). The
+   * primary's row is kept and the alias's deleted, rather than reassigned.
+   * Must run BEFORE repointRecipient().
+   */
+  async deleteMergeDuplicates(primaryId, aliasIds) {
+    const result = await query(
+      `DELETE FROM recipient_bank_accounts rba
+        USING recipient_bank_accounts keep
+        WHERE rba.recipient_id = ANY($2::int[])
+          AND keep.recipient_id = $1
+          AND keep.account_number = rba.account_number`,
+      [primaryId, aliasIds],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /** Repoint surviving alias bank accounts onto the merge primary. */
+  async repointRecipient(primaryId, aliasIds) {
+    const result = await query(
+      `UPDATE recipient_bank_accounts
+          SET recipient_id = $1
+        WHERE recipient_id = ANY($2::int[])`,
+      [primaryId, aliasIds],
+    );
+    return result.rowCount ?? 0;
+  },
+
   async setPrimary(bankAccountId, recipientId) {
     return withTransaction(async (client) => {
       await client.query(

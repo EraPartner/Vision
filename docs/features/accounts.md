@@ -61,7 +61,7 @@ SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS 
 
 ### `?since=YYYY-MM-DD` deep-link
 
-`/accounts/:id?since=2026-06-03` narrows the ledger to rows dated on/after the given day (a dismissible banner shows the active narrowing). This is the landing target for the Reconcile flow's *"show transactions since {statement date}"* exit; the reconcile dialog itself gains that exit in a later work package — the target exists now. Rows are compared as plain `YYYY-MM-DD` strings (no local-midnight shift), and Load-more stops once rows older than the cut-off are loaded.
+`/accounts/:id?since=2026-06-03` narrows the ledger to rows dated on/after the given day (a dismissible banner shows the active narrowing). This is the landing target for the Reconcile dialog's *"Show transactions since {statement date}"* exit (wired since WP-B1's completion). Rows are compared as plain `YYYY-MM-DD` strings (no local-midnight shift), and Load-more stops once rows older than the cut-off are loaded.
 
 ## Balance provenance (WP-B2)
 
@@ -74,12 +74,16 @@ fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. Show
 
 ## Reconcile
 
-The drift badge/chip (`statement_balance − computed_balance`, ADR-094) opens the Reconcile dialog:
+The drift badge/chip (`statement_balance − computed_balance`, ADR-094) opens the Reconcile dialog. The badge itself carries the statement's as-of date (*"Drift +€15,50 · statement 03/06/2026"*) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub cards, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
 
+The dialog:
+
+- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − computed`, rounded to cents half-away-from-zero so the preview always equals what `NUMERIC(15,2)` will store). *Save reading* PATCHes `statement_balance`/`statement_balance_date` through the normal account update path. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) can never pass as money. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path.
 - **Accept computed balance** — rewrite the stored statement figure to the computed one (no transaction created).
 - **Add adjustment transaction** — keep the statement as truth; the server stamps one balancing ledger row.
+- **Show transactions since {date}** — deep-links to `/accounts/:id?since={statement date}` (the fresh reading's date when one is entered, else the stored anchor's).
 
-Both go through `POST /api/accounts/:id/reconcile` and collapse the drift to 0. The fuller reconcile flow (statement input + date, live drift preview, "show transactions since" exit) lands in WP-B1/WP-B5 and will deep-link into the ledger route via `?since=`.
+When a fresh reading is entered, both resolutions PATCH it first so the resolved drift equals the preview; a reading that already matches the ledger (inside the server's half-cent epsilon) is saved without a reconcile call. Resolutions go through `POST /api/accounts/:id/reconcile` and collapse the drift to 0. On new accounts the statement fields no longer appear in the create dialog — a starting figure is recorded via the opening-balance field; later statements arrive through Reconcile (edit-Advanced keeps the raw fields).
 
 ## Lifecycle: edit · opening balance · merge · close · archive · delete
 

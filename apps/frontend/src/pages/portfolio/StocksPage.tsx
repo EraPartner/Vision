@@ -25,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ExportDialog } from "@/components/reports/ExportDialog";
@@ -208,7 +209,7 @@ export default function StocksPage({
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div {...loadingSurfaceProps} className="space-y-6">
         <PageHeader title={t(titleKey)} icon={PageIcon} />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-64 w-full" />

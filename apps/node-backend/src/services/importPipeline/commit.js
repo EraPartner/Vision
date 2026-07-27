@@ -11,6 +11,12 @@
  */
 
 import { query, withTransaction } from '../../database/connection.js';
+import { transactionRepository } from '../../repositories/transactionRepository.js';
+import {
+  markStagingRowCommitted,
+  markStagingRowDuplicate,
+  markStagingRowError,
+} from '../../repositories/importBatchRepository.js';
 import { logger } from '../../config/logger.js';
 import { formatDateToYmd } from '../../lib/dateFormat.js';
 import { refreshAggregations } from '../aggregationRefresh.js';
@@ -93,10 +99,7 @@ export async function commitBatch({ batchId, onProgress }) {
         // yet visible to the field-based check below.
         if (row.tx_hash && committedHashes.has(row.tx_hash)) {
           chunkDuplicates++;
-          await client.query(
-            `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
-            [row.id]
-          );
+          await markStagingRowDuplicate(row.id);
           continue;
         }
 
@@ -122,29 +125,19 @@ export async function commitBatch({ batchId, onProgress }) {
         //    match and re-insert every already-imported transaction — breaking
         //    the "re-import is a no-op" idempotency this dedup is meant to give.
         const memoNorm = (row.memo ?? '').trim();
-        const dupCheck = await client.query(
-          `SELECT t.id
-             FROM transactions t
-            WHERE t.date = $1
-              AND t.amount = $2
-              AND (
-                ($3::integer IS NOT NULL AND t.recipient_id = $3)
-                OR ($3::integer IS NULL AND t.recipient_id IS NULL)
-              )
-              AND COALESCE(TRIM(t.memo), '') = $4
-              AND t.bank_account IS NOT DISTINCT FROM $5
-              AND NOT (t.import_batch_id = $7 AND t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
-              AND t.is_active = true
-            LIMIT 1`,
-          [dateStr, row.amount, effectiveRecipientId, memoNorm, row.bank_account || null, row.tx_hash || null, batchId]
-        );
+        const duplicateId = await transactionRepository.findImportDuplicate({
+          date: dateStr,
+          amount: row.amount,
+          recipientId: effectiveRecipientId,
+          memo: memoNorm,
+          bankAccount: row.bank_account || null,
+          txHash: row.tx_hash || null,
+          batchId,
+        });
 
-        if (dupCheck.rows.length > 0) {
+        if (duplicateId !== undefined) {
           chunkDuplicates++;
-          await client.query(
-            `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
-            [row.id]
-          );
+          await markStagingRowDuplicate(row.id);
           continue;
         }
 
@@ -174,62 +167,45 @@ export async function commitBatch({ batchId, onProgress }) {
           // ON CONFLICT on the partial unique index over tx_hash makes the
           // insert race-safe — a concurrent import that slipped past the
           // field-based check above can't double-insert.
-          const insertResult = await client.query(
-            `INSERT INTO transactions
-                (date, bank_account, recipient_id, category_id, amount, memo, currency, balance, comment,
-                 import_batch_id, matched_pattern_id, tx_hash, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
-             ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
-             RETURNING id`,
-            [
-              dateStr,
-              row.bank_account || null,
-              effectiveRecipientId,
-              effectiveCategoryId,
-              row.amount,
-              row.memo || '',
-              // currency is NOT NULL at the DB level (migration 0046); default
-              // a missing import currency to EUR rather than writing NULL.
-              row.currency || 'EUR',
-              row.balance != null ? row.balance : null,
-              row.comment || null,
-              batchId,
-              effectivePatternId,
-              row.tx_hash || null,
-            ]
-          );
+          const insertedId = await transactionRepository.insertImportedRow({
+            date: dateStr,
+            bankAccount: row.bank_account || null,
+            recipientId: effectiveRecipientId,
+            categoryId: effectiveCategoryId,
+            amount: row.amount,
+            memo: row.memo || '',
+            // currency is NOT NULL at the DB level (migration 0046); default
+            // a missing import currency to EUR rather than writing NULL.
+            currency: row.currency || 'EUR',
+            balance: row.balance != null ? row.balance : null,
+            comment: row.comment || null,
+            importBatchId: batchId,
+            matchedPatternId: effectivePatternId,
+            txHash: row.tx_hash || null,
+          });
 
-          if (insertResult.rows.length === 0) {
+          if (insertedId === undefined) {
             // tx_hash conflict — another row/import already has this hash.
             chunkDuplicates++;
-            await client.query(
-              `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
-              [row.id]
-            );
+            await markStagingRowDuplicate(row.id);
             await client.query(`RELEASE SAVEPOINT ${sp}`);
             continue;
           }
 
           chunkImported++;
           chunkInserted.push({
-            id: insertResult.rows[0].id,
+            id: insertedId,
             recipient_id: effectiveRecipientId,
             amount: row.amount,
             transaction_date: dateStr,
           });
           if (row.tx_hash) committedHashes.add(row.tx_hash);
-          await client.query(
-            `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
-            [row.id]
-          );
+          await markStagingRowCommitted(row.id);
           await client.query(`RELEASE SAVEPOINT ${sp}`);
         } catch (err) {
           await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
           chunkErrors++;
-          await client.query(
-            `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,
-            [row.id, err?.message?.slice(0, 500) || 'insert failed']
-          );
+          await markStagingRowError(row.id, err?.message?.slice(0, 500) || 'insert failed');
         }
       }
     });

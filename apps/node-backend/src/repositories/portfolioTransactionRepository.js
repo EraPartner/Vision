@@ -7,6 +7,8 @@
 
 export { __resetPortfolioTransactionSchemaCache } from './portfolioTxRepo.common.js';
 
+import { getAccountIdRelation } from './portfolioTxRepo.common.js';
+
 import {
   getAll,
   getAllWithCount,
@@ -20,6 +22,7 @@ import {
   create,
   update,
   hardDelete,
+  repointAccount,
 } from './portfolioTxRepo.writes.js';
 
 export const portfolioTransactionRepository = {
@@ -32,6 +35,8 @@ export const portfolioTransactionRepository = {
   create,
   update,
   hardDelete,
+  repointAccount,
+  getAccountIdRelation,
   getSummary,
 };
 

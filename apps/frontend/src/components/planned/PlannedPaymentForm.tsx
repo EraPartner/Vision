@@ -16,9 +16,23 @@ import { AccountCombobox } from "@/components/shared/AccountCombobox";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { TagInput } from "@/components/shared/TagInput";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { FieldError } from "@/components/ui/field-error";
+import { fieldErrorProps, useFieldErrors, type FieldErrorMap } from "@/hooks/useFieldErrors";
 
 type Frequency = PlannedPayment["frequency"];
 type LoanType = NonNullable<PlannedPayment["loan_type"]>;
+
+/** Visual order — decides which field gets focus on a blocked submit. */
+const FIELD_ORDER = [
+  "pp-name",
+  "pp-amount",
+  "pp-due-date",
+  "pp-bank",
+  "pp-loan-principal",
+  "pp-loan-rate",
+  "pp-loan-term",
+  "pp-custom-days",
+] as const;
 
 interface Props {
   open: boolean;
@@ -57,33 +71,39 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
   const loading = false;
 
-  const handleSubmit = () => {
-    if (!name.trim() || !dueDate || (!isLoan && !amount) || !bankAccount.trim()) {
-      alert(t('plannedForm.requiredFieldsHint'));
-      return;
-    }
-
-    if (isLoan) {
-      if (!loanPrincipal || !loanRate || !loanTermMonths) {
-        alert(t('plannedForm.loanRequiredHint'));
-        return;
-      }
-      const term = parseInt(loanTermMonths, 10);
-      if (!Number.isInteger(term) || term < 1 || term > 600) {
-        alert(t('plannedForm.loanTermInvalid'));
-        return;
-      }
-    }
-
+  // The same conditions that used to stop submission behind a blocking
+  // `alert()`, re-expressed per field: recomputed every render, but only shown
+  // once a submit has actually been blocked (see useFieldErrors), so each
+  // message clears itself as soon as its own field is fixed.
+  const term = parseInt(loanTermMonths, 10);
+  const days = parseInt(customDays, 10);
+  const fieldErrors: FieldErrorMap = {
+    "pp-name": !name.trim() ? t('plannedForm.nameRequired') : undefined,
+    "pp-amount": !isLoan && !amount ? t('plannedForm.amountRequired') : undefined,
+    "pp-due-date": !dueDate ? t('validation.required') : undefined,
+    "pp-bank": !bankAccount.trim() ? t('portfolio.move.selectAccount') : undefined,
+    "pp-loan-principal": isLoan && !loanPrincipal ? t('validation.required') : undefined,
+    "pp-loan-rate": isLoan && !loanRate ? t('validation.required') : undefined,
+    "pp-loan-term": !isLoan
+      ? undefined
+      : !loanTermMonths
+        ? t('validation.required')
+        : !Number.isInteger(term) || term < 1 || term > 600
+          ? t('plannedForm.loanTermInvalid')
+          : undefined,
     // A "custom" pattern with a blank/0 interval reached the backend as the
     // literal pattern "custom" and came back as a raw 400 — block it here.
-    if (!isLoan && isRecurring && frequency === "custom") {
-      const days = parseInt(customDays, 10);
-      if (!Number.isInteger(days) || days < 1) {
-        alert(t('plannedForm.customDaysInvalid'));
-        return;
-      }
-    }
+    "pp-custom-days":
+      !isLoan && isRecurring && frequency === "custom" && (!Number.isInteger(days) || days < 1)
+        ? t('plannedForm.customDaysInvalid')
+        : undefined,
+  };
+  const { visibleErrors, checkValid, resetErrors } = useFieldErrors(fieldErrors, FIELD_ORDER);
+
+  const handleSubmit = () => {
+    if (!checkValid()) return;
+    // Narrowing only — `checkValid()` has already blocked a missing due date.
+    if (!dueDate) return;
 
     const dueDateStr = toYmd(dueDate);
 
@@ -137,6 +157,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
     }
 
     onSubmit(payload as Omit<PlannedPayment, "id" | "created_at">);
+    resetErrors();
   };
 
   return (
@@ -151,14 +172,16 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             {/* Name */}
             <div className="grid gap-1.5">
               <Label htmlFor="pp-name">{t('plannedForm.nameRequired2')}</Label>
-              <Input id="pp-name" placeholder={t('plannedForm.namePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
+              <Input id="pp-name" placeholder={t('plannedForm.namePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} {...fieldErrorProps("pp-name", visibleErrors["pp-name"])} />
+              <FieldError field="pp-name" message={visibleErrors["pp-name"]} />
             </div>
 
             {/* Amount + Currency */}
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 grid gap-1.5">
                 <Label htmlFor="pp-amount">{t('plannedForm.amountRequired2')}</Label>
-                <Input id="pp-amount" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <Input id="pp-amount" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} {...fieldErrorProps("pp-amount", visibleErrors["pp-amount"])} />
+                <FieldError field="pp-amount" message={visibleErrors["pp-amount"]} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="pp-currency">{t('plannedForm.currency')}</Label>
@@ -175,13 +198,16 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
             {/* Due date */}
             <div className="grid gap-1.5">
-              <Label>{t('plannedForm.dueDate')}</Label>
+              <Label htmlFor="pp-due-date">{t('plannedForm.dueDate')}</Label>
               <DatePicker
+                id="pp-due-date"
                 value={dueDate}
                 onChange={setDueDate}
                 placeholder={t('plannedForm.pickDate')}
                 portalContainer={portalContainer}
+                {...fieldErrorProps("pp-due-date", visibleErrors["pp-due-date"])}
               />
+              <FieldError field="pp-due-date" message={visibleErrors["pp-due-date"]} />
             </div>
 
             {/* Recipient */}
@@ -222,7 +248,9 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
                 value={bankAccount}
                 onChange={setBankAccount}
                 placeholder={t('plannedForm.bankPlaceholder')}
+                {...fieldErrorProps("pp-bank", visibleErrors["pp-bank"])}
               />
+              <FieldError field="pp-bank" message={visibleErrors["pp-bank"]} />
             </div>
 
             {/* Recurring toggle */}
@@ -250,17 +278,20 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5">
                     <Label htmlFor="pp-loan-principal">{t('plannedForm.loanPrincipal')}</Label>
-                    <Input id="pp-loan-principal" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} />
+                    <Input id="pp-loan-principal" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} {...fieldErrorProps("pp-loan-principal", visibleErrors["pp-loan-principal"])} />
+                    <FieldError field="pp-loan-principal" message={visibleErrors["pp-loan-principal"]} />
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="pp-loan-rate">{t('plannedForm.loanRate')}</Label>
-                    <Input id="pp-loan-rate" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$" value={loanRate} onChange={(e) => setLoanRate(e.target.value)} />
+                    <Input id="pp-loan-rate" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$" value={loanRate} onChange={(e) => setLoanRate(e.target.value)} {...fieldErrorProps("pp-loan-rate", visibleErrors["pp-loan-rate"])} />
+                    <FieldError field="pp-loan-rate" message={visibleErrors["pp-loan-rate"]} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5">
                     <Label htmlFor="pp-loan-term">{t('plannedForm.loanTermMonths')}</Label>
-                    <Input id="pp-loan-term" type="number" min={1} value={loanTermMonths} onChange={(e) => setLoanTermMonths(e.target.value)} />
+                    <Input id="pp-loan-term" type="number" min={1} value={loanTermMonths} onChange={(e) => setLoanTermMonths(e.target.value)} {...fieldErrorProps("pp-loan-term", visibleErrors["pp-loan-term"])} />
+                    <FieldError field="pp-loan-term" message={visibleErrors["pp-loan-term"]} />
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="pp-loan-payment-day">{t('plannedForm.loanPaymentDay')}</Label>
@@ -300,7 +331,8 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
                 {frequency === "custom" && (
                   <div className="grid gap-1.5">
                     <Label htmlFor="pp-custom-days">{t('plannedForm.repeatEvery')}</Label>
-                    <Input id="pp-custom-days" type="number" min={1} placeholder={t('plannedForm.customDaysPlaceholder')} value={customDays} onChange={(e) => setCustomDays(e.target.value)} />
+                    <Input id="pp-custom-days" type="number" min={1} placeholder={t('plannedForm.customDaysPlaceholder')} value={customDays} onChange={(e) => setCustomDays(e.target.value)} {...fieldErrorProps("pp-custom-days", visibleErrors["pp-custom-days"])} />
+                    <FieldError field="pp-custom-days" message={visibleErrors["pp-custom-days"]} />
                   </div>
                 )}
 
@@ -340,7 +372,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
           </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('plannedForm.cancel')}</Button>
+          <Button variant="outline" onClick={() => { resetErrors(); onOpenChange(false); }}>{t('plannedForm.cancel')}</Button>
           <Button onClick={handleSubmit} disabled={loading || !name.trim() || !dueDate || (!isLoan && !amount) || !bankAccount.trim()}>
             {initial ? t('plannedForm.saveChanges') : t('plannedForm.createPayment')}
           </Button>

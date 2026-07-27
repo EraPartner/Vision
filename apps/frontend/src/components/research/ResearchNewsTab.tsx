@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { safeHref } from "@/utils/safeHref";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -28,7 +29,7 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
 
   if (isFetching && !result) {
     return (
-      <div className="space-y-3">
+      <div {...loadingSurfaceProps} className="space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="flex gap-3">
             <Skeleton className="h-16 w-24 rounded shrink-0" />

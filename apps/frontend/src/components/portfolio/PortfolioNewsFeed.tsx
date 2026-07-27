@@ -4,6 +4,7 @@ import { apiClient, type MarketNewsArticle } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Newspaper, ExternalLink, Clock, WifiOff } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -45,7 +46,10 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
       </CardHeader>
       <CardContent className="p-0 flex-1 min-h-0">
         <ScrollArea className="h-full">
-          <div className="px-6 pb-4 space-y-1">
+          {/* Shared with the offline/empty/loaded branches, so the status role
+              is spread only while loading — one region for the six skeleton
+              rows rather than one per row. */}
+          <div {...(isOnline && isLoading ? loadingSurfaceProps : {})} className="px-6 pb-4 space-y-1">
             {!isOnline && articles.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <WifiOff className="h-10 w-10 text-muted-foreground/30 mb-3" />

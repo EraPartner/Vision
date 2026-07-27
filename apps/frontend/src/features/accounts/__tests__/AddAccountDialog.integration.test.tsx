@@ -122,4 +122,71 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(screen.queryByText(/holds a cash balance/i)).not.toBeInTheDocument();
         expect(screen.queryByText(/multi-currency cash/i)).not.toBeInTheDocument();
     });
+
+    // ── WP-B5 §3 F1: the statement fields are an EDIT-only concern ───────────
+
+    it("does not offer the statement-balance fields on create (they only mint instant drift)", async () => {
+        const calls = mockCreate();
+        const user = userEvent.setup();
+        renderWithApp(<AddAccountDialog />);
+
+        await openCreateDialog(user);
+        await user.click(screen.getByRole("button", { name: /advanced/i }));
+        // Advanced is open (owner/liquidity are there)…
+        expect(await screen.findByLabelText(/owner/i)).toBeInTheDocument();
+        // …but the statement reading is not, on create.
+        expect(screen.queryByLabelText(/statement balance/i)).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/^as of$/i)).not.toBeInTheDocument();
+
+        await user.type(screen.getByLabelText(/^name$/i), "KBC Checking");
+        await user.click(screen.getByRole("button", { name: /create/i }));
+
+        await waitFor(() => expect(calls.create).toHaveLength(1));
+        const body = calls.create[0] as Record<string, unknown>;
+        // A create payload must never carry a statement reading.
+        expect(body.statement_balance).toBeUndefined();
+        expect(body.statement_balance_date).toBeUndefined();
+    });
+
+    it("still offers (and validates) the statement-balance fields in edit mode", async () => {
+        const user = userEvent.setup();
+        const saved: unknown[] = [];
+        const initialValues = {
+            name: "KBC Checking", display_name: "KBC Checking", institution: "KBC",
+            currency: "EUR", type: "checking" as const, owner: "me" as const,
+            liquidity_class: "liquid" as const, tax_wrapper: "none" as const,
+            spendable: true, in_net_worth: true, multi_currency_cash: false,
+            has_cash_sleeve: true,
+            // accountRepository.js emits the DATE as a bare YYYY-MM-DD (to_char),
+            // which is what <input type="date"> wants; accountToFormValues also
+            // slices defensively for any other source.
+            statementBalance: "1284.4", statementBalanceDate: "2026-06-03",
+        };
+        renderWithApp(
+            <AddAccountDialog
+                mode="edit"
+                open
+                onOpenChange={() => {}}
+                initialValues={initialValues}
+                onSave={(v) => saved.push(v)}
+            />,
+        );
+
+        // Advanced starts expanded in edit mode, statement fields populated.
+        expect(await screen.findByLabelText(/statement balance/i)).toHaveValue("1284.4");
+        expect(screen.getByLabelText(/^as of$/i)).toHaveValue("2026-06-03");
+
+        // Clearing the date while a balance is set is still blocked (ADR-094).
+        await user.clear(screen.getByLabelText(/^as of$/i));
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        expect(saved).toHaveLength(0);
+
+        await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await waitFor(() => expect(saved).toHaveLength(1));
+        expect(saved[0]).toMatchObject({
+            statementBalance: "1284.4",
+            statementBalanceDate: "2026-07-20",
+        });
+    });
 });

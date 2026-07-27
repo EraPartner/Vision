@@ -3,6 +3,7 @@ import {apiClient} from '@/lib/api';
 import {categoryKeys} from '@/lib/queryKeys';
 import type {CategoryCreate, CategoryUpdate} from '@/types/api';
 import {toast} from 'sonner';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import {useLanguage} from '@/contexts/LanguageContext';
 
 export function useCategories(params?: {
@@ -36,7 +37,7 @@ export function useCreateCategory() {
             }
         },
         onError: (error: Error) => {
-            toast.error(t('categories.createFailedTitle'), { description: error.message });
+            toast.error(t('categories.createFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -52,7 +53,7 @@ export function useUpdateCategory() {
             queryClient.invalidateQueries({queryKey: categoryKeys.all});
         },
         onError: (error: Error) => {
-            toast.error(t('categories.updateFailedTitle'), { description: error.message });
+            toast.error(t('categories.updateFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -67,7 +68,7 @@ export function useDeleteCategory() {
             queryClient.invalidateQueries({queryKey: categoryKeys.all});
         },
         onError: (error: Error) => {
-            toast.error(t('categories.deleteFailedTitle'), { description: error.message });
+            toast.error(t('categories.deleteFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }

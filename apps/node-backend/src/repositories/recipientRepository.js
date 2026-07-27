@@ -280,6 +280,52 @@ export const recipientRepository = {
   },
 
   /**
+   * Lock the merge primary so concurrent merges into it serialize cleanly.
+   * @returns {Promise<{id:number}|undefined>}
+   */
+  async lockByIdForMerge(id) {
+    const result = await query(`SELECT id FROM recipients WHERE id = $1 FOR UPDATE`, [id]);
+    return result.rows[0] ?? undefined;
+  },
+
+  /**
+   * Flag alias rows as pointing at the primary, preserving the historical alias
+   * relationship for the Recipients UI + /:id/aliases. Distinct from
+   * mergeRecipients() above, which the older non-atomic route path still uses.
+   * @returns {Promise<number[]>} the alias ids actually flagged
+   */
+  async flagAliasesOf(primaryId, aliasIds) {
+    const result = await query(
+      `UPDATE recipients
+          SET primary_recipient_id = $1,
+              updated_at = NOW()
+        WHERE id = ANY($2::int[])
+          AND id <> $1
+        RETURNING id`,
+      [primaryId, aliasIds],
+    );
+    return result.rows.map((r) => r.id);
+  },
+
+  /**
+   * Re-point GRANDCHILDREN — recipients whose primary_recipient_id was one of
+   * the now-merged aliases — onto the new primary. Without this, merging C→B
+   * then B→A leaves C pointing at B (a depth-2 chain) that the one-level read
+   * layer cannot resolve, so C vanishes from A's group.
+   */
+  async repointGrandchildAliases(primaryId, aliasIds) {
+    const result = await query(
+      `UPDATE recipients
+          SET primary_recipient_id = $1,
+              updated_at = NOW()
+        WHERE primary_recipient_id = ANY($2::int[])
+          AND id <> $1`,
+      [primaryId, aliasIds],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /**
    * Unmerge: remove primary_recipient_id from a recipient.
    */
   async unmergeRecipient(id) {

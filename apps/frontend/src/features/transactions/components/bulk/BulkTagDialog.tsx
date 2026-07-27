@@ -41,8 +41,14 @@ export function BulkTagDialog({
         reset();
     }
 
+    // No reset on dismissal: Radix reports an overlay click and Escape through
+    // the same callback as a deliberate close, so resetting there wiped the
+    // chosen tags on one stray click. The chosen tags are not tied to *which*
+    // rows are selected — they stay meaningful for whatever the selection is
+    // when the dialog is reopened — and the dialog stays mounted while closed,
+    // so they are still there. reset() belongs to Cancel and to a applied edit.
     return (
-        <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{t('txPage.bulk.tagTitle', { n: selectedCount })}</DialogTitle>
@@ -63,7 +69,7 @@ export function BulkTagDialog({
                     </div>
                 </div>
                 <DialogFooter className="gap-2">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+                    <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }} disabled={pending}>
                         {t('common.cancel')}
                     </Button>
                     <Button

@@ -36,6 +36,27 @@ const CATEGORY_NAME_SQL = `CASE
              END`;
 const RECIPIENT_NAME_SQL = 'COALESCE(pr.name, r.name)';
 
+// Stamped-balance date range per account, keyed on the ORIGINAL account_id —
+// the account-merge guard (§1 F2) must read this before the repoint.
+const STAMP_RANGES_SQL = `
+  SELECT account_id,
+         to_char(MIN(date), 'YYYY-MM-DD') AS min_date,
+         to_char(MAX(date), 'YYYY-MM-DD') AS max_date
+  FROM transactions
+  WHERE account_id = ANY($1::int[]) AND is_active = true AND balance IS NOT NULL
+  GROUP BY account_id`;
+
+// Mark one leg of a transfer pair (SIMP-50). The `auto` variant guards against
+// clobbering a concurrent manual mark or already-paired row; the `manual`
+// variant is unconditional (the caller has already released prior peers).
+const MARK_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'auto'
+            WHERE id = $1 AND is_transfer = false AND transfer_source IS NULL`;
+const MARK_MANUAL_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`;
+// Undo a leg WE just auto-marked (guarded on the peer we set + source='auto') so
+// a half-applied pair is never committed when the sibling leg's guarded UPDATE misses.
+const REVERT_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+            WHERE id = $1 AND transfer_peer_id = $2 AND transfer_source = 'auto'`;
+
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
 const TRANSACTION_SORT_COLUMNS = {
   date: 't.date',
@@ -617,6 +638,272 @@ export const transactionRepository = {
       [sinceDate]
     );
     return result.rows;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Account / recipient merge repoints (ADR-088, ADR-014)
+  //
+  // Composed by the merge services inside withTransaction; the ambient context
+  // routes these onto the transaction's client, so the repoints share the
+  // merge's FOR UPDATE locks and roll back with it.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Stamped-balance date range per account. Run BEFORE an account-merge repoint,
+   * while rows still carry their original account_id — the repoint erases that
+   * provenance. Backs the overlapping-stamp guard (§1 F2).
+   * @returns {Promise<{account_id:number,min_date:string,max_date:string}[]>}
+   */
+  async getStampedDateRangesByAccount(accountIds) {
+    const result = await query(STAMP_RANGES_SQL, [accountIds]);
+    return result.rows;
+  },
+
+  /**
+   * Repoint transactions off merged-away source accounts onto the survivor.
+   * Also stamps `bank_account` with the survivor's name so the dual-write
+   * trigger (migration 0051) keeps account_id at the target and a later edit
+   * can't re-resolve the old name into a fresh account (un-merge).
+   */
+  async repointAccount(targetId, targetName, sourceIds) {
+    const result = await query(
+      `UPDATE transactions SET account_id = $1, bank_account = $2 WHERE account_id = ANY($3::int[])`,
+      [targetId, targetName, sourceIds],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /** Repoint transactions off merged alias recipients onto the primary. */
+  async repointRecipient(primaryId, aliasIds) {
+    const result = await query(
+      `UPDATE transactions
+          SET recipient_id = $1
+        WHERE recipient_id = ANY($2::int[])`,
+      [primaryId, aliasIds],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Internal-transfer reconciliation (ADR-083)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Candidate (outflow, inflow) pairs among open rows: equal-and-opposite
+   * amount, same currency, two different own accounts, within ±windowDays.
+   * Fixing the outflow side (amount < 0) yields each pair exactly once. Uses the
+   * (amount, date) index added in migration 0044. Pairs the user explicitly
+   * rejected (transfer_dismissals, migration 0070) are excluded — the PAIR, not
+   * the rows: each leg stays matchable with every other candidate.
+   */
+  async listTransferCandidatePairs(windowDays) {
+    const { rows } = await query(
+      `SELECT a.id AS "outId", b.id AS "inId"
+       FROM transactions a
+       JOIN transactions b
+         ON b.amount = -a.amount
+        AND COALESCE(b.currency, 'EUR') = COALESCE(a.currency, 'EUR')
+        AND b.account_id IS DISTINCT FROM a.account_id
+        AND a.account_id IS NOT NULL AND b.account_id IS NOT NULL
+        AND b.date BETWEEN a.date - $1::int AND a.date + $1::int
+      WHERE a.is_active AND b.is_active
+        AND a.is_transfer = false AND b.is_transfer = false
+        AND a.transfer_source IS NULL AND b.transfer_source IS NULL
+        AND a.amount < 0
+        AND NOT EXISTS (
+          SELECT 1 FROM transfer_dismissals d
+           WHERE d.txn_a_id = LEAST(a.id, b.id)
+             AND d.txn_b_id = GREATEST(a.id, b.id)
+        )`,
+      [windowDays],
+    );
+    return rows;
+  },
+
+  /**
+   * Release transfers whose peer was deleted (the FK set transfer_peer_id NULL).
+   * Only reconciler-owned rows ('auto'/'manual'): system rows — opening anchors,
+   * reconcile adjustments, trade cash legs — are also is_transfer=true with a
+   * NULL peer but are NOT reconciler pairs.
+   */
+  async releaseOrphanedTransfers() {
+    await query(
+      `UPDATE transactions
+        SET is_transfer = false, transfer_source = NULL
+      WHERE is_transfer = true AND transfer_peer_id IS NULL
+        AND transfer_source IN ('auto', 'manual')`,
+    );
+  },
+
+  /**
+   * Release auto-pairs whose legs no longer satisfy the match rule (e.g. an
+   * amount or date was edited). The predicate is symmetric, so both legs of a
+   * now-invalid pair qualify and are released together.
+   */
+  async releaseInvalidAutoTransferPairs(windowDays) {
+    await query(
+      `UPDATE transactions t
+        SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+      WHERE t.transfer_source = 'auto' AND t.transfer_peer_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM transactions p
+           WHERE p.id = t.transfer_peer_id
+             -- Reciprocity: the peer must still point back at t. Without this,
+             -- when markTransfer re-points one leg elsewhere the stranded auto
+             -- leg stayed is_transfer=true forever (a phantom one-way transfer,
+             -- excluded from cash-flow aggregates).
+             AND p.transfer_peer_id = t.id
+             AND p.amount = -t.amount
+             AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
+             AND p.account_id IS DISTINCT FROM t.account_id
+             AND p.account_id IS NOT NULL AND t.account_id IS NOT NULL
+             AND p.date BETWEEN t.date - $1::int AND t.date + $1::int
+             AND p.is_active AND t.is_active
+        )`,
+      [windowDays],
+    );
+  },
+
+  /** Display rows for the ambiguous-match suggestions endpoint. */
+  async listTransferSuggestionRows(ids) {
+    const { rows } = await query(
+      `SELECT id, date, amount, currency, bank_account, memo, recipient_id
+       FROM transactions WHERE id = ANY($1)`,
+      [ids],
+    );
+    return rows;
+  },
+
+  /**
+   * Mark one leg of an auto-detected pair. Guarded against clobbering a
+   * concurrent manual mark or an already-paired row; returns rows affected so
+   * the caller can detect a half-applied pair.
+   */
+  async markAutoTransferLeg(id, peerId) {
+    const result = await query(MARK_AUTO_LEG_SQL, [id, peerId]);
+    return result.rowCount ?? 0;
+  },
+
+  /** Mark one leg of a manual pair (unconditional — caller released prior peers). */
+  async markManualTransferLeg(id, peerId) {
+    const result = await query(MARK_MANUAL_LEG_SQL, [id, peerId]);
+    return result.rowCount ?? 0;
+  },
+
+  /**
+   * Undo a leg WE just auto-marked (guarded on the peer we set + source='auto')
+   * so a half-applied pair is never committed when the sibling leg's guarded
+   * UPDATE misses.
+   */
+  async revertAutoTransferLeg(id, peerId) {
+    const result = await query(REVERT_AUTO_LEG_SQL, [id, peerId]);
+    return result.rowCount ?? 0;
+  },
+
+  /** Lock both legs of a manual mark and read what markTransfer validates. */
+  async lockTransferLegs(ids) {
+    const { rows } = await query(
+      `SELECT id, amount, account_id, is_active FROM transactions WHERE id = ANY($1) FOR UPDATE`,
+      [ids],
+    );
+    return rows;
+  },
+
+  /**
+   * Release any existing peer of the given legs before re-pairing them, so a
+   * prior counterpart isn't stranded as a phantom one-way transfer. The
+   * stranded peer goes back to open (NULL), not dismissed.
+   */
+  async releaseTransferPeersOf(ids) {
+    const result = await query(
+      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+        WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)`,
+      [ids],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  /** Lock a row and read its peer pointer (unmarkTransfer's reciprocity check). */
+  async lockTransferPeerPointer(id) {
+    const { rows } = await query(
+      'SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE',
+      [id],
+    );
+    return rows[0]?.transfer_peer_id ?? undefined;
+  },
+
+  /** Record a rejected pairing (sticky, per-pair — migration 0070). */
+  async insertTransferDismissal(aId, bId) {
+    await query(
+      `INSERT INTO transfer_dismissals (txn_a_id, txn_b_id)
+         VALUES (LEAST($1::int, $2::int), GREATEST($1::int, $2::int))
+         ON CONFLICT DO NOTHING`,
+      [aId, bId],
+    );
+  },
+
+  /** Reset a single leg back to open. */
+  async clearTransferMark(id) {
+    const result = await query(
+      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
+      [id],
+    );
+    return result.rowCount ?? 0;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Import commit (import-specific — deliberately NOT create()/getById())
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Field-based duplicate probe for the import commit path: date + amount +
+   * recipient + memo, scoped to the same account, and skipped when both rows
+   * carry a tx_hash and the hashes DIFFER within this batch (the hash is the
+   * identity then). See commit.js for the full rationale — the predicate is
+   * load-bearing for import idempotency and is moved here verbatim.
+   *
+   * @returns {Promise<number|undefined>} the duplicate's id, or undefined
+   */
+  async findImportDuplicate({ date, amount, recipientId, memo, bankAccount, txHash, batchId }) {
+    const result = await query(
+      `SELECT t.id
+             FROM transactions t
+            WHERE t.date = $1
+              AND t.amount = $2
+              AND (
+                ($3::integer IS NOT NULL AND t.recipient_id = $3)
+                OR ($3::integer IS NULL AND t.recipient_id IS NULL)
+              )
+              AND COALESCE(TRIM(t.memo), '') = $4
+              AND t.bank_account IS NOT DISTINCT FROM $5
+              AND NOT (t.import_batch_id = $7 AND t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
+              AND t.is_active = true
+            LIMIT 1`,
+      [date, amount, recipientId, memo, bankAccount, txHash, batchId],
+    );
+    return result.rows[0]?.id ?? undefined;
+  },
+
+  /**
+   * Insert a committed import row. Distinct from create(): the import writes
+   * `balance` (bank-stamped, anchors ADR-094), `import_batch_id`,
+   * `matched_pattern_id` and `tx_hash`, and relies on ON CONFLICT over the
+   * partial unique index on tx_hash to stay race-safe against a concurrent
+   * import. A conflict yields no row.
+   *
+   * @returns {Promise<number|undefined>} inserted id, or undefined on conflict
+   */
+  async insertImportedRow({ date, bankAccount, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash }) {
+    const result = await query(
+      `INSERT INTO transactions
+                (date, bank_account, recipient_id, category_id, amount, memo, currency, balance, comment,
+                 import_batch_id, matched_pattern_id, tx_hash, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
+             ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
+             RETURNING id`,
+      [date, bankAccount, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash],
+    );
+    return result.rows[0]?.id ?? undefined;
   },
 };
 

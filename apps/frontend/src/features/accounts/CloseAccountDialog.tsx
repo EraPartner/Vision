@@ -16,6 +16,7 @@ import { AlertTriangle, DoorClosed, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { invalidateAccountRepoint } from '@/lib/queryKeys';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
@@ -45,7 +46,7 @@ export function CloseAccountDialog({ account, open, onOpenChange }: CloseAccount
       toast.success(t('accounts.close.done', { name: account.display_name || account.name }));
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(t('accounts.close.failed'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('accounts.close.failed'), { description: apiErrorToMessage(e, t) }),
   });
 
   const residual = account.computed_balance ?? 0;

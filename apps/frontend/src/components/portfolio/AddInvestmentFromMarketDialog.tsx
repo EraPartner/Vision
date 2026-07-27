@@ -19,6 +19,7 @@ import { todayYmd } from '@/lib/timezone';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 import { SUPPORTED_CURRENCIES } from '@/utils/currency';
+import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
 
 interface Quote {
   symbol: string;
@@ -81,13 +82,38 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     recurrenceEndDate: '',
   });
 
-  const [newInvestmentForm, setNewInvestmentForm] = useState(makeNewInvestmentForm);
-  const [transactionForm, setTransactionForm] = useState(makeTransactionForm);
+  // Typed input survives a dismissal (overlay click / Escape / ✕) — see
+  // useDialogFormState. Both step forms share one dirty verdict so a half-typed
+  // transaction is not wiped by a re-seed aimed at the other step.
+  const {
+    form: newInvestmentForm,
+    setForm: setNewInvestmentForm,
+    reset: resetNewInvestmentForm,
+    dirty: newInvestmentDirty,
+  } = useDialogFormState(makeNewInvestmentForm);
+  const {
+    form: transactionForm,
+    setForm: setTransactionForm,
+    reset: resetTransactionForm,
+    dirty: transactionDirty,
+  } = useDialogFormState(makeTransactionForm);
+
+  const dirty = newInvestmentDirty || transactionDirty;
 
   const reset = () => {
     setStep('choose');
-    setNewInvestmentForm(makeNewInvestmentForm());
-    setTransactionForm(makeTransactionForm());
+    resetNewInvestmentForm();
+    resetTransactionForm();
+  };
+
+  // Both forms are seeded from the quote (name, symbol, price), so looking up a
+  // different symbol on the page behind the dialog must re-seed them — keeping
+  // input across a dismissal must never mean submitting AAPL's price as MSFT's.
+  useReseedOnIdentityChange(quote.symbol, reset);
+
+  const handleOpenChange = (v: boolean) => {
+    if (v && !dirty) reset();
+    setOpen(v);
   };
 
   const handleCreateInvestment = async (e: React.FormEvent) => {
@@ -202,7 +228,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   const showRecurring = ['buy', 'sell', 'dividend'].includes(transactionForm.type);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1.5">
           <Plus className="h-4 w-4" />

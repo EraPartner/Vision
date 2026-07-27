@@ -30,15 +30,71 @@ export function mockConnection(extra = {}) {
  * shares the module-level `query` spy so tests can route pooled and
  * transactional SQL through one mock; pass a `client` to use it instead.
  *
+ * Models the AMBIENT TRANSACTION CONTEXT of the real connection.js (added in
+ * 32806e2): while a `withTransaction` callback is running, module-level
+ * `query`/`queryPrepared` execute on that transaction's client instead of the
+ * pool (connection.js:85-88 and :149-152). Without this the mock contradicted
+ * production — a repository call made inside a transaction appeared to run on
+ * the pool — so a service that composes repos inside `withTransaction` could
+ * not be tested against the client at all. Because the routed SQL lands on the
+ * supplied client's spy, assertions written against `client.query.mock.calls`
+ * (statement text, params, lock ordering) keep working unchanged when service
+ * SQL later moves into a repository.
+ *
+ * Routing stops as soon as the callback settles — resolve OR reject — mirroring
+ * production's store invalidation, so a leaked continuation falls back to the
+ * pool rather than writing on a released client.
+ *
+ * `extra.query`, when supplied, becomes the POOL-side implementation rather
+ * than replacing the exported spy, so ambient routing survives it. The pool
+ * sink is also returned as `poolQuery` for tests that need to prime pooled
+ * statements without the priming being consumed by transactional ones.
+ *
  * @param {{ query: import('vitest').Mock } & Record<string, any>} [client]
  * @param {Record<string, any>} [extra]
  */
 export function mockTxConnection(client, extra = {}) {
-  const query = vi.fn();
+  // Mirrors connection.js's txStorage store: holds the active transaction's
+  // client while the callback runs, nulled when it settles.
+  const store = { client: null };
+  const { query: poolImpl, ...restExtra } = extra;
+  const poolQuery = poolImpl ?? vi.fn();
+
+  // `active.query !== query` is the self-reference guard for the no-client
+  // case, where the transaction shares this very spy: routing there would
+  // recurse forever, and the call is already being recorded on it.
+  const ambient = () => {
+    const active = store.client;
+    return active && active.query !== query ? active : null;
+  };
+
+  const query = vi.fn((...args) => {
+    const active = ambient();
+    return active ? active.query(...args) : poolQuery(...args);
+  });
+
+  const queryPrepared = vi.fn((name, text, values) => {
+    const active = ambient();
+    // pg's object form, exactly as connection.js:151 passes it.
+    return active ? active.query({ name, text, values }) : poolQuery(text, values);
+  });
+
+  const txClient = client ?? { query };
+
   return {
     query,
-    withTransaction: vi.fn(async (fn) => fn(client ?? { query })),
-    ...extra,
+    queryPrepared,
+    poolQuery,
+    getAmbientTransactionClient: vi.fn(() => store.client),
+    withTransaction: vi.fn(async (fn) => {
+      store.client = txClient;
+      try {
+        return await fn(txClient);
+      } finally {
+        store.client = null;
+      }
+    }),
+    ...restExtra,
   };
 }
 

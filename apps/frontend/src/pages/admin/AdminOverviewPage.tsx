@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -147,7 +148,13 @@ export default function AdminOverviewPage() {
                 description={t('admin.overview.description')}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {/* The grid is shared with the loaded cards, so the status role is
+                spread only while loading — one region for all three skeleton
+                cards rather than one per card. */}
+            <div
+                {...(dbLoading ? loadingSurfaceProps : {})}
+                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
                 {dbLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
                         <Card key={i} className="glass-chrome">

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useOwedSummary, useOwedByRecipient, useRecordPayment, useSettleSplit, useDeleteSplit, useSettleAllSplitsByRecipient } from "@/hooks/useSplits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { parseDecimal } from "@/lib/decimal";
@@ -42,7 +44,7 @@ export default function OwesPage() {
         return (
             <div className="space-y-8 animate-in">
                 <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div {...loadingSurfaceProps} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {[...Array(3)].map((_, i) => (
                         <Skeleton key={i} className="h-32" />
                     ))}
@@ -178,8 +180,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
             downloadBlob(blob, filename);
             toast.success(t('owesPage.export.success'));
         } catch (error) {
-            const message = error instanceof Error ? error.message : t('owesPage.export.failed');
-            toast.error(t('owesPage.export.failed'), { description: message });
+            toast.error(t('owesPage.export.failed'), { description: apiErrorToMessage(error, t) });
         } finally {
             setIsExportingCsv(false);
         }
@@ -215,7 +216,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
             />
 
             {isLoading ? (
-                <div className="space-y-3">
+                <div {...loadingSurfaceProps} className="space-y-3">
                     {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24" />)}
                 </div>
             ) : items.length === 0 ? (
@@ -457,7 +458,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
     ], [t, appSettings.dateFormat]);
 
     if (isLoading) {
-        return <Skeleton className="h-[320px]" />;
+        return <Skeleton {...loadingSurfaceProps} className="h-[320px]" />;
     }
 
     return (

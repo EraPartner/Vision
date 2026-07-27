@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type { AccountCreate, AccountUpdate } from '@/types/api';
 import { toast } from 'sonner';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { accountKeys, invalidateAccountDerived, invalidateAccountRepoint } from '@/lib/queryKeys';
 
@@ -25,7 +26,7 @@ export function useCreateAccount() {
             toast.success(t('accounts.created'));
         },
         onError: (error: Error) => {
-            toast.error(t('accounts.createFailedTitle'), { description: error.message });
+            toast.error(t('accounts.createFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -41,7 +42,7 @@ export function useUpdateAccount() {
             invalidateAccountDerived(queryClient);
         },
         onError: (error: Error) => {
-            toast.error(t('accounts.updateFailedTitle'), { description: error.message });
+            toast.error(t('accounts.updateFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -67,7 +68,7 @@ export function useMergeAccounts() {
             });
         },
         onError: (error: Error) => {
-            toast.error(t('accounts.mergeFailedTitle'), { description: error.message });
+            toast.error(t('accounts.mergeFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }
@@ -86,7 +87,7 @@ export function useDeleteAccount() {
             // 409 = account still referenced → the caller routes to the close
             // flow (lifecycle D5); no dead-end error toast for that case.
             if ((error as { status?: number }).status === 409) return;
-            toast.error(t('accounts.deleteFailedTitle'), { description: error.message });
+            toast.error(t('accounts.deleteFailedTitle'), { description: apiErrorToMessage(error, t) });
         },
     });
 }

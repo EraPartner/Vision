@@ -29,18 +29,10 @@
 import { query, withTransaction } from '../database/connection.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { roundMoney } from '../lib/money.js';
-
-/**
- * Stamped-balance date range per original account across the merge set. Runs
- * BEFORE the repoint (rows still carry their original account_id).
- */
-const STAMP_RANGES_SQL = `
-  SELECT account_id,
-         to_char(MIN(date), 'YYYY-MM-DD') AS min_date,
-         to_char(MAX(date), 'YYYY-MM-DD') AS max_date
-  FROM transactions
-  WHERE account_id = ANY($1::int[]) AND is_active = true AND balance IS NOT NULL
-  GROUP BY account_id`;
+import { accountRepository } from '../repositories/accountRepository.js';
+import { transactionRepository } from '../repositories/transactionRepository.js';
+import { plannedTransactionRepository } from '../repositories/plannedTransactionRepository.js';
+import { portfolioTransactionRepository } from '../repositories/portfolioTransactionRepository.js';
 
 /**
  * Do the stamped-balance histories of >1 original account overlap in time?
@@ -75,73 +67,54 @@ export async function mergeAccounts(targetId, sourceIds) {
   const ids = [...new Set((sourceIds || []).filter((id) => Number.isInteger(id) && id !== targetId))];
   if (!ids.length) throw new ValidationError('Provide at least one distinct source account to merge');
 
-  return withTransaction(async (client) => {
+  // Composed from repository methods: the ambient transaction context routes
+  // each repo call onto this transaction's client, so every statement below
+  // shares the FOR UPDATE locks taken here and rolls back atomically.
+  return withTransaction(async () => {
     // Lock the survivor + sources so concurrent merges serialize.
-    const tgt = await client.query('SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE', [targetId]);
-    if (!tgt.rows[0]) throw new NotFoundError(`Account ${targetId} not found`);
-    const targetName = tgt.rows[0].name;
+    const tgt = await accountRepository.lockByIdForMerge(targetId);
+    if (!tgt) throw new NotFoundError(`Account ${targetId} not found`);
+    const targetName = tgt.name;
 
-    const srcRows = await client.query('SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE', [ids]);
-    const found = new Set(srcRows.rows.map((r) => r.id));
+    const srcRows = await accountRepository.lockByIdsForMerge(ids);
+    const found = new Set(srcRows.map((r) => r.id));
     const missing = ids.filter((id) => !found.has(id));
     if (missing.length) throw new NotFoundError(`Account(s) not found: ${missing.join(', ')}`);
 
     // Overlapping-stamp guard (§1 F2, module header): capture per-original-
     // account stamped ranges before the repoint erases the provenance.
-    const stampRanges = await client.query(STAMP_RANGES_SQL, [[targetId, ...ids]]);
-    const stampsInterleaved = stampRangesOverlap(stampRanges.rows);
+    const stampRanges = await transactionRepository.getStampedDateRangesByAccount([targetId, ...ids]);
+    const stampsInterleaved = stampRangesOverlap(stampRanges);
 
-    const txRes = await client.query(
-      `UPDATE transactions SET account_id = $1, bank_account = $2 WHERE account_id = ANY($3::int[])`,
-      [targetId, targetName, ids],
-    );
-    const plannedRes = await client.query(
-      `UPDATE planned_transactions SET account_id = $1, bank_account = $2 WHERE account_id = ANY($3::int[])`,
-      [targetId, targetName, ids],
-    );
+    const txCount = await transactionRepository.repointAccount(targetId, targetName, ids);
+    const plannedCount = await plannedTransactionRepository.repointAccount(targetId, targetName, ids);
 
     // Portfolio lots: account_id lives on the inheritance base (an UPDATE cascades to the child
     // tables) or, in the flat schema, on the table itself. (portfolio_transactions is a view in the
     // inheritance schema and is not updatable.)
-    const baseReg = await client.query(`SELECT to_regclass('public.portfolio_transactions_base') AS r`);
-    const portRes = baseReg.rows[0]?.r
-      ? await client.query(
-          `UPDATE portfolio_transactions_base SET account_id = $1 WHERE account_id = ANY($2::int[])`,
-          [targetId, ids],
-        )
-      : await client.query(
-          `UPDATE portfolio_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])`,
-          [targetId, ids],
-        );
+    const portfolioCount = await portfolioTransactionRepository.repointAccount(targetId, ids);
 
     // Accounts that used a merged source as their funding/settlement account.
-    const fundRes = await client.query(
-      `UPDATE accounts SET funding_account_id = $1 WHERE funding_account_id = ANY($2::int[])`,
-      [targetId, ids],
-    );
+    const fundingCount = await accountRepository.repointFundingAccount(targetId, ids);
 
     // Interleaved stamps invalidate the survivor's statement anchor: drift
     // would be computed against a figure reconciled for a pre-merge partition.
     // Clear it (reversible — the user re-reconciles with a fresh statement);
     // per-row balance stamps stay untouched (historical facts).
     if (stampsInterleaved) {
-      await client.query(
-        `UPDATE accounts SET statement_balance = NULL, statement_balance_date = NULL, updated_at = NOW()
-         WHERE id = $1`,
-        [targetId],
-      );
+      await accountRepository.clearStatementAnchor(targetId);
     }
 
-    await client.query('DELETE FROM accounts WHERE id = ANY($1::int[]) AND id <> $2', [ids, targetId]);
+    await accountRepository.deleteMergedSources(ids, targetId);
 
     return {
       into: targetId,
       merged: ids,
       reassigned: {
-        transactions: txRes.rowCount ?? 0,
-        planned: plannedRes.rowCount ?? 0,
-        portfolio: portRes.rowCount ?? 0,
-        funding: fundRes.rowCount ?? 0,
+        transactions: txCount,
+        planned: plannedCount,
+        portfolio: portfolioCount,
+        funding: fundingCount,
       },
       // Surfaced so the merge dialog (WP-B5) can warn that the statement
       // anchor was cleared and the merged history interleaves two banks.
@@ -186,9 +159,10 @@ export async function previewMerge(sourceId, targetId) {
   if (!byId.has(targetId)) throw new NotFoundError(`Account ${targetId} not found`);
   if (!byId.has(sourceId)) throw new NotFoundError(`Account ${sourceId} not found`);
 
-  // Same table set mergeAccounts repoints, as COUNTs.
-  const baseReg = await query(`SELECT to_regclass('public.portfolio_transactions_base') AS r`);
-  const portfolioTable = baseReg.rows[0]?.r ? 'portfolio_transactions_base' : 'portfolio_transactions';
+  // Same table set mergeAccounts repoints, as COUNTs. The relation probe is the
+  // same repo helper the merge write path uses, so preview and merge can never
+  // disagree about which table carries account_id.
+  const portfolioTable = await portfolioTransactionRepository.getAccountIdRelation();
 
   const unionIds = [targetId, sourceId];
   const [txCount, plannedCount, portfolioCount, fundingCount, projected, stampRanges] = await Promise.all([
@@ -222,7 +196,7 @@ export async function previewMerge(sourceId, targetId) {
             + (SELECT amount FROM delta) AS balance`,
       [unionIds],
     ),
-    query(STAMP_RANGES_SQL, [unionIds]),
+    transactionRepository.getStampedDateRangesByAccount(unionIds),
   ]);
 
   return {
@@ -237,7 +211,7 @@ export async function previewMerge(sourceId, targetId) {
     // pg NUMERIC arrives as a string; emit a rounded number (banker's, cents).
     projectedBalance: roundMoney(projected.rows[0]?.balance ?? 0),
     projectedBalanceCurrency: byId.get(targetId).currency,
-    stampsInterleaved: stampRangesOverlap(stampRanges.rows),
+    stampsInterleaved: stampRangesOverlap(stampRanges),
   };
 }
 

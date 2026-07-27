@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import PlannedPaymentsPage from "@/pages/PlannedPaymentsPage";
+import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
+import { todayYmd } from "@/lib/timezone";
 
 // The table virtualizes rows via @tanstack/react-virtual, which renders nothing
 // in jsdom's zero-height scroll container. Mock the virtualizer to materialise
@@ -316,5 +318,184 @@ describe("PlannedPaymentsPage (integration)", () => {
         // flow is exercised by AddPortfolioTxnDialog tests; here we just
         // verify the GET handler is wired and called at least once.)
         expect(before).toBeGreaterThan(0);
+    });
+});
+
+// ─── PlannedPaymentForm inline field validation ─────────────────────────────
+//
+// Validation used to stop submission behind a blocking `alert()` — modal,
+// unlinked to any field, and impossible to re-read. It now renders on the
+// offending field, tied to it by `aria-describedby` with `aria-invalid` on the
+// control, so these assert the linkage rather than only the copy. The blocking
+// conditions themselves are unchanged: `onSubmit` must still never fire.
+describe("PlannedPaymentForm (inline validation)", () => {
+    /** The message element the control points at — the whole a11y contract. */
+    function describedError(control: HTMLElement): HTMLElement {
+        const describedBy = control.getAttribute("aria-describedby");
+        expect(describedBy).toBeTruthy();
+        const message = document.getElementById(describedBy!);
+        expect(message).toBeInTheDocument();
+        return message!;
+    }
+
+    /** Bank account is an AccountCombobox: open it, type, take the create escape hatch. */
+    async function pickBankAccount(user: ReturnType<typeof userEvent.setup>, name: string) {
+        await user.click(screen.getByLabelText(/bank account/i));
+        await user.type(screen.getByPlaceholderText(/search or type a new account/i), name);
+        await user.click(await screen.findByText(new RegExp(`create account "${name}"`, "i")));
+    }
+
+    /** New payment, name + bank filled — the point where the submit button unlocks. */
+    async function renderSubmittableForm() {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        renderWithApp(
+            <PlannedPaymentForm open onOpenChange={() => {}} onSubmit={onSubmit} />,
+        );
+        await screen.findByRole("dialog");
+        await user.type(screen.getByLabelText("Name *"), "Mortgage");
+        await user.type(screen.getByLabelText("Amount *"), "100");
+        await pickBankAccount(user, "Main");
+        return { user, onSubmit };
+    }
+
+    const submitBtn = () => screen.getByRole("button", { name: /create payment/i });
+
+    it("flags every missing loan field, focuses the first, and blocks submit", async () => {
+        const { user, onSubmit } = await renderSubmittableForm();
+
+        await user.click(screen.getByLabelText(/loan repayment/i));
+        await user.click(submitBtn());
+
+        const principal = screen.getByLabelText(/principal amount/i);
+        await waitFor(() => expect(principal).toHaveFocus());
+        expect(principal).toHaveAttribute("aria-invalid", "true");
+        expect(describedError(principal)).toHaveTextContent(/required/i);
+
+        // The other two are flagged as well, not just the focused one.
+        for (const label of [/annual interest/i, /term \(months\)/i]) {
+            const field = screen.getByLabelText(label);
+            expect(field).toHaveAttribute("aria-invalid", "true");
+            expect(describedError(field)).toHaveTextContent(/required/i);
+        }
+
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("flags an out-of-range loan term on the term field and blocks submit", async () => {
+        const { user, onSubmit } = await renderSubmittableForm();
+
+        await user.click(screen.getByLabelText(/loan repayment/i));
+        await user.type(screen.getByLabelText(/principal amount/i), "1000");
+        await user.type(screen.getByLabelText(/annual interest/i), "3.5");
+        const termField = screen.getByLabelText(/term \(months\)/i);
+        await user.type(termField, "601");
+
+        await user.click(submitBtn());
+
+        await waitFor(() => expect(termField).toHaveAttribute("aria-invalid", "true"));
+        expect(describedError(termField)).toHaveTextContent(/between 1 and 600 months/i);
+        expect(onSubmit).not.toHaveBeenCalled();
+
+        // Correcting the field clears its message without another submit.
+        await user.clear(termField);
+        await user.type(termField, "240");
+        await waitFor(() => expect(termField).not.toHaveAttribute("aria-invalid"));
+        expect(screen.queryByText(/between 1 and 600 months/i)).not.toBeInTheDocument();
+    });
+
+    it("flags a blank custom repeat interval on the interval field and blocks submit", async () => {
+        const { user, onSubmit } = await renderSubmittableForm();
+
+        await user.click(screen.getByLabelText("Recurring"));
+        // The frequency <Label> has no htmlFor and the trigger no id, so this
+        // combobox has no accessible name to query by — match its value instead.
+        const frequency = screen
+            .getAllByRole("combobox")
+            .find((c) => c.textContent === "Monthly")!;
+        await user.click(frequency);
+        await user.click(await screen.findByRole("option", { name: /custom interval/i }));
+
+        await user.click(submitBtn());
+
+        const days = screen.getByLabelText(/repeat every/i);
+        await waitFor(() => expect(days).toHaveAttribute("aria-invalid", "true"));
+        expect(describedError(days)).toHaveTextContent(/at least 1 day/i);
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("submits an unchanged payload once the loan fields are valid", async () => {
+        const { user, onSubmit } = await renderSubmittableForm();
+
+        await user.click(screen.getByLabelText(/loan repayment/i));
+        await user.type(screen.getByLabelText(/principal amount/i), "1000");
+        await user.type(screen.getByLabelText(/annual interest/i), "3.5");
+        await user.type(screen.getByLabelText(/term \(months\)/i), "240");
+
+        await user.click(submitBtn());
+
+        await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+        // Byte-for-byte: same keys, same order, same recurrence fields deleted
+        // for loans. Routing validation inline must not have touched this.
+        expect(JSON.stringify(onSubmit.mock.calls[0][0])).toBe(
+            JSON.stringify({
+                name: "Mortgage",
+                amount: 100,
+                currency: "EUR",
+                due_date: todayYmd(),
+                url: undefined,
+                is_recurring: true,
+                is_loan: true,
+                loan_type: "amortizing",
+                loan_principal: 1000,
+                loan_annual_interest_rate: 3.5,
+                loan_term_months: 240,
+                loan_start_date: todayYmd(),
+                loan_payment_day: new Date().getDate(),
+                recipient_id: undefined,
+                category_id: undefined,
+                bank_account: "Main",
+                tags: undefined,
+                notes: undefined,
+                is_active: true,
+            }),
+        );
+    });
+
+    it("sends an unchanged POST body end-to-end on a plain create", async () => {
+        const user = userEvent.setup();
+        let rawBody = "";
+
+        server.use(
+            http.get(`${API_BASE}/api/planned-transactions`, () =>
+                ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
+            ),
+            http.post(`${API_BASE}/api/planned-transactions`, async ({ request }) => {
+                rawBody = await request.text();
+                return ok({ ...rentPayment, id: 99, memo: "Groceries" });
+            }),
+        );
+
+        renderWithApp(<PlannedPaymentsPage />);
+
+        await user.click(await screen.findByRole("button", { name: /new payment/i }));
+        await screen.findByRole("dialog");
+
+        await user.type(screen.getByLabelText("Name *"), "Groceries");
+        await user.type(screen.getByLabelText("Amount *"), "100");
+        await pickBankAccount(user, "Main");
+
+        await user.click(submitBtn());
+
+        await waitFor(() => expect(rawBody).not.toBe(""));
+        expect(JSON.parse(rawBody)).toEqual({
+            memo: "Groceries",
+            amount: 100,
+            currency: "EUR",
+            planned_date: todayYmd(),
+            is_recurring: false,
+            is_loan: false,
+            bank_account: "Main",
+        });
     });
 });

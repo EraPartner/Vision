@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { cn } from "@/lib/utils";
 
 /**
@@ -8,7 +9,7 @@ import { cn } from "@/lib/utils";
  */
 export function SectionLoader({ className }: { className?: string }) {
     return (
-        <div role="status" aria-busy="true" aria-label="Loading" className={cn("space-y-3", className)}>
+        <div {...loadingSurfaceProps} className={cn("space-y-3", className)}>
             <Skeleton className="h-7 w-1/3" />
             <Skeleton className="h-28 w-full" />
             <Skeleton className="h-28 w-full" />

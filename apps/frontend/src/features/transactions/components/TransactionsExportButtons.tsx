@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { requestBlob } from "@/lib/api/helpers";
 import { downloadBlob } from "@/lib/downloadBlob";
@@ -76,8 +77,7 @@ export function TransactionsExportButtons(props: TransactionsExportButtonsProps)
             downloadBlob(blob, buildFilename(format, props.filterLabel));
             toast.success(t('txPage.toast.exportSuccess'));
         } catch (error) {
-            const message = error instanceof Error ? error.message : t('txPage.toast.exportFailed');
-            toast.error(t('txPage.toast.exportFailed'), { description: message });
+            toast.error(t('txPage.toast.exportFailed'), { description: apiErrorToMessage(error, t) });
         } finally {
             setExportingFormat(null);
         }

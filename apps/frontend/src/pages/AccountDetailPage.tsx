@@ -47,6 +47,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
+import { useDriftBadge } from "@/features/accounts/driftBadge";
 import { isPortfolioType } from "@/features/accounts/groupAccounts";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
 import { toAccountPayload, accountToFormValues } from "@/features/accounts/accountFormMapping";
@@ -79,6 +80,8 @@ export default function AccountDetailPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const fmtCur = useCurrencyFormatter();
     const balanceProvenance = useBalanceProvenance();
+    // Shared drift chip content + tone (§3 F1) — identical to the hub card.
+    const driftBadge = useDriftBadge();
     const { appSettings } = useAppSettings();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
@@ -98,8 +101,8 @@ export default function AccountDetailPage() {
     const [reconciling, setReconciling] = useState(false);
     const [ledgerLimit, setLedgerLimit] = useState(LEDGER_PAGE_SIZE);
 
-    // Reconcile "show transactions since {date}" deep-link target (WP-B5 wires
-    // the dialog exit; the route accepts it today).
+    // Reconcile "show transactions since {date}" deep-link target — the exit the
+    // ReconcileDialog navigates to (WP-B5).
     const sinceRaw = searchParams.get("since");
     const since = sinceRaw && YMD_RE.test(sinceRaw) ? sinceRaw : undefined;
     const clearSince = () =>
@@ -232,7 +235,7 @@ export default function AccountDetailPage() {
     }
 
     const a = account;
-    const hasDrift = a.drift != null && a.drift !== 0;
+    const drift = driftBadge(a);
     const provenanceText = balanceProvenance(a);
 
     const metadata: Array<{ label: string; value: string }> = [
@@ -361,20 +364,20 @@ export default function AccountDetailPage() {
                         ) : (
                             <div className="mt-1 text-sm text-muted-foreground">{t("accounts.detail.noBalance")}</div>
                         )}
-                        {hasDrift && (
+                        {drift && (
                             // Drift chip → Reconcile (same affordance as the hub card badge).
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
                                         type="button"
-                                        className={`${badgeVariants({ variant: "destructive" })} mt-3 cursor-pointer text-xs`}
+                                        className={`${badgeVariants({ variant: drift.variant })} mt-3 cursor-pointer text-xs`}
                                         aria-label={t("accounts.reconcile.open")}
                                         onClick={() => setReconciling(true)}
                                     >
-                                        {t("accounts.drift")}: {a.drift! > 0 ? "+" : ""}{fmtCur(a.drift!, a.currency)}
+                                        {drift.label}
                                     </button>
                                 </TooltipTrigger>
-                                <TooltipContent>{t("accounts.driftTooltip")}</TooltipContent>
+                                <TooltipContent>{drift.tooltip}</TooltipContent>
                             </Tooltip>
                         )}
                     </div>

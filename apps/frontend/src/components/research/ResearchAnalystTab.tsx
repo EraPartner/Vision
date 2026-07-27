@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -33,7 +34,7 @@ export function ResearchAnalystTab({ symbol, enabled }: ResearchAnalystTabProps)
   });
 
   if (isFetching && !result) {
-    return <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}</div>;
+    return <div {...loadingSurfaceProps} className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}</div>;
   }
 
   if (result?.meta.source === "unavailable") {

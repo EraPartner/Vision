@@ -4,6 +4,7 @@ import { useStatistics } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Import } from "lucide-react";
 import { ExportDialog } from "@/components/reports/ExportDialog";
@@ -51,7 +52,7 @@ const SankeyTab = lazy(() =>
   import("@/components/statistics/SankeyTab").then((m) => ({ default: m.SankeyTab }))
 );
 
-const ChartSkeleton = () => <Skeleton className="h-[400px] w-full" />;
+const ChartSkeleton = () => <Skeleton {...loadingSurfaceProps} className="h-[400px] w-full" />;
 
 export default function StatisticsPage() {
   const {
@@ -80,7 +81,7 @@ export default function StatisticsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 animate-in">
+      <div {...loadingSurfaceProps} className="space-y-6 animate-in">
         <PageHeader title={t("statsPage.title")} icon={BarChart3} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (

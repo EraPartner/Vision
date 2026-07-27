@@ -15,6 +15,7 @@ import type { PriceProvider } from '@/types/api';
 import { PriceProviderFields, PRICE_PROVIDERS } from './PriceProviderFields';
 import { priceProviderPayload } from './priceProviderPayload';
 import { INVESTMENT_CURRENCIES } from '@/utils/currency';
+import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
 
 interface Props {
   investment: InvestmentSummary;
@@ -51,13 +52,21 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     priceProviderHistoryPricePath: investment.price_provider_history_price_path || 'price',
   });
 
-  const [form, setForm] = useState(initialForm);
+  // Edits survive a dismissal (overlay click / Escape / ✕) — see
+  // useDialogFormState. The prefill still has to be right, so the form re-seeds
+  // when this instance is pointed at a different investment, and whenever a
+  // pristine dialog is reopened (picking up the values a save just persisted).
+  const { form, setForm, reset, dirty } = useDialogFormState(initialForm);
+  useReseedOnIdentityChange(investment.id, reset);
+
+  const handleOpenChange = (v: boolean) => {
+    if (v && !dirty) reset();
+    setOpen(v);
+  };
 
   const unitBased = isUnitBased(investment.assetClass);
 
   const priceProviders = PRICE_PROVIDERS(t);
-
-  const reset = () => setForm(initialForm());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +88,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
         ...priceProviderPayload(form),
       });
       toast.success(t('invEdit.toast.updated', { name: form.name.trim() }));
+      reset();
       setOpen(false);
     } catch {
       // handled in hook
@@ -88,13 +98,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
   const selectedProvider = priceProviders.find((p) => p.key === form.priceProvider);
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ?? <Button variant="outline">{t('common.edit')}</Button>}
       </DialogTrigger>
@@ -155,7 +159,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
           />
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+            <Button type="button" variant="outline" onClick={() => { reset(); setOpen(false); }}>{t('common.cancel')}</Button>
             <Button type="submit" disabled={isUpdatingInvestment}>
               {isUpdatingInvestment && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('common.save')}

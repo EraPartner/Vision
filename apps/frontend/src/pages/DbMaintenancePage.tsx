@@ -13,9 +13,11 @@ import { formatDateTimeWithAppSettings } from '@/components/shared/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getDbStats, vacuumTable } from '@/lib/api/admin';
 import type { DbTableStat } from '@/lib/api/admin';
@@ -142,7 +144,7 @@ export default function DbMaintenancePage() {
         },
         onError: (err: Error, table) => {
             const label = table ?? t('dbMaintenance.allTables');
-            toast.error(t('dbMaintenance.vacuumFailed'), { description: `${label}: ${err.message}` });
+            toast.error(t('dbMaintenance.vacuumFailed'), { description: `${label}: ${apiErrorToMessage(err, t)}` });
         },
         onSettled: () => setVacuumingTable(null),
     });
@@ -218,7 +220,10 @@ export default function DbMaintenancePage() {
                 <CardHeader>
                     <CardTitle className="text-base">{t('dbMaintenance.tableStats')}</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
+                {/* The skeleton rows live inside <tbody>, where a wrapper
+                    element would be invalid HTML — the CardContent around the
+                    table carries the status role instead, only while loading. */}
+                <CardContent {...(isLoading ? loadingSurfaceProps : {})} className="p-0">
                     <Table>
                         <TableHeader>
                             <TableRow>

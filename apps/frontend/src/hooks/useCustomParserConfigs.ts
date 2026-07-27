@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type SavedParserConfig, type CustomParserConfigPayload } from '@/lib/api';
 import { toast } from 'sonner';
 import { importKeys } from '@/lib/queryKeys';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export type { SavedParserConfig, CustomParserConfigPayload };
@@ -25,7 +26,7 @@ export function useCreateCustomParserConfig() {
       toast.success(t('importPage.customParser.saved'));
     },
     onError: (error: Error) => {
-      toast.error(t('importPage.customParser.saveFailed'), { description: error.message });
+      toast.error(t('importPage.customParser.saveFailed'), { description: apiErrorToMessage(error, t) });
     },
   });
 }
@@ -41,7 +42,7 @@ export function useUpdateCustomParserConfig() {
       toast.success(t('importPage.customParser.updated'));
     },
     onError: (error: Error) => {
-      toast.error(t('importPage.customParser.saveFailed'), { description: error.message });
+      toast.error(t('importPage.customParser.saveFailed'), { description: apiErrorToMessage(error, t) });
     },
   });
 }
@@ -56,7 +57,7 @@ export function useDeleteCustomParserConfig() {
       toast.success(t('importPage.customParser.deleted'));
     },
     onError: (error: Error) => {
-      toast.error(t('importPage.customParser.deleteFailed'), { description: error.message });
+      toast.error(t('importPage.customParser.deleteFailed'), { description: apiErrorToMessage(error, t) });
     },
   });
 }

@@ -32,6 +32,24 @@ export async function hasPortfolioTransactionInheritanceSchema() {
   return _hasPortfolioTransactionInheritanceSchema;
 }
 
+/**
+ * Which relation carries `account_id` for portfolio lots: the inheritance base
+ * (an UPDATE there cascades to the child tables) or, in the flat schema, the
+ * table itself. `portfolio_transactions` is a VIEW in the inheritance schema
+ * and is not updatable, so the distinction is load-bearing for writes.
+ *
+ * Deliberately NOT cached, unlike hasPortfolioTransactionInheritanceSchema():
+ * the account-merge paths probe per call, and sharing the cache here would
+ * change their behavior (a cached probe never re-observes a schema change and
+ * suppresses the probe statement callers assert on).
+ *
+ * @returns {Promise<'portfolio_transactions_base'|'portfolio_transactions'>}
+ */
+export async function getAccountIdRelation() {
+  const result = await query(`SELECT to_regclass('public.portfolio_transactions_base') AS r`);
+  return result.rows[0]?.r ? 'portfolio_transactions_base' : 'portfolio_transactions';
+}
+
 export function markInheritanceSchemaPresent() {
   _hasPortfolioTransactionInheritanceSchema = true;
 }

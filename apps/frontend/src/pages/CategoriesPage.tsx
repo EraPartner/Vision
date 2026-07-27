@@ -8,6 +8,7 @@ import {Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown,
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/features/categories/AddCategoryDialog";
 import {cn} from "@/lib/utils";
@@ -98,7 +99,7 @@ export default function CategoriesPage() {
         return (
             <div className="space-y-6 animate-in">
                 <PageHeader title={t('categories.title')} icon={Tags} />
-                <Card className="glass-regular">
+                <Card {...loadingSurfaceProps} className="glass-regular">
                     <CardHeader className="pb-3"><Skeleton className="h-6 w-44" /></CardHeader>
                     <CardContent className="space-y-2">
                         {[...Array(6)].map((_, i) => (

@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api";
 import { portfolioKeys } from "@/lib/queryKeys";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -250,7 +251,7 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
     onError: (err, _vars, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(portfolioKeys.investments, ctx.prev);
       toast.error(t("portfolio.updateInvestmentFailedTitle"), {
-        description: (err as Error).message,
+        description: apiErrorToMessage(err, t),
       });
     },
     onSettled: () => {

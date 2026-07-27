@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { splitKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { SplitCreateInput } from '@/types/splits';
 
@@ -41,7 +42,7 @@ export function useCreateSplits() {
             qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t('splits.created'));
         },
-        onError: (e: Error) => toast.error(t('splits.createFailed'), { description: e.message }),
+        onError: (e: Error) => toast.error(t('splits.createFailed'), { description: apiErrorToMessage(e, t) }),
     });
 }
 
@@ -55,7 +56,7 @@ export function useRecordPayment() {
             qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t('splits.paymentRecorded'));
         },
-        onError: (e: Error) => toast.error(t('splits.paymentFailed'), { description: e.message }),
+        onError: (e: Error) => toast.error(t('splits.paymentFailed'), { description: apiErrorToMessage(e, t) }),
     });
 }
 
@@ -68,7 +69,7 @@ export function useSettleSplit() {
             qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t('splits.settled'));
         },
-        onError: (e: Error) => toast.error(t('splits.settledFailed'), { description: e.message }),
+        onError: (e: Error) => toast.error(t('splits.settledFailed'), { description: apiErrorToMessage(e, t) }),
     });
 }
 
@@ -81,7 +82,7 @@ export function useSettleAllSplitsByRecipient() {
             qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t('splits.allSettled', { n: result.settled_count }));
         },
-        onError: (e: Error) => toast.error(t('splits.allSettledFailed'), { description: e.message }),
+        onError: (e: Error) => toast.error(t('splits.allSettledFailed'), { description: apiErrorToMessage(e, t) }),
     });
 }
 
@@ -94,6 +95,6 @@ export function useDeleteSplit() {
             qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t('splits.removed'));
         },
-        onError: (e: Error) => toast.error(t('splits.removeFailed'), { description: e.message }),
+        onError: (e: Error) => toast.error(t('splits.removeFailed'), { description: apiErrorToMessage(e, t) }),
     });
 }

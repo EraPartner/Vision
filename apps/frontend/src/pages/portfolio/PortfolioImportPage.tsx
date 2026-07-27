@@ -7,6 +7,7 @@
 
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -142,7 +143,7 @@ export function PortfolioImportPage() {
         toast.info(t("importPage.toast.importCancelled"));
         setProgress(null);
       } else {
-        toast.error(t("importPage.toast.serverError"), { description: message });
+        toast.error(t("importPage.toast.serverError"), { description: apiErrorToMessage(error, t) });
         setProgress((p) => (p ? { ...p, phase: "error" } : null));
       }
     } finally {

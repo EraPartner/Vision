@@ -15,12 +15,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
 import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
+import { loadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import {
@@ -261,7 +263,7 @@ export default function TableDataEditorPage() {
     const previewMutation = useMutation({
         mutationFn: () => previewTableMutation(table, changes),
         onSuccess: (res) => { setPreviewStatements(res.statements); setPreviewOpen(true); },
-        onError: (err: Error) => toast.error(t('dbEditor.previewFailed'), { description: err.message }),
+        onError: (err: Error) => toast.error(t('dbEditor.previewFailed'), { description: apiErrorToMessage(err, t) }),
     });
 
     const commitMutation = useMutation({
@@ -272,7 +274,7 @@ export default function TableDataEditorPage() {
             discardAll();
             qc.invalidateQueries({ queryKey: adminKeys.dbTableAll(table) });
         },
-        onError: (err: Error) => toast.error(t('dbEditor.commitFailed'), { description: err.message }),
+        onError: (err: Error) => toast.error(t('dbEditor.commitFailed'), { description: apiErrorToMessage(err, t) }),
     });
 
     const total = data?.total ?? 0;
@@ -344,7 +346,10 @@ export default function TableDataEditorPage() {
 
             {/* Grid */}
             <Card className="glass-chrome overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* The skeleton rows live inside <tbody>, where a wrapper
+                    element would be invalid HTML — the scroll container around
+                    the table carries the status role, only while loading. */}
+                <div {...(query.isLoading ? loadingSurfaceProps : {})} className="overflow-x-auto">
                     <Table>
                         <TableHeader className="bg-foreground/[0.015]">
                             {/* Column titles + sort */}

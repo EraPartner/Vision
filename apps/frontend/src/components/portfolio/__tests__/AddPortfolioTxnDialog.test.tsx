@@ -325,6 +325,89 @@ describe("AddPortfolioTxnDialog", () => {
         expect(screen.queryByRole("option", { name: /gift/i })).not.toBeInTheDocument();
     });
 
+    // ─── Unsaved input survives dismissal ──────────────────────────────────
+
+    /** The Radix overlay — clicking it is the "stray click next to the dialog". */
+    const overlay = () =>
+        document.querySelector<HTMLElement>(".fixed.inset-0.backdrop-blur-md")!;
+
+    it("keeps typed input when dismissed with Escape", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        // Act — type, dismiss by accident, reopen
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+        await user.type(await screen.findByLabelText(/units/i), "12");
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+
+        // Assert — the work is still there
+        await screen.findByRole("dialog");
+        expect(await screen.findByLabelText(/units/i)).toHaveValue("12");
+    });
+
+    it("keeps typed input when dismissed by an outside click", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        // Act — a stray click next to the dialog is the exact reported accident
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+        await user.type(await screen.findByLabelText(/units/i), "12");
+        await user.click(overlay());
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+
+        // Assert
+        await screen.findByRole("dialog");
+        expect(await screen.findByLabelText(/units/i)).toHaveValue("12");
+    });
+
+    it("clears the form on explicit Cancel", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        // Act — Cancel is a deliberate discard, unlike a dismissal
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+        await user.type(await screen.findByLabelText(/units/i), "12");
+        await user.click(screen.getByRole("button", { name: /cancel/i }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+
+        // Assert
+        await screen.findByRole("dialog");
+        expect(await screen.findByLabelText(/units/i)).toHaveValue("");
+    });
+
+    it("clears the form after a successful submit", async () => {
+        // Arrange
+        server.use(
+            http.post(`${API_BASE}/api/investments/1/transactions`, () => ok(PORTFOLIO_TXN_STUB)),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        // Act — record a transaction, then reopen the dialog
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+        await user.type(await screen.findByLabelText(/units/i), "10");
+        await user.type(screen.getByLabelText(/price per unit/i), "90");
+        await user.click(screen.getByRole("button", { name: /record/i }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        await user.click(screen.getByRole("button", { name: /add transaction/i }));
+
+        // Assert — a recorded transaction must not be prefilled into the next one
+        await screen.findByRole("dialog");
+        expect(await screen.findByLabelText(/units/i)).toHaveValue("");
+        expect(screen.getByLabelText(/price per unit/i)).toHaveValue("");
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("dialog renders in open state (a11y / backdrop guard)", async () => {

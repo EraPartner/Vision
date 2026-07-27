@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Coins, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { invalidateAccountDerived, invalidateTransactionData } from '@/lib/queryKeys';
 import { toYmd } from '@/components/shared/dateUtils';
@@ -70,7 +71,7 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
       else toast.success(t('accounts.openingBalance.saved'));
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('accounts.openingBalance.failed'), { description: apiErrorToMessage(e, t) }),
   });
 
   const canSubmit = !save.isPending && balance.trim() !== '' && Number.isFinite(Number(balance)) && !!date;

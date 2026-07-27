@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Card,
@@ -207,8 +208,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
       setCustomBank("");
       setCustomConfig(DEFAULT_CUSTOM_CONFIG);
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('importPage.failed');
-      toast.error(t('importPage.toast.serverError'), { description: message });
+      toast.error(t('importPage.toast.serverError'), { description: apiErrorToMessage(error, t) });
       setProgress((p) => p ? { ...p, phase: 'error' } : null);
     } finally {
       setLoading(false);

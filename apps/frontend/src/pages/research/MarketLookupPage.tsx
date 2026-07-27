@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   TrendingUp, TrendingDown, BarChart3, Activity, Clock, Star, Link2,
@@ -319,7 +320,7 @@ export default function MarketLookupPage() {
           {/* Header */}
           {isQuoteBusy ? (
             <Card className="glass-regular">
-              <CardContent className="py-6 space-y-3">
+              <CardContent {...loadingSurfaceProps} className="py-6 space-y-3">
                 <Skeleton className="h-8 w-64" />
                 <Skeleton className="h-12 w-40" />
                 <Skeleton className="h-5 w-32" />
@@ -431,7 +432,7 @@ export default function MarketLookupPage() {
             </CardHeader>
             <CardContent>
               {isChartBusy ? (
-                <Skeleton className="h-[320px] w-full rounded-lg" />
+                <Skeleton {...loadingSurfaceProps} className="h-[320px] w-full rounded-lg" />
               ) : displayChart?.points && displayChart.points.length > 0 ? (
                 <div className="space-y-4">
                   <AreaChart
