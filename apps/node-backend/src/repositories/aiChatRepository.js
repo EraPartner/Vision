@@ -13,6 +13,9 @@
 
 import { query } from '../database/connection.js';
 
+/** @typedef {import('../types/rows.js').AiConversationRow} AiConversationRow */
+/** @typedef {import('../types/rows.js').AiMessageRow} AiMessageRow */
+
 const CONVERSATION_COLUMNS =
   'id, title, model, created_at AS "createdAt", updated_at AS "updatedAt"';
 const MESSAGE_COLUMNS =
@@ -23,6 +26,10 @@ const MESSAGE_COLUMNS =
 const PG_FK_VIOLATION = '23503';
 
 export class ConversationDeletedError extends Error {
+  /**
+   * @param {string} conversationId UUID of the deleted conversation.
+   * @param {unknown} [cause] The underlying pg FK-violation error.
+   */
   constructor(conversationId, cause) {
     super(`Conversation ${conversationId} was deleted while a message was being appended`);
     this.name = 'ConversationDeletedError';
@@ -32,12 +39,17 @@ export class ConversationDeletedError extends Error {
   }
 }
 
+/**
+ * @param {any} value Arbitrary JSON-serialisable value.
+ * @returns {string|null}
+ */
 function serializeJsonb(value) {
   if (value === undefined || value === null) return null;
   return JSON.stringify(value);
 }
 
 const aiChatRepository = {
+  /** @returns {Promise<AiConversationRow[]>} */
   async listConversations() {
     const result = await query(
       `SELECT ${CONVERSATION_COLUMNS}
@@ -47,6 +59,10 @@ const aiChatRepository = {
     return result.rows;
   },
 
+  /**
+   * @param {string} id UUID.
+   * @returns {Promise<AiConversationRow|null>}
+   */
   async getConversation(id) {
     const result = await query(
       `SELECT ${CONVERSATION_COLUMNS} FROM ai_conversations WHERE id = $1`,
@@ -55,6 +71,10 @@ const aiChatRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {{ title: string, model: string }} input
+   * @returns {Promise<AiConversationRow>}
+   */
   async createConversation({ title, model }) {
     const result = await query(
       `INSERT INTO ai_conversations (title, model)
@@ -65,6 +85,11 @@ const aiChatRepository = {
     return result.rows[0];
   },
 
+  /**
+   * @param {string} id UUID.
+   * @param {string} title
+   * @returns {Promise<AiConversationRow|null>}
+   */
   async renameConversation(id, title) {
     const result = await query(
       `UPDATE ai_conversations
@@ -76,6 +101,11 @@ const aiChatRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {string} id UUID.
+   * @param {string} model
+   * @returns {Promise<AiConversationRow|null>}
+   */
   async updateConversationModel(id, model) {
     const result = await query(
       `UPDATE ai_conversations
@@ -87,6 +117,10 @@ const aiChatRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {string} id UUID.
+   * @returns {Promise<boolean>} true if a row was removed
+   */
   async deleteConversation(id) {
     const result = await query(
       `DELETE FROM ai_conversations WHERE id = $1 RETURNING id`,
@@ -95,6 +129,10 @@ const aiChatRepository = {
     return result.rows.length > 0;
   },
 
+  /**
+   * @param {string} conversationId UUID.
+   * @returns {Promise<AiMessageRow[]>}
+   */
   async getMessages(conversationId) {
     const result = await query(
       `SELECT ${MESSAGE_COLUMNS}
@@ -106,6 +144,18 @@ const aiChatRepository = {
     return result.rows;
   },
 
+  /**
+   * @param {{
+   *   conversationId: string,
+   *   role: string,
+   *   content?: string|null,
+   *   toolName?: string|null,
+   *   toolArgs?: any,
+   *   toolResult?: any,
+   *   status?: string,
+   * }} input
+   * @returns {Promise<AiMessageRow>}
+   */
   async appendMessage({
     conversationId,
     role,
@@ -132,7 +182,7 @@ const aiChatRepository = {
         ],
       );
       return result.rows[0];
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       if (err && err.code === PG_FK_VIOLATION) {
         throw new ConversationDeletedError(conversationId, err);
       }
@@ -140,6 +190,11 @@ const aiChatRepository = {
     }
   },
 
+  /**
+   * @param {string} id UUID.
+   * @param {string} status
+   * @returns {Promise<AiMessageRow|null>}
+   */
   async updateMessageStatus(id, status) {
     const result = await query(
       `UPDATE ai_messages

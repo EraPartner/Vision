@@ -9,6 +9,13 @@
 import { query } from '../database/connection.js';
 import { buildLimitOffset } from '../lib/sqlClauses.js';
 
+/** @typedef {import('../types/rows.js').AttachmentRow} AttachmentRow */
+/** @typedef {import('../types/rows.js').FormattedAttachment} FormattedAttachment */
+
+/**
+ * @param {AttachmentRow} row
+ * @returns {FormattedAttachment}
+ */
 function formatRow(row) {
   return {
     id: row.id,
@@ -25,6 +32,8 @@ export const attachmentRepository = {
   /**
    * Whether the parent transaction row exists. Upload guard — checked before
    * the file is written to disk so a bad id 404s instead of orphaning a file.
+   * @param {number} transactionId
+   * @returns {Promise<boolean>}
    */
   async transactionExists(transactionId) {
     const result = await query('SELECT id FROM transactions WHERE id = $1', [transactionId]);
@@ -38,6 +47,7 @@ export const attachmentRepository = {
    *
    * @param {number} transactionId
    * @param {{ limit?: number|null, offset?: number }} [page]
+   * @returns {Promise<FormattedAttachment[]>}
    */
   async listByTransaction(transactionId, { limit = null, offset = 0 } = {}) {
     const params = [transactionId];
@@ -50,7 +60,11 @@ export const attachmentRepository = {
     return result.rows.map(formatRow);
   },
 
-  /** Attachment count for a transaction — the `total` for a paginated list. */
+  /**
+   * Attachment count for a transaction — the `total` for a paginated list.
+   * @param {number} transactionId
+   * @returns {Promise<number>}
+   */
   async countByTransaction(transactionId) {
     const result = await query(
       'SELECT COUNT(*) FROM attachments WHERE transaction_id = $1',
@@ -63,6 +77,8 @@ export const attachmentRepository = {
    * List stored file paths for a set of transactions. Used before a hard
    * delete so the DB CASCADE (which only removes the rows) can be followed
    * by best-effort file removal.
+   * @param {number[]} transactionIds
+   * @returns {Promise<string[]>}
    */
   async listPathsByTransactionIds(transactionIds) {
     if (!Array.isArray(transactionIds) || transactionIds.length === 0) return [];
@@ -70,11 +86,19 @@ export const attachmentRepository = {
       'SELECT stored_path FROM attachments WHERE transaction_id = ANY($1::int[])',
       [transactionIds],
     );
-    return result.rows.map((row) => row.stored_path);
+    return result.rows.map((/** @type {{ stored_path: string }} */ row) => row.stored_path);
   },
 
   /**
    * Insert a new attachment row. Returns the created row.
+   * @param {{
+   *   transaction_id: number|string,
+   *   filename: string,
+   *   stored_path: string,
+   *   mime_type: string,
+   *   size_bytes: number,
+   * }} input
+   * @returns {Promise<FormattedAttachment>}
    */
   async create({ transaction_id, filename, stored_path, mime_type, size_bytes }) {
     const sql = `
@@ -94,6 +118,8 @@ export const attachmentRepository = {
 
   /**
    * Fetch a single attachment by ID. Returns null if not found.
+   * @param {number|string} id
+   * @returns {Promise<FormattedAttachment|null>}
    */
   async findById(id) {
     const result = await query('SELECT * FROM attachments WHERE id = $1', [id]);
@@ -102,6 +128,8 @@ export const attachmentRepository = {
 
   /**
    * Delete an attachment row by ID. Returns true if a row was deleted.
+   * @param {number|string} id
+   * @returns {Promise<boolean>}
    */
   async deleteById(id) {
     const result = await query('DELETE FROM attachments WHERE id = $1', [id]);

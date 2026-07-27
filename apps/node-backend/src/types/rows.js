@@ -266,6 +266,23 @@
  */
 
 /**
+ * A row of `recipient_bank_accounts` (`SELECT *` / `RETURNING *`; baseline
+ * schema).
+ *
+ * @typedef {object} RecipientBankAccountRow
+ * @property {number} id
+ * @property {number|null} recipient_id
+ * @property {string} account_number VARCHAR(34), stored trimmed + uppercased.
+ * @property {string|null} bank_name
+ * @property {string|null} account_label
+ * @property {string|null} address
+ * @property {boolean} is_primary
+ * @property {boolean} is_active
+ * @property {Date|null} created_at
+ * @property {Date|null} updated_at
+ */
+
+/**
  * `RecipientRow` plus the derived columns the list / detail / update reads project.
  *
  * @typedef {RecipientRow & {
@@ -515,6 +532,79 @@
  */
 
 // ---------------------------------------------------------------------------
+// Saved charts
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of `saved_charts` as projected by `savedChartsRepository`'s shared
+ * `COLUMNS` list (baseline + migrations 0017/0063/0064). The two DATE columns
+ * are `to_char`-formatted in SQL, so they are calendar-day strings, not `Date`s.
+ * INTEGER[] columns come back from pg as `number[]` already; the repository's
+ * `mapRow` re-normalises them (and the three booleans) defensively without
+ * changing the type, so raw and emitted shapes coincide.
+ *
+ * @typedef {object} SavedChartRow
+ * @property {number} id
+ * @property {string} name
+ * @property {string} chart_type
+ * @property {number[]} category_ids INTEGER[].
+ * @property {number[]} recipient_ids INTEGER[].
+ * @property {number[]} tag_ids INTEGER[] (migration 0063).
+ * @property {boolean} all_categories
+ * @property {boolean} all_recipients
+ * @property {boolean} all_tags
+ * @property {string} chart_variant
+ * @property {string} time_bucket
+ * @property {string|null} date_range_start 'YYYY-MM-DD' — `to_char`-formatted in the projection.
+ * @property {string|null} date_range_end 'YYYY-MM-DD' — `to_char`-formatted in the projection.
+ * @property {Date} created_at
+ * @property {Date} updated_at
+ */
+
+// ---------------------------------------------------------------------------
+// Watchlist
+// ---------------------------------------------------------------------------
+
+/**
+ * A raw row of `watchlist` (`SELECT *` / `RETURNING *`; baseline schema +
+ * migration 0058). NOT what the repository returns — every read funnels
+ * through `mapWatchlistRow`.
+ *
+ * @typedef {object} WatchlistRow
+ * @property {number} id
+ * @property {string} name
+ * @property {string|null} symbol
+ * @property {string} asset_class `asset_class` enum: stock|etf|crypto|metals|real_estate|savings|bond.
+ * @property {string} target_price NUMERIC(18,6) — pg emits NUMERIC as a string.
+ * @property {string} currency
+ * @property {string|null} notes
+ * @property {string|null} price_provider_id
+ * @property {string|null} added_price NUMERIC(18,6); NULL on rows predating migration 0058.
+ * @property {Date} created_at
+ * @property {Date} updated_at
+ */
+
+/**
+ * A `watchlist` row after `mapWatchlistRow` coerced the two NUMERIC columns
+ * (`WATCHLIST_NUMERIC_FIELDS`) to numbers.
+ *
+ * @typedef {object} FormattedWatchlistRow
+ * @property {number} id
+ * @property {string} name
+ * @property {string|null} symbol
+ * @property {string} asset_class
+ * @property {number} target_price
+ * @property {string} currency
+ * @property {string|null} notes
+ * @property {string|null} price_provider_id
+ * @property {number|null} added_price
+ * @property {Date} created_at
+ * @property {Date} updated_at
+ * @property {number|null} [current_price] Not a column — only present when a caller (the watchlist route) merged the live quote in; bare repository reads never emit it.
+ * @property {number|null} [price_change] Not a column — merged in by the watchlist route alongside `current_price`.
+ */
+
+// ---------------------------------------------------------------------------
 // Tags
 // ---------------------------------------------------------------------------
 
@@ -526,6 +616,123 @@
  * @property {string} slug
  * @property {string|null} color
  * @property {boolean} is_active
+ * @property {Date} created_at
+ * @property {Date} updated_at
+ */
+
+// ---------------------------------------------------------------------------
+// AI chat (ai_conversations + ai_messages)
+// ---------------------------------------------------------------------------
+
+/**
+ * An `ai_conversations` row as projected by `aiChatRepository`'s
+ * `CONVERSATION_COLUMNS` — the timestamps are aliased to camelCase in SQL.
+ *
+ * @typedef {object} AiConversationRow
+ * @property {string} id UUID.
+ * @property {string} title
+ * @property {string} model
+ * @property {Date} createdAt Aliased from `created_at` (TIMESTAMPTZ).
+ * @property {Date} updatedAt Aliased from `updated_at` (TIMESTAMPTZ).
+ */
+
+/**
+ * An `ai_messages` row as projected by `aiChatRepository`'s `MESSAGE_COLUMNS`
+ * — the snake_case columns are aliased to camelCase in SQL.
+ *
+ * @typedef {object} AiMessageRow
+ * @property {string} id UUID.
+ * @property {string} conversationId UUID FK → ai_conversations.
+ * @property {'user'|'assistant'|'tool'|'system'} role
+ * @property {string|null} content
+ * @property {string|null} toolName
+ * @property {any} toolArgs JSONB — parsed value or null.
+ * @property {any} toolResult JSONB — parsed value or null.
+ * @property {'complete'|'streaming'|'aborted'|'error'} status
+ * @property {Date} createdAt
+ */
+
+// ---------------------------------------------------------------------------
+// Attachments
+// ---------------------------------------------------------------------------
+
+/**
+ * A raw row of `attachments` (`SELECT *` / `RETURNING *`, migration 0004). All
+ * three BIGINT columns come back from pg as strings.
+ *
+ * @typedef {object} AttachmentRow
+ * @property {string} id BIGSERIAL — string, not number.
+ * @property {string} transaction_id BIGINT FK → transactions — string.
+ * @property {string} filename
+ * @property {string} stored_path
+ * @property {string} mime_type
+ * @property {string} size_bytes BIGINT — string.
+ * @property {Date} created_at
+ */
+
+/**
+ * What `attachmentRepository`'s `formatRow` emits: `size_bytes` coerced to a
+ * number; `id` / `transaction_id` stay BIGINT strings.
+ *
+ * @typedef {object} FormattedAttachment
+ * @property {string} id
+ * @property {string} transaction_id
+ * @property {string} filename
+ * @property {string} stored_path
+ * @property {string} mime_type
+ * @property {number} size_bytes
+ * @property {Date} created_at
+ */
+
+// ---------------------------------------------------------------------------
+// Custom parser configs
+// ---------------------------------------------------------------------------
+
+/**
+ * A raw row of `custom_parser_configs` (migrations 0037 + 0041). NOT what the
+ * repository returns — every path funnels through its `mapRow`.
+ *
+ * @typedef {object} CustomParserConfigRow
+ * @property {number} id
+ * @property {string} name
+ * @property {'transaction'|'portfolio'} kind
+ * @property {any} config_json JSONB — pg hands it back already parsed.
+ * @property {Date} created_at
+ * @property {Date} updated_at
+ */
+
+/**
+ * What `customParserConfigRepository`'s `mapRow` emits: `config_json` re-keyed
+ * to `config` (parsed if it somehow arrived as a string).
+ *
+ * @typedef {object} FormattedCustomParserConfig
+ * @property {number} id
+ * @property {string} name
+ * @property {'transaction'|'portfolio'} kind
+ * @property {any} config Parsed JSONB parser definition.
+ * @property {Date} created_at
+ * @property {Date} updated_at
+ */
+
+// ---------------------------------------------------------------------------
+// Research provider mappings (ADR-079)
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of `instrument_provider_map` (migration 0042) as projected by
+ * `instrumentProviderMapRepository`'s shared `COLUMNS` list — the full table.
+ *
+ * @typedef {object} InstrumentProviderMapRow
+ * @property {number} id
+ * @property {string} instrument_key ISIN (`key_type='isin'`) or internal id.
+ * @property {'isin'|'internal'} key_type
+ * @property {string} provider
+ * @property {string|null} provider_symbol
+ * @property {string|null} resolved_name
+ * @property {string|null} exchange
+ * @property {string|null} currency
+ * @property {'confirmed'|'auto'|'failed'} status
+ * @property {Date|null} verified_at TIMESTAMPTZ
  * @property {Date} created_at
  * @property {Date} updated_at
  */

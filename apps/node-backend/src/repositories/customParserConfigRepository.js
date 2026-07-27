@@ -1,8 +1,15 @@
 import { query } from '../database/connection.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
+/** @typedef {import('../types/rows.js').CustomParserConfigRow} CustomParserConfigRow */
+/** @typedef {import('../types/rows.js').FormattedCustomParserConfig} FormattedCustomParserConfig */
+
 const COLUMNS = 'id, name, kind, config_json, created_at, updated_at';
 
+/**
+ * @param {CustomParserConfigRow} r
+ * @returns {FormattedCustomParserConfig}
+ */
 function mapRow(r) {
   return {
     id: r.id,
@@ -16,6 +23,10 @@ function mapRow(r) {
 }
 
 const customParserConfigRepository = {
+  /**
+   * @param {string} [kind]
+   * @returns {Promise<FormattedCustomParserConfig[]>}
+   */
   async getAll(kind = 'transaction') {
     const result = await query(
       `SELECT ${COLUMNS} FROM custom_parser_configs WHERE kind = $1 ORDER BY name ASC`,
@@ -24,12 +35,21 @@ const customParserConfigRepository = {
     return result.rows.map(mapRow);
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<FormattedCustomParserConfig|undefined>}
+   */
   async getById(id) {
     const result = await query(`SELECT ${COLUMNS} FROM custom_parser_configs WHERE id = $1`, [id]);
     const r = result.rows[0];
     return r ? mapRow(r) : undefined;
   },
 
+  /**
+   * @param {string} name
+   * @param {string} [kind]
+   * @returns {Promise<FormattedCustomParserConfig|undefined>}
+   */
   async getByName(name, kind = 'transaction') {
     const result = await query(
       `SELECT ${COLUMNS} FROM custom_parser_configs WHERE name = $1 AND kind = $2`,
@@ -39,6 +59,10 @@ const customParserConfigRepository = {
     return r ? mapRow(r) : undefined;
   },
 
+  /**
+   * @param {{ name: string, config: any, kind?: string }} input
+   * @returns {Promise<FormattedCustomParserConfig>}
+   */
   async create({ name, config, kind = 'transaction' }) {
     const result = await query(
       `INSERT INTO custom_parser_configs (name, kind, config_json)
@@ -49,6 +73,11 @@ const customParserConfigRepository = {
     return mapRow(result.rows[0]);
   },
 
+  /**
+   * @param {number} id
+   * @param {{ name?: string, config?: any }} patch
+   * @returns {Promise<FormattedCustomParserConfig|undefined>}
+   */
   async update(id, { name, config }) {
     // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
     const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses({
@@ -68,6 +97,10 @@ const customParserConfigRepository = {
     return result.rows[0] ? mapRow(result.rows[0]) : undefined;
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<boolean>} true if a row was removed
+   */
   async delete(id) {
     const result = await query(`DELETE FROM custom_parser_configs WHERE id = $1 RETURNING id`, [id]);
     return result.rows.length > 0;

@@ -59,6 +59,7 @@ export const statisticsRepository = {
       targetCurrency
     );
 
+    /** @type {Record<string, { id: number|null, name: string, count: number, total: number }>} */
     const catMap = {};
     for (const row of catConverted) {
       const catId = row.category_id === -1 ? null : parseInt(row.category_id, 10);
@@ -90,7 +91,7 @@ export const statisticsRepository = {
         ORDER BY a.name`,
       []
     );
-    return result.rows.map(r => r.bank_account);
+    return result.rows.map((/** @type {{ bank_account: string }} */ r) => r.bank_account);
   },
 
   /**
@@ -113,6 +114,11 @@ export const statisticsRepository = {
     return parseInt(result.rows[0].count, 10);
   },
 
+  /**
+   * @param {number[]} [excludedCategoryIds]
+   * @param {string} [targetCurrency]
+   * @param {number[]} [excludedRecipientIds]
+   */
   async getCategoryPivot(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = []) {
     const includeTransfers = await getIncludeTransfers();
     // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses,
@@ -170,6 +176,12 @@ export const statisticsRepository = {
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
 
+    /**
+     * @type {Record<string, Record<string, {
+     *   categoryId: number|null, categoryName: string,
+     *   total: number, income: number, expense: number, transactionCount: number,
+     * }>>}
+     */
     const periodCatMap = {};
     for (const row of converted) {
       const period = row.period;
@@ -192,6 +204,12 @@ export const statisticsRepository = {
       }
     }
 
+    /**
+     * @type {Record<string, Array<{
+     *   categoryId: number|null, categoryName: string,
+     *   total: number, income: number, expense: number, transactionCount: number,
+     * }>>}
+     */
     const categoryPivot = {};
     for (const [period, cats] of Object.entries(periodCatMap)) {
       categoryPivot[period] = Object.values(cats)

@@ -57,6 +57,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     targetCurrency
   );
 
+  /** @type {Record<string, number>} */
   const monthlySpending = {};
   for (const row of past6Converted) {
     const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
@@ -91,6 +92,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     targetCurrency
   );
 
+  /** @type {Record<string, { spending: number, income: number }>} */
   const dailyMap = {};
   for (const row of currentConverted) {
     const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;

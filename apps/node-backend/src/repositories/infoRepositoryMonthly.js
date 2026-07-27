@@ -20,6 +20,12 @@ import {
   getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
 
+/**
+ * @param {number[]} [excludedCategoryIds]
+ * @param {string} [targetCurrency]
+ * @param {number[]} [excludedRecipientIds]
+ * @param {boolean} [allTime]
+ */
 export async function getMonthlyFinancialSummary(
   excludedCategoryIds = [],
   targetCurrency = 'EUR',
@@ -75,6 +81,14 @@ export async function getMonthlyFinancialSummary(
     }
     const mergedConverted = await convertRowsToEur(mergedRows, targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' });
 
+    /**
+     * @type {Record<string, {
+     *   month: number, year: number,
+     *   period_start: string|null, period_end: string|null,
+     *   total_spending: number, total_income: number,
+     *   net_amount: number, transaction_count: number,
+     * }>}
+     */
     const monthMap = {};
     for (const conv of mergedConverted) {
       const key = conv._key;
@@ -204,7 +218,13 @@ export async function getMonthlyFinancialSummary(
   const result = await query(sql, params);
   logger.debug('Monthly summary query returned', { rowCount: result.rows.length });
 
-  const dailyRows = result.rows.filter(r => r.date != null);
+  const dailyRows = result.rows.filter(
+    (/** @type {{
+      month: number, year: number, period_start: Date, period_end: Date,
+      date: Date|null, currency: string|null, cnt: string|null,
+      income_amount: string|null, spending_amount: string|null,
+    }} */ r) => r.date != null,
+  );
   // Convert each (date, currency) income/spending aggregate at that date's rate.
   const [incomeConverted, spendingConverted] = await Promise.all([
     convertRowsToEur(
@@ -219,6 +239,14 @@ export async function getMonthlyFinancialSummary(
     ),
   ]);
 
+  /**
+   * @type {Record<string, {
+   *   month: number, year: number,
+   *   period_start: string|null, period_end: string|null,
+   *   total_spending: number, total_income: number,
+   *   net_amount: number, transaction_count: number,
+   * }>}
+   */
   const monthMap = {};
   for (const row of result.rows) {
     const key = formatYearMonthKey(row.year, row.month);
