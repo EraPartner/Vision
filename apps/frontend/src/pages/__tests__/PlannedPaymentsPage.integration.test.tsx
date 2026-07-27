@@ -153,6 +153,31 @@ describe("PlannedPaymentsPage (integration)", () => {
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
+    it("resets the create form (direction toggle, name) between consecutive New opens", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<PlannedPaymentsPage />);
+
+        // First "New" open: dirty the sticky fields — flip the direction
+        // toggle to Income and type a name.
+        await user.click(await screen.findByRole("button", { name: /new payment/i }));
+        await screen.findByRole("dialog");
+        await user.click(screen.getByRole("radio", { name: /income/i }));
+        expect(screen.getByRole("radio", { name: /income/i })).toHaveAttribute("aria-checked", "true");
+        await user.type(screen.getByLabelText("Name *"), "Salary");
+
+        // Close without saving, reopen "New".
+        await user.keyboard("{Escape}");
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /new payment/i }));
+        await screen.findByRole("dialog");
+
+        // The form remounted blank: direction back on its Expense default
+        // (the sign-owning field), name cleared.
+        expect(screen.getByRole("radio", { name: /expense/i })).toHaveAttribute("aria-checked", "true");
+        expect(screen.getByRole("radio", { name: /income/i })).toHaveAttribute("aria-checked", "false");
+        expect(screen.getByLabelText("Name *")).toHaveValue("");
+    });
+
     it("shows payment name in table row when MSW returns a planned payment", async () => {
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>

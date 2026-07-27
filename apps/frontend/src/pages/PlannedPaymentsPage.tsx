@@ -84,6 +84,10 @@ export default function PlannedPaymentsPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PlannedPayment | undefined>();
+  // Bumped on every "New" open so the create form's key changes and it
+  // remounts blank — a constant "new" key kept all useState initializers
+  // (name, amount, the direction toggle, …) from the previous create.
+  const [createFormKey, setCreateFormKey] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [paymentToLink, setPaymentToLink] = useState<PlannedPayment | null>(null);
@@ -431,7 +435,7 @@ export default function PlannedPaymentsPage() {
               {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               {showAll ? t('plannedPage.showingAll') : t('plannedPage.activeOnly')}
             </Button>
-            <Button onClick={() => { setEditing(undefined); setFormOpen(true); }} className="gap-2">
+            <Button onClick={() => { setEditing(undefined); setCreateFormKey((k) => k + 1); setFormOpen(true); }} className="gap-2">
               <Plus className="h-4 w-4" />
               {t('plannedPage.newPayment')}
             </Button>
@@ -469,7 +473,7 @@ export default function PlannedPaymentsPage() {
           onOpenChange={(open) => { setFormOpen(open); if (!open) setEditing(undefined); }}
           onSubmit={handleSubmit}
           initial={editing}
-          key={editing?.id ?? "new"}
+          key={editing?.id ?? `new-${createFormKey}`}
         />
 
         <LinkTransactionDialog
