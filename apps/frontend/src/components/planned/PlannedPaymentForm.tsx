@@ -154,9 +154,11 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
     const payload: Record<string, unknown> = {
       name: name.trim(),
       // Loans: POST overwrites this from the generated schedule outright, and
-      // PATCH only keeps a client value that is already the schedule's negated
-      // installment (which is exactly what the split above reproduces) — so
-      // there is no double negation on either path.
+      // PATCH keeps a defined client value as-is (never re-negates it), so
+      // there is no double negation on either path. Note PATCH keeping the
+      // client value means editing a loan's principal/rate/term can leave a
+      // stale amount vs. the regenerated schedule — a pre-existing backend
+      // behavior, tracked separately in TODO.md.
       amount: signedAmount,
       currency,
       due_date: dueDateStr,
