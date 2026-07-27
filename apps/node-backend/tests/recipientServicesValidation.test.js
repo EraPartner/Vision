@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { mockLogger } from './helpers/mockLogger.js';
-import { mockConnection } from './helpers/repoMocks.js';
-vi.mock('../src/database/connection.js', () => mockConnection());
+import { mockTxConnection } from './helpers/repoMocks.js';
+// Ambient-aware connection mock: transactional SQL lands on `mockClient` whether
+// the service threads the client through explicitly or a repository issues it
+// via module-level query() inside withTransaction (see repoMocks.js).
+const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
+vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient));
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
@@ -15,6 +19,7 @@ import { ValidationError, NotFoundError } from '../src/middleware/errorHandler.j
 beforeEach(() => {
   query.mockReset();
   withTransaction.mockReset();
+  mockClient.query.mockReset();
 });
 
 describe('updatePattern — validates the row merged with stored values', () => {
@@ -40,16 +45,13 @@ describe('updatePattern — validates the row merged with stored values', () => 
 describe('mergeRecipients — flattens nested alias chains', () => {
   it('re-points grandchildren aliases onto the new primary', async () => {
     const sqls = [];
-    const client = {
-      query: vi.fn(async (sql) => {
-        sqls.push(sql);
-        if (sql.includes('FOR UPDATE')) return { rows: [{ id: 1 }] };
-        if (sql.includes('information_schema')) return { rows: [] };
-        if (sql.includes('RETURNING id')) return { rows: [{ id: 3 }] };
-        return { rows: [], rowCount: 0 };
-      }),
-    };
-    withTransaction.mockImplementation(async (fn) => fn(client));
+    mockClient.query.mockImplementation(async (sql) => {
+      sqls.push(sql);
+      if (sql.includes('FOR UPDATE')) return { rows: [{ id: 1 }] };
+      if (sql.includes('information_schema')) return { rows: [] };
+      if (sql.includes('RETURNING id')) return { rows: [{ id: 3 }] };
+      return { rows: [], rowCount: 0 };
+    });
 
     await mergeRecipients(1, [3]);
 
