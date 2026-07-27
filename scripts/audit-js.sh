@@ -19,4 +19,9 @@
 
 set -eu
 
-exec bun audit --audit-level=high
+# GHSA-qwww-vcr4-c8h2 (react-router RSC-mode CSRF): the vulnerable code path is
+# React Server Components mode, which this app cannot reach — Vision is a Vite
+# SPA (<BrowserRouter>/<Routes> only; no SSR, no RSC, no server actions). The
+# only patched release is react-router 8.3.0, a major migration; tracked in
+# TODO.md ("react-router 7→8 migration"). Remove this ignore with that bump.
+exec bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2

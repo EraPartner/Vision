@@ -79,6 +79,11 @@ look-changing one.
   - If `DATABASE_URL` is ever unset outside the documented Docker flow, the backend silently connects with a guessable password instead of failing closed.
   - Fix: make `DATABASE_URL` required (no default) outside development, or loudly warn when the literal default is in effect.
 
+- [ ] **react-router 7→8 migration — remove the accepted-risk audit ignore for GHSA-qwww-vcr4-c8h2** 🔼
+  - ↪ _from: Orchestration session 2026-07-27 · Deps Audit (JS) CI failure on PR #131_
+  - `scripts/audit-js.sh` carries `--ignore=GHSA-qwww-vcr4-c8h2` (react-router RSC-mode CSRF, high): the vulnerable range is `>=7.12.0 <8.3.0` with the only patched release being 8.3.0, and `apps/frontend/package.json` pins `react-router-dom ^7.18.1`. The vulnerable code path is RSC mode, which this Vite SPA (`<BrowserRouter>`/`<Routes>`, no SSR/RSC/server actions) cannot reach — hence accepted-risk rather than a rushed major bump. The sibling `brace-expansion` advisory from the same CI failure was fixed properly (root override `>=5.0.8`, replacing the older `^2.1.2` override).
+  - Fix: migrate to react-router 8.x (check whether `react-router-dom` still exists as a package in v8 or the import root changes), run the full frontend suite + a route-by-route smoke pass, then delete the `--ignore` flag and its comment block from `scripts/audit-js.sh`.
+
 ### 🐛 Correctness
 
 - [x] **Vision CSV export mangles negative amounts → re-importing a Vision export silently drops every expense row** 🔺 ✅ 2026-07-11 · c5b4fb6 (#82) *(spot-verified by hand 2026-07-02: mechanism confirmed end-to-end)*
