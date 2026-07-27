@@ -1996,6 +1996,22 @@ look-changing one.
   - Worst case is AddPortfolioTxnDialog (~10 fields: units, price, fees, taxes, date, account, recurrence); a mis-click next to the dialog erases everything with no recovery.
   - Fix: when dirty, `event.preventDefault()` in `onInteractOutside`/`onEscapeKeyDown` and ask via the existing `useConfirmDialog`; or minimally stop resetting on dismissal (reset only on success/Cancel, as AddTransactionDialog and PlannedPaymentForm already do by staying mounted).
 
+- [ ] **Required-field errors are mouse-unreachable in both money forms — submit buttons are disabled on exactly the empty-required predicates, so users hit a dead button instead of learning which field is missing** 🔼
+  - ↪ _from: Orchestration session 2026-07-27 · form-a11y implementation (3016c83) follow-up_
+  - Both submit buttons disable on the empty-required conditions, so the new inline required-errors can only fire via Enter (AddTransactionDialog) or not at all (PlannedPaymentForm has no `<form>` — submit is a button onClick). Same as before 3016c83 (the alert was equally unreachable), but now the better fix is obvious: enable the buttons and let the blocked submit reveal the errors + focus the first invalid field. Changing the disabled predicates was deliberately out of 3016c83's scope.
+
+- [ ] **PlannedPaymentForm comboboxes have no accessible name — dangling Labels without htmlFor** 🔼 🔧
+  - ↪ _from: Orchestration session 2026-07-27 · form-a11y implementation follow-up_
+  - Frequency (~:314), loan type, end date, and tags render a `<Label>` with no `htmlFor` and controls with no `id`; a combobox doesn't take its name from content, so these have no accessible name at all. Same wiring fix as 3016c83's DatePicker/AccountCombobox pass-through.
+
+- [ ] **validate-locales unused-key check has a substring hole** ⏬
+  - ↪ _from: Orchestration session 2026-07-27 · form-a11y implementation follow-up_
+  - `plannedForm.nameRequired`/`amountRequired` passed the unused-key validator for weeks while dead purely because they are substrings of the live `…Required2` keys. (Both are genuinely used since 3016c83.) The validator should match key references exactly, not by substring.
+
+- [ ] **e2e mutations-parity.spec.ts fills a combobox button as if it were an input** ⏬
+  - ↪ _from: Orchestration session 2026-07-27 · form-a11y implementation follow-up_
+  - `mutations-parity.spec.ts:85` does `page.getByLabel(/^bank account \*/i).fill(...)` against AccountCombobox, which renders a `<button>` — `.fill()` on a button looks broken independent of any recent change; e2e isn't in the default verification gates, so this may have been failing silently.
+
 - [ ] **Dialogs nested inside InvestmentDetailDialog still lose drafts — the outer dialog unmounts them on its own dismissal** 🔼
   - ↪ _from: Orchestration session 2026-07-27 · dialog-guard implementation (e0df996) follow-up_
   - `InvestmentDetailDialog.tsx:127,192,549` renders AddPortfolioTxnDialog / EditInvestmentDialog / EditPortfolioTxnDialog inside its own DialogContent, so dismissing the OUTER dialog unmounts the inner one and the preserved-state mechanism from e0df996 cannot help (the parent controls mounting). The inline usages on Stocks/Savings/RealEstate/Overview pages are unaffected. Fix: the finding's fuller option — dirty-gated `event.preventDefault()` in onInteractOutside/onEscapeKeyDown + useConfirmDialog on the outer dialog — or lift the nested dialogs' state/mounting out of the outer dialog.
@@ -2070,7 +2086,7 @@ look-changing one.
   - `handleDelete` calls `mutate(id)` directly — every other delete flow checked (Accounts, Recipients, Planned Payments, Categories) confirms first via `useConfirmDialog`.
   - Fix: wrap in the existing `useConfirmDialog` pattern.
 
-- [ ] **Form validation errors are toast-only — the one accessible field-association primitive in the codebase is fully dead code, used nowhere** ⏫ 🔧 🔎 verified-present 2026-07-11 *(worse than originally reported)*
+- [x] **Form validation errors are toast-only — the one accessible field-association primitive in the codebase is fully dead code, used nowhere** ⏫ 🔧 ✅ 2026-07-27 · 3016c83 (premise drifted further than filed: form.tsx AND react-hook-form were deleted by the SIMP remediation (4a671a3) as dead code, and aria-invalid was at ZERO occurrences. Implemented the named starting scope without re-adding the dependency: useFieldErrors + FieldError rebuild the primitive's exact ARIA contract (id-linked aria-describedby, aria-invalid, FormMessage's verbatim styling, focus-first-invalid) on plain state; AddTransactionDialog's 4 and PlannedPaymentForm's 8 validation cases now render inline, replacing toasts/silent returns/both alert() calls; server-error toasts kept. Submit behavior independently verified unchanged — payload blocks byte-identical vs HEAD, blocking-condition sets equal both directions, disabled predicates untouched. The remaining 57 toast-validation files + the disabled-button reachability gap are filed below)
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `toast.error(...)` is used for validation in 59 files (not "40+"); `aria-invalid`/`aria-describedby` wiring exists in exactly one primitive (`components/ui/form.tsx:93-94`), and **zero files import `Form`/`FormField`/`FormControl` from it** — `react-hook-form`, which the primitive depends on, isn't used anywhere else in the app. A screen-reader user who misses the transient toast has no way to discover which field failed, anywhere in the app.
   - Fix: route field-level errors through the existing `Form`/`FormField`/`FormMessage` primitives, starting with Add/Edit Transaction and Planned Payment.
