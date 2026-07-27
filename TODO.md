@@ -79,10 +79,10 @@ look-changing one.
   - If `DATABASE_URL` is ever unset outside the documented Docker flow, the backend silently connects with a guessable password instead of failing closed.
   - Fix: make `DATABASE_URL` required (no default) outside development, or loudly warn when the literal default is in effect.
 
-- [ ] **react-router 7→8 migration — remove the accepted-risk audit ignore for GHSA-qwww-vcr4-c8h2** 🔼
+- [ ] **Retire the two accepted-risk audit ignores: react-router 7→8 migration (GHSA-qwww-vcr4-c8h2) + brace-expansion 5.x compatibility (GHSA-mh99-v99m-4gvg)** 🔼
   - ↪ _from: Orchestration session 2026-07-27 · Deps Audit (JS) CI failure on PR #131_
-  - `scripts/audit-js.sh` carries `--ignore=GHSA-qwww-vcr4-c8h2` (react-router RSC-mode CSRF, high): the vulnerable range is `>=7.12.0 <8.3.0` with the only patched release being 8.3.0, and `apps/frontend/package.json` pins `react-router-dom ^7.18.1`. The vulnerable code path is RSC mode, which this Vite SPA (`<BrowserRouter>`/`<Routes>`, no SSR/RSC/server actions) cannot reach — hence accepted-risk rather than a rushed major bump. The sibling `brace-expansion` advisory from the same CI failure was fixed properly (root override `>=5.0.8`, replacing the older `^2.1.2` override).
-  - Fix: migrate to react-router 8.x (check whether `react-router-dom` still exists as a package in v8 or the import root changes), run the full frontend suite + a route-by-route smoke pass, then delete the `--ignore` flag and its comment block from `scripts/audit-js.sh`.
+  - `scripts/audit-js.sh` carries two `--ignore` flags. (a) react-router RSC-mode CSRF, high: vulnerable `>=7.12.0 <8.3.0`, only patch is the 8.3.0 major, app pins `react-router-dom ^7.18.1`; the vulnerable path is RSC mode, unreachable in this Vite SPA (`<BrowserRouter>`/`<Routes>`, no SSR/RSC/server actions). (b) brace-expansion DoS, high: only patch is 5.0.8, whose CJS export shape changed from a bare function to named `{ expand }` — the root-override attempt crashed eslint and the backend suite on CI (the postcss/c5cd5a6 harmful-override lesson replayed), so the override stays `^2.1.2` and the risk is accepted: consumers are dev tooling + archiver globbing repo-authored patterns, no untrusted expansion input.
+  - Fix: (a) migrate to react-router 8.x (check whether `react-router-dom` still exists in v8 or the import root changes), full frontend suite + route-by-route smoke pass, drop the ignore. (b) watch for minimatch/eslint/archiver releases compatible with brace-expansion 5.x (or a 2.x backport) — then bump the override and drop that ignore. Delete each ignore's comment block in `scripts/audit-js.sh` as it retires.
 
 ### 🐛 Correctness
 
