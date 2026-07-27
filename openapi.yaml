@@ -3636,7 +3636,7 @@ paths:
       tags: [PlannedTransactions]
       responses:
         "200":
-          description: Due-soon list
+          description: Due-soon list (canonical `{items, total}` body; `days` echoes the effective window)
           content:
             application/json:
               schema:
@@ -3645,9 +3645,17 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/PlannedTransaction"
+                        type: object
+                        required: [items, total, days]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/PlannedTransaction"
+                          total:
+                            type: integer
+                          days:
+                            type: integer
 
   /api/planned-transactions/match-suggestions:
     get:
@@ -3662,7 +3670,7 @@ paths:
       tags: [PlannedTransactions]
       responses:
         "200":
-          description: Match suggestions
+          description: Match suggestions (canonical `{items, total}` body)
           content:
             application/json:
               schema:
@@ -3671,31 +3679,37 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            planned:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          total:
+                            type: integer
+                          items:
+                            type: array
+                            items:
                               type: object
                               properties:
-                                id: { type: integer }
-                                recipient_id: { type: integer, nullable: true }
-                                recipient_name: { type: string, nullable: true }
-                                amount: { type: number }
-                                planned_date: { type: string }
-                                currency: { type: string, nullable: true }
-                                is_recurring: { type: boolean }
-                            candidates:
-                              type: array
-                              items:
-                                type: object
-                                properties:
-                                  id: { type: integer }
-                                  recipient_name: { type: string, nullable: true }
-                                  amount: { type: number }
-                                  transaction_date: { type: string }
-                                  currency: { type: string, nullable: true }
-                                  memo: { type: string, nullable: true }
+                                planned:
+                                  type: object
+                                  properties:
+                                    id: { type: integer }
+                                    recipient_id: { type: integer, nullable: true }
+                                    recipient_name: { type: string, nullable: true }
+                                    amount: { type: number }
+                                    planned_date: { type: string }
+                                    currency: { type: string, nullable: true }
+                                    is_recurring: { type: boolean }
+                                candidates:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      id: { type: integer }
+                                      recipient_name: { type: string, nullable: true }
+                                      amount: { type: number }
+                                      transaction_date: { type: string }
+                                      currency: { type: string, nullable: true }
+                                      memo: { type: string, nullable: true }
 
   /api/planned-transactions/{id}:
     parameters:
@@ -3824,11 +3838,24 @@ paths:
       tags: [Info]
       responses:
         "200":
-          description: Bank list
+          description: Bank list (canonical `{items, total}` body)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: string
+                          total:
+                            type: integer
 
   /api/info/supported-adapters:
     get:
@@ -3837,11 +3864,29 @@ paths:
       tags: [Info]
       responses:
         "200":
-          description: Adapter list
+          description: Adapter list (canonical `{items, total}` body)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              required: [key, name]
+                              properties:
+                                key: { type: string }
+                                name: { type: string }
+                                adapter_class: { type: string }
+                          total:
+                            type: integer
 
   /api/info/transaction-count:
     get:
@@ -4767,11 +4812,24 @@ paths:
             enum: [basic, full]
       responses:
         "200":
-          description: Quote data
+          description: Quote data (canonical `{items, total}` body)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                          total:
+                            type: integer
 
   /api/market/chart:
     get:
@@ -4794,11 +4852,32 @@ paths:
             type: string
       responses:
         "200":
-          description: OHLC chart data
+          description: OHLC chart data (canonical `{items, total}` series with `symbol`/`currency` alongside)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          symbol: { type: string }
+                          currency: { type: string }
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                time: { type: number }
+                                close: { type: number }
+                                high: { type: number }
+                                low: { type: number }
+                                volume: { type: number }
+                          total:
+                            type: integer
 
   /api/market/news:
     get:
@@ -4813,11 +4892,24 @@ paths:
             type: string
       responses:
         "200":
-          description: News items
+          description: News items (canonical `{items, total}` body)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                          total:
+                            type: integer
 
   # ─── Watchlist ────────────────────────────────────────────────────────────────
   /api/watchlist:
@@ -5423,7 +5515,7 @@ paths:
       tags: [AI]
       responses:
         "200":
-          description: Model list
+          description: Model list (canonical `{items, total}` body)
           content:
             application/json:
               schema:
@@ -5433,12 +5525,14 @@ paths:
                     properties:
                       data:
                         type: object
-                        required: [models]
+                        required: [items, total]
                         properties:
-                          models:
+                          items:
                             type: array
                             items:
                               $ref: "#/components/schemas/OllamaModel"
+                          total:
+                            type: integer
 
   /api/ai/conversations:
     get:
@@ -6753,11 +6847,24 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Request metrics
+          description: Request metrics (canonical `{items, total}` body)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                          total:
+                            type: integer
 
   /api/admin/endpoints:
     get:
@@ -7100,7 +7207,7 @@ paths:
             default: isin
       responses:
         "200":
-          description: "Stored mappings ({ mappings: [...] })"
+          description: "Stored mappings (canonical `{items, total}` body)"
           content:
             application/json:
               schema:
@@ -7131,7 +7238,7 @@ paths:
                     type: object
       responses:
         "200":
-          description: Updated mapping set
+          description: Updated mapping set (canonical `{items, total}` body)
           content:
             application/json:
               schema:
@@ -7229,7 +7336,7 @@ paths:
       tags: [Research]
       responses:
         "200":
-          description: "{ providers: [{ provider, label, envVar, configured, source, masked }] }"
+          description: "Canonical `{items, total}` body; each item is { provider, label, envVar, configured, source, masked }"
           content:
             application/json:
               schema:
@@ -7258,7 +7365,7 @@ paths:
                   type: string
       responses:
         "200":
-          description: Updated masked statuses
+          description: Updated masked statuses (canonical `{items, total}` body)
           content:
             application/json:
               schema:

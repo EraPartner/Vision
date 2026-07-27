@@ -130,8 +130,10 @@ export interface OllamaModel {
   modifiedAt: string | null;
 }
 
+/** Canonical `{items, total}` collection body of GET /api/ai/models. */
 export interface OllamaModelsResponse {
-  models: OllamaModel[];
+  items: OllamaModel[];
+  total: number;
 }
 
 export interface CreateConversationBody {

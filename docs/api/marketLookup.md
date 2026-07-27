@@ -84,7 +84,7 @@ Use `detail=basic` for price-only views such as benchmark strips, watchlist prev
 
 ```json
 {
-  "quotes": [
+  "items": [
     {
       "symbol": "AAPL",
       "name": "Apple Inc.",
@@ -127,17 +127,18 @@ Use `detail=basic` for price-only views such as benchmark strips, watchlist prev
         }
       ]
     }
-  ]
+  ],
+  "total": 1
 }
 ```
 
 **Response — `detail=basic`:** `200 OK`
 
-Same envelope shape (`{ "quotes": [ … ] }`), but each quote object contains only the core price fields. The fundamentals/analyst fields (`marketCap`, `pe`, `forwardPE`, `dividendYield`, `eps`, `beta`, `priceToBook`, `analystConsensus`, `recentAnalystActions`) are **omitted**.
+Same canonical collection body (`{ "items": [ … ], "total": n }`), but each quote object contains only the core price fields. The fundamentals/analyst fields (`marketCap`, `pe`, `forwardPE`, `dividendYield`, `eps`, `beta`, `priceToBook`, `analystConsensus`, `recentAnalystActions`) are **omitted**.
 
 ```json
 {
-  "quotes": [
+  "items": [
     {
       "symbol": "AAPL",
       "name": "Apple Inc.",
@@ -156,7 +157,8 @@ Same envelope shape (`{ "quotes": [ … ] }`), but each quote object contains on
       "high52w": 199.62,
       "low52w": 164.08
     }
-  ]
+  ],
+  "total": 1
 }
 ```
 
@@ -197,7 +199,7 @@ Get historical price chart data for a symbol.
 {
   "symbol": "AAPL",
   "currency": "USD",
-  "points": [
+  "items": [
     {
       "time": 1709246400000,
       "close": 175.43,
@@ -205,7 +207,8 @@ Get historical price chart data for a symbol.
       "low": 173.00,
       "volume": 52436789
     }
-  ]
+  ],
+  "total": 1
 }
 ```
 
@@ -228,7 +231,7 @@ Get news articles for one or more symbols.
 
 ```json
 {
-  "articles": [
+  "items": [
     {
       "title": "Apple Reports Strong Q4 Earnings",
       "link": "https://finance.yahoo.com/...",
@@ -237,7 +240,8 @@ Get news articles for one or more symbols.
       "thumbnail": "https://image.com/thumb.jpg",
       "relatedSymbols": ["AAPL"]
     }
-  ]
+  ],
+  "total": 1
 }
 ```
 
@@ -294,8 +298,8 @@ Backend import route tests were updated to validate the unified API response env
 ### Earlier Notes (2026-04-10)
 
 - Quote + summary mapping behavior when provider responses are available.
-- Quote failure fallback behavior returning `{"quotes": []}` for partial failure tolerance.
+- Quote failure fallback behavior returning `{"items": [], "total": 0}` for partial failure tolerance.
 - `GET /api/market/news` deduplication by title and server-side thumbnail normalization.
-- News search failure tolerance returning `{"articles": []}`.
+- News search failure tolerance returning `{"items": [], "total": 0}`.
 
 Code links: [[apps/node-backend/tests/routes/marketLookup.test.js]], [[apps/node-backend/src/routes/marketLookup.js]], [[apps/node-backend/tests/routes/import.test.js]]

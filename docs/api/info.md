@@ -37,15 +37,14 @@ All monetary values in responses use **Decimal.js** for precision to eliminate I
 
 ### GET /api/info/banks
 
-List all bank accounts in the workspace.
+List all bank accounts in the workspace. Canonical collection body `{ items, total }` (unpaginated — `total` is the row count).
 
 **Response:** `200 OK`
 
 ```json
 {
-  "banks": [
-    { "id": 1, "name": "Main Account", "balance": 5000.00 }
-  ]
+  "items": ["BE68539007547034", "BE71096123456769"],
+  "total": 2
 }
 ```
 
@@ -57,19 +56,21 @@ List all supported bank adapters.
 
 **Response:** `200 OK`
 
+Canonical collection body `{ items, total }`.
+
 ```json
 {
-  "adapters": [
-    { "key": "belfius", "name": "Belfius", "adapter_class": "BelfiusAdapter" },
-    { "key": "revolut", "name": "Revolut", "adapter_class": "RevolutAdapter" },
-    { "key": "ing", "name": "ING", "adapter_class": "INGAdapter" },
-    { "key": "kbc", "name": "KBC", "adapter_class": "KBCAdapter" },
-    { "key": "bnp", "name": "BNP Paribas Fortis", "adapter_class": "BNPAdapter" },
-    { "key": "sabb", "name": "SABB", "adapter_class": "SABBAdapter" },
-    { "key": "wise", "name": "Wise", "adapter_class": "WiseAdapter" },
-    { "key": "vision", "name": "Vision", "adapter_class": "VisionAdapter" }
+  "items": [
+    { "key": "belfius", "name": "Belfius" },
+    { "key": "revolut", "name": "Revolut" },
+    { "key": "ing", "name": "ING" },
+    { "key": "kbc", "name": "KBC" },
+    { "key": "bnp", "name": "BNP Paribas Fortis" },
+    { "key": "sabb", "name": "SABB" },
+    { "key": "wise", "name": "Wise" },
+    { "key": "vision", "name": "Vision" }
   ],
-  "total_count": 8
+  "total": 8
 }
 ```
 

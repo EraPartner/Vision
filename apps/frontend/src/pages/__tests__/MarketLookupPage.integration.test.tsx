@@ -104,12 +104,12 @@ describe("MarketLookupPage (integration)", () => {
             ),
             http.get(`${API_BASE}/api/market/quote`, () => {
                 quoteFetched = true;
-                return ok({ quotes: [appleQuote] });
+                return ok({ items: [appleQuote], total: 1 });
             }),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
         );
 
         renderWithApp(<MarketLookupPage />);
@@ -135,12 +135,12 @@ describe("MarketLookupPage (integration)", () => {
                 }),
             ),
             http.get(`${API_BASE}/api/market/quote`, () =>
-                ok({ quotes: [appleQuote] }),
+                ok({ items: [appleQuote], total: 1 }),
             ),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
         );
 
         renderWithApp(<MarketLookupPage />);
@@ -156,11 +156,11 @@ describe("MarketLookupPage (integration)", () => {
 
     it("shows quote card when symbol is supplied via URL query param", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [appleQuote] })),
+            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
         );
 
         renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
@@ -171,11 +171,11 @@ describe("MarketLookupPage (integration)", () => {
 
     it("shows Price Chart section when a symbol is loaded", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [appleQuote] })),
+            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
         );
 
         renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
@@ -186,11 +186,11 @@ describe("MarketLookupPage (integration)", () => {
 
     it("shows Latest News section when a symbol is loaded", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [appleQuote] })),
+            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
         );
 
         renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
@@ -202,9 +202,9 @@ describe("MarketLookupPage (integration)", () => {
     it("shows No news message when the news tab has no articles", async () => {
         const user = userEvent.setup({ delay: null });
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [appleQuote] })),
+            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
             // News now comes from the research aggregator in the Details card's
             // News tab. Empty articles (source live) → "No news available".
@@ -224,11 +224,11 @@ describe("MarketLookupPage (integration)", () => {
 
     it("shows time range buttons when quote is loaded", async () => {
         server.use(
-            http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [appleQuote] })),
+            http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [appleQuote], total: 1 })),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
         );
 
         renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
@@ -242,9 +242,9 @@ describe("MarketLookupPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/market/quote`, () => err(500, "Server error")),
             http.get(`${API_BASE}/api/market/chart`, () =>
-                ok({ symbol: "AAPL", currency: "USD", points: [] }),
+                ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
         );
 
         renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });

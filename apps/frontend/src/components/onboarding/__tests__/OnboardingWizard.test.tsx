@@ -16,11 +16,11 @@ function stubAdapters() {
     server.use(
         http.get(`${API_BASE}/api/info/supported-adapters`, () =>
             ok({
-                adapters: [
+                items: [
                     { key: "kbc", name: "KBC", adapter_class: "KbcAdapter" },
                     { key: "ing", name: "ING", adapter_class: "IngAdapter" },
                 ],
-                total_count: 2,
+                total: 2,
             }),
         ),
     );

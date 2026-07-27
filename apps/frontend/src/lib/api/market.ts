@@ -5,14 +5,19 @@ import type { MarketNewsArticle } from '@/lib/api/types';
 
 export type { MarketNewsArticle };
 
-export function getMarketNews(
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getMarketNews(
     symbols?: string[],
     count?: number,
-): Promise<{ articles: MarketNewsArticle[] }> {
+): Promise<MarketNewsArticle[]> {
     const params: Record<string, string | number> = {};
     if (symbols?.length) params.symbols = symbols.join(',');
     if (count) params.count = count;
-    return requestWithQuery('/api/market/news', params);
+    const { items } = await requestWithQuery<{ items: MarketNewsArticle[]; total: number }>(
+        '/api/market/news',
+        params,
+    );
+    return items;
 }
 
 export interface MarketQuote {
@@ -32,12 +37,16 @@ export interface MarketQuote {
  * benchmark strip and watchlist; omit it (default 'full') when the rich
  * fundamentals/analyst fields are rendered.
  */
-export function getMarketQuotes<Q = MarketQuote>(
+export async function getMarketQuotes<Q = MarketQuote>(
     symbols: string,
     opts?: { detail?: 'basic' | 'full' },
-): Promise<{ quotes: Q[] }> {
+): Promise<Q[]> {
     const detail = opts?.detail === 'basic' ? '&detail=basic' : '';
-    return apiRequest(`/api/market/quote?symbols=${encodeURIComponent(symbols)}${detail}`);
+    // Canonical `{items, total}` collection body — callers only need the rows.
+    const { items } = await apiRequest<{ items: Q[]; total: number }>(
+        `/api/market/quote?symbols=${encodeURIComponent(symbols)}${detail}`,
+    );
+    return items;
 }
 
 export interface MarketChartPoint {
@@ -54,12 +63,23 @@ export interface MarketChartResponse<P = MarketChartPoint> {
     points: P[];
 }
 
-export function getMarketChart<P = MarketChartPoint>(
+/**
+ * The wire body is the canonical `{items, total}` collection (with `symbol` and
+ * `currency` alongside); the series is re-surfaced as `points` here so chart
+ * consumers keep a domain-named field.
+ */
+export async function getMarketChart<P = MarketChartPoint>(
     symbol: string,
     range: string,
     interval: string,
 ): Promise<MarketChartResponse<P>> {
-    return requestWithQuery('/api/market/chart', { symbol, range, interval });
+    const { items, ...rest } = await requestWithQuery<{
+        symbol?: string;
+        currency?: string;
+        items: P[];
+        total: number;
+    }>('/api/market/chart', { symbol, range, interval });
+    return { symbol: rest.symbol, currency: rest.currency, points: items };
 }
 
 export interface MarketSearchResult {

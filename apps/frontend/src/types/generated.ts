@@ -5898,14 +5898,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Due-soon list */
+            /** @description Due-soon list (canonical `{items, total}` body; `days` echoes the effective window) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["PlannedTransaction"][];
+                        data?: {
+                            items: components["schemas"]["PlannedTransaction"][];
+                            total: number;
+                            days: number;
+                        };
                     };
                 };
             };
@@ -5920,7 +5924,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Match suggestions */
+            /** @description Match suggestions (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5928,24 +5932,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: {
-                            planned?: {
-                                id?: number;
-                                recipient_id?: number | null;
-                                recipient_name?: string | null;
-                                amount?: number;
-                                planned_date?: string;
-                                currency?: string | null;
-                                is_recurring?: boolean;
-                            };
-                            candidates?: {
-                                id?: number;
-                                recipient_name?: string | null;
-                                amount?: number;
-                                transaction_date?: string;
-                                currency?: string | null;
-                                memo?: string | null;
+                            total: number;
+                            items: {
+                                planned?: {
+                                    id?: number;
+                                    recipient_id?: number | null;
+                                    recipient_name?: string | null;
+                                    amount?: number;
+                                    planned_date?: string;
+                                    currency?: string | null;
+                                    is_recurring?: boolean;
+                                };
+                                candidates?: {
+                                    id?: number;
+                                    recipient_name?: string | null;
+                                    amount?: number;
+                                    transaction_date?: string;
+                                    currency?: string | null;
+                                    memo?: string | null;
+                                }[];
                             }[];
-                        }[];
+                        };
                     };
                 };
             };
@@ -6080,13 +6087,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Bank list */
+            /** @description Bank list (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: string[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -6100,13 +6112,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Adapter list */
+            /** @description Adapter list (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: {
+                                key: string;
+                                name: string;
+                                adapter_class?: string;
+                            }[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -7043,13 +7064,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Quote data */
+            /** @description Quote data (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: Record<string, never>[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -7067,13 +7093,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OHLC chart data */
+            /** @description OHLC chart data (canonical `{items, total}` series with `symbol`/`currency` alongside) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            symbol?: string;
+                            currency?: string;
+                            items: {
+                                time?: number;
+                                close?: number;
+                                high?: number;
+                                low?: number;
+                                volume?: number;
+                            }[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -7089,13 +7128,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description News items */
+            /** @description News items (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: Record<string, never>[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -7746,7 +7790,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Model list */
+            /** @description Model list (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7754,7 +7798,8 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: {
-                            models: components["schemas"]["OllamaModel"][];
+                            items: components["schemas"]["OllamaModel"][];
+                            total: number;
                         };
                     };
                 };
@@ -9213,13 +9258,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Request metrics */
+            /** @description Request metrics (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items: Record<string, never>[];
+                            total: number;
+                        };
+                    };
                 };
             };
         };
@@ -9589,7 +9639,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Stored mappings ({ mappings: [...] }) */
+            /** @description Stored mappings (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9628,7 +9678,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Updated mapping set */
+            /** @description Updated mapping set (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9762,7 +9812,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description { providers: [{ provider, label, envVar, configured, source, masked }] } */
+            /** @description Canonical `{items, total}` body; each item is { provider, label, envVar, configured, source, masked } */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9790,7 +9840,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Updated masked statuses */
+            /** @description Updated masked statuses (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;

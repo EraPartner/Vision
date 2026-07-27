@@ -50,7 +50,7 @@ export default function WatchlistPage() {
   const { data: quotesData, isError: quotesError } = useMarketQuotesQuery(["watchlist-quotes", symbols], symbols);
   const quotesUnavailable = !isOnline || quotesError;
 
-  const priceMap = new Map(quotesData?.quotes?.map((q) => [q.symbol, q]) || []);
+  const priceMap = new Map(quotesData?.map((q) => [q.symbol, q]) || []);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.deleteWatchlistItem(id),

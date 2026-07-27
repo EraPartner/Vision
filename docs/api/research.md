@@ -600,7 +600,7 @@ The cross-provider symbol map is the fool-proof anchor against silent wrong-inst
 
 List stored mappings for an instrument. **Query:** `instrument_key` (required), `key_type` (`isin` | `internal`, default `isin`).
 
-**Response:** `{ mappings: [ { id, instrument_key, key_type, provider, provider_symbol, resolved_name, exchange, currency, status, verified_at } ] }` — `status` ∈ `confirmed` | `auto` | `failed`.
+**Response:** canonical collection body `{ items: [ { id, instrument_key, key_type, provider, provider_symbol, resolved_name, exchange, currency, status, verified_at } ], total }` — `status` ∈ `confirmed` | `auto` | `failed`.
 
 ### POST /api/research/mappings/resolve
 
@@ -616,7 +616,7 @@ Auto-propose a per-provider symbol by running each search-capable, keyed provide
 
 Persist user-confirmed mappings (upsert one row per provider, default `status=confirmed`).
 
-**Body:** `{ instrument_key, key_type?, mappings: [ { provider, providerSymbol, resolvedName?, exchange?, currency? } ] }` (non-empty array). **Response:** `{ mappings: [...] }` — the full stored set after upsert.
+**Body:** `{ instrument_key, key_type?, mappings: [ { provider, providerSymbol, resolvedName?, exchange?, currency? } ] }` (non-empty array). **Response:** canonical collection body `{ items: [...], total }` — the full stored set after upsert.
 
 ### DELETE /api/research/mappings/:id
 
@@ -637,11 +637,11 @@ Manage the keyed providers' API keys from the app (or via the root `.env`, ADR-0
 
 ### GET /api/research/provider-keys
 
-Returns `{ providers: [{ provider, label, envVar, configured, source, masked }] }` — `source` ∈ `settings` | `env` | `none`; `masked` shows only the last 4 characters.
+Returns the canonical collection body `{ items: [{ provider, label, envVar, configured, source, masked }], total }` — `source` ∈ `settings` | `env` | `none`; `masked` shows only the last 4 characters.
 
 ### PUT /api/research/provider-keys/:provider
 
-Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data` / `finnhub` / `fmp` / `alpha_vantage` / `fred`) and returns the updated masked statuses. `400` on unknown provider or empty key.
+Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data` / `finnhub` / `fmp` / `alpha_vantage` / `fred`) and returns the updated masked statuses in the same `{ items, total }` body as the GET. `400` on unknown provider or empty key.
 
 ### DELETE /api/research/provider-keys/:provider
 

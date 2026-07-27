@@ -636,24 +636,27 @@ The probe updates the `provider_health` row (calls `recordSuccess` or `recordErr
 
 ### GET /api/admin/metrics/requests
 
-Retrieve rolling request metrics per route from the in-memory window (last 15 minutes, 1-minute buckets).
+Retrieve rolling request metrics per route from the in-memory window (last 15 minutes, 1-minute buckets). Canonical collection body `{ items, total }` (unpaginated — `total` is the row count).
 
 **Response:** `200 OK`
 
 ```json
-[
-  {
-    "route": "GET:/api/transactions",
-    "method": "GET",
-    "path": "/api/transactions",
-    "count": 142,
-    "errors": 3,
-    "error_rate": 0.021,
-    "p50_ms": 18,
-    "p95_ms": 67,
-    "window_minutes": 15
-  }
-]
+{
+  "items": [
+    {
+      "route": "GET:/api/transactions",
+      "method": "GET",
+      "path": "/api/transactions",
+      "count": 142,
+      "errors": 3,
+      "error_rate": 0.021,
+      "p50_ms": 18,
+      "p95_ms": 67,
+      "window_minutes": 15
+    }
+  ],
+  "total": 1
+}
 ```
 
 **Notes:**

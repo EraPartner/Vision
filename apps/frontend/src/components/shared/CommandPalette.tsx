@@ -199,7 +199,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     const { data: tickerQuote, isFetching: tickerLoading } = useQuery({
         queryKey: ["palette-quote", debouncedTicker],
         queryFn: async () => {
-            const { quotes } = await apiClient.getMarketQuotes<PaletteQuote>(debouncedTicker, { detail: "basic" });
+            const quotes = await apiClient.getMarketQuotes<PaletteQuote>(debouncedTicker, { detail: "basic" });
             return quotes[0] ?? null;
         },
         enabled: open && debouncedTicker.length >= 1,

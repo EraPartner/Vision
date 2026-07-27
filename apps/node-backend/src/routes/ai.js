@@ -197,11 +197,14 @@ router.get('/status', async (req, res) => {
 });
 
 // GET /api/ai/models
+//
+// Canonical collection shape `{items, total}`; unpaginated, so `total` is the
+// row count (present so pagination can land without breaking the shape).
 router.get('/models', async (req, res) => {
   const client = getOllamaClient();
   try {
     const models = await client.listModels();
-    res.ok({ models });
+    res.ok({ items: models, total: models.length });
   } catch (err) {
     if (err instanceof OllamaError) {
       throw new AppError(`Ollama not reachable: ${err.message}`, {

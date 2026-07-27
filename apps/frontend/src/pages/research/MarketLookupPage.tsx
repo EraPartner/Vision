@@ -183,7 +183,7 @@ export default function MarketLookupPage() {
   const { data: quoteData, isFetching: isQuoteLoading } = useQuery({
     queryKey: ["market-quote", effectiveSelectedSymbol],
     queryFn: async () => {
-      const { quotes } = await apiClient.getMarketQuotes<Quote>(effectiveSelectedSymbol!, { detail: "basic" });
+      const quotes = await apiClient.getMarketQuotes<Quote>(effectiveSelectedSymbol!, { detail: "basic" });
       return quotes[0] ?? null;
     },
     enabled: useYahoo && isOnline,

@@ -242,8 +242,10 @@ export interface MappingSaveInput {
     currency?: string;
 }
 
+/** Canonical `{items, total}` collection body (GET and POST /api/research/mappings). */
 export interface MappingsResponse {
-    mappings: InstrumentProviderMapping[];
+    items: InstrumentProviderMapping[];
+    total: number;
 }
 
 export type MappingDiscrepancyType = 'currency_mismatch' | 'price_outlier';
@@ -279,8 +281,10 @@ export interface ProviderKeyStatus {
     masked?: string;
 }
 
+/** Canonical `{items, total}` collection body (GET and PUT /api/research/provider-keys). */
 export interface ProviderKeysResponse {
-    providers: ProviderKeyStatus[];
+    items: ProviderKeyStatus[];
+    total: number;
 }
 
 // ── Fundamentals scorecard (ADR-081) ─────────────────────────────────────────

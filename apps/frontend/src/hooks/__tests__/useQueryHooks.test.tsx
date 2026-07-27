@@ -35,16 +35,16 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("useBankAccounts", () => {
     it("starts in loading state", () => {
-        vi.spyOn(apiClient, "getDistinctBankAccounts").mockResolvedValue({ banks: [] });
+        vi.spyOn(apiClient, "getDistinctBankAccounts").mockResolvedValue([]);
         const { result } = renderHook(() => useBankAccounts(), { wrapper: makeQueryWrapper() });
         expect(result.current.isLoading).toBe(true);
     });
 
     it("returns bank accounts on success", async () => {
-        vi.spyOn(apiClient, "getDistinctBankAccounts").mockResolvedValue({ banks: ["BE123", "BE456"] });
+        vi.spyOn(apiClient, "getDistinctBankAccounts").mockResolvedValue(["BE123", "BE456"]);
         const { result } = renderHook(() => useBankAccounts(), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data?.banks).toEqual(["BE123", "BE456"]);
+        expect(result.current.data).toEqual(["BE123", "BE456"]);
     });
 
     it("exposes error on failure", async () => {

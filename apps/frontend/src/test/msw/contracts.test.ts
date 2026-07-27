@@ -242,7 +242,11 @@ const NewsArticleSchema = z.object({
     thumbnail: z.string().nullable(),
     relatedSymbols: z.array(z.string()),
 });
-const MarketNewsSchema = z.object({ articles: z.array(NewsArticleSchema) });
+// Canonical `{ items, total }` collection body.
+const MarketNewsSchema = z.object({
+    items: z.array(NewsArticleSchema),
+    total: z.number().int().nonnegative(),
+});
 
 // Canonical collection body: { items, total, limit, offset }.
 const ImportBatchesSchema = z.object({
@@ -494,10 +498,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.object({ items: z.array(z.unknown()) }),
         ],
         [
-            "GET /api/market/quote returns expected shape",
+            "GET /api/market/quote returns { items, total }",
             "/api/market/quote",
             "GET /api/market/quote",
-            z.object({ quotes: z.array(z.unknown()) }),
+            collectionSchema(),
         ],
         [
             "GET /api/market/search returns expected shape",
@@ -574,16 +578,16 @@ describe("Missing GET endpoint contracts (E4)", () => {
             z.object({ patterns: z.array(z.unknown()), total: z.number() }),
         ],
         [
-            "GET /api/info/banks returns { banks }",
+            "GET /api/info/banks returns { items, total }",
             "/api/info/banks",
             "GET /api/info/banks",
-            z.object({ banks: z.array(z.unknown()) }),
+            collectionSchema(),
         ],
         [
-            "GET /api/info/supported-adapters returns { adapters, total_count }",
+            "GET /api/info/supported-adapters returns { items, total }",
             "/api/info/supported-adapters",
             "GET /api/info/supported-adapters",
-            z.object({ adapters: z.array(z.unknown()), total_count: z.number() }),
+            collectionSchema(),
         ],
         [
             "GET /api/info/inflation-rates returns array",
@@ -610,10 +614,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             collectionSchema(),
         ],
         [
-            "GET /api/admin/metrics/requests returns array",
+            "GET /api/admin/metrics/requests returns { items, total }",
             "/api/admin/metrics/requests",
             "GET /api/admin/metrics/requests",
-            z.array(z.unknown()),
+            collectionSchema(),
         ],
         [
             "GET /api/admin/endpoints returns { items, total }",
@@ -777,10 +781,10 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             }),
         ],
         [
-            "GET /api/ai/models returns models array",
+            "GET /api/ai/models returns { items, total }",
             "/api/ai/models",
             "GET /api/ai/models",
-            z.object({ models: z.array(z.unknown()) }),
+            collectionSchema(),
         ],
         [
             "GET /api/attachments/transaction/:id returns items array",
@@ -867,10 +871,10 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             TransactionItemSchema,
         ],
         [
-            "GET /api/planned-transactions/due-soon returns array",
+            "GET /api/planned-transactions/due-soon returns { items, total, days }",
             "/api/planned-transactions/due-soon",
             "GET /api/planned-transactions/due-soon",
-            z.array(z.unknown()),
+            collectionSchema().extend({ days: z.number().int().positive() }),
         ],
     ])("%s", async (_name, path, label, schema) => {
         validate(schema, await getEnvelope(path), label);

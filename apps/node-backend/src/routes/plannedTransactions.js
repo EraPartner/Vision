@@ -345,7 +345,9 @@ router.get('/due-soon', async (req, res) => {
   const days = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 365) : 7;
   const rows = await plannedTransactionRepository.getDueSoon(days);
   const items = rows.map(formatPlannedTransaction);
-  res.ok(items, { days, total: items.length });
+  // Canonical collection shape `{items, total}` in the data body (never counts
+  // in meta); `days` echoes the effective window alongside.
+  res.ok({ items, total: items.length, days });
 });
 
 /**
@@ -359,7 +361,8 @@ router.get('/due-soon', async (req, res) => {
  */
 router.get('/match-suggestions', async (req, res) => {
   const suggestions = await getMatchSuggestions();
-  res.ok(suggestions, { total: suggestions.length });
+  // Canonical collection shape `{items, total}` in the data body.
+  res.ok({ items: suggestions, total: suggestions.length });
 });
 
 router.get('/:id', validateIdParam, async (req, res) => {

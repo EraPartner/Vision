@@ -74,7 +74,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
     queryFn: async () => {
       if (!item?.symbol) return null;
       try {
-        const { quotes } = await apiClient.getMarketQuotes(item.symbol, { detail: "basic" });
+        const quotes = await apiClient.getMarketQuotes(item.symbol, { detail: "basic" });
         return quotes[0] ?? null;
       } catch {
         return null;

@@ -215,10 +215,13 @@ function positiveInt(value) {
 }
 
 // GET /api/research/mappings?instrument_key=US0378331005&key_type=isin
+//
+// Canonical collection shape `{items, total}`; unpaginated, so `total` is the
+// row count (present so pagination can land without breaking the shape).
 router.get('/mappings', async (req, res) => {
   const instrumentKey = requireInstrumentKey(req.query.instrument_key);
   const rows = await researchMappingService.list(instrumentKey, keyType(req.query.key_type));
-  res.ok({ mappings: rows });
+  res.ok({ items: rows, total: rows.length });
 });
 
 // POST /api/research/mappings/resolve  { instrument_key, key_type, asset_class, query, investment_id }
@@ -236,6 +239,8 @@ router.post('/mappings/resolve', async (req, res) => {
 });
 
 // POST /api/research/mappings  { instrument_key, key_type, mappings: [...] }
+// Answers the updated mapping set in the same canonical `{items, total}`
+// collection shape as GET /mappings (one response type for both).
 router.post('/mappings', async (req, res) => {
   const { instrument_key, key_type, mappings } = req.body ?? {};
   const rows = await researchMappingService.save({
@@ -243,7 +248,7 @@ router.post('/mappings', async (req, res) => {
     keyType: keyType(key_type),
     mappings: parseResearchParam(mappingsArraySchema, mappings),
   });
-  res.ok({ mappings: rows });
+  res.ok({ items: rows, total: rows.length });
 });
 
 // DELETE /api/research/mappings/:id
@@ -270,17 +275,21 @@ router.post('/mappings/audit', async (req, res) => {
 // Keys are masked in responses and never returned in full.
 
 // GET /api/research/provider-keys
+//
+// Canonical collection shape `{items, total}` (fixed provider roster, so
+// `total` is simply the row count).
 router.get('/provider-keys', async (_req, res) => {
-  const providers = await researchProviderKeyService.listKeyStatuses();
-  res.ok({ providers });
+  const items = await researchProviderKeyService.listKeyStatuses();
+  res.ok({ items, total: items.length });
 });
 
 // PUT /api/research/provider-keys/:provider  { api_key }
+// Answers the refreshed statuses in the same `{items, total}` shape as the GET.
 router.put('/provider-keys/:provider', async (req, res) => {
   const { api_key } = req.body ?? {};
   await researchProviderKeyService.setKey(req.params.provider, api_key);
-  const providers = await researchProviderKeyService.listKeyStatuses();
-  res.ok({ providers });
+  const items = await researchProviderKeyService.listKeyStatuses();
+  res.ok({ items, total: items.length });
 });
 
 // DELETE /api/research/provider-keys/:provider

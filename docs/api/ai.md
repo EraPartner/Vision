@@ -49,14 +49,15 @@ When Ollama is unreachable the route still returns 200 with `{"ok": false, ...}`
 
 ## GET /api/ai/models
 
-Pass-through of `GET /api/tags` from Ollama.
+Pass-through of `GET /api/tags` from Ollama, served in the canonical collection body `{ items, total }` (unpaginated — `total` is the row count).
 
 **Response 200:**
 ```json
 {
-  "models": [
+  "items": [
     { "name": "llama3.2:3b", "size": 2100000000, "modified": "2026-04-10T08:12:00Z" }
-  ]
+  ],
+  "total": 1
 }
 ```
 

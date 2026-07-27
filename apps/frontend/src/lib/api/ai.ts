@@ -53,9 +53,10 @@ export function getOllamaStatus(): Promise<OllamaStatus> {
     return apiRequest('/api/ai/status');
 }
 
+/** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getOllamaModels(): Promise<OllamaModel[]> {
     const response = await apiRequest<OllamaModelsResponse>('/api/ai/models');
-    return response.models ?? [];
+    return response.items ?? [];
 }
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */

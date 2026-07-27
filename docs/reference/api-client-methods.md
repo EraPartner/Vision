@@ -112,7 +112,7 @@ The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines
 | `createWatchlistItem(data)` | POST /api/watchlist | `WatchlistItem` |
 | `updateWatchlistItem(id, data)` | PATCH /api/watchlist/:id | `WatchlistItem` |
 | `deleteWatchlistItem(id)` | DELETE /api/watchlist/:id | `void` |
-| `getMarketQuotes(symbols)` | GET /api/market/quotes | `{ quotes: Array<{symbol, price, change, changePercent}> }` |
+| `getMarketQuotes(symbols)` | GET /api/market/quote | `Array<{symbol, price, change, changePercent}>` (unwrapped from the `{ items, total }` body) |
 
 **Phase 3.6 Enhancement**: WatchlistPage refactored to use typed `apiClient` watchlist methods instead of scattered raw `fetch()` calls. Enables shared retry logic, timeout handling, and React Query integration. `getMarketQuotes()` fetches live quotes for multiple symbols via comma-separated list.
 
@@ -143,7 +143,7 @@ The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines
 | Method | Backend Route | Return Type | Notes |
 |--------|----------|-------------|-------|
 | `getStatistics(params?)` | GET /api/info | Statistics summary | Direct |
-| `getSupportedParsers()` | GET /api/info/supported-adapters | `{ adapters, total_count }` | Direct |
+| `getSupportedParsers()` | GET /api/info/supported-adapters | `SupportedAdapter[]` (unwrapped from the `{ items, total }` body) | Direct |
 | `getTransactionSummary(params?)` | GET /api/info/transaction-summary | Summary stats | Direct |
 | `getTransactionCount()` | GET /api/info/transaction-count | `{ total_transactions }` | Direct |
 | `getMonthlyFinancialSummary(params?)` | GET /api/aggregations/monthly-summary | Monthly data | Phase G: Envelope unwrapped |
@@ -185,7 +185,7 @@ The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines
 
 | Method | Endpoint | Return Type |
 |--------|----------|-------------|
-| `getMarketNews(symbols?, count?)` | GET /api/market/news | `{ articles }` |
+| `getMarketNews(symbols?, count?)` | GET /api/market/news | `MarketNewsArticle[]` (unwrapped from the `{ items, total }` body) |
 
 ### Electron (Desktop Only)
 

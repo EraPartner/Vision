@@ -55,7 +55,7 @@ export default function ResearchHomePage() {
   // Live benchmark strip. 60s polling mirrors the watchlist quote cadence.
   const { data: benchmarkData } = useMarketQuotesQuery(["research-benchmarks", BENCHMARK_SYMBOLS], BENCHMARK_SYMBOLS, { staleTime: 60_000 });
   const benchmarkMap = useMemo(
-    () => new Map((benchmarkData?.quotes ?? []).map((q) => [q.symbol, q])),
+    () => new Map((benchmarkData ?? []).map((q) => [q.symbol, q])),
     [benchmarkData],
   );
 
@@ -74,7 +74,7 @@ export default function ResearchHomePage() {
   );
   const { data: watchlistQuotes } = useMarketQuotesQuery(["watchlist-quotes", watchlistSymbols], watchlistSymbols, { staleTime: 60_000 });
   const watchlistPriceMap = useMemo(
-    () => new Map((watchlistQuotes?.quotes ?? []).map((q) => [q.symbol, q])),
+    () => new Map((watchlistQuotes ?? []).map((q) => [q.symbol, q])),
     [watchlistQuotes],
   );
 

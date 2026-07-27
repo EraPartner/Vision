@@ -6,15 +6,24 @@ import type { NetWorthResponse } from '@/lib/api/types';
 // (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
 // cutover; it had no callers. Use the aggregations endpoints instead.)
 
-export function getSupportedParsers(): Promise<{
-    adapters: Array<{ key: string; name: string; adapter_class?: string }>;
-    total_count: number;
-}> {
-    return apiRequest('/api/info/supported-adapters');
+export interface SupportedAdapter {
+    key: string;
+    name: string;
+    adapter_class?: string;
 }
 
-export function getDistinctBankAccounts(): Promise<{ banks: string[] }> {
-    return apiRequest('/api/info/banks');
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getSupportedParsers(): Promise<SupportedAdapter[]> {
+    const { items } = await apiRequest<{ items: SupportedAdapter[]; total: number }>(
+        '/api/info/supported-adapters',
+    );
+    return items;
+}
+
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getDistinctBankAccounts(): Promise<string[]> {
+    const { items } = await apiRequest<{ items: string[]; total: number }>('/api/info/banks');
+    return items;
 }
 
 // (Removed getTransactionSummary — legacy GET /api/info/transaction-summary was

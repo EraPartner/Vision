@@ -20,7 +20,7 @@ export function useMarketQuotesQuery<Q = MarketQuote>(
         queryFn: () =>
             symbols
                 ? apiClient.getMarketQuotes<Q>(symbols, { detail: 'basic' })
-                : Promise.resolve({ quotes: [] as Q[] }),
+                : Promise.resolve([] as Q[]),
         enabled: !!symbols && isOnline,
         staleTime: options?.staleTime,
         refetchInterval: isOnline ? 60_000 : false,

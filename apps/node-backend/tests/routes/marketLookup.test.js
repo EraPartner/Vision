@@ -98,8 +98,8 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/quote'](req, res);
 
       const body = res.json.mock.calls[0][0];
-      expect(body.data.quotes).toHaveLength(1);
-      expect(body.data.quotes[0]).toMatchObject({
+      expect(body.data.items).toHaveLength(1);
+      expect(body.data.items[0]).toMatchObject({
         symbol: 'AAPL',
         name: 'Apple Inc.',
         marketCap: 300,
@@ -110,14 +110,14 @@ describe('Market Lookup Routes', () => {
         beta: 1.1,
         priceToBook: 4.4,
       });
-      expect(body.data.quotes[0].analystConsensus).toEqual({
+      expect(body.data.items[0].analystConsensus).toEqual({
         strongBuy: 4,
         buy: 10,
         hold: 3,
         sell: 1,
         strongSell: 0,
       });
-      expect(body.data.quotes[0].recentAnalystActions).toHaveLength(1);
+      expect(body.data.items[0].recentAnalystActions).toHaveLength(1);
     });
 
     it('detail=basic returns price-only fields and skips the quoteSummary call', async () => {
@@ -137,7 +137,7 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/quote'](req, res);
 
       expect(mockYahooQuoteSummary).not.toHaveBeenCalled();
-      const quote = res.json.mock.calls[0][0].data.quotes[0];
+      const quote = res.json.mock.calls[0][0].data.items[0];
       expect(quote).toMatchObject({
         symbol: 'AAPL',
         name: 'Apple Inc.',
@@ -160,7 +160,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/quote'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { quotes: [] } });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [], total: 0 } });
     });
   });
 
@@ -279,7 +279,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/chart'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { points: [] } });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [], total: 0 } });
     });
 
     it('maps chart points and filters null closes', async () => {
@@ -299,8 +299,8 @@ describe('Market Lookup Routes', () => {
       const payload = res.json.mock.calls[0][0].data;
       expect(payload.symbol).toBe('AAPL');
       expect(payload.currency).toBe('USD');
-      expect(payload.points).toHaveLength(1);
-      expect(payload.points[0]).toMatchObject({ close: 200, high: 201, low: 199, volume: 10 });
+      expect(payload.items).toHaveLength(1);
+      expect(payload.items[0]).toMatchObject({ close: 200, high: 201, low: 199, volume: 10 });
     });
 
     it('throws AppError (502) when chart request crashes', async () => {
@@ -330,7 +330,7 @@ describe('Market Lookup Routes', () => {
         { validateResult: false },
       );
       const payload = res.json.mock.calls[0][0].data;
-      expect(payload.points).toHaveLength(1);
+      expect(payload.items).toHaveLength(1);
     });
   });
 
@@ -373,11 +373,11 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/news'](req, res);
 
       const body = res.json.mock.calls[0][0].data;
-      expect(body.articles).toHaveLength(2);
-      expect(body.articles[0].title).toBe('Unique headline');
-      expect(body.articles[0].thumbnail).toBe('https://img.example.com/c.jpg');
-      expect(body.articles[1].title).toBe('Shared headline');
-      expect(body.articles[1].thumbnail).toBe('https://img.example.com/a.jpg');
+      expect(body.items).toHaveLength(2);
+      expect(body.items[0].title).toBe('Unique headline');
+      expect(body.items[0].thumbnail).toBe('https://img.example.com/c.jpg');
+      expect(body.items[1].title).toBe('Shared headline');
+      expect(body.items[1].thumbnail).toBe('https://img.example.com/a.jpg');
     });
 
     it('should tolerate yahoo search failures and return empty results', async () => {
@@ -389,7 +389,7 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/news'](req, res);
 
       expect(res.status).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { articles: [] } });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [], total: 0 } });
     });
 
     it('uses default symbols and caps count at 50', async () => {
@@ -450,7 +450,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/quote'](req, res);
 
-      const quote = res.json.mock.calls[0][0].data.quotes[0];
+      const quote = res.json.mock.calls[0][0].data.items[0];
       expect(quote.name).toBe('MSFT');
       expect(quote.currency).toBe('USD');
       expect(quote.analystConsensus).toEqual({ strongBuy: 1, buy: 2, hold: 3, sell: 4, strongSell: 5 });
@@ -471,7 +471,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/quote'](req, res);
 
-      const quote = res.json.mock.calls[0][0].data.quotes[0];
+      const quote = res.json.mock.calls[0][0].data.items[0];
       expect(quote.symbol).toBe('NVDA');
       expect(quote.price).toBe(900);
       expect(quote.analystConsensus).toBeNull();
@@ -514,7 +514,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/news'](req, res);
 
-      const article = res.json.mock.calls[0][0].data.articles[0];
+      const article = res.json.mock.calls[0][0].data.items[0];
       expect(article.thumbnail).toBeNull();
     });
   });

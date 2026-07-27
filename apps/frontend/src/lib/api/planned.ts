@@ -82,7 +82,11 @@ export interface PlannedMatchSuggestion {
 /**
  * Planned payments with recent unlinked transactions within match tolerance
  * that were not auto-cleared (ambiguous matches, or auto-clear disabled).
+ * Canonical `{items, total}` collection body — callers only need the rows.
  */
-export function getPlannedMatchSuggestions(): Promise<PlannedMatchSuggestion[]> {
-    return apiRequest<PlannedMatchSuggestion[]>('/api/planned-transactions/match-suggestions');
+export async function getPlannedMatchSuggestions(): Promise<PlannedMatchSuggestion[]> {
+    const { items } = await apiRequest<{ items: PlannedMatchSuggestion[]; total: number }>(
+        '/api/planned-transactions/match-suggestions',
+    );
+    return items;
 }
