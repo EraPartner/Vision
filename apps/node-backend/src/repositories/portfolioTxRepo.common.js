@@ -13,6 +13,31 @@ import { buildUpdateSql } from '../lib/sqlClauses.js';
 import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
 import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision/types/assetClasses';
 
+/** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
+
+/**
+ * The caller-facing portfolio-transaction payload, before/after
+ * {@link normalizeTransactionPayload} fills in the derived unit math.
+ *
+ * @typedef {object} PortfolioTransactionInput
+ * @property {number} investment_id
+ * @property {string} type
+ * @property {string} date 'YYYY-MM-DD'
+ * @property {number|string} [amount]
+ * @property {number|string|null} [units]
+ * @property {number|string|null} [price_per_unit]
+ * @property {number|string|null} [fees]
+ * @property {number|string|null} [taxes]
+ * @property {string} [currency]
+ * @property {string|null} [note]
+ * @property {boolean} [is_recurring]
+ * @property {string|null} [recurrence_interval]
+ * @property {string|null} [recurrence_end_date]
+ * @property {number|string|null} [fx_rate_to_eur]
+ * @property {number|null} [account_id]
+ * @property {string} [preloaded_asset_class]
+ */
+
 // Mirrors the recurrence_interval DB enum (migration 0001) and the frontend
 // RecurrenceInterval union. An out-of-set value has no DB CHECK on the flat
 // table path and otherwise surfaces as a raw enum-cast 500.
@@ -20,8 +45,10 @@ export const VALID_RECURRENCE_INTERVALS = new Set([
   'daily', 'weekly', 'bi-weekly', 'monthly', 'quarterly', 'yearly',
 ]);
 
+/** @type {boolean|undefined} */
 let _hasPortfolioTransactionInheritanceSchema;
 
+/** @returns {Promise<boolean>} true on legacy table-inheritance installs. */
 export async function hasPortfolioTransactionInheritanceSchema() {
   if (_hasPortfolioTransactionInheritanceSchema !== undefined) {
     return _hasPortfolioTransactionInheritanceSchema;
@@ -62,6 +89,10 @@ export function __resetPortfolioTransactionSchemaCache() {
   _hasPortfolioTransactionInheritanceSchema = undefined;
 }
 
+/**
+ * @param {any} err
+ * @returns {boolean}
+ */
 export function isNonUpdatablePortfolioTransactionsViewError(err) {
   const msg = err?.message || '';
   return msg.includes('cannot update view "portfolio_transactions"')
@@ -69,6 +100,10 @@ export function isNonUpdatablePortfolioTransactionsViewError(err) {
     || msg.includes('cannot delete from view "portfolio_transactions"');
 }
 
+/**
+ * @param {any} err
+ * @returns {boolean}
+ */
 export function isMissingInheritanceRelationError(err) {
   if (err?.code === '42P01') return true;
   const msg = err?.message || '';
@@ -82,6 +117,11 @@ export function isMissingInheritanceRelationError(err) {
     || msg.includes('relation "bond_transactions" does not exist');
 }
 
+/**
+ * @param {any} err
+ * @param {string} childTable
+ * @returns {boolean}
+ */
 function isDuplicatePortfolioTransactionIdError(err, childTable) {
   if (err?.code !== '23505') return false;
   const msg = err?.message || '';
@@ -97,6 +137,7 @@ async function resyncPortfolioTransactionsBaseIdSequence() {
   );
 }
 
+/** @type {Record<string, string>} */
 export const TRANSACTION_TABLE_BY_ASSET_CLASS = {
   stock: 'stock_transactions',
   etf: 'etf_transactions',
@@ -112,6 +153,10 @@ export const TRANSACTION_TABLE_BY_ASSET_CLASS = {
 // raw payload values with .has().
 export const UNIT_BASED_ASSET_CLASSES = new Set(/** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASS_LIST));
 
+/**
+ * @param {{ investmentId?: number|null, type?: string|null }} [filters]
+ * @returns {{ where: string, params: any[], nextParam: number }}
+ */
 export function buildListWhereClause({ investmentId = null, type = null } = {}) {
   let where = 'WHERE 1=1';
   const params = [];
@@ -129,12 +174,21 @@ export function buildListWhereClause({ investmentId = null, type = null } = {}) 
   return { where, params, nextParam: idx };
 }
 
+/**
+ * @param {string} message
+ * @returns {Error & { code?: string }}
+ */
 export function makeValidationError(message) {
   const err = /** @type {Error & { code?: string }} */ (new Error(message));
   err.code = 'VALIDATION_ERROR';
   return err;
 }
 
+/**
+ * @param {any} value
+ * @param {string} fieldName
+ * @returns {number|undefined}
+ */
 function parseOptionalNumber(value, fieldName) {
   if (value === undefined || value === null || value === '') return undefined;
   const parsed = Number(value);
@@ -144,6 +198,10 @@ function parseOptionalNumber(value, fieldName) {
   return parsed;
 }
 
+/**
+ * @param {{ amount?: number, units?: number, pricePerUnit?: number }} input
+ * @returns {{ amount: number, units: number, price_per_unit: number }}
+ */
 function normalizeBuySellMath({ amount, units, pricePerUnit }) {
   const hasAmount = amount !== undefined;
   const hasUnits = units !== undefined;
@@ -362,6 +420,7 @@ export const BASE_ALLOWED_FIELDS = [
   'account_id', // owning account for the lot (ADR-091)
 ];
 
+/** @type {Record<string, string[]>} */
 export const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
   stock: ['units', 'price_per_unit'],
   etf: ['units', 'price_per_unit'],
@@ -372,6 +431,12 @@ export const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
   bond: [],
 };
 
+/**
+ * @param {PortfolioTransactionInput & Record<string, any>} fields
+ * @param {(id: number) => Promise<PortfolioTransactionRow|null>} getByIdFn
+ * @param {string} preloadedAssetClass
+ * @returns {Promise<PortfolioTransactionRow|null>}
+ */
 export async function createThroughInheritanceTables(fields, getByIdFn, preloadedAssetClass) {
   const {
     investment_id,
@@ -427,7 +492,9 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     account_id ?? null,
   ];
 
+  /** @type {string[]} */
   const childColumns = [];
+  /** @type {any[]} */
   const childValues = [];
   if (assetClass === 'stock' || assetClass === 'etf' || assetClass === 'crypto' || assetClass === 'metals') {
     childColumns.push('units', 'price_per_unit');
@@ -464,6 +531,10 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
   }
 }
 
+/**
+ * @param {number} id
+ * @returns {Promise<boolean>}
+ */
 export async function hardDeleteThroughInheritanceTables(id) {
   try {
     const result = await query('DELETE FROM portfolio_transactions_base WHERE id = $1', [id]);
@@ -475,6 +546,12 @@ export async function hardDeleteThroughInheritanceTables(id) {
   }
 }
 
+/**
+ * @param {number} id
+ * @param {Record<string, any>} fields
+ * @param {(id: number) => Promise<PortfolioTransactionRow|null>} getByIdFn
+ * @returns {Promise<PortfolioTransactionRow|null>}
+ */
 export async function updateThroughInheritanceTables(id, fields, getByIdFn) {
   try {
     const existing = await getByIdFn(id);

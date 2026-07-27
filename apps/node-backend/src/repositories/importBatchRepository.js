@@ -8,9 +8,11 @@
 
 import { query, withTransaction } from '../database/connection.js';
 
+/** @typedef {import('../types/rows.js').ImportBatchRow} ImportBatchRow */
+
 /**
- * @param {{ limit?: number, offset?: number }} opts
- * @returns {Promise<{ batches: object[], total: number }>}
+ * @param {{ limit?: number, offset?: number }} [opts]
+ * @returns {Promise<{ batches: Omit<ImportBatchRow, 'custom_config'>[], total: number }>}
  */
 export async function listBatches({ limit = 50, offset = 0 } = {}) {
     const [dataResult, countResult] = await Promise.all([
@@ -46,8 +48,8 @@ export async function listBatches({ limit = 50, offset = 0 } = {}) {
 }
 
 /**
- * @param {number} id
- * @returns {Promise<object|null>}
+ * @param {number|string} id
+ * @returns {Promise<ImportBatchRow|null>}
  */
 export async function getBatch(id) {
     const { rows } = await query(
@@ -80,8 +82,8 @@ export async function getBatch(id) {
  * override category, and matched pattern. Returns one row per staging row;
  * caller groups by effective recipient.
  *
- * @param {number} batchId
- * @returns {Promise<object[]>}
+ * @param {number|string} batchId
+ * @returns {Promise<Record<string, any>[]>} one row per matched staging row
  */
 export async function getPreviewRows(batchId) {
     const { rows } = await query(
@@ -245,7 +247,7 @@ export async function rollbackBatch(id) {
                 AND NOT EXISTS (SELECT 1 FROM recipients r2 WHERE r2.primary_recipient_id = r.id)`,
             [id]
         );
-        const orphanIds = orphanRows.map((r) => r.id);
+        const orphanIds = orphanRows.map((/** @type {any} */ r) => r.id);
         let recipientsRemoved = 0;
         if (orphanIds.length > 0) {
             // recipient_bank_accounts FK is NO ACTION, so clear those first; the rest cascade.

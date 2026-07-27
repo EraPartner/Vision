@@ -14,7 +14,9 @@
     "db:new-migration": "cd ../.. && alembic revision -m",
     "db:reset": "cd ../.. && alembic downgrade base && alembic upgrade head",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "lint:fix": "eslint src/ --fix",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "typecheck:ratchet": "node scripts/checkjs-ratchet.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

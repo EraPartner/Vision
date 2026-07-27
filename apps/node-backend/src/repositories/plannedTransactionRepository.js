@@ -8,6 +8,30 @@ import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
+/** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
+/** @typedef {import('../types/rows.js').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow */
+/** @typedef {import('../types/rows.js').PlannedTransactionListRow} PlannedTransactionListRow */
+/** @typedef {import('../types/rows.js').PlannedMatchCandidateRow} PlannedMatchCandidateRow */
+/** @typedef {import('../types/rows.js').PlannedForecastRow} PlannedForecastRow */
+/** @typedef {import('../types/rows.js').LoanScheduleRow} LoanScheduleRow */
+
+/**
+ * Filters shared by getAll and the count fallback.
+ *
+ * @typedef {object} PlannedTransactionFilters
+ * @property {number} [limit]
+ * @property {number} [offset]
+ * @property {string|null} [startDate] 'YYYY-MM-DD'
+ * @property {string|null} [endDate] 'YYYY-MM-DD'
+ * @property {string|null} [bankAccount]
+ * @property {number|null} [categoryId]
+ * @property {number|null} [recipientId]
+ * @property {boolean|null} [isRecurring]
+ * @property {boolean|null} [isExecuted]
+ * @property {string|null} [search]
+ * @property {boolean} [active]
+ */
+
 // Shared projection + joins for planned_transaction reads. getAll, getById,
 // getDueSoon, getForForecast and the update() RETURNING wrapper all read the
 // same recipient_name + resolved category_name shape over the same joins;
@@ -29,8 +53,9 @@ const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
  * planned-transaction row. Identical between getById() and update(); mutates and
  * returns the row.
  *
- * @param {object} row - a planned_transactions row (must carry id, is_loan)
- * @returns {Promise<object>} the same row, hydrated
+ * @param {any} row - a planned_transactions row (must carry id, is_loan)
+ * @param {number} id
+ * @returns {Promise<HydratedPlannedTransactionRow>} the same row, hydrated
  */
 async function hydratePlannedRow(row, id) {
   const execResult = await query(
@@ -67,6 +92,10 @@ async function hydratePlannedRow(row, id) {
   return row;
 }
 
+/**
+ * @param {PlannedTransactionFilters} [filters]
+ * @returns {{ whereClause: string, params: any[] }}
+ */
 function buildPlannedTransactionWhereClause({
   startDate = null,
   endDate = null,
@@ -108,6 +137,12 @@ function buildPlannedTransactionWhereClause({
   return { whereClause, params };
 }
 
+/**
+ * @param {QueryRunner} client
+ * @param {number} plannedTransactionId
+ * @param {LoanScheduleRow[]|Array<Record<string, any>>} [scheduleEntries]
+ * @returns {Promise<void>}
+ */
 async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries = []) {
   if (!Array.isArray(scheduleEntries) || scheduleEntries.length === 0) return;
 
@@ -137,6 +172,12 @@ async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEnt
   );
 }
 
+/**
+ * @param {QueryRunner} client
+ * @param {number} plannedTransactionId
+ * @param {string[]|null|undefined} slugs
+ * @returns {Promise<void>}
+ */
 async function setPlannedTransactionTags(client, plannedTransactionId, slugs) {
   await client.query('DELETE FROM planned_transaction_tags WHERE planned_transaction_id = $1', [plannedTransactionId]);
   if (!slugs || slugs.length === 0) return;
@@ -145,7 +186,7 @@ async function setPlannedTransactionTags(client, plannedTransactionId, slugs) {
     [slugs],
   );
   if (resolved.rows.length === 0) return;
-  const tagIds = resolved.rows.map((r) => r.id);
+  const tagIds = resolved.rows.map((/** @type {any} */ r) => r.id);
   await client.query(
     `INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id)
      SELECT $1, unnest($2::int[])
@@ -160,9 +201,9 @@ async function setPlannedTransactionTags(client, plannedTransactionId, slugs) {
  * exists. Shared by update() and updateWithLoanSchedule() so the two
  * transaction bodies cannot drift.
  *
- * @param {import('pg').PoolClient} client
+ * @param {QueryRunner} client
  * @param {number} id
- * @param {object} sanitized  output of sanitizeUpdateFields()
+ * @param {Record<string, any>} sanitized  output of sanitizeUpdateFields()
  * @returns {Promise<boolean>} false when the row is gone
  */
 async function applyPlannedFieldUpdate(client, id, sanitized) {
@@ -181,6 +222,10 @@ async function applyPlannedFieldUpdate(client, id, sanitized) {
 }
 
 export const plannedTransactionRepository = {
+  /**
+   * @param {PlannedTransactionFilters} [filters]
+   * @returns {Promise<{ items: HydratedPlannedTransactionRow[], total: number }>}
+   */
   async getAll({
     limit = 50, offset = 0, startDate = null, endDate = null,
     bankAccount = null, categoryId = null, recipientId = null,
@@ -223,9 +268,9 @@ export const plannedTransactionRepository = {
       const countResult = await query(countSql, params);
       total = parseInt(countResult.rows[0]?.count, 10) || 0;
     }
-    const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
+    const rows = result.rows.map((/** @type {any} */ { total_count: _total_count, ...row }) => row);
 
-    const plannedTransactionIds = rows.map((row) => row.id);
+    const plannedTransactionIds = rows.map((/** @type {any} */ row) => row.id);
     const executionsByPlannedTransactionId = new Map();
     if (plannedTransactionIds.length > 0) {
       const executionResult = await query(
@@ -245,8 +290,8 @@ export const plannedTransactionRepository = {
     }
 
     const loanPlannedTransactionIds = rows
-      .filter((row) => row.is_loan)
-      .map((row) => row.id);
+      .filter((/** @type {any} */ row) => row.is_loan)
+      .map((/** @type {any} */ row) => row.id);
 
     const schedulesByPlannedTransactionId = new Map();
     if (loanPlannedTransactionIds.length > 0) {
@@ -306,6 +351,7 @@ export const plannedTransactionRepository = {
   // carry amortization semantics that a fuzzy recipient+amount match must not
   // silently advance. Recurring rows are always eligible (they never stay
   // is_executed=true), one-off rows only while is_executed=false.
+  /** @returns {Promise<PlannedMatchCandidateRow[]>} */
   async listActiveUnexecuted() {
     const result = await query(
       `SELECT pt.id,
@@ -328,6 +374,10 @@ export const plannedTransactionRepository = {
     return result.rows;
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<HydratedPlannedTransactionRow|null>}
+   */
   async getById(id) {
     const sql = `
       SELECT ${PLANNED_SELECT_FIELDS}
@@ -341,6 +391,16 @@ export const plannedTransactionRepository = {
     return hydratePlannedRow(result.rows[0], id);
   },
 
+  /**
+   * @param {Record<string, any> & {
+   *   planned_date: string,
+   *   amount: number|string,
+   *   is_loan?: boolean,
+   *   loan_schedule?: Array<Record<string, any>>,
+   *   tags?: string[]|null,
+   * }} input
+   * @returns {Promise<HydratedPlannedTransactionRow|null>}
+   */
   async create({
     planned_date,
     bank_account,
@@ -436,6 +496,11 @@ export const plannedTransactionRepository = {
     return this.getById(plannedId);
   },
 
+  /**
+   * @param {number} id
+   * @param {Record<string, any> & { tags?: string[] }} fields
+   * @returns {Promise<HydratedPlannedTransactionRow|null>}
+   */
   async update(id, fields) {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
@@ -483,9 +548,9 @@ export const plannedTransactionRepository = {
    * failure. `scheduleEntries` of [] clears the schedule.
    *
    * @param {number} id
-   * @param {object} fields  sanitized update fields (may include `tags`)
-   * @param {Array}  scheduleEntries  installments to write ([] clears)
-   * @returns {Promise<object|null>} the hydrated row, or null if the row is gone
+   * @param {Record<string, any> & { tags?: string[] }} fields  sanitized update fields (may include `tags`)
+   * @param {Array<Record<string, any>>} [scheduleEntries]  installments to write ([] clears)
+   * @returns {Promise<HydratedPlannedTransactionRow|null>} the hydrated row, or null if the row is gone
    */
   async updateWithLoanSchedule(id, fields, scheduleEntries = []) {
     const { tags, ...txFields } = fields;
@@ -518,7 +583,7 @@ export const plannedTransactionRepository = {
    * the next `days` days. Used by the bill-reminder endpoint.
    *
    * @param {number} days - Lookahead window (1–365)
-   * @returns {Promise<Array>}
+   * @returns {Promise<PlannedTransactionListRow[]>}
    */
   async getDueSoon(days) {
     const sql = `
@@ -542,7 +607,7 @@ export const plannedTransactionRepository = {
    * the user hasn't executed them yet).
    *
    * @param {number} months - Forecast horizon in months (1–24)
-   * @returns {Promise<Array>}
+   * @returns {Promise<PlannedForecastRow[]>}
    */
   async getForForecast(months) {
     const sql = `
@@ -565,11 +630,21 @@ export const plannedTransactionRepository = {
     return result.rows;
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<boolean>}
+   */
   async hardDelete(id) {
     const result = await query('DELETE FROM planned_transactions WHERE id = $1', [id]);
     return result.rowCount > 0;
   },
 
+  /**
+   * @param {number} plannedTransactionId
+   * @param {number} executedTransactionId
+   * @param {string|null} [executionDate] 'YYYY-MM-DD'; defaults to app-timezone today
+   * @returns {Promise<void>}
+   */
   async addExecution(plannedTransactionId, executedTransactionId, executionDate) {
     await query(
       `INSERT INTO planned_transaction_executions (planned_transaction_id, executed_transaction_id, execution_date)
@@ -595,7 +670,8 @@ export const plannedTransactionRepository = {
    * @param {number} plannedTransactionId
    * @param {number} executedTransactionId
    * @param {string} executionDate - YYYY-MM-DD
-   * @param {object} updateFields - sanitized fields for planned_transactions update
+   * @param {Record<string, any>} [updateFields] - sanitized fields for planned_transactions update
+   * @param {number[]|null} [tagIdsToInherit] - tag ids copied onto the executed transaction
    * @returns {Promise<{ duplicate: boolean }>}
    */
   async executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}, tagIdsToInherit = null) {
@@ -640,6 +716,11 @@ export const plannedTransactionRepository = {
     });
   },
 
+  /**
+   * @param {number} plannedTransactionId
+   * @param {Array<Record<string, any>>} [scheduleEntries]
+   * @returns {Promise<void>}
+   */
   async replaceLoanSchedule(plannedTransactionId, scheduleEntries = []) {
     return withTransaction(async (client) => {
       await client.query(
@@ -654,6 +735,11 @@ export const plannedTransactionRepository = {
    * Repoint planned transactions off merged-away source accounts onto the
    * survivor, stamping `bank_account` so the dual-write trigger (migration
    * 0051) keeps account_id at the target (ADR-088).
+   *
+   * @param {number} targetId
+   * @param {string} targetName
+   * @param {number[]} sourceIds
+   * @returns {Promise<number>} rows repointed
    */
   async repointAccount(targetId, targetName, sourceIds) {
     const result = await query(
@@ -666,6 +752,8 @@ export const plannedTransactionRepository = {
   /**
    * Does planned_transactions carry recipient_id? Very old schemas predate the
    * column, and the recipient merge must skip the repoint rather than fail.
+   *
+   * @returns {Promise<boolean>}
    */
   async hasRecipientIdColumn() {
     const result = await query(
@@ -676,7 +764,13 @@ export const plannedTransactionRepository = {
     return result.rows.length > 0;
   },
 
-  /** Repoint planned transactions off merged alias recipients onto the primary. */
+  /**
+   * Repoint planned transactions off merged alias recipients onto the primary.
+   *
+   * @param {number} primaryId
+   * @param {number[]} aliasIds
+   * @returns {Promise<number>} rows repointed
+   */
   async repointRecipient(primaryId, aliasIds) {
     const result = await query(
       `UPDATE planned_transactions

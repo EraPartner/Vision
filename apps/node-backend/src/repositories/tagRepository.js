@@ -8,10 +8,13 @@
 import { query } from '../database/connection.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
+/** @typedef {import('../types/rows.js').TagRow} TagRow */
+
 export const tagRepository = {
   /**
    * List tags, optionally filtered by active status, with pagination.
-   * @param {{ active?: boolean|null, limit?: number, offset?: number }} opts
+   * @param {{ active?: boolean|null, limit?: number, offset?: number }} [opts]
+   * @returns {Promise<TagRow[]>}
    */
   async getAll({ active = null, limit = 50, offset = 0 } = {}) {
     let sql = 'SELECT * FROM tags WHERE 1=1';
@@ -29,10 +32,12 @@ export const tagRepository = {
 
   /**
    * Count tags matching the active filter (for paginated list totals).
-   * @param {{ active?: boolean|null }} opts
+   * @param {{ active?: boolean|null }} [opts]
+   * @returns {Promise<number>} `COUNT(*)` is a bigint string; parsed here.
    */
   async getCount({ active = null } = {}) {
     let sql = 'SELECT COUNT(*) FROM tags WHERE 1=1';
+    /** @type {any[]} */
     const params = [];
 
     if (active === true) {
@@ -45,11 +50,19 @@ export const tagRepository = {
     return parseInt(result.rows[0].count, 10);
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<TagRow|null>}
+   */
   async getById(id) {
     const result = await query('SELECT * FROM tags WHERE id = $1', [id]);
     return result.rows[0] ?? null;
   },
 
+  /**
+   * @param {string} slug
+   * @returns {Promise<TagRow|null>}
+   */
   async getBySlug(slug) {
     const result = await query('SELECT * FROM tags WHERE slug = $1', [slug]);
     return result.rows[0] ?? null;
@@ -58,6 +71,7 @@ export const tagRepository = {
   /**
    * Look up tags by slug array. Returns only rows that exist.
    * @param {string[]} slugs
+   * @returns {Promise<TagRow[]>}
    */
   async getManyBySlugs(slugs) {
     if (slugs.length === 0) return [];
@@ -74,8 +88,8 @@ export const tagRepository = {
    * Color is preserved if already set; new color is applied only if column was NULL.
    *
    * @param {string} slug  Already normalized by caller
-   * @param {string|null} color
-   * @returns {Promise<{ tag: object, reactivated: boolean }>}
+   * @param {string|null} [color]
+   * @returns {Promise<{ tag: TagRow, reactivated: boolean }>}
    */
   async findOrCreateBySlug(slug, color = null) {
     const result = await query(
@@ -97,6 +111,10 @@ export const tagRepository = {
   /**
    * Update allowed mutable fields: color and/or is_active.
    * Slug is immutable.
+   *
+   * @param {number} id
+   * @param {{ color?: string|null, is_active?: boolean|null }} fields
+   * @returns {Promise<TagRow|null>}
    */
   async update(id, { color, is_active }) {
     // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped;
@@ -119,6 +137,9 @@ export const tagRepository = {
 
   /**
    * Soft delete: set is_active = false.
+   *
+   * @param {number} id
+   * @returns {Promise<TagRow|null>}
    */
   async softDelete(id) {
     const result = await query(
@@ -130,6 +151,9 @@ export const tagRepository = {
 
   /**
    * Count how many transactions reference a given tag (for reactivation toast).
+   *
+   * @param {number} tagId
+   * @returns {Promise<number>}
    */
   async countTransactionReferences(tagId) {
     const result = await query(

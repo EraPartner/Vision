@@ -16,6 +16,10 @@ const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
 /**
  * Set the batch-level brokerage account (ADR-095). Lots committed from this batch
  * inherit it as their account_id (ADR-091). Pass null to clear.
+ *
+ * @param {number|string} batchId
+ * @param {number|null|undefined} accountId
+ * @returns {Promise<void>}
  */
 export async function setBatchAccount(batchId, accountId) {
   await query(

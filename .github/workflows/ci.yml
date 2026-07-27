@@ -224,6 +224,12 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # Backend checkJs — tsc --checkJs over JSDoc-typed JS files.
   # Required gate: catches JSDoc rot in the backend before it reaches main.
+  #
+  # Two steps, one program: the base config is loose (strict/noImplicitAny off)
+  # and covers all of src/; the ratchet re-runs it with noImplicitAny: true and
+  # fails only on the paths listed in scripts/checkjs-ratchet.js (the data-layer
+  # row contracts + the repositories annotated against them). See that script's
+  # header for why this is not a second directory-scoped tsconfig.
   # ─────────────────────────────────────────────────────────────────────────────
   typecheck-backend:
     name: Type Check (Backend)
@@ -241,6 +247,9 @@ jobs:
 
       - name: Type-check backend (JSDoc)
         run: cd apps/node-backend && bunx tsc -p tsconfig.check.json
+
+      - name: Type-check backend (noImplicitAny ratchet)
+        run: cd apps/node-backend && bun scripts/checkjs-ratchet.js
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Verify generated artifacts — the committed locale TS files and the
