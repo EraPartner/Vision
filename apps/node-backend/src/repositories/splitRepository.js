@@ -107,12 +107,23 @@ export const splitRepository = {
         currentSplitTotal: totals.current_split_total,
       });
       if (!check.ok) throw new ValidationError(check.error);
+      // The bare `RETURNING *` row is not the shape every other split-reading
+      // endpoint emits: `amount` comes back as a pg NUMERIC string and neither
+      // `recipient_name` nor `amount_paid` exists. Re-select the inserted row
+      // joined to recipients (a fresh split has no payments, hence the literal
+      // 0) so this returns the same formatSplit shape as
+      // getSplitsByTransaction / settleSplit / getOwedByRecipient.
       const result = await client.query(
-        `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
+        `WITH created AS (
+           INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+           VALUES ($1, $2, $3, $4) RETURNING *
+         )
+         SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
+         FROM created
+         LEFT JOIN recipients r ON r.id = created.recipient_id`,
         [transaction_id, recipient_id, amount, note || null]
       );
-      return result.rows[0];
+      return formatSplit(result.rows[0]);
     });
   },
 
@@ -139,14 +150,23 @@ export const splitRepository = {
       const recipientIds = preparedSplits.map((s) => s.recipient_id);
       const amounts = preparedSplits.map((s) => s.amount);
       const notes = preparedSplits.map((s) => s.note);
+      // Same re-select as createSplitAtomic: `RETURNING *` alone would emit
+      // string amounts and no recipient_name/amount_paid, which is not the
+      // split shape the rest of the API returns.
       const result = await client.query(
-        `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-         SELECT $1, s.recipient_id, s.amount, s.note
-         FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
-         RETURNING *`,
+        `WITH created AS (
+           INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+           SELECT $1, s.recipient_id, s.amount, s.note
+           FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
+           RETURNING *
+         )
+         SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
+         FROM created
+         LEFT JOIN recipients r ON r.id = created.recipient_id
+         ORDER BY created.id`,
         [transaction_id, recipientIds, amounts, notes]
       );
-      return result.rows;
+      return result.rows.map(formatSplit);
     });
   },
 
@@ -380,7 +400,11 @@ export const splitRepository = {
         ]
       );
 
-      return result.rows[0];
+      // formatPayment, not the raw row: `amount` is NUMERIC (pg hands it back
+      // as a string) and `paid_at` is a DATE. The POST /pay path used to
+      // return the row untouched while its sibling getPayments coerced, so the
+      // same payment had two different wire shapes.
+      return formatPayment(result.rows[0]);
     });
   },
 
@@ -390,12 +414,7 @@ export const splitRepository = {
   async getPayments(splitId) {
     const sql = `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC`;
     const result = await query(sql, [splitId]);
-    return result.rows.map(row => ({
-      ...row,
-      amount: toNumber(toDecimal(row.amount)),
-      // DATE column: calendar-day string, not a raw pg Date.
-      paid_at: toWireDate(row.paid_at),
-    }));
+    return result.rows.map(formatPayment);
   },
 
   /**
@@ -486,6 +505,20 @@ export const splitRepository = {
     return result.rowCount ?? 0;
   },
 };
+
+/**
+ * Wire shape for a split_payments row: NUMERIC `amount` coerced to a number,
+ * DATE `paid_at` rendered as a calendar-day string. Shared by every endpoint
+ * that emits a payment so POST /pay and GET /payments cannot drift apart.
+ */
+function formatPayment(row) {
+  return {
+    ...row,
+    amount: toNumber(toDecimal(row.amount)),
+    // DATE column: calendar-day string, not a raw pg Date.
+    paid_at: toWireDate(row.paid_at),
+  };
+}
 
 function formatSplit(row) {
   return {

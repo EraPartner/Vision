@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { TrendingDown, TrendingUp } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
@@ -21,6 +23,21 @@ import { fieldErrorProps, useFieldErrors, type FieldErrorMap } from "@/hooks/use
 
 type Frequency = PlannedPayment["frequency"];
 type LoanType = NonNullable<PlannedPayment["loan_type"]>;
+
+/**
+ * Sign convention for a planned payment's stored `amount`: money going OUT is
+ * negative, money coming IN is positive. Enforced end-to-end —
+ *  - routes/plannedTransactions.js force-negates a loan installment
+ *    (`-Math.abs(regular_payment_amount)`) on both create and patch,
+ *  - calculations/aggregation/cashflowForecast.js buckets positive amounts as
+ *    income and negative as expenses,
+ *  - plannedMatchService.matchesTolerance() refuses a (planned, tx) pair whose
+ *    signs differ, so a bill stored positive can never auto-clear against the
+ *    real negative transaction.
+ * The amount input therefore holds an unsigned magnitude and this toggle owns
+ * the sign; the two are recombined in handleSubmit.
+ */
+type Direction = "expense" | "income";
 
 /** Visual order — decides which field gets focus on a blocked submit. */
 const FIELD_ORDER = [
@@ -45,7 +62,16 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const [name, setName] = useState(initial?.name ?? "");
-  const [amount, setAmount] = useState(initial?.amount?.toString() ?? "");
+  // Edit path: the stored amount is signed, the field is a magnitude — split it
+  // back into |amount| + direction so re-saving an untouched row is a no-op.
+  const [amount, setAmount] = useState(
+    initial?.amount != null ? Math.abs(initial.amount).toString() : "",
+  );
+  // Default to "expense": planned payments are overwhelmingly bills, and it is
+  // the direction that keeps a new row auto-matchable against a real debit.
+  const [direction, setDirection] = useState<Direction>(
+    (initial?.amount ?? 0) > 0 ? "income" : "expense",
+  );
   const [currency, setCurrency] = useState(initial?.currency ?? appSettings.defaultCurrency);
   // New planned payments default the (required) due date to today so the form is
   // immediately submittable; editing keeps the stored date.
@@ -70,6 +96,11 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   const loading = false;
+
+  // A loan installment is always money out, and the server derives its amount
+  // from the generated repayment schedule, so the toggle locks to "expense"
+  // (same forced-value + disabled idiom as the recurring switch below).
+  const effectiveDirection: Direction = isLoan ? "expense" : direction;
 
   // The same conditions that used to stop submission behind a blocking
   // `alert()`, re-expressed per field: recomputed every render, but only shown
@@ -112,10 +143,23 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       endDateStr = toYmd(endDate);
     }
 
+    // Recombine magnitude + direction into the signed stored amount. Math.abs
+    // guards a stray typed "-" so the toggle is the single source of the sign;
+    // the 0 case is spelled out to avoid handing the API a `-0`.
+    const magnitude = Math.abs(parseDecimal(amount));
+    const signedAmount =
+      magnitude === 0 || effectiveDirection === "income" ? magnitude : -magnitude;
+
     // If loan is enabled, clear recurrence inputs before submitting - loans drive their own schedule
     const payload: Record<string, unknown> = {
       name: name.trim(),
-      amount: parseDecimal(amount),
+      // Loans: POST overwrites this from the generated schedule outright, and
+      // PATCH keeps a defined client value as-is (never re-negates it), so
+      // there is no double negation on either path. Note PATCH keeping the
+      // client value means editing a loan's principal/rate/term can leave a
+      // stale amount vs. the regenerated schedule — a pre-existing backend
+      // behavior, tracked separately in TODO.md.
+      amount: signedAmount,
       currency,
       due_date: dueDateStr,
       url: url?.trim() || undefined,
@@ -180,7 +224,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 grid gap-1.5">
                 <Label htmlFor="pp-amount">{t('plannedForm.amountRequired2')}</Label>
-                <Input id="pp-amount" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} {...fieldErrorProps("pp-amount", visibleErrors["pp-amount"])} />
+                <Input id="pp-amount" type="text" inputMode="decimal" pattern="^[0-9]+([.,][0-9]+)?$" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} {...fieldErrorProps("pp-amount", visibleErrors["pp-amount"])} />
                 <FieldError field="pp-amount" message={visibleErrors["pp-amount"]} />
               </div>
               <div className="grid gap-1.5">
@@ -194,6 +238,45 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Direction — owns the sign of the amount above (see `Direction`). */}
+            <div className="grid gap-1.5">
+              {/* Labelled via aria-labelledby, not htmlFor: the group's children
+                  are role="radio" buttons, and a `for` association would
+                  overwrite their own accessible names with "Direction". */}
+              <Label id="pp-direction-label">{t('plannedForm.direction')}</Label>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                aria-labelledby="pp-direction-label"
+                value={effectiveDirection}
+                // Radix emits "" when the active item is re-pressed; ignore it so
+                // the control can never end up with no direction selected.
+                onValueChange={(v) => { if (v) setDirection(v as Direction); }}
+                disabled={isLoan}
+                className="grid grid-cols-2 gap-2"
+              >
+                <ToggleGroupItem
+                  id="pp-direction-expense"
+                  value="expense"
+                  className="w-full data-[state=on]:bg-loss/10 data-[state=on]:text-loss data-[state=on]:shadow-[inset_0_0_0_1px_hsl(var(--loss)/0.35)]"
+                >
+                  <TrendingDown className="h-4 w-4" aria-hidden="true" />
+                  {t('plannedForm.direction.expense')}
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  id="pp-direction-income"
+                  value="income"
+                  className="w-full data-[state=on]:bg-gain/10 data-[state=on]:text-gain data-[state=on]:shadow-[inset_0_0_0_1px_hsl(var(--gain)/0.35)]"
+                >
+                  <TrendingUp className="h-4 w-4" aria-hidden="true" />
+                  {t('plannedForm.direction.income')}
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <p className="text-xs text-muted-foreground">
+                {isLoan ? t('plannedForm.directionLoanDesc') : t('plannedForm.directionDesc')}
+              </p>
             </div>
 
             {/* Due date */}

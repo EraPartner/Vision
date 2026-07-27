@@ -507,23 +507,24 @@ Implementation notes:
 
 ## TypeScript Types
 
-**File:** [[apps/frontend/src/types/splits.ts]]
+**File:** [[apps/frontend/src/lib/api/splits.ts]] — the single home for these shapes
+(a second, drifted copy under `types/splits.ts` was folded in).
 
 ```typescript
-interface TransactionSplit {
+interface SplitItem {
   id: number;
   transaction_id: number;
   recipient_id: number;
-  recipient_name?: string;
+  recipient_name: string | null;
   amount: number;
   amount_paid: number;
-  note?: string;
+  note: string | null;
   is_settled: boolean;
   created_at: string;
   updated_at: string;
 }
 
-interface TransactionSplitDetail extends TransactionSplit {
+interface OwedDetailItem extends SplitItem {
   transaction_date: string;
   transaction_memo: string;
   transaction_amount: number;
@@ -533,7 +534,7 @@ interface TransactionSplitDetail extends TransactionSplit {
   remaining: number;
 }
 
-interface OwedSummary {
+interface OwedSummaryItem {
   recipient_id: number;
   recipient_name: string;
   total_owed: number;
@@ -547,7 +548,7 @@ interface SplitPayment {
   split_id: number;
   amount: number;
   paid_at: string;
-  note?: string;
+  note: string | null;
   created_at: string;
 }
 

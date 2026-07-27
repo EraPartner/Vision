@@ -440,7 +440,10 @@ describe("PlannedPaymentForm (inline validation)", () => {
         expect(JSON.stringify(onSubmit.mock.calls[0][0])).toBe(
             JSON.stringify({
                 name: "Mortgage",
-                amount: 100,
+                // Typed as "100" with the Direction toggle on its "Expense"
+                // default (and locked there by the loan switch) — the form owns
+                // the sign now, so it leaves as -100.
+                amount: -100,
                 currency: "EUR",
                 due_date: todayYmd(),
                 url: undefined,
@@ -490,7 +493,9 @@ describe("PlannedPaymentForm (inline validation)", () => {
         await waitFor(() => expect(rawBody).not.toBe(""));
         expect(JSON.parse(rawBody)).toEqual({
             memo: "Groceries",
-            amount: 100,
+            // Expense is the Direction default, so a bare "100" reaches the API
+            // as -100 — the sign the forecast and auto-match both expect.
+            amount: -100,
             currency: "EUR",
             planned_date: todayYmd(),
             is_recurring: false,

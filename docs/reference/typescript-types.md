@@ -7,7 +7,7 @@ updated: 2026-06-18
 tags: [reference, typescript, types, interfaces, frontend, contract-guard, openapi, generated-types, type-safety]
 description: Complete reference of all TypeScript types and interfaces used in the Vision frontend. June 2026 — generated.ts is now load-bearing via contract-guard.ts; api.ts header corrected to point at the Node backend contract.
 aliases: [typescript types, type definitions, interfaces, type reference]
-related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/generated.ts", "apps/frontend/src/types/contract-guard.ts", "apps/frontend/src/types/portfolio.ts", "apps/frontend/src/types/watchlist.ts", "apps/frontend/src/types/splits.ts"]
+related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/generated.ts", "apps/frontend/src/types/contract-guard.ts", "apps/frontend/src/types/portfolio.ts", "apps/frontend/src/types/watchlist.ts", "apps/frontend/src/lib/api/splits.ts"]
 ---
 
 # TypeScript Types Reference
@@ -24,9 +24,9 @@ related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/genera
 
 **[[apps/frontend/src/types/contract-guard.ts|contract-guard.ts]]** closes that gap with compile-time assertions:
 
-- Imports `components['schemas']` from `generated.ts` and the hand-written types from `api.ts`
-- **Key coverage check:** every field the app consumes (`Transaction`, `Category`, `Recipient`, `Tag`, `PlannedTransaction`, `Investment`, `PortfolioTransaction`) must exist as a key in the corresponding generated schema — `bun run typecheck` fails if a field is renamed or removed in the contract
-- **Money/quantity check:** money fields (`amount`, `balance`, `amount_eur`, `loan_principal`, `current_price`, `units`, `price_per_unit`, `fees`, `taxes`) must remain `number` (or `number | null`) in the contract — fails if the OpenAPI spec re-types an amount as a string
+- Imports `components['schemas']` from `generated.ts` and the hand-written types from `api.ts` (plus the per-feature type modules for splits, watchlist, attachments and AI chat)
+- **Key coverage check:** every field the app consumes (`Transaction`, `Category`, `Account`, `Recipient`, `Tag`, `PlannedTransaction`, `Investment`, `PortfolioTransaction`, `SplitItem`, `SplitPayment`, `OwedSummaryItem`, `WatchlistItem`, `Attachment`, `ConversationSummary`, `ChatMessage`, `TokenUsage`, `OllamaModel`) must exist as a key in the corresponding generated schema — `bun run typecheck` fails if a field is renamed or removed in the contract
+- **Money/quantity check:** money fields (`amount`, `balance`, `amount_eur`, `loan_principal`, `current_price`, `units`, `price_per_unit`, `fees`, `taxes`, `amount_paid`, `total_owed`, `total_paid`, `remaining`, `target_price`, `added_price`) must remain `number` (or `number | null`) in the contract — fails if the OpenAPI spec re-types an amount as a string
 - **One-directional and optionality-tolerant:** additive contract changes (new fields) and `required`/`| null` nuances do not cause failures — only consumed-field removals/renames and money-type regressions are caught
 
 > [!note] Money coercion is a separate concern
@@ -257,19 +257,23 @@ interface WatchlistItem {
 
 ## Split Types
 
-**Source:** [[apps/frontend/src/types/splits.ts]]
+**Source:** [[apps/frontend/src/lib/api/splits.ts]]
 
-### TransactionSplit
+Guarded against `components['schemas']['Split'] / ['SplitPayment'] / ['SplitOwed']`
+in [[apps/frontend/src/types/contract-guard.ts]].
+
+### SplitItem
 
 ```typescript
-interface TransactionSplit {
+interface SplitItem {
   id: number;
   transaction_id: number;
   recipient_id: number;
+  recipient_name: string | null;
   amount: number;
-  currency: string;
+  amount_paid: number;
+  note: string | null;
   is_settled: boolean;
-  settled_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -288,26 +292,18 @@ interface SplitPayment {
 }
 ```
 
-### OwedSummary
+### OwedSummaryItem
+
+One row per recipient from `GET /api/splits/owed` — a flat list, not a nested tree.
 
 ```typescript
-interface OwedSummary {
+interface OwedSummaryItem {
+  recipient_id: number;
+  recipient_name: string;
   total_owed: number;
   total_paid: number;
   remaining: number;
   split_count: number;
-  transaction_currency: string;
-  recipients: OwedRecipient[];
-}
-
-interface OwedRecipient {
-  id: number;
-  name: string;
-  total_owed: number;
-  total_paid: number;
-  remaining: number;
-  bank_account: string | null;
-  splits: TransactionSplit[];
 }
 ```
 

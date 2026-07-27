@@ -225,7 +225,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | [[apps/frontend/src/types/api.ts]] | API request/response types |
 | [[apps/frontend/src/types/portfolio.ts]] | Portfolio/investment types |
 | [[apps/frontend/src/types/watchlist.ts]] | Watchlist types |
-| [[apps/frontend/src/types/splits.ts]] | Split transaction types |
+| [[apps/frontend/src/lib/api/splits.ts]] | Split transaction types (client + wire shapes) |
 
 ### Backend Entry Point
 

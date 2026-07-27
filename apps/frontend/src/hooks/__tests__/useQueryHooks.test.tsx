@@ -131,7 +131,9 @@ describe("useOllamaModels", () => {
     });
 
     it("fetches models when enabled=true", async () => {
-        vi.spyOn(apiClient, "getOllamaModels").mockResolvedValue([{ name: "llama3", modified: "", size: 0 }]);
+        vi.spyOn(apiClient, "getOllamaModels").mockResolvedValue([
+            { name: "llama3", size: 0, family: "llama", parameterSize: "8B", quantization: "Q4_0", modifiedAt: null },
+        ]);
         const { result } = renderHook(() => useOllamaModels(true), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data).toHaveLength(1);

@@ -92,11 +92,22 @@ let failed = false;
 const en = masters.en;
 const enKeys = new Set(Object.keys(en));
 
+// A value starting with a bracketed language-code stub (e.g. "[NL] ...") means a
+// translation was never done and the placeholder is about to ship verbatim to users.
+const STUB_PREFIX_RE = /^\[[A-Z]{2}\]\s/;
+
 for (const [lang, dict] of Object.entries(masters)) {
   const suspicious = Object.entries(dict).filter(([, v]) => typeof v === 'string' && /\\",\\n$/.test(v));
   if (suspicious.length) {
     console.error(`Language ${lang} has ${suspicious.length} suspicious escaped-tail strings (sample 20 keys):`);
     console.error(suspicious.slice(0, 20).map(([k]) => k).join('\n'));
+    failed = true;
+  }
+
+  const stubbed = Object.entries(dict).filter(([, v]) => typeof v === 'string' && STUB_PREFIX_RE.test(v));
+  if (stubbed.length) {
+    console.error(`Language ${lang} has ${stubbed.length} untranslated stub value(s) still prefixed with a "[XX] " placeholder (sample 20 keys):`);
+    console.error(stubbed.slice(0, 20).map(([k]) => k).join('\n'));
     failed = true;
   }
 
