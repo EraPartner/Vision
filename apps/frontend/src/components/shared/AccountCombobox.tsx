@@ -16,8 +16,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { FieldErrorAria } from "@/hooks/useFieldErrors";
 
-interface AccountComboboxProps {
+interface AccountComboboxProps extends FieldErrorAria {
     id?: string;
     /** The bank_account label (an accounts.name, or free text for a new account). */
     value: string;
@@ -30,7 +31,17 @@ interface AccountComboboxProps {
 
 const normalize = (s: string) => s.trim().toLowerCase();
 
-export function AccountCombobox({ id, value, onChange, placeholder, disabled, className, portalContainer }: AccountComboboxProps) {
+export function AccountCombobox({
+    id,
+    value,
+    onChange,
+    placeholder,
+    disabled,
+    className,
+    portalContainer,
+    "aria-invalid": ariaInvalid,
+    "aria-describedby": ariaDescribedBy,
+}: AccountComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -68,6 +79,8 @@ export function AccountCombobox({ id, value, onChange, placeholder, disabled, cl
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
+                    aria-invalid={ariaInvalid}
+                    aria-describedby={ariaDescribedBy}
                     disabled={disabled}
                     className={cn("w-full justify-between font-normal", !value && "text-muted-foreground", className)}
                 >

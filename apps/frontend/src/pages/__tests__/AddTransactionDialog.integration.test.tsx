@@ -8,6 +8,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
+import { todayYmd } from "@/lib/timezone";
 
 const API_BASE = "http://localhost:3002";
 
@@ -292,12 +293,34 @@ describe("AddTransactionDialog (integration)", () => {
         );
     });
 
-    it("shows invalid amount toast when non-numeric amount is submitted", async () => {
+    // ─── Inline field validation (ARIA-associated, replaces the old toasts) ──
+    //
+    // Field validation used to be announced only through `toast.error(...)`:
+    // transient, and detached from the control that failed. It now renders on
+    // the field, linked by `aria-describedby`, with `aria-invalid` on the
+    // control — so these assert the linkage, not just the text. Server errors
+    // still toast (covered by the 409/422/500 tests above).
+
+    /** The message element the control points at — the whole a11y contract. */
+    function describedError(control: HTMLElement): HTMLElement {
+        const describedBy = control.getAttribute("aria-describedby");
+        expect(describedBy).toBeTruthy();
+        const message = document.getElementById(describedBy!);
+        expect(message).toBeInTheDocument();
+        return message!;
+    }
+
+    it("renders an inline error associated to the amount field for a non-numeric amount", async () => {
         const user = userEvent.setup();
         const toastSpy = vi.spyOn(toast, "error");
+        let postCalled = false;
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.post(`${API_BASE}/api/transactions`, () => {
+                postCalled = true;
+                return ok({});
+            }),
         );
 
         renderWithApp(<AddTransactionDialog />);
@@ -305,7 +328,8 @@ describe("AddTransactionDialog (integration)", () => {
         await user.click(await screen.findByRole("button", { name: /add transaction/i }));
         await screen.findByRole("dialog");
 
-        await user.type(screen.getByLabelText(/amount/i), "abc");
+        const amount = screen.getByLabelText(/amount/i);
+        await user.type(amount, "abc");
         await pickBankAccount(user, "Main");
         // Select recipient so the guard passes
         await pickRecipient(user, "Test Supermarket");
@@ -314,12 +338,131 @@ describe("AddTransactionDialog (integration)", () => {
         const formEl = screen.getByRole("dialog").querySelector("form")!;
         fireEvent.submit(formEl);
 
-        await waitFor(() =>
-            expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/invalid amount/i),
-            ),
-        );
-        // Dialog must remain open after validation error
+        await waitFor(() => expect(amount).toHaveAttribute("aria-invalid", "true"));
+        expect(describedError(amount)).toHaveTextContent(/invalid amount/i);
+        // Submit is blocked exactly as before, and the dialog stays open.
+        expect(postCalled).toBe(false);
         expect(screen.queryByRole("dialog")).toBeInTheDocument();
+        // The inline message fully replaces the transient toast.
+        expect(toastSpy).not.toHaveBeenCalled();
+    });
+
+    it("renders an inline error associated to the amount field for a zero amount", async () => {
+        const user = userEvent.setup();
+        let postCalled = false;
+
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.post(`${API_BASE}/api/transactions`, () => {
+                postCalled = true;
+                return ok({});
+            }),
+        );
+
+        renderWithApp(<AddTransactionDialog />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        const amount = screen.getByLabelText(/amount/i);
+        await user.type(amount, "0");
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
+
+        await user.click(screen.getByRole("button", { name: /create/i }));
+
+        await waitFor(() => expect(amount).toHaveAttribute("aria-invalid", "true"));
+        expect(describedError(amount)).toHaveTextContent(/cannot be zero/i);
+        expect(postCalled).toBe(false);
+    });
+
+    it("clears the inline error once the field is corrected", async () => {
+        const user = userEvent.setup();
+
+        server.use(http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)));
+
+        renderWithApp(<AddTransactionDialog />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        const amount = screen.getByLabelText(/amount/i);
+        await user.type(amount, "0");
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
+        await user.click(screen.getByRole("button", { name: /create/i }));
+
+        await waitFor(() => expect(amount).toHaveAttribute("aria-invalid", "true"));
+
+        await user.clear(amount);
+        await user.type(amount, "12.50");
+
+        await waitFor(() => expect(amount).not.toHaveAttribute("aria-invalid"));
+        expect(amount).not.toHaveAttribute("aria-describedby");
+        expect(screen.queryByText(/cannot be zero/i)).not.toBeInTheDocument();
+    });
+
+    it("moves focus to the first invalid field on a blocked submit", async () => {
+        const user = userEvent.setup();
+
+        server.use(http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)));
+
+        renderWithApp(<AddTransactionDialog />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        // Amount is left empty and no recipient is picked: amount comes first in
+        // visual order, so it is the one that must receive focus.
+        await pickBankAccount(user, "Main");
+
+        const formEl = screen.getByRole("dialog").querySelector("form")!;
+        fireEvent.submit(formEl);
+
+        const amount = screen.getByLabelText(/amount/i);
+        await waitFor(() => expect(amount).toHaveFocus());
+        expect(describedError(amount)).toHaveTextContent(/required/i);
+        // The still-empty recipient is flagged too, not just the focused field.
+        const recipient = screen.getByRole("combobox", { name: /recipient/i });
+        expect(recipient).toHaveAttribute("aria-invalid", "true");
+    });
+
+    it("sends an unchanged request body on a valid submit", async () => {
+        const user = userEvent.setup();
+        let rawBody = "";
+
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
+                rawBody = await request.text();
+                return ok({
+                    id: 42,
+                    transaction_date: todayYmd(),
+                    bank_account: "Main",
+                    amount: 12.5,
+                    currency: "EUR",
+                    recipient_id: 7,
+                });
+            }),
+        );
+
+        renderWithApp(<AddTransactionDialog />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        await user.type(screen.getByLabelText(/amount/i), "12.50");
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
+
+        await user.click(screen.getByRole("button", { name: /create/i }));
+
+        await waitFor(() => expect(rawBody).not.toBe(""));
+        // Byte-for-byte: same keys, same order, same JSON.stringify omission of
+        // the untouched optional fields. Routing validation through inline
+        // errors must not have moved a single character of this.
+        expect(rawBody).toBe(
+            `{"transaction_date":"${todayYmd()}","bank_account":"Main","recipient_id":7,"amount":12.5,"currency":"EUR"}`,
+        );
     });
 });

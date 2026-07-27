@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings, weekStartsOnFromSetting } from "@/components/shared/dateUtils";
+import type { FieldErrorAria } from "@/hooks/useFieldErrors";
 
-type DatePickerProps = {
+type DatePickerProps = FieldErrorAria & {
   value?: Date;
   onChange: (date?: Date) => void;
   placeholder?: string;
@@ -18,6 +19,8 @@ type DatePickerProps = {
   allowClear?: boolean;
   clearLabel?: string;
   portalContainer?: HTMLElement | null;
+  /** Put on the trigger, so a <Label htmlFor> and a <FieldError> can reach it. */
+  id?: string;
 };
 
 export function DatePicker({
@@ -31,6 +34,9 @@ export function DatePicker({
   allowClear = false,
   clearLabel,
   portalContainer,
+  id,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: DatePickerProps) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
@@ -41,9 +47,12 @@ export function DatePicker({
     <Popover>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           type="button"
           variant="outline"
           disabled={disabled}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           className={cn(
             "w-full justify-start text-left font-normal",
             !value && "text-muted-foreground",
