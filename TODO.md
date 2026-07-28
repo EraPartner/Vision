@@ -871,7 +871,7 @@ look-changing one.
   - `apps/node-backend/src/repositories/infoRepositoryNetWorth.js:137` gates the history walk on `lb.balance IS NOT NULL` while the current point comes from the unstamped-tolerant lateral (`:147-162`, applied `:303-314`); the flow fallback only rescues "nothing stamped anywhere". Chart: 1000 → 1200 with no transaction, surfaced as a real gain. Same gate class as the banks history finding above — fix them consistently.
   - Fix: apply the unstamped-tolerant balance resolution to the history walk too; flip the pin.
 
-- [ ] **`infoRepositoryPlanned` builds next-month from LOCAL date parts but reads them back with UTC getters — names the wrong month east of UTC (the app's own default TZ)** 🔼
+- [x] **`infoRepositoryPlanned` builds next-month from LOCAL date parts but reads them back with UTC getters — names the wrong month east of UTC (the app's own default TZ)** 🔼 ✅ 2026-07-28 · e40e96f (window rebuilt on the ADR-009 string helpers, month/year parsed from the window start — host-TZ independent, verifier-confirmed at UTC+14 and brute-forced over a decade of boundaries; pinned under forced TZ=Asia/Tokyo incl. the Dec→Jan boundary. The SAME file's expandRecurringOccurrences has its own pre-existing TZ bug — filed below)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (noticed; NOT pinned as a failure — container and CI run TZ=UTC where it cannot reproduce; the suite asserts the month/period_start invariant instead)_
   - `apps/node-backend/src/repositories/infoRepositoryPlanned.js:98-99` + `:214-215` — `new Date(today.year, today.month, 1)` constructs with LOCAL getters but `month`/`year` are read back via `getUTCMonth()`/`getUTCFullYear()`. Under a server TZ east of UTC — including the default `APP_TIMEZONE=Europe/Brussels` — local midnight of the 1st is the previous month in UTC: the response names the wrong month while `period_start` names the right one.
   - Fix: route through the ADR-009 APP_TIMEZONE date helpers instead of mixed local/UTC `Date` getters.
@@ -926,7 +926,7 @@ look-changing one.
   - The headline is unbounded (hub parity) while the chart stops at today. Corollary the verifier added: an account whose rows are ALL future-dated yields banks headline 123 with net worth reporting `snapshots=0, current.liquid=0` (empty grid skips the current-point override).
   - Fix: decide the product stance on future-dated rows (exclude from headline until effective? include in both?) and align banks + net worth + hub on it.
 
-- [ ] **Net-worth transaction-flow fallback sums tracking-only transactions — a ledger whose only active accounts are `in_net_worth=false` reports THEIR running total as net worth instead of 0** 🔼
+- [x] **Net-worth transaction-flow fallback sums tracking-only transactions — a ledger whose only active accounts are `in_net_worth=false` reports THEIR running total as net worth instead of 0** 🔼 ✅ 2026-07-28 · e40e96f (NOT EXISTS predicate on both fallback CTEs excludes rows positively attributed to in_net_worth=false accounts; unattributed/un-migrated rows stay counted (pinned via UPDATE-relabel since the sync trigger creates accounts on INSERT). Verifier: predicate matches the walk's resolution exactly, FK/NOT-NULL edge cases unrepresentable, and the multi-currency variant (tracking-only USD polluting the converted sum) is covered. Residues filed below: firstDataDate span, no is_liability split on the fallback)
   - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (pre-existing block, reproduced by the verifier: liquid −133.25 where 0 is correct; comment at the site now states the real trigger honestly)_
   - `apps/node-backend/src/repositories/infoRepositoryNetWorth.js:193-201` — the fallback fires when the balance walk returns no rows, which happens not only for un-migrated ledgers but whenever every account with activity is excluded from net worth; it then sums ALL transactions with no account/`in_net_worth` predicate.
   - Fix: constrain the fallback's sum to in-net-worth accounts (join through the account resolution the walk uses); an all-tracking ledger should report 0.
@@ -936,7 +936,7 @@ look-changing one.
   - `tests/infoRepository.test.js:57,68,111,150,172,189,212,237,267,300,420` — `sql.includes('SELECT 1 FROM')` is meant to catch only `mvAvailable`'s probe but also matches `NOT EXISTS (SELECT 1 FROM anchor)` inside `COMPUTED_BALANCE_LATERAL`; only branch ordering saves it today (acknowledged in the comment at `:293-296`).
   - Fix: tighten the guard to `SELECT 1 FROM mv_` at all 11 sites.
 
-- [ ] **Recipient month-over-month still converts at the LATEST rate — now inconsistent with the fixed top-merchants/by-year/pivot on the same page** 🔽
+- [x] **Recipient month-over-month still converts at the LATEST rate — now inconsistent with the fixed top-merchants/by-year/pivot on the same page** 🔽 ✅ 2026-07-28 · e40e96f (per-(recipient,period,date,currency) aggregation + historical per-date conversion, the top-merchants pattern; a stressed 2.9× cross-surface disagreement closes to one rounding cent; Decimal accumulator guards the multiplied row count; no-DB contract guard added on the convertRowsToEur options)
   - ↪ _from: Orchestration session 2026-07-28 · recipients-FX fix pass (same class, one function away; out of that finding's top-merchants scope)_
   - `apps/node-backend/src/repositories/infoRepositoryRecipients.js:152-155` — `momConverted` passes no options to `convertRowsToEur` while grouping by `(recipient, period, currency)`: a rate move between the two compared months is invisible, and MoM's EUR figures won't match the now-historical sibling surfaces.
   - Fix: same treatment — add `t.date` (or the period's representative dates) to the grouping and pass `useHistoricalRatesByDate`.
@@ -970,6 +970,21 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · sankey fix pass (noticed, out of scope; the label collision also exists in the pivot — pre-existing and consistent)_
   - (a) `sankey.js` `COALESCE(c.general || ': ' || c.detail, 'Uncategorised')` merges a genuinely-named "Uncategorised" category with the NULL bucket (same shape in the pivot — fix together or accept). (b) `savings = Math.max(0, income − spending)`: an overspending year just omits the savings node instead of showing a deficit — display gap, possibly deliberate.
   - Fix: (a) distinguish the NULL bucket with a sentinel id rather than a display-string collision; (b) decide whether the flow graph should render a deficit node.
+
+- [ ] **`expandRecurringOccurrences` mixes a pg local-midnight Date with APP_TIMEZONE strings and UTC comparisons — every occurrence shifts a day back where host offset > app offset** 🔼
+  - ↪ _from: Orchestration session 2026-07-28 · planned-month fix verification (verifier reproduced on HEAD and on the fixed tree under TZ=Asia/Tokyo: a weekly cadence lands 6 days off — pre-existing, NOT a regression of the window fix in the same file)_
+  - `apps/node-backend/src/repositories/infoRepositoryPlanned.js:65-88` — `:81` feeds a pg local-midnight `Date` to `toAppDateString` (APP_TIMEZONE) and `:71-73` compares `current.getTime()` against `Date.UTC(...)`. Same TZ-mix class the window fix just removed from this file's other function.
+  - Fix: expand recurrences in YMD-string arithmetic via the ADR-009 helpers (addDaysYmd etc.), no Date getters; pin under forced TZ like the window tests.
+
+- [ ] **Net-worth fallback residues: series length driven by excluded rows; everything lands in `liquid` (no `is_liability` split)** 🔽
+  - ↪ _from: Orchestration session 2026-07-28 · net-worth fallback fix (noticed by implementer, both reproduced by verifier)_
+  - (a) `infoRepositoryNetWorth.js:73-80` — `firstDataDateYmd` is MIN(date) over ALL active transactions incl. tracking-only: an all-tracking ledger returns a 401-day all-zero snapshots array whose span comes entirely from excluded rows. (b) `:228-278` — the fallback has no `is_liability` split, so un-migrated liability rows land in `liquid` and `liabilities` is always 0 on that path (verifier probe: −5000 → liquid −5000, liabilities 0).
+  - Fix: (a) apply the same tracking-exclusion to the date probe; (b) split the fallback by the liability resolution the walk uses where attributable.
+
+- [ ] **`convertRowsToEur` emits `used_fallback_rate`/`fallback_reason` per row but no repository surfaces them — fallback-rate conversions are indistinguishable in every recipient/money view** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · MoM fix pass (noticed; verifier confirmed no reader repo-wide; more reachable now that all four recipient surfaces use historical rates)_
+  - `apps/node-backend/src/services/currency/currencyConversionService.js:389-391`. (The portfolio path's `usedFallbackRate` is a separate unrelated field.)
+  - Fix: thread the flags into the emitted rows where a surface wants to badge estimated conversions, or document that they are internal-only.
 
 
 
