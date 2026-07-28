@@ -24,6 +24,22 @@ export type { Column };
 export type SortDirection = "asc" | "desc" | null;
 
 /**
+ * Minimum trimmed length before a server-mode search is forwarded to
+ * `search.onChange`. Below this the table forwards "" so the list shows
+ * UNFILTERED results (never stale ones) while the input keeps the user's
+ * text. Companion of the server-side `MIN_SEARCH_LENGTH`
+ * (apps/node-backend/src/lib/filterBuilder.js): the backend ignores
+ * sub-length terms anyway, so forwarding them only refetches for nothing.
+ */
+export const SERVER_SEARCH_MIN_LENGTH = 3;
+
+/** The query actually forwarded to the server for a given raw input value. */
+function gateServerSearch(value: string): string {
+    const trimmed = value.trim();
+    return trimmed.length >= SERVER_SEARCH_MIN_LENGTH ? trimmed : "";
+}
+
+/**
  * Server-driven data operations, grouped by concern. Presence of a group turns
  * that concern over to the server; omit the whole object for a fully local table.
  *
@@ -207,7 +223,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             isTypingRef.current = true;
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
-                onSearchChange!(value);
+                onSearchChange!(gateServerSearch(value));
                 debounceRef.current = null;
                 isTypingRef.current = false;
             }, SEARCH_DEBOUNCE_MS);
@@ -224,7 +240,15 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     useEffect(() => {
         if (!isServerSearch) return;
         const externalQuery = searchValue ?? "";
-        if (!isTypingRef.current && externalQuery !== localSearchQuery) {
+        // `gateServerSearch(localSearchQuery)` is what this table last forwarded
+        // for the current input. When the external value matches it, this is our
+        // own (gated/trimmed) echo coming back — not an outside change — and
+        // syncing would wipe the sub-threshold text the user is still typing.
+        if (
+            !isTypingRef.current &&
+            externalQuery !== localSearchQuery &&
+            externalQuery !== gateServerSearch(localSearchQuery)
+        ) {
             setLocalSearchQuery(externalQuery);
         }
     }, [isServerSearch, searchValue, localSearchQuery]);

@@ -3,7 +3,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
-import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { useState } from "react";
+import { VirtualDataTable, SERVER_SEARCH_MIN_LENGTH } from "@/components/shared/VirtualDataTable";
 import { ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import type { Column } from "@/types/dataTable";
 import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
@@ -224,6 +225,86 @@ describe("VirtualDataTable — server-side search", () => {
         );
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
         expect(onSearchChange).not.toHaveBeenCalled();
+    });
+
+    it(`forwards "" (unfiltered) for input shorter than ${SERVER_SEARCH_MIN_LENGTH} characters and never issues a filtered search`, async () => {
+        vi.useFakeTimers();
+        const onSearchChange = vi.fn();
+        renderTable({ serverMode: { search: { onChange: onSearchChange } } });
+
+        const input = screen.getByPlaceholderText("Search database...");
+        fireEvent.change(input, { target: { value: "ab" } });
+        await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+
+        expect(onSearchChange).toHaveBeenCalledWith("");
+        expect(onSearchChange).not.toHaveBeenCalledWith("ab");
+        // The input keeps the user's typed text — only the forwarded search resets.
+        expect(input).toHaveValue("ab");
+    });
+
+    it("whitespace-padded input below the threshold counts as too short", async () => {
+        vi.useFakeTimers();
+        const onSearchChange = vi.fn();
+        renderTable({ serverMode: { search: { onChange: onSearchChange } } });
+
+        fireEvent.change(
+            screen.getByPlaceholderText("Search database..."),
+            { target: { value: "  ab  " } },
+        );
+        await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+
+        expect(onSearchChange).toHaveBeenCalledWith("");
+        expect(onSearchChange).not.toHaveBeenCalledWith("ab");
+    });
+
+    it(`forwards the trimmed term once the input reaches ${SERVER_SEARCH_MIN_LENGTH} characters`, async () => {
+        vi.useFakeTimers();
+        const onSearchChange = vi.fn();
+        renderTable({ serverMode: { search: { onChange: onSearchChange } } });
+
+        fireEvent.change(
+            screen.getByPlaceholderText("Search database..."),
+            { target: { value: "  abc " } },
+        );
+        await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+
+        expect(onSearchChange).toHaveBeenCalledWith("abc");
+    });
+
+    it("resets the forwarded search to \"\" when a filtered query is shortened below the threshold, keeping the typed text", async () => {
+        vi.useFakeTimers();
+        // Controlled harness mirroring the real call sites (TransactionsPage /
+        // RecipientsPage): the forwarded value loops back in as search.value.
+        const onSearchChange = vi.fn();
+        function Harness() {
+            const [search, setSearch] = useState("");
+            return (
+                <VirtualDataTable<TestRow>
+                    title="My Table"
+                    columns={COLUMNS}
+                    data={DATA}
+                    serverMode={{
+                        search: {
+                            onChange: (q) => { onSearchChange(q); setSearch(q); },
+                            value: search,
+                        },
+                    }}
+                />
+            );
+        }
+        renderWithApp(<Harness />);
+
+        const input = screen.getByPlaceholderText("Search database...");
+        fireEvent.change(input, { target: { value: "abcd" } });
+        await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+        expect(onSearchChange).toHaveBeenLastCalledWith("abcd");
+
+        fireEvent.change(input, { target: { value: "ab" } });
+        await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+        // Below the threshold: unfiltered (never stale "abcd" results) …
+        expect(onSearchChange).toHaveBeenLastCalledWith("");
+        // … while the echoed-back "" must not wipe what the user typed.
+        expect(input).toHaveValue("ab");
     });
 });
 
