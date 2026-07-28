@@ -1,17 +1,21 @@
 /**
  * Investment route tests.
  * Tests all CRUD endpoints for investments and portfolio transactions.
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js) — validateIdParam (routes/investments.js:35-41)
+ * is no longer stubbed; it runs for real on every `/:id`-prefixed route. No
+ * test here exercised an invalid id against one of those routes under the
+ * old stub (all used valid numeric ids), so nothing was fake-passing —
+ * validateIdParam is simply exercised for real now instead of bypassed.
+ *
+ * Mount path is /api/investments, behind investmentRateLimiter at the app
+ * level (main.js:327) — a module-scoped per-IP counter deliberately NOT
+ * reproduced here per the routeApp.js fidelity map.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/investmentRepository.js', () => ({
   default: {
@@ -71,13 +75,6 @@ vi.mock('../../src/config/kinesisConfig.js', () => ({
   }),
 }));
 
-vi.mock('../../src/middleware/validation.js', async (importOriginal) => ({
-  // Keep the real value helpers (assertCurrency, assertMaxLength, validateNumber);
-  // only stub the id-param middleware to a no-op.
-  ...(await importOriginal()),
-  validateIdParam: (req, res, next) => next(),
-}));
-
 vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
@@ -85,14 +82,13 @@ vi.mock('../../src/config/logger.js', () => ({
 import investmentRepository from '../../src/repositories/investmentRepository.js';
 import portfolioTransactionRepository from '../../src/repositories/portfolioTransactionRepository.js';
 import { fetchHistoricalPrices, fetchLivePricesDetailed } from '../../src/services/priceProviderService.js';
-import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/investments.js');
+
+const { default: investmentsRouter } = await import('../../src/routes/investments.js');
+
+const BASE = '/api/investments';
+const api = routeAgent(investmentsRouter, { mountPath: BASE });
 
 let nowSpy;
-
-function mockResponse() {
-  return createMockResponse({ end: vi.fn() });
-}
 
 describe('Investment Routes', () => {
   beforeEach(() => {
@@ -106,23 +102,6 @@ describe('Investment Routes', () => {
 
   describe('GET /transactions', () => {
     it('should cache and differentiate entries by limit parameter', async () => {
-      const reqLimit10 = {
-        query: {
-          investment_ids: '1,2',
-          per_investment_limit: '1000',
-          limit: '10',
-          offset: '0',
-        },
-      };
-      const reqLimit20 = {
-        query: {
-          investment_ids: '1,2',
-          per_investment_limit: '1000',
-          limit: '20',
-          offset: '0',
-        },
-      };
-
       const repoResultA = [{ id: 101, amount: 1 }];
       const repoResultB = [{ id: 202, amount: 2 }];
 
@@ -131,23 +110,17 @@ describe('Investment Routes', () => {
         .mockResolvedValueOnce(repoResultB);
       portfolioTransactionRepository.getCount.mockResolvedValue(2);
 
-      const resA1 = mockResponse();
-      await routeHandlers['get:/transactions'](reqLimit10, resA1);
-      expect(resA1.json).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ items: repoResultA, limit: 10 }),
-      }));
+      const query10 = { investment_ids: '1,2', per_investment_limit: '1000', limit: '10', offset: '0' };
+      const query20 = { investment_ids: '1,2', per_investment_limit: '1000', limit: '20', offset: '0' };
 
-      const resA2 = mockResponse();
-      await routeHandlers['get:/transactions'](reqLimit10, resA2);
-      expect(resA2.json).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ items: repoResultA, limit: 10 }),
-      }));
+      const resA1 = await api.get(`${BASE}/transactions`).query(query10).expect(200);
+      expect(resA1.body).toEqual(okEnvelope(expect.objectContaining({ items: repoResultA, limit: 10 })));
 
-      const resB = mockResponse();
-      await routeHandlers['get:/transactions'](reqLimit20, resB);
-      expect(resB.json).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ items: repoResultB, limit: 20 }),
-      }));
+      const resA2 = await api.get(`${BASE}/transactions`).query(query10).expect(200);
+      expect(resA2.body).toEqual(okEnvelope(expect.objectContaining({ items: repoResultA, limit: 10 })));
+
+      const resB = await api.get(`${BASE}/transactions`).query(query20).expect(200);
+      expect(resB.body).toEqual(okEnvelope(expect.objectContaining({ items: repoResultB, limit: 20 })));
 
       expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenCalledTimes(2);
       expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenNthCalledWith(
@@ -169,31 +142,24 @@ describe('Investment Routes', () => {
         total: 1,
       });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(`${BASE}/`).expect(200);
 
-      const data = res.json.mock.calls[0][0];
-      expect(data.data.items).toHaveLength(1);
-      expect(data.data.total).toBe(1);
+      expect(res.body.data.items).toHaveLength(1);
+      expect(res.body.data.total).toBe(1);
     });
 
     it('should return empty list', async () => {
       investmentRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.items).toEqual([]);
+      expect(res.body.data.items).toEqual([]);
     });
 
     it('should respect pagination and filters', async () => {
       investmentRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
-      const req = { query: { limit: '10', offset: '5', asset_class: 'crypto', active: 'true' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      await api.get(`${BASE}/`).query({ limit: '10', offset: '5', asset_class: 'crypto', active: 'true' }).expect(200);
 
       expect(investmentRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({
         limit: 10, offset: 5, assetClass: 'crypto', active: true,
@@ -203,9 +169,8 @@ describe('Investment Routes', () => {
     it('should handle errors', async () => {
       investmentRepository.getAllWithCount.mockRejectedValue(new Error('DB error'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/'](req, res)).rejects.toThrow('DB error');
+      const res = await api.get(`${BASE}/`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -214,44 +179,34 @@ describe('Investment Routes', () => {
     it('should create investment with 201', async () => {
       investmentRepository.create.mockResolvedValue({ id: 1, name: 'Bitcoin', asset_class: 'crypto' });
 
-      const req = { body: { name: 'Bitcoin', asset_class: 'crypto', currency: 'EUR' } };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(201);
+      await api.post(`${BASE}/`).send({ name: 'Bitcoin', asset_class: 'crypto', currency: 'EUR' }).expect(201);
     });
 
     it('should throw ValidationError for missing required fields', async () => {
-      const req = { body: { name: 'Bitcoin' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/`).send({ name: 'Bitcoin' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('should throw ValidationError for missing name', async () => {
-      const req = { body: { asset_class: 'crypto' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/`).send({ asset_class: 'crypto' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('should handle errors', async () => {
       investmentRepository.create.mockRejectedValue(new Error('DB error'));
 
-      const req = { body: { name: 'Bitcoin', asset_class: 'crypto' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toThrow('DB error');
+      const res = await api.post(`${BASE}/`).send({ name: 'Bitcoin', asset_class: 'crypto' }).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
   // ── GET /api/investments/providers ─────────────────────────
   describe('GET /providers', () => {
     it('should return supported providers', async () => {
-      const req = {};
-      const res = mockResponse();
-      await routeHandlers['get:/providers'](req, res);
+      const res = await api.get(`${BASE}/providers`).expect(200);
 
-      const data = res.json.mock.calls[0][0];
-      expect(data.data.providers).toBeDefined();
-      expect(data.data.providers.length).toBeGreaterThan(0);
+      expect(res.body.data.providers).toBeDefined();
+      expect(res.body.data.providers.length).toBeGreaterThan(0);
     });
   });
 
@@ -265,11 +220,9 @@ describe('Investment Routes', () => {
       // Faithful stand-in for the real bulk update: one statement, N rows.
       investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
-      const req = { body: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/refresh-prices'](req, res);
+      const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.json.mock.calls[0][0].data;
+      const data = res.body.data;
       expect(data.updated).toBe(1);
       expect(data.priceSources).toEqual({ 1: 'live' });
       expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
@@ -285,11 +238,9 @@ describe('Investment Routes', () => {
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 123.45, source: 'cached' } });
       investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
-      const req = { body: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/refresh-prices'](req, res);
+      const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.json.mock.calls[0][0].data;
+      const data = res.body.data;
       expect(data.updated).toBe(0);
       expect(data.prices).toEqual({ 1: 123.45 });
       expect(data.priceSources).toEqual({ 1: 'cached' });
@@ -304,11 +255,9 @@ describe('Investment Routes', () => {
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 188.4, source: 'live' } });
       investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
-      const req = { body: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/refresh-prices'](req, res);
+      const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.json.mock.calls[0][0].data;
+      const data = res.body.data;
       expect(data.total).toBe(1);
       expect(data.updated).toBe(1);
       expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
@@ -321,11 +270,9 @@ describe('Investment Routes', () => {
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 101.25, source: 'live' } });
       investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
-      const req = { body: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/refresh-prices'](req, res);
+      const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.json.mock.calls[0][0].data;
+      const data = res.body.data;
       expect(data.total).toBe(1);
       expect(data.updated).toBe(1);
       expect(data.prices).toEqual({ 1: 101.25 });
@@ -338,19 +285,16 @@ describe('Investment Routes', () => {
         { id: 1, price_provider: 'manual', price_provider_id: null },
       ]);
 
-      const req = { body: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/refresh-prices'](req, res);
+      const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.updated).toBe(0);
+      expect(res.body.data.updated).toBe(0);
     });
 
     it('should handle errors', async () => {
       investmentRepository.getAll.mockRejectedValue(new Error('DB error'));
 
-      const req = { body: {} };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/refresh-prices'](req, res)).rejects.toThrow('DB error');
+      const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -362,22 +306,19 @@ describe('Investment Routes', () => {
         { timestampMs: 1700000000000, price: 700 },
       ]);
 
-      const req = { params: { id: '12' }, query: { from_ms: '1699999999999', to_ms: '1700000000001' } };
-      const res = mockResponse();
-      await routeHandlers['get:/:id/price-history'](req, res);
+      const res = await api.get(`${BASE}/12/price-history`)
+        .query({ from_ms: '1699999999999', to_ms: '1700000000001' })
+        .expect(200);
 
       expect(fetchHistoricalPrices).toHaveBeenCalledWith(
         { id: 12, price_provider: 'custom' },
         { fromMs: 1699999999999, toMs: 1700000000001, dbOnly: true }
       );
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: {
-          investment_id: 12,
-          provider: 'custom',
-          points: [{ timestampMs: 1700000000000, price: 700 }],
-        },
-      });
+      expect(res.body).toEqual(okEnvelope({
+        investment_id: 12,
+        provider: 'custom',
+        points: [{ timestampMs: 1700000000000, price: 700 }],
+      }));
     });
   });
 
@@ -386,27 +327,23 @@ describe('Investment Routes', () => {
     it('should return investment by id', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, name: 'Bitcoin' });
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
+      const res = await api.get(`${BASE}/1`).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.name).toBe('Bitcoin');
+      expect(res.body.data.name).toBe('Bitcoin');
     });
 
     it('should throw NotFoundError for non-existent', async () => {
       investmentRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { id: '999' } };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.get(`${BASE}/999`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('should handle errors', async () => {
       investmentRepository.getById.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id'](req, res)).rejects.toThrow('DB error');
+      const res = await api.get(`${BASE}/1`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -415,27 +352,23 @@ describe('Investment Routes', () => {
     it('should update investment', async () => {
       investmentRepository.update.mockResolvedValue({ id: 1, name: 'Updated' });
 
-      const req = { params: { id: '1' }, body: { name: 'Updated' } };
-      const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      const res = await api.patch(`${BASE}/1`).send({ name: 'Updated' }).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.name).toBe('Updated');
+      expect(res.body.data.name).toBe('Updated');
     });
 
     it('should throw NotFoundError for non-existent', async () => {
       investmentRepository.update.mockResolvedValue(null);
 
-      const req = { params: { id: '999' }, body: { name: 'Updated' } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.patch(`${BASE}/999`).send({ name: 'Updated' }).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('should handle errors', async () => {
       investmentRepository.update.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' }, body: { name: 'Updated' } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toThrow('DB error');
+      const res = await api.patch(`${BASE}/1`).send({ name: 'Updated' }).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
 
     it('should throw ValidationError for validation errors', async () => {
@@ -443,9 +376,8 @@ describe('Investment Routes', () => {
       err.code = 'VALIDATION_ERROR';
       investmentRepository.update.mockRejectedValue(err);
 
-      const req = { params: { id: '1' }, body: { symbol: 'AAPL' } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.patch(`${BASE}/1`).send({ symbol: 'AAPL' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
   });
 
@@ -454,28 +386,23 @@ describe('Investment Routes', () => {
     it('should delete and return 204', async () => {
       investmentRepository.hardDelete.mockResolvedValue(true);
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
+      await api.delete(`${BASE}/1`).expect(204);
 
       expect(investmentRepository.hardDelete).toHaveBeenCalledWith(1);
-      expect(res.status).toHaveBeenCalledWith(204);
     });
 
     it('should throw NotFoundError for non-existent', async () => {
       investmentRepository.hardDelete.mockResolvedValue(false);
 
-      const req = { params: { id: '999' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.delete(`${BASE}/999`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('should handle errors', async () => {
       investmentRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toThrow('DB error');
+      const res = await api.delete(`${BASE}/1`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -487,21 +414,16 @@ describe('Investment Routes', () => {
         total: 1,
       });
 
-      const req = { params: { id: '1' }, query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/:id/transactions'](req, res);
+      const res = await api.get(`${BASE}/1/transactions`).expect(200);
 
-      const data = res.json.mock.calls[0][0].data;
-      expect(data.items).toHaveLength(1);
-      expect(data.total).toBe(1);
+      expect(res.body.data.items).toHaveLength(1);
+      expect(res.body.data.total).toBe(1);
     });
 
     it('should filter by type', async () => {
       portfolioTransactionRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
-      const req = { params: { id: '1' }, query: { type: 'buy' } };
-      const res = mockResponse();
-      await routeHandlers['get:/:id/transactions'](req, res);
+      await api.get(`${BASE}/1/transactions`).query({ type: 'buy' }).expect(200);
 
       expect(portfolioTransactionRepository.getAllWithCount).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'buy' })
@@ -511,9 +433,8 @@ describe('Investment Routes', () => {
     it('should handle errors', async () => {
       portfolioTransactionRepository.getAllWithCount.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' }, query: {} };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id/transactions'](req, res)).rejects.toThrow('DB error');
+      const res = await api.get(`${BASE}/1/transactions`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -525,23 +446,16 @@ describe('Investment Routes', () => {
         id: 1, type: 'buy', amount: 1000,
       });
 
-      const req = { params: { id: '1' }, body: { type: 'buy', date: '2026-01-15', amount: 1000 } };
-      const res = mockResponse();
-      await routeHandlers['post:/:id/transactions'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(201);
+      await api.post(`${BASE}/1/transactions`).send({ type: 'buy', date: '2026-01-15', amount: 1000 }).expect(201);
     });
 
     it('should pass fx_rate_to_eur to repository create', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'USD' });
       portfolioTransactionRepository.create.mockResolvedValue({ id: 1, type: 'buy', amount: 1000, fx_rate_to_eur: 0.92 });
 
-      const req = {
-        params: { id: '1' },
-        body: { type: 'buy', date: '2026-01-15', amount: 1000, fx_rate_to_eur: 0.92 },
-      };
-      const res = mockResponse();
-      await routeHandlers['post:/:id/transactions'](req, res);
+      await api.post(`${BASE}/1/transactions`)
+        .send({ type: 'buy', date: '2026-01-15', amount: 1000, fx_rate_to_eur: 0.92 })
+        .expect(201);
 
       expect(portfolioTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -549,23 +463,20 @@ describe('Investment Routes', () => {
           fx_rate_to_eur: 0.92,
         })
       );
-      expect(res.status).toHaveBeenCalledWith(201);
     });
 
     it('should throw NotFoundError if investment not found', async () => {
       investmentRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { id: '999' }, body: { type: 'buy', date: '2026-01-15', amount: 1000 } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.post(`${BASE}/999/transactions`).send({ type: 'buy', date: '2026-01-15', amount: 1000 }).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('should throw ValidationError for missing required fields', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'EUR' });
 
-      const req = { params: { id: '1' }, body: { type: 'buy' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/1/transactions`).send({ type: 'buy' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('should throw ValidationError when repository raises validation error', async () => {
@@ -574,18 +485,16 @@ describe('Investment Routes', () => {
       err.code = 'VALIDATION_ERROR';
       portfolioTransactionRepository.create.mockRejectedValue(err);
 
-      const req = { params: { id: '1' }, body: { type: 'buy', date: '2026-01-15' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/1/transactions`).send({ type: 'buy', date: '2026-01-15' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('should handle errors', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'EUR' });
       portfolioTransactionRepository.create.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' }, body: { type: 'buy', date: '2026-01-15', amount: 1000 } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toThrow('DB error');
+      const res = await api.post(`${BASE}/1/transactions`).send({ type: 'buy', date: '2026-01-15', amount: 1000 }).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -595,34 +504,27 @@ describe('Investment Routes', () => {
       portfolioTransactionRepository.getById.mockResolvedValue({ id: 1, investment_id: 10 });
       portfolioTransactionRepository.hardDelete.mockResolvedValue(true);
 
-      const req = { params: { txnId: '1' } };
-      const res = mockResponse();
-      await routeHandlers['delete:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(204);
+      await api.delete(`${BASE}/transactions/1`).expect(204);
     });
 
     it('should throw NotFoundError for non-existent', async () => {
       portfolioTransactionRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { txnId: '999' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.delete(`${BASE}/transactions/999`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('should throw ValidationError for invalid ID', async () => {
-      const req = { params: { txnId: 'abc' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.delete(`${BASE}/transactions/abc`).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('should handle errors', async () => {
       portfolioTransactionRepository.getById.mockResolvedValue({ id: 1, investment_id: 10 });
       portfolioTransactionRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { txnId: '1' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/transactions/:txnId'](req, res)).rejects.toThrow('DB error');
+      const res = await api.delete(`${BASE}/transactions/1`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -631,34 +533,29 @@ describe('Investment Routes', () => {
     it('should update portfolio transaction', async () => {
       portfolioTransactionRepository.update.mockResolvedValue({ id: 1, amount: 1200 });
 
-      const req = { params: { txnId: '1' }, body: { amount: 1200 } };
-      const res = mockResponse();
-      await routeHandlers['patch:/transactions/:txnId'](req, res);
+      const res = await api.patch(`${BASE}/transactions/1`).send({ amount: 1200 }).expect(200);
 
       expect(portfolioTransactionRepository.update).toHaveBeenCalledWith(1, { amount: 1200 });
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 1, amount: 1200 } });
+      expect(res.body).toEqual(okEnvelope({ id: 1, amount: 1200 }));
     });
 
     it('should throw NotFoundError for non-existent transaction', async () => {
       portfolioTransactionRepository.update.mockResolvedValue(null);
 
-      const req = { params: { txnId: '999' }, body: { amount: 1200 } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.patch(`${BASE}/transactions/999`).send({ amount: 1200 }).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('should throw ValidationError for invalid ID', async () => {
-      const req = { params: { txnId: 'abc' }, body: { amount: 1200 } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.patch(`${BASE}/transactions/abc`).send({ amount: 1200 }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('should handle errors', async () => {
       portfolioTransactionRepository.update.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { txnId: '1' }, body: { amount: 1200 } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toThrow('DB error');
+      const res = await api.patch(`${BASE}/transactions/1`).send({ amount: 1200 }).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
 
     it('should throw ValidationError for validation errors', async () => {
@@ -666,25 +563,22 @@ describe('Investment Routes', () => {
       err.code = 'VALIDATION_ERROR';
       portfolioTransactionRepository.update.mockRejectedValue(err);
 
-      const req = { params: { txnId: '1' }, body: { amount: 1200 } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.patch(`${BASE}/transactions/1`).send({ amount: 1200 }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('rejects a free-text or cleared currency and uppercases a valid one', async () => {
       // PATCH forwarded the raw value to the VARCHAR(10) column (create
       // validates): garbage stored, >10 chars 22001'd, null hit NOT NULL.
       for (const currency of ['euro', null, '']) {
-        const req = { params: { txnId: '1' }, body: { currency } };
-        await expect(routeHandlers['patch:/transactions/:txnId'](req, mockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+        const res = await api.patch(`${BASE}/transactions/1`).send({ currency }).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       }
       expect(portfolioTransactionRepository.update).not.toHaveBeenCalled();
 
       portfolioTransactionRepository.update.mockResolvedValue({ id: 1, investment_id: 10, currency: 'USD' });
       // fx_rate_to_eur supplied explicitly → the fx recompute path is skipped.
-      const req = { params: { txnId: '1' }, body: { currency: 'usd', fx_rate_to_eur: 0.9 } };
-      await routeHandlers['patch:/transactions/:txnId'](req, mockResponse());
+      await api.patch(`${BASE}/transactions/1`).send({ currency: 'usd', fx_rate_to_eur: 0.9 }).expect(200);
       expect(portfolioTransactionRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ currency: 'USD' }),
@@ -699,11 +593,9 @@ describe('Investment Routes', () => {
         { type: 'buy', total_amount: 5000, count: 3 },
       ]);
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['get:/:id/summary'](req, res);
+      const res = await api.get(`${BASE}/1/summary`).expect(200);
 
-      const data = res.json.mock.calls[0][0].data;
+      const data = res.body.data;
       expect(data.investment_id).toBe(1);
       expect(data.breakdown).toHaveLength(1);
     });
@@ -711,9 +603,8 @@ describe('Investment Routes', () => {
     it('should handle errors', async () => {
       portfolioTransactionRepository.getSummary.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id/summary'](req, res)).rejects.toThrow('DB error');
+      const res = await api.get(`${BASE}/1/summary`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 });
