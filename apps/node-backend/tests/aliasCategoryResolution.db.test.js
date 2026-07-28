@@ -361,33 +361,86 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
   // Sankey
   // ───────────────────────────────────────────────────────────────────────────
   describe('computeSankeyFlow', () => {
-    // Both cited sankey sites at once. The category JOIN half is the regression
-    // pin (the alias row used to land in "Uncategorised"). The exclusion half is
-    // characterization only: pre-fix the alias row was ALSO absent when a
-    // category was excluded — but via the NULL semantics of `!= ALL` (a NULL
-    // effective category fails the comparison and drops the row), not via
-    // resolved-category matching. The clause still has that NULL-dropping
-    // defect for genuinely uncategorised rows — see the filed sankey-exclusion
-    // finding in TODO.md.
-    it('attributes an alias row to its PRIMARY default category, and excludes it by that category', async () => {
+    /** The finding's fixture: €3000 uncategorised income + an alias-Bills and a Food expense. */
+    async function seedSankeyYear() {
       await seedBase();
+      // Uncategorised at all three levels — the row the exclusion clause used to eat.
       await insertTxn({ date: '2024-01-15', amount: '3000.00', recipientId: rec.misc });
       await insertTxn({ date: '2024-02-10', amount: '-120.00', recipientId: rec.electrabelAlias });
       await insertTxn({ date: '2024-02-12', amount: '-40.00', recipientId: rec.aldi });
+    }
 
-      const env = await computeSankeyFlow({ year: 2024 });
-      const byLabel = Object.fromEntries(
-        env.data.nodes.filter((n) => n.id.startsWith('cat:')).map((n) => [n.label, n.value]),
-      );
-      expect(byLabel).toEqual({
-        'Bills: Utilities': 120, // formerly 'Uncategorised'
-        'Food: Groceries': 40,
+    /** { income, spendingByLabel } for a year's flow graph. */
+    async function flow(opts) {
+      const env = await computeSankeyFlow({ year: 2024, ...opts });
+      return {
+        income: env.data.nodes.find((n) => n.id === '__income__')?.value ?? 0,
+        spending: Object.fromEntries(
+          env.data.nodes.filter((n) => n.id.startsWith('cat:')).map((n) => [n.label, n.value]),
+        ),
+      };
+    }
+
+    // The category JOIN regression pin: the alias row used to land in
+    // "Uncategorised" because the join resolved only 2 levels.
+    it('attributes an alias row to its PRIMARY default category', async () => {
+      await seedSankeyYear();
+
+      expect(await flow({})).toEqual({
+        income: 3000,
+        spending: { 'Bills: Utilities': 120, 'Food: Groceries': 40 }, // formerly 'Uncategorised'
+      });
+    });
+
+    // Real pin for the NULL-sentinel half (was characterization only, because
+    // pre-fix the alias row vanished for the WRONG reason). `!= ALL($n)` with
+    // no `-1` sentinel is NULL — not true — for a NULL effective category, so
+    // excluding ANY category silently erased every uncategorised row: this
+    // exact fixture rendered "Income 0" with €40 still flowing out of it.
+    // buildExclusionClauses' `COALESCE(..., -1) NOT IN (...)` keeps them.
+    it('excludes by the PRIMARY default category while keeping uncategorised rows', async () => {
+      await seedSankeyYear();
+
+      expect(await flow({ excludedCategoryIds: [cat.Bills] })).toEqual({
+        income: 3000, // pre-fix: 0 — the uncategorised income row was dropped
+        spending: { 'Food: Groceries': 40 },
+      });
+    });
+
+    // Recipient exclusion is alias-aware: the bare `t.recipient_id != ALL(...)`
+    // left rows booked on an ALIAS of the excluded PRIMARY in the graph, while
+    // the category exclusion beside it already resolved the alias.
+    it('excludes a PRIMARY recipient together with its aliases, keeping recipient-less rows', async () => {
+      await seedSankeyYear();
+
+      expect(await flow({ excludedRecipientIds: [rec.electrabel] })).toEqual({
+        income: 3000,
+        spending: { 'Food: Groceries': 40 }, // pre-fix: Bills 120 survived
+      });
+    });
+
+    // ADR-083: a savings transfer's two legs inflated BOTH sides of the graph
+    // (fake income in, fake spending out) — sankey had no is_transfer filter
+    // at all. It now follows the same runtime setting as its siblings.
+    it('excludes internal transfers by default and includes them when the setting is on', async () => {
+      await seedBase();
+      await insertTxn({ date: '2024-01-15', amount: '3000.00', recipientId: rec.misc });
+      await insertTxn({ date: '2024-02-12', amount: '-40.00', recipientId: rec.aldi });
+      await insertTxn({ date: '2024-03-01', amount: '-900.00', recipientId: rec.misc, isTransfer: true });
+      await insertTxn({ date: '2024-03-01', amount: '900.00', recipientId: rec.misc, isTransfer: true });
+
+      expect(await flow({})).toEqual({
+        income: 3000, // pre-fix: 3900
+        spending: { 'Food: Groceries': 40 }, // pre-fix: + Uncategorised 900
       });
 
-      const excluded = await computeSankeyFlow({ year: 2024, excludedCategoryIds: [cat.Bills] });
-      expect(
-        excluded.data.nodes.filter((n) => n.id.startsWith('cat:')).map((n) => n.label),
-      ).toEqual(['Food: Groceries']); // characterization — passes pre-fix too (see comment above)
+      await getTestPool().query(
+        `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)`,
+      );
+      expect(await flow({})).toEqual({
+        income: 3900,
+        spending: { 'Food: Groceries': 40, Uncategorised: 900 },
+      });
     });
   });
 
