@@ -1,16 +1,18 @@
 /**
  * Attachment route tests — upload cleanup on failed DB insert.
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed. The
+ * multer upload middleware (`attachmentUpload.single`) stays mocked (as
+ * before) since it does real disk I/O; the mock now drives `req.file` /
+ * upload errors through the real middleware chain instead of the test
+ * hand-building a `req.file`.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+const uploadState = vi.hoisted(() => ({ file: null, error: null }));
 
 vi.mock('../../src/services/attachmentRecordService.js', () => ({
   attachmentRepository: {
@@ -24,15 +26,17 @@ vi.mock('../../src/services/attachmentRecordService.js', () => ({
 }));
 
 vi.mock('../../src/services/attachmentService.js', () => ({
-  attachmentUpload: { single: vi.fn(() => vi.fn()) },
+  attachmentUpload: {
+    single: () => (req, _res, cb) => {
+      if (uploadState.error) return cb(uploadState.error);
+      req.file = uploadState.file;
+      cb();
+    },
+  },
   storeAttachment: vi.fn(),
   resolveAbsolutePath: vi.fn(),
   removeAttachmentFile: vi.fn(),
   verifyAttachmentContent: vi.fn(),
-}));
-
-vi.mock('../../src/middleware/validation.js', () => ({
-  validateIdParam: vi.fn(),
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
@@ -42,16 +46,17 @@ vi.mock('../../src/config/logger.js', () => ({
 import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
 import { storeAttachment, removeAttachmentFile, verifyAttachmentContent } from '../../src/services/attachmentService.js';
 import { logger } from '../../src/config/logger.js';
-await import('../../src/routes/attachments.js');
 
-const UPLOAD_REQ = () => ({
-  params: { id: '1' },
-  file: { originalname: 'receipt.png', size: 1234 },
-});
+const { default: attachmentsRouter } = await import('../../src/routes/attachments.js');
+
+const api = routeAgent(attachmentsRouter, { mountPath: '/api/attachments' });
+const BASE = '/api/attachments';
 
 describe('Attachment routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    uploadState.file = { originalname: 'receipt.png', size: 1234 };
+    uploadState.error = null;
     verifyAttachmentContent.mockReturnValue('image/png');
     attachmentRepository.transactionExists.mockResolvedValue(true);
     storeAttachment.mockResolvedValue('attachments/1/receipt.png');
@@ -61,10 +66,9 @@ describe('Attachment routes', () => {
     it('stores the file and creates the DB row', async () => {
       attachmentRepository.create.mockResolvedValue({ id: 7, transaction_id: 1 });
 
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/transaction/:id'], UPLOAD_REQ(), res);
+      const res = await api.post(`${BASE}/transaction/1`).expect(201);
 
-      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.body).toEqual(okEnvelope({ id: 7, transaction_id: 1 }));
       expect(attachmentRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ stored_path: 'attachments/1/receipt.png' }),
       );
@@ -77,24 +81,36 @@ describe('Attachment routes', () => {
       attachmentRepository.create.mockRejectedValue(new Error('FK violation'));
       removeAttachmentFile.mockResolvedValue(undefined);
 
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/transaction/:id'], UPLOAD_REQ(), res);
+      await api.post(`${BASE}/transaction/1`).expect(500);
 
       expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt.png');
-      expect(res.status).toHaveBeenCalledWith(500);
     });
 
     it('still surfaces the insert error when cleanup itself fails', async () => {
       attachmentRepository.create.mockRejectedValue(new Error('FK violation'));
       removeAttachmentFile.mockRejectedValue(new Error('EACCES'));
 
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/transaction/:id'], UPLOAD_REQ(), res);
+      const res = await api.post(`${BASE}/transaction/1`).expect(500);
 
-      expect(res.status).toHaveBeenCalledWith(500);
-      const body = res.json.mock.calls[0][0];
-      expect(body.error.message).toBe('FK violation');
+      expect(res.body.error.message).toBe('FK violation');
       expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it('rejects a missing file with a 400 VALIDATION_ERROR envelope', async () => {
+      // Newly on-path: the real middleware chain now runs, so a request with
+      // no file actually reaches the "No file uploaded" guard.
+      uploadState.file = undefined;
+
+      const res = await api.post(`${BASE}/transaction/1`).expect(400);
+
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      expect(attachmentRepository.transactionExists).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-integer :id via the real validateIdParam guard', async () => {
+      const res = await api.post(`${BASE}/transaction/abc`).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      expect(attachmentRepository.transactionExists).not.toHaveBeenCalled();
     });
   });
 
@@ -104,14 +120,11 @@ describe('Attachment routes', () => {
       attachmentRepository.deleteById.mockResolvedValue(true);
       removeAttachmentFile.mockResolvedValue(undefined);
 
-      const res = mockResponse();
-      await routeHandlers['delete:/:id']({ params: { id: '7' } }, res);
+      const res = await api.delete(`${BASE}/7`).expect(204);
 
       expect(attachmentRepository.deleteById).toHaveBeenCalledWith(7);
       expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt.png');
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
+      expect(res.text).toBe('');
     });
 
     // The row is already gone; an orphaned file is logged, not surfaced.
@@ -120,21 +133,18 @@ describe('Attachment routes', () => {
       attachmentRepository.deleteById.mockResolvedValue(true);
       removeAttachmentFile.mockRejectedValue(new Error('EACCES'));
 
-      const res = mockResponse();
-      await routeHandlers['delete:/:id']({ params: { id: '7' } }, res);
+      const res = await api.delete(`${BASE}/7`).expect(204);
 
       expect(logger.warn).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.json).not.toHaveBeenCalled();
+      expect(res.text).toBe('');
     });
 
     it('404s when the attachment does not exist', async () => {
       attachmentRepository.findById.mockResolvedValue(null);
 
-      const res = mockResponse();
-      await callHandler(routeHandlers['delete:/:id'], { params: { id: '99' } }, res);
+      const res = await api.delete(`${BASE}/99`).expect(404);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
       expect(attachmentRepository.deleteById).not.toHaveBeenCalled();
     });
   });
@@ -145,49 +155,21 @@ describe('Attachment routes', () => {
     it('lists every attachment (unbounded query, no limit/offset echoed)', async () => {
       attachmentRepository.listByTransaction.mockResolvedValue([{ id: 1 }, { id: 2 }]);
 
-      const res = mockResponse();
-      await routeHandlers['get:/transaction/:id']({ params: { id: '5' }, query: {} }, res);
+      const res = await api.get(`${BASE}/transaction/5`).expect(200);
 
       expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(5, {});
       expect(attachmentRepository.countByTransaction).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 1 }, { id: 2 }], total: 2 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 1 }, { id: 2 }], total: 2 }));
     });
 
     it('pages and reports the full total when limit/offset are supplied', async () => {
       attachmentRepository.listByTransaction.mockResolvedValue([{ id: 2 }]);
       attachmentRepository.countByTransaction.mockResolvedValue(4);
 
-      const res = mockResponse();
-      await routeHandlers['get:/transaction/:id'](
-        { params: { id: '5' }, query: { limit: '1', offset: '1' } },
-        res,
-      );
+      const res = await api.get(`${BASE}/transaction/5?limit=1&offset=1`).expect(200);
 
       expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(5, { limit: 1, offset: 1 });
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 2 }], total: 4, limit: 1, offset: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 2 }], total: 4, limit: 1, offset: 1 }));
     });
   });
 });
-
-function mockResponse() {
-  return createMockResponse({ setHeader: vi.fn(), end: vi.fn(), headersSent: false });
-}
-
-async function callHandler(handler, req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    const code = err.code ?? 'INTERNAL_SERVER_ERROR';
-    const message = err.message ?? 'Internal server error';
-    const error = { code, message };
-    if (err.details !== undefined) error.details = err.details;
-    res.status(status).json({ ok: false, error });
-  }
-}

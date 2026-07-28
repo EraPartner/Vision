@@ -2,21 +2,17 @@
  * Category route tests.
  * Mirrors: apps/backend/tests/test_categories.py
  *
- * Uses mocked repository layer for unit testing.
- * Mocks express Router to avoid dependency issues.
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
-// Mock express Router
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
-
+// The route imports its repository through services/categoryService.js, which
+// re-exports the default from this module (`export { default } from
+// '../repositories/categoryRepository.js'`) — mocking the repository here
+// intercepts that same binding.
 vi.mock('../../src/repositories/categoryRepository.js', () => ({
   default: {
     getAll: vi.fn(),
@@ -29,15 +25,20 @@ vi.mock('../../src/repositories/categoryRepository.js', () => ({
   },
 }));
 
+vi.mock('../../src/services/materializedViewService.js', () => ({
+  scheduleRefresh: vi.fn(),
+}));
+
 vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
 import categoryRepository from '../../src/repositories/categoryRepository.js';
-import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 
-// Import routes AFTER mocks are set up
-await import('../../src/routes/categories.js');
+const { default: categoriesRouter } = await import('../../src/routes/categories.js');
+
+const api = routeAgent(categoriesRouter, { mountPath: '/api/categories' });
+const BASE = '/api/categories';
 
 describe('Category Routes', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -47,11 +48,9 @@ describe('Category Routes', () => {
       categoryRepository.getAll.mockResolvedValue([]);
       categoryRepository.getCount.mockResolvedValue(0);
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(BASE).expect(200);
 
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      expect(res.body).toEqual(expect.objectContaining({
         ok: true,
         data: expect.objectContaining({ items: [], total: 0, limit: 50, offset: 0 }),
       }));
@@ -65,26 +64,20 @@ describe('Category Routes', () => {
       categoryRepository.getAll.mockResolvedValue(categories);
       categoryRepository.getCount.mockResolvedValue(2);
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(BASE).expect(200);
 
-      const result = res.json.mock.calls[0][0];
-      expect(result.data.total).toBe(2);
-      expect(result.data.items.length).toBe(2);
+      expect(res.body.data.total).toBe(2);
+      expect(res.body.data.items.length).toBe(2);
     });
 
     it('should respect pagination parameters', async () => {
       categoryRepository.getAll.mockResolvedValue([]);
       categoryRepository.getCount.mockResolvedValue(5);
 
-      const req = { query: { limit: '2', offset: '1' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(`${BASE}?limit=2&offset=1`).expect(200);
 
-      const result = res.json.mock.calls[0][0];
-      expect(result.data.limit).toBe(2);
-      expect(result.data.offset).toBe(1);
+      expect(res.body.data.limit).toBe(2);
+      expect(res.body.data.offset).toBe(1);
     });
   });
 
@@ -95,11 +88,7 @@ describe('Category Routes', () => {
         created: true,
       });
 
-      const req = { body: { general: 'groceries', detail: 'food' } };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(201);
+      await api.post(BASE).send({ general: 'groceries', detail: 'food' }).expect(201);
     });
 
     it('should return 200 for duplicate', async () => {
@@ -108,17 +97,12 @@ describe('Category Routes', () => {
         created: false,
       });
 
-      const req = { body: { general: 'groceries', detail: 'food' } };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(200);
+      await api.post(BASE).send({ general: 'groceries', detail: 'food' }).expect(200);
     });
 
-    it('should throw ValidationError for missing fields', async () => {
-      const req = { body: { general: 'groceries' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return a 400 VALIDATION_ERROR envelope for missing fields', async () => {
+      const res = await api.post(BASE).send({ general: 'groceries' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
   });
 
@@ -126,19 +110,23 @@ describe('Category Routes', () => {
     it('should return category by id', async () => {
       categoryRepository.getById.mockResolvedValue({ id: 1, general: 'GROCERIES', detail: 'FOOD' });
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(res.json).toHaveBeenCalled();
+      const res = await api.get(`${BASE}/1`).expect(200);
+      expect(res.body.data.id).toBe(1);
     });
 
-    it('should throw NotFoundError for non-existent', async () => {
+    it('should return a 404 NOT_FOUND envelope for non-existent', async () => {
       categoryRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { id: '99999' } };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.get(`${BASE}/99999`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
+    });
+
+    it('rejects a non-integer :id via the real validateIdParam guard', async () => {
+      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // validateIdParam with a pass-through, so this guard was never tested.
+      const res = await api.get(`${BASE}/abc`).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      expect(categoryRepository.getById).not.toHaveBeenCalled();
     });
   });
 
@@ -146,19 +134,15 @@ describe('Category Routes', () => {
     it('should update category', async () => {
       categoryRepository.update.mockResolvedValue({ id: 1, general: 'UPDATED' });
 
-      const req = { params: { id: '1' }, body: { general: 'updated' } };
-      const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.json).toHaveBeenCalled();
+      const res = await api.patch(`${BASE}/1`).send({ general: 'updated' }).expect(200);
+      expect(res.body.data.general).toBe('UPDATED');
     });
 
-    it('should throw NotFoundError for non-existent', async () => {
+    it('should return a 404 NOT_FOUND envelope for non-existent', async () => {
       categoryRepository.update.mockResolvedValue(null);
 
-      const req = { params: { id: '99999' }, body: { general: 'test' } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.patch(`${BASE}/99999`).send({ general: 'test' }).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
   });
 
@@ -166,21 +150,15 @@ describe('Category Routes', () => {
     it('should delete and return 204 with no body', async () => {
       categoryRepository.hardDelete.mockResolvedValue(true);
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
+      const res = await api.delete(`${BASE}/1`).expect(204);
+      expect(res.text).toBe('');
     });
 
-    it('should throw NotFoundError for non-existent', async () => {
+    it('should return a 404 NOT_FOUND envelope for non-existent', async () => {
       categoryRepository.hardDelete.mockResolvedValue(false);
 
-      const req = { params: { id: '99999' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.delete(`${BASE}/99999`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
   });
 
@@ -188,17 +166,13 @@ describe('Category Routes', () => {
     it('should assign category to recipients', async () => {
       categoryRepository.assignToRecipients.mockResolvedValue(2);
 
-      const req = { params: { id: '1' }, body: { recipient_ids: [1, 2] } };
-      const res = mockResponse();
-      await routeHandlers['post:/:id/assign'](req, res);
-
-      expect(res.json.mock.calls[0][0].data.updated_recipients).toBe(2);
+      const res = await api.post(`${BASE}/1/assign`).send({ recipient_ids: [1, 2] }).expect(200);
+      expect(res.body.data.updated_recipients).toBe(2);
     });
 
-    it('should throw ValidationError for missing recipient_ids', async () => {
-      const req = { params: { id: '1' }, body: {} };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return a 400 VALIDATION_ERROR envelope for missing recipient_ids', async () => {
+      const res = await api.post(`${BASE}/1/assign`).send({}).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
   });
 
@@ -211,29 +185,31 @@ describe('Category Routes', () => {
       });
       categoryRepository.assignToRecipients.mockResolvedValue(3);
 
-      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: [1, 2, 3] } };
-      const res = mockResponse();
-      await routeHandlers['post:/assign'](req, res);
-
-      expect(res.json.mock.calls[0][0].data.updated_recipients).toBe(3);
+      const res = await api.post(`${BASE}/assign`)
+        .send({ category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: [1, 2, 3] })
+        .expect(200);
+      expect(res.body.data.updated_recipients).toBe(3);
     });
 
-    it('should throw ValidationError for missing category_general', async () => {
-      const req = { body: { category_detail: 'FOOD', recipient_ids: [1] } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return a 400 VALIDATION_ERROR envelope for missing category_general', async () => {
+      const res = await api.post(`${BASE}/assign`)
+        .send({ category_detail: 'FOOD', recipient_ids: [1] })
+        .expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
-    it('should throw ValidationError for missing category_detail', async () => {
-      const req = { body: { category_general: 'GROCERIES', recipient_ids: [1] } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return a 400 VALIDATION_ERROR envelope for missing category_detail', async () => {
+      const res = await api.post(`${BASE}/assign`)
+        .send({ category_general: 'GROCERIES', recipient_ids: [1] })
+        .expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
-    it('should throw ValidationError for missing recipient_ids', async () => {
-      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return a 400 VALIDATION_ERROR envelope for missing recipient_ids', async () => {
+      const res = await api.post(`${BASE}/assign`)
+        .send({ category_general: 'GROCERIES', category_detail: 'FOOD' })
+        .expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('should handle single recipient_id (not array)', async () => {
@@ -243,74 +219,64 @@ describe('Category Routes', () => {
       });
       categoryRepository.assignToRecipients.mockResolvedValue(1);
 
-      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: 42 } };
-      const res = mockResponse();
-      await routeHandlers['post:/assign'](req, res);
-
-      expect(res.json.mock.calls[0][0].data.updated_recipients).toBe(1);
+      const res = await api.post(`${BASE}/assign`)
+        .send({ category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: 42 })
+        .expect(200);
+      expect(res.body.data.updated_recipients).toBe(1);
     });
 
-    it('should propagate error when DB throws', async () => {
+    it('should propagate a 500 when the DB throws', async () => {
       categoryRepository.createOrGet.mockRejectedValue(new Error('DB error'));
 
-      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: [1] } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/assign'](req, res)).rejects.toThrow('DB error');
+      const res = await api.post(`${BASE}/assign`)
+        .send({ category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: [1] })
+        .expect(500);
+      expect(res.body.error.message).toBe('DB error');
     });
   });
 
   // ── Error paths for existing routes ────────────────────────
   describe('Error handling', () => {
-    it('GET / should propagate error when DB throws', async () => {
+    it('GET / should answer a 500 when the DB throws', async () => {
       categoryRepository.getAll.mockRejectedValue(new Error('DB error'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/'](req, res)).rejects.toThrow('DB error');
+      const res = await api.get(BASE).expect(500);
+      expect(res.body.error.message).toBe('DB error');
     });
 
-    it('POST / should propagate error when DB throws', async () => {
+    it('POST / should answer a 500 when the DB throws', async () => {
       categoryRepository.createOrGet.mockRejectedValue(new Error('DB error'));
 
-      const req = { body: { general: 'TEST', detail: 'TEST' } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toThrow('DB error');
+      const res = await api.post(BASE).send({ general: 'TEST', detail: 'TEST' }).expect(500);
+      expect(res.body.error.message).toBe('DB error');
     });
 
-    it('GET /:id should propagate error when DB throws', async () => {
+    it('GET /:id should answer a 500 when the DB throws', async () => {
       categoryRepository.getById.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id'](req, res)).rejects.toThrow('DB error');
+      const res = await api.get(`${BASE}/1`).expect(500);
+      expect(res.body.error.message).toBe('DB error');
     });
 
-    it('PATCH /:id should propagate error when DB throws', async () => {
+    it('PATCH /:id should answer a 500 when the DB throws', async () => {
       categoryRepository.update.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' }, body: { general: 'test' } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toThrow('DB error');
+      const res = await api.patch(`${BASE}/1`).send({ general: 'test' }).expect(500);
+      expect(res.body.error.message).toBe('DB error');
     });
 
-    it('DELETE /:id should propagate error when DB throws', async () => {
+    it('DELETE /:id should answer a 500 when the DB throws', async () => {
       categoryRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toThrow('DB error');
+      const res = await api.delete(`${BASE}/1`).expect(500);
+      expect(res.body.error.message).toBe('DB error');
     });
 
-    it('POST /:id/assign should propagate error when DB throws', async () => {
+    it('POST /:id/assign should answer a 500 when the DB throws', async () => {
       categoryRepository.assignToRecipients.mockRejectedValue(new Error('DB error'));
 
-      const req = { params: { id: '1' }, body: { recipient_ids: [1] } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/assign'](req, res)).rejects.toThrow('DB error');
+      const res = await api.post(`${BASE}/1/assign`).send({ recipient_ids: [1] }).expect(500);
+      expect(res.body.error.message).toBe('DB error');
     });
   });
 });
-
-function mockResponse() {
-  return createMockResponse();
-}

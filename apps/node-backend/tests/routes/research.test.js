@@ -5,16 +5,14 @@
  * scalar normalization, per-endpoint symbol requireds, key_type set + default,
  * instrument_key/query requireds, positiveInt coercion, and the macro
  * provider/series_id guards.
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js). main.js:330 also mounts `marketRateLimiter`
+ * before this router — deliberately not reproduced here (module-level counter
+ * shared across the whole worker; see routeApp.js's fidelity map).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
 
 vi.mock('../../src/services/research/researchAggregator.js', () => ({
   researchAggregator: {
@@ -53,8 +51,11 @@ import { researchAggregator } from '../../src/services/research/researchAggregat
 import { researchMappingService } from '../../src/services/research/researchMappingService.js';
 import { clearKey, listKeyStatuses } from '../../src/services/research/researchProviderKeyService.js';
 import { runPortfolioForecast } from '../../src/services/research/projection/portfolioProjection.js';
-import { ValidationError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/research.js');
+
+const { default: researchRouter } = await import('../../src/routes/research.js');
+
+const api = routeAgent(researchRouter, { mountPath: '/api/research' });
+const BASE = '/api/research';
 
 describe('Research route parameter guards', () => {
   beforeEach(() => {
@@ -67,40 +68,42 @@ describe('Research route parameter guards', () => {
   });
 
   describe('symbol requireds', () => {
-    it.each(['get:/quote', 'get:/chart', 'get:/analyst', 'get:/news'])(
-      '%s rejects a missing/empty symbol',
-      async (key) => {
-        await expect(routeHandlers[key]({ query: {} }, createMockResponse()))
-          .rejects.toThrow('symbol parameter required');
-        await expect(routeHandlers[key]({ query: { symbol: '   ' } }, createMockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+    it.each(['/quote', '/chart', '/analyst', '/news'])(
+      'GET %s rejects a missing/empty symbol',
+      async (path) => {
+        const res1 = await api.get(`${BASE}${path}`).expect(400);
+        expect(res1.body.error.message).toBe('symbol parameter required');
+
+        const res2 = await api.get(`${BASE}${path}`).query({ symbol: '   ' }).expect(400);
+        expect(res2.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       },
     );
 
     it('uses the first entry of an array-valued symbol and trims scalars', async () => {
-      await routeHandlers['get:/quote']({ query: { symbol: ['AAPL', 'MSFT'] } }, createMockResponse());
+      await api.get(`${BASE}/quote?symbol=AAPL&symbol=MSFT`).expect(200);
       expect(researchAggregator.fetch).toHaveBeenCalledWith('quote', expect.objectContaining({ symbol: 'AAPL' }));
 
-      await routeHandlers['get:/news']({ query: { symbol: '  TSLA  ' } }, createMockResponse());
+      await api.get(`${BASE}/news`).query({ symbol: '  TSLA  ' }).expect(200);
       expect(researchAggregator.fetch).toHaveBeenLastCalledWith('news', { symbol: 'TSLA' });
     });
   });
 
   describe('macro series guards', () => {
     it('rejects an unknown provider with the provider list', async () => {
-      await expect(routeHandlers['get:/macro/series']({ query: { provider: 'nope', series_id: 'CPIAUCSL' } }, createMockResponse()))
-        .rejects.toThrow('provider must be one of: fred, eurostat, dbnomics');
+      const res = await api.get(`${BASE}/macro/series`).query({ provider: 'nope', series_id: 'CPIAUCSL' }).expect(400);
+      expect(res.body.error.message).toBe('provider must be one of: fred, eurostat, dbnomics');
     });
 
     it('rejects a series_id that fails the provider shape', async () => {
-      await expect(routeHandlers['get:/macro/series']({ query: { provider: 'fred', series_id: 'a/b/c' } }, createMockResponse()))
-        .rejects.toThrow('valid series_id required for the given provider');
-      await expect(routeHandlers['get:/macro/series']({ query: { provider: 'fred' } }, createMockResponse()))
-        .rejects.toThrow('valid series_id required for the given provider');
+      const res1 = await api.get(`${BASE}/macro/series`).query({ provider: 'fred', series_id: 'a/b/c' }).expect(400);
+      expect(res1.body.error.message).toBe('valid series_id required for the given provider');
+
+      const res2 = await api.get(`${BASE}/macro/series`).query({ provider: 'fred' }).expect(400);
+      expect(res2.body.error.message).toBe('valid series_id required for the given provider');
     });
 
     it('fetches with defaulted range for a valid provider/series pair', async () => {
-      await routeHandlers['get:/macro/series']({ query: { provider: 'fred', series_id: 'CPIAUCSL' } }, createMockResponse());
+      await api.get(`${BASE}/macro/series`).query({ provider: 'fred', series_id: 'CPIAUCSL' }).expect(200);
       expect(researchAggregator.fetchMacroSeries).toHaveBeenCalledWith({
         provider: 'fred', seriesId: 'CPIAUCSL', range: '5y',
       });
@@ -109,36 +112,32 @@ describe('Research route parameter guards', () => {
 
   describe('mapping guards', () => {
     it('GET /mappings requires instrument_key and defaults key_type to isin', async () => {
-      await expect(routeHandlers['get:/mappings']({ query: {} }, createMockResponse()))
-        .rejects.toThrow('instrument_key required');
+      const res = await api.get(`${BASE}/mappings`).expect(400);
+      expect(res.body.error.message).toBe('instrument_key required');
 
-      await routeHandlers['get:/mappings']({ query: { instrument_key: 'US0378331005' } }, createMockResponse());
+      await api.get(`${BASE}/mappings`).query({ instrument_key: 'US0378331005' }).expect(200);
       expect(researchMappingService.list).toHaveBeenCalledWith('US0378331005', 'isin');
     });
 
     it('rejects an unknown key_type', async () => {
-      await expect(
-        routeHandlers['get:/mappings']({ query: { instrument_key: 'X', key_type: 'weird' } }, createMockResponse()),
-      ).rejects.toThrow("key_type must be 'isin' or 'internal'");
+      const res = await api.get(`${BASE}/mappings`).query({ instrument_key: 'X', key_type: 'weird' }).expect(400);
+      expect(res.body.error.message).toBe("key_type must be 'isin' or 'internal'");
     });
 
     it('POST /mappings/resolve requires query and coerces investment_id via parseInt', async () => {
-      await expect(
-        routeHandlers['post:/mappings/resolve']({ body: { instrument_key: 'X', query: '' } }, createMockResponse()),
-      ).rejects.toThrow('query required');
+      const res = await api.post(`${BASE}/mappings/resolve`).send({ instrument_key: 'X', query: '' }).expect(400);
+      expect(res.body.error.message).toBe('query required');
 
-      await routeHandlers['post:/mappings/resolve'](
-        { body: { instrument_key: 'X', key_type: 'internal', query: 'apple', investment_id: '5' } },
-        createMockResponse(),
-      );
+      await api.post(`${BASE}/mappings/resolve`)
+        .send({ instrument_key: 'X', key_type: 'internal', query: 'apple', investment_id: '5' })
+        .expect(200);
       expect(researchMappingService.resolve).toHaveBeenCalledWith(expect.objectContaining({
         instrumentKey: 'X', keyType: 'internal', query: 'apple', investmentId: 5,
       }));
 
-      await routeHandlers['post:/mappings/resolve'](
-        { body: { instrument_key: 'X', query: 'apple', investment_id: 'abc' } },
-        createMockResponse(),
-      );
+      await api.post(`${BASE}/mappings/resolve`)
+        .send({ instrument_key: 'X', query: 'apple', investment_id: 'abc' })
+        .expect(200);
       expect(researchMappingService.resolve).toHaveBeenLastCalledWith(
         expect.objectContaining({ investmentId: undefined }),
       );
@@ -146,46 +145,38 @@ describe('Research route parameter guards', () => {
 
     it('POST /mappings rejects a missing or empty mappings array', async () => {
       for (const mappings of [undefined, 'x', []]) {
-        await expect(
-          routeHandlers['post:/mappings']({ body: { instrument_key: 'X', mappings } }, createMockResponse()),
-        ).rejects.toThrow('mappings must be a non-empty array');
+        const res = await api.post(`${BASE}/mappings`).send({ instrument_key: 'X', mappings }).expect(400);
+        expect(res.body.error.message).toBe('mappings must be a non-empty array');
       }
     });
 
     it('DELETE /mappings/:id keeps parseInt id coercion and answers 204', async () => {
       researchMappingService.remove.mockResolvedValue(true);
-      const res = createMockResponse();
-      await routeHandlers['delete:/mappings/:id']({ params: { id: '12abc' } }, res);
+      const res = await api.delete(`${BASE}/mappings/12abc`).expect(204);
       expect(researchMappingService.remove).toHaveBeenCalledWith(12);
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
-      await expect(routeHandlers['delete:/mappings/:id']({ params: { id: 'abc' } }, createMockResponse()))
-        .rejects.toThrow('valid mapping id required');
+      expect(res.text).toBe('');
+
+      const res2 = await api.delete(`${BASE}/mappings/abc`).expect(400);
+      expect(res2.body.error.message).toBe('valid mapping id required');
     });
 
     // Idempotent: an already-removed mapping is still 204, not 404.
     it('DELETE /mappings/:id answers 204 when nothing was removed', async () => {
       researchMappingService.remove.mockResolvedValue(false);
-      const res = createMockResponse();
-      await routeHandlers['delete:/mappings/:id']({ params: { id: '5' } }, res);
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.json).not.toHaveBeenCalled();
+      const res = await api.delete(`${BASE}/mappings/5`).expect(204);
+      expect(res.text).toBe('');
     });
   });
 
   describe('DELETE /provider-keys/:provider', () => {
     it('clears the key and answers 204 with no body', async () => {
       clearKey.mockResolvedValue(true);
-      const res = createMockResponse();
-      await routeHandlers['delete:/provider-keys/:provider']({ params: { provider: 'finnhub' } }, res);
+      const res = await api.delete(`${BASE}/provider-keys/finnhub`).expect(204);
 
       expect(clearKey).toHaveBeenCalledWith('finnhub');
       // The statuses are refetched by the caller — the delete must not re-read them.
       expect(listKeyStatuses).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
+      expect(res.text).toBe('');
     });
   });
 
@@ -195,16 +186,13 @@ describe('Research route parameter guards', () => {
   describe('POST /portfolio-forecast body casing', () => {
     it('reads the snake_case spellings', async () => {
       runPortfolioForecast.mockResolvedValue({ bands: [] });
-      const res = createMockResponse();
-      await routeHandlers['post:/portfolio-forecast']({
-        body: {
-          horizon_months: 24,
-          monthly_contribution: 250,
-          paths: 500,
-          forward_blend: 0.5,
-          target_value: 100000,
-        },
-      }, res);
+      const res = await api.post(`${BASE}/portfolio-forecast`).send({
+        horizon_months: 24,
+        monthly_contribution: 250,
+        paths: 500,
+        forward_blend: 0.5,
+        target_value: 100000,
+      }).expect(200);
 
       expect(runPortfolioForecast).toHaveBeenCalledWith(expect.objectContaining({
         horizonMonths: 24,
@@ -213,19 +201,17 @@ describe('Research route parameter guards', () => {
         forwardBlend: 0.5,
         targetValue: 100000,
       }));
-      expect(res.json.mock.calls[0][0].data).toEqual({ bands: [] });
+      expect(res.body.data).toEqual({ bands: [] });
     });
 
     it('no longer accepts the camelCase spellings', async () => {
       runPortfolioForecast.mockResolvedValue({ bands: [] });
-      await routeHandlers['post:/portfolio-forecast']({
-        body: {
-          horizonMonths: 24,
-          monthlyContribution: 250,
-          forwardBlend: 0.5,
-          targetValue: 100000,
-        },
-      }, createMockResponse());
+      await api.post(`${BASE}/portfolio-forecast`).send({
+        horizonMonths: 24,
+        monthlyContribution: 250,
+        forwardBlend: 0.5,
+        targetValue: 100000,
+      }).expect(200);
 
       expect(runPortfolioForecast).toHaveBeenCalledWith(expect.objectContaining({
         horizonMonths: undefined,
@@ -237,9 +223,9 @@ describe('Research route parameter guards', () => {
 
     it('does not fall back to camelCase when the snake_case key is absent', async () => {
       runPortfolioForecast.mockResolvedValue({ bands: [] });
-      await routeHandlers['post:/portfolio-forecast']({
-        body: { horizon_months: 12, monthlyContribution: 999 },
-      }, createMockResponse());
+      await api.post(`${BASE}/portfolio-forecast`).send({
+        horizon_months: 12, monthlyContribution: 999,
+      }).expect(200);
 
       expect(runPortfolioForecast).toHaveBeenCalledWith(expect.objectContaining({
         horizonMonths: 12,
@@ -250,10 +236,9 @@ describe('Research route parameter guards', () => {
 
   describe('search empty-q short-circuit', () => {
     it('returns an empty payload without calling the aggregator', async () => {
-      const res = createMockResponse();
-      await routeHandlers['get:/search']({ query: {} }, res);
+      const res = await api.get(`${BASE}/search`).expect(200);
       expect(researchAggregator.fetch).not.toHaveBeenCalled();
-      expect(res.json.mock.calls[0][0].data).toEqual({ items: [] });
+      expect(res.body.data).toEqual({ items: [] });
     });
   });
 });

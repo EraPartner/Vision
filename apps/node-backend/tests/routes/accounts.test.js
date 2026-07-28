@@ -5,16 +5,12 @@
  * (net-worth + bank-balances) via invalidatePortfolioCaches, otherwise the
  * 5-min netWorthResponseCache keeps serving a stale net worth after an account
  * is renamed / toggled in_net_worth / archived / merged / reconciled, etc.
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
 vi.mock('../../src/services/accountService.js', () => ({
   default: {
@@ -28,6 +24,7 @@ vi.mock('../../src/services/accountService.js', () => ({
 
 vi.mock('../../src/services/accountMergeService.js', () => ({
   mergeAccounts: vi.fn(),
+  previewMerge: vi.fn(),
 }));
 
 vi.mock('../../src/services/openingBalanceService.js', () => ({
@@ -46,69 +43,57 @@ vi.mock('../../src/services/info/cache.js', () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 
-vi.mock('../../src/middleware/validation.js', () => ({
-  validateIdParam: (req, res, next) => next(),
-}));
-
 import accountService from '../../src/services/accountService.js';
 import { mergeAccounts } from '../../src/services/accountMergeService.js';
 import { setOpeningBalance } from '../../src/services/openingBalanceService.js';
 import { reconcileAccount } from '../../src/services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../../src/services/aggregationRefresh.js';
 import { invalidatePortfolioCaches } from '../../src/services/info/cache.js';
-import { ValidationError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/accounts.js');
+
+const { default: accountsRouter } = await import('../../src/routes/accounts.js');
+
+const api = routeAgent(accountsRouter, { mountPath: '/api/accounts' });
+const BASE = '/api/accounts';
 
 describe('Account Routes — portfolio cache invalidation', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('create busts the portfolio caches', async () => {
     accountService.create.mockResolvedValue({ id: 1, name: 'Cash' });
-    const res = createMockResponse();
-    await routeHandlers['post:/']({ body: { name: 'Cash' } }, res);
+    const res = await api.post(BASE).send({ name: 'Cash' }).expect(201);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
-    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.body).toEqual(okEnvelope({ id: 1, name: 'Cash', links: [] }));
   });
 
   it('update busts the portfolio caches (rename / in_net_worth / is_active / statement_balance)', async () => {
     accountService.update.mockResolvedValue({ id: 1, name: 'Renamed' });
-    const res = createMockResponse();
-    await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { name: 'Renamed' } }, res);
+    await api.patch(`${BASE}/1`).send({ name: 'Renamed' }).expect(200);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
   });
 
   it('delete busts the portfolio caches and answers 204 with no body', async () => {
     accountService.remove.mockResolvedValue(undefined);
-    const res = createMockResponse();
-    await routeHandlers['delete:/:id']({ params: { id: '1' } }, res);
+    const res = await api.delete(`${BASE}/1`).expect(204);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
-    expect(res.status).toHaveBeenCalledWith(204);
-    expect(res.send).toHaveBeenCalledWith();
-    expect(res.json).not.toHaveBeenCalled();
+    expect(res.text).toBe('');
   });
 
   it('merge busts the portfolio caches', async () => {
     mergeAccounts.mockResolvedValue({ survivor_id: 1, merged: [2] });
-    const res = createMockResponse();
-    await routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [2] } }, res);
+    await api.post(`${BASE}/1/merge`).send({ source_ids: [2] }).expect(200);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
   });
 
   it('opening-balance busts the portfolio caches and still refreshes aggregations', async () => {
     setOpeningBalance.mockResolvedValue({ id: 1 });
-    const res = createMockResponse();
-    await routeHandlers['post:/:id/opening-balance'](
-      { params: { id: '1' }, body: { balance: 100, date: '2026-01-01' } },
-      res,
-    );
+    await api.post(`${BASE}/1/opening-balance`).send({ balance: 100, date: '2026-01-01' }).expect(200);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
     expect(scheduleAggregationRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('reconcile busts the portfolio caches and still refreshes aggregations', async () => {
     reconcileAccount.mockResolvedValue({ id: 1 });
-    const res = createMockResponse();
-    await routeHandlers['post:/:id/reconcile']({ params: { id: '1' }, body: { mode: 'accept' } }, res);
+    await api.post(`${BASE}/1/reconcile`).send({ mode: 'accept' }).expect(200);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
     expect(scheduleAggregationRefresh).toHaveBeenCalledTimes(1);
   });
@@ -124,46 +109,34 @@ describe('POST /:id/merge — source_ids are rejected, not filtered', () => {
 
   it('merges a fully-valid body unchanged (parseInt coercion preserved)', async () => {
     mergeAccounts.mockResolvedValue({ into: 1, merged: [2, 3] });
-    const res = createMockResponse();
-    await routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [2, '3'] } }, res);
+    const res = await api.post(`${BASE}/1/merge`).send({ source_ids: [2, '3'] }).expect(200);
     expect(mergeAccounts).toHaveBeenCalledWith(1, [2, 3]);
-    expect(res.json).toHaveBeenCalledWith({
-      ok: true,
-      data: { into: 1, merged: [2, 3], links: [] },
-    });
+    expect(res.body).toEqual(okEnvelope({ into: 1, merged: [2, 3], links: [] }));
   });
 
   it('rejects with 400 when one source id of several is not an integer, merging nothing', async () => {
-    const res = createMockResponse();
-    await expect(
-      routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [2, 'abc', 3] } }, res),
-    ).rejects.toBeInstanceOf(ValidationError);
+    const res = await api.post(`${BASE}/1/merge`).send({ source_ids: [2, 'abc', 3] }).expect(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
     expect(mergeAccounts).not.toHaveBeenCalled();
     expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
   });
 
   it('names each offending entry (index and raw value) in the 400', async () => {
-    const res = createMockResponse();
-    await expect(
-      routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [2, 'abc', null] } }, res),
-    ).rejects.toThrow(/source_ids\[1\] \("abc"\).*source_ids\[2\] \(null\)/s);
+    const res = await api.post(`${BASE}/1/merge`).send({ source_ids: [2, 'abc', null] }).expect(400);
+    expect(res.body.error.message).toMatch(/source_ids\[1\] \("abc"\).*source_ids\[2\] \(null\)/s);
     expect(mergeAccounts).not.toHaveBeenCalled();
   });
 
   it('rejects non-integer forms that parseInt cannot coerce (null, objects, empty string)', async () => {
     for (const bad of [null, {}, '', [], undefined]) {
-      const res = createMockResponse();
-      await expect(
-        routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: { source_ids: [bad] } }, res),
-      ).rejects.toBeInstanceOf(ValidationError);
+      await api.post(`${BASE}/1/merge`).send({ source_ids: [bad] }).expect(400);
     }
     expect(mergeAccounts).not.toHaveBeenCalled();
   });
 
   it('leaves the non-array / missing source_ids path to the service (empty list)', async () => {
     mergeAccounts.mockResolvedValue({ into: 1, merged: [] });
-    const res = createMockResponse();
-    await routeHandlers['post:/:id/merge']({ params: { id: '1' }, body: {} }, res);
+    await api.post(`${BASE}/1/merge`).send({}).expect(200);
     expect(mergeAccounts).toHaveBeenCalledWith(1, []);
   });
 });
@@ -175,42 +148,44 @@ describe('Account Routes — GET / pagination is opt-in', () => {
   // must keep answering the complete list (and must not echo limit/offset).
   it('returns the full list and no limit/offset when neither param is sent', async () => {
     accountService.list.mockResolvedValue({ items: [{ id: 1 }, { id: 2 }], total: 2 });
-    const res = createMockResponse();
-    await routeHandlers['get:/']({ query: {} }, res);
+    const res = await api.get(BASE).expect(200);
 
     expect(accountService.list).toHaveBeenCalledWith({ active: true });
-    expect(res.json).toHaveBeenCalledWith({
-      ok: true,
-      data: { items: [{ id: 1 }, { id: 2 }], total: 2, links: [] },
-    });
+    expect(res.body).toEqual(okEnvelope({ items: [{ id: 1 }, { id: 2 }], total: 2, links: [] }));
   });
 
   it('treats an empty limit param as absent', async () => {
     accountService.list.mockResolvedValue({ items: [{ id: 1 }], total: 1 });
-    const res = createMockResponse();
-    await routeHandlers['get:/']({ query: { limit: '' } }, res);
+    const res = await api.get(`${BASE}?limit=`).expect(200);
 
     expect(accountService.list).toHaveBeenCalledWith({ active: true });
-    expect(res.json.mock.calls[0][0].data.limit).toBeUndefined();
+    expect(res.body.data.limit).toBeUndefined();
   });
 
   it('pages and reports the full total when limit/offset are supplied', async () => {
     accountService.list.mockResolvedValue({ items: [{ id: 3 }], total: 12 });
-    const res = createMockResponse();
-    await routeHandlers['get:/']({ query: { active: 'all', limit: '1', offset: '2' } }, res);
+    const res = await api.get(`${BASE}?active=all&limit=1&offset=2`).expect(200);
 
     expect(accountService.list).toHaveBeenCalledWith({ active: null, limit: 1, offset: 2 });
-    expect(res.json).toHaveBeenCalledWith({
-      ok: true,
-      data: { items: [{ id: 3 }], total: 12, limit: 1, offset: 2, links: [] },
-    });
+    expect(res.body).toEqual(okEnvelope({ items: [{ id: 3 }], total: 12, limit: 1, offset: 2, links: [] }));
   });
 
   it('clamps limit to the per-resource cap', async () => {
     accountService.list.mockResolvedValue({ items: [], total: 0 });
-    const res = createMockResponse();
-    await routeHandlers['get:/']({ query: { limit: '99999' } }, res);
+    await api.get(`${BASE}?limit=99999`).expect(200);
 
     expect(accountService.list).toHaveBeenCalledWith({ active: true, limit: 1000, offset: 0 });
+  });
+});
+
+describe('GET /:id — real validateIdParam guard', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rejects a non-integer :id with a 400 VALIDATION_ERROR envelope', async () => {
+    // Previously `vi.mock('.../middleware/validation.js')` replaced
+    // validateIdParam with a pass-through, so this guard was never tested.
+    const res = await api.get(`${BASE}/abc`).expect(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+    expect(accountService.get).not.toHaveBeenCalled();
   });
 });

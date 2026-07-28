@@ -7,9 +7,12 @@
  * path), but they must now parse it through the same shared default-aware helper
  * so the accepted spellings can't diverge per endpoint (methods previously
  * accepted any value via `!== 'false'`, rolling only `=== 'true'`).
+ *
+ * The router half runs against the REAL router mounted on a throwaway Express
+ * app (see tests/helpers/routeApp.js).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
+import { routeAgent } from '../helpers/routeApp.js';
 import { parseBoolQueryParam } from '../../src/routes/info/_queryParams.js';
 
 describe('parseBoolQueryParam — default-aware boolean query param', () => {
@@ -39,13 +42,6 @@ describe('parseBoolQueryParam — default-aware boolean query param', () => {
   });
 });
 
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
-
 const methodsSpy = vi.fn(async () => ({ data: {}, meta: {} }));
 const rollingSpy = vi.fn(async () => ({ data: {}, meta: {} }));
 
@@ -54,11 +50,13 @@ vi.mock('../../src/services/calculations/forecast/index.js', () => ({
   computeCashflowForecastRolling: (...a) => rollingSpy(...a),
 }));
 
-await import('../../src/routes/aggregations.js');
+const { default: aggregationsRouter } = await import('../../src/routes/aggregations.js');
 
-const run = async (key, query) => {
-  const res = createMockResponse();
-  await routeHandlers[key]({ query, get: () => undefined }, res);
+const api = routeAgent(aggregationsRouter, { mountPath: '/api/aggregations' });
+
+const run = async (path, query = {}) => {
+  const qs = new URLSearchParams(query).toString();
+  await api.get(`/api/aggregations${path}${qs ? `?${qs}` : ''}`).expect(200);
 };
 
 describe('cashflow-forecast endpoints — include_backtest default drift', () => {
@@ -68,28 +66,28 @@ describe('cashflow-forecast endpoints — include_backtest default drift', () =>
   });
 
   it('methods defaults include_backtest ON when the param is omitted', async () => {
-    await run('get:/cashflow-forecast-methods', {});
+    await run('/cashflow-forecast-methods');
     expect(methodsSpy.mock.calls[0][0].includeBacktest).toBe(true);
   });
 
   it('rolling defaults include_backtest OFF when the param is omitted', async () => {
-    await run('get:/cashflow-forecast-rolling', {});
+    await run('/cashflow-forecast-rolling');
     expect(rollingSpy.mock.calls[0][0].includeBacktest).toBe(false);
   });
 
   it('both endpoints accept the same spellings (methods "0" → false, rolling "1" → true)', async () => {
-    await run('get:/cashflow-forecast-methods', { include_backtest: '0' });
+    await run('/cashflow-forecast-methods', { include_backtest: '0' });
     expect(methodsSpy.mock.calls[0][0].includeBacktest).toBe(false);
 
-    await run('get:/cashflow-forecast-rolling', { include_backtest: '1' });
+    await run('/cashflow-forecast-rolling', { include_backtest: '1' });
     expect(rollingSpy.mock.calls[0][0].includeBacktest).toBe(true);
   });
 
   it('explicit override flips each default', async () => {
-    await run('get:/cashflow-forecast-methods', { include_backtest: 'false' });
+    await run('/cashflow-forecast-methods', { include_backtest: 'false' });
     expect(methodsSpy.mock.calls[0][0].includeBacktest).toBe(false);
 
-    await run('get:/cashflow-forecast-rolling', { include_backtest: 'true' });
+    await run('/cashflow-forecast-rolling', { include_backtest: 'true' });
     expect(rollingSpy.mock.calls[0][0].includeBacktest).toBe(true);
   });
 });
