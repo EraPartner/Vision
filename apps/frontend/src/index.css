@@ -471,6 +471,41 @@
     }
 
     /* ------------------------------------------------------------------
+     * Modal overlay backdrop (ui/dialog, ui/alert-dialog, ui/sheet).
+     *
+     * A frosted full-viewport overlay re-blurs every glass surface plus the
+     * drifting aurora on every vsync for as long as a modal is open — the
+     * most expensive standing state in the app. The frost is therefore an
+     * fx-enhanced opt-in (ADR-075); every other tier gets a flat dim the
+     * compositor can cache. The modal content's own glass is untouched.
+     * ------------------------------------------------------------------ */
+
+    .modal-overlay {
+        background: hsl(var(--background) / 0.6);
+    }
+
+    @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+        /* Gated to no-preference so the frost yields to
+           prefers-reduced-transparency, like the other fx-enhanced opt-ins. */
+        @media (prefers-reduced-transparency: no-preference) {
+            /* blur(12px) = the former Tailwind backdrop-blur-md; alphas match
+               the former bg-background/40 (dialog, sheet) — the enhanced tier
+               must look exactly like the pre-tier overlay. */
+            :root.fx-enhanced .modal-overlay {
+                background: hsl(var(--background) / 0.4);
+                -webkit-backdrop-filter: blur(12px);
+                backdrop-filter: blur(12px);
+            }
+
+            /* Alert dialogs keep their slightly stronger scrim (was
+               bg-background/50). */
+            :root.fx-enhanced .modal-overlay-strong {
+                background: hsl(var(--background) / 0.5);
+            }
+        }
+    }
+
+    /* ------------------------------------------------------------------
      * Shell surfaces
      * ------------------------------------------------------------------ */
 
