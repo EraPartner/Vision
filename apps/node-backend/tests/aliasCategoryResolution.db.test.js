@@ -7,6 +7,17 @@
  *   • sankey flow (services/calculations/aggregation/sankey),
  *   • recurring detection (services/recurringDetectionService).
  *
+ * …and, added with the follow-up pass, the remaining name-rendering surfaces:
+ *
+ *   • CSV / NDJSON export (services/transactionExport) and the owed-splits
+ *     export (repositories/splitRepository) — both carried the pre-fix
+ *     `pc`-before-`rc` CASE, so they labelled a row with the PRIMARY's category
+ *     name where the transactions list showed the ALIAS's own,
+ *   • planned transactions (repositories/plannedTransactionRepository, which
+ *     resolved 2 levels, and repositories/infoRepositoryPlanned, which resolved
+ *     1) — planned_transactions carries its own recipient_id + category_id, so
+ *     the identical 3-level resolution applies there.
+ *
  * "3-level" = own `t.category_id` → recipient's `default_category_id` →
  * PRIMARY recipient's `default_category_id`. A transaction recorded under an
  * ALIAS recipient whose PRIMARY carries the default category is categorised in
@@ -42,6 +53,14 @@ import transactionRepository from '../src/repositories/transactionRepository.js'
 import { clearMvCache } from '../src/repositories/infoRepositoryHelpers.js';
 import { clearMemoryCache } from '../src/services/currency/currencyConversionService.js';
 import { closePool } from '../src/database/connection.js';
+import {
+  buildIdListWhere,
+  streamCsvExport,
+  streamNdjsonExport,
+} from '../src/services/transactionExport.js';
+import splitRepository from '../src/repositories/splitRepository.js';
+import plannedTransactionRepository from '../src/repositories/plannedTransactionRepository.js';
+import { plannedRepository } from '../src/repositories/infoRepositoryPlanned.js';
 
 const MANAGED_VIEWS = ['mv_monthly_summary', 'mv_category_totals', 'mv_cashflow_daily'];
 
@@ -120,6 +139,77 @@ async function insertTxn({
   return rows[0].id;
 }
 
+/**
+ * seedBase() plus the topology the parent fix pinned in
+ * transactionRepository.db.test.js ("alias with its own default under a
+ * differently-defaulted primary"):
+ *
+ *   Electrabel        — PRIMARY, default category Bills:Utilities
+ *   Electrabel Retail — ALIAS of Electrabel, with its OWN default Zzz:Last
+ *
+ * A row booked against the alias resolves to Zzz:Last. The pre-fix `pc`-first
+ * CASE resolved Bills:Utilities instead — this is the only topology in which
+ * the two orders disagree, since it is the only one where BOTH rc and pc exist
+ * and differ. 'Zzz'/'Last' sorts after every other fixture category, so an
+ * ordered assertion can also tell the two resolutions apart.
+ */
+async function seedAliasWithOwnDefault() {
+  await seedBase();
+  const pool = getTestPool();
+  const { rows: catRows } = await pool.query(
+    `INSERT INTO categories (general, detail) VALUES ('Zzz', 'Last') RETURNING id`,
+  );
+  cat.Zzz = catRows[0].id;
+  const { rows: recRows } = await pool.query(
+    `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
+     VALUES ('Electrabel Retail', 'electrabel retail', $1, $2) RETURNING id`,
+    [cat.Zzz, rec.electrabel],
+  );
+  rec.electrabelOwnAlias = recRows[0].id;
+}
+
+/**
+ * The name of the category the transactions list's EFFECTIVE id names for a
+ * row — the reference every other surface's `category_name` must equal. Read
+ * back from `categories` rather than hardcoded, so the assertion is literally
+ * "the id and the name denote the same category".
+ */
+async function listResolvedCategoryName(txnId) {
+  const listed = (await transactionRepository.getAll({})).find((t) => t.id === txnId);
+  const { rows } = await getTestPool().query(
+    `SELECT general || ':' || detail AS name FROM categories WHERE id = $1`,
+    [listed.effective_category_id],
+  );
+  return { effectiveCategoryId: listed.effective_category_id, name: rows[0].name };
+}
+
+/** Minimal `res` double for the streaming export pipeline; collects the chunks. */
+function collectingRes() {
+  /** @type {string[]} */
+  const chunks = [];
+  return {
+    chunks,
+    setHeader() {},
+    write(chunk) { chunks.push(chunk); return true; },
+    end() {},
+    headersSent: false,
+  };
+}
+
+/**
+ * Insert one planned_transactions row directly (not through the repository, so
+ * repository behaviour is never asserted against itself). `dateSql` is a raw
+ * SQL date expression: the planned surfaces are windowed on CURRENT_DATE.
+ */
+async function insertPlanned({ dateSql, amount, recipientId, categoryId = null, memo = null }) {
+  const { rows } = await getTestPool().query(
+    `INSERT INTO planned_transactions (planned_date, amount, currency, recipient_id, category_id, memo)
+     VALUES (${dateSql}, $1, 'EUR', $2, $3, $4) RETURNING id`,
+    [amount, recipientId, categoryId, memo],
+  );
+  return rows[0].id;
+}
+
 async function dropManagedViews() {
   const pool = getTestPool();
   for (const view of MANAGED_VIEWS) {
@@ -142,6 +232,9 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
     // MVs first: they are the only artefact of this suite that outlives a row
     // wipe, and every other DB suite assumes a migrated DB with no MVs.
     await dropManagedViews();
+    // transaction_splits/split_payments cascade off transactions;
+    // planned_transactions does NOT cascade off recipients, so it goes first.
+    await pool.query('DELETE FROM planned_transactions');
     await pool.query('DELETE FROM transactions');
     await pool.query('DELETE FROM accounts');
     await pool.query('DELETE FROM recipients');
@@ -321,6 +414,218 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
       expect(alias.occurrences).toBe(3);
       // Formerly null: the 2-level join found no category for the alias.
       expect(alias.categoryName).toBe('Bills:Utilities');
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // CSV / NDJSON export — services/transactionExport
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('transaction export', () => {
+    /** Category column index in the (balance-less) CSV header. */
+    const CSV_CATEGORY_COL = 7;
+
+    it('labels an alias row with the category the transactions list resolves', async () => {
+      await seedAliasWithOwnDefault();
+      const aliasTxn = await insertTxn({
+        date: '2024-03-05',
+        amount: '-11.11',
+        recipientId: rec.electrabelOwnAlias,
+      });
+      const { effectiveCategoryId, name } = await listResolvedCategoryName(aliasTxn);
+      expect(effectiveCategoryId).toBe(cat.Zzz);
+      expect(name).toBe('Zzz:Last');
+
+      const csvRes = collectingRes();
+      await streamCsvExport(csvRes, buildIdListWhere([aliasTxn]));
+      // [0] is the header line, [1] the single data row.
+      expect(csvRes.chunks[0].split(',')[CSV_CATEGORY_COL]).toBe('Category');
+      // Pre-fix: 'Bills:Utilities' — the PRIMARY's category, not the alias's.
+      expect(csvRes.chunks[1].trim().split(',')[CSV_CATEGORY_COL]).toBe(name);
+
+      const jsonRes = collectingRes();
+      await streamNdjsonExport(jsonRes, buildIdListWhere([aliasTxn]));
+      expect(JSON.parse(jsonRes.chunks[0]).category).toBe(name);
+    });
+
+    it("an own category_id still wins over both recipient defaults", async () => {
+      await seedAliasWithOwnDefault();
+      const ownTxn = await insertTxn({
+        date: '2024-03-06',
+        amount: '-22.22',
+        recipientId: rec.electrabelOwnAlias,
+        categoryId: cat.Food,
+      });
+      const { effectiveCategoryId, name } = await listResolvedCategoryName(ownTxn);
+      expect(effectiveCategoryId).toBe(cat.Food);
+
+      const res = collectingRes();
+      await streamCsvExport(res, buildIdListWhere([ownTxn]));
+      expect(res.chunks[1].trim().split(',')[CSV_CATEGORY_COL]).toBe(name);
+    });
+
+    it('still reaches the PRIMARY default when the alias has none of its own', async () => {
+      await seedBase();
+      const aliasTxn = await insertTxn({
+        date: '2024-03-07',
+        amount: '-33.33',
+        recipientId: rec.electrabelAlias, // no default of its own
+      });
+      const { effectiveCategoryId, name } = await listResolvedCategoryName(aliasTxn);
+      expect(effectiveCategoryId).toBe(cat.Bills);
+
+      const res = collectingRes();
+      await streamCsvExport(res, buildIdListWhere([aliasTxn]));
+      expect(res.chunks[1].trim().split(',')[CSV_CATEGORY_COL]).toBe(name);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Owed-splits export — repositories/splitRepository
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('getOwedExportRowsByRecipient', () => {
+    it('labels an alias row with the category the transactions list resolves', async () => {
+      await seedAliasWithOwnDefault();
+      const aliasTxn = await insertTxn({
+        date: '2024-03-05',
+        amount: '-11.11',
+        recipientId: rec.electrabelOwnAlias,
+      });
+      // rec.misc owes half of the alias-recipient transaction.
+      await getTestPool().query(
+        `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, is_settled)
+         VALUES ($1, $2, '5.00', false)`,
+        [aliasTxn, rec.misc],
+      );
+      const { effectiveCategoryId, name } = await listResolvedCategoryName(aliasTxn);
+      expect(effectiveCategoryId).toBe(cat.Zzz);
+
+      const rows = await splitRepository.getOwedExportRowsByRecipient(rec.misc);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].amount).toBe(5);
+      // Pre-fix: 'Bills:Utilities' — the PRIMARY's category, not the alias's.
+      expect(rows[0].category_name).toBe(name);
+    });
+
+    it('still reaches the PRIMARY default when the alias has none of its own', async () => {
+      await seedBase();
+      const aliasTxn = await insertTxn({
+        date: '2024-03-05',
+        amount: '-11.11',
+        recipientId: rec.electrabelAlias,
+      });
+      await getTestPool().query(
+        `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, is_settled)
+         VALUES ($1, $2, '4.00', false)`,
+        [aliasTxn, rec.misc],
+      );
+      const { name } = await listResolvedCategoryName(aliasTxn);
+
+      const rows = await splitRepository.getOwedExportRowsByRecipient(rec.misc);
+      expect(rows[0].category_name).toBe(name);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Planned transactions — plannedTransactionRepository + infoRepositoryPlanned
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('planned transactions', () => {
+    // Anchored to the DB's own calendar so it lands inside every window under
+    // test: next month (getPlannedExpensesNextMonth), ≤90 days out (getDueSoon)
+    // and ≤3 months out (getForForecast).
+    const NEXT_MONTH_SQL = `(date_trunc('month', CURRENT_DATE) + interval '1 month' + interval '4 days')::date`;
+
+    async function seedPlanned() {
+      await seedAliasWithOwnDefault();
+      const aliasPlanned = await insertPlanned({
+        dateSql: NEXT_MONTH_SQL,
+        amount: '-77.00',
+        recipientId: rec.electrabelOwnAlias, // resolves via the ALIAS's own default
+        memo: 'alias planned',
+      });
+      const inheritedPlanned = await insertPlanned({
+        dateSql: NEXT_MONTH_SQL,
+        amount: '-55.00',
+        recipientId: rec.electrabelAlias, // resolves via the PRIMARY's default
+        memo: 'inherited planned',
+      });
+      const ownPlanned = await insertPlanned({
+        dateSql: NEXT_MONTH_SQL,
+        amount: '-11.00',
+        recipientId: rec.electrabelOwnAlias,
+        categoryId: cat.Food, // own category_id wins over both defaults
+        memo: 'own planned',
+      });
+      return { aliasPlanned, inheritedPlanned, ownPlanned };
+    }
+
+    it('getAll / getById / getDueSoon / getForForecast resolve all three levels', async () => {
+      const { aliasPlanned, inheritedPlanned, ownPlanned } = await seedPlanned();
+      // Pre-fix this repository resolved 2 levels (c → rc, no `pc` branch and
+      // no `pr` join), so `inheritedPlanned` came back category_name: null.
+      const expected = {
+        [aliasPlanned]: 'Zzz:Last',
+        [inheritedPlanned]: 'Bills:Utilities',
+        [ownPlanned]: 'Food:Groceries',
+      };
+
+      const { items } = await plannedTransactionRepository.getAll({});
+      expect(Object.fromEntries(items.map((r) => [r.id, r.category_name]))).toEqual(expected);
+
+      for (const [id, name] of Object.entries(expected)) {
+        const row = await plannedTransactionRepository.getById(Number(id));
+        expect(row.category_name).toBe(name);
+        // Where the row carries its OWN category_id, the id and the displayed
+        // name must denote the same category; where it does not, the name is
+        // an inherited display value and category_id is legitimately null.
+        if (row.category_id != null) expect(row.category_id).toBe(cat.Food);
+        else expect(name).not.toBe('Food:Groceries');
+      }
+
+      const due = await plannedTransactionRepository.getDueSoon(90);
+      expect(Object.fromEntries(due.map((r) => [r.id, r.category_name]))).toEqual(expected);
+
+      const forecast = await plannedTransactionRepository.getForForecast(3);
+      expect(Object.fromEntries(forecast.map((r) => [r.id, r.category_name]))).toEqual(expected);
+    });
+
+    // The search clause matches the RESOLVED label: 'Utilities' reaches the row
+    // categorised through the PRIMARY recipient's default (formerly unreachable
+    // — the clause had no pc term) and only that row (the two siblings display
+    // 'Zzz:Last' and 'Food:Groceries', even though the same pc is joined for
+    // them).
+    it('search matches the label a planned row actually displays', async () => {
+      const { aliasPlanned, inheritedPlanned, ownPlanned } = await seedPlanned();
+
+      const utilities = await plannedTransactionRepository.getAll({ search: 'Utilities' });
+      expect(utilities.items.map((r) => r.id)).toEqual([inheritedPlanned]);
+
+      const zzz = await plannedTransactionRepository.getAll({ search: 'Zzz:La' });
+      expect(zzz.items.map((r) => r.id)).toEqual([aliasPlanned]);
+
+      const food = await plannedTransactionRepository.getAll({ search: 'Groceries' });
+      expect(food.items.map((r) => r.id)).toEqual([ownPlanned]);
+    });
+
+    it('getPlannedExpensesNextMonth categorises what its sibling repository categorises', async () => {
+      const { aliasPlanned, inheritedPlanned, ownPlanned } = await seedPlanned();
+
+      // The sibling repository is the reference surface for these rows…
+      const { items } = await plannedTransactionRepository.getAll({});
+      const reference = Object.fromEntries(items.map((r) => [r.id, r.category_name]));
+
+      const result = await plannedRepository.getPlannedExpensesNextMonth('EUR');
+      // Response shape is pinned elsewhere — only the name resolution changes.
+      expect(Object.keys(result).sort()).toEqual(
+        ['daily_data', 'month', 'period_end', 'period_start', 'summary', 'year'],
+      );
+      const occurrences = result.daily_data.flatMap((d) => d.transactions);
+      expect(occurrences).toHaveLength(3);
+      // Pre-fix: all three were null except `ownPlanned` — this site joined
+      // neither rc nor pc.
+      expect(Object.fromEntries(occurrences.map((t) => [t.id, t.category_name]))).toEqual(reference);
+      expect(reference[aliasPlanned]).toBe('Zzz:Last');
+      expect(reference[inheritedPlanned]).toBe('Bills:Utilities');
+      expect(reference[ownPlanned]).toBe('Food:Groceries');
     });
   });
 });

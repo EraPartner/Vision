@@ -36,17 +36,32 @@ import { buildSetClauses } from '../lib/sqlClauses.js';
 // getDueSoon, getForForecast and the update() RETURNING wrapper all read the
 // same recipient_name + resolved category_name shape over the same joins;
 // keeping the block in one place avoids five-way drift.
-const PLANNED_SELECT_FIELDS = `pt.*,
-             r.name AS recipient_name,
-             CASE
+// planned_transactions carries its own `recipient_id` + `category_id`, so the
+// same 3-level resolution the transactions list uses applies verbatim here:
+// own (c) → recipient default (rc) → PRIMARY recipient default (pc), mirroring
+// COALESCE(pt.category_id, r.default_category_id, pr.default_category_id).
+// This used to stop at `rc` (no `pc` branch, no `pr` join), so a planned row
+// booked against an ALIAS recipient that inherits from its primary showed no
+// category at all while the equivalent transaction showed one.
+// NB: `category_id` in the projection is deliberately still pt's OWN stored
+// column (that is the editable field the PATCH round-trips); `category_name` is
+// the resolved DISPLAY name. They only coincide when pt.category_id is set.
+const PLANNED_CATEGORY_NAME_SQL = `CASE
                 WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
                 WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+                WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                 ELSE NULL
-              END AS category_name`;
+              END`;
+
+const PLANNED_SELECT_FIELDS = `pt.*,
+             r.name AS recipient_name,
+             ${PLANNED_CATEGORY_NAME_SQL} AS category_name`;
 
 const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON pt.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id`;
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      LEFT JOIN categories pc ON pr.default_category_id = pc.id`;
 
 /**
  * Attach the executions, loan_schedule and tags sub-collections to a hydrated
@@ -126,10 +141,11 @@ function buildPlannedTransactionWhereClause({
       pt.comment ILIKE $${paramIdx} OR
       pt.bank_account ILIKE $${paramIdx} OR
       r.name ILIKE $${paramIdx} OR
-      c.general ILIKE $${paramIdx} OR
-      c.detail ILIKE $${paramIdx} OR
-      rc.general ILIKE $${paramIdx} OR
-      rc.detail ILIKE $${paramIdx}
+      -- Match the RESOLVED label the row displays, not each candidate level in
+      -- turn. ORing c/rc separately both missed rows categorised through the
+      -- primary recipient (no pc term at all) and matched rows whose own
+      -- category_id overrode the recipient default the term hit.
+      ${PLANNED_CATEGORY_NAME_SQL} ILIKE $${paramIdx}
     )`;
     params.push(sp);
   }
@@ -614,11 +630,7 @@ export const plannedTransactionRepository = {
       SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
              pt.memo, pt.is_recurring, pt.recurrence_pattern,
              r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+             ${PLANNED_CATEGORY_NAME_SQL} AS category_name
       FROM planned_transactions pt
       ${PLANNED_JOINS}
       WHERE pt.is_active = true

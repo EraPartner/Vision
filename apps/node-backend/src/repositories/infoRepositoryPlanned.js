@@ -102,13 +102,25 @@ export const plannedRepository = {
 
     const sql = `
       SELECT pt.*, r.name AS recipient_name,
+             -- Same 3-level resolution as plannedTransactionRepository (and as
+             -- transactionRepository's CATEGORY_NAME_SQL): own (c) → recipient
+             -- default (rc) → PRIMARY recipient default (pc). This site
+             -- resolved c ONLY, joining neither rc nor pc, so a planned row
+             -- that inherits its category from the recipient reported
+             -- category_name: null here while its sibling repository — reading
+             -- the same table for the same row — categorised it.
              CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END AS category_name
       FROM planned_transactions pt
       LEFT JOIN recipients r ON pt.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON pt.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      LEFT JOIN categories pc ON pr.default_category_id = pc.id
       WHERE pt.is_active = true
         AND pt.is_executed = false
         AND (

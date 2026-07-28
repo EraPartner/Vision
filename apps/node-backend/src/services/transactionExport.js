@@ -72,10 +72,17 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
     SELECT t.id, t.date, t.bank_account, t.account_id,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
            t.amount, t.currency, t.balance,
+           -- Same branch order as transactionRepository's CATEGORY_NAME_SQL:
+           -- own (c) → recipient default (rc) → primary-recipient default (pc),
+           -- mirroring COALESCE(t.category_id, r.default_category_id,
+           -- pr.default_category_id). It used to test pc before rc, so an
+           -- ALIAS recipient with its own default under a differently-defaulted
+           -- PRIMARY exported the primary's category name while the
+           -- transactions list showed the alias's.
            CASE
              WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-             WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
              WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+             WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
              ELSE ''
            END AS category_name,
            t.comment,
