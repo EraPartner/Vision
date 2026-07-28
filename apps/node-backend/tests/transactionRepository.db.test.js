@@ -44,8 +44,9 @@ const T = {}; // t1..t7
  * 0066 normalized-identity arbiter (lower(btrim(name))) directly.
  *
  * The fixtures PRE-CREATE accounts rather than letting the sync trigger mint
- * them, because the trigger's own onboarding INSERT is currently broken at
- * head (see the 'account onboarding' test below): only the resolve path works.
+ * them, so corpus setup stays independent of the trigger under test. (The
+ * trigger's own onboarding path — once broken at head by the 0076 ON CONFLICT
+ * regression, fixed by migration 0083 — has its own dedicated test below.)
  */
 async function ensureAccount(name) {
   const pool = getTestPool();
@@ -451,36 +452,50 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
       expect(rows[0].n).toBe(1);
     });
 
-    // BUG (pinning current behaviour, flagged for the orchestrator):
-    // account ONBOARDING via the sync trigger is broken at schema head.
-    // Migration 0066 dropped uq_accounts_name (raw-name unique constraint) in
-    // favour of the expression index uq_accounts_name_norm on
-    // lower(btrim(name)) — and its trigger correctly targeted
-    // `ON CONFLICT (lower(btrim(name)))`. The later trigger rewrite in 0076
-    // regressed the arbiter back to `ON CONFLICT (name)`, which no longer
-    // matches ANY unique index, so the first INSERT of a transaction whose
-    // bank_account label has no existing account raises 42P10 ("there is no
-    // unique or exclusion constraint matching the ON CONFLICT specification").
-    // Every existing-label write still works (the resolve path short-circuits
-    // before the INSERT); only first-seen labels — new-account onboarding,
-    // e.g. importing a CSV for a brand-new account — blow up. No mock suite
-    // could see this: the arbiter is only validated when the trigger actually
-    // executes against the real schema.
-    it('rejects a transaction whose bank label would onboard a NEW account (0076 ON CONFLICT regression)', async () => {
-      await expect(
-        transactionRepository.create({
-          transaction_date: '2024-03-10',
-          bank_account: 'BRAND NEW BANK',
-          recipient_id: rec.delhaize,
-          amount: '-1.00',
-          category_id: null,
-          comment: null,
-        }),
-      ).rejects.toThrow(/no unique or exclusion constraint matching the ON CONFLICT/i);
-      const { rows } = await getTestPool().query(
-        `SELECT 1 FROM accounts WHERE name = 'BRAND NEW BANK'`,
+    // Regression coverage for the (fixed) 0076 ON CONFLICT arbiter finding:
+    // migration 0066 dropped uq_accounts_name for the expression index
+    // uq_accounts_name_norm on lower(btrim(name)), and the trigger rewrite in
+    // 0076 regressed the onboarding INSERT's arbiter back to
+    // `ON CONFLICT (name)` — matching NO unique index, so every first-seen
+    // label raised 42P10 at schema head ("there is no unique or exclusion
+    // constraint matching the ON CONFLICT specification"). Fixed by migration
+    // 0083 (CREATE OR REPLACE for already-migrated installs) plus an in-place
+    // edit of 0076 (fresh installs). This test formerly PINNED the failure;
+    // it now asserts the repaired behaviour: a brand-new label onboards
+    // exactly one account (trimmed name, 0066 normalized-identity dedup
+    // across casings). No mock suite could see this: the arbiter is only
+    // validated when the trigger actually executes against the real schema.
+    it('onboards a NEW account for a first-seen bank label (0076 ON CONFLICT regression, fixed by 0083)', async () => {
+      const row = await transactionRepository.create({
+        transaction_date: '2024-03-10',
+        bank_account: 'BRAND NEW BANK',
+        recipient_id: rec.delhaize,
+        amount: '-1.00',
+        category_id: null,
+        comment: null,
+      });
+      // The trigger onboarded the account and stamped the FK on the row.
+      const { rows: accounts } = await getTestPool().query(
+        `SELECT id, name FROM accounts WHERE lower(btrim(name)) = 'brand new bank'`,
       );
-      expect(rows).toEqual([]); // nothing was onboarded
+      expect(accounts).toHaveLength(1);
+      expect(accounts[0].name).toBe('BRAND NEW BANK'); // trimmed by the trigger
+      expect(row.account_id).toBe(accounts[0].id);
+
+      // A second casing/spacing of the SAME new label (raw SQL, bypassing the
+      // repository's toUpperCase) resolves to the existing account instead of
+      // minting a twin — the 0066 dedup semantics survive the 0083 fix.
+      const { rows: second } = await getTestPool().query(
+        `INSERT INTO transactions (date, amount, currency, recipient_id, bank_account)
+         VALUES ('2024-03-11', -2.00, 'EUR', $1, '  Brand New Bank ')
+         RETURNING account_id`,
+        [rec.delhaize],
+      );
+      expect(second[0].account_id).toBe(accounts[0].id);
+      const { rows: count } = await getTestPool().query(
+        `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'brand new bank'`,
+      );
+      expect(count[0].n).toBe(1); // ONE account across both casings
     });
 
     it('defaults currency to EUR and nulls bank/memo when absent', async () => {

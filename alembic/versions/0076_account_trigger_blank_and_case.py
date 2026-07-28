@@ -30,6 +30,18 @@ triggers on transactions / planned_transactions stay attached. No data is read
 or written by the migration itself.
 
 Rollback: downgrade() restores the 0062 function verbatim.
+
+RETROACTIVE FIX (2026-07-28): as originally shipped, the onboarding INSERT's
+arbiter was `ON CONFLICT (name)` — but 0066 had already dropped
+uq_accounts_name for the expression index uq_accounts_name_norm on
+`lower(btrim(name))`, so the arbiter matched NO unique index and every
+first-seen-label INSERT raised 42P10. This file is edited in place to use the
+correct `(lower(btrim(name)))` arbiter so fresh installs (and installs below
+0076) never pass through the broken state; installs that already ran the
+broken version are repaired by migration 0083, which re-issues the CREATE OR
+REPLACE with the same corrected body. The duplication is deliberate: the
+function lives in the database, so editing this file alone cannot reach
+already-migrated installs.
 """
 
 from typing import Sequence, Union
@@ -72,9 +84,18 @@ def upgrade() -> None:
                  WHERE lower(btrim(name)) = lower(acct_name)
                  ORDER BY id LIMIT 1;
                 IF resolved_id IS NULL THEN
+                    -- Arbiter = the 0066 unique expression index
+                    -- uq_accounts_name_norm on lower(btrim(name)). As shipped,
+                    -- this said `ON CONFLICT (name)` — matching no unique
+                    -- index, since 0066 dropped uq_accounts_name — so every
+                    -- first-seen-label INSERT raised 42P10. Fixed here IN
+                    -- PLACE so fresh installs never pass through the broken
+                    -- state; installs that already ran the broken version get
+                    -- the same fix via 0083's CREATE OR REPLACE (the function
+                    -- lives in the DB — editing this file cannot reach them).
                     INSERT INTO accounts (name, display_name)
                         VALUES (acct_name, acct_name)
-                        ON CONFLICT (name) DO NOTHING;
+                        ON CONFLICT (lower(btrim(name))) DO NOTHING;
                     SELECT id INTO resolved_id FROM accounts
                      WHERE lower(btrim(name)) = lower(acct_name)
                      ORDER BY id LIMIT 1;
