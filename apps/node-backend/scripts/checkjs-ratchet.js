@@ -52,18 +52,16 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  * a prefix, so new files under it are ratcheted from birth too. Held so far as
  * prefixes: the two import pipelines, currency/FX, prices, tax, and info.
  *
- * The top level of `src/services/` (the ~51 `*.js` files directly in that
- * directory, not its subdirectories) is ALMOST fully held too — but as
- * individual file paths, not a `src/services/` prefix, because 7 files there
- * are still implicit-any-dirty and a bare prefix would silently gate them
- * (immediate CI failure) along with every still-dirty subdirectory below.
- * LEFT at the top level: `aiChatService.js`, `belgianInflationService.js`,
- * `dbEditor.js`, `deduplication.js`, `marketLookupService.js`,
- * `priceProviderService.js`, `transactionExport.js`. Once those reach zero,
- * the individual entries below can collapse to a plain `src/services/`
- * top-level convention — but note that still would NOT cover subdirectories
- * (each file's prefix match is per-string, not per-directory-tree; see
- * `isRatcheted`), so the subdirectory prefixes above would still be needed.
+ * The top level of `src/services/` (all 51 `*.js` files directly in that
+ * directory, not its subdirectories) is now fully held — but still as 51
+ * individual file paths, not a `src/services/` prefix: `isRatcheted`'s prefix
+ * match is per-string-prefix, not per-directory-level, so a `src/services/`
+ * entry would ALSO match every still-dirty subdirectory below (`aiChat/` and
+ * most of `calculations/`/`research/`/`reports/`/`portfolio/`) and gate them
+ * sight-unseen — instant CI failure on this script's next run. Collapsing the
+ * 51 entries to a directory prefix is only safe once those subdirectories are
+ * themselves fully clean (at which point `src/services/` alone, without the
+ * now-redundant subdirectory prefixes, would cover the whole tree).
  *
  * `calculations/`, `research/`, `reports/`, and `portfolio/` are each
  * individually-clean-file-only so far (not yet whole subdirectories) — most
@@ -98,14 +96,16 @@ const RATCHETED = [
   'src/services/research/adapters/schemas.js',
   'src/services/research/providerRegistry.js',
 
-  // Top level of src/services/ (44 of ~51 — see LEFT list above), alphabetical.
+  // Top level of src/services/ — all 51 files, alphabetical.
   'src/services/accountMergeService.js',
   'src/services/accountService.js',
   'src/services/aggregationRefresh.js',
+  'src/services/aiChatService.js',
   'src/services/attachmentCleanup.js',
   'src/services/attachmentRecordService.js',
   'src/services/attachmentService.js',
   'src/services/bankAdapters.js',
+  'src/services/belgianInflationService.js',
   'src/services/bulkSelection.js',
   'src/services/cashForecastInsightService.js',
   'src/services/categoryOutlierService.js',
@@ -114,9 +114,12 @@ const RATCHETED = [
   'src/services/crossWorkspaceDataService.js',
   'src/services/customParserConfigService.js',
   'src/services/dataImportService.js',
+  'src/services/dbEditor.js',
+  'src/services/deduplication.js',
   'src/services/importBatchService.js',
   'src/services/infoService.js',
   'src/services/insightsDigestService.js',
+  'src/services/marketLookupService.js',
   'src/services/materializedViewService.js',
   'src/services/openingBalanceService.js',
   'src/services/plannedExecutionService.js',
@@ -124,6 +127,7 @@ const RATCHETED = [
   'src/services/plannedTransactionService.js',
   'src/services/portfolioImportBatchService.js',
   'src/services/portfolioPerformanceSnapshotService.js',
+  'src/services/priceProviderService.js',
   'src/services/providerHealthService.js',
   'src/services/quoteBackfillService.js',
   'src/services/recipientBankAccountService.js',
@@ -140,6 +144,7 @@ const RATCHETED = [
   'src/services/subscriptionCreepService.js',
   'src/services/tagService.js',
   'src/services/transactionBulkService.js',
+  'src/services/transactionExport.js',
   'src/services/transactionService.js',
   'src/services/transferReconciliationService.js',
   'src/services/watchlistService.js',

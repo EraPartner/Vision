@@ -1020,4 +1020,31 @@
  * @typedef {Record<string, number>} RateTable
  */
 
+// ---------------------------------------------------------------------------
+// Belgian inflation rates
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of `belgian_inflation_rates` (migration 0001).
+ *
+ * @typedef {object} BelgianInflationRateRow
+ * @property {number} id SERIAL
+ * @property {Date} month_date DATE (first-of-month) — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string.
+ * @property {string} monthly_rate NUMERIC(10,8) — pg emits NUMERIC as a string.
+ * @property {string} source VARCHAR(50) NOT NULL DEFAULT 'statbel'.
+ * @property {Date} fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW().
+ * @property {Date|null} updated_at TIMESTAMPTZ
+ */
+
+/**
+ * The service's normalized shape for one month's inflation rate — used both
+ * for DB-loaded rows (after `monthKeyFromDatabaseValue`/`Number()`) and rates
+ * parsed from an external payload (Statbel/Eurostat), which are the same
+ * shape before being persisted.
+ *
+ * @typedef {object} BelgianInflationRate
+ * @property {string} month 'YYYY-MM'.
+ * @property {number} monthly_rate Already-numeric fraction (e.g. 0.0025), rounded to `RATE_DECIMALS`.
+ */
+
 export {};

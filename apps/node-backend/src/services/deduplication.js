@@ -6,11 +6,24 @@ import crypto from 'crypto';
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 
+/**
+ * @typedef {object} FieldHashInput
+ * @property {Date} date genuine UTC-instant Date (see contract note below).
+ * @property {number|string} amount
+ * @property {string} [recipient]
+ * @property {string} [memo]
+ * @property {string} [rawData]
+ */
+
 // `transactionData.date` must be a genuine UTC-instant Date (e.g. from the
 // import pipeline's parseDateFlexibleUtc) — `.toISOString()` extracts its UTC
 // calendar day. Do NOT pass a pg-read DATE column here: those parse as
 // local-midnight Date objects (see lib/dateFormat.js) and would day-shift the
 // hash on any host east of UTC.
+/**
+ * @param {FieldHashInput} transactionData
+ * @returns {string}
+ */
 export function createTransactionHash(transactionData) {
   let raw = transactionData.rawData;
   if (!raw) {
@@ -20,13 +33,29 @@ export function createTransactionHash(transactionData) {
 }
 
 /**
+ * @typedef {object} ManualHashInput
+ * @property {string|Date} date
+ * @property {number|string} amount
+ * @property {number|string|null} [recipientId]
+ * @property {string|null} [memo]
+ * @property {string|null} [bankAccount]
+ */
+
+/**
  * Create a hash for a manually added transaction.
+ *
+ * @param {ManualHashInput} input
+ * @returns {string}
  */
 export function createManualTransactionHash({ date, amount, recipientId, memo, bankAccount }) {
   const raw = `manual|${date}|${amount}|${recipientId}|${(memo || '').toUpperCase()}|${(bankAccount || '').toUpperCase()}`;
   return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
 }
 
+/**
+ * @param {FieldHashInput} transactionData
+ * @returns {Promise<boolean>}
+ */
 export async function isDuplicate(transactionData) {
   // Same UTC-instant contract as createTransactionHash above:
   // transactionData.date must be a genuine UTC-instant Date, not a pg-read
@@ -58,6 +87,13 @@ export async function isDuplicate(transactionData) {
   return result.rows.length > 0;
 }
 
+/**
+ * @param {string} date
+ * @param {number|string} amount
+ * @param {string} [recipientName]
+ * @param {string} [memo]
+ * @returns {Promise<boolean>}
+ */
 export async function isDuplicateByFields(date, amount, recipientName, memo) {
   const result = await query(
     `SELECT id FROM transactions t
@@ -72,7 +108,9 @@ export async function isDuplicateByFields(date, amount, recipientName, memo) {
 
 /**
  * Check if a manually added transaction is a duplicate using the manual_raw_transactions table.
- * Returns { isDuplicate: boolean, existingTransactionId: number|null }
+ *
+ * @param {ManualHashInput} input
+ * @returns {Promise<{ isDuplicate: boolean, existingTransactionId: number|null }>}
  */
 export async function isManualDuplicate({ date, amount, recipientId, memo, bankAccount }) {
   const hash = createManualTransactionHash({ date, amount, recipientId, memo, bankAccount });
@@ -118,6 +156,9 @@ export async function isManualDuplicate({ date, amount, recipientId, memo, bankA
 
 /**
  * Record a manually added transaction in the raw table for future dedup.
+ *
+ * @param {ManualHashInput & { categoryId?: number|string|null, comment?: string|null, transactionId: number|string }} input
+ * @returns {Promise<void>}
  */
 export async function recordManualRawTransaction({ date, amount, recipientId, memo, bankAccount, categoryId, comment, transactionId }) {
   const hash = createManualTransactionHash({ date, amount, recipientId, memo, bankAccount });
