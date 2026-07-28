@@ -123,11 +123,23 @@ export const recipientInsightsRepository = {
         avgAmount: roundToCents(r.totalSpend / r.transactionCount),
       }));
 
+    // Grouped per (recipient, period, DATE, currency) for the same reason top
+    // merchants above is: the conversion below needs each row's OWN date rate.
+    // Aggregating a whole month first and converting the SUM afterwards has to
+    // pick ONE rate for the month, and passing no options at all picked the
+    // CURRENT `is_latest` rate for BOTH months — so a rate move between the two
+    // compared months was invisible (the change percent measured spend only)
+    // and MoM's EUR figures disagreed with the now-historical top-merchants /
+    // by-year / pivot surfaces on the same page. amount < 0 is pinned, so ABS
+    // distributes over the same-sign SUM and SUM-then-convert per date is
+    // identical to converting each row; the per-(recipient, period) totals are
+    // re-reduced in JS below.
     const momRawResult = await query(`
       SELECT
         COALESCE(pr.id, r.id)       AS recipient_id,
         COALESCE(pr.name, r.name)   AS recipient_name,
         TO_CHAR(t.date, 'YYYY-MM')  AS period,
+        t.date,
         t.currency,
         SUM(ABS(t.amount))          AS abs_amount
       FROM transactions t
@@ -146,12 +158,14 @@ export const recipientInsightsRepository = {
                        + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)
         )
         ${exclusionWhere}
-      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.currency
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
     `, params);
 
+    // Historical per-date rates, matching top merchants / by-year / pivot.
     const momConverted = await convertRowsToEur(
       mapRowsForAmountConversion(momRawResult.rows, 'abs_amount', false),
-      targetCurrency
+      targetCurrency,
+      { useHistoricalRatesByDate: true, dateField: 'date' }
     );
 
     // Derive the current / previous month keys in the database so they match
@@ -171,8 +185,14 @@ export const recipientInsightsRepository = {
       const rid = row.recipient_id;
       const eur = row.amount_eur;
       if (!momAgg[rid]) momAgg[rid] = { name: row.recipient_name, current: 0, previous: 0 };
-      if (row.period === currentPeriod) momAgg[rid].current += eur;
-      else if (row.period === prevPeriod) momAgg[rid].previous += eur;
+      // Decimal accumulation (money-hygiene), as in the top-merchants reduction
+      // above: per-date conversion means a month is now many converted rows,
+      // and native `+=` over them drifts sub-cent before the final round.
+      if (row.period === currentPeriod) {
+        momAgg[rid].current = toNumber(toDecimal(momAgg[rid].current).plus(toDecimal(eur)));
+      } else if (row.period === prevPeriod) {
+        momAgg[rid].previous = toNumber(toDecimal(momAgg[rid].previous).plus(toDecimal(eur)));
+      }
     }
 
     const monthOverMonth = Object.entries(momAgg)

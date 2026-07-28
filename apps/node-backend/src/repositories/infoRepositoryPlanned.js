@@ -4,7 +4,7 @@
 
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { toAppTz, toAppDateString } from '../lib/timezone.js';
+import { toAppDateString, todayAppDateString, firstOfMonthYmd, addDaysYmd } from '../lib/timezone.js';
 import { calculateNextDate } from '../lib/calculations/recurrence.js';
 import { addAll, toDecimal, toNumber } from '../lib/money.js';
 import {
@@ -90,15 +90,22 @@ function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
 
 export const plannedRepository = {
   async getPlannedExpensesNextMonth(targetCurrency = 'EUR') {
-    // Anchor the month window to today's calendar month in APP_TIMEZONE.
-    // Constructed LOCALLY to pair with formatDateToYmd's local extraction —
-    // a UTC-constructed boundary would render as the last day of the previous
-    // month on any server west of UTC. (today.month is 1-based, so passing it
-    // as the 0-based month argument yields the first of the NEXT month.)
-    const today = toAppTz(new Date());
-    const nextMonth = new Date(today.year, today.month, 1);
-    const monthAfter = new Date(today.year, today.month + 1, 1);
-    const lastDay = new Date(monthAfter.getTime() - 1);
+    // Anchor the month window to today's calendar month in APP_TIMEZONE and
+    // keep it as YYYY-MM-DD strings throughout (ADR-009 helpers: pure calendar
+    // math, host-timezone independent).
+    //
+    // The boundaries used to be `Date`s built with LOCAL getters
+    // (`new Date(today.year, today.month, 1)`) but read back with UTC ones
+    // (`getUTCMonth()`/`getUTCFullYear()`) for the `month`/`year` fields. East
+    // of UTC — including the default APP_TIMEZONE=Europe/Brussels — local
+    // midnight of the 1st is still the PREVIOUS month in UTC, so the response
+    // named one month while `period_start` (formatted with local getters)
+    // named the next: month=7 alongside period_start='2026-08-01'.
+    const todayYmd = todayAppDateString();
+    const startYmd = firstOfMonthYmd(todayYmd, 1); // first of next month
+    const endYmd = firstOfMonthYmd(todayYmd, 2); // first of the month after (exclusive)
+    const lastDayYmd = addDaysYmd(endYmd, -1);
+    const [nextMonthYear, nextMonthMonth] = startYmd.split('-').map((s) => parseInt(s, 10));
 
     const sql = `
       SELECT pt.*, r.name AS recipient_name,
@@ -130,18 +137,12 @@ export const plannedRepository = {
       ORDER BY pt.planned_date ASC
     `;
 
-    const result = await query(sql, [
-      formatDateToYmd(nextMonth),
-      formatDateToYmd(monthAfter),
-    ]);
+    const result = await query(sql, [startYmd, endYmd]);
 
     const plannedConverted = await convertRowsToEur(
       mapRowsForAmountConversion(result.rows, 'amount', false),
       targetCurrency
     );
-
-    const startYmd = formatDateToYmd(nextMonth);
-    const endYmd = formatDateToYmd(monthAfter);
 
     /**
      * `total_income` / `total_expenses` are deliberately `any`: they hold
@@ -223,10 +224,10 @@ export const plannedRepository = {
     }
 
     return {
-      month: nextMonth.getUTCMonth() + 1,
-      year: nextMonth.getUTCFullYear(),
-      period_start: formatDateToYmd(nextMonth),
-      period_end: formatDateToYmd(lastDay),
+      month: nextMonthMonth,
+      year: nextMonthYear,
+      period_start: startYmd,
+      period_end: lastDayYmd,
       daily_data: dailyData,
       summary: {
         total_income: roundToCents(totalIncome),

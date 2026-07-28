@@ -234,6 +234,20 @@ describe('InfoRepository', () => {
     it('should fall back to cumulative transaction flow when no bank balances are available', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
+        // Discriminated by 'tx_cumulative', the fallback's own CTE:
+        // `COALESCE(SUM(t.amount), 0) AS amount` also appears inside the
+        // shared balance-series CTEs, so it cross-matches the history walk.
+        // Like the 'WITH anchor' branch below, this MUST come before the
+        // generic 'SELECT 1 FROM' one — the fallback's tracking-only exclusion
+        // contains `NOT EXISTS (SELECT 1 FROM accounts a …)`.
+        if (sql.includes('tx_cumulative')) {
+          return {
+            rows: [
+              { day: '2026-02-01', currency: 'EUR', value: '1200' },
+              { day: todayKey, currency: 'EUR', value: '1500' },
+            ],
+          };
+        }
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
@@ -242,18 +256,17 @@ describe('InfoRepository', () => {
         if (sql.includes('balance_series')) {
           return { rows: [] };
         }
-        if (sql.includes('COALESCE(SUM(t.amount), 0) AS amount')) {
-          return {
-            rows: [
-              { day: '2026-02-01', currency: 'EUR', value: '1200' },
-              { day: todayKey, currency: 'EUR', value: '1500' },
-            ],
-          };
-        }
         return { rows: [] };
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
+
+      // The fallback query must carry the tracking-only exclusion: a ledger
+      // whose only active accounts are in_net_worth=false must not have THEIR
+      // running total reported as net worth.
+      const fallbackSql = query.mock.calls.map(([s]) => s)
+        .find((s) => typeof s === 'string' && s.includes('tx_cumulative'));
+      expect(fallbackSql).toContain('a.in_net_worth = false');
 
       expect(result.current.liquid).toBe(1500);
       expect(result.current.investments).toBe(500);
@@ -727,6 +740,50 @@ describe('InfoRepository', () => {
         expect(query.mock.calls[0][0]).toContain('is_executed = false');
       } finally {
         vi.useRealTimers();
+      }
+    });
+
+    // The month window used to be built as LOCAL Dates (`new Date(today.year,
+    // today.month, 1)`) but read back for the `month`/`year` fields with UTC
+    // getters. On a server east of UTC — including the default
+    // APP_TIMEZONE=Europe/Brussels — local midnight of the 1st is still the
+    // PREVIOUS month in UTC, so the response named month 6 while period_start
+    // (local extraction) named 2026-07-01, and at a year boundary it named the
+    // previous YEAR too. Neither CI nor the container can see it: both run
+    // TZ=UTC, where local and UTC getters agree.
+    it.each([
+      ['mid-year', '2026-06-15T12:00:00Z', 7, 2026, '2026-07-01', '2026-07-31'],
+      ['across the year boundary', '2026-12-15T12:00:00Z', 1, 2027, '2027-01-01', '2027-01-31'],
+    ])('names the next month consistently with period_start east of UTC (%s)', async (
+      _label, systemTime, month, year, periodStart, periodEnd,
+    ) => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      const prevTz = process.env.TZ;
+      process.env.TZ = 'Asia/Tokyo'; // UTC+9 — local midnight is the day before in UTC
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(systemTime));
+      try {
+        query.mockResolvedValueOnce({ rows: [] });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+
+        expect(result.period_start).toBe(periodStart);
+        expect(result.period_end).toBe(periodEnd);
+        // The headline month/year must name the SAME month period_start does.
+        expect({ month: result.month, year: result.year }).toEqual({ month, year });
+        // …and the SQL window must be bound to that same month.
+        expect(query.mock.calls[0][1]).toEqual([periodStart, expect.any(String)]);
+      } finally {
+        vi.useRealTimers();
+        // Restore, not reassign: `process.env.TZ = undefined` writes the literal
+        // string "undefined", leaving Intl on an invalid zone for the rest of
+        // the file.
+        if (prevTz === undefined) delete process.env.TZ;
+        else process.env.TZ = prevTz;
       }
     });
 

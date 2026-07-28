@@ -193,13 +193,31 @@ export const netWorthRepository = {
     // Reached whenever the walk produced no rows at all: no in-net-worth
     // account owns an active row. That covers the un-migrated ledger this was
     // written for (transactions still carrying a NULL account_id) but ALSO the
-    // case where every account with activity is in_net_worth=false — and the
-    // fallback below sums transactions with no account/in_net_worth predicate
-    // at all, so a ledger of purely tracking-only accounts reports THEIR
-    // running total as net worth instead of 0. Pre-existing and filed
-    // separately; the walk itself no longer needs rescuing when nothing is
-    // stamped, since an unstamped account resolves to its running Σ(amount) day
-    // by day, which is exactly what this fallback computes.
+    // case where every account with activity is in_net_worth=false. The walk
+    // itself no longer needs rescuing when nothing is stamped, since an
+    // unstamped account resolves to its running Σ(amount) day by day, which is
+    // exactly what this fallback computes.
+    //
+    // `NOT_TRACKING_ONLY` below is what keeps the two populations apart. The
+    // fallback used to sum EVERY active transaction with no account /
+    // in_net_worth predicate at all, so a ledger whose only active accounts are
+    // in_net_worth=false reported THEIR running total as net worth (measured:
+    // liquid −143.25 where 0 is correct). It cannot simply inner-join
+    // `accounts` either — the un-migrated ledger it exists for has rows with a
+    // `bank_account` string (or nothing) and NO accounts row behind them, and
+    // an inner join would drop exactly the rows the fallback is here to count.
+    //
+    // So the predicate excludes only rows POSITIVELY attributed to an
+    // in_net_worth=false account, mirroring the walk's own resolution, which
+    // reads `transactions.account_id` and nothing else (`account_list` above).
+    // Rows with a NULL account_id stay counted: they are unattributed, and
+    // nothing says they belong to a tracking-only account. An all-tracking
+    // ledger therefore yields no rows at all → every day is 0.
+    const NOT_TRACKING_ONLY = `
+            AND NOT EXISTS (
+              SELECT 1 FROM accounts a
+              WHERE a.id = t.account_id AND a.in_net_worth = false
+            )`;
     if (bankHistoryConverted.length === 0) {
       logger.debug('Net worth account balance history empty; using transaction flow fallback', {
         targetCurrency,
@@ -220,6 +238,7 @@ export const netWorthRepository = {
           WHERE t.is_active = true
             AND t.date >= (SELECT start_date FROM bounds)
             AND t.date <= (SELECT end_date FROM bounds)
+            ${NOT_TRACKING_ONLY}
         ),
         tx_daily AS (
           SELECT
@@ -230,6 +249,7 @@ export const netWorthRepository = {
           WHERE t.is_active = true
             AND t.date >= (SELECT start_date FROM bounds)
             AND t.date <= (SELECT end_date FROM bounds)
+            ${NOT_TRACKING_ONLY}
           GROUP BY t.date::date, COALESCE(t.currency, 'EUR')
         ),
         tx_series AS (

@@ -323,6 +323,40 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       const r = await recipientInsightsRepository.getRecipientInsights('EUR');
       expect(mom(r, 'Colruyt')).toMatchObject({ currentSpend: 10, previousSpend: 10, changePercent: 0 });
     });
+
+    // Same class as the top-merchants FX fix, one function away: `momConverted`
+    // passed NO options, so both compared months were converted at the CURRENT
+    // `is_latest` rate. A rate move between them was therefore invisible — an
+    // identical 100 USD in each month read 90/90 (changePercent 0) instead of
+    // 50/25 — and the EUR figures contradicted the historical-rate
+    // top-merchants / by-year / pivot surfaces on the same page. The query now
+    // carries `t.date` in its GROUP BY so it can be converted per date too.
+    it('converts each month at ITS OWN date rate, agreeing with top merchants', async () => {
+      await seedBase();
+      const { rows } = await getTestPool().query(`
+        SELECT to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM-DD') AS cur_day,
+               to_char(date_trunc('month', CURRENT_DATE) - INTERVAL '1 month', 'YYYY-MM-DD') AS prev_day
+      `);
+      const { cur_day: curDay, prev_day: prevDay } = rows[0];
+
+      await insertRate('USD', prevDay, '0.25');
+      await insertRate('USD', curDay, '0.50');
+      // The latest rate is what the old code used for BOTH months.
+      await insertRate('USD', '2000-01-01', '0.90', true);
+
+      await insertTxn({ date: prevDay, amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
+      await insertTxn({ date: curDay, amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
+
+      const r = await recipientInsightsRepository.getRecipientInsights('EUR');
+      expect(mom(r, 'Colruyt')).toMatchObject({
+        currentSpend: 50, // curDay rate 0.50, not the latest 0.90
+        previousSpend: 25, // prevDay rate 0.25 — the rate move is now visible
+        changePercent: 100, // was 0: identical USD spend at one shared rate
+      });
+      // Cross-surface: MoM's two months must add up to what top merchants
+      // reports for the same recipient over the same two transactions.
+      expect(merchant(r, 'Colruyt').totalSpend).toBe(75);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────

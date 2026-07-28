@@ -319,6 +319,63 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       const r = await infoRepository.getNetWorthFromSnapshots();
       expect(r.current.liquid).toBe(1000);
     });
+
+    // The transaction-flow fallback fires whenever the balance walk returns no
+    // rows — which is not only the un-migrated ledger it was written for, but
+    // ALSO a ledger where every account with activity is in_net_worth=false.
+    // It used to sum ALL active transactions with no account / in_net_worth
+    // predicate, so that ledger reported the tracking-only accounts' running
+    // total as net worth (measured: liquid −143.25 where 0 is correct).
+    it('reports 0 for a ledger whose only active accounts are tracking-only', async () => {
+      await seedBase();
+      const today = TODAY();
+      const d1 = addDaysYmd(today, -1);
+      await addAccount('TRACKING', { inNetWorth: false });
+      // Unstamped on purpose: the walk is empty either way (no in-net-worth
+      // account owns a row), so the fallback is what answers.
+      await insertTxn({ date: d1, amount: '-133.25', bank: 'TRACKING' });
+      await insertTxn({ date: today, amount: '-10.00', bank: 'TRACKING' });
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.current).toEqual({ liquid: 0, liabilities: 0, investments: 0, netWorth: 0 });
+      expect(r.snapshots.map((s) => s.liquid)).toEqual([0, 0]);
+    });
+
+    // The other half of the same predicate: the fallback must keep counting
+    // rows that are NOT positively attributed to a tracking-only account. A
+    // bare inner join to `accounts` would have dropped exactly these — the
+    // un-migrated ledger the fallback exists to serve.
+    it('still sums un-migrated rows whose bank_account has no accounts row', async () => {
+      await seedBase();
+      const today = TODAY();
+      const d1 = addDaysYmd(today, -1);
+      // Written with no bank label (account_id NULL), then relabelled: the
+      // sync trigger only ever resolves an UPDATE against an EXISTING account,
+      // so the row keeps account_id NULL behind a bank_account string with no
+      // accounts row — the shape a pre-accounts ledger carries.
+      await insertTxn({ date: d1, amount: '1200.00', bank: null });
+      await insertTxn({ date: today, amount: '300.00', bank: null });
+      await getTestPool().query(`UPDATE transactions SET bank_account = 'LEGACY BANK'`);
+      expect(
+        (await getTestPool().query(`SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`)).rows[0].n,
+      ).toBe(2);
+      expect((await getTestPool().query('SELECT count(*)::int AS n FROM accounts')).rows[0].n).toBe(0);
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.snapshots.map((s) => [s.date, s.liquid])).toEqual([[d1, 1200], [today, 1500]]);
+      expect(r.current.liquid).toBe(1500);
+    });
+
+    it('drops only the tracking-attributed rows when un-migrated rows sit alongside them', async () => {
+      await seedBase();
+      const today = TODAY();
+      await addAccount('TRACKING', { inNetWorth: false });
+      await insertTxn({ date: today, amount: '-133.25', bank: 'TRACKING' });
+      await insertTxn({ date: today, amount: '1000.00', bank: null }); // unattributed
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.current.liquid).toBe(1000); // not 866.75
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
