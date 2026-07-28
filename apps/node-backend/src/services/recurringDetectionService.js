@@ -155,7 +155,7 @@ export async function detectRecurringPatterns() {
     const result = await query(`
       SELECT t.id, t.date, t.amount, t.currency, t.memo, t.bank_account,
              t.recipient_id, r.name AS recipient_name,
-             t.category_id,
+             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              COALESCE(c.general || ':' || c.detail, NULL) AS category_name
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
@@ -278,7 +278,7 @@ export async function detectRecurringPatterns() {
         averageAmount: roundMoney(avgAmount),
         latestAmount: roundMoney(latestAmount),
         currency,
-        categoryId: txns[txns.length - 1].category_id,
+        categoryId: txns[txns.length - 1].effective_category_id,
         categoryName: txns[txns.length - 1].category_name,
         bankAccount: txns[txns.length - 1].bank_account,
         // DATE columns: calendar-day strings, not raw pg Dates (which

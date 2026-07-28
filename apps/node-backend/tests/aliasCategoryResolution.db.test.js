@@ -468,6 +468,36 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
       // Formerly null: the 2-level join found no category for the alias.
       expect(alias.categoryName).toBe('Bills:Utilities');
     });
+
+    it('categoryId denotes the same category categoryName names, even for a recipient-default-resolved alias', async () => {
+      await seedBase();
+      // Three monthly occurrences under the ALIAS, none carrying its own
+      // category.id — the category comes only from the PRIMARY's default.
+      for (const daysAgo of [90, 60, 30]) {
+        await insertTxn({
+          dateSql: `(CURRENT_DATE - interval '${daysAgo} days')::date`,
+          amount: '-120.00',
+          recipientId: rec.electrabelAlias,
+        });
+      }
+      __clearRecurringCacheForTests();
+
+      const { patterns } = await detectRecurringPatterns();
+      const alias = patterns.find((p) => p.recipientId === rec.electrabelAlias);
+      expect(alias).toBeDefined();
+      // Pre-fix: categoryId was the raw (null) t.category_id while categoryName
+      // was already resolved through the 3-level COALESCE — so a
+      // recipient-default-categorised pattern reported categoryId: null beside
+      // a non-null categoryName, and any consumer keying on the id (e.g. the
+      // "create planned payment" POST) saw it as uncategorised.
+      expect(alias.categoryId).not.toBeNull();
+      const { rows } = await getTestPool().query(
+        `SELECT general || ':' || detail AS name FROM categories WHERE id = $1`,
+        [alias.categoryId],
+      );
+      expect(rows[0]?.name).toBe(alias.categoryName);
+      expect(alias.categoryId).toBe(cat.Bills);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
