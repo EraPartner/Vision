@@ -581,20 +581,28 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
       expect(row.amount).toBe('-18.7500');
     });
 
-    // POSSIBLE BUG (pinning current behaviour, flagged for the orchestrator):
-    // update()'s RETURNING enrichment joins only 2 category levels (own +
-    // recipient default) — unlike getById/getAll/create, which resolve 3
-    // levels. For a row categorised via its PRIMARY recipient's default, the
-    // update response reports category_name NULL even though a follow-up GET
-    // shows 'Bills:Utilities'. The mocked suite could never see this because
-    // its fixtures echoed whatever the mocked UPDATE CTE returned.
-    it('update() response resolves only 2 category levels — diverges from getById on alias rows', async () => {
+    // Regression coverage (formerly a pinned bug): update()'s RETURNING
+    // enrichment used to join only 2 category levels (own + recipient default)
+    // — unlike getById/getAll/create, which resolve 3. For a row categorised
+    // via its PRIMARY recipient's default, the update response reported
+    // category_name NULL (and the alias's own name) even though a follow-up
+    // GET showed 'Bills:Utilities' / the primary's name. update() now shares
+    // the same 3-level fragments as the read paths, in both the RETURNING CTE
+    // and the tags-path fetch, so the update response and an immediate GET
+    // must be identical.
+    it('update() response resolves the full 3-level category — identical to getById on alias rows', async () => {
       const updated = await transactionRepository.update(T.t3, { amount: '-121.00' });
-      expect(updated.category_name).toBeNull(); // ← current (likely buggy) behaviour
-      expect(updated.recipient_name).toBe('Electrabel Invoicing'); // r.name, not COALESCE(pr.name, r.name)
       const fetched = await transactionRepository.getById(T.t3);
-      expect(fetched.category_name).toBe('Bills:Utilities'); // the same row, via GET
-      expect(fetched.recipient_name).toBe('Electrabel');
+      expect(updated.category_name).toBe('Bills:Utilities'); // via the PRIMARY's default
+      expect(updated.effective_category_id).toBe(cat.Bills);
+      expect(updated.recipient_name).toBe('Electrabel'); // COALESCE(pr.name, r.name)
+      expect(fetched).toEqual(updated); // response ≡ immediate GET, field for field
+
+      // The tags-path fetch (fields + tags in one PATCH) resolves identically.
+      const withTags = await transactionRepository.update(T.t3, { amount: '-122.00', tags: [] });
+      expect(withTags.category_name).toBe('Bills:Utilities');
+      expect(withTags.effective_category_id).toBe(cat.Bills);
+      expect(withTags.recipient_name).toBe('Electrabel');
     });
   });
 
