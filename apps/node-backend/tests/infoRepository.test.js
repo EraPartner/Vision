@@ -75,7 +75,7 @@ describe('InfoRepository', () => {
             ],
           };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return {
             rows: [
               { day: '2026-02-01', bank_account: 'Chase', balance: '4500', currency: 'EUR' },
@@ -118,7 +118,7 @@ describe('InfoRepository', () => {
             ],
           };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return {
             rows: [
               { day: '2026-02-01', bank_account: 'Chase', balance: '4500', currency: 'EUR' },
@@ -152,7 +152,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [{ day: todayKey, investments: '4470' }] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'Chase', balance: '5000', currency: 'EUR' }] };
         }
         return { rows: [] };
@@ -191,7 +191,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'Main', balance: '1234.56', currency: 'EUR' }] };
         }
         return { rows: [] };
@@ -214,7 +214,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return {
             rows: [
               { day: firstDayKey, bank_account: 'A', balance: '1000', currency: 'EUR' },
@@ -239,7 +239,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [{ day: todayKey, investments: '500' }] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [] };
         }
         if (sql.includes('COALESCE(SUM(t.amount), 0) AS amount')) {
@@ -274,7 +274,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'FallbackAccount', balance: '99', currency: 'EUR' }] };
         }
         return { rows: [] };
@@ -289,10 +289,11 @@ describe('InfoRepository', () => {
     // ── WP-A1: current point uses the unified computed-balance definition ──
     //
     // The unified current-balance query is discriminated by 'WITH anchor'
-    // (the shared lateral's CTE) — the stamped history walk has 'account_list'
-    // instead, so the two mocks can't cross-match. The 'WITH anchor' branch
-    // MUST come before the generic 'SELECT 1 FROM' branch: the lateral's
-    // no-stamp fallback contains `NOT EXISTS (SELECT 1 FROM anchor)`.
+    // (the shared lateral's CTE) — the daily history walk ends in a
+    // 'balance_series' CTE instead, so the two mocks can't cross-match. The
+    // 'WITH anchor' branch MUST come before the generic 'SELECT 1 FROM'
+    // branch: the lateral's no-stamp fallback contains
+    // `NOT EXISTS (SELECT 1 FROM anchor)`.
     const mockUnifiedNetWorth = ({ firstDataDate, investmentsRows, walkRows, currentRows }) => {
       query.mockImplementation(async (sql) => {
         if (sql.includes('WITH anchor')) return { rows: currentRows };
@@ -301,7 +302,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: investmentsRows };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: walkRows };
         }
         return { rows: [] };
@@ -421,7 +422,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'Main', balance: '1000', currency: 'EUR' }] };
         }
         return { rows: [] };

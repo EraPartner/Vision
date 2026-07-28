@@ -283,6 +283,17 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
   /** @type {Map<string, number|undefined>} */
   const historicalRateCache = new Map();
 
+  // Per-request memo for currencies the historical index knows NOTHING about.
+  // The index is empty for a currency only when `exchange_rates` holds no row
+  // for it at all, and then the per-date point lookup below misses on EVERY
+  // date and goes to the network. A daily series (balance history: up to 366
+  // distinct days per request) turned that into hundreds of sequential
+  // round-trips, each of which is a multi-second timeout when offline. One
+  // attempt per currency per request is enough: it saves what it fetches, so
+  // the index has a row to interpolate from next time.
+  /** @type {Map<string, number|undefined>} */
+  const unindexedCurrencyRate = new Map();
+
   /**
    * @param {Record<string, any>} row
    * @returns {string|null} 'YYYY-MM-DD', or null when the row carries no usable date
@@ -327,7 +338,16 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
       : undefined;
     if (historical !== undefined) return { rate: historical, fellBack: false };
 
-    const fetched = await getRate(code, rowDate);
+    // Index built but empty for this currency (findNearestRateInIndex only
+    // misses when the currency has no entries at all): one network attempt per
+    // request, not one per date. See unindexedCurrencyRate above.
+    let fetched;
+    if (historicalIndex && unindexedCurrencyRate.has(code)) {
+      fetched = unindexedCurrencyRate.get(code);
+    } else {
+      fetched = await getRate(code, rowDate);
+      if (historicalIndex) unindexedCurrencyRate.set(code, fetched);
+    }
     if (fetched !== undefined) return { rate: fetched, fellBack: false };
 
     const fallback = rates[code];

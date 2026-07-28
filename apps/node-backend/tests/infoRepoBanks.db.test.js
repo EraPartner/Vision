@@ -210,7 +210,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
       const r = await banksRepository.getBankBalances();
       expect(r.accounts[0]).toMatchObject({ balance: 10, transaction_count: 1 });
       // The inactive row is also invisible to the activity lateral's MIN/MAX.
-      expect(r.accounts[0].last_transaction).toEqual(new Date(await ymdFromToday("- interval '3 days'")));
+      // DATE columns cross the boundary as calendar-day strings (toWireDate).
+      expect(r.accounts[0].last_transaction).toBe(await ymdFromToday("- interval '3 days'"));
     });
 
     it('converts each account at the rate for its most recent activity date', async () => {
@@ -229,12 +230,14 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
   // 12-month daily history
   // ───────────────────────────────────────────────────────────────────────────
   describe('history', () => {
-    it('emits one point per day from the first stamp to today, carrying the last stamp forward', async () => {
+    it('emits one point per day from the first activity to today, anchoring each day on the latest stamp ≤ that day', async () => {
       await seedRecipient();
       await addAccount('HIST BANK');
       await insertTxn({ dateExpr: "CURRENT_DATE - interval '4 days'", amount: '-50.00', bank: 'HIST BANK', balance: '1000.00' });
-      // A LATER unstamped row must not create or move a history point: the
-      // history walk is stamp-based (WP-A1) and this row has balance NULL.
+      // A later UNSTAMPED row moves the series from the day it posts: the walk
+      // resolves each day with the same anchor+delta definition the headline
+      // uses (anchor = latest stamp ≤ day, plus every active row after it),
+      // so manual/trade activity is no longer invisible until the next import.
       await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '-25.00', bank: 'HIST BANK' });
       await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-5.00', bank: 'HIST BANK', balance: '900.00' });
 
@@ -249,11 +252,14 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
       expect(r.history['HIST BANK']).toEqual([
         { date: days[0], balance: 1000 },
         { date: days[1], balance: 1000 }, // forward-filled: no row that day
-        { date: days[2], balance: 1000 }, // unstamped row ignored by the walk
-        { date: days[3], balance: 900 },
+        { date: days[2], balance: 975 },  // 1000 stamp − the unstamped 25
+        { date: days[3], balance: 900 },  // re-anchored on the new stamp
         { date: days[4], balance: 900 },
       ]);
       expect(r.total_history).toEqual(r.history['HIST BANK']);
+      // The invariant both history findings demand: the headline IS the last
+      // chart point, never a step above it.
+      expect(r.total_history[r.total_history.length - 1].balance).toBe(r.total_net_position);
     });
 
     it('fills the whole 12-month window from a stamp that predates it', async () => {
@@ -271,6 +277,49 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
       expect(points[0].date).toBe(await ymdFromToday("- interval '12 months'"));
       expect(points[points.length - 1].date).toBe(await ymdFromToday());
       expect(points.every((p) => p.balance === 500)).toBe(true);
+    });
+
+    it('opens the window at the balance carried in from BEFORE it, stamps and unstamped rows alike', async () => {
+      // The series is computed over the whole ledger and then clamped onto the
+      // grid: activity older than the 12-month window must arrive as the
+      // window's opening balance, not as a missing/zero point.
+      await seedRecipient();
+      await addAccount('OLD ACTIVITY');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '18 months'", amount: '-1.00', bank: 'OLD ACTIVITY', balance: '500.00' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '15 months'", amount: '-100.00', bank: 'OLD ACTIVITY' });
+
+      const r = await banksRepository.getBankBalances();
+      const points = r.history['OLD ACTIVITY'];
+      expect(points[0].date).toBe(await ymdFromToday("- interval '12 months'"));
+      expect(points.every((p) => p.balance === 400)).toBe(true);
+      expect(r.total_net_position).toBe(400);
+    });
+
+    it('orders WITHIN a day: an unstamped row after that day’s stamp moves the same day’s point', async () => {
+      // Same-date rows tie-break on id, exactly as the current-balance anchor
+      // does — the stamp anchors and the later row is a delta on top of it.
+      await seedRecipient();
+      await addAccount('SAME DAY');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-10.00', bank: 'SAME DAY', balance: '1000.00' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-25.00', bank: 'SAME DAY' });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.history['SAME DAY']).toEqual([
+        { date: await ymdFromToday("- interval '1 day'"), balance: 975 },
+        { date: await ymdFromToday(), balance: 975 },
+      ]);
+      expect(r.total_net_position).toBe(975);
+    });
+
+    it('ignores inactive rows in the series, as the current balance does', async () => {
+      await seedRecipient();
+      await addAccount('HIST ACTIVE');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', bank: 'HIST ACTIVE' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-999.00', bank: 'HIST ACTIVE', isActive: false });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.history['HIST ACTIVE'].every((p) => p.balance === 100)).toBe(true);
+      expect(r.total_net_position).toBe(100);
     });
 
     it('sums per-day across accounts into total_history, honouring the same population gates', async () => {
@@ -296,42 +345,42 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // PINNED real-DB behaviours (see the suite report — do NOT "fix" here)
+  // Formerly pinned discrepancies — now corrective
   // ───────────────────────────────────────────────────────────────────────────
-  describe('pinned discrepancies (current real behaviour)', () => {
-    // PIN 1 — wire-date convention violation.
-    // `anchor_date` is emitted as a 'YYYY-MM-DD' string (the lateral uses
-    // to_char), but `first_transaction` / `last_transaction` are passed through
-    // RAW from pg (infoRepositoryBanks.js:182-183). pg reads a DATE column as a
-    // JS Date at *local* midnight, and lib/dateFormat.js documents the project
-    // rule: DATE values at an emit boundary go through toWireDate(), because
-    // JSON-serializing the raw Date emits an ISO timestamp of the PREVIOUS day
-    // on any server east of UTC (Brussels: all day, every day). The mock suite
-    // fed these fields as strings, so it could never see the type. This pins
-    // the CURRENT behaviour: Date instances, not calendar-day strings.
-    it('PIN: first_transaction/last_transaction come back as raw pg Date objects, not toWireDate strings', async () => {
+  describe('wire-date convention', () => {
+    // Was PIN 1. `anchor_date` is emitted as a 'YYYY-MM-DD' string (the lateral
+    // uses to_char) while `first_transaction` / `last_transaction` were passed
+    // through RAW from pg. pg reads a DATE column as a JS Date at *local*
+    // midnight, and lib/dateFormat.js documents the project rule: DATE values
+    // at an emit boundary go through toWireDate(), because JSON-serializing the
+    // raw Date emits an ISO timestamp of the PREVIOUS day on any server east of
+    // UTC (Brussels: all day, every day). The mock suite fed these fields as
+    // strings, so only a real-DB test can see the type.
+    it('emits first_transaction/last_transaction as calendar-day strings, not raw pg Dates', async () => {
       await seedRecipient();
       await addAccount('DATE SHAPE');
       await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '-1.00', bank: 'DATE SHAPE' });
       await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-2.00', bank: 'DATE SHAPE' });
 
       const account = (await banksRepository.getBankBalances()).accounts[0];
-      expect(account.first_transaction).toBeInstanceOf(Date);
-      expect(account.last_transaction).toBeInstanceOf(Date);
-      // …while the provenance field on the SAME object is already a string.
+      expect(account.first_transaction).toBe(await ymdFromToday("- interval '3 days'"));
+      expect(account.last_transaction).toBe(await ymdFromToday("- interval '1 day'"));
+      // The whole object survives JSON round-tripping as calendar days — the
+      // actual failure mode was an ISO timestamp landing a day early.
+      const wire = JSON.parse(JSON.stringify(account));
+      expect(wire.first_transaction).toBe(account.first_transaction);
+      expect(wire.last_transaction).toBe(account.last_transaction);
+      // …matching the provenance field on the SAME object, already a string.
       expect(typeof account.anchor_date === 'undefined' || typeof account.anchor_date === 'string').toBe(true);
     });
+  });
 
-    // PIN 2 — multi-currency accounts sum raw amounts across currencies.
-    // COMPUTED_BALANCE_LATERAL does `SUM(t2.amount)` with no currency
-    // partitioning, and the account's currency is then taken from the single
-    // most recent active row (`(ARRAY_AGG(... ORDER BY t.date DESC, t.id DESC))[1]`),
-    // so a mixed-currency account has its EUR and USD amounts added as bare
-    // numbers and the total converted at ONE rate. Fixture: 100 EUR + 100 USD
-    // with USD@0.5. Correct would be 100 + 50 = 150 EUR; the query yields
-    // (100+100) × 0.5 = 100. The repository comment flags multi-currency
-    // partitioning as "D2" (deferred) — pinned here, not fixed.
-    it('PIN: a multi-currency account adds EUR and USD amounts before converting at one rate', async () => {
+  describe('multi-currency accounts', () => {
+    // Was PIN 2. The unpartitioned lateral did `SUM(t2.amount)` across
+    // currencies and the caller converted that total at the ONE rate belonging
+    // to the most recent row's currency. The balance computation is now
+    // partitioned by currency and each partition converted at its own rate.
+    it('converts each currency partition at its own rate instead of summing raw amounts', async () => {
       await seedRecipient();
       await addAccount('MULTI CCY');
       await insertRate('USD', 'CURRENT_DATE', '0.5');
@@ -339,18 +388,106 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
       await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'MULTI CCY' });
 
       const r = await banksRepository.getBankBalances();
-      expect(r.accounts[0].balance).toBe(100); // (100 EUR + 100 USD) × 0.5 — NOT 150
-      expect(r.total_net_position).toBe(100);
+      expect(r.accounts[0].balance).toBe(150); // 100 EUR + (100 USD × 0.5) — NOT (100+100) × 0.5
+      expect(r.total_net_position).toBe(150);
+      // …and the chart agrees with the headline it sits under.
+      expect(r.total_history[r.total_history.length - 1].balance).toBe(150);
     });
 
-    // PIN 3 — the history series and the headline have different populations.
-    // The current-balance query deliberately dropped its `balance IS NOT NULL`
+    it('anchors each currency on ITS OWN latest stamp — a EUR statement never absorbs USD activity', async () => {
+      // Composition semantics: a stamped `balance` is the statement figure for
+      // the currency of the row carrying it, so it anchors that partition only.
+      //   EUR: stamp 1000 (day-10) − 25 (day-3)      = 975 EUR
+      //   USD: nothing stamped → Σ = 100 USD @0.5    =  50 EUR
+      await seedRecipient();
+      await addAccount('WISE MULTI', { currency: 'EUR' });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '10 days'", amount: '-50.00', currency: 'EUR', bank: 'WISE MULTI', balance: '1000.00' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '5 days'", amount: '100.00', currency: 'USD', bank: 'WISE MULTI' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '-25.00', currency: 'EUR', bank: 'WISE MULTI' });
+
+      const r = await banksRepository.getBankBalances();
+      // The old cross-currency form gave 1000 + (100 − 25) = 1075 at one rate.
+      expect(r.accounts[0].balance).toBe(1025);
+      expect(r.total_net_position).toBe(1025);
+      expect(r.total_history[r.total_history.length - 1].balance).toBe(1025);
+    });
+
+    it('revalues the headline at TODAY rate, not at the last statement date, over a moving curve', async () => {
+      // The archetypal imported foreign-currency account: fully stamped, last
+      // statement a month old, rate moved since. Keying the headline's FX on
+      // the account's last activity (as it briefly did) pinned it to the old
+      // rate while the chart — which revalues day by day — ended at the new
+      // one: 500 under a chart ending at 900. Both must read 900.
+      // NOTE: a single seeded rate row makes this test vacuous — the curve has
+      // to move for the two conventions to disagree.
+      await seedRecipient();
+      await addAccount('WISE USD', { currency: 'USD' });
+      await insertRate('USD', "CURRENT_DATE - interval '30 days'", '0.5', false);
+      await insertRate('USD', 'CURRENT_DATE', '0.9');
+      await insertTxn({
+        dateExpr: "CURRENT_DATE - interval '30 days'",
+        amount: '-10.00', currency: 'USD', bank: 'WISE USD', balance: '1000.00',
+      });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.accounts[0].balance).toBe(900); // 1000 USD × today's 0.9
+      expect(r.total_net_position).toBe(900);
+
+      const points = r.history['WISE USD'];
+      expect(points[points.length - 1]).toEqual({ date: await ymdFromToday(), balance: 900 });
+      // …and the day of the statement is still valued at the rate of that day,
+      // so the series genuinely moves with FX (otherwise the check above is
+      // satisfied by a flat curve).
+      const statementDay = await ymdFromToday("- interval '30 days'");
+      expect(points.find((p) => p.date === statementDay)).toEqual({ date: statementDay, balance: 500 });
+    });
+
+    it('holds headline == last chart point for a MIXED-currency account on a moving curve', async () => {
+      await seedRecipient();
+      await addAccount('MULTI MOVING', { currency: 'EUR' });
+      await insertRate('USD', "CURRENT_DATE - interval '20 days'", '0.5', false);
+      await insertRate('USD', 'CURRENT_DATE', '0.8');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '20 days'", amount: '100.00', currency: 'EUR', bank: 'MULTI MOVING' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '20 days'", amount: '200.00', currency: 'USD', bank: 'MULTI MOVING' });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.accounts[0].balance).toBe(260); // 100 EUR + 200 USD × 0.8
+      const points = r.history['MULTI MOVING'];
+      expect(points[points.length - 1].balance).toBe(260);
+      expect(points[0]).toEqual({ // 20 days ago, at that day's 0.5
+        date: await ymdFromToday("- interval '20 days'"),
+        balance: 200,
+      });
+      expect(r.total_history[r.total_history.length - 1].balance).toBe(r.total_net_position);
+    });
+
+    it('leaves a single-currency account byte-identical to the unpartitioned computation', async () => {
+      // The overwhelmingly common case: one partition, whose anchor is the
+      // account's latest stamped row and whose delta is every row after it.
+      await seedRecipient();
+      await addAccount('ONE CCY USD', { currency: 'USD' });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '10 days'", amount: '-50.00', currency: 'USD', bank: 'ONE CCY USD', balance: '1000.00' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '5 days'", amount: '-100.00', currency: 'USD', bank: 'ONE CCY USD' });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.accounts[0]).toMatchObject({
+        balance: 450, // (1000 − 100) USD × 0.5
+        anchor_date: await ymdFromToday("- interval '10 days'"),
+        post_anchor_count: 1,
+      });
+      expect(r.total_net_position).toBe(450);
+    });
+  });
+
+  describe('history/headline agreement', () => {
+    // Was PIN 3. The current-balance query dropped its `balance IS NOT NULL`
     // gate (WP-A1) so manual-only accounts reach the headline, but the history
-    // query still filters `WHERE lb.balance IS NOT NULL`. A ledger of only
-    // never-stamped accounts therefore renders a non-zero total_net_position
-    // above an EMPTY Balance History chart; with a mix, today's total_history
-    // point silently disagrees with total_net_position.
-    it('PIN: manual-only accounts reach total_net_position but never appear in history', async () => {
+    // query kept filtering `WHERE lb.balance IS NOT NULL` — so an all-manual
+    // ledger rendered a non-zero total_net_position above an EMPTY chart, and a
+    // mixed one rendered a today-point that silently disagreed with it.
+    it('includes manual-only accounts in history, so today equals total_net_position (mixed ledger)', async () => {
       await seedRecipient();
       await addAccount('MANUAL ONLY');
       await addAccount('STAMPED');
@@ -359,9 +496,54 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
 
       const r = await banksRepository.getBankBalances();
       expect(r.total_net_position).toBe(1070);
-      expect(Object.keys(r.history)).toEqual(['STAMPED']); // MANUAL ONLY has no points
-      // Today's history total is 1000 — 70 short of the headline it sits under.
-      expect(r.total_history[r.total_history.length - 1].balance).toBe(1000);
+      expect(Object.keys(r.history).sort()).toEqual(['MANUAL ONLY', 'STAMPED']);
+      expect(r.history['MANUAL ONLY']).toEqual([
+        { date: await ymdFromToday("- interval '1 day'"), balance: 70 },
+        { date: await ymdFromToday(), balance: 70 },
+      ]);
+      expect(r.total_history[r.total_history.length - 1].balance).toBe(r.total_net_position);
+    });
+
+    // KNOWN DIVERGENCE (deliberate, and the only one left): the headline is the
+    // unbounded computed balance — the same figure the accounts hub shows, which
+    // it must not drift from — while the chart stops at today. A FUTURE-dated
+    // row therefore counts in the headline before it reaches the chart. Bounding
+    // the headline at today instead would fix the chart at the cost of the hub
+    // agreement; pinned here so the trade-off stays visible.
+    it('counts a future-dated row in the headline but not yet in the chart', async () => {
+      await seedRecipient();
+      await addAccount('AHEAD');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', bank: 'AHEAD' });
+      await insertTxn({ dateExpr: "CURRENT_DATE + interval '3 days'", amount: '40.00', bank: 'AHEAD' });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.total_net_position).toBe(140);
+      expect(r.total_history[r.total_history.length - 1]).toEqual({
+        date: await ymdFromToday(),
+        balance: 100,
+      });
+    });
+
+    it('charts an all-manual ledger instead of leaving the headline over an empty chart', async () => {
+      await seedRecipient();
+      await addAccount('CASH');
+      await addAccount('WALLET');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '200.00', bank: 'CASH' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '-50.00', bank: 'CASH' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '30.00', bank: 'WALLET' });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.total_net_position).toBe(180);
+      // A day BEFORE an account's first row yields no point for it (its first
+      // known balance is never carried backwards), so the running total starts
+      // at first activity and steps only where transactions actually land.
+      expect(r.total_history).toEqual([
+        { date: await ymdFromToday("- interval '3 days'"), balance: 200 },
+        { date: await ymdFromToday("- interval '2 days'"), balance: 150 },
+        { date: await ymdFromToday("- interval '1 day'"), balance: 180 },
+        { date: await ymdFromToday(), balance: 180 },
+      ]);
+      expect(r.total_history[r.total_history.length - 1].balance).toBe(r.total_net_position);
     });
   });
 });

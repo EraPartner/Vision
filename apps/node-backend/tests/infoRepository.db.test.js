@@ -7,10 +7,10 @@
  *
  * DB-backed complement to infoRepository.test.js (which stays: it runs without a
  * DB). That mock suite dispatches on SQL substrings — `if (sql.includes('WITH
- * anchor'))`, `if (sql.includes('account_list'))` — to decide which canned rows
+ * anchor'))`, `if (sql.includes('balance_series'))` — to decide which canned rows
  * to hand back, so it asserts the shape of the JS reducers and the presence of
  * SQL fragments, never what the statements return. Everything here runs against
- * the migrated schema: the stamped history walk and the shared anchor+delta
+ * the migrated schema: the daily balance-series walk and the shared anchor+delta
  * lateral resolving over real NUMERIC/DATE columns, `portfolio_performance_snapshots`
  * joined by day, the transaction-flow fallback, the planned-transaction recurrence
  * expansion off real DATE values, and the 6-month/current-month aggregation windows.
@@ -239,7 +239,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       expect(r.current).toEqual({ liquid: 5000, liabilities: -300, investments: 4470, netWorth: 9170 });
     });
 
-    it('overrides the CURRENT point with the anchor+delta definition while history stays stamp-based', async () => {
+    it('resolves EVERY point with the anchor+delta definition, current and historical alike', async () => {
       await seedBase();
       const today = TODAY();
       const d1 = addDaysYmd(today, -1);
@@ -251,9 +251,11 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       await insertTxn({ date: d1, amount: '200.00', bank: 'CASH' }); // never stamped at all
 
       const r = await infoRepository.getNetWorthFromSnapshots();
-      // History: the stamped walk sees KBC only, frozen at its stamp.
-      expect(r.snapshots[0]).toMatchObject({ date: d1, liquid: 5000 });
-      // Current: 5000 + 150 (post-anchor) + 200 (manual-only account) = 5350.
+      // History on d1: KBC's stamp 5000 + CASH's unstamped 200 — the manual-only
+      // account is no longer invisible until the final point.
+      expect(r.snapshots[0]).toMatchObject({ date: d1, liquid: 5200 });
+      // Current: 5000 + 150 (post-anchor) + 200 (manual-only account) = 5350,
+      // i.e. exactly the 150 that actually posted today above the d1 point.
       expect(r.current.liquid).toBe(5350);
       expect(r.current.netWorth).toBe(5350);
       expect(r.snapshots[r.snapshots.length - 1].liquid).toBe(5350);
@@ -520,17 +522,15 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       expect(two.past_6_months.avg_monthly_spending).toBe(120);
     });
 
-    // PIN 2 — net worth's stamp-based history walk hides accounts that were
-    // never stamped, so every point except the last one under-reports.
-    // infoRepositoryNetWorth.js:137 gates the walk with
-    // `WHERE lb.balance IS NOT NULL`, while the current point is taken from the
-    // unstamped-tolerant anchor+delta lateral (147-162, applied at 303-314).
-    // A manual-only account therefore contributes to the headline and to the
-    // final chart point but to no earlier point — the chart shows a vertical
-    // step on its last day that no transaction explains. The transaction-flow
-    // fallback only rescues the case where NOTHING is stamped anywhere; mixing
-    // one stamped account with one manual account defeats it.
-    it('PIN: a manual-only account appears only in the LAST net-worth point, stepping the chart', async () => {
+    // Was PIN 2 — net worth's stamp-based history walk hid never-stamped
+    // accounts from every point except the last one, where the current-point
+    // override added them back in one go: a vertical step no transaction
+    // explains, which the monthly-change figure then reported as a real gain.
+    // The transaction-flow fallback only rescued "nothing stamped anywhere";
+    // mixing one stamped account with one manual account defeated it. The walk
+    // now resolves each day with the same unstamped-tolerant anchor+delta
+    // definition the current point uses.
+    it('carries manual-only accounts through the whole net-worth history, not just the last point', async () => {
       await seedBase();
       const today = TODAY();
       const d1 = addDaysYmd(today, -1);
@@ -541,11 +541,59 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
 
       const r = await infoRepository.getNetWorthFromSnapshots();
       expect(r.snapshots.map((s) => [s.date, s.liquid])).toEqual([
-        [d1, 1000], // CASH's 200 is invisible…
-        [today, 1200], // …until the current-point override adds it
+        [d1, 1200], // CASH's 200 counts from the day it posts…
+        [today, 1200], // …so the last point is flat, not a step
       ]);
-      // The step is reported as a real monthly gain even though nothing moved.
       expect(r.current.liquid).toBe(1200);
+      // Nothing moved after d1, so nothing is reported as movement.
+      expect(r.monthlyChange).toBe(0);
+    });
+
+    it('keeps headline == last chart point for a foreign-currency account on a moving curve', async () => {
+      // Same invariant as the banks widget's: the current point converts at
+      // today's rate and the walk at each day's, so a rate that moved after the
+      // last statement must not open a gap between the headline and the chart.
+      await seedBase();
+      const today = TODAY();
+      const d30 = addDaysYmd(today, -30);
+      await addAccount('WISE USD', { currency: 'USD' });
+      for (const [date, rate, isLatest] of [[d30, '0.5', false], [today, '0.9', true]]) {
+        await getTestPool().query(
+          `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
+           VALUES ('USD', $1::date, $2, $3)`,
+          [date, rate, isLatest],
+        );
+      }
+      await insertTxn({ date: d30, amount: '-10.00', currency: 'USD', bank: 'WISE USD', balance: '1000.00' });
+
+      const r = await infoRepository.getNetWorthFromSnapshots('EUR');
+      expect(r.current.liquid).toBe(900); // 1000 USD × today's 0.9
+      const last = r.snapshots[r.snapshots.length - 1];
+      expect(last.liquid).toBe(r.current.liquid);
+      // The curve moves the series, so the equality above is not a flat-curve
+      // coincidence: the statement day itself is still valued at 0.5.
+      expect(r.snapshots[0]).toMatchObject({ date: d30, liquid: 500 });
+    });
+
+    it('keeps headline == last chart point on an all-manual net-worth ledger', async () => {
+      await seedBase();
+      const today = TODAY();
+      const d2 = addDaysYmd(today, -2);
+      const d1 = addDaysYmd(today, -1);
+      await addAccount('CASH');
+      await addAccount('WALLET');
+      await insertTxn({ date: d2, amount: '200.00', bank: 'CASH' });
+      await insertTxn({ date: d1, amount: '-50.00', bank: 'CASH' });
+      await insertTxn({ date: d1, amount: '30.00', bank: 'WALLET' });
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.snapshots.map((s) => [s.date, s.liquid])).toEqual([
+        [d2, 200],
+        [d1, 180],
+        [today, 180],
+      ]);
+      expect(r.current.liquid).toBe(180);
+      expect(r.snapshots[r.snapshots.length - 1].liquid).toBe(r.current.liquid);
     });
   });
 });

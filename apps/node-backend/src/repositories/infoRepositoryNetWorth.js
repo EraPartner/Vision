@@ -4,7 +4,10 @@
 
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
-import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
+import {
+  COMPUTED_BALANCE_LATERAL,
+  computedBalanceSeriesCtes,
+} from './accountBalanceSql.js';
 import { toNumber, toDecimal } from '../lib/money.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import {
@@ -25,15 +28,20 @@ export const netWorthRepository = {
    * Bank balances are still derived live from the transactions table.
    * No network calls — all data from the database.
    *
-   * The liquid/liability *history* series is stamp-based (latest stamped
-   * `transactions.balance` ≤ each day), but the **current** point — headline,
-   * last chart point, latest table row — is overridden with the unified
-   * anchor+delta computed balance (`COMPUTED_BALANCE_LATERAL`, ADR-094 /
-   * WP-A1), the same single definition the accounts hub and dashboard widget
-   * consume. The naive stamped walk it replaced silently
-   * dropped manual-only (never-stamped) in-net-worth accounts from the
-   * headline and froze stamped accounts at their last imported statement
-   * figure.
+   * The **current** point — headline, last chart point, latest table row — is
+   * the unified anchor+delta computed balance (`COMPUTED_BALANCE_LATERAL`,
+   * ADR-094 / WP-A1), the same single definition the accounts hub and dashboard
+   * widget consume. The naive stamped read it replaced silently dropped
+   * manual-only (never-stamped) in-net-worth accounts from the headline and
+   * froze stamped accounts at their last imported statement figure.
+   *
+   * The liquid/liability *history* series applies that same definition to every
+   * earlier day (`computedBalanceSeriesCtes`). It used to be stamp-based, so a
+   * manual-only account showed up in the last point only and the chart stepped
+   * up overnight — a step the monthly-change figure then reported as a real
+   * gain. A day before an account's first active row still yields no row for it
+   * (it contributes 0 to that day's total, and its first known balance is never
+   * carried backwards).
    *
    * @param {string} [targetCurrency]
    * @param {{ liveInvestments?: number }} [opts]
@@ -87,9 +95,8 @@ export const netWorthRepository = {
     // Postgres CURRENT_DATE follows the server timezone, not the app's.
     const todayYmd = todayAppDateString();
 
-    // History walk (stamp-based, per WP-A1 decision) and the unified
-    // current-point balances (anchor+delta lateral) are independent — run in
-    // parallel.
+    // History walk and the unified current-point balances (the same
+    // anchor+delta definition, unbounded) are independent — run in parallel.
     const [bankHistoryResult, currentBalancesResult] = await Promise.all([
       query(`
       WITH bounds AS (
@@ -104,38 +111,37 @@ export const netWorthRepository = {
         -- tracking-only account (in_net_worth=false) does not contribute.
         -- is_liability splits negative debt balances (ADR-092) out of the
         -- "liquid assets" bucket so a mortgage is not counted as liquid cash.
-        -- The stamped-only probe below serves the HISTORY series only (WP-A1
-        -- decision); the current point is overridden after the walk with the
-        -- unified computed-balance lateral.
         SELECT a.id AS account_id, a.name AS bank_account,
-               (a.type = 'liability') AS is_liability
+               (a.type = 'liability') AS is_liability,
+               a.currency AS account_currency
         FROM accounts a
         WHERE a.in_net_worth = true
           AND a.id IN (
             SELECT t.account_id FROM transactions t
              WHERE t.is_active = true AND t.account_id IS NOT NULL
           )
-      )
+      ),
+      -- The walk resolves each day with the SAME unstamped-tolerant
+      -- anchor+delta definition the current point uses, bounded at that day.
+      -- The stamped-only probe it replaces (plus a WHERE lb.balance IS NOT
+      -- NULL gate) hid never-stamped accounts from EVERY point except the last
+      -- one — the current-point override below then added them back in one go,
+      -- so the chart stepped up overnight and reported it as a monthly gain.
+      -- Cross-currency Σ (not per-currency) on purpose: it must mirror the
+      -- current-point lateral below exactly, or the step returns for
+      -- multi-currency accounts.
+      ${computedBalanceSeriesCtes()}
+      -- The currency mirrors the current-point query: the latest active row's
+      -- (as of the day), falling back to the account's own.
       SELECT
-        to_char(d.day, 'YYYY-MM-DD') AS day,
+        to_char(s.day, 'YYYY-MM-DD') AS day,
         a.bank_account,
         a.is_liability,
-        COALESCE(lb.currency, 'EUR') AS currency,
-        lb.balance
-      FROM days d
-      CROSS JOIN account_list a
-      LEFT JOIN LATERAL (
-        SELECT t.currency, t.balance
-        FROM transactions t
-        WHERE t.is_active = true
-          AND t.account_id = a.account_id
-          AND t.balance IS NOT NULL
-          AND t.date <= d.day
-        ORDER BY t.date DESC, t.id DESC
-        LIMIT 1
-      ) lb ON true
-      WHERE lb.balance IS NOT NULL
-      ORDER BY d.day, a.account_id
+        COALESCE(s.row_currency, a.account_currency, 'EUR') AS currency,
+        s.balance
+      FROM balance_series s
+      JOIN account_list a ON a.account_id = s.account_id
+      ORDER BY s.day, s.account_id
     `, [firstDataDateYmd, todayYmd]),
       // Unified current balance per in-net-worth account (WP-A1): the shared
       // anchor+delta lateral, with NO `balance IS NOT NULL` population gate —
@@ -184,6 +190,16 @@ export const netWorthRepository = {
     ]);
     let bankHistoryConverted = bankHistoryConvertedInitial;
 
+    // Reached whenever the walk produced no rows at all: no in-net-worth
+    // account owns an active row. That covers the un-migrated ledger this was
+    // written for (transactions still carrying a NULL account_id) but ALSO the
+    // case where every account with activity is in_net_worth=false — and the
+    // fallback below sums transactions with no account/in_net_worth predicate
+    // at all, so a ledger of purely tracking-only accounts reports THEIR
+    // running total as net worth instead of 0. Pre-existing and filed
+    // separately; the walk itself no longer needs rescuing when nothing is
+    // stamped, since an unstamped account resolves to its running Σ(amount) day
+    // by day, which is exactly what this fallback computes.
     if (bankHistoryConverted.length === 0) {
       logger.debug('Net worth account balance history empty; using transaction flow fallback', {
         targetCurrency,
@@ -292,14 +308,16 @@ export const netWorthRepository = {
 
     const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
 
-    // WP-A1: override the *current* point's liquid/liability figures with the
-    // unified computed-balance definition (see the method doc). Only the last
-    // point moves — the history series deliberately stays stamp-based — so a
-    // manual-only account or post-anchor manual activity can introduce a step
-    // between the penultimate (stamped) and latest (computed) points. Skipped
-    // when the accounts query returned nothing (no in-net-worth accounts, e.g.
-    // an un-migrated ledger running on the transaction-flow fallback), keeping
-    // the walk/fallback-derived point instead.
+    // WP-A1: set the *current* point's liquid/liability figures from the
+    // unified computed-balance definition (see the method doc). Now that the
+    // walk resolves every earlier day with that same definition this is
+    // continuous with the point before it, so no step is introduced; it still
+    // matters because the walk is bounded at each day (a future-dated row
+    // counts here first) and because the population is every in-net-worth
+    // account, including ones with no active rows at all. Skipped when the
+    // accounts query returned nothing (no in-net-worth accounts, e.g. an
+    // un-migrated ledger running on the transaction-flow fallback), keeping the
+    // walk/fallback-derived point instead.
     if (currentBalancesConverted.length > 0 && sanitizedSnapshots.length > 0) {
       let liquidNow = toDecimal(0);
       let liabilitiesNow = toDecimal(0);
