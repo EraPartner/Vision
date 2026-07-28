@@ -941,7 +941,7 @@ look-changing one.
   - `apps/node-backend/src/repositories/infoRepositoryRecipients.js:152-155` — `momConverted` passes no options to `convertRowsToEur` while grouping by `(recipient, period, currency)`: a rate move between the two compared months is invisible, and MoM's EUR figures won't match the now-historical sibling surfaces.
   - Fix: same treatment — add `t.date` (or the period's representative dates) to the grouping and pass `useHistoricalRatesByDate`.
 
-- [ ] **Remaining category-NAME resolution defects: export + splits use pc-before-rc, planned surfaces resolve 2-level or 1-level** 🔼
+- [x] **Remaining category-NAME resolution defects: export + splits use pc-before-rc, planned surfaces resolve 2-level or 1-level** 🔼 ✅ 2026-07-28 · 5dba368 (all five sites on the canonical order: export/bulk-export + owed-splits CASE swapped; plannedTransactionRepository 2→3 levels via a shared constant across its six query sites; infoRepositoryPlanned 1→3. Adjacent correction surfaced by the fix's own tests: planned search now matches the resolved display label (the old OR'd-columns form both missed pc-categorised rows and over-matched via the primary). 5 pins fail pre-fix on the alias-with-own-default topology, asserting name==resolved-id against transactionRepository. Residue filed below: planned surfaces show the alias's recipient_name where transactions show the primary's)
   - ↪ _from: Orchestration session 2026-07-28 · category-precedence fix pass (implementer noticed 4 sites; verifier reproduced all live, found a 5th, and confirmed the enumeration is otherwise exhaustive)_
   - (a) `apps/node-backend/src/services/transactionExport.js:75-80` and `repositories/splitRepository.js:374-379` carry the pre-fix `pc`-before-`rc` CASE — the CSV/NDJSON export and the owed-splits export show "Bills:Utilities" for the row the transactions list now labels "Zzz:Last" (reproduced live). (b) `repositories/plannedTransactionRepository.js:41-45` and `:617-621` resolve `c → rc` only (no `pc` branch, no `pr` join). (c) `repositories/infoRepositoryPlanned.js:104-107` resolves `c` ONLY (joins neither `rc` nor `pc`) — `getPlannedExpensesNextMonth` reports `category_name: null` for rows its sibling plannedTransactionRepository categorises. Every other name-rendering site verified structurally consistent.
   - Fix: (a) swap to the canonical rc-before-pc order; (b)+(c) extend to the full 3-level pattern with the `pr` join; pin each on the alias-with-own-default topology.
@@ -950,6 +950,11 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · denominator fix verification (non-blocking notes)_
   - (a) `countObservedMonths` + `monthKeyFromDbDate` now live verbatim in both `infoRepositoryForecast.js:76-99` and `infoRepositoryAverageVsCurrent.js:26-73` — two copies of a money denominator is the drift risk the precedence finding is about, one layer up; a shared helper in `infoRepositoryHelpers.js` (parameterised on windowMonths) closes it. (b) `tests/infoRepository.test.js:855-862` asserts the ledger probe lacks `is_transfer`/`LIMIT` but not that it KEEPS `is_active = true` and the window floor — both load-bearing; only the DB suite catches their removal.
   - Fix: extract the shared helper; strengthen the mock guard to assert the two retained predicates.
+
+- [ ] **Planned surfaces show the ALIAS's `recipient_name` where transactions show the PRIMARY's — same recipient, two labels across the dashboard** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · category-name fix pass (noticed; consistent across both planned repos, so possibly deliberate — decide, don't assume)_
+  - `apps/node-backend/src/repositories/plannedTransactionRepository.js` and `infoRepositoryPlanned.js` project `r.name` while transactions use `COALESCE(pr.name, r.name)`: a planned row under an alias shows the alias name, the equivalent transaction shows the primary's.
+  - Fix: decide the intended display (probably the transactions convention) and align both planned repos; pin on the alias topology.
 
 
 
