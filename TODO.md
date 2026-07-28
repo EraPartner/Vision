@@ -796,10 +796,35 @@ look-changing one.
   - `getCategoryBreakdown` and `getCategoryPivot` (infoRepositoryStatistics.js) use `COALESCE(t.category_id, r.default_category_id)` with no primary-recipient fallback: a row recorded under an alias whose primary carries the default is categorised in the transactions list but UNCATEGORISED in the breakdown, and absent from the pivot (its WHERE requires the 2-level COALESCE non-NULL). Corollary: the mock suite's "missing category_id → Uncategorised" pivot case is unreachable through the real query. Pinned in `tests/infoRepoStatistics.db.test.js`.
   - Fix: extend both queries' COALESCE with the primary-recipient default (matching transactionRepository's 3-level pattern); flip the pinned test.
 
-- [ ] **Remaining 2-level category-resolution surfaces: monthly summary (live + MV), recurring detection, sankey** 🔽
+- [x] **Remaining 2-level category-resolution surfaces: monthly summary (live + MV), recurring detection, sankey** 🔽 ✅ 2026-07-28 · 0defad0 (all four sites now canonical 3-level with the required `pr` join; migration 0085 drops mv_monthly_summary for rebuild-at-boot (0084 mechanism — totals output-invariant for the MV's only reader, so this aligns the stored grain; the user-visible fixes are sankey attribution + recurring detection's category label). Pinned by 5 live-DB tests (aliasCategoryResolution.db.test.js, 3 fail pre-fix) + SQL-shape guards in the three mock suites; adversarially verified on live PG16 incl. alias chains / default-less primary / own-category override, migration round-trip, and mvAvailable fallback. Verifier + implementer residues filed as the five findings below)
   - ↪ _from: Orchestration session 2026-07-28 · category-resolution fix pass (same pattern, outside that pass's scope)_
   - `services/materializedViewService.js:71` (`mv_monthly_summary` definition) and the monthly live path `repositories/infoRepositoryMonthly.js:184`, `services/recurringDetectionService.js:157`, and `services/calculations/aggregation/sankey.js:51,73` all still use the 2-level `COALESCE(t.category_id, r.default_category_id)` — alias rows categorised via their primary's default are treated as uncategorised on these surfaces, now inconsistent with the fixed transactions/breakdown/pivot 3-level resolution.
   - Fix: extend each to the canonical 3-level pattern; the MV change needs the same drop-and-rebuild migration treatment as 0084 (mv_monthly_summary drop).
+
+- [ ] **Sankey exclusion clauses are NULL-unsafe and not alias-aware — excluding any category silently erases every uncategorised row (income renders as €0 with flows still leaving it)** 🔼
+  - ↪ _from: Orchestration session 2026-07-28 · category-resolution verifier (reproduced live on the real service)_
+  - `apps/node-backend/src/services/calculations/aggregation/sankey.js:58` — category exclusion is `COALESCE(...) != ALL($n)` with no `-1` NULL sentinel: a NULL effective category fails the comparison and the row is dropped, so excluding one category removed a €3000 uncategorised income row entirely — the graph showed `Income 0` with €40 still flowing out of it. The canonical form (with a comment documenting this exact bug) is `filterBuilder.js:356`: `COALESCE(..., -1) NOT IN (...)`. Sibling defect at `sankey.js:63`: recipient exclusion is `t.recipient_id != ALL(...)` — neither NULL-safe nor alias-aware (canonical: `COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN`), so excluding a primary recipient leaves its alias rows in the graph while the category exclusion beside it is now alias-aware.
+  - Fix: move both clauses to the canonical sentinel forms (or route through `buildExclusionClauses`); pin with a live-DB test that has an uncategorised row + an active exclusion (the existing aliasCategoryResolution.db.test.js sankey exclusion assertion is characterization only and passes either way — its comment says so).
+
+- [ ] **Sankey has no `is_transfer` filter — internal transfers counted as income/spending in the flow graph** 🔼
+  - ↪ _from: Orchestration session 2026-07-28 · category-resolution fix pass (noticed, out of scope)_
+  - `apps/node-backend/src/services/calculations/aggregation/sankey.js:74` (the aggregation query's WHERE) filters `is_active` and date only — unlike every other money aggregation (ADR-083; e.g. mv_monthly_summary's `is_transfer = false`). A savings transfer inflates both the income and spending sides of the graph.
+  - Fix: add `AND t.is_transfer = false` (confirm against ADR-083's exclusion semantics before assuming — sankey may arguably want transfers as a visible flow, in which case they should be a distinct node, not silent income/spending).
+
+- [ ] **`transactionRepository` resolves effective category id and displayed name with OPPOSITE precedence — id says one category, name shows another** 🔼
+  - ↪ _from: Orchestration session 2026-07-28 · category-resolution verifier (reproduced live: id=Food:Groceries, name="Bills:Utilities" on the same row)_
+  - `apps/node-backend/src/repositories/transactionRepository.js:66` (`EFFECTIVE_CATEGORY_ID_SQL`: own → `rc` recipient default → `pc` primary default) vs `:67-72` (`CATEGORY_NAME_SQL`: `c` → **`pc` → `rc`**). For an alias recipient that has its own default AND a primary with a different default, the transactions list reports the recipient-default id but displays the primary-default name. The newly-fixed aggregation surfaces follow the id (matching `EFFECTIVE_CATEGORY_ID_SQL`), so they disagree with the reference surface's displayed name in this topology.
+  - Fix: make `CATEGORY_NAME_SQL` join through the same COALESCE the id uses (`rc` before `pc`); pin with a DB test on the alias-with-own-default-and-differing-primary-default topology.
+
+- [ ] **Recurring detection emits raw `categoryId` beside the resolved `categoryName`, and groups/labels patterns by alias rather than primary recipient** 🔽
+  - ↪ _from: Orchestration session 2026-07-28 · category-resolution fix pass (noticed, out of scope; the categoryId half pre-existing and widened by the 3-level fix)_
+  - `apps/node-backend/src/services/recurringDetectionService.js:280` — emitted `categoryId` is raw `t.category_id` while `categoryName` is the resolved effective category, so any recipient-default-categorised pattern reports `categoryId: null` with a non-null `categoryName` (consumers keying on the id see uncategorised). And `:152` — `recipient_name` is `r.name` with grouping on raw `recipient_id`, not `COALESCE(pr.name, r.name)`/primary id, so an alias and its primary yield two separate patterns which now carry the same category label. The recipient half changes grouping semantics — decide deliberately, don't drive it from the category fix.
+  - Fix: emit the same effective category id the name is resolved from; separately decide whether patterns should group by primary recipient (alias-merge semantics) and label with the canonical name.
+
+- [ ] **Stale comment: `routes/recipients.js:20-21` still documents the MV category attribution as 2-level** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · category-resolution fix pass (noticed in passing)_
+  - The comment describes `COALESCE(t.category_id, r.default_category_id)`; as of the 3-level fix (0defad0) every category-bearing surface resolves three levels.
+  - Fix: update the comment to the 3-level expression.
 
 
 
