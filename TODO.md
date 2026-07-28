@@ -971,7 +971,7 @@ look-changing one.
   - (a) `sankey.js` `COALESCE(c.general || ': ' || c.detail, 'Uncategorised')` merges a genuinely-named "Uncategorised" category with the NULL bucket (same shape in the pivot — fix together or accept). (b) `savings = Math.max(0, income − spending)`: an overspending year just omits the savings node instead of showing a deficit — display gap, possibly deliberate.
   - Fix: (a) distinguish the NULL bucket with a sentinel id rather than a display-string collision; (b) decide whether the flow graph should render a deficit node.
 
-- [ ] **`expandRecurringOccurrences` mixes a pg local-midnight Date with APP_TIMEZONE strings and UTC comparisons — every occurrence shifts a day back where host offset > app offset** 🔼
+- [x] **`expandRecurringOccurrences` mixes a pg local-midnight Date with APP_TIMEZONE strings and UTC comparisons — every occurrence shifts a day back where host offset > app offset** 🔼 ✅ 2026-07-28 · acd913c (expansion rebuilt as pure YMD-string calendar math on the ADR-009 helpers; clamp cascade preserved byte-for-byte (Jan 31 monthly → …Jul 28); TZ×cadence it.each matrix pins identical occurrences under UTC/Tokyo/LA, fail-against-old reproduces the 6-day and clamp-shift failures; planned suites green under UTC/Tokyo/LA/UTC+14. Residue filed below: the pattern grammar is now encoded in two places)
   - ↪ _from: Orchestration session 2026-07-28 · planned-month fix verification (verifier reproduced on HEAD and on the fixed tree under TZ=Asia/Tokyo: a weekly cadence lands 6 days off — pre-existing, NOT a regression of the window fix in the same file)_
   - `apps/node-backend/src/repositories/infoRepositoryPlanned.js:65-88` — `:81` feeds a pg local-midnight `Date` to `toAppDateString` (APP_TIMEZONE) and `:71-73` compares `current.getTime()` against `Date.UTC(...)`. Same TZ-mix class the window fix just removed from this file's other function.
   - Fix: expand recurrences in YMD-string arithmetic via the ADR-009 helpers (addDaysYmd etc.), no Date getters; pin under forced TZ like the window tests.
@@ -985,6 +985,11 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · MoM fix pass (noticed; verifier confirmed no reader repo-wide; more reachable now that all four recipient surfaces use historical rates)_
   - `apps/node-backend/src/services/currency/currencyConversionService.js:389-391`. (The portfolio path's `usedFallbackRate` is a separate unrelated field.)
   - Fix: thread the flags into the emitted rows where a surface wants to badge estimated conversions, or document that they are internal-only.
+
+- [ ] **Recurrence pattern grammar is now encoded in two steppers — adding a pattern to one silently diverges the other** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · recurrence-TZ fix (noticed; documented in the new stepper's JSDoc)_
+  - `infoRepositoryPlanned.js` `nextOccurrenceYmd` (string-space, with fast-forward) vs `lib/` `calculateNextDate` / `lib/calculations/recurrence.js` `expandOccurrences` (Date-space, no fast-forward, 500-cap that truncates stale daily rows before the window — the reason it couldn't be reused).
+  - Fix: extract one shared string-space stepper in `lib/` with an optional fast-forward, migrate both call sites onto it.
 
 
 
