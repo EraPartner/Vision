@@ -1,19 +1,16 @@
 /**
  * Bulk-tag route tests — isolated file so we can add withTransaction to the
- * connection mock without touching the 584-line transactions.test.js.
+ * connection mock without touching the large transactions.test.js.
+ *
+ * Driven over HTTP against the real router (tests/helpers/routeApp.js): the
+ * per-route rate limiter declared on POST /bulk-tag (routes/transactions.js:433)
+ * and the centralized error handler are both on the tested path.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockPooledTxConnection } from '../helpers/repoMocks.js';
 import { mockTransactionRepository, mockDeduplication, mockTransferReconciliation, mockCurrencyConversion } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
@@ -29,47 +26,41 @@ vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCu
 
 vi.mock('../../src/database/connection.js', () => mockPooledTxConnection());
 
-await import('../../src/routes/transactions.js');
+const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.js';
 import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
+
+const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
+const bulkTag = (body) => api.post('/api/transactions/bulk-tag').send(body);
 
 describe('POST /bulk-tag — input validation', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns 400 when transaction_ids is missing', async () => {
-    const req = { body: { add_slugs: ['rome-2020'] } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkTag({ add_slugs: ['rome-2020'] }).expect(400);
   });
 
   it('returns 400 when transaction_ids is empty array', async () => {
-    const req = { body: { transaction_ids: [], add_slugs: ['rome-2020'] } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkTag({ transaction_ids: [], add_slugs: ['rome-2020'] }).expect(400);
   });
 
   it('returns 400 when transaction_ids exceeds 500 entries', async () => {
-    const req = { body: { transaction_ids: Array.from({ length: 501 }, (_, i) => i + 1), add_slugs: ['rome'] } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkTag({
+      transaction_ids: Array.from({ length: 501 }, (_, i) => i + 1),
+      add_slugs: ['rome'],
+    }).expect(400);
   });
 
   it('returns 400 when add_slugs exceeds 50 entries', async () => {
-    const req = { body: { transaction_ids: [1], add_slugs: Array.from({ length: 51 }, (_, i) => `tag-${i}`) } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkTag({
+      transaction_ids: [1],
+      add_slugs: Array.from({ length: 51 }, (_, i) => `tag-${i}`),
+    }).expect(400);
   });
 
   it('returns 400 when both add_slugs and remove_slugs are empty', async () => {
-    const req = { body: { transaction_ids: [1], add_slugs: [], remove_slugs: [] } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkTag({ transaction_ids: [1], add_slugs: [], remove_slugs: [] }).expect(400);
   });
 });
 
@@ -78,20 +69,18 @@ describe('POST /bulk-tag — unknown slug rejection', () => {
 
   it('returns 400 listing unknown add slug before writing anything', async () => {
     dbQuery.mockResolvedValueOnce({ rows: [] }); // no active tag found
-    const req = { body: { transaction_ids: [1], add_slugs: ['ghost-tag'] } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].error.message).toContain('ghost-tag');
+
+    const res = await bulkTag({ transaction_ids: [1], add_slugs: ['ghost-tag'] }).expect(400);
+
+    expect(res.body.error.message).toContain('ghost-tag');
     expect(getClient).not.toHaveBeenCalled();
   });
 
   it('returns 400 listing unknown remove slug before writing anything', async () => {
     dbQuery.mockResolvedValueOnce({ rows: [] }); // no tag found
-    const req = { body: { transaction_ids: [1], remove_slugs: ['ghost-tag'] } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+
+    await bulkTag({ transaction_ids: [1], remove_slugs: ['ghost-tag'] }).expect(400);
+
     expect(getClient).not.toHaveBeenCalled();
   });
 });
@@ -108,14 +97,11 @@ describe('POST /bulk-tag — success paths', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const req = { body: { transaction_ids: [1, 2], add_slugs: ['rome-2020'] } };
-    const res = mockResponse();
-    await routeHandlers['post:/bulk-tag'](req, res);
+    const res = await bulkTag({ transaction_ids: [1, 2], add_slugs: ['rome-2020'] }).expect(200);
 
-    const data = res.json.mock.calls[0][0].data;
-    expect(data.added).toBe(2);
-    expect(data.removed).toBe(0);
-    expect(data.transactions_affected).toBe(2);
+    expect(res.body.data.added).toBe(2);
+    expect(res.body.data.removed).toBe(0);
+    expect(res.body.data.transactions_affected).toBe(2);
     expect(scheduleReconcile).toHaveBeenCalledTimes(1);
   });
 
@@ -128,13 +114,10 @@ describe('POST /bulk-tag — success paths', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const req = { body: { transaction_ids: [1], remove_slugs: ['rome-2020'] } };
-    const res = mockResponse();
-    await routeHandlers['post:/bulk-tag'](req, res);
+    const res = await bulkTag({ transaction_ids: [1], remove_slugs: ['rome-2020'] }).expect(200);
 
-    const data = res.json.mock.calls[0][0].data;
-    expect(data.removed).toBe(1);
-    expect(data.added).toBe(0);
+    expect(res.body.data.removed).toBe(1);
+    expect(res.body.data.added).toBe(0);
   });
 
   it('adds and removes in a single transaction', async () => {
@@ -149,13 +132,12 @@ describe('POST /bulk-tag — success paths', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const req = { body: { transaction_ids: [1], add_slugs: ['rome-2020'], remove_slugs: ['work-trip'] } };
-    const res = mockResponse();
-    await routeHandlers['post:/bulk-tag'](req, res);
+    const res = await bulkTag({
+      transaction_ids: [1], add_slugs: ['rome-2020'], remove_slugs: ['work-trip'],
+    }).expect(200);
 
-    const data = res.json.mock.calls[0][0].data;
-    expect(data.added).toBe(1);
-    expect(data.removed).toBe(1);
+    expect(res.body.data.added).toBe(1);
+    expect(res.body.data.removed).toBe(1);
   });
 });
 
@@ -171,28 +153,12 @@ describe('POST /bulk-tag — atomicity', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const req = { body: { transaction_ids: [1], add_slugs: ['rome-2020'] } };
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-tag'], req, res);
+    const res = await bulkTag({ transaction_ids: [1], add_slugs: ['rome-2020'] }).expect(500);
 
     expect(scheduleReconcile).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
     const rollbackCall = clientQuery.mock.calls.find(([sql]) => sql === 'ROLLBACK');
     expect(rollbackCall).toBeDefined();
     expect(release).toHaveBeenCalledTimes(1);
   });
 });
-
-function mockResponse() {
-  return createMockResponse({ headersSent: false });
-}
-
-async function callHandler(handler, req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    const code = err.code ?? 'INTERNAL_SERVER_ERROR';
-    res.status(status).json({ ok: false, error: { code, message: err.message } });
-  }
-}

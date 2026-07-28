@@ -1,12 +1,15 @@
 /**
  * Validation-behavior pins for the transactions route bodies (ZOD-06).
  *
- * These tests pin the exact accept/reject/coercion behavior of the hand-rolled
- * validation in POST /, PATCH /:id, POST /bulk-tag, and POST /bulk-update
- * BEFORE the zod migration, so the swap cannot silently change the wire
- * contract: rejected inputs stay 400/VALIDATION_ERROR, accepted inputs reach
- * the repository byte-identically (raw vs coerced), and clear-vs-absent
- * semantics survive.
+ * These tests pin the exact accept/reject/coercion behavior of the body
+ * validation in POST /, PATCH /:id, POST /bulk-tag, and POST /bulk-update, so
+ * the wire contract cannot silently change: rejected inputs stay
+ * 400/VALIDATION_ERROR, accepted inputs reach the repository byte-identically
+ * (raw vs coerced), and clear-vs-absent semantics survive.
+ *
+ * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * status/envelope assertions are the ones the error handler actually emits
+ * rather than a hand-replayed approximation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockPooledTxConnection } from '../helpers/repoMocks.js';
@@ -17,14 +20,7 @@ import {
   mockCurrencyConversion,
 } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
@@ -45,25 +41,11 @@ vi.mock('../../src/services/plannedMatchService.js', () => ({
 }));
 
 import transactionRepository from '../../src/repositories/transactionRepository.js';
-import { recordManualRawTransaction } from '../../src/services/deduplication.js';
-import { ValidationError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/transactions.js');
+import { recordManualRawTransaction, isManualDuplicate } from '../../src/services/deduplication.js';
 
-function mockResponse() {
-  return createMockResponse({ headersSent: false });
-}
+const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
 
-// Runs a handler through the same status/envelope shaping as errorHandler.js
-// so pins can assert the wire format (400 + VALIDATION_ERROR).
-async function callHandler(handler, req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    const code = err.code ?? 'INTERNAL_SERVER_ERROR';
-    res.status(status).json({ ok: false, error: { code, message: err.message } });
-  }
-}
+const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
 
 const validPostBody = () => ({
   transaction_date: '2026-01-15',
@@ -72,58 +54,65 @@ const validPostBody = () => ({
   amount: -50,
 });
 
-const runPost = (body) => routeHandlers['post:/'](
-  { body },
-  createMockResponse({ headersSent: false }),
-);
+const post = (body) => api.post('/api/transactions/').send(body);
+const patch = (body) => api.patch('/api/transactions/1').send(body);
+const bulkTag = (body) => api.post('/api/transactions/bulk-tag').send(body);
+const bulkUpdate = (body) => api.post('/api/transactions/bulk-update').send(body);
 
-const runPatch = (body) => routeHandlers['patch:/:id'](
-  { params: { id: '1' }, body },
-  createMockResponse({ headersSent: false }),
-);
+/** Assert a 400 VALIDATION_ERROR envelope and return the response. */
+async function expectValidationError(pending) {
+  const res = await pending;
+  expect(res.status).toBe(400);
+  expect(res.body.ok).toBe(false);
+  expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  return res;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
+  isManualDuplicate.mockResolvedValue({ isDuplicate: false });
   transactionRepository.create.mockResolvedValue({ id: 1, amount: '-50', date: '2026-01-15' });
   transactionRepository.update.mockResolvedValue({ id: 1, amount: '10', date: '2026-07-01' });
 });
 
 describe('POST / — validation pins', () => {
   it('emits the 400 VALIDATION_ERROR envelope for a missing-fields body', async () => {
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/'], { body: {} }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    const body = res.json.mock.calls[0][0];
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(body.error.message).toContain('Missing required fields');
+    const res = await expectValidationError(post({}));
+    expect(res.body.error.message).toContain('Missing required fields');
+    // The failure envelope carries the request id injected by requestId middleware.
+    expect(res.body.meta.requestId).toEqual(expect.any(String));
+    expect(res.headers['x-request-id']).toBe(res.body.meta.requestId);
   });
 
   it('rejects when any required field is absent', async () => {
     for (const missing of ['transaction_date', 'bank_account', 'recipient_id', 'amount']) {
       const body = validPostBody();
       delete body[missing];
-      await expect(runPost(body)).rejects.toBeInstanceOf(ValidationError);
+      await expectValidationError(post(body));
     }
     expect(transactionRepository.create).not.toHaveBeenCalled();
   });
 
   it('falls back from transaction_date to date', async () => {
-    await runPost({ ...validPostBody(), transaction_date: undefined, date: '2026-02-03' });
+    const body = validPostBody();
+    delete body.transaction_date;
+    await post({ ...body, date: '2026-02-03' }).expect(201);
     expect(transactionRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ transaction_date: '2026-02-03' }),
     );
   });
 
   it('rejects zero, non-numeric, and out-of-range amounts', async () => {
-    for (const amount of [0, '0', 'abc', Infinity, -Infinity, 1e12 + 1, -1e13]) {
-      await expect(runPost({ ...validPostBody(), amount })).rejects.toBeInstanceOf(ValidationError);
+    // Infinity/-Infinity are not representable in JSON, so they arrive as the
+    // string forms a client would actually send.
+    for (const amount of [0, '0', 'abc', 'Infinity', '-Infinity', 1e12 + 1, -1e13]) {
+      await expectValidationError(post({ ...validPostBody(), amount }));
     }
     expect(transactionRepository.create).not.toHaveBeenCalled();
   });
 
   it('passes an accepted numeric-string amount through RAW (no coercion)', async () => {
-    await runPost({ ...validPostBody(), amount: '-12.5' });
+    await post({ ...validPostBody(), amount: '-12.5' }).expect(201);
     expect(transactionRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ amount: '-12.5' }),
     );
@@ -131,53 +120,53 @@ describe('POST / — validation pins', () => {
 
   it('rejects non-positive-integer recipient ids', async () => {
     for (const recipient_id of [1.5, 'abc', -1, '2.5']) {
-      await expect(runPost({ ...validPostBody(), recipient_id })).rejects.toBeInstanceOf(ValidationError);
+      await expectValidationError(post({ ...validPostBody(), recipient_id }));
     }
   });
 
   it('passes an accepted numeric-string recipient_id through RAW', async () => {
-    await runPost({ ...validPostBody(), recipient_id: '5' });
+    await post({ ...validPostBody(), recipient_id: '5' }).expect(201);
     expect(transactionRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ recipient_id: '5' }),
     );
   });
 
   it('rejects non-array tags, defaults absent tags to null, passes arrays through', async () => {
-    await expect(runPost({ ...validPostBody(), tags: 'x' })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPost({ ...validPostBody(), tags: null })).rejects.toBeInstanceOf(ValidationError);
+    await expectValidationError(post({ ...validPostBody(), tags: 'x' }));
+    await expectValidationError(post({ ...validPostBody(), tags: null }));
 
-    await runPost(validPostBody());
+    await post(validPostBody()).expect(201);
     expect(transactionRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ tags: null }),
     );
 
-    await runPost({ ...validPostBody(), tags: ['a', 'b'] });
+    await post({ ...validPostBody(), tags: ['a', 'b'] }).expect(201);
     expect(transactionRepository.create).toHaveBeenLastCalledWith(
       expect.objectContaining({ tags: ['a', 'b'] }),
     );
   });
 
   it('normalises currency to uppercase ISO and rejects free text', async () => {
-    await expect(runPost({ ...validPostBody(), currency: 'euro' })).rejects.toBeInstanceOf(ValidationError);
+    await expectValidationError(post({ ...validPostBody(), currency: 'euro' }));
 
-    await runPost({ ...validPostBody(), currency: 'usd' });
+    await post({ ...validPostBody(), currency: 'usd' }).expect(201);
     expect(transactionRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ currency: 'USD' }),
     );
 
-    await runPost(validPostBody());
+    await post(validPostBody()).expect(201);
     expect(transactionRepository.create).toHaveBeenLastCalledWith(
       expect.objectContaining({ currency: undefined }),
     );
   });
 
   it('rejects a bank_account longer than 100 characters', async () => {
-    await expect(runPost({ ...validPostBody(), bank_account: 'a'.repeat(101) }))
-      .rejects.toThrow(/bank_account/);
+    const res = await expectValidationError(post({ ...validPostBody(), bank_account: 'a'.repeat(101) }));
+    expect(res.body.error.message).toMatch(/bank_account/);
   });
 
   it('still records the raw-transaction mirror with the accepted values', async () => {
-    await runPost({ ...validPostBody(), memo: 'm', category_id: 4 });
+    await post({ ...validPostBody(), memo: 'm', category_id: 4 }).expect(201);
     expect(recordManualRawTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ date: '2026-01-15', recipientId: 1, categoryId: 4, memo: 'm' }),
     );
@@ -186,11 +175,11 @@ describe('POST / — validation pins', () => {
 
 describe('PATCH /:id — validation pins', () => {
   it('rejects a cleared or free-text currency but uppercases a valid one', async () => {
-    await expect(runPatch({ currency: '' })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPatch({ currency: null })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPatch({ currency: 'euro' })).rejects.toBeInstanceOf(ValidationError);
+    await expectValidationError(patch({ currency: '' }));
+    await expectValidationError(patch({ currency: null }));
+    await expectValidationError(patch({ currency: 'euro' }));
 
-    await runPatch({ currency: 'usd' });
+    await patch({ currency: 'usd' }).expect(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ currency: 'USD' }),
@@ -198,7 +187,7 @@ describe('PATCH /:id — validation pins', () => {
   });
 
   it('allows a zero amount on PATCH (unlike POST) and coerces it to a number', async () => {
-    await runPatch({ amount: '0' });
+    await patch({ amount: '0' }).expect(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ amount: 0 }),
@@ -206,14 +195,14 @@ describe('PATCH /:id — validation pins', () => {
   });
 
   it('rejects an out-of-range amount', async () => {
-    await expect(runPatch({ amount: 1e13 })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPatch({ amount: Infinity })).rejects.toBeInstanceOf(ValidationError);
+    await expectValidationError(patch({ amount: 1e13 }));
+    await expectValidationError(patch({ amount: 'Infinity' }));
   });
 
   it('caps bank_account at 100 chars but lets null through untouched', async () => {
-    await expect(runPatch({ bank_account: 'a'.repeat(101) })).rejects.toBeInstanceOf(ValidationError);
+    await expectValidationError(patch({ bank_account: 'a'.repeat(101) }));
 
-    await runPatch({ bank_account: null });
+    await patch({ bank_account: null }).expect(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ bank_account: null }),
@@ -221,9 +210,9 @@ describe('PATCH /:id — validation pins', () => {
   });
 
   it('rejects non-array tags and passes arrays through', async () => {
-    await expect(runPatch({ tags: 'x' })).rejects.toBeInstanceOf(ValidationError);
+    await expectValidationError(patch({ tags: 'x' }));
 
-    await runPatch({ tags: ['a'] });
+    await patch({ tags: ['a'] }).expect(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ tags: ['a'] }),
@@ -231,7 +220,7 @@ describe('PATCH /:id — validation pins', () => {
   });
 
   it('keeps the boundary loose: unvalidated fields pass through untouched', async () => {
-    await runPatch({ memo: 'hi', is_active: 'yes', comment: 7 });
+    await patch({ memo: 'hi', is_active: 'yes', comment: 7 }).expect(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ memo: 'hi', is_active: 'yes', comment: 7 }),
@@ -239,7 +228,7 @@ describe('PATCH /:id — validation pins', () => {
   });
 
   it('absent fields stay absent in the patch handed to the repository', async () => {
-    await runPatch({ memo: 'only-this' });
+    await patch({ memo: 'only-this' }).expect(200);
     const patchArg = transactionRepository.update.mock.calls[0][1];
     expect('amount' in patchArg).toBe(false);
     expect('transaction_date' in patchArg).toBe(false);
@@ -249,7 +238,7 @@ describe('PATCH /:id — validation pins', () => {
   });
 
   it('coerces numeric-string FK ids to numbers', async () => {
-    await runPatch({ recipient_id: '7', category_id: '3' });
+    await patch({ recipient_id: '7', category_id: '3' }).expect(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ recipient_id: 7, category_id: 3 }),
@@ -257,7 +246,7 @@ describe('PATCH /:id — validation pins', () => {
   });
 
   it('strips read-only keys (id, created_at, links) before the repository', async () => {
-    await runPatch({ id: 99, created_at: 'x', links: ['a'], memo: 'ok' });
+    await patch({ id: 99, created_at: 'x', links: ['a'], memo: 'ok' }).expect(200);
     const patchArg = transactionRepository.update.mock.calls[0][1];
     expect('id' in patchArg).toBe(false);
     expect('created_at' in patchArg).toBe(false);
@@ -273,41 +262,35 @@ describe('POST /bulk-tag — validation pins', () => {
       { transaction_ids: [1], remove_slugs: { a: 1 } },
       { transaction_ids: [1], add_slugs: null },
     ]) {
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/bulk-tag'], { body }, res);
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expectValidationError(bulkTag(body));
     }
   });
 
   it('rejects remove_slugs above 50 entries', async () => {
-    const res = mockResponse();
-    const body = { transaction_ids: [1], remove_slugs: Array.from({ length: 51 }, (_, i) => `t-${i}`) };
-    await callHandler(routeHandlers['post:/bulk-tag'], { body }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await expectValidationError(bulkTag({
+      transaction_ids: [1],
+      remove_slugs: Array.from({ length: 51 }, (_, i) => `t-${i}`),
+    }));
   });
 
   it('checks the both-empty rule before filtering invalid ids', async () => {
-    const res = mockResponse();
-    const body = { transaction_ids: ['abc'], add_slugs: [], remove_slugs: [] };
-    await callHandler(routeHandlers['post:/bulk-tag'], { body }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].error.message).toMatch(/at least one/i);
+    const res = await expectValidationError(bulkTag({
+      transaction_ids: ['abc'], add_slugs: [], remove_slugs: [],
+    }));
+    expect(res.body.error.message).toMatch(/at least one/i);
   });
 
   it('rejects when transaction_ids contains no int4-valid ids', async () => {
-    const res = mockResponse();
-    const body = { transaction_ids: ['abc', 0, -2, 2 ** 31], add_slugs: ['x'] };
-    await callHandler(routeHandlers['post:/bulk-tag'], { body }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].error.message).toContain('no valid IDs');
+    const res = await expectValidationError(bulkTag({
+      transaction_ids: ['abc', 0, -2, 2 ** 31], add_slugs: ['x'],
+    }));
+    expect(res.body.error.message).toContain('no valid IDs');
   });
 });
 
 describe('POST /bulk-update — validation pins', () => {
   it('rejects an array fields value', async () => {
-    const res = mockResponse();
-    await callHandler(routeHandlers['post:/bulk-update'], { body: { ids: [1], fields: [] } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await expectValidationError(bulkUpdate({ ids: [1], fields: [] }));
   });
 
   it('keeps FK ids strict: numeric strings and floats are rejected', async () => {
@@ -318,10 +301,7 @@ describe('POST /bulk-update — validation pins', () => {
       { recipient_id: 0 },
       { recipient_id: true },
     ]) {
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/bulk-update'], { body: { ids: [1], fields } }, res);
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json.mock.calls[0][0].error.code).toBe('VALIDATION_ERROR');
+      await expectValidationError(bulkUpdate({ ids: [1], fields }));
     }
   });
 });

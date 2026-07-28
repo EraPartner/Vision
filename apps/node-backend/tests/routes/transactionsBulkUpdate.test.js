@@ -1,18 +1,15 @@
 /**
  * POST /bulk-update — field validation, FK pre-checks, single transaction.
+ *
+ * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * route's rate limiter, JSON body parsing and the centralized error handler are
+ * all on the tested path.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockPooledTxConnection } from '../helpers/repoMocks.js';
 import { mockTransactionRepository, mockDeduplication, mockTransferReconciliation, mockCurrencyConversion } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
@@ -28,46 +25,28 @@ vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCu
 
 vi.mock('../../src/database/connection.js', () => mockPooledTxConnection());
 
-await import('../../src/routes/transactions.js');
+const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.js';
 import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
 
-const handler = routeHandlers['post:/bulk-update'];
-
-function mockResponse() {
-  return createMockResponse({ headersSent: false });
-}
-
-async function callHandler(req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    res.status(status).json({ ok: false, error: { code: err.code ?? 'INTERNAL_SERVER_ERROR', message: err.message } });
-  }
-}
+const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
+const bulkUpdate = (body) => api.post('/api/transactions/bulk-update').send(body);
 
 describe('POST /bulk-update — field validation', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('rejects when fields object is missing', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1] } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkUpdate({ ids: [1] }).expect(400);
   });
 
   it('rejects when no recognized field is set', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { foo: 1 } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].error.message).toMatch(/at least one/i);
+    const res = await bulkUpdate({ ids: [1], fields: { foo: 1 } }).expect(400);
+    expect(res.body.error.message).toMatch(/at least one/i);
   });
 
   it('rejects non-integer category_id', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { category_id: 'abc' } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkUpdate({ ids: [1], fields: { category_id: 'abc' } }).expect(400);
   });
 
   it('accepts category_id = null (uncategorize)', async () => {
@@ -78,25 +57,20 @@ describe('POST /bulk-update — field validation', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { category_id: null } } }, res);
+    const res = await bulkUpdate({ ids: [1], fields: { category_id: null } }).expect(200);
 
-    expect(res.json.mock.calls[0][0].data.updated).toBe(1);
+    expect(res.body.data.updated).toBe(1);
     const updateCall = clientQuery.mock.calls.find(([sql]) => sql.includes('UPDATE transactions'));
     expect(updateCall[0]).toMatch(/category_id = \$2/);
     expect(updateCall[1]).toEqual([[1], null]);
   });
 
   it('rejects null recipient_id (column is NOT NULL)', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { recipient_id: null } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkUpdate({ ids: [1], fields: { recipient_id: null } }).expect(400);
   });
 
   it('rejects non-boolean is_active', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { is_active: 'true' } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkUpdate({ ids: [1], fields: { is_active: 'true' } }).expect(400);
   });
 });
 
@@ -105,17 +79,17 @@ describe('POST /bulk-update — FK pre-checks', () => {
 
   it('returns 400 when category does not exist', async () => {
     dbQuery.mockResolvedValueOnce({ rows: [] }); // category lookup
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { category_id: 999 } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+
+    await bulkUpdate({ ids: [1], fields: { category_id: 999 } }).expect(400);
+
     expect(getClient).not.toHaveBeenCalled();
   });
 
   it('returns 400 when recipient does not exist', async () => {
     dbQuery.mockResolvedValueOnce({ rows: [] }); // recipient lookup
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { recipient_id: 999 } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+
+    await bulkUpdate({ ids: [1], fields: { recipient_id: 999 } }).expect(400);
+
     expect(getClient).not.toHaveBeenCalled();
   });
 });
@@ -132,10 +106,9 @@ describe('POST /bulk-update — success paths', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1, 2], fields: { category_id: 7 } } }, res);
+    const res = await bulkUpdate({ ids: [1, 2], fields: { category_id: 7 } }).expect(200);
 
-    expect(res.json.mock.calls[0][0].data.updated).toBe(2);
+    expect(res.body.data.updated).toBe(2);
     expect(scheduleReconcile).toHaveBeenCalledTimes(1);
   });
 
@@ -150,15 +123,12 @@ describe('POST /bulk-update — success paths', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({
-      body: {
-        ids: [5],
-        fields: { category_id: 7, recipient_id: 99, is_active: false },
-      },
-    }, res);
+    const res = await bulkUpdate({
+      ids: [5],
+      fields: { category_id: 7, recipient_id: 99, is_active: false },
+    }).expect(200);
 
-    expect(res.json.mock.calls[0][0].data.updated).toBe(1);
+    expect(res.body.data.updated).toBe(1);
     const updateCall = clientQuery.mock.calls.find(([sql]) => sql.includes('UPDATE transactions'));
     expect(updateCall[0]).toMatch(/category_id = \$2.*recipient_id = \$3.*is_active = \$4.*updated_at = NOW\(\)/s);
     expect(updateCall[1]).toEqual([[5], 7, 99, false]);
@@ -172,10 +142,9 @@ describe('POST /bulk-update — success paths', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [12345], fields: { is_active: true } } }, res);
+    const res = await bulkUpdate({ ids: [12345], fields: { is_active: true } }).expect(200);
 
-    expect(res.json.mock.calls[0][0].data.updated).toBe(0);
+    expect(res.body.data.updated).toBe(0);
     expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 });
@@ -191,11 +160,9 @@ describe('POST /bulk-update — atomicity', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], fields: { is_active: false } } }, res);
+    await bulkUpdate({ ids: [1], fields: { is_active: false } }).expect(500);
 
     expect(scheduleReconcile).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(500);
     expect(release).toHaveBeenCalledTimes(1);
   });
 });

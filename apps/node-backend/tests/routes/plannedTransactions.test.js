@@ -1,17 +1,15 @@
 /**
  * Planned transaction route tests.
  * Mirrors: apps/backend/tests/test_planned_transactions.py
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js). Notably `validateIdParam` is no longer stubbed —
+ * the guard that the old mock-router harness dropped from the chain now runs on
+ * every `/:id` route here.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
   default: {
@@ -31,42 +29,13 @@ vi.mock('../../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
-vi.mock('../../src/services/loanRepaymentService.js', () => ({
-  generateLoanRepaymentSchedule: vi.fn(() => ({
-    regular_payment_amount: 850,
-    first_due_date: '2026-04-01',
-    schedule: [
-      {
-        installment_number: 1,
-        due_date: '2026-04-01',
-        payment_amount: 850,
-        principal_amount: 700,
-        interest_amount: 150,
-        remaining_principal: 9300,
-      },
-    ],
-  })),
-}));
-
-vi.mock('../../src/middleware/validation.js', async (importOriginal) => ({
-  // Keep the real helpers (assertYmd, validateId, …); only stub the middleware.
-  ...(await importOriginal()),
-  validateIdParam: (_req, _res, next) => next(),
-}));
-
+// The per-route PATCH limiter (routes/plannedTransactions.js:417) is stubbed
+// here on purpose: this suite issues ~28 PATCHes against one in-memory counter
+// keyed by IP, so the real 30/min ceiling would make the file self-throttling
+// and flaky as tests are added. The transactions suites exercise the real
+// limiter chain. Every OTHER middleware on the chain is real.
 vi.mock('../../src/middleware/rateLimiter.js', () => ({
   rateLimiter: () => (_req, _res, next) => next(),
-}));
-
-vi.mock('../../src/services/recurrenceService.js', () => ({
-  calculateNextDate: vi.fn((base, pattern) => {
-    if (pattern === 'monthly') {
-      const d = new Date(base);
-      d.setMonth(d.getMonth() + 1);
-      return d;
-    }
-    return null;
-  }),
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
@@ -75,12 +44,15 @@ vi.mock('../../src/config/logger.js', () => ({
 
 import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
-import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/plannedTransactions.js');
 
-function mockResponse() {
-  return createMockResponse({ set: vi.fn() });
-}
+const { default: plannedRouter } = await import('../../src/routes/plannedTransactions.js');
+
+const api = routeAgent(plannedRouter, { mountPath: '/api/planned-transactions' });
+
+const BASE = '/api/planned-transactions';
+const post = (body) => api.post(`${BASE}/`).send(body);
+const patch = (id, body) => api.patch(`${BASE}/${id}`).send(body);
+const execute = (id, body) => api.post(`${BASE}/${id}/execute`).send(body);
 
 describe('Planned Transaction Routes', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -89,13 +61,12 @@ describe('Planned Transaction Routes', () => {
     it('should return empty list', async () => {
       plannedTransactionRepository.getAll.mockResolvedValue({ items: [], total: 0 });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(`${BASE}/`).expect(200);
 
-      const result = res.json.mock.calls[0][0];
-      expect(result.data.items).toEqual([]);
-      expect(result.data.total).toBe(0);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.items).toEqual([]);
+      expect(res.body.data.total).toBe(0);
+      expect(res.body.meta.requestId).toEqual(expect.any(String));
     });
 
     it('should return planned transactions', async () => {
@@ -104,31 +75,24 @@ describe('Planned Transaction Routes', () => {
         total: 1,
       });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.total).toBe(1);
+      expect(res.body.data.total).toBe(1);
     });
 
     it('should respect pagination', async () => {
       plannedTransactionRepository.getAll.mockResolvedValue({ items: [], total: 10 });
 
-      const req = { query: { limit: '5', offset: '2' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get(`${BASE}/?limit=5&offset=2`).expect(200);
 
-      const data = res.json.mock.calls[0][0].data;
-      expect(data.limit).toBe(5);
-      expect(data.offset).toBe(2);
+      expect(res.body.data.limit).toBe(5);
+      expect(res.body.data.offset).toBe(2);
     });
 
     it('should filter by is_recurring', async () => {
       plannedTransactionRepository.getAll.mockResolvedValue({ items: [], total: 0 });
 
-      const req = { query: { is_recurring: 'true' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      await api.get(`${BASE}/?is_recurring=true`).expect(200);
 
       expect(plannedTransactionRepository.getAll).toHaveBeenCalledWith(
         expect.objectContaining({ isRecurring: true })
@@ -138,9 +102,7 @@ describe('Planned Transaction Routes', () => {
     it('should filter by is_executed', async () => {
       plannedTransactionRepository.getAll.mockResolvedValue({ items: [], total: 0 });
 
-      const req = { query: { is_executed: 'false' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      await api.get(`${BASE}/?is_executed=false`).expect(200);
 
       expect(plannedTransactionRepository.getAll).toHaveBeenCalledWith(
         expect.objectContaining({ isExecuted: false })
@@ -155,39 +117,32 @@ describe('Planned Transaction Routes', () => {
         is_recurring: false, is_executed: false,
       });
 
-      const req = { body: { planned_date: '2026-03-15', bank_account: 'Chase', amount: 50 } };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
+      const res = await post({ planned_date: '2026-03-15', bank_account: 'Chase', amount: 50 })
+        .expect(201);
 
-      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.id).toBe(1);
     });
 
-    it('should throw ValidationError for missing fields', async () => {
-      const req = { body: { amount: 50 } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return a 400 VALIDATION_ERROR envelope for missing fields', async () => {
+      const res = await post({ amount: 50 }).expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
     it('rejects a zero amount (meaningless, never auto-matches)', async () => {
-      const req = { body: { planned_date: '2026-03-15', bank_account: 'Chase', amount: 0 } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      await post({ planned_date: '2026-03-15', bank_account: 'Chase', amount: 0 }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
     it('rejects an absurd amount above the money-column ceiling', async () => {
-      const req = { body: { planned_date: '2026-03-15', bank_account: 'Chase', amount: 1e15 } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      await post({ planned_date: '2026-03-15', bank_account: 'Chase', amount: 1e15 }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
     it('rejects a negative reminder_days_before', async () => {
-      const req = {
-        body: { planned_date: '2026-03-15', bank_account: 'Chase', amount: 50, reminder_days_before: -1 },
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      await post({
+        planned_date: '2026-03-15', bank_account: 'Chase', amount: 50, reminder_days_before: -1,
+      }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
@@ -202,22 +157,17 @@ describe('Planned Transaction Routes', () => {
         is_executed: false,
       });
 
-      const req = {
-        body: {
-          bank_account: 'Mortgage',
-          is_loan: true,
-          loan_type: 'amortizing',
-          loan_principal: 10000,
-          loan_annual_interest_rate: 6,
-          loan_term_months: 12,
-          loan_start_date: '2026-04-01',
-          loan_payment_day: 1,
-        },
-      };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
+      await post({
+        bank_account: 'Mortgage',
+        is_loan: true,
+        loan_type: 'amortizing',
+        loan_principal: 10000,
+        loan_annual_interest_rate: 6,
+        loan_term_months: 12,
+        loan_start_date: '2026-04-01',
+        loan_payment_day: 1,
+      }).expect(201);
 
-      expect(res.status).toHaveBeenCalledWith(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           is_loan: true,
@@ -227,27 +177,19 @@ describe('Planned Transaction Routes', () => {
       );
     });
 
-    it('rejects an invalid recurrence_pattern (fortnightly) with ValidationError', async () => {
-      const req = {
-        body: {
-          planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
-          is_recurring: true, recurrence_pattern: 'fortnightly',
-        },
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('rejects an invalid recurrence_pattern (fortnightly) with a 400', async () => {
+      await post({
+        planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
+        is_recurring: true, recurrence_pattern: 'fortnightly',
+      }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
     it('rejects is_recurring:true with no recurrence_pattern (would be perpetually due)', async () => {
-      const req = {
-        body: {
-          planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
-          is_recurring: true,
-        },
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      await post({
+        planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
+        is_recurring: true,
+      }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
@@ -256,15 +198,11 @@ describe('Planned Transaction Routes', () => {
         id: 9, planned_date: '2026-03-15', amount: '50.00', bank_account: 'Chase',
         is_recurring: true, is_executed: false,
       });
-      const req = {
-        body: {
-          planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
-          is_recurring: true, recurrence_pattern: 'every 10 days',
-        },
-      };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-      expect(res.status).toHaveBeenCalledWith(201);
+
+      await post({
+        planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
+        is_recurring: true, recurrence_pattern: 'every 10 days',
+      }).expect(201);
     });
 
     it('stores a loan as a monthly recurrence so /execute advances it', async () => {
@@ -273,34 +211,25 @@ describe('Planned Transaction Routes', () => {
         is_loan: true, is_recurring: true, recurrence_pattern: 'monthly', is_executed: false,
       });
 
-      const req = {
-        body: {
-          bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
-          loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
-          loan_start_date: '2026-04-01', loan_payment_day: 1,
-          // The frontend may inject a display string; the route must replace it.
-          recurrence_pattern: 'loan(12 months)',
-        },
-      };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
+      await post({
+        bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
+        loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
+        loan_start_date: '2026-04-01', loan_payment_day: 1,
+        // The frontend may inject a display string; the route must replace it.
+        recurrence_pattern: 'loan(12 months)',
+      }).expect(201);
 
-      expect(res.status).toHaveBeenCalledWith(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ is_loan: true, is_recurring: true, recurrence_pattern: 'monthly' }),
       );
     });
 
-    it('should throw ValidationError when loan_term_months is out of bounds', async () => {
-      const req = {
-        body: {
-          bank_account: 'Mortgage',
-          is_loan: true,
-          loan_term_months: 601,
-        },
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return 400 when loan_term_months is out of bounds', async () => {
+      await post({
+        bank_account: 'Mortgage',
+        is_loan: true,
+        loan_term_months: 601,
+      }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
   });
@@ -318,35 +247,31 @@ describe('Planned Transaction Routes', () => {
     });
 
     it('coerces a string amount to a number before the repository', async () => {
-      const req = { body: { ...validBody, amount: '50.5' } };
-      await routeHandlers['post:/'](req, mockResponse());
+      await post({ ...validBody, amount: '50.5' }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 50.5 }),
       );
     });
 
     it('rejects an empty-string amount (coerces to 0, which is meaningless)', async () => {
-      const req = { body: { ...validBody, amount: '' } };
-      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      await post({ ...validBody, amount: '' }).expect(400);
     });
 
     it('rejects non-array tags (including null)', async () => {
-      await expect(routeHandlers['post:/']({ body: { ...validBody, tags: 'groceries' } }, mockResponse()))
-        .rejects.toBeInstanceOf(ValidationError);
-      await expect(routeHandlers['post:/']({ body: { ...validBody, tags: null } }, mockResponse()))
-        .rejects.toBeInstanceOf(ValidationError);
+      await post({ ...validBody, tags: 'groceries' }).expect(400);
+      await post({ ...validBody, tags: null }).expect(400);
     });
 
     it('coerces reminder_days_before and accepts the 0/365 boundaries', async () => {
-      await routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: '5' } }, mockResponse());
+      await post({ ...validBody, reminder_days_before: '5' }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ reminder_days_before: 5 }),
       );
-      await routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: 0 } }, mockResponse());
+      await post({ ...validBody, reminder_days_before: 0 }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenLastCalledWith(
         expect.objectContaining({ reminder_days_before: 0 }),
       );
-      await routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: 365 } }, mockResponse());
+      await post({ ...validBody, reminder_days_before: 365 }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenLastCalledWith(
         expect.objectContaining({ reminder_days_before: 365 }),
       );
@@ -354,17 +279,16 @@ describe('Planned Transaction Routes', () => {
 
     it('rejects out-of-range or fractional reminder_days_before', async () => {
       for (const bad of [366, 2.5, 'abc']) {
-        await expect(routeHandlers['post:/']({ body: { ...validBody, reminder_days_before: bad } }, mockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+        await post({ ...validBody, reminder_days_before: bad }).expect(400);
       }
     });
 
     it('coerces max_occurrences to an integer and accepts the 1 boundary', async () => {
-      await routeHandlers['post:/']({ body: { ...validBody, max_occurrences: '3' } }, mockResponse());
+      await post({ ...validBody, max_occurrences: '3' }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ max_occurrences: 3 }),
       );
-      await routeHandlers['post:/']({ body: { ...validBody, max_occurrences: 1 } }, mockResponse());
+      await post({ ...validBody, max_occurrences: 1 }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenLastCalledWith(
         expect.objectContaining({ max_occurrences: 1 }),
       );
@@ -372,54 +296,47 @@ describe('Planned Transaction Routes', () => {
 
     it('rejects non-positive or non-numeric max_occurrences', async () => {
       for (const bad of [0, -1, 1.5, 'abc']) {
-        await expect(routeHandlers['post:/']({ body: { ...validBody, max_occurrences: bad } }, mockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+        await post({ ...validBody, max_occurrences: bad }).expect(400);
       }
     });
 
     it('accepts a valid recurrence_end_date unchanged and rejects a malformed one', async () => {
-      await routeHandlers['post:/']({ body: { ...validBody, recurrence_end_date: '2026-12-31' } }, mockResponse());
+      await post({ ...validBody, recurrence_end_date: '2026-12-31' }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ recurrence_end_date: '2026-12-31' }),
       );
-      await expect(routeHandlers['post:/']({ body: { ...validBody, recurrence_end_date: 'banana' } }, mockResponse()))
-        .rejects.toBeInstanceOf(ValidationError);
+      await post({ ...validBody, recurrence_end_date: 'banana' }).expect(400);
     });
 
     it('normalises currency to uppercase ISO and rejects free text', async () => {
       // Free-typed "euro" used to be uppercased to "EURO" by the repository and
       // then violate the 0046 ISO CHECK as a raw 500.
-      const badReq = { body: { ...validBody, currency: 'euro' } };
-      await expect(routeHandlers['post:/'](badReq, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      await post({ ...validBody, currency: 'euro' }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
 
-      const okReq = { body: { ...validBody, currency: 'usd' } };
-      await routeHandlers['post:/'](okReq, mockResponse());
+      await post({ ...validBody, currency: 'usd' }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ currency: 'USD' }),
       );
     });
 
     it('maps an absent/empty currency to undefined so the repository default (EUR) applies', async () => {
-      const req = { body: { ...validBody, currency: '' } };
-      await routeHandlers['post:/'](req, mockResponse());
+      await post({ ...validBody, currency: '' }).expect(201);
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ currency: undefined }),
       );
     });
 
     it('drops truthy recurrence bounds on a loan instead of validating them', async () => {
-      const req = {
-        body: {
-          bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
-          loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
-          loan_start_date: '2026-04-01', loan_payment_day: 1,
-          // Garbage that would 400 on a non-loan — the loan branch deletes it.
-          max_occurrences: 'abc', recurrence_end_date: 'banana',
-          frequency: 'x', custom_interval_days: 3, end_date: 'y',
-        },
-      };
-      await routeHandlers['post:/'](req, mockResponse());
+      await post({
+        bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
+        loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
+        loan_start_date: '2026-04-01', loan_payment_day: 1,
+        // Garbage that would 400 on a non-loan — the loan branch deletes it.
+        max_occurrences: 'abc', recurrence_end_date: 'banana',
+        frequency: 'x', custom_interval_days: 3, end_date: 'y',
+      }).expect(201);
+
       const arg = plannedTransactionRepository.create.mock.calls[0][0];
       expect('max_occurrences' in arg).toBe(false);
       expect('recurrence_end_date' in arg).toBe(false);
@@ -429,15 +346,12 @@ describe('Planned Transaction Routes', () => {
     });
 
     it('still rejects a falsy-but-present max_occurrences on a loan (not dropped)', async () => {
-      const req = {
-        body: {
-          bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
-          loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
-          loan_start_date: '2026-04-01', loan_payment_day: 1,
-          max_occurrences: 0,
-        },
-      };
-      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      await post({
+        bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
+        loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
+        loan_start_date: '2026-04-01', loan_payment_day: 1,
+        max_occurrences: 0,
+      }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
   });
@@ -449,8 +363,7 @@ describe('Planned Transaction Routes', () => {
     });
 
     it('coerces reminder_days_before and max_occurrences on update', async () => {
-      const req = { params: { id: '1' }, body: { reminder_days_before: '7', max_occurrences: '4' } };
-      await routeHandlers['patch:/:id'](req, mockResponse());
+      await patch(1, { reminder_days_before: '7', max_occurrences: '4' }).expect(200);
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ reminder_days_before: 7, max_occurrences: 4 }),
@@ -465,8 +378,7 @@ describe('Planned Transaction Routes', () => {
         { tags: 'nope' },
         { recurrence_pattern: 'fortnightly' },
       ]) {
-        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+        await patch(1, body).expect(400);
       }
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
     });
@@ -475,12 +387,11 @@ describe('Planned Transaction Routes', () => {
       // PATCH forwarded the raw value to the SET builder, so "euro" hit the
       // 0046 ISO CHECK as a raw 500 and null hit the NOT NULL constraint.
       for (const body of [{ currency: 'euro' }, { currency: null }, { currency: '' }]) {
-        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+        await patch(1, body).expect(400);
       }
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
 
-      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { currency: 'usd' } }, mockResponse());
+      await patch(1, { currency: 'usd' }).expect(200);
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ currency: 'USD' }),
@@ -495,12 +406,11 @@ describe('Planned Transaction Routes', () => {
         { amount: null },
         { amount: '' },
       ]) {
-        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+        await patch(1, body).expect(400);
       }
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
 
-      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { amount: '-42.50' } }, mockResponse());
+      await patch(1, { amount: '-42.50' }).expect(200);
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ amount: -42.5 }),
@@ -511,17 +421,15 @@ describe('Planned Transaction Routes', () => {
       // is_recurring:true on a row without a pattern used to store and leave
       // the row perpetually due after /execute (the POST guard has an exact
       // sibling); clearing the pattern on a recurring row recreated it.
-      await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body: { is_recurring: true } }, mockResponse()))
-        .rejects.toBeInstanceOf(ValidationError);
+      await patch(1, { is_recurring: true }).expect(400);
 
       plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false, is_recurring: true, recurrence_pattern: 'monthly' });
-      await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body: { recurrence_pattern: null } }, mockResponse()))
-        .rejects.toBeInstanceOf(ValidationError);
+      await patch(1, { recurrence_pattern: null }).expect(400);
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
 
       // Turning recurrence on WITH a valid pattern still passes.
       plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false });
-      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { is_recurring: true, recurrence_pattern: 'monthly' } }, mockResponse());
+      await patch(1, { is_recurring: true, recurrence_pattern: 'monthly' }).expect(200);
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ is_recurring: true, recurrence_pattern: 'monthly' }),
@@ -529,7 +437,7 @@ describe('Planned Transaction Routes', () => {
 
       // An unrelated edit to a legacy broken row (recurring, no pattern) is NOT blocked.
       plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false, is_recurring: true, recurrence_pattern: null });
-      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { memo: 'still editable' } }, mockResponse());
+      await patch(1, { memo: 'still editable' }).expect(200);
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ memo: 'still editable' }),
@@ -537,11 +445,9 @@ describe('Planned Transaction Routes', () => {
     });
 
     it('passes explicit nulls through to clear recurrence bounds and pattern', async () => {
-      const req = {
-        params: { id: '1' },
-        body: { recurrence_end_date: null, max_occurrences: null, recurrence_pattern: null },
-      };
-      await routeHandlers['patch:/:id'](req, mockResponse());
+      await patch(1, {
+        recurrence_end_date: null, max_occurrences: null, recurrence_pattern: null,
+      }).expect(200);
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
@@ -559,19 +465,26 @@ describe('Planned Transaction Routes', () => {
         id: 1, planned_date: '2026-03-15', amount: '50.00',
       });
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
+      const res = await api.get(`${BASE}/1`).expect(200);
 
-      expect(res.json).toHaveBeenCalled();
+      expect(res.body.data.id).toBe(1);
     });
 
-    it('should throw NotFoundError for non-existent', async () => {
+    it('should return a 404 envelope for non-existent', async () => {
       plannedTransactionRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { id: '99999' } };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.get(`${BASE}/99999`).expect(404);
+
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('rejects a non-integer :id via the real validateIdParam guard', async () => {
+      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // validateIdParam with a pass-through, so this guard was never tested.
+      const res = await api.get(`${BASE}/abc`).expect(400);
+
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(plannedTransactionRepository.getById).not.toHaveBeenCalled();
     });
   });
 
@@ -580,19 +493,15 @@ describe('Planned Transaction Routes', () => {
       plannedTransactionRepository.getById.mockResolvedValue({ id: 1 });
       plannedTransactionRepository.update.mockResolvedValue({ id: 1, amount: '75.00' });
 
-      const req = { params: { id: '1' }, body: { amount: 75 } };
-      const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      const res = await patch(1, { amount: 75 }).expect(200);
 
-      expect(res.json).toHaveBeenCalled();
+      expect(res.body.ok).toBe(true);
     });
 
-    it('should throw NotFoundError for non-existent', async () => {
+    it('should return 404 for non-existent', async () => {
       plannedTransactionRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { id: '99999' }, body: { amount: 75 } };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      await patch(99999, { amount: 75 }).expect(404);
     });
 
     it('should resolve recipient_name and category_name to IDs', async () => {
@@ -606,15 +515,10 @@ describe('Planned Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{ id: 11 }] })
         .mockResolvedValueOnce({ rows: [{ id: 22 }] });
 
-      const req = {
-        params: { id: '1' },
-        body: {
-          recipient_name: 'John',
-          category_name: 'FOOD:GROCERIES',
-        },
-      };
-      const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      await patch(1, {
+        recipient_name: 'John',
+        category_name: 'FOOD:GROCERIES',
+      }).expect(200);
 
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
@@ -623,7 +527,6 @@ describe('Planned Transaction Routes', () => {
           category_id: 22,
         })
       );
-      expect(res.json).toHaveBeenCalled();
     });
 
     // Sign/amount derivation pins: whenever the repayment schedule is
@@ -647,17 +550,13 @@ describe('Planned Transaction Routes', () => {
       plannedTransactionRepository.getById.mockResolvedValueOnce(existingLoan);
       plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({ id: 1, is_loan: true });
 
-      const req = {
-        params: { id: '1' },
-        // Client edits the principal but sends its stale (pre-regeneration) amount.
-        body: {
-          loan_principal: 10000,
-          loan_annual_interest_rate: 6,
-          loan_term_months: 12,
-          amount: -214.03,
-        },
-      };
-      await routeHandlers['patch:/:id'](req, mockResponse());
+      // Client edits the principal but sends its stale (pre-regeneration) amount.
+      await patch(1, {
+        loan_principal: 10000,
+        loan_annual_interest_rate: 6,
+        loan_term_months: 12,
+        amount: -214.03,
+      }).expect(200);
 
       expect(plannedTransactionRepository.updateWithLoanSchedule).toHaveBeenCalledWith(
         1,
@@ -673,20 +572,16 @@ describe('Planned Transaction Routes', () => {
       plannedTransactionRepository.getById.mockResolvedValueOnce({ id: 1, is_loan: false });
       plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({ id: 1, is_loan: true });
 
-      const req = {
-        params: { id: '1' },
-        body: {
-          is_loan: true,
-          loan_type: 'amortizing',
-          loan_principal: 10000,
-          loan_annual_interest_rate: 6,
-          loan_term_months: 12,
-          loan_start_date: '2026-04-01',
-          loan_payment_day: 1,
-          amount: 500, // stale client value, wrong sign — must be ignored
-        },
-      };
-      await routeHandlers['patch:/:id'](req, mockResponse());
+      await patch(1, {
+        is_loan: true,
+        loan_type: 'amortizing',
+        loan_principal: 10000,
+        loan_annual_interest_rate: 6,
+        loan_term_months: 12,
+        loan_start_date: '2026-04-01',
+        loan_payment_day: 1,
+        amount: 500, // stale client value, wrong sign — must be ignored
+      }).expect(200);
 
       expect(plannedTransactionRepository.updateWithLoanSchedule).toHaveBeenCalledWith(
         1,
@@ -702,8 +597,7 @@ describe('Planned Transaction Routes', () => {
       plannedTransactionRepository.getById.mockResolvedValueOnce(existingLoan);
       plannedTransactionRepository.update.mockResolvedValue({ id: 1, is_loan: true });
 
-      const req = { params: { id: '1' }, body: { memo: 'note', amount: -123.45 } };
-      await routeHandlers['patch:/:id'](req, mockResponse());
+      await patch(1, { memo: 'note', amount: -123.45 }).expect(200);
 
       expect(plannedTransactionRepository.updateWithLoanSchedule).not.toHaveBeenCalled();
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
@@ -725,12 +619,7 @@ describe('Planned Transaction Routes', () => {
       });
       plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({ id: 1, is_loan: false, loan_schedule: [] });
 
-      const req = {
-        params: { id: '1' },
-        body: { is_loan: false },
-      };
-      const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      await patch(1, { is_loan: false }).expect(200);
 
       // Field update + schedule clear must go through ONE atomic method ([] clears
       // the schedule) — not a separate update() + replaceLoanSchedule() pair.
@@ -750,7 +639,6 @@ describe('Planned Transaction Routes', () => {
         [],
       );
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalled();
     });
   });
 
@@ -761,14 +649,10 @@ describe('Planned Transaction Routes', () => {
         .mockResolvedValueOnce({ id: 1, is_executed: true, last_executed_date: '2026-03-15' });
       plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
 
-      const req = {
-        params: { id: '1' },
-        body: { executed_transaction_id: 10, execution_date: '2026-03-15' },
-      };
-      const res = mockResponse();
-      await routeHandlers['post:/:id/execute'](req, res);
+      const res = await execute(1, { executed_transaction_id: 10, execution_date: '2026-03-15' })
+        .expect(200);
 
-      expect(res.json).toHaveBeenCalled();
+      expect(res.body.ok).toBe(true);
     });
 
     it('should execute recurring and advance date', async () => {
@@ -780,9 +664,7 @@ describe('Planned Transaction Routes', () => {
         .mockResolvedValueOnce({ id: 1, is_executed: false, planned_date: '2026-04-15' });
       plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
 
-      const req = { params: { id: '1' }, body: { executed_transaction_id: 10 } };
-      const res = mockResponse();
-      await routeHandlers['post:/:id/execute'](req, res);
+      await execute(1, { executed_transaction_id: 10 }).expect(200);
 
       const call = plannedTransactionRepository.executeAndAdvance.mock.calls[0];
       expect(call[3].is_executed).toBe(false);
@@ -799,8 +681,7 @@ describe('Planned Transaction Routes', () => {
         .mockResolvedValueOnce({ id: 1 });
       plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
 
-      const req = { params: { id: '1' }, body: { executed_transaction_id: 10 } };
-      await routeHandlers['post:/:id/execute'](req, mockResponse());
+      await execute(1, { executed_transaction_id: 10 }).expect(200);
 
       const updateFields = plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
       expect(updateFields.planned_date).toBe('2026-02-28'); // not 2026-02-27 (the UTC day)
@@ -815,25 +696,22 @@ describe('Planned Transaction Routes', () => {
         .mockResolvedValueOnce({ id: 1 });
       plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
 
-      const req = { params: { id: '1' }, body: { executed_transaction_id: 11 } };
-      await routeHandlers['post:/:id/execute'](req, mockResponse());
+      await execute(1, { executed_transaction_id: 11 }).expect(200);
 
       const updateFields = plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
       expect(updateFields.planned_date).toBe('2026-03-28');
     });
 
-    it('should throw ValidationError without executed_transaction_id', async () => {
-      const req = { params: { id: '1' }, body: {} };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/execute'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    it('should return 400 without executed_transaction_id', async () => {
+      const res = await execute(1, {}).expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('should throw NotFoundError for non-existent', async () => {
+    it('should return 404 for non-existent', async () => {
       plannedTransactionRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { id: '99999' }, body: { executed_transaction_id: 10 } };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/execute'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await execute(99999, { executed_transaction_id: 10 }).expect(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -841,21 +719,16 @@ describe('Planned Transaction Routes', () => {
     it('should delete and return 204 with no body', async () => {
       plannedTransactionRepository.hardDelete.mockResolvedValue(true);
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
+      const res = await api.delete(`${BASE}/1`).expect(204);
 
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
+      expect(res.text).toBe('');
     });
 
-    it('should throw NotFoundError for non-existent', async () => {
+    it('should return 404 for non-existent', async () => {
       plannedTransactionRepository.hardDelete.mockResolvedValue(false);
 
-      const req = { params: { id: '99999' } };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.delete(`${BASE}/99999`).expect(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
     });
   });
 });

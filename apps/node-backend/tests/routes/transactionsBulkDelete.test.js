@@ -1,18 +1,15 @@
 /**
  * POST /bulk-delete — id-mode, filter-mode, validation, atomicity.
+ *
+ * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * route's rate limiter, JSON body parsing and the centralized error handler are
+ * all on the tested path.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockPooledTxConnection } from '../helpers/repoMocks.js';
 import { mockTransactionRepository, mockDeduplication, mockTransferReconciliation, mockCurrencyConversion, mockAttachmentRecordService, mockAttachmentService } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
@@ -32,47 +29,27 @@ vi.mock('../../src/services/attachmentRecordService.js', () => mockAttachmentRec
 
 vi.mock('../../src/services/attachmentService.js', () => mockAttachmentService());
 
-await import('../../src/routes/transactions.js');
+const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.js';
 import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
-import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
-import { removeAttachmentFile } from '../../src/services/attachmentService.js';
 
-const handler = routeHandlers['post:/bulk-delete'];
-
-function mockResponse() {
-  return createMockResponse({ headersSent: false });
-}
-
-async function callHandler(req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    res.status(status).json({ ok: false, error: { code: err.code ?? 'INTERNAL_SERVER_ERROR', message: err.message } });
-  }
-}
+const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
+const bulkDelete = (body) => api.post('/api/transactions/bulk-delete').send(body);
 
 describe('POST /bulk-delete — input validation', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns 400 when neither ids nor filter is given', async () => {
-    const res = mockResponse();
-    await callHandler({ body: {} }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkDelete({}).expect(400);
   });
 
   it('returns 400 when both ids and filter are given', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], filter: { search: 'x' } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkDelete({ ids: [1], filter: { search: 'x' } }).expect(400);
   });
 
   it('returns 400 when ids exceeds 500 entries', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: Array.from({ length: 501 }, (_, i) => i + 1) } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkDelete({ ids: Array.from({ length: 501 }, (_, i) => i + 1) }).expect(400);
   });
 });
 
@@ -87,11 +64,9 @@ describe('POST /bulk-delete — id-mode success', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1, 2, 3] } }, res);
+    const res = await bulkDelete({ ids: [1, 2, 3] }).expect(200);
 
-    const data = res.json.mock.calls[0][0].data;
-    expect(data.deleted).toBe(3);
+    expect(res.body.data.deleted).toBe(3);
     expect(scheduleReconcile).toHaveBeenCalledTimes(1);
 
     const deleteCall = clientQuery.mock.calls.find(([sql]) => sql.includes('DELETE FROM transactions'));
@@ -107,10 +82,9 @@ describe('POST /bulk-delete — id-mode success', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [9999] } }, res);
+    const res = await bulkDelete({ ids: [9999] }).expect(200);
 
-    expect(res.json.mock.calls[0][0].data.deleted).toBe(0);
+    expect(res.body.data.deleted).toBe(0);
     expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 });
@@ -120,9 +94,9 @@ describe('POST /bulk-delete — filter-mode', () => {
 
   it('rejects filter requests that exceed the cap', async () => {
     dbQuery.mockResolvedValueOnce({ rows: [{ n: 6000 }] });
-    const res = mockResponse();
-    await callHandler({ body: { filter: { search: 'big' } } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+
+    await bulkDelete({ filter: { search: 'big' } }).expect(400);
+
     expect(getClient).not.toHaveBeenCalled();
   });
 
@@ -138,10 +112,9 @@ describe('POST /bulk-delete — filter-mode', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { filter: { search: 'cafe' } } }, res);
+    const res = await bulkDelete({ filter: { search: 'cafe' } }).expect(200);
 
-    expect(res.json.mock.calls[0][0].data.deleted).toBe(2);
+    expect(res.body.data.deleted).toBe(2);
     const deleteCall = clientQuery.mock.calls.find(([sql]) => sql.includes('DELETE'));
     expect(deleteCall[1]).toEqual([[11, 22]]);
   });
@@ -158,11 +131,10 @@ describe('POST /bulk-delete — atomicity', () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1] } }, res);
+    const res = await bulkDelete({ ids: [1] }).expect(500);
 
     expect(scheduleReconcile).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
     const rollback = clientQuery.mock.calls.find(([sql]) => sql === 'ROLLBACK');
     expect(rollback).toBeDefined();
     expect(release).toHaveBeenCalledTimes(1);
