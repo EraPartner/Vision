@@ -29,7 +29,7 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
     enabled: isOnline,
   });
 
-  const articles = data?.articles ?? [];
+  const articles = data ?? [];
 
   return (
     <Card className="glass-regular h-full flex flex-col">

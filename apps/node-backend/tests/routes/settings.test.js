@@ -248,6 +248,43 @@ describe('Settings Routes', () => {
       });
     });
 
+    it('rejects an unknown setting key with a 400 naming the known keys', async () => {
+      const req = { params: { key: 'totally_unknown_key' }, body: { value: { any: 'json' } } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toThrow(/Unknown setting key 'totally_unknown_key'.*Known keys:/);
+      expect(settingsRepository.set).not.toHaveBeenCalled();
+    });
+
+    it('accepts dismissed_recurring_patterns as an array (RecurringDetectionPanel payload)', async () => {
+      settingsRepository.set.mockResolvedValue({ key: 'dismissed_recurring_patterns', value: [3, 7] });
+
+      const req = { params: { key: 'dismissed_recurring_patterns' }, body: { value: [3, 7] } };
+      const res = mockResponse();
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(settingsRepository.set).toHaveBeenCalledWith('dismissed_recurring_patterns', [3, 7]);
+    });
+
+    it('rejects a non-array dismissed_recurring_patterns', async () => {
+      const req = { params: { key: 'dismissed_recurring_patterns' }, body: { value: 'weekly' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('accepts a portfolio_tax_adjustments_v1 entry map (usePortfolioTaxAdjustments payload)', async () => {
+      const value = { '2026:4': { taxes: 12.5, fees: 3 } };
+      settingsRepository.set.mockResolvedValue({ key: 'portfolio_tax_adjustments_v1', value });
+
+      const req = { params: { key: 'portfolio_tax_adjustments_v1' }, body: { value } };
+      const res = mockResponse();
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(settingsRepository.set).toHaveBeenCalledWith('portfolio_tax_adjustments_v1', value);
+    });
+
     it('propagates error when single setting save fails', async () => {
       settingsRepository.set.mockRejectedValue(new Error('boom'));
 
@@ -313,6 +350,13 @@ describe('Settings Routes', () => {
       const req = { body: { onboarding_complete: true } };
       const res = mockResponse();
       await expect(routeHandlers['put:/'](req, res)).rejects.toThrow('boom');
+    });
+
+    it('rejects an unknown key via bulk (no unknown-key bypass)', async () => {
+      const req = { body: { onboarding_complete: true, mystery_key: { any: 'json' } } };
+      const res = mockResponse();
+      await expect(routeHandlers['put:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(settingsRepository.setMany).not.toHaveBeenCalled();
     });
 
     it('rejects an invalid cost_basis_method via bulk (no validation bypass)', async () => {

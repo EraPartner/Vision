@@ -257,27 +257,28 @@ export async function searchSymbols(q) {
 }
 
 /**
- * Batch quote lookup. Returns the `{ quotes }` payload for GET
- * /api/market/quote. `basic` returns price fields only; the default (full)
- * additionally fetches quoteSummary for fundamentals/analyst data. Results are
- * per-symbol cached (QUOTE_CACHE_TTL_MS) and concurrent identical fetches are
- * coalesced; a failed symbol is dropped rather than failing the batch.
+ * Batch quote lookup. Returns the canonical `{ items, total }` collection
+ * payload for GET /api/market/quote. `basic` returns price fields only; the
+ * default (full) additionally fetches quoteSummary for fundamentals/analyst
+ * data. Results are per-symbol cached (QUOTE_CACHE_TTL_MS) and concurrent
+ * identical fetches are coalesced; a failed symbol is dropped rather than
+ * failing the batch.
  *
  * @param {string[]} symbolList
  * @param {boolean} basic
- * @returns {Promise<{ quotes: Array<object> }>}
+ * @returns {Promise<{ items: Array<object>, total: number }>}
  */
 export async function getQuotes(symbolList, basic) {
   const quoteResults = await Promise.allSettled(
     symbolList.map((sym) => getCachedQuote(sym, basic)),
   );
 
-  const quotes = quoteResults
+  const items = quoteResults
     .filter(/** @type {(r: PromiseSettledResult<any>) => r is PromiseFulfilledResult<any>} */
       (r) => r.status === 'fulfilled' && r.value !== null && r.value !== undefined)
     .map((r) => r.value);
 
-  return { quotes };
+  return { items, total: items.length };
 }
 
 /**
@@ -285,9 +286,12 @@ export async function getQuotes(symbolList, basic) {
  * `range`/`interval` are passed through to yahoo-finance2, which validates them
  * against its own literal-union types — leave them loosely typed.
  *
+ * The series travels in the canonical `items` key (with `total`); `symbol` and
+ * `currency` ride alongside in the body.
+ *
  * @param {string} symbol
  * @param {{ range?: any, interval?: any }} [options]
- * @returns {Promise<{ symbol?: string, currency?: string, points: Array<object> }>}
+ * @returns {Promise<{ symbol?: string, currency?: string, items: Array<object>, total: number }>}
  */
 export async function getChart(symbol, { range = '1mo', interval = '1d' } = {}) {
   /** @type {any} */
@@ -306,7 +310,7 @@ export async function getChart(symbol, { range = '1mo', interval = '1d' } = {}) 
     throw upstreamError('Market chart unavailable', err);
   }
 
-  if (!result) return { points: [] };
+  if (!result) return { items: [], total: 0 };
 
   const points = (result.quotes || [])
     .filter((p) => p.close != null)
@@ -321,17 +325,18 @@ export async function getChart(symbol, { range = '1mo', interval = '1d' } = {}) 
   return {
     symbol: result.meta?.symbol,
     currency: result.meta?.currency,
-    points,
+    items: points,
+    total: points.length,
   };
 }
 
 /**
  * Symbol news feed, deduplicated by title and sorted newest-first. Returns the
- * `{ articles }` payload for GET /api/market/news.
+ * canonical `{ items, total }` collection payload for GET /api/market/news.
  *
  * @param {string} symbols Comma-separated symbols ('' falls back to SPY,QQQ,DIA).
  * @param {string} count Requested article count as a string; capped at 50.
- * @returns {Promise<{ articles: Array<object> }>}
+ * @returns {Promise<{ items: Array<object>, total: number }>}
  */
 export async function getNews(symbols, count) {
   const querySymbols = symbols || 'SPY,QQQ,DIA';
@@ -374,5 +379,5 @@ export async function getNews(symbols, count) {
     .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
     .slice(0, newsCount);
 
-  return { articles };
+  return { items: articles, total: articles.length };
 }

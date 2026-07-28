@@ -25,7 +25,13 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { closeTestPool, getTestPool, hasTestDatabase } from '../setup/db.js';
+import {
+  acquireDbSuiteLock,
+  closeTestPool,
+  getTestPool,
+  hasTestDatabase,
+  releaseDbSuiteLock,
+} from '../setup/db.js';
 import {
   reconcileTransfers,
   getTransferSuggestions,
@@ -133,7 +139,10 @@ describe.skipIf(!hasTestDatabase())('services/transferReconciliationService (rea
       process.env.DATABASE_URL,
       'DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)',
     ).toBe(process.env.TEST_DATABASE_URL);
-  });
+    // DB suites share one database across parallel vitest workers — serialize
+    // them behind the shared advisory lock (see tests/setup/db.js).
+    await acquireDbSuiteLock();
+  }, 180_000);
 
   afterEach(async () => {
     const pool = getTestPool();
@@ -152,6 +161,7 @@ describe.skipIf(!hasTestDatabase())('services/transferReconciliationService (rea
   });
 
   afterAll(async () => {
+    await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
   });

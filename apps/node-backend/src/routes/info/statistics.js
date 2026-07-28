@@ -28,9 +28,12 @@ const router = Router();
 // cutover (ADR-010): the aggregations.js routes superseded them and they had
 // zero production callers. The category breakdown lives on via getCategoryBreakdown.)
 
+// Both metadata lists use the canonical `{items, total}` collection shape
+// (unpaginated — `total` is the row count, present so pagination could land
+// without breaking the shape).
 router.get('/banks', async (req, res) => {
   const banks = await infoRepository.getBanks();
-  res.ok({ banks });
+  res.ok({ items: banks, total: banks.length });
 });
 
 router.get('/supported-adapters', async (req, res) => {
@@ -39,7 +42,7 @@ router.get('/supported-adapters', async (req, res) => {
   // second hardcoded list to update. (The old list also referenced
   // *Adapter-class names that don't exist anywhere in the codebase.)
   const adapters = listAdapters();
-  res.ok({ adapters, total_count: adapters.length });
+  res.ok({ items: adapters, total: adapters.length });
 });
 
 router.get('/transaction-count', async (req, res) => {

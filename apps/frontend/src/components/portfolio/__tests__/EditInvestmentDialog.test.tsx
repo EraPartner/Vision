@@ -3,6 +3,7 @@ import { describe, expect, it, afterEach, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
+import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err } from "@/test/msw/handlers";
@@ -159,6 +160,27 @@ describe("EditInvestmentDialog", () => {
         );
     });
 
+    it("whitespace-only name shows an error toast instead of silently no-oping the Save", async () => {
+        const toastError = vi.spyOn(toast, "error");
+        const user = userEvent.setup();
+        renderWithApp(<EditInvestmentDialog investment={INVESTMENT} />);
+
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        // `required` on the input blocks a truly EMPTY submit natively, but
+        // whitespace passed it and the guard used to bare-return silently.
+        const nameInput = screen.getByDisplayValue("MSCI World ETF");
+        await user.clear(nameInput);
+        await user.type(nameInput, "   ");
+
+        await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+        // Dialog stays open and the user gets explicit feedback.
+        await waitFor(() => expect(toastError).toHaveBeenCalledWith("Name is required"));
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
     it("Cancel button closes dialog", async () => {
         // Arrange
         const user = userEvent.setup();
@@ -214,7 +236,7 @@ describe("EditInvestmentDialog", () => {
 
     /** The Radix overlay — clicking it is the "stray click next to the dialog". */
     const overlay = () =>
-        document.querySelector<HTMLElement>(".fixed.inset-0.backdrop-blur-md")!;
+        document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay")!;
 
     it("keeps unsaved edits when dismissed by an outside click", async () => {
         // Arrange

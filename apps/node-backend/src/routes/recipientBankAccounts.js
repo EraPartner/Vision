@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import recipientBankAccountRepository from '../services/recipientBankAccountService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertMaxLength } from '../middleware/validation.js';
 
 const router = Router();
 
@@ -27,6 +27,9 @@ router.post('/:id/bank-accounts', validateIdParam, async (req, res) => {
   const { account_number, bank_name, address, account_label, set_as_primary } = req.body;
 
   if (!account_number) throw new ValidationError('Missing required field: account_number');
+  // account_number is VARCHAR(34) (IBAN max width, migration 0001) — an
+  // over-length value otherwise reached the column as a raw 22001 500.
+  assertMaxLength(account_number, 34, 'account_number');
 
   const { bankAccount, created } = await recipientBankAccountRepository.createOrGet({
     recipientId,

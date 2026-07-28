@@ -670,6 +670,26 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
+
+    it('rejects a free-text or cleared currency and uppercases a valid one', async () => {
+      // PATCH forwarded the raw value to the VARCHAR(10) column (create
+      // validates): garbage stored, >10 chars 22001'd, null hit NOT NULL.
+      for (const currency of ['euro', null, '']) {
+        const req = { params: { txnId: '1' }, body: { currency } };
+        await expect(routeHandlers['patch:/transactions/:txnId'](req, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(portfolioTransactionRepository.update).not.toHaveBeenCalled();
+
+      portfolioTransactionRepository.update.mockResolvedValue({ id: 1, investment_id: 10, currency: 'USD' });
+      // fx_rate_to_eur supplied explicitly → the fx recompute path is skipped.
+      const req = { params: { txnId: '1' }, body: { currency: 'usd', fx_rate_to_eur: 0.9 } };
+      await routeHandlers['patch:/transactions/:txnId'](req, mockResponse());
+      expect(portfolioTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ currency: 'USD' }),
+      );
+    });
   });
 
   // ── GET /api/investments/:id/summary ───────────────────────

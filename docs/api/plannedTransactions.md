@@ -225,10 +225,10 @@ This endpoint is read-only and never mutates any state. The caller (frontend `Ma
 
 **Query Parameters:** none
 
-**Response:**
+**Response:** canonical collection body `{ items, total }` (unpaginated — `total` is the row count).
 ```json
 {
-  "suggestions": [
+  "items": [
     {
       "planned": {
         "id": 42,
@@ -255,7 +255,7 @@ This endpoint is read-only and never mutates any state. The caller (frontend `Ma
 - Only active, unexecuted planned payments are considered.
 - Transaction lookback is 45 days (sourced from `transactionRepository.listRecentUnlinked({ sinceDate })`).
 - Loan-type planned payments (`is_loan = true`) are excluded.
-- Returns an empty `suggestions` array when `autoClearPlannedOnMatch` is `false`.
+- Returns an empty `items` array when `autoClearPlannedOnMatch` is `false`.
 - Recipient cluster roots are resolved via `recipientRepository.getClusterRootMap` so clustered aliases are compared correctly.
 
 **Response Status Codes:**

@@ -31,16 +31,16 @@ describe("ai conversation API client", () => {
     expect((await getOllamaStatus()).ok).toBe(true);
   });
 
-  it("getOllamaModels returns the models array", async () => {
+  it("getOllamaModels unwraps the rows from { items, total }", async () => {
     server.use(
-      http.get(`${API_BASE}/api/ai/models`, () => ok({ models: [{ name: "llama3" }] })),
+      http.get(`${API_BASE}/api/ai/models`, () => ok({ items: [{ name: "llama3" }], total: 1 })),
     );
     const models = await getOllamaModels();
     expect(models).toHaveLength(1);
     expect(models[0].name).toBe("llama3");
   });
 
-  it("getOllamaModels defaults to [] when models is absent", async () => {
+  it("getOllamaModels defaults to [] when items is absent", async () => {
     server.use(http.get(`${API_BASE}/api/ai/models`, () => ok({})));
     expect(await getOllamaModels()).toEqual([]);
   });

@@ -27,6 +27,9 @@ export const recipientInsightsRepository = {
    * - top merchants by total spend (full list; frontend slices for chart/KPIs)
    * - spending frequency & average per recipient
    * - month-over-month comparison alerts ("You spent X% more at …")
+   *
+   * @param {string} [targetCurrency]
+   * @param {{ excludedCategoryIds?: number[], excludedRecipientIds?: number[] }} [opts]
    */
   async getRecipientInsights(targetCurrency = 'EUR', { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
     // Canonical exclusion semantics (lib/filterBuilder.buildExclusionClauses,
@@ -63,6 +66,13 @@ export const recipientInsightsRepository = {
       targetCurrency
     );
 
+    /**
+     * @type {Record<string, {
+     *   recipientId: number, name: string,
+     *   totalSpend: number, transactionCount: number,
+     *   firstSeen: string, lastSeen: string,
+     * }>}
+     */
     const recipientAgg = {};
     for (const row of topConverted) {
       const rid = row.recipient_id;
@@ -141,6 +151,7 @@ export const recipientInsightsRepository = {
     const currentPeriod = periodResult.rows[0].current_period;
     const prevPeriod = periodResult.rows[0].prev_period;
 
+    /** @type {Record<string, { name: string, current: number, previous: number }>} */
     const momAgg = {};
     for (const row of momConverted) {
       const rid = row.recipient_id;
@@ -165,6 +176,11 @@ export const recipientInsightsRepository = {
     return { topMerchants, monthOverMonth };
   },
 
+  /**
+   * @param {string} [targetCurrency]
+   * @param {number[]} [excludedRecipientIds]
+   * @param {number[]} [excludedCategoryIds]
+   */
   async getRecipientByYear(targetCurrency = 'EUR', excludedRecipientIds = [], excludedCategoryIds = []) {
     // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses).
     // Category exclusion (incl. hidden categories) must apply here too, or the
@@ -204,6 +220,12 @@ export const recipientInsightsRepository = {
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
 
+    /**
+     * @type {Record<string, Record<string, {
+     *   recipientId: number, name: string,
+     *   totalSpend: number, transactionCount: number,
+     * }>>}
+     */
     const yearRecMap = {};
     for (const row of converted) {
       const year = String(row.year);
@@ -219,6 +241,12 @@ export const recipientInsightsRepository = {
       yearRecMap[year][rid].transactionCount += cnt;
     }
 
+    /**
+     * @type {Record<string, Array<{
+     *   recipientId: number, name: string,
+     *   totalSpend: number, transactionCount: number,
+     * }>>}
+     */
     const recipientsByYear = {};
     for (const [year, recs] of Object.entries(yearRecMap)) {
       recipientsByYear[year] = Object.values(recs)
@@ -230,6 +258,16 @@ export const recipientInsightsRepository = {
     return { recipientsByYear };
   },
 
+  /**
+   * @param {number[]} [excludedRecipientIds]
+   * @param {string} [targetCurrency]
+   * @param {{
+   *   bucket?: string,
+   *   startDate?: string|null,
+   *   endDate?: string|null,
+   *   recipientIds?: number[]|null,
+   * }} [opts]
+   */
   async getRecipientPivot(excludedRecipientIds = [], targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, recipientIds = null } = {}) {
     // Canonical recipient exclusion (lib/filterBuilder.buildExclusionClauses).
     const excl = buildExclusionClauses({ excludedRecipientIds });
@@ -256,7 +294,7 @@ export const recipientInsightsRepository = {
         `SELECT id FROM recipients WHERE id = ANY($1::int[]) OR primary_recipient_id = ANY($1::int[])`,
         [validIncludeIds],
       );
-      const memberIds = memberRes.rows.map((row) => Number(row.id));
+      const memberIds = memberRes.rows.map((/** @type {{ id: number }} */ row) => Number(row.id));
       if (memberIds.length === 0) return { recipientPivot: {} };
       params.push(memberIds);
       recipientInclude = `AND t.recipient_id = ANY($${params.length}::int[])`;

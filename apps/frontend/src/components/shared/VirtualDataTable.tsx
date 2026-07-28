@@ -24,6 +24,22 @@ export type { Column };
 export type SortDirection = "asc" | "desc" | null;
 
 /**
+ * Minimum trimmed length before a server-mode search is forwarded to
+ * `search.onChange`. Below this the table forwards "" so the list shows
+ * UNFILTERED results (never stale ones) while the input keeps the user's
+ * text. Companion of the server-side `MIN_SEARCH_LENGTH`
+ * (apps/node-backend/src/lib/filterBuilder.js): the backend ignores
+ * sub-length terms anyway, so forwarding them only refetches for nothing.
+ */
+export const SERVER_SEARCH_MIN_LENGTH = 3;
+
+/** The query actually forwarded to the server for a given raw input value. */
+function gateServerSearch(value: string): string {
+    const trimmed = value.trim();
+    return trimmed.length >= SERVER_SEARCH_MIN_LENGTH ? trimmed : "";
+}
+
+/**
  * Server-driven data operations, grouped by concern. Presence of a group turns
  * that concern over to the server; omit the whole object for a fully local table.
  *
@@ -207,7 +223,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             isTypingRef.current = true;
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
-                onSearchChange!(value);
+                onSearchChange!(gateServerSearch(value));
                 debounceRef.current = null;
                 isTypingRef.current = false;
             }, SEARCH_DEBOUNCE_MS);
@@ -224,7 +240,15 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     useEffect(() => {
         if (!isServerSearch) return;
         const externalQuery = searchValue ?? "";
-        if (!isTypingRef.current && externalQuery !== localSearchQuery) {
+        // `gateServerSearch(localSearchQuery)` is what this table last forwarded
+        // for the current input. When the external value matches it, this is our
+        // own (gated/trimmed) echo coming back — not an outside change — and
+        // syncing would wipe the sub-threshold text the user is still typing.
+        if (
+            !isTypingRef.current &&
+            externalQuery !== localSearchQuery &&
+            externalQuery !== gateServerSearch(localSearchQuery)
+        ) {
             setLocalSearchQuery(externalQuery);
         }
     }, [isServerSearch, searchValue, localSearchQuery]);
@@ -527,7 +551,20 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     const saveEditing = (sourceIndex: number, row: T) => {
         if (onRowUpdate) {
-            const updatedRow = { ...row, ...editValues } as T;
+            // Number columns keep the raw string while editing (so a decimal
+            // separator can be typed) and are parsed here. A cleared number
+            // field keeps the original value instead of saving a legit-looking
+            // 0.00 (`parseDecimal("") → 0`).
+            const values: Record<string, unknown> = { ...editValues };
+            for (const col of columns) {
+                if (!col.editable || col.type !== "number" || !(col.key in values)) continue;
+                const raw = values[col.key];
+                if (typeof raw === "string") {
+                    if (raw.trim() === "") delete values[col.key];
+                    else values[col.key] = parseDecimal(raw);
+                }
+            }
+            const updatedRow = { ...row, ...values } as T;
             onRowUpdate(sourceIndex, updatedRow);
         }
         setEditingRow(null);
@@ -847,11 +884,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                                 type={col.type || "text"}
                                                                 value={String(editValues[col.key] ?? "")}
                                                                 onChange={(e) =>
+                                                                    // Raw string for every type; number columns are parsed
+                                                                    // at save time (saveEditing) so clearing the field does
+                                                                    // not silently become a saved 0.00.
                                                                     setEditValues((prev) => ({
                                                                         ...prev,
-                                                                        [col.key]: col.type === "number"
-                                                                            ? parseDecimal(e.target.value)
-                                                                            : e.target.value,
+                                                                        [col.key]: e.target.value,
                                                                     }))
                                                                 }
                                                                 onKeyDown={(e) => {

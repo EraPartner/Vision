@@ -123,7 +123,7 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
 
   const entries = useMemo<TickerEntry[]>(() => {
     const bySymbol = new Map<string, TickerQuote>();
-    for (const q of data?.quotes ?? []) {
+    for (const q of data ?? []) {
       if (q.symbol) bySymbol.set(q.symbol.toUpperCase(), q);
     }
     if (bySymbol.size === 0) return [];

@@ -323,7 +323,7 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/info/exchange-rates`, () =>
         ok({ rates: [], fallback_rates: {}, base: "EUR", date: "2025-01-01" }),
     ),
-    http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+    http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
 
     http.get(`${API_BASE}/api/import/batches`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0 }),
@@ -338,7 +338,7 @@ export const defaultHandlers = [
 
     http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [] })),
 
-    http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [] })),
+    http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [], total: 0 })),
     http.get(`${API_BASE}/api/market/search`, () => ok({ results: [] })),
     // Research aggregator endpoints (consumed by the Market Lookup Details tabs
     // — scorecard fires on load, analyst/news on tab-click). Default to an
@@ -388,8 +388,8 @@ export const defaultHandlers = [
             cashForecast: null,
         }),
     ),
-    http.get(`${API_BASE}/api/info/banks`, () => ok({ banks: [] })),
-    http.get(`${API_BASE}/api/info/supported-adapters`, () => ok({ adapters: [], total_count: 0 })),
+    http.get(`${API_BASE}/api/info/banks`, () => ok({ items: [], total: 0 })),
+    http.get(`${API_BASE}/api/info/supported-adapters`, () => ok({ items: [], total: 0 })),
     http.get(`${API_BASE}/api/info/inflation-rates`, () => ok([])),
 
     http.get(`${API_BASE}/api/admin/endpoint-liveness`, () => ok({ items: [], total: 0 })),
@@ -397,7 +397,7 @@ export const defaultHandlers = [
         ok({ tables: [], db_size: null }),
     ),
     http.get(`${API_BASE}/api/admin/providers/health`, () => ok({ items: [], total: 0 })),
-    http.get(`${API_BASE}/api/admin/metrics/requests`, () => ok([])),
+    http.get(`${API_BASE}/api/admin/metrics/requests`, () => ok({ items: [], total: 0 })),
     http.get(`${API_BASE}/api/admin/endpoints`, () => ok({ items: [], total: 0 })),
 
     // ── Mutation stubs ───────────────────────────────────────────────────────
@@ -433,7 +433,7 @@ export const defaultHandlers = [
     http.post(`${API_BASE}/api/planned-transactions/:id/execute`, () =>
         ok({ ...PLANNED_TRANSACTION_STUB, is_executed: true }),
     ),
-    http.get(`${API_BASE}/api/planned-transactions/due-soon`, () => ok([])),
+    http.get(`${API_BASE}/api/planned-transactions/due-soon`, () => ok({ items: [], total: 0, days: 7 })),
 
     // ── Phase F1: full contract surface coverage ────────────────────────────
 
@@ -462,7 +462,7 @@ export const defaultHandlers = [
         }),
     ),
     http.delete(`${API_BASE}/api/ai/conversations/:id`, () => noContent()),
-    http.get(`${API_BASE}/api/ai/models`, () => ok({ models: [] })),
+    http.get(`${API_BASE}/api/ai/models`, () => ok({ items: [], total: 0 })),
 
     // Attachments
     http.get(`${API_BASE}/api/attachments/transaction/:id`, () => ok({ items: [] })),
@@ -644,11 +644,9 @@ export const defaultHandlers = [
 
     // Recipients delete (already handled above) — clusters, etc. covered
 
-    // Market chart
+    // Market chart — canonical `{items, total}` collection body with the
+    // symbol/currency metadata alongside.
     http.get(`${API_BASE}/api/market/chart`, () =>
-        new Response(JSON.stringify({ symbol: "TEST", currency: "USD", points: [] }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-        }),
+        ok({ symbol: "TEST", currency: "USD", items: [], total: 0 }),
     ),
 ];

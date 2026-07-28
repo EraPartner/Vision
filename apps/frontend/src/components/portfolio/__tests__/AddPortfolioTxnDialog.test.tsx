@@ -329,7 +329,7 @@ describe("AddPortfolioTxnDialog", () => {
 
     /** The Radix overlay — clicking it is the "stray click next to the dialog". */
     const overlay = () =>
-        document.querySelector<HTMLElement>(".fixed.inset-0.backdrop-blur-md")!;
+        document.querySelector<HTMLElement>(".fixed.inset-0.modal-overlay")!;
 
     it("keeps typed input when dismissed with Escape", async () => {
         // Arrange

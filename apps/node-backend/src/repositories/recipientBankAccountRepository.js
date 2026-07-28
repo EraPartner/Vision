@@ -8,7 +8,13 @@
 import { query, withTransaction } from '../database/connection.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
+/** @typedef {import('../types/rows.js').RecipientBankAccountRow} RecipientBankAccountRow */
+
 export const recipientBankAccountRepository = {
+  /**
+   * @param {number} id
+   * @returns {Promise<RecipientBankAccountRow|null>}
+   */
   async getById(id) {
     const result = await query(
       `SELECT * FROM recipient_bank_accounts WHERE id = $1`,
@@ -17,6 +23,10 @@ export const recipientBankAccountRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {string|null|undefined} accountNumber
+   * @returns {Promise<RecipientBankAccountRow|null>}
+   */
   async getByAccountNumber(accountNumber) {
     if (!accountNumber) return null;
     const result = await query(
@@ -26,6 +36,11 @@ export const recipientBankAccountRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {number} recipientId
+   * @param {boolean} [activeOnly]
+   * @returns {Promise<RecipientBankAccountRow[]>}
+   */
   async getByRecipientId(recipientId, activeOnly = true) {
     let sql = `
       SELECT * FROM recipient_bank_accounts
@@ -38,6 +53,10 @@ export const recipientBankAccountRepository = {
     return result.rows;
   },
 
+  /**
+   * @param {number} recipientId
+   * @returns {Promise<RecipientBankAccountRow|null>}
+   */
   async getPrimaryAccount(recipientId) {
     const result = await query(
       `SELECT * FROM recipient_bank_accounts
@@ -50,6 +69,15 @@ export const recipientBankAccountRepository = {
 
   /**
    * Create or get a bank account, enriching existing accounts with missing metadata.
+   * @param {{
+   *   recipientId: number,
+   *   accountNumber: string,
+   *   bankName?: string|null,
+   *   address?: string|null,
+   *   accountLabel?: string|null,
+   *   setAsPrimary?: boolean,
+   * }} input
+   * @returns {Promise<{ bankAccount: RecipientBankAccountRow|null, created: boolean }>}
    */
   async createOrGet({ recipientId, accountNumber, bankName = null, address = null, accountLabel = null, setAsPrimary = false }) {
     if (!accountNumber) throw new Error('Account number is required');
@@ -110,6 +138,11 @@ export const recipientBankAccountRepository = {
     return { bankAccount: created, created: true };
   },
 
+  /**
+   * @param {number} id
+   * @param {{ bankName?: string|null, address?: string|null, accountLabel?: string|null }} patch
+   * @returns {Promise<RecipientBankAccountRow|null>}
+   */
   async update(id, { bankName, address, accountLabel }) {
     // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
     const { clauses: updates, params, nextIdx: paramIdx } = buildSetClauses({
@@ -125,6 +158,10 @@ export const recipientBankAccountRepository = {
     return result.rows[0] || null;
   },
 
+  /**
+   * @param {number} id
+   * @returns {Promise<boolean>} true if a row was deactivated
+   */
   async softDelete(id) {
     const result = await query(
       `UPDATE recipient_bank_accounts SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING id`,
@@ -138,6 +175,9 @@ export const recipientBankAccountRepository = {
    * primary already owns on uq_rba_account_number (migration 0029). The
    * primary's row is kept and the alias's deleted, rather than reassigned.
    * Must run BEFORE repointRecipient().
+   * @param {number} primaryId
+   * @param {number[]} aliasIds
+   * @returns {Promise<number>} rows deleted
    */
   async deleteMergeDuplicates(primaryId, aliasIds) {
     const result = await query(
@@ -151,7 +191,12 @@ export const recipientBankAccountRepository = {
     return result.rowCount ?? 0;
   },
 
-  /** Repoint surviving alias bank accounts onto the merge primary. */
+  /**
+   * Repoint surviving alias bank accounts onto the merge primary.
+   * @param {number} primaryId
+   * @param {number[]} aliasIds
+   * @returns {Promise<number>} rows repointed
+   */
   async repointRecipient(primaryId, aliasIds) {
     const result = await query(
       `UPDATE recipient_bank_accounts
@@ -162,6 +207,11 @@ export const recipientBankAccountRepository = {
     return result.rowCount ?? 0;
   },
 
+  /**
+   * @param {number} bankAccountId
+   * @param {number} recipientId
+   * @returns {Promise<boolean>} true if the account was made primary
+   */
   async setPrimary(bankAccountId, recipientId) {
     return withTransaction(async (client) => {
       await client.query(

@@ -137,7 +137,16 @@ describe('createInvestment — numeric boundary pins', () => {
 
 describe('createInvestment — string width and currency pins', () => {
   it('accepts strings exactly at the column width and rejects one char over', async () => {
-    const widths = [['name', 200], ['symbol', 20], ['location', 300], ['municipality', 200]];
+    const widths = [
+      ['name', 200], ['symbol', 20], ['location', 300], ['municipality', 200],
+      // Provider columns: URL shape is validated separately; the width guard
+      // stops an over-length-but-valid value 22001-ing at the VARCHAR column.
+      ['price_provider_id', 200],
+      ['price_provider_url', 500], ['price_provider_latest_url', 500],
+      ['price_provider_latest_path', 300], ['price_provider_history_url', 500],
+      ['price_provider_history_path', 300], ['price_provider_history_ts_path', 300],
+      ['price_provider_history_price_path', 300],
+    ];
     for (const [field, max] of widths) {
       await createInvestment(createReq({ [field]: 'x'.repeat(max) }), mockRes());
       await expect(createInvestment(createReq({ [field]: 'x'.repeat(max + 1) }), mockRes()))

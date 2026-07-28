@@ -30,5 +30,5 @@ export function useAdapters(enabled = true) {
     if (isError) toast.error(t('importPage.toast.parsersError'));
   }, [isError, t]);
 
-  return { adapters: data?.adapters ?? [], loading: isLoading };
+  return { adapters: data ?? [], loading: isLoading };
 }

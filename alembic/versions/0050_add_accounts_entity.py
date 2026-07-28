@@ -31,16 +31,30 @@ Dual-write (writers populate both the string and the FK) and flip-reads happen i
 checks. Distinct from `recipient_bank_accounts` (counterparty IBANs, ADR-015/ADR-087).
 
 Blast radius: one new table + two nullable columns + indexes (no rewrite of existing columns),
-plus a bounded backfill (one INSERT over distinct strings, two UPDATEs keyed by the new index).
+plus a bounded backfill (one INSERT over distinct strings, UPDATEs to link rows).
 No existing data is destroyed. Downgrade drops the columns/indexes, the table, and the enum
 types; the backfilled `account_id` values disappear with the columns (the `bank_account` string
 is untouched, so re-applying re-derives them).
+
+COST CONTROL (large installs): on a big `transactions` table the naive shape of step 3 — a
+single full-table UPDATE plus two eager index builds, all inside one migration transaction —
+is the most expensive step of the whole chain (full heap rewrite + full WAL + write-blocking
+index builds). To keep it bounded, the `transactions` half of the backfill and the two
+`transactions` indexes run inside an `autocommit_block()`:
+  * the backfill UPDATE is batched over id ranges, each batch committing on its own, so locks
+    stay short, WAL is spread out, and vacuum can reclaim dead tuples between batches;
+  * the indexes are built AFTER the backfill (no index maintenance during the rewrite) and
+    with CREATE INDEX CONCURRENTLY (no write-blocking lock);
+  * every statement stays idempotent (`WHERE account_id IS NULL`, drop-invalid-then-create),
+    so a kill mid-migration resumes cleanly on the next boot — the same resume contract
+    `transaction_per_migration` (alembic/env.py) already establishes per-migration.
 
 NOTE: migrations are not auto-run — this is AUTHORED NOT YET APPLIED; the user applies it.
 """
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 
@@ -48,6 +62,45 @@ revision: str = "0050_add_accounts_entity"
 down_revision: Union[str, Sequence[str], None] = "0049_validate_currency_checks"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+# Rows per committed batch of the transactions backfill UPDATE (id-range keyed, so each
+# batch is a cheap PK range scan regardless of how sparse the id space is).
+BACKFILL_BATCH_SIZE = 50_000
+
+
+def _create_index_concurrently(name: str, create_sql: str) -> None:
+    """CREATE INDEX CONCURRENTLY with the failure caveat handled.
+
+    Must be called inside an autocommit_block(): CONCURRENTLY cannot run in a
+    transaction. A concurrent build that is interrupted leaves an INVALID index
+    behind, and `CREATE INDEX IF NOT EXISTS` would silently keep it — so instead:
+    a valid existing index is kept (idempotent re-run, no wasteful rebuild), an
+    invalid leftover is dropped, and only then is the index (re)built.
+    """
+    valid = (
+        op.get_bind()
+        .execute(
+            sa.text(
+                """
+                SELECT i.indisvalid
+                  FROM pg_index i
+                  JOIN pg_class c ON c.oid = i.indexrelid
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE c.relname = :name
+                   AND n.nspname = current_schema()
+                """
+            ),
+            {"name": name},
+        )
+        .scalar()
+    )
+    if valid:
+        return
+    if valid is not None:  # exists but INVALID (interrupted previous concurrent build)
+        op.execute(f"DROP INDEX IF EXISTS {name}")
+    # One statement per execute: a multi-statement string would run as a single
+    # implicit transaction and CONCURRENTLY would refuse.
+    op.execute(create_sql)
 
 
 def upgrade() -> None:
@@ -109,7 +162,10 @@ def upgrade() -> None:
         """
     )
 
-    # ── account_id FKs (ON DELETE RESTRICT) + indexes ──
+    # ── account_id FKs (ON DELETE RESTRICT) + planned_transactions index ──
+    # The two transactions indexes are NOT built here: they are built CONCURRENTLY at the
+    # end of upgrade(), after the backfill, inside the autocommit block (see docstring).
+    # planned_transactions is small, so its index stays in the transactional section.
     op.execute(
         """
         ALTER TABLE transactions
@@ -119,12 +175,6 @@ def upgrade() -> None:
             ADD COLUMN IF NOT EXISTS account_id INTEGER
             REFERENCES accounts(id) ON DELETE RESTRICT;
 
-        CREATE INDEX IF NOT EXISTS idx_transactions_account_id
-            ON transactions (account_id);
-        -- Mirrors idx_transactions_bank_date_active for the running-balance window
-        -- (PARTITION BY account_id ORDER BY date) and the balance-history LATERAL probe.
-        CREATE INDEX IF NOT EXISTS idx_transactions_account_date_active
-            ON transactions (account_id, date DESC) WHERE is_active = true;
         CREATE INDEX IF NOT EXISTS idx_planned_transactions_account_id
             ON planned_transactions (account_id);
         """
@@ -189,16 +239,10 @@ def upgrade() -> None:
         """
     )
 
-    # Link existing rows to their account by exact trimmed-name match.
+    # Link existing planned rows to their account by exact trimmed-name match
+    # (small table — single statement, stays in the migration transaction).
     op.execute(
         """
-        UPDATE transactions t
-           SET account_id = a.id
-          FROM accounts a
-         WHERE t.account_id IS NULL
-           AND t.bank_account IS NOT NULL
-           AND a.name = btrim(t.bank_account);
-
         UPDATE planned_transactions p
            SET account_id = a.id
           FROM accounts a
@@ -207,6 +251,57 @@ def upgrade() -> None:
            AND a.name = btrim(p.bank_account);
         """
     )
+
+    # ── transactions backfill + indexes, outside the migration transaction ──
+    # autocommit_block() commits everything above (safe: every statement above is
+    # idempotent), runs the block in autocommit, then resumes a transaction for the
+    # alembic_version stamp. Semantics of the UPDATE are identical to the original
+    # single statement (same WHERE, same join) — it is merely partitioned by id range,
+    # and each batch commits on its own. The `account_id IS NULL` guard makes an
+    # interrupted backfill resume where it stopped on the next boot.
+    with op.get_context().autocommit_block():
+        bind = op.get_bind()
+        bounds = bind.execute(
+            sa.text("SELECT min(id) AS lo, max(id) AS hi FROM transactions")
+        ).one()
+        if bounds.lo is not None:
+            batch_lo = bounds.lo
+            while batch_lo <= bounds.hi:
+                batch_hi = batch_lo + BACKFILL_BATCH_SIZE - 1
+                bind.execute(
+                    sa.text(
+                        """
+                        UPDATE transactions t
+                           SET account_id = a.id
+                          FROM accounts a
+                         WHERE t.id BETWEEN :lo AND :hi
+                           AND t.account_id IS NULL
+                           AND t.bank_account IS NOT NULL
+                           AND a.name = btrim(t.bank_account)
+                        """
+                    ),
+                    {"lo": batch_lo, "hi": batch_hi},
+                )
+                batch_lo = batch_hi + 1
+
+        # Built AFTER the backfill so the heap rewrite above does not have to
+        # maintain them row-by-row, and CONCURRENTLY so writers are never blocked.
+        _create_index_concurrently(
+            "idx_transactions_account_id",
+            """
+            CREATE INDEX CONCURRENTLY idx_transactions_account_id
+                ON transactions (account_id)
+            """,
+        )
+        # Mirrors idx_transactions_bank_date_active for the running-balance window
+        # (PARTITION BY account_id ORDER BY date) and the balance-history LATERAL probe.
+        _create_index_concurrently(
+            "idx_transactions_account_date_active",
+            """
+            CREATE INDEX CONCURRENTLY idx_transactions_account_date_active
+                ON transactions (account_id, date DESC) WHERE is_active = true
+            """,
+        )
 
 
 def downgrade() -> None:

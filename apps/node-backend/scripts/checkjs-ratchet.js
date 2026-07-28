@@ -42,38 +42,18 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  * `apps/node-backend/`, POSIX separators. An entry ending in `/` is a directory
  * prefix; anything else is an exact file.
  *
- * Seeded with the core data-layer row shapes (`src/types/rows.js`) and the
- * repositories annotated against them. `src/repositories/` as a whole is the
- * target — the info* aggregate repositories and the smaller side-table
- * repositories are the remaining work.
+ * Seeded with the core data-layer row shapes (`src/types/rows.js`), then grown
+ * file-by-file until every repository was annotated. The whole data layer is
+ * now held as directory prefixes, so a NEW file under either directory is
+ * ratcheted from birth. Per the original plan, the next targets are further
+ * directories (services/, routes/, …) — grow them file-by-file, then collapse
+ * to the directory prefix once complete.
  *
  * @type {string[]}
  */
 const RATCHETED = [
   'src/types/',
-  'src/repositories/accountBalanceSql.js',
-  'src/repositories/accountRepository.js',
-  'src/repositories/cashflowForecastAccuracyRepository.js',
-  'src/repositories/cashflowForecastMcRepository.js',
-  'src/repositories/cashflowForecastMcRollingRepository.js',
-  'src/repositories/categoryRepository.js',
-  'src/repositories/importBatchRepository.js',
-  'src/repositories/infoRepository.js',
-  'src/repositories/infoRepositoryTags.js',
-  'src/repositories/investmentRepository.js',
-  'src/repositories/plannedTransactionRepository.js',
-  'src/repositories/portfolioImportBatchRepository.js',
-  'src/repositories/portfolioTransactionRepository.js',
-  'src/repositories/portfolioTxRepo.common.js',
-  'src/repositories/portfolioTxRepo.reads.js',
-  'src/repositories/portfolioTxRepo.writes.js',
-  'src/repositories/providerApiKeyRepository.js',
-  'src/repositories/providerHealthRepository.js',
-  'src/repositories/providerQuotaRepository.js',
-  'src/repositories/recipientRepository.js',
-  'src/repositories/splitRepository.js',
-  'src/repositories/tagRepository.js',
-  'src/repositories/transactionRepository.js',
+  'src/repositories/',
 ];
 
 /** Directory the "ready to ratchet" hint scans for already-clean files. */

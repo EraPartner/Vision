@@ -153,12 +153,10 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
     // If loan is enabled, clear recurrence inputs before submitting - loans drive their own schedule
     const payload: Record<string, unknown> = {
       name: name.trim(),
-      // Loans: POST overwrites this from the generated schedule outright, and
-      // PATCH keeps a defined client value as-is (never re-negates it), so
-      // there is no double negation on either path. Note PATCH keeping the
-      // client value means editing a loan's principal/rate/term can leave a
-      // stale amount vs. the regenerated schedule — a pre-existing backend
-      // behavior, tracked separately in TODO.md.
+      // Loans: the server owns the amount — POST and PATCH both re-derive it
+      // as -|regular_payment_amount| whenever the repayment schedule is
+      // (re)generated, ignoring this client value, so there is no double
+      // negation and no stale amount on either path.
       amount: signedAmount,
       currency,
       due_date: dueDateStr,

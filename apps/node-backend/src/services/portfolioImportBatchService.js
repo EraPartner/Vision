@@ -46,11 +46,16 @@ export async function createInvestmentForRow({ batchId, rowId }) {
     throw err;
   }
 
+  // CSV-derived currency: coalesce to EUR unless it is a clean ISO-shaped code
+  // (uppercased). investments.currency is VARCHAR(10) with no CHECK, so a
+  // malformed CSV cell either stored garbage or (>10 chars) 500'd the insert —
+  // fallback (not reject) matches the pipeline's existing `|| 'EUR'` coalescing.
+  const rawCurrency = String(row.currency || '').trim().toUpperCase();
   const investment = await investmentRepository.create(/** @type {any} */ ({
     name,
     symbol: (row.symbol_raw || '').trim() || undefined,
     asset_class: row.default_asset_class,
-    currency: (row.currency || 'EUR').trim() || 'EUR',
+    currency: /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : 'EUR',
     price_provider: 'manual',
   }));
 

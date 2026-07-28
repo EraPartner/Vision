@@ -223,9 +223,13 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         );
     });
 
-    it("GET /api/planned-transactions/due-soon returns array", async () => {
+    it("GET /api/planned-transactions/due-soon returns { items, total, days }", async () => {
         const data = await get("/api/planned-transactions/due-soon");
-        validate(z.array(z.unknown()), data, "GET /api/planned-transactions/due-soon");
+        validate(
+            collectionSchema().extend({ days: z.number().int().positive() }),
+            data,
+            "GET /api/planned-transactions/due-soon",
+        );
     });
 
     it("GET /api/aggregations/category-breakdown returns expected shape", async () => {
@@ -343,18 +347,14 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         );
     });
 
-    it("GET /api/info/banks returns banks object", async () => {
+    it("GET /api/info/banks returns { items, total }", async () => {
         const data = await get("/api/info/banks");
-        validate(z.object({ banks: z.array(z.unknown()) }), data, "GET /api/info/banks");
+        validate(collectionSchema(), data, "GET /api/info/banks");
     });
 
-    it("GET /api/info/supported-adapters returns adapters object", async () => {
+    it("GET /api/info/supported-adapters returns { items, total }", async () => {
         const data = await get("/api/info/supported-adapters");
-        validate(
-            z.object({ adapters: z.array(z.unknown()), total_count: z.number() }),
-            data,
-            "GET /api/info/supported-adapters",
-        );
+        validate(collectionSchema(), data, "GET /api/info/supported-adapters");
     });
 
     it("GET /api/info/recurring-patterns returns patterns object", async () => {
@@ -397,9 +397,9 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(collectionSchema(), data, "GET /api/admin/providers/health");
     });
 
-    it("GET /api/admin/metrics/requests returns array", async () => {
+    it("GET /api/admin/metrics/requests returns { items, total }", async () => {
         const data = await get("/api/admin/metrics/requests");
-        validate(z.array(z.unknown()), data, "GET /api/admin/metrics/requests");
+        validate(collectionSchema(), data, "GET /api/admin/metrics/requests");
     });
 
     it("GET /api/admin/endpoints returns { items, total }", async () => {
@@ -438,8 +438,8 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
 
     // (GET /api/info/transaction-summary removed — Phase 9 cutover deleted the route.)
 
-    it("GET /api/market/news returns articles array", async () => {
+    it("GET /api/market/news returns { items, total }", async () => {
         const data = await get("/api/market/news");
-        validate(z.object({ articles: z.array(z.unknown()) }), data, "GET /api/market/news");
+        validate(collectionSchema(), data, "GET /api/market/news");
     });
 });

@@ -89,8 +89,10 @@ export function probeProvider(provider: string): Promise<ProbeResult> {
 
 // ── Request Metrics ───────────────────────────────────────────────────────────
 
-export function getRequestMetrics(): Promise<RouteMetric[]> {
-    return apiRequest<RouteMetric[]>('/api/admin/metrics/requests');
+/** Canonical `{items, total}` collection body — callers only need the rows. */
+export async function getRequestMetrics(): Promise<RouteMetric[]> {
+    const { items } = await apiRequest<{ items: RouteMetric[]; total: number }>('/api/admin/metrics/requests');
+    return items;
 }
 
 // ── Endpoint Manifest ─────────────────────────────────────────────────────────

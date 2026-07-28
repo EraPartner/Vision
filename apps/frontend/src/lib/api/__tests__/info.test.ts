@@ -26,20 +26,20 @@ function ok<T>(data: T, init?: ResponseInit) {
 afterEach(() => server.resetHandlers());
 
 describe("info API client", () => {
-  it("getSupportedParsers fetches the adapter list", async () => {
+  it("getSupportedParsers unwraps the adapter rows from { items, total }", async () => {
     server.use(
       http.get(`${API_BASE}/api/info/supported-adapters`, () =>
-        ok({ adapters: [{ key: "kbc", name: "KBC" }], total_count: 1 }),
+        ok({ items: [{ key: "kbc", name: "KBC" }], total: 1 }),
       ),
     );
     const res = await getSupportedParsers();
-    expect(res.total_count).toBe(1);
-    expect(res.adapters[0].key).toBe("kbc");
+    expect(res).toHaveLength(1);
+    expect(res[0].key).toBe("kbc");
   });
 
-  it("getDistinctBankAccounts fetches the banks endpoint", async () => {
-    server.use(http.get(`${API_BASE}/api/info/banks`, () => ok({ banks: ["acc1"] })));
-    expect((await getDistinctBankAccounts()).banks).toEqual(["acc1"]);
+  it("getDistinctBankAccounts unwraps the rows from { items, total }", async () => {
+    server.use(http.get(`${API_BASE}/api/info/banks`, () => ok({ items: ["acc1"], total: 1 })));
+    expect(await getDistinctBankAccounts()).toEqual(["acc1"]);
   });
 
   it("getTransactionCount fetches the count", async () => {

@@ -53,7 +53,7 @@ export function ResearchKeysSection() {
             </h3>
             <p className="text-xs text-muted-foreground">{t('settings.research.hint')}</p>
             <div className="rounded-lg border divide-y">
-                {(data?.providers ?? []).map((status) => (
+                {(data?.items ?? []).map((status) => (
                     <ProviderKeyRow
                         key={status.provider}
                         status={status}

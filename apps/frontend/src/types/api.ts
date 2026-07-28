@@ -228,6 +228,9 @@ export interface TransactionCreate {
 // Nullable fields carry PATCH null-to-clear semantics: explicit null clears
 // the value server-side, undefined (absent key) leaves it unchanged. `??
 // undefined` on a cleared value silently dropped the key — the clear no-op'd.
+// `balance` is deliberately absent: the running balance is bank-stamped import
+// data (ADR-094) and the backend PATCH whitelist drops it — sending it was a
+// silent no-op that made the field look editable.
 export interface TransactionUpdate {
     transaction_date?: string;
     bank_account?: string | null;
@@ -236,7 +239,6 @@ export interface TransactionUpdate {
     memo?: string | null;
     amount?: number;
     currency?: string;
-    balance?: number;
     category_id?: number | null;
     category_name?: string;
     comment?: string | null;

@@ -88,4 +88,20 @@ describe("PortfolioCsvColumnMapper", () => {
     expect(screen.getAllByText("Buy").length).toBeGreaterThan(0);
     expect(screen.getByText("Sell")).toBeInTheDocument();
   });
+
+  it("warns when the same CSV column is mapped to multiple fields", async () => {
+    // amount + fees both mapped to "Amount" → every row would get fees = amount.
+    renderMapper(null, baseConfig({ dateColumn: "Date", amountColumn: "Amount", feesColumn: "Amount" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /The same CSV column is mapped to multiple fields: Amount/,
+    );
+  });
+
+  it("shows no duplicate warning when every mapped column is distinct", async () => {
+    renderMapper(null, baseConfig({ dateColumn: "Date", amountColumn: "Amount", feesColumn: "Fees" }));
+
+    expect(await screen.findByText(/Required\. Map a date column/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });

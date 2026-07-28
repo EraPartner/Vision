@@ -269,7 +269,7 @@ describe("market API client", () => {
     server.use(
       http.get(`${API_BASE}/api/market/news`, ({ request }) => {
         url = request.url;
-        return ok({ articles: [] });
+        return ok({ items: [], total: 0 });
       }),
     );
     await getMarketNews(["AAPL", "MSFT"], 5);
@@ -282,7 +282,7 @@ describe("market API client", () => {
     server.use(
       http.get(`${API_BASE}/api/market/news`, ({ request }) => {
         url = request.url;
-        return ok({ articles: [] });
+        return ok({ items: [], total: 0 });
       }),
     );
     await getMarketNews();
@@ -295,7 +295,7 @@ describe("market API client", () => {
     server.use(
       http.get(`${API_BASE}/api/market/quote`, ({ request }) => {
         urls.push(request.url);
-        return ok({ quotes: [] });
+        return ok({ items: [], total: 0 });
       }),
     );
     await getMarketQuotes("AAPL");
@@ -309,7 +309,7 @@ describe("market API client", () => {
     server.use(
       http.get(`${API_BASE}/api/market/chart`, ({ request }) => {
         url = request.url;
-        return ok({ points: [] });
+        return ok({ items: [], total: 0 });
       }),
     );
     await getMarketChart("AAPL", "1mo", "1d");

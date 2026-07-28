@@ -107,13 +107,13 @@ describe('Info Routes', () => {
 
       // Registry-derived: one entry per non-generic adapter, keyed by name with
       // the adapter's bankName label. Adding an adapter exposes it automatically.
-      const keys = data.adapters.map((a) => a.key);
+      const keys = data.items.map((a) => a.key);
       expect(keys).toContain('bnp');
       expect(keys).toContain('wise');
       expect(keys).not.toContain('generic');
-      expect(data.total_count).toBe(data.adapters.length);
+      expect(data.total).toBe(data.items.length);
       // bankName label, not a hardcoded display string / nonexistent class name.
-      const bnp = data.adapters.find((a) => a.key === 'bnp');
+      const bnp = data.items.find((a) => a.key === 'bnp');
       expect(bnp.name).toBe('BNP Paribas Fortis');
       expect(bnp.adapter_class).toBeUndefined();
     });
@@ -127,7 +127,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/banks'](req, res);
 
-      expect(res.json.mock.calls[0][0].data.banks).toHaveLength(2);
+      expect(res.json.mock.calls[0][0].data.items).toHaveLength(2);
     });
 
     it('should return empty for no banks', async () => {
@@ -137,7 +137,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/banks'](req, res);
 
-      expect(res.json.mock.calls[0][0].data.banks).toEqual([]);
+      expect(res.json.mock.calls[0][0].data).toEqual({ items: [], total: 0 });
     });
 
     it('should handle database errors', async () => {
@@ -190,8 +190,8 @@ describe('Info Routes', () => {
       await routeHandlers['get:/supported-adapters'](req, res);
 
       const result = res.json.mock.calls[0][0].data;
-      expect(result.adapters).toBeDefined();
-      expect(result.total_count).toBeGreaterThan(0);
+      expect(result.items).toBeDefined();
+      expect(result.total).toBeGreaterThan(0);
     });
   });
 

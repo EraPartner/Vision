@@ -386,6 +386,28 @@ describe('Planned Transaction Routes', () => {
         .rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('normalises currency to uppercase ISO and rejects free text', async () => {
+      // Free-typed "euro" used to be uppercased to "EURO" by the repository and
+      // then violate the 0046 ISO CHECK as a raw 500.
+      const badReq = { body: { ...validBody, currency: 'euro' } };
+      await expect(routeHandlers['post:/'](badReq, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+
+      const okReq = { body: { ...validBody, currency: 'usd' } };
+      await routeHandlers['post:/'](okReq, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+      );
+    });
+
+    it('maps an absent/empty currency to undefined so the repository default (EUR) applies', async () => {
+      const req = { body: { ...validBody, currency: '' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: undefined }),
+      );
+    });
+
     it('drops truthy recurrence bounds on a loan instead of validating them', async () => {
       const req = {
         body: {
@@ -447,6 +469,71 @@ describe('Planned Transaction Routes', () => {
           .rejects.toBeInstanceOf(ValidationError);
       }
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('normalises a valid currency and rejects free-text or cleared currency on PATCH', async () => {
+      // PATCH forwarded the raw value to the SET builder, so "euro" hit the
+      // 0046 ISO CHECK as a raw 500 and null hit the NOT NULL constraint.
+      for (const body of [{ currency: 'euro' }, { currency: null }, { currency: '' }]) {
+        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { currency: 'usd' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ currency: 'USD' }),
+      );
+    });
+
+    it('coerces a valid amount and rejects zero/absurd/non-finite/cleared amounts on PATCH', async () => {
+      for (const body of [
+        { amount: 0 },
+        { amount: 1e15 },
+        { amount: 'Infinity' },
+        { amount: null },
+        { amount: '' },
+      ]) {
+        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { amount: '-42.50' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ amount: -42.5 }),
+      );
+    });
+
+    it('rejects turning recurrence on (or clearing the pattern) when the merged state has no valid pattern', async () => {
+      // is_recurring:true on a row without a pattern used to store and leave
+      // the row perpetually due after /execute (the POST guard has an exact
+      // sibling); clearing the pattern on a recurring row recreated it.
+      await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body: { is_recurring: true } }, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false, is_recurring: true, recurrence_pattern: 'monthly' });
+      await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body: { recurrence_pattern: null } }, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+
+      // Turning recurrence on WITH a valid pattern still passes.
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false });
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { is_recurring: true, recurrence_pattern: 'monthly' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ is_recurring: true, recurrence_pattern: 'monthly' }),
+      );
+
+      // An unrelated edit to a legacy broken row (recurring, no pattern) is NOT blocked.
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false, is_recurring: true, recurrence_pattern: null });
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { memo: 'still editable' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ memo: 'still editable' }),
+      );
     });
 
     it('passes explicit nulls through to clear recurrence bounds and pattern', async () => {
@@ -537,6 +624,92 @@ describe('Planned Transaction Routes', () => {
         })
       );
       expect(res.json).toHaveBeenCalled();
+    });
+
+    // Sign/amount derivation pins: whenever the repayment schedule is
+    // (re)generated by a PATCH, `amount` MUST be re-derived server-side as
+    // -|regular_payment_amount| — a defined client amount is ignored, exactly
+    // like POST. Keeping the client value desynced amount from
+    // loan_regular_payment_amount. (10000 @ 6% / 12 months → 860.66, same
+    // real-schedule figure the POST test pins.)
+    const existingLoan = {
+      id: 1,
+      is_loan: true,
+      loan_type: 'amortizing',
+      loan_principal: 5000,
+      loan_annual_interest_rate: 3,
+      loan_term_months: 24,
+      loan_start_date: '2026-04-01',
+      loan_payment_day: 1,
+    };
+
+    it('re-derives amount from the regenerated schedule even when the client sends a stale amount', async () => {
+      plannedTransactionRepository.getById.mockResolvedValueOnce(existingLoan);
+      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({ id: 1, is_loan: true });
+
+      const req = {
+        params: { id: '1' },
+        // Client edits the principal but sends its stale (pre-regeneration) amount.
+        body: {
+          loan_principal: 10000,
+          loan_annual_interest_rate: 6,
+          loan_term_months: 12,
+          amount: -214.03,
+        },
+      };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+
+      expect(plannedTransactionRepository.updateWithLoanSchedule).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          amount: -860.66,
+          loan_regular_payment_amount: 860.66,
+        }),
+        expect.any(Array),
+      );
+    });
+
+    it('re-derives (and force-negates) amount on convert-to-loan even when the client sends a positive amount', async () => {
+      plannedTransactionRepository.getById.mockResolvedValueOnce({ id: 1, is_loan: false });
+      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({ id: 1, is_loan: true });
+
+      const req = {
+        params: { id: '1' },
+        body: {
+          is_loan: true,
+          loan_type: 'amortizing',
+          loan_principal: 10000,
+          loan_annual_interest_rate: 6,
+          loan_term_months: 12,
+          loan_start_date: '2026-04-01',
+          loan_payment_day: 1,
+          amount: 500, // stale client value, wrong sign — must be ignored
+        },
+      };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+
+      expect(plannedTransactionRepository.updateWithLoanSchedule).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ amount: -860.66 }),
+        expect.any(Array),
+      );
+    });
+
+    it('keeps a client amount on a loan PATCH that touches no schedule input', async () => {
+      // No loan field changed and is_loan not re-asserted → the schedule is not
+      // regenerated, so the client's amount passes through untouched (boundary
+      // of the re-derivation rule).
+      plannedTransactionRepository.getById.mockResolvedValueOnce(existingLoan);
+      plannedTransactionRepository.update.mockResolvedValue({ id: 1, is_loan: true });
+
+      const req = { params: { id: '1' }, body: { memo: 'note', amount: -123.45 } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+
+      expect(plannedTransactionRepository.updateWithLoanSchedule).not.toHaveBeenCalled();
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ amount: -123.45 }),
+      );
     });
 
     it('should clear loan fields and loan schedule atomically when toggled off', async () => {

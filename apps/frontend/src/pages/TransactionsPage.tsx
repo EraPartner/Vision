@@ -307,7 +307,8 @@ export default function TransactionsPage() {
                 amount: updated.amount,
                 bank_account: updated.bank,
                 currency: updated.currency,
-                balance: updated.balance,
+                // balance deliberately not sent — bank-stamped import data
+                // (ADR-094); the backend PATCH whitelist drops it anyway.
                 comment: updated.comment,
             },
         }, {

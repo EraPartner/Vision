@@ -147,7 +147,15 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                 planned_date: pattern.predictedNext,
                 recipient_id: pattern.recipientId,
                 memo: t('recurring.autoDetectedMemo', { name: pattern.recipientName }),
-                amount: pattern.latestAmount * -1,
+                // Detected amounts are .abs()'d server-side; the pattern's
+                // `direction` carries the dominant sign of the source
+                // transactions. Planned sign convention: money out negative,
+                // money in positive — hardcoding the expense sign here turned a
+                // detected salary into a negative planned payment that
+                // plannedMatchService could never auto-match (sign mismatch).
+                amount: pattern.direction === "income"
+                    ? Math.abs(pattern.latestAmount)
+                    : -Math.abs(pattern.latestAmount),
                 currency: pattern.currency,
                 category_id: pattern.categoryId ?? undefined,
                 bank_account: pattern.bankAccount ?? undefined,

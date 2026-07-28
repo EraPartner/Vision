@@ -48,6 +48,8 @@ const ALLOWED_MV_NAMES = new Set([
  * Positive results cached in-process indefinitely; negative results cached
  * for {@link MV_NEGATIVE_CACHE_TTL_MS} so we recover quickly after MV creation.
  *
+ * @param {string} viewName
+ * @returns {Promise<boolean>}
  * @throws {Error} if {@code viewName} is not in the allowlist.
  */
 export async function mvAvailable(viewName) {
@@ -88,6 +90,10 @@ export function clearMvCache() {
 
 // ── Numeric helpers ────────────────────────────────────────────────────────
 
+/**
+ * @param {number|string|import('decimal.js').Decimal} value
+ * @returns {number}
+ */
 export function roundToCents(value) {
   return roundMoney(value);
 }
@@ -98,16 +104,30 @@ export function roundToCents(value) {
 // working while routes import the canonical helper from lib directly.
 export { formatDateToYmd, toWireDate };
 
+/**
+ * @param {number|string} year
+ * @param {number|string} month 1-based.
+ * @returns {string} 'YYYY-MM'
+ */
 export function formatYearMonthKey(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
+/**
+ * @param {Date} date
+ * @param {number} [days]
+ * @returns {Date}
+ */
 export function addDaysUtc(date, days = 1) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
 
+/**
+ * @param {Date} date
+ * @returns {string} 'YYYY-MM-DD' (UTC)
+ */
 export function getDayKeyUtc(date) {
   const yyyy = date.getUTCFullYear();
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -115,6 +135,10 @@ export function getDayKeyUtc(date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/**
+ * @param {string|Date} value
+ * @returns {string} 'YYYY-MM'
+ */
 export function extractYearMonth(value) {
   return String(value).substring(0, 7);
 }
@@ -127,8 +151,13 @@ export function extractYearMonth(value) {
  * summing absolute EUR per (period, entity), rounding totals to cents, and
  * sorting each period ascending by total. Shared by the recipient and tag
  * period-pivots (SIMP-49).
+ *
+ * @param {Array<Record<string, any>>} convertedRows
+ * @param {{ idField: string, labelField: string, idKey: string, labelKey: string }} shape
+ * @returns {Record<string, Array<Record<string, any>>>}
  */
 export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, labelKey }) {
+  /** @type {Record<string, Record<string, Record<string, any>>>} */
   const periodMap = {};
   for (const row of convertedRows) {
     const period = row.period;
@@ -144,6 +173,7 @@ export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, la
     periodMap[period][id].transactionCount += cnt;
   }
 
+  /** @type {Record<string, Array<Record<string, any>>>} */
   const pivot = {};
   for (const [period, entities] of Object.entries(periodMap)) {
     pivot[period] = Object.values(entities)
@@ -153,6 +183,12 @@ export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, la
   return pivot;
 }
 
+/**
+ * @param {Array<{
+ *   total_spending: number, total_income: number, net_amount: number,
+ *   transaction_count: number, period_start?: string|null, period_end?: string|null,
+ * }>} months
+ */
 export function buildMonthlySummary(months) {
   return {
     total_spending: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.total_spending)), toDecimal(0))),
@@ -165,6 +201,12 @@ export function buildMonthlySummary(months) {
   };
 }
 
+/**
+ * @param {Array<Record<string, any>>} rows
+ * @param {string} [amountField]
+ * @param {boolean} [fallbackToZero]
+ * @returns {Array<Record<string, any>>} rows with a numeric `amount` merged in
+ */
 export function mapRowsForAmountConversion(rows, amountField = 'amount', fallbackToZero = true) {
   return rows.map(row => ({
     ...row,
@@ -176,15 +218,31 @@ export function mapRowsForAmountConversion(rows, amountField = 'amount', fallbac
 
 // ── Category helpers ───────────────────────────────────────────────────────
 
+/**
+ * @param {number|string} categoryId `-1` is the "uncategorised" sentinel.
+ * @returns {string}
+ */
 export function getCategoryKey(categoryId) {
   return categoryId === -1 ? 'null' : String(categoryId);
 }
 
+/**
+ * @param {any} categoryId A number or numeric string; `-1` is the
+ *   "uncategorised" sentinel. (`any` because the value is fed to `parseInt`,
+ *   whose declared parameter is `string` — the runtime coercion of a number is
+ *   deliberate here.)
+ * @returns {number|null}
+ */
 export function parseCategoryId(categoryId) {
   return categoryId === -1 ? null : parseInt(categoryId, 10);
 }
 
+/**
+ * @param {Array<Record<string, any>>} convertedRows
+ * @returns {Array<{ id: number|null, name: string, count: number, total: number }>}
+ */
 export function buildCategoryFromConvertedRows(convertedRows) {
+  /** @type {Map<string, { id: number|null, name: string, count: number, total: number }>} */
   const categoryMap = new Map();
 
   for (const row of convertedRows) {
@@ -212,6 +270,12 @@ export function buildCategoryFromConvertedRows(convertedRows) {
 
 // ── Currency conversion helpers ────────────────────────────────────────────
 
+/**
+ * @param {Array<Record<string, any>>} rows Rows with `amount` + `currency`.
+ * @param {string} targetCurrency
+ * @param {string} [dateField] Date field used for the historical rate lookup.
+ * @returns {Promise<Array<Record<string, any>>>} rows with `amount_eur` merged in
+ */
 export async function convertRowsWithHistoricalRateFallback(rows, targetCurrency, dateField = 'date') {
   try {
     return await convertRowsToEur(rows, targetCurrency, { useHistoricalRatesByDate: true, dateField });
@@ -228,10 +292,10 @@ export async function convertRowsWithHistoricalRateFallback(rows, targetCurrency
  *
  * The `_batchGroup` tag is stripped from all returned rows.
  *
- * @param {Array<Array<Object>>} groups - Each group has rows with `amount` + `currency`
+ * @param {Array<Array<Record<string, any>>>} groups - Each group has rows with `amount` + `currency`
  * @param {string} targetCurrency
  * @param {string} [dateField='date'] - Date field used for historical rate lookup
- * @returns {Promise<Array<Array<Object>>>} Converted groups in the same order as input
+ * @returns {Promise<Array<Array<Record<string, any>>>>} Converted groups in the same order as input
  */
 export async function batchConvertGroupsWithHistoricalRateFallback(groups, targetCurrency, dateField = 'date') {
   const TAG = '_batchGroup';
@@ -255,6 +319,10 @@ export async function batchConvertGroupsWithHistoricalRateFallback(groups, targe
 
 // ── Investment spike sanitizer ─────────────────────────────────────────────
 
+/**
+ * @param {Array<{ date: string, liquid: number, liabilities: number, investments: number, netWorth: number }>} snapshots
+ * @returns {Array<{ date: string, liquid: number, liabilities: number, investments: number, netWorth: number }>}
+ */
 export function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
   if (!Array.isArray(snapshots) || snapshots.length < 3) {
     return Array.isArray(snapshots) ? snapshots : [];
@@ -289,8 +357,12 @@ export function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
     if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
       const correctedInvestments = Math.sqrt(prev * next);
       const liquid = Number(sanitized[i]?.liquid) || 0;
+      // Liabilities are stored as negative balances (ADR-092); the canonical
+      // formula everywhere else is netWorth = liquid + liabilities + investments,
+      // so the corrected point must include the liabilities term too.
+      const liabilities = Number(sanitized[i]?.liabilities) || 0;
       sanitized[i].investments = roundToCents(correctedInvestments);
-      sanitized[i].netWorth = roundToCents(liquid + correctedInvestments);
+      sanitized[i].netWorth = roundToCents(liquid + liabilities + correctedInvestments);
     }
   }
 

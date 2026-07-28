@@ -9,6 +9,8 @@
 
 import { query } from '../database/connection.js';
 
+/** @typedef {import('../types/rows.js').InstrumentProviderMapRow} InstrumentProviderMapRow */
+
 const COLUMNS = `id, instrument_key, key_type, provider, provider_symbol,
                  resolved_name, exchange, currency, status, verified_at,
                  created_at, updated_at`;
@@ -17,7 +19,7 @@ const COLUMNS = `id, instrument_key, key_type, provider, provider_symbol,
  * All mappings for an instrument, ordered by provider.
  * @param {string} instrumentKey
  * @param {string} keyType  'isin' | 'internal'
- * @returns {Promise<object[]>}
+ * @returns {Promise<InstrumentProviderMapRow[]>}
  */
 export async function listByInstrument(instrumentKey, keyType) {
   const result = await query(
@@ -33,8 +35,17 @@ export async function listByInstrument(instrumentKey, keyType) {
 /**
  * Upsert one mapping. Conflict target is the (instrument_key, key_type, provider)
  * unique index; an existing row's symbol/name/exchange/currency/status are replaced.
- * @param {object} m
- * @returns {Promise<object>} the upserted row
+ * @param {{
+ *   instrumentKey: string,
+ *   keyType: string,
+ *   provider: string,
+ *   providerSymbol?: string|null,
+ *   resolvedName?: string|null,
+ *   exchange?: string|null,
+ *   currency?: string|null,
+ *   status?: string|null,
+ * }} m
+ * @returns {Promise<InstrumentProviderMapRow>} the upserted row
  */
 export async function upsert(m) {
   const result = await query(

@@ -14,7 +14,7 @@ import { z } from 'zod';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
-import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
+import { validateIdParam, assertYmd, validateId, assertCurrency } from '../middleware/validation.js';
 import { formatDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
@@ -105,6 +105,25 @@ const maxOccurrencesField = z.unknown().transform((value, ctx) => {
   return n;
 }).optional();
 
+// Normalise/validate currency (ISO-4217) so free text never reaches the
+// VARCHAR(3) column + 0046 CHECK as a raw 500 (create uppercases before
+// insert, so "euro" became "EURO" → CHECK violation; PATCH forwarded the raw
+// value). Mirrors transactions.js: POST maps absent/''/null to undefined (the
+// repository defaults to 'EUR'), PATCH rejects a cleared value (the column is
+// NOT NULL).
+const currencyField = ({ rejectEmpty = false } = {}) => z.unknown().transform((value, ctx) => {
+  if (rejectEmpty && (value == null || value === '')) {
+    ctx.addIssue({ code: 'custom', message: 'currency cannot be cleared' });
+    return z.NEVER;
+  }
+  try {
+    return assertCurrency(value);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: /** @type {Error} */ (err).message });
+    return z.NEVER;
+  }
+}).optional();
+
 // POST body. The is_loan-conditional rules live in superRefine because the
 // loan branch in the handler overrides amount/planned_date/recurrence from the
 // generated schedule and DELETES truthy recurrence bounds — so only values
@@ -113,6 +132,7 @@ const maxOccurrencesField = z.unknown().transform((value, ctx) => {
 const createPlannedSchema = z.looseObject({
   tags: tagsField,
   reminder_days_before: reminderDaysBeforeField,
+  currency: currencyField(),
 }).superRefine((data, ctx) => {
   if (!data.bank_account) {
     ctx.addIssue({ code: 'custom', message: 'Missing required field: bank_account' });
@@ -185,6 +205,22 @@ const patchPlannedSchema = z.looseObject({
   reminder_days_before: reminderDaysBeforeField,
   recurrence_end_date: recurrenceEndDateField,
   max_occurrences: maxOccurrencesField,
+  currency: currencyField({ rejectEmpty: true }),
+  // amount is a NOT NULL money column; POST already rejects zero/non-finite/
+  // absurd values but PATCH forwarded the raw value to the SET builder, so
+  // `amount: 1e15` overflowed NUMERIC(15,2) → 500, `"Infinity"`/null 500'd at
+  // the cast, and 0 stored a meaningless never-auto-matching row. Loan PATCHes
+  // that regenerate the schedule overwrite this value afterwards, exactly as
+  // before (their installment amount is always derived, never client-sent).
+  amount: z.unknown().transform((value, ctx) => {
+    const amountNum = Number(value);
+    if (value == null || value === '' || !Number.isFinite(amountNum)
+        || amountNum === 0 || Math.abs(amountNum) > MAX_PLANNED_AMOUNT) {
+      ctx.addIssue({ code: 'custom', message: 'amount must be a non-zero finite number within range' });
+      return z.NEVER;
+    }
+    return amountNum;
+  }).optional(),
   recurrence_pattern: z.unknown().transform((value, ctx) => {
     if (value && !isValidPattern(/** @type {string} */ (value))) {
       ctx.addIssue({ code: 'custom', message: `Invalid recurrence_pattern: ${value}` });
@@ -235,9 +271,12 @@ function applyLoanPatchDefaults(fields, existing) {
 
     fields.loan_regular_payment_amount = generatedLoanSchedule.regular_payment_amount;
     fields.loan_first_payment_date = generatedLoanSchedule.first_due_date;
-    if (fields.amount === undefined) {
-      fields.amount = -Math.abs(generatedLoanSchedule.regular_payment_amount);
-    }
+    // The schedule was just regenerated, so the installment amount is ALWAYS
+    // re-derived from it — a defined client `amount` is ignored, exactly like
+    // POST. Keeping a stale client value here desynced `amount` from
+    // `loan_regular_payment_amount` whenever principal/rate/term changed (or
+    // on convert-to-loan via PATCH).
+    fields.amount = -Math.abs(generatedLoanSchedule.regular_payment_amount);
     if (fields.planned_date === undefined) {
       fields.planned_date = generatedLoanSchedule.first_due_date;
     }
@@ -345,7 +384,9 @@ router.get('/due-soon', async (req, res) => {
   const days = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 365) : 7;
   const rows = await plannedTransactionRepository.getDueSoon(days);
   const items = rows.map(formatPlannedTransaction);
-  res.ok(items, { days, total: items.length });
+  // Canonical collection shape `{items, total}` in the data body (never counts
+  // in meta); `days` echoes the effective window alongside.
+  res.ok({ items, total: items.length, days });
 });
 
 /**
@@ -359,7 +400,8 @@ router.get('/due-soon', async (req, res) => {
  */
 router.get('/match-suggestions', async (req, res) => {
   const suggestions = await getMatchSuggestions();
-  res.ok(suggestions, { total: suggestions.length });
+  // Canonical collection shape `{items, total}` in the data body.
+  res.ok({ items: suggestions, total: suggestions.length });
 });
 
 router.get('/:id', validateIdParam, async (req, res) => {
@@ -392,6 +434,22 @@ router.patch(
 
     const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
     const loanScheduleDirective = resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing);
+
+    // Same guard as POST, on the merged state: a recurring planned tx needs a
+    // pattern calculateNextDate can advance, or /execute leaves it perpetually
+    // due. Only enforced when this PATCH touches the recurrence fields, so an
+    // unrelated edit to a legacy broken row is not blocked. Loan PATCHes that
+    // regenerate the schedule have already defaulted pattern='monthly' above.
+    if (fields.is_recurring !== undefined || fields.recurrence_pattern !== undefined) {
+      const resultingIsLoan = fields.is_loan !== undefined ? !!fields.is_loan : !!existing.is_loan;
+      const resultingIsRecurring = fields.is_recurring !== undefined ? !!fields.is_recurring : !!existing.is_recurring;
+      const resultingPattern = fields.recurrence_pattern !== undefined
+        ? fields.recurrence_pattern
+        : existing.recurrence_pattern;
+      if (!resultingIsLoan && resultingIsRecurring && !isValidPattern(/** @type {string} */ (resultingPattern))) {
+        throw new ValidationError(`Invalid or missing recurrence_pattern: ${resultingPattern}`);
+      }
+    }
 
     // When the loan schedule must change, the field update and the schedule
     // rewrite MUST happen in one transaction — otherwise a crash between them

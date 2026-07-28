@@ -318,7 +318,7 @@ describe("planned-transactions API client", () => {
   it("getPlannedMatchSuggestions returns suggestion list", async () => {
     server.use(
       http.get(`${API_BASE}/api/planned-transactions/match-suggestions`, () =>
-        ok([{ planned: { id: 1 }, candidates: [] }]),
+        ok({ items: [{ planned: { id: 1 }, candidates: [] }], total: 1 }),
       ),
     );
     const res = await getPlannedMatchSuggestions();

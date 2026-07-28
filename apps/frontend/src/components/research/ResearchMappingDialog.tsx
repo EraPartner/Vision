@@ -62,7 +62,7 @@ export function ResearchMappingDialog({
     enabled: open && !!instrumentKey,
     staleTime: 60_000,
   });
-  const existing = existingResult?.data.mappings ?? [];
+  const existing = existingResult?.data.items ?? [];
 
   // Resolve proposals (auto-propose per provider). Does not persist.
   const resolveMutation = useMutation({

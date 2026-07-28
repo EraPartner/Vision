@@ -134,14 +134,26 @@ export const banksRepository = {
     const [currentBalancesConverted, historyConverted] =
       await batchConvertGroupsWithHistoricalRateFallback(
         [
-          latestBalanceResult.rows.map(r => ({
+          latestBalanceResult.rows.map((/** @type {{
+            bank_account: string, display_name: string, currency: string|null,
+            balance: string, drift: string|null,
+            anchor_date: string|null, post_anchor_count: string|null,
+            date: Date|null, transaction_count: string,
+            first_transaction: Date|null, last_transaction: Date|null,
+          }} */ r) => ({
             ...r,
             amount: toNumber(toDecimal(r.balance)),
             currency: r.currency || 'EUR',
           })),
           historyResult.rows
-            .filter(r => r.bank_account)
-            .map(r => ({
+            .filter((/** @type {{
+              bank_account: string, day: string, currency: string,
+              balance: string, date: Date,
+            }} */ r) => r.bank_account)
+            .map((/** @type {{
+              bank_account: string, day: string, currency: string,
+              balance: string, date: Date,
+            }} */ r) => ({
               ...r,
               amount: toNumber(toDecimal(r.balance)),
               currency: r.currency || 'EUR',
@@ -173,6 +185,7 @@ export const banksRepository = {
       totalNetPosition += balance;
     }
 
+    /** @type {Record<string, Array<{ date: string, balance: number }>>} */
     const historyMap = {};
     for (const row of historyConverted) {
       const key = row.bank_account;

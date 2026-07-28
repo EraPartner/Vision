@@ -20,6 +20,9 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /**
  * Fixed day-step for the day-based recurrence patterns, or null for the
  * month-based ones (monthly/quarterly/yearly), whose step length varies.
+ *
+ * @param {string|null|undefined} pattern
+ * @returns {number|null}
  */
 function dayStepForPattern(pattern) {
   const p = String(pattern || '').toLowerCase().trim();
@@ -48,8 +51,15 @@ function dayStepForPattern(pattern) {
  * Month-based patterns keep the plain walk (120 monthly hops = 10 years, far
  * beyond any realistic staleness, and bulk month jumps would change the
  * sequential month-end clamping semantics).
+ *
+ * @param {Date|string} plannedDate DATE column — a `Date` from pg.
+ * @param {string} pattern
+ * @param {string} startYmd 'YYYY-MM-DD' (inclusive)
+ * @param {string} endYmd 'YYYY-MM-DD' (exclusive)
+ * @returns {string[]} occurrence days as 'YYYY-MM-DD'
  */
 function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
+  /** @type {string[]} */
   const ymds = [];
   if (!pattern) return ymds;
   let current = plannedDate instanceof Date ? new Date(plannedDate.getTime()) : new Date(plannedDate);
@@ -121,10 +131,35 @@ export const plannedRepository = {
     const startYmd = formatDateToYmd(nextMonth);
     const endYmd = formatDateToYmd(monthAfter);
 
+    /**
+     * `total_income` / `total_expenses` are deliberately `any`: they hold
+     * Decimals during the accumulation loop and are collapsed IN PLACE to
+     * numbers after it (see below) — a union type would reject one of the two
+     * phases without a runtime change.
+     *
+     * @type {Record<string, {
+     *   date: string,
+     *   total_income: any,
+     *   total_expenses: any,
+     *   transactions: Array<{
+     *     id: number,
+     *     recipient_name: string|null,
+     *     amount: number,
+     *     category_name: string|null,
+     *     is_recurring: boolean,
+     *     recurrence_pattern: string|null,
+     *   }>,
+     * }>}
+     */
     const dailyMap = {};
     let occurrenceCount = 0;
     // Day totals accumulate as Decimals (monetary-arithmetic rule) and are
     // collapsed to numbers once, after the loop.
+    /**
+     * @param {string} dateStr 'YYYY-MM-DD'
+     * @param {any} row Converted planned row (`PlannedForecastRow`-ish + `amount_eur`).
+     * @param {number} eur
+     */
     const pushOccurrence = (dateStr, row, eur) => {
       if (!dailyMap[dateStr]) {
         dailyMap[dateStr] = { date: dateStr, total_income: toDecimal(0), total_expenses: toDecimal(0), transactions: [] };

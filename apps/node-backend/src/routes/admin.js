@@ -320,8 +320,11 @@ router.post('/providers/:provider/probe', adminMutateLimiter, async (req, res) =
 
 // ── Request Metrics ───────────────────────────────────────────────────────────
 
+// Canonical collection shape `{items, total}` (unpaginated — `total` is the
+// row count, present so pagination can land without breaking the shape).
 router.get('/metrics/requests', (_req, res) => {
-  res.ok(getMetrics());
+  const items = getMetrics();
+  res.ok({ items, total: items.length });
 });
 
 // ── Endpoint Manifest ─────────────────────────────────────────────────────────

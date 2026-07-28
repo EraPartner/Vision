@@ -76,6 +76,7 @@ export const netWorthRepository = {
       ORDER BY snapshot_date ASC
     `, [targetCurrency]);
 
+    /** @type {Record<string, number>} */
     const investmentsByDay = {};
     for (const row of snapshotResult.rows) {
       investmentsByDay[row.day] = Number(row.investments) || 0;
@@ -171,7 +172,10 @@ export const netWorthRepository = {
       ),
       convertRowsWithHistoricalRateFallback(
         mapRowsForAmountConversion(
-          currentBalancesResult.rows.map((r) => ({ ...r, day: todayYmd })),
+          currentBalancesResult.rows.map(
+            (/** @type {{ bank_account: string, is_liability: boolean, balance: string, currency: string }} */ r) =>
+              ({ ...r, day: todayYmd }),
+          ),
           'balance'
         ),
         targetCurrency,
@@ -246,7 +250,9 @@ export const netWorthRepository = {
     // Split each in-net-worth account's daily balance into liquid assets vs
     // liabilities (ADR-092): debt balances are negative and must not drag the
     // "liquid assets" headline negative. netWorth = liquid + liabilities + investments.
+    /** @type {Record<string, number>} */
     const liquidByDay = {};
+    /** @type {Record<string, number>} */
     const liabilitiesByDay = {};
     for (const row of bankHistoryConverted) {
       const bucket = row.is_liability ? liabilitiesByDay : liquidByDay;
@@ -322,7 +328,8 @@ export const netWorthRepository = {
       last.netWorth = roundToCents(last.liquid + (last.liabilities || 0) + investments);
     }
 
-    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 };
+    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1]
+      || /** @type {{ date?: string, liquid: number, liabilities: number, investments: number, netWorth: number }} */ ({ liquid: 0, liabilities: 0, investments: 0, netWorth: 0 });
     const currentMonthPrefix = latest.date ? extractYearMonth(latest.date) : null;
     const firstCurrentMonthIdx = currentMonthPrefix
       ? sanitizedSnapshots.findIndex(s => s.date.startsWith(currentMonthPrefix))

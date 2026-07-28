@@ -29,11 +29,16 @@ vi.mock('../src/services/recurringDetectionService.js', () => ({
   detectRecurringPatterns: vi.fn(),
 }));
 
+vi.mock('../src/services/marketLookupService.js', () => ({
+  getQuotes: vi.fn(),
+}));
+
 import { infoRepository } from '../src/repositories/infoRepository.js';
 import { watchlistRepository } from '../src/repositories/watchlistRepository.js';
 import { categoryRepository } from '../src/repositories/categoryRepository.js';
 import { transactionRepository } from '../src/repositories/transactionRepository.js';
 import { detectRecurringPatterns } from '../src/services/recurringDetectionService.js';
+import { getQuotes } from '../src/services/marketLookupService.js';
 import {
   getBankBalances,
   getSpendingPace,
@@ -203,14 +208,19 @@ describe('getRecipientInsights', () => {
 });
 
 describe('getWatchlist', () => {
-  it('reshapes raw rows into the tool envelope', async () => {
+  it('reshapes raw rows and merges live quote prices by symbol', async () => {
+    // current_price is not a watchlist column — the tool must fetch the live
+    // quote (like the watchlist page does) instead of reading it off the row.
     watchlistRepository.getAllWithCount.mockResolvedValueOnce({
       rows: [
-        { id: 1, name: 'Apple', symbol: 'AAPL', asset_class: 'stock', current_price: '174.99', currency: 'USD', notes: null },
+        { id: 1, name: 'Apple', symbol: 'AAPL', asset_class: 'stock', currency: 'USD', notes: null },
       ],
       total: 1,
     });
+    getQuotes.mockResolvedValueOnce({ items: [{ symbol: 'AAPL', price: 174.99 }], total: 1 });
+
     const r = await getWatchlist.run({});
+    expect(getQuotes).toHaveBeenCalledWith(['AAPL'], true);
     expect(r.data).toEqual([
       { id: 1, name: 'Apple', symbol: 'AAPL', assetClass: 'stock', currentPrice: 174.99, currency: 'USD', notes: null },
     ]);
@@ -223,15 +233,45 @@ describe('getWatchlist', () => {
     expect(watchlistRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({ assetClass: 'crypto' }));
   });
 
-  it('handles null current_price', async () => {
+  it('skips the quote fetch and reports null price for symbol-less items', async () => {
     watchlistRepository.getAllWithCount.mockResolvedValueOnce({
-      rows: [{ id: 1, name: 'X', symbol: null, asset_class: 'bond', current_price: null, currency: null, notes: null }],
+      rows: [{ id: 1, name: 'X', symbol: null, asset_class: 'bond', currency: null, notes: null }],
       total: 1,
     });
     const r = await getWatchlist.run({});
+    expect(getQuotes).not.toHaveBeenCalled();
     expect(r.data[0].currentPrice).toBeNull();
     expect(r.data[0].currency).toBe('EUR'); // fallback
     expect(r.data[0].symbol).toBeNull();
+  });
+
+  it('degrades to null prices when the quote service fails', async () => {
+    watchlistRepository.getAllWithCount.mockResolvedValueOnce({
+      rows: [{ id: 1, name: 'Apple', symbol: 'AAPL', asset_class: 'stock', currency: 'USD', notes: null }],
+      total: 1,
+    });
+    getQuotes.mockRejectedValueOnce(new Error('offline'));
+
+    const r = await getWatchlist.run({});
+    expect(r.ok).toBe(true);
+    expect(r.data[0].currentPrice).toBeNull();
+  });
+
+  it('reports null price for a symbol the quote batch dropped', async () => {
+    // getQuotes drops failed symbols from items rather than failing the batch.
+    watchlistRepository.getAllWithCount.mockResolvedValueOnce({
+      rows: [
+        { id: 1, name: 'Apple', symbol: 'AAPL', asset_class: 'stock', currency: 'USD', notes: null },
+        { id: 2, name: 'Unknown', symbol: 'NOPE', asset_class: 'stock', currency: 'EUR', notes: null },
+      ],
+      total: 2,
+    });
+    getQuotes.mockResolvedValueOnce({ items: [{ symbol: 'AAPL', price: 200.5 }], total: 1 });
+
+    const r = await getWatchlist.run({});
+    expect(getQuotes).toHaveBeenCalledWith(['AAPL', 'NOPE'], true);
+    expect(r.data[0].currentPrice).toBe(200.5);
+    expect(r.data[1].currentPrice).toBeNull();
   });
 
   it('rejects unknown asset class', async () => {

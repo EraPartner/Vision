@@ -978,7 +978,7 @@ export default function MarketOverviewPage() {
   const { data } = useMarketQuotesQuery<OverviewQuote>(["market-overview", region, sector], symbols, { staleTime: 60_000 });
 
   const pctMap = useMemo(
-    () => new Map((data?.quotes ?? []).map((q) => [q.symbol, q.changePercent])),
+    () => new Map((data ?? []).map((q) => [q.symbol, q.changePercent])),
     [data],
   );
 

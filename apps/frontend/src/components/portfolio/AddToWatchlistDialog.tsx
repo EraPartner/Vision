@@ -98,8 +98,8 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
     queryFn: async () => {
       if (!selectedAsset?.symbol) return null;
       try {
-        const data = await getMarketQuotes(selectedAsset.symbol, { detail: "basic" });
-        return data.quotes?.[0] ?? null;
+        const quotes = await getMarketQuotes(selectedAsset.symbol, { detail: "basic" });
+        return quotes[0] ?? null;
       } catch {
         return null;
       }

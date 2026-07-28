@@ -432,7 +432,18 @@ router.post('/batches/:id/rows/:rowId/investment-override', async (req, res) => 
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
   if (req.body.create_new === true) {
-    const investment = await createInvestmentForRow({ batchId, rowId });
+    let investment;
+    try {
+      investment = await createInvestmentForRow({ batchId, rowId });
+    } catch (err) {
+      // Repository/service VALIDATION_ERROR (missing default asset class, no
+      // name, duplicate symbol) → typed 400, matching investmentController's
+      // translateRepoError — a raw coded Error would surface as a 500.
+      if (/** @type {any} */ (err)?.code === 'VALIDATION_ERROR') {
+        throw new ValidationError(/** @type {Error} */ (err).message);
+      }
+      throw err;
+    }
     if (!investment) throw new NotFoundError(`Row ${rowId} not found in batch ${batchId}`);
     res.ok({ row_id: rowId, investment_id: investment.id, created: true, investment });
     return;

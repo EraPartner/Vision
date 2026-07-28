@@ -29,15 +29,17 @@ const ITEM: WatchlistItem = {
 const CHART_RESPONSE = {
   symbol: "AAPL",
   currency: "USD",
-  points: [
+  items: [
     { time: 1700000000000, close: 190 },
     { time: 1700086400000, close: 192 },
   ],
+  total: 2,
 };
 
 /** Quote data payload — wrapped in the ADR-026 success envelope by `ok()`. */
 const QUOTE_RESPONSE = {
-  quotes: [{ symbol: "AAPL", price: 195.5, change: 1.2, changePercent: 0.6 }],
+  items: [{ symbol: "AAPL", price: 195.5, change: 1.2, changePercent: 0.6 }],
+  total: 1,
 };
 
 function setupDefaultChartHandlers() {
@@ -77,7 +79,7 @@ describe("WatchlistChartDialog", () => {
   it("fetches chart data on open and displays chart or no-data message", async () => {
     // Arrange — empty chart data
     server.use(
-      http.get(`${API_BASE}/api/market/chart`, () => ok({ symbol: "AAPL", currency: "USD", points: [] })),
+      http.get(`${API_BASE}/api/market/chart`, () => ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 })),
       http.get(`${API_BASE}/api/market/quote`, () => ok(QUOTE_RESPONSE)),
     );
     const onOpenChange = vi.fn();
@@ -91,8 +93,8 @@ describe("WatchlistChartDialog", () => {
 
   it("unwraps the API envelope so chart points and live quote render (regression)", async () => {
     // Regression guard for the envelope bug: the market endpoints return
-    // { ok, data: { points | quotes } }. Reading res.json() directly (the old
-    // raw-fetch path) left points/quote undefined — empty chart + no price.
+    // { ok, data: { items, total } }. Reading res.json() directly (the old
+    // raw-fetch path) left the rows undefined — empty chart + no price.
     // Arrange — realistic enveloped responses with non-empty data.
     setupDefaultChartHandlers();
     renderWithApp(
@@ -100,10 +102,10 @@ describe("WatchlistChartDialog", () => {
     );
     await screen.findByRole("dialog");
 
-    // Assert — live quote (195.5) is unwrapped from data.quotes[0] and rendered
+    // Assert — live quote (195.5) is unwrapped from data.items[0] and rendered
     // (locale-tolerant on the decimal separator); not the loading skeleton.
     expect(await screen.findByText(/195[.,]5/)).toBeInTheDocument();
-    // Assert — chart points are unwrapped from data.points, so the empty-state
+    // Assert — chart points are unwrapped from data.items, so the empty-state
     // fallback must not appear.
     expect(screen.queryByText(/no chart data/i)).not.toBeInTheDocument();
   });
@@ -130,7 +132,7 @@ describe("WatchlistChartDialog", () => {
       http.get(`${API_BASE}/api/market/chart`, ({ request }) => {
         const url = new URL(request.url);
         capturedRange = url.searchParams.get("range");
-        return ok({ symbol: "AAPL", currency: "USD", points: [] });
+        return ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 });
       }),
       http.get(`${API_BASE}/api/market/quote`, () => ok(QUOTE_RESPONSE)),
     );
@@ -156,7 +158,7 @@ describe("WatchlistChartDialog", () => {
     // Arrange
     let patchBody: unknown = null;
     server.use(
-      http.get(`${API_BASE}/api/market/chart`, () => ok({ symbol: "AAPL", currency: "USD", points: [] })),
+      http.get(`${API_BASE}/api/market/chart`, () => ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 })),
       http.get(`${API_BASE}/api/market/quote`, () => ok(QUOTE_RESPONSE)),
       http.patch(`${API_BASE}/api/watchlist/1`, async ({ request }) => {
         patchBody = await request.json();
@@ -197,7 +199,7 @@ describe("WatchlistChartDialog", () => {
     // with a success toast. A 0 target must now be rejected client-side.
     let patched = false;
     server.use(
-      http.get(`${API_BASE}/api/market/chart`, () => ok({ symbol: "AAPL", currency: "USD", points: [] })),
+      http.get(`${API_BASE}/api/market/chart`, () => ok({ symbol: "AAPL", currency: "USD", items: [], total: 0 })),
       http.get(`${API_BASE}/api/market/quote`, () => ok(QUOTE_RESPONSE)),
       http.patch(`${API_BASE}/api/watchlist/1`, () => {
         patched = true;
@@ -268,7 +270,7 @@ describe("WatchlistChartDialog", () => {
   it("renders gracefully when chart history API returns 5xx error", async () => {
     server.use(
       http.get(`${API_BASE}/api/market/chart`, () => err(500, "history unavailable")),
-      http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [] })),
+      http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [], total: 0 })),
     );
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     renderWithApp(

@@ -568,6 +568,12 @@ export const investmentRepository = {
     }
     name = trimmedName;
     symbol = normalizeSymbol(symbol);
+    // Same uniqueness rule as update() (there is no DB unique index on symbol,
+    // so create was the one path that could still insert a duplicate — e.g. a
+    // duplicate-on-retry). excludeId 0 matches no row: ids start at 1.
+    if (typeof symbol === 'string' && symbol !== '') {
+      await ensureSymbolIsUnique(symbol, 0);
+    }
     const payload = {
       name,
       symbol,

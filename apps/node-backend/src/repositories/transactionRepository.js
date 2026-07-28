@@ -611,17 +611,16 @@ export const transactionRepository = {
       mapColumn: (key) => (key === 'transaction_date' ? 'date' : key),
     });
 
+    // Same 3-level enrichment as getById/getAll/create (shared fragments): the
+    // update response must not disagree with an immediately-following GET on
+    // alias-recipient rows categorised via their primary's default.
     const fetchSql = `
-      SELECT t.*, r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+      SELECT t.*,
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name
       FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${TRANSACTION_JOINS}
       WHERE t.id = $1
     `;
 
@@ -668,16 +667,11 @@ export const transactionRepository = {
         RETURNING *
       )
       SELECT t.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name
       FROM updated t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${TRANSACTION_JOINS}
     `;
 
     const result = await query(sql, updateParams);

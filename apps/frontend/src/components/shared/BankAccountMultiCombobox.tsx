@@ -23,7 +23,7 @@ export function BankAccountMultiCombobox({ value, onChange, disabled, className 
         <MultiCombobox
             value={value}
             onChange={onChange}
-            items={data?.banks ?? []}
+            items={data ?? []}
             getValue={getIban}
             renderItem={getIban}
             displayLabel={displayLabel}
