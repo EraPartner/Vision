@@ -51,3 +51,46 @@ export async function closeTestPool() {
 export function hasTestDatabase() {
   return Boolean(process.env.TEST_DATABASE_URL);
 }
+
+// ── Cross-suite serialization ───────────────────────────────────────────────
+// Vitest runs test FILES in parallel workers, but every DB-backed suite shares
+// the one TEST_DATABASE_URL database and wipes whole tables between tests —
+// two suites running concurrently delete each other's fixtures mid-test. A
+// session-scoped Postgres advisory lock serializes them at the database level
+// without slowing the (much larger) non-DB portion of the run: each suite
+// takes the lock in beforeAll and releases it in afterAll, so DB suites queue
+// behind one another while everything else stays parallel.
+//
+// Suites must pass a generous timeout to beforeAll (the wait is the sum of the
+// suites ahead in the queue): `beforeAll(acquireDbSuiteLock, 180_000)`.
+
+const DB_SUITE_LOCK_KEY = 715_001;
+
+/** @type {import('pg').PoolClient | null} */
+let lockClient = null;
+
+/** Block until this process holds the shared DB-suite advisory lock. */
+export async function acquireDbSuiteLock() {
+  const pool = getTestPool();
+  if (!pool || lockClient) return;
+  const client = await pool.connect();
+  try {
+    await client.query('SELECT pg_advisory_lock($1)', [DB_SUITE_LOCK_KEY]);
+  } catch (err) {
+    client.release();
+    throw err;
+  }
+  lockClient = client;
+}
+
+/** Release the advisory lock (safe to call when not held). */
+export async function releaseDbSuiteLock() {
+  if (!lockClient) return;
+  const client = lockClient;
+  lockClient = null;
+  try {
+    await client.query('SELECT pg_advisory_unlock($1)', [DB_SUITE_LOCK_KEY]);
+  } finally {
+    client.release();
+  }
+}

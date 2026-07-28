@@ -74,7 +74,12 @@ docker run -d --rm \
 
 printf '[test-db] Waiting for postgres'
 i=0
-until docker exec "$CONTAINER" pg_isready -U vision_test -d vision_test >/dev/null 2>&1; do
+# Probe over TCP (-h 127.0.0.1): during initdb the entrypoint runs a TEMPORARY
+# server that answers on the unix socket only — a socket probe reports ready,
+# then the temp server shuts down and the migration's first TCP connect dies
+# with "Connection terminated unexpectedly". TCP only answers once the final
+# server is up.
+until docker exec "$CONTAINER" pg_isready -h 127.0.0.1 -U vision_test -d vision_test >/dev/null 2>&1; do
   i=$((i + 1))
   if [ "$i" -gt 60 ]; then
     echo ' timed out.' >&2
