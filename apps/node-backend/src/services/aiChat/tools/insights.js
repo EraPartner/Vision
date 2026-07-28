@@ -14,6 +14,7 @@ import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
 import { parseEnum, parsePositiveInt } from './_validate.js';
+import { getQuotes } from '../../marketLookupService.js';
 import { detectRecurringPatterns } from '../../recurringDetectionService.js';
 import { getInsightsDigest } from '../../insightsDigestService.js';
 
@@ -211,17 +212,40 @@ export const getWatchlist = {
       assetClass,
     });
 
-    const shaped = rows.map((item) => ({
-      id: item.id,
-      name: item.name,
-      symbol: item.symbol || null,
-      assetClass: item.asset_class,
-      currentPrice: item.current_price != null
-        ? roundToCents(toDecimal(item.current_price)).toNumber()
-        : null,
-      currency: item.currency || 'EUR',
-      notes: item.notes || null,
-    }));
+    // current_price is NOT a watchlist column — the repository never emits it.
+    // The watchlist UI merges the live quote in client-side (GET
+    // /api/market/quote); mirror that here via the same service so the tool
+    // reports real prices instead of always-null. Quote failures (offline, no
+    // provider) degrade to null prices rather than failing the tool.
+    const symbols = [...new Set(rows.map((item) => item.symbol).filter(Boolean))];
+    const priceBySymbol = new Map();
+    if (symbols.length > 0) {
+      try {
+        const { items } = await getQuotes(symbols, true);
+        for (const quote of /** @type {Array<{ symbol?: string, price?: number|null }>} */ (items)) {
+          if (quote.symbol != null && quote.price != null) {
+            priceBySymbol.set(quote.symbol, quote.price);
+          }
+        }
+      } catch {
+        // Degrade gracefully: leave priceBySymbol empty → currentPrice: null.
+      }
+    }
+
+    const shaped = rows.map((item) => {
+      const livePrice = item.symbol ? priceBySymbol.get(item.symbol) : undefined;
+      return {
+        id: item.id,
+        name: item.name,
+        symbol: item.symbol || null,
+        assetClass: item.asset_class,
+        currentPrice: livePrice != null
+          ? roundToCents(toDecimal(livePrice)).toNumber()
+          : null,
+        currency: item.currency || 'EUR',
+        notes: item.notes || null,
+      };
+    });
 
     return {
       ok: true,
