@@ -147,4 +147,23 @@ describe('detectRecurringPatterns', () => {
     expect(second).toBe(first);
     expect(mockQuery.mock.calls.length).toBe(callsAfterFirst);
   });
+
+  // The scan must resolve the effective category over all THREE levels (own →
+  // recipient default → PRIMARY recipient's default), matching
+  // transactionRepository. With the former 2-level resolution a pattern whose
+  // transactions sit under an alias recipient — categorised only via the
+  // PRIMARY's default — reported categoryName: null while the transactions
+  // list showed it categorised. Behavioural coverage lives in
+  // tests/aliasCategoryResolution.db.test.js.
+  it('resolves the effective category over three levels in the scan query', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    await detectRecurringPatterns();
+
+    const sql = mockQuery.mock.calls[0][0];
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(sql).toContain(
+      'LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id',
+    );
+  });
 });

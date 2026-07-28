@@ -48,4 +48,25 @@ describe('computeSankeyFlow (SQL-grouped rows)', () => {
     expect(query.mock.calls[0][0]).toContain('GROUP BY 1, 2, 3');
     expect(query.mock.calls[0][0]).toContain('SUM(ABS(t.amount))');
   });
+
+  // The emitted SQL must resolve the effective category over all THREE levels
+  // (own → recipient default → PRIMARY recipient's default), in the category
+  // JOIN *and* in the exclusion clause. With the former 2-level resolution a
+  // row recorded under an alias whose PRIMARY carries the default category
+  // landed in "Uncategorised" and survived an exclusion of that same category.
+  // Behavioural coverage lives in tests/aliasCategoryResolution.db.test.js.
+  it('resolves the effective category over three levels in the join and the exclusion clause', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await computeSankeyFlow({ year: 2025, excludedCategoryIds: [7] });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(sql).toContain(
+      'LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id',
+    );
+    expect(sql).toContain(
+      'AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) != ALL($3)',
+    );
+  });
 });

@@ -147,6 +147,11 @@ export async function detectRecurringPatterns() {
     // history adds scan cost without changing the result. Without the bound
     // this was a full-table scan on every call (including via the aiChat
     // getRecurringDetected tool).
+    // Effective category is the canonical 3-level resolution (own → recipient
+    // default → PRIMARY recipient's default), matching transactionRepository —
+    // a row recorded under an alias whose PRIMARY carries the default category
+    // must not report a null category_name here while the transactions list
+    // shows it categorised.
     const result = await query(`
       SELECT t.id, t.date, t.amount, t.currency, t.memo, t.bank_account,
              t.recipient_id, r.name AS recipient_name,
@@ -154,7 +159,8 @@ export async function detectRecurringPatterns() {
              COALESCE(c.general || ':' || c.detail, NULL) AS category_name
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       WHERE t.is_active = true
         AND t.recipient_id IS NOT NULL
         AND t.date >= CURRENT_DATE - INTERVAL '3 years'

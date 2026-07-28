@@ -51,7 +51,13 @@ const MATERIALIZED_VIEWS = [
 export async function createMaterializedViews() {
   logger.info('Creating materialized views (if not exist)…');
 
-  // 1. Monthly income / spending / net per month (last 12 months)
+  // 1. Monthly income / spending / net per month (last 12 months).
+  //    Effective category resolves 3 levels (own → recipient default → PRIMARY
+  //    recipient's default) so the MV's category grain agrees with the monthly
+  //    live path and the transactions surfaces. Changing this definition
+  //    requires a migration that DROPs the MV (see 0085): IF NOT EXISTS never
+  //    redefines an existing view, so already-migrated installs keep the old SQL
+  //    otherwise.
   await query(`
     CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS
     SELECT
@@ -68,7 +74,8 @@ export async function createMaterializedViews() {
       COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS category_name
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
     WHERE t.is_active = true AND t.is_transfer = false
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '12 months'
     GROUP BY month_start, month, year, t.currency, c.id, category_name

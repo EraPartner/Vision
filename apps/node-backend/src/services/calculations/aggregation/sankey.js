@@ -46,9 +46,20 @@ export async function computeSankeyFlow({
   const params = [yearStart, yearEnd];
   const clauses = [];
 
+  // Effective category is the canonical 3-level resolution (own → recipient
+  // default → PRIMARY recipient's default), matching transactionRepository —
+  // used identically by the exclusion clause and the category join below, so a
+  // row recorded under an alias whose PRIMARY carries the default category is
+  // both excludable by that category and attributed to it in the flow graph
+  // (it formerly landed in "Uncategorised"). NOTE: unlike the canonical
+  // filterBuilder.js exclusion, `!= ALL` here has no `-1` NULL sentinel, so
+  // rows whose effective category is NULL are silently dropped whenever any
+  // exclusion is applied — filed in TODO.md, not fixed here.
   if (excludedCategoryIds.length > 0) {
     params.push(excludedCategoryIds);
-    clauses.push(`AND COALESCE(t.category_id, r.default_category_id) != ALL($${params.length})`);
+    clauses.push(
+      `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) != ALL($${params.length})`,
+    );
   }
 
   if (excludedRecipientIds.length > 0) {
@@ -70,7 +81,8 @@ export async function computeSankeyFlow({
       SUM(ABS(t.amount)) AS amount
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
     WHERE t.is_active = true
       AND t.date BETWEEN $1 AND $2
       ${clauses.join('\n      ')}
