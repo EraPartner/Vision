@@ -157,19 +157,25 @@ export default function ImportReviewPage() {
 
   const newAccountCount = accountDisclosure.filter((e) => e.isNew).length;
 
+  // These three are driven via `mutateAsync` and toast their own localized
+  // copy in the callers' catch blocks — the meta flag keeps the global
+  // mutation-error backstop from toasting the same failure twice.
   const overrideMutation = useMutation({
     mutationFn: ({ rowId, recipientId }: { rowId: number; recipientId: number | null }) =>
       apiClient.overrideImportRow(batchId, rowId, recipientId),
+    meta: { suppressErrorToast: true },
   });
 
   const categoryOverrideMutation = useMutation({
     mutationFn: ({ rowId, categoryId }: { rowId: number; categoryId: number | null }) =>
       apiClient.overrideImportRowCategory(batchId, rowId, categoryId),
+    meta: { suppressErrorToast: true },
   });
 
   const persistDefaultMutation = useMutation({
     mutationFn: ({ recipientId, categoryId }: { recipientId: number; categoryId: number | null }) =>
       apiClient.updateRecipient(recipientId, { default_category_id: categoryId }),
+    meta: { suppressErrorToast: true },
   });
 
   const commitMutation = useMutation({

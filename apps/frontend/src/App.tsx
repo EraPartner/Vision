@@ -13,6 +13,7 @@ import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/c
 
 import { lazy, Suspense, useCallback, useEffect, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { GlobalMutationErrorToaster } from "@/components/shared/GlobalMutationErrorToaster";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { StartupRedirect } from "@/components/shared/StartupRedirect";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
@@ -196,6 +197,7 @@ const App = () => {
                                         <Sonner />
                                         <AppSettingsSaveErrorToaster />
                                         <BelgianTaxSaveErrorToaster />
+                                        <GlobalMutationErrorToaster />
                                         <BrowserRouter>
                                             <ScrollToTop />
                                             <StartupRedirect />

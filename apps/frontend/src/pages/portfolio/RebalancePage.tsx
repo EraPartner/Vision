@@ -26,6 +26,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { apiClient } from "@/lib/api";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { cn } from "@/lib/utils";
 import { useRebalancePlans } from "@/hooks/useRebalancePlans";
 import type { ModelPortfolio, RebalanceResponse } from "@/lib/api/crossWorkspace";
@@ -120,6 +121,9 @@ export default function RebalancePage() {
       const availableCashArg = useCashCap ? resolveCap(cashCapInput, availableCash) : undefined;
       return apiClient.computeRebalance({ targetWeights, currency, availableCash: availableCashArg });
     },
+    // Errors render inline below the form (compute.isError) — keep the global
+    // mutation-error backstop from also toasting the same failure.
+    meta: { suppressErrorToast: true },
   });
   const result: RebalanceResponse | undefined = compute.data;
 
@@ -349,7 +353,7 @@ export default function RebalancePage() {
       )}
 
       {compute.isError && (
-        <p className="text-sm text-destructive">{(compute.error as Error)?.message}</p>
+        <p className="text-sm text-destructive">{apiErrorToMessage(compute.error, t)}</p>
       )}
 
       {result && (
