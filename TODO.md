@@ -786,15 +786,21 @@ look-changing one.
   - `alembic/versions/0066_normalized_account_identity.py` dropped `uq_accounts_name` for the expression index `uq_accounts_name_norm` on `lower(btrim(name))` and retargeted the sync trigger to `ON CONFLICT (lower(btrim(name)))`; `alembic/versions/0076_account_trigger_blank_and_case.py:77` rewrote the trigger and regressed the arbiter back to `ON CONFLICT (name)` — which matches NO unique index at head. INSERTing a transaction whose `bank_account` has no existing account raises `there is no unique or exclusion constraint matching the ON CONFLICT specification`. Existing labels (any casing) still resolve — only first-seen-label onboarding (e.g. the first CSV import for a new account) blows up. Pinned by the clearly-marked test in `tests/transactionRepository.db.test.js` ("0076 ON CONFLICT regression").
   - Fix: new migration re-creating the trigger function with the `(lower(btrim(name)))` arbiter (the function lives in the DB, so already-migrated installs need the CREATE OR REPLACE — editing 0076 in place is not enough); flip the pinned test to expect successful onboarding.
 
-- [ ] **`transactionRepository.update()` RETURNING enrichment resolves only 2 category levels — response disagrees with an immediate getById on alias-recipient rows** 🔽
+- [x] **`transactionRepository.update()` RETURNING enrichment resolves only 2 category levels — response disagrees with an immediate getById on alias-recipient rows** 🔽 ✅ 2026-07-28 · a029b5d (both enrichment queries now use the shared 3-level join fragments and return effective_category_id; flipped DB pin asserts deep equality with an immediate getById through both the fields and fields+tags PATCH paths)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness migration_
   - `update()`'s RETURNING join omits the primary-recipient default-category fallback (and `COALESCE(pr.name, r.name)`): updating a row categorised via its primary's default returns `category_name: null` / the alias name, while `getById`/`getAll`/`create` return the 3-level resolution. Pinned in `tests/transactionRepository.db.test.js` ("update() response resolves only 2 category levels").
   - Fix: align update()'s RETURNING join with the 3-level pattern used by the read paths.
 
-- [ ] **Statistics breakdown/pivot resolve categories 2-level — alias rows categorised via their primary are UNCATEGORISED in the breakdown and entirely absent from the pivot** 🔼
+- [x] **Statistics breakdown/pivot resolve categories 2-level — alias rows categorised via their primary are UNCATEGORISED in the breakdown and entirely absent from the pivot** 🔼 ✅ 2026-07-28 · 0ffaed6 (breakdown + pivot now 3-level — pivot's COALESCE fixed consistently in all four embedded sites; the mv_category_totals fast path embedded the same 2-level expression, so its definition is corrected and migration 0084 drops the stale MV on existing installs (live query serves until the rebuild populates — no wrong-answer window); flipped DB pins assert breakdown/pivot agree with the transactions list; verified via test:db 3175/3175)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness migration_
   - `getCategoryBreakdown` and `getCategoryPivot` (infoRepositoryStatistics.js) use `COALESCE(t.category_id, r.default_category_id)` with no primary-recipient fallback: a row recorded under an alias whose primary carries the default is categorised in the transactions list but UNCATEGORISED in the breakdown, and absent from the pivot (its WHERE requires the 2-level COALESCE non-NULL). Corollary: the mock suite's "missing category_id → Uncategorised" pivot case is unreachable through the real query. Pinned in `tests/infoRepoStatistics.db.test.js`.
   - Fix: extend both queries' COALESCE with the primary-recipient default (matching transactionRepository's 3-level pattern); flip the pinned test.
+
+- [ ] **Remaining 2-level category-resolution surfaces: monthly summary (live + MV), recurring detection, sankey** 🔽
+  - ↪ _from: Orchestration session 2026-07-28 · category-resolution fix pass (same pattern, outside that pass's scope)_
+  - `services/materializedViewService.js:71` (`mv_monthly_summary` definition) and the monthly live path `repositories/infoRepositoryMonthly.js:184`, `services/recurringDetectionService.js:157`, and `services/calculations/aggregation/sankey.js:51,73` all still use the 2-level `COALESCE(t.category_id, r.default_category_id)` — alias rows categorised via their primary's default are treated as uncategorised on these surfaces, now inconsistent with the fixed transactions/breakdown/pivot 3-level resolution.
+  - Fix: extend each to the canonical 3-level pattern; the MV change needs the same drop-and-rebuild migration treatment as 0084 (mv_monthly_summary drop).
+
 
 
 
