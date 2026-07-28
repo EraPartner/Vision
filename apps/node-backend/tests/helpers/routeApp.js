@@ -166,7 +166,7 @@ export function okEnvelope(data, extraMeta = {}) {
 
 /**
  * Matcher for the ADR-026 failure envelope emitted by `createErrorHandler`
- * (errorHandler.js:150-157). `details` is only present on typed AppErrors that
+ * (errorHandler.js:240-244). `details` is only present on typed AppErrors that
  * carry it, so it is opt-in here.
  *
  * @param {{ code?: any, message?: any, details?: any }} [error]

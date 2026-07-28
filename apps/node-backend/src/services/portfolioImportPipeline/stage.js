@@ -24,8 +24,16 @@ const STAGE_INSERT_CHUNK = 500;
  * Create a new portfolio import batch row.
  *
  * @param {{ adapterName: string, filename?: string|null, sizeBytes?: number|null, customConfig?: object|null, defaultAssetClass?: string|null, defaultType?: string|null, isBrokerage?: boolean, accountId?: number|string|null }} args
- * @returns {Promise<string>} the new batch id — `portfolio_import_batches.id` is
- *   BIGSERIAL, so node-postgres hands it back as a STRING, not a number.
+ * @returns {Promise<number>} the new batch id, as a NUMBER.
+ *
+ *   `portfolio_import_batches.id` is BIGSERIAL and node-postgres hands BIGINT
+ *   back as a STRING. Normalized here for the same reason as the transaction
+ *   pipeline (see importPipeline/stage.js `createBatch`): the streaming/immediate
+ *   import responses would otherwise emit `batch_id: "12"` while the review-commit
+ *   route (routes/portfolioImportRoutes.js:491) emits `batch_id: 12`. NUMBER is
+ *   the single wire type — it matches `coercedIdSchema` (lib/importBatchIds.js:17)
+ *   and the frontend guards (`batch_id: z.number()` in
+ *   apps/frontend/src/lib/api/portfolioImports.ts).
  */
 export async function createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage = false, accountId }) {
   const result = await query(
@@ -44,7 +52,7 @@ export async function createBatch({ adapterName, filename, sizeBytes, customConf
       accountId != null ? Number(accountId) : null,
     ],
   );
-  return result.rows[0].id;
+  return Number(result.rows[0].id);
 }
 
 /**

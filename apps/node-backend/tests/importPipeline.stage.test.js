@@ -20,9 +20,46 @@ vi.mock('../src/services/importPipeline/adapters/generic.js', () => ({
   default: { name: 'generic', parseWithConfig: (...args) => genericParseWithConfig(...args) },
 }));
 
-import { stageBatch } from '../src/services/importPipeline/stage.js';
+import { stageBatch, createBatch } from '../src/services/importPipeline/stage.js';
+import { createBatch as createPortfolioBatch } from '../src/services/portfolioImportPipeline/stage.js';
+import { query } from '../src/database/connection.js';
 
 const CONFIG = { dateColumn: 'D', recipientColumn: 'R', amountColumn: 'A' };
+
+/**
+ * The single boundary where a batch id enters the application. `import_batches.id`
+ * is BIGSERIAL and node-postgres emits BIGINT as a STRING, so without this
+ * normalization POST /api/import/csv answered `batch_id: "12"` while the
+ * review-commit route (routes/importRoutes.js:570), which reads the id back off
+ * the URL through `coercedIdSchema`, answered `batch_id: 12`.
+ */
+describe('createBatch normalizes the BIGSERIAL id to a number', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns a NUMBER even though pg hands back a string', async () => {
+    query.mockResolvedValue({ rows: [{ id: '12' }] });
+
+    const id = await createBatch({ adapterName: 'vision' });
+
+    expect(id).toBe(12);
+    expect(typeof id).toBe('number');
+  });
+
+  it('does the same in the portfolio pipeline, so both agree on the wire', async () => {
+    query.mockResolvedValue({ rows: [{ id: '12' }] });
+
+    const id = await createPortfolioBatch({ adapterName: 'generic' });
+
+    expect(id).toBe(12);
+    expect(typeof id).toBe('number');
+  });
+
+  it('is exact for ids up to Number.MAX_SAFE_INTEGER (the documented ceiling)', async () => {
+    query.mockResolvedValue({ rows: [{ id: String(Number.MAX_SAFE_INTEGER) }] });
+
+    expect(await createBatch({ adapterName: 'vision' })).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});
 
 describe('stageBatch adapter resolution', () => {
   beforeEach(() => {

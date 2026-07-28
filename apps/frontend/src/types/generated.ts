@@ -8498,7 +8498,7 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: {
-                            batch_id?: string;
+                            batch_id?: number;
                             total?: number;
                             imported?: number;
                             duplicates?: number;
@@ -8515,7 +8515,7 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: {
-                            batch_id?: string;
+                            batch_id?: number;
                             requires_review?: boolean;
                             match_source_counts?: {
                                 [key: string]: number;

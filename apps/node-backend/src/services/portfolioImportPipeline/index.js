@@ -51,12 +51,13 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 /**
  * A `portfolio_import_batches` id as it is actually passed around.
  *
- * `createBatch` returns the BIGSERIAL id, which node-postgres emits as a
- * STRING; the review/commit routes instead parse it out of the URL through
- * `coercedIdSchema`, which yields a NUMBER. Both reach the same functions and
- * both work (the value is only ever bound as a query parameter).
+ * Always a NUMBER — `createBatch` (stage.js) normalizes node-postgres's
+ * BIGSERIAL string at the boundary, and the review/commit routes parse it out
+ * of the URL through `coercedIdSchema` (lib/importBatchIds.js:17), which
+ * already yielded a number. Formerly a `string|number` union that let the two
+ * import responses disagree on the wire.
  *
- * @typedef {string|number} PortfolioImportBatchId
+ * @typedef {number} PortfolioImportBatchId
  */
 
 /**

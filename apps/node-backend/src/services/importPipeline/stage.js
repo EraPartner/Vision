@@ -25,8 +25,22 @@ const STAGE_INSERT_CHUNK = 500;
  * Create a new import batch row.
  *
  * @param {{ adapterName: string, filename?: string|null, sizeBytes?: number|null, customConfig?: object|null }} args
- * @returns {Promise<string>} the new batch id — `import_batches.id` is BIGSERIAL,
- *   so node-postgres hands it back as a STRING, not a number.
+ * @returns {Promise<number>} the new batch id, as a NUMBER.
+ *
+ *   `import_batches.id` is BIGSERIAL and node-postgres hands BIGINT back as a
+ *   STRING, so this used to leak a string all the way to the wire: POST
+ *   /api/import/csv answered `batch_id: "12"` while the review-commit route
+ *   (routes/importRoutes.js:570), which reads the id back off the URL through
+ *   `coercedIdSchema` (lib/importBatchIds.js:17), answered `batch_id: 12` —
+ *   same JSON field, two types, so strict-equality across the two responses
+ *   broke. Normalizing here, at the single boundary where the id enters the
+ *   application, makes NUMBER the one wire type; it matches the coerced input
+ *   schema and the frontend runtime guards (`batch_id: z.number()` in
+ *   apps/frontend/src/lib/api/imports.ts).
+ *
+ *   Safe for this app: BIGSERIAL starts at 1 and increments per CSV import, so
+ *   reaching 2^53 is not physically attainable. If that ever changes, the fix
+ *   is to make the WIRE type a string everywhere, not to reintroduce the split.
  */
 export async function createBatch({ adapterName, filename, sizeBytes, customConfig }) {
   const result = await query(
@@ -36,7 +50,7 @@ export async function createBatch({ adapterName, filename, sizeBytes, customConf
      RETURNING id`,
     [adapterName, filename || null, sizeBytes || null, customConfig ? JSON.stringify(customConfig) : null]
   );
-  return result.rows[0].id;
+  return Number(result.rows[0].id);
 }
 
 /**

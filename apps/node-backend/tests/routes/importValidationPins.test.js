@@ -82,9 +82,13 @@ vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
 
 vi.mock('../../src/database/connection.js', () => mockConnection());
 
-import { runImportPipeline } from '../../src/services/importPipeline/index.js';
+import { runImportPipeline, commitImport } from '../../src/services/importPipeline/index.js';
+// NOT mocked: only .../importPipeline/index.js is. This is the real boundary
+// function, run here over the mocked pg connection.
+import { createBatch } from '../../src/services/importPipeline/stage.js';
 import { importRecipientsCSV } from '../../src/services/dataImportService.js';
-import { getBatch, overrideRecipient } from '../../src/repositories/importBatchRepository.js';
+import { getBatch, getPreviewRows, overrideRecipient } from '../../src/repositories/importBatchRepository.js';
+import { query as dbQuery } from '../../src/database/connection.js';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
 
 const { default: importRouter } = await import('../../src/routes/importRoutes.js');
@@ -302,5 +306,76 @@ describe('normalizeParserConfig pins (POST /parsers)', () => {
       const res = await create(config).expect(400);
       expect(res.body.error.message).toContain('Missing or invalid "config"');
     }
+  });
+});
+
+/**
+ * `batch_id` wire type.
+ *
+ * The immediate-import responses (`POST /csv`, 201 and the 202 review variant)
+ * relay `pipelineResult.batchId` straight from `createBatch`, while the
+ * review-commit route re-reads the id off the URL through `coercedIdSchema`.
+ * Those two producers disagreed until `createBatch` was normalized
+ * (services/importPipeline/stage.js — pinned by tests/importPipeline.stage.test.js),
+ * so `batch_id` was a string on one response and a number on the other and a
+ * client doing `a.batch_id === b.batch_id` across them always saw false.
+ * NUMBER is the single wire type; these pin every response that carries the field.
+ */
+describe('batch_id wire type', () => {
+  const BATCH_ID = 12;
+
+  // The pipeline is mocked here, but its `batchId` is produced by the REAL
+  // `createBatch` running over the mocked pg connection primed with what
+  // node-postgres actually returns for a BIGSERIAL: the STRING '12'. That keeps
+  // these route pins honest — before the stage-boundary fix they failed with
+  // `batch_id: "12"`, exactly the wire split the finding describes.
+  const realBatchId = async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: String(BATCH_ID) }] });
+    return createBatch({ adapterName: 'vision' });
+  };
+
+  it('POST /csv (201, committed) emits a numeric batch_id', async () => {
+    runImportPipeline.mockImplementation(async () => ({
+      batchId: await realBatchId(), total: 1, imported: 1, duplicates: 0, errors: 0,
+    }));
+
+    const res = await api.post(`${BASE}/csv`).query({ bank_name: 'vision' }).expect(201);
+
+    expect(typeof res.body.data.batch_id).toBe('number');
+    expect(res.body.data.batch_id).toBe(BATCH_ID);
+  });
+
+  it('POST /csv (202, review required) emits a numeric batch_id', async () => {
+    runImportPipeline.mockImplementation(async () => ({
+      batchId: await realBatchId(), requiresReview: true, matchSourceCounts: { exact: 1 },
+    }));
+
+    const res = await api.post(`${BASE}/csv`).query({ bank_name: 'vision' }).expect(202);
+
+    expect(typeof res.body.data.batch_id).toBe('number');
+    expect(res.body.data.batch_id).toBe(BATCH_ID);
+  });
+
+  it('POST /batches/:id/commit emits the SAME type and value for the same batch', async () => {
+    runImportPipeline.mockImplementation(async () => ({
+      batchId: await realBatchId(), requiresReview: true, matchSourceCounts: {},
+    }));
+    const started = await api.post(`${BASE}/csv`).query({ bank_name: 'vision' }).expect(202);
+
+    getBatch.mockResolvedValue({ id: BATCH_ID, status: 'awaiting_review' });
+    commitImport.mockResolvedValue({ imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0 });
+    const committed = await api.post(`${BASE}/batches/${BATCH_ID}/commit`).send({}).expect(200);
+
+    expect(typeof committed.body.data.batch_id).toBe('number');
+    // The whole point of the finding: strict equality across the two responses.
+    expect(committed.body.data.batch_id).toStrictEqual(started.body.data.batch_id);
+  });
+
+  it('GET /batches/:id/preview also emits a numeric batch_id', async () => {
+    getPreviewRows.mockResolvedValue([]);
+
+    const res = await api.get(`${BASE}/batches/${BATCH_ID}/preview`).expect(200);
+
+    expect(typeof res.body.data.batch_id).toBe('number');
   });
 });

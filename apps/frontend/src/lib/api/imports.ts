@@ -50,7 +50,7 @@ const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
 export function importCSV(
     file: File,
     bankName: string,
-): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
+): Promise<{ batch_id: number; imported: number; duplicates: number; total_processed: number; message: string }> {
     const queryParams = new URLSearchParams();
     queryParams.append('bank_name', bankName);
     return postMultipartImport('/api/import/csv', file, queryParams);
@@ -155,7 +155,7 @@ export function importCSVCustom(
     separator: string = ',',
     encoding: string = 'utf-8',
     skipRows: number = 0,
-): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
+): Promise<{ batch_id: number; imported: number; duplicates: number; total_processed: number; message: string }> {
     const queryParams = new URLSearchParams();
     queryParams.append('bank_name', bankName);
     queryParams.append('date_format', dateFormat);

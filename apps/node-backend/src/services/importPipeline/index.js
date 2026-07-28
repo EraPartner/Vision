@@ -47,13 +47,14 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 /**
  * An `import_batches` id as it is actually passed around.
  *
- * `createBatch` returns the BIGSERIAL id, which node-postgres emits as a
- * STRING; the review/commit routes instead parse it out of the URL through
- * `coercedIdSchema`, which yields a NUMBER. Both reach the same functions and
- * both work (they are only ever interpolated as a query parameter), so the
- * union is the truth rather than a widening.
+ * Always a NUMBER. Two producers feed it and both now agree: `createBatch`
+ * (stage.js) normalizes node-postgres's BIGSERIAL string at the boundary, and
+ * the review/commit routes parse it out of the URL through `coercedIdSchema`
+ * (lib/importBatchIds.js:17), which already yielded a number. It was a
+ * `string|number` union until the two disagreed on the wire — see the note on
+ * `createBatch` for why number won.
  *
- * @typedef {string|number} ImportBatchId
+ * @typedef {number} ImportBatchId
  */
 
 /**

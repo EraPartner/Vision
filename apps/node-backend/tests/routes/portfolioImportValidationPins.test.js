@@ -76,7 +76,11 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-import { runPortfolioImportPipeline } from '../../src/services/portfolioImportPipeline/index.js';
+import { runPortfolioImportPipeline, commitPortfolioImport } from '../../src/services/portfolioImportPipeline/index.js';
+// NOT mocked: only .../portfolioImportPipeline/index.js is. This is the real
+// boundary function, run here over the mocked pg connection.
+import { createBatch } from '../../src/services/portfolioImportPipeline/stage.js';
+import { query as dbQuery } from '../../src/database/connection.js';
 import { getBatch, overrideInvestment } from '../../src/services/portfolioImportBatchService.js';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
 import { ValidationError } from '../../src/middleware/errorHandler.js';
@@ -256,5 +260,65 @@ describe('normalizePortfolioParserConfig pins (POST /parsers)', () => {
     for (const config of [null, 'str', [1]]) {
       await expect(create(config)).rejects.toThrow('Missing or invalid "config"');
     }
+  });
+});
+
+/**
+ * `batch_id` wire type — the portfolio half of the same split.
+ *
+ * `POST /csv/custom` relays `result.batchId` from `createBatch`
+ * (services/portfolioImportPipeline/stage.js), while `POST /batches/:id/commit`
+ * re-reads the id off the URL through `coercedIdSchema`. `createBatch` used to
+ * hand back node-postgres's BIGSERIAL STRING, so the two responses typed the
+ * same JSON field differently. NUMBER is now the single wire type (normalized at
+ * the stage boundary; pinned by tests/importPipeline.stage.test.js).
+ */
+describe('batch_id wire type', () => {
+  const BATCH_ID = 12;
+
+  // The pipeline is mocked, but its `batchId` comes from the REAL `createBatch`
+  // running over the mocked pg connection primed with what node-postgres
+  // actually returns for a BIGSERIAL: the STRING '12'. Before the stage-boundary
+  // fix these pins failed with `batch_id: "12"`.
+  const realBatchId = async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: String(BATCH_ID) }] });
+    return createBatch({ adapterName: 'generic' });
+  };
+  // createMockResponse's res.ok() funnels into the res.json spy as { ok, data }.
+  const payload = (res) => res.json.mock.calls[0][0].data;
+
+  it('POST /csv/custom emits a numeric batch_id on both the 201 and the 202', async () => {
+    runPortfolioImportPipeline.mockImplementation(async () => ({
+      requiresReview: false, batchId: await realBatchId(), total: 1, skipped: 0, imported: 1, duplicates: 0, errors: 0,
+    }));
+    const committed = mockResponse();
+    await routeHandlers['post:/csv/custom']({ file: file(), query: minimalQuery, body: {} }, committed);
+    expect(typeof payload(committed).batch_id).toBe('number');
+    expect(payload(committed).batch_id).toBe(BATCH_ID);
+
+    runPortfolioImportPipeline.mockImplementation(async () => ({
+      requiresReview: true, batchId: await realBatchId(), matchSourceCounts: { symbol: 1 },
+    }));
+    const review = mockResponse();
+    await routeHandlers['post:/csv/custom']({ file: file(), query: minimalQuery, body: {} }, review);
+    expect(typeof payload(review).batch_id).toBe('number');
+    expect(payload(review).batch_id).toStrictEqual(payload(committed).batch_id);
+  });
+
+  it('POST /batches/:id/commit emits the SAME type and value for the same batch', async () => {
+    runPortfolioImportPipeline.mockImplementation(async () => ({
+      requiresReview: true, batchId: await realBatchId(), matchSourceCounts: {},
+    }));
+    const started = mockResponse();
+    await routeHandlers['post:/csv/custom']({ file: file(), query: minimalQuery, body: {} }, started);
+
+    getBatch.mockResolvedValue({ id: BATCH_ID, status: 'awaiting_review' });
+    commitPortfolioImport.mockResolvedValue({ imported: 1, duplicates: 0, errors: 0 });
+    const committed = mockResponse();
+    await routeHandlers['post:/batches/:id/commit']({ params: { id: String(BATCH_ID) }, body: {} }, committed);
+
+    expect(typeof payload(committed).batch_id).toBe('number');
+    // The whole point of the finding: strict equality across the two responses.
+    expect(payload(committed).batch_id).toStrictEqual(payload(started).batch_id);
   });
 });

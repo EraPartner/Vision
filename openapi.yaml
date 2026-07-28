@@ -6200,7 +6200,7 @@ paths:
                         type: object
                         properties:
                           batch_id:
-                            type: string
+                            type: integer
                           total:
                             type: integer
                           imported:
@@ -6222,7 +6222,7 @@ paths:
                         type: object
                         properties:
                           batch_id:
-                            type: string
+                            type: integer
                           requires_review:
                             type: boolean
                           match_source_counts:

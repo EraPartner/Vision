@@ -52,7 +52,7 @@ const { default: transactionsRouter } = await import('../../src/routes/transacti
 const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
 // Same router behind an error handler in production mode (main.js:401 passes
 // `settings.isProduction`), so the 5xx message-sanitization branch
-// (errorHandler.js:139-141) is actually exercised rather than assumed.
+// (errorHandler.js:234-235) is actually exercised rather than assumed.
 const apiProd = routeAgent(transactionsRouter, {
   mountPath: '/api/transactions',
   isProduction: () => true,
@@ -492,37 +492,50 @@ describe('Transaction Routes', () => {
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
 
-    it('PIN: a malformed JSON body yields a 500 INTERNAL_SERVER_ERROR, not a 400', async () => {
-      // body-parser raises a SyntaxError carrying `status = 400`, but
-      // createErrorHandler only honours `err.status` for AppError instances
-      // (src/middleware/errorHandler.js:117-119), so a client typo is reported
-      // as a server fault. Pinning current production behavior — the mock-router
-      // harness never ran a body parser, so this path was invisible.
+    it('a malformed JSON body yields a 400 with the parser reason, in both modes', async () => {
+      // body-parser raises a SyntaxError carrying `status = 400` and
+      // `type = 'entity.parse.failed'`. It is not an AppError, so it used to
+      // collapse to a 500 INTERNAL_SERVER_ERROR — a client typo reported as a
+      // server fault. errorHandler.js now forwards the 4xx and echoes the
+      // trusted body-parser message (THE RULE, errorHandler.js:91-110).
       const res = await api
         .post('/api/transactions/')
         .set('Content-Type', 'application/json')
         .send('{"amount": ');
 
-      expect(res.status).toBe(500);
-      expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toMatch(/JSON/i);
+
+      // Production must not sanitize it away: the 4xx never reaches the 5xx branch.
+      const prod = await apiProd
+        .post('/api/transactions/')
+        .set('Content-Type', 'application/json')
+        .send('{"amount": ');
+      expect(prod.status).toBe(400);
+      expect(prod.body.error.message).toBe(res.body.error.message);
+      expect(prod.body.error.message).not.toBe(PROD_5XX_MESSAGE);
+
+      expect(transactionRepository.create).not.toHaveBeenCalled();
     });
 
-    it('PIN: an over-limit body yields a 500, and in production the reason is hidden', async () => {
-      // Same root cause as the malformed-JSON pin: body-parser's
-      // PayloadTooLargeError carries `status = 413` but is not an AppError, so
-      // errorHandler.js:117-119 maps it to 500. In production the 5xx branch
-      // (errorHandler.js:139-141) then replaces "request entity too large" with
-      // the generic message, so a client that posted a too-large bulk payload
-      // cannot tell why it failed.
+    it('an over-limit body yields a 413 whose reason survives production', async () => {
+      // body-parser's PayloadTooLargeError carries `status = 413` and
+      // `type = 'entity.too.large'`. It used to become a 500, and the 5xx
+      // sanitizer then replaced "request entity too large" with the generic
+      // message — a client posting an oversized bulk/import payload could not
+      // tell why it failed, and the typo counted against server-error monitoring.
       const oversize = { memo: 'x'.repeat(1024 * 1024 + 100) };
 
       const dev = await api.post('/api/transactions/').send(oversize);
-      expect(dev.status).toBe(500);
+      expect(dev.status).toBe(413);
+      expect(dev.body.error.code).toBe('VALIDATION_ERROR');
       expect(dev.body.error.message).toBe('request entity too large');
 
       const prod = await apiProd.post('/api/transactions/').send(oversize);
-      expect(prod.status).toBe(500);
-      expect(prod.body.error.message).toBe(PROD_5XX_MESSAGE);
+      expect(prod.status).toBe(413);
+      expect(prod.body.error.message).toBe('request entity too large');
+      expect(prod.body.error.message).not.toBe(PROD_5XX_MESSAGE);
     });
 
     it('the CSRF guard blocks a cross-site POST before the router runs', async () => {
