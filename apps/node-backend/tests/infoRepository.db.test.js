@@ -440,15 +440,19 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       await insertTxn({ date: TODAY(), amount: '-5.00' });
       await insertTxn({ date: TODAY(), amount: '1.00' });
 
+      // Observed window: the ledger's first in-window row is in month -2 (the
+      // month -9 row is outside the 6-month floor), so the denominators are
+      // months -2 and -1 — in months for the monthly figure, in calendar days
+      // for the daily one.
       const { rows } = await getTestPool().query(`
         SELECT (date_trunc('month', CURRENT_DATE)::date
-                - (date_trunc('month', CURRENT_DATE) - interval '6 months')::date) AS n
+                - (date_trunc('month', CURRENT_DATE) - interval '2 months')::date) AS n
       `);
       const calendarDays = Number(rows[0].n);
 
       const r = await infoRepository.getAverageVsCurrentSpending('EUR');
       expect(r.past_6_months.months_counted).toBe(2);
-      expect(r.past_6_months.avg_monthly_spending).toBe(15); // 30 / 2 months with rows
+      expect(r.past_6_months.avg_monthly_spending).toBe(15); // 30 over 2 elapsed months
       // Rounded to cents by the repository, so compare the rounded figure.
       expect(r.past_6_months.avg_daily_spending).toBe(Math.round((30 / calendarDays) * 100) / 100);
       expect(r.current_month.total_spending).toBe(5);
@@ -496,30 +500,69 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       return insertTxn({ date: rows[0].d, amount, ...opts });
     }
 
-    // PIN 1 — "average monthly spending over the past 6 months" divides by the
-    // number of months that contain ANY transaction, not by 6.
-    // infoRepositoryAverageVsCurrent.js:66-75 seeds a `monthlySpending` key for
-    // every month that has a row (the key is created before the `eur < 0`
-    // test), then divides by `monthKeys.length`. A ledger holding one spending
-    // month reports that month's whole figure as its 6-month average, and a
-    // month whose only rows are INCOME still counts in the divisor and dilutes
-    // it. The `avg_daily_spending` sibling on the same object does use the true
-    // calendar-day denominator, so the two disagree by construction: the
-    // fixture below reports 240/month next to 240/calendarDays per day.
-    it('PIN: avg_monthly_spending divides by populated months (income-only months included), not by 6', async () => {
+    // Was PIN 1 — "average monthly spending over the past 6 months" divided by
+    // the number of months that contain ANY transaction. A `monthlySpending`
+    // key was seeded for every month with a row (before the `eur < 0` test),
+    // then the total was divided by `monthKeys.length`: a gap month vanished
+    // from the divisor (inflating the average) and a month whose only rows were
+    // INCOME entered it (diluting the average with zero extra spend). The
+    // `avg_daily_spending` sibling on the same object divided by calendar days
+    // instead, so the two disagreed by construction.
+    //
+    // Both now divide the same numerator by the same observed window — the span
+    // from the ledger's first in-window transaction through the last complete
+    // month (infoRepositoryAverageVsCurrent.countObservedMonths, the same
+    // definition infoRepositoryForecast uses), one expressed in months and one
+    // in days.
+    it('divides by elapsed months since the ledger started, counting empty months as zeros', async () => {
       await seedBase();
       await insertTxnAt(monthDay(1, 10), '-240.00');
 
+      // A one-month-old ledger is not charged five phantom zeros: 240, not 40.
       const one = await infoRepository.getAverageVsCurrentSpending('EUR');
       expect(one.past_6_months.months_counted).toBe(1);
-      expect(one.past_6_months.avg_monthly_spending).toBe(240); // not 240 / 6 = 40
+      expect(one.past_6_months.avg_monthly_spending).toBe(240);
 
-      // Adding a month with ONLY income halves the reported average without a
-      // single euro of extra spending.
-      await insertTxnAt(monthDay(2, 10), '1000.00');
-      const two = await infoRepository.getAverageVsCurrentSpending('EUR');
-      expect(two.past_6_months.months_counted).toBe(2);
-      expect(two.past_6_months.avg_monthly_spending).toBe(120);
+      // Pushing history back to month -3 makes months -3 and -2 real zeros:
+      // the divisor is 3, not the 2 months that happen to carry rows.
+      await insertTxnAt(monthDay(3, 10), '-60.00');
+      const three = await infoRepository.getAverageVsCurrentSpending('EUR');
+      expect(three.past_6_months.months_counted).toBe(3);
+      expect(three.past_6_months.avg_monthly_spending).toBe(100); // 300 / 3, not 300 / 2 = 150
+    });
+
+    it('is unmoved by an income-only month INSIDE an established span (an income row that is the ledger-oldest row still extends the span, matching the forecast doctrine)', async () => {
+      await seedBase();
+      await insertTxnAt(monthDay(3, 10), '-240.00');
+
+      const before = await infoRepository.getAverageVsCurrentSpending('EUR');
+      expect(before.past_6_months.months_counted).toBe(3);
+      expect(before.past_6_months.avg_monthly_spending).toBe(80); // 240 over months -3..-1
+
+      // A month holding ONLY income adds no spend and no new observed month
+      // (month -1 was already inside the span), so the average cannot move.
+      await insertTxnAt(monthDay(1, 10), '1000.00');
+      const after = await infoRepository.getAverageVsCurrentSpending('EUR');
+      expect(after.past_6_months.months_counted).toBe(3);
+      expect(after.past_6_months.avg_monthly_spending).toBe(80); // was 240 → 120 before the fix
+    });
+
+    it('keeps avg_monthly_spending and avg_daily_spending on one denominator', async () => {
+      await seedBase();
+      await insertTxnAt(monthDay(2, 10), '-240.00');
+
+      const { rows } = await getTestPool().query(`
+        SELECT (date_trunc('month', CURRENT_DATE)::date
+                - (date_trunc('month', CURRENT_DATE) - interval '2 months')::date) AS n
+      `);
+      const observedDays = Number(rows[0].n);
+
+      const r = await infoRepository.getAverageVsCurrentSpending('EUR');
+      expect(r.past_6_months.months_counted).toBe(2);
+      expect(r.past_6_months.avg_monthly_spending).toBe(120);
+      // Same 240 spread over the same window, in days rather than months —
+      // previously 240/183 next to 240/2, a factor-3 disagreement.
+      expect(r.past_6_months.avg_daily_spending).toBe(Math.round((240 / observedDays) * 100) / 100);
     });
 
     // Was PIN 2 — net worth's stamp-based history walk hid never-stamped

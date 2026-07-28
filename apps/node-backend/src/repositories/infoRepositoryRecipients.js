@@ -42,10 +42,20 @@ export const recipientInsightsRepository = {
     const params = excl.params;
     const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
+    // Grouped per (recipient, DATE, currency) — the extra `t.date` key exists so
+    // the conversion below can use each row's OWN date rate, exactly as
+    // getRecipientByYear (:212) and getRecipientPivot (:324) do. Aggregating
+    // per recipient first and converting the SUM afterwards would have to pick a
+    // single rate for a multi-date total, which is what made Top merchants
+    // report a different EUR figure than by-year/pivot for the same recipient.
+    // amount < 0 is pinned, so ABS distributes over the same-sign SUM and
+    // SUM-then-convert per date is identical to converting each row; tx_count
+    // and the MIN/MAX date bounds are re-reduced per recipient in JS below.
     const topRawResult = await query(`
       SELECT
         COALESCE(pr.name, r.name)   AS recipient_name,
         COALESCE(pr.id, r.id)       AS recipient_id,
+        t.date,
         t.currency,
         SUM(ABS(t.amount))          AS total_abs_amount,
         COUNT(*)                    AS tx_count,
@@ -58,12 +68,16 @@ export const recipientInsightsRepository = {
         AND t.is_active = true
         AND t.is_transfer = false
         ${exclusionWhere}
-      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.currency
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `, params);
 
+    // Historical per-date rates, matching getRecipientByYear / getRecipientPivot.
+    // Converting at the LATEST rate here made one 2024 USD purchase read 90 in
+    // Top merchants and 25 in the by-year / pivot views of the same recipient.
     const topConverted = await convertRowsToEur(
       mapRowsForAmountConversion(topRawResult.rows, 'total_abs_amount', false),
-      targetCurrency
+      targetCurrency,
+      { useHistoricalRatesByDate: true, dateField: 'date' }
     );
 
     /**

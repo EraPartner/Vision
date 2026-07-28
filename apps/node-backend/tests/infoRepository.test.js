@@ -808,7 +808,10 @@ describe('InfoRepository', () => {
             { amount: '-5', currency: 'EUR', date: '2026-03-03' },
             { amount: '1', currency: 'EUR', date: '2026-03-03' },
           ],
-        });
+        })
+        // Third call: the unfiltered ledger-start probe. A first row back at the
+        // window floor means the full 6 observed months apply.
+        .mockResolvedValueOnce({ rows: [{ first_date: '2025-09-04' }] });
 
       // Pin the clock so the calendar-day denominators are deterministic.
       vi.useFakeTimers();
@@ -816,9 +819,12 @@ describe('InfoRepository', () => {
       try {
         const result = await infoRepository.getAverageVsCurrentSpending('EUR');
 
-        // 6-month window = 2025-09-01 → 2026-03-01 = 181 calendar days; spend 30.
-        // Old (buggy) code divided by 2 transaction days → 15.
+        // Observed window = 2025-09-01 → 2026-03-01 = 6 months = 181 calendar
+        // days; spend 30. Old (buggy) code divided by 2 transaction days → 15.
         expect(result.past_6_months.avg_daily_spending).toBeCloseTo(30 / 181, 2);
+        // The monthly sibling divides the SAME 30 by the SAME window in months.
+        expect(result.past_6_months.months_counted).toBe(6);
+        expect(result.past_6_months.avg_monthly_spending).toBeCloseTo(30 / 6, 2);
         expect(result.current_month.total_spending).toBe(5);
         // daysElapsed is the calendar day (15), not the 1 day that had a txn.
         expect(result.current_month.days_elapsed).toBe(15);
@@ -845,11 +851,20 @@ describe('InfoRepository', () => {
 
       await infoRepository.getAverageVsCurrentSpending('EUR');
 
-      for (const [sql] of query.mock.calls) {
+      // Calls 0/1 are the two aggregate windows; call 2 is the ledger-start
+      // probe, which is a MIN(date) scalar and has nothing to group by.
+      for (const [sql] of query.mock.calls.slice(0, 2)) {
         expect(sql).toContain('GROUP BY t.date, t.currency');
         expect(sql).toContain('SUM(t.amount)');
         expect(sql).not.toMatch(/LIMIT/i);
       }
+      // The average denominator must be probed UNFILTERED: an exclusion or the
+      // ADR-083 transfer predicate emptying the oldest months would silently
+      // re-base the divisor (see infoRepositoryForecast's sqlLedgerStart).
+      const probeSql = query.mock.calls[2][0];
+      expect(probeSql).toContain('MIN(t.date)');
+      expect(probeSql).not.toMatch(/is_transfer/);
+      expect(probeSql).not.toMatch(/LIMIT/i);
     });
   });
 });

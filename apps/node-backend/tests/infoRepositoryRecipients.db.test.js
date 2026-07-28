@@ -211,6 +211,51 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       });
       expect(exclPrimary.topMerchants.map((m) => m.name).sort()).toEqual(['Colruyt', 'Electrabel']);
     });
+
+    // Was PIN 1 — the three recipient surfaces disagreed on FX. getRecipientByYear
+    // and getRecipientPivot both pass `{ useHistoricalRatesByDate: true,
+    // dateField: 'date' }`, converting each row at the rate for ITS date;
+    // top merchants passed no options at all and converted every row at the
+    // CURRENT `is_latest` rate, so one USD purchase read 90 in "Top merchants"
+    // and 25 in "Top recipients by year" / the recipient pivot on the same page.
+    // The top-merchants query now carries `t.date` in its GROUP BY so it can be
+    // converted per date like its siblings.
+    it('converts top merchants at each row date historical rate, agreeing with by-year and pivot', async () => {
+      await seedBase();
+      await insertRate('USD', '2024-06-01', '0.25');
+      await insertRate('USD', '2026-01-01', '0.90', true);
+      await insertTxn({ date: '2024-06-01', amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
+
+      const insights = await recipientInsightsRepository.getRecipientInsights('EUR');
+      const byYear = await recipientInsightsRepository.getRecipientByYear('EUR');
+      const pivot = await recipientInsightsRepository.getRecipientPivot([], 'EUR');
+
+      expect(merchant(insights, 'Colruyt').totalSpend).toBe(25); // 2024-06-01 rate, not the latest 0.90
+      expect(byYear.recipientsByYear['2024'][0].totalSpend).toBe(25);
+      expect(pivot.recipientPivot['2024-06'][0].total).toBe(25);
+    });
+
+    // Per-date conversion must not disturb the per-recipient reduction: two
+    // purchases on DIFFERENT dates at different rates still collapse into one
+    // merchant row whose count, average and first/last-seen bounds span both.
+    it('sums a recipient across dates at each date own rate, keeping count and seen-dates', async () => {
+      await seedBase();
+      await insertRate('USD', '2024-06-01', '0.25');
+      await insertRate('USD', '2024-09-01', '0.50');
+      await insertRate('USD', '2026-01-01', '0.90', true);
+      await insertTxn({ date: '2024-06-01', amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
+      await insertTxn({ date: '2024-09-01', amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
+
+      const r = await recipientInsightsRepository.getRecipientInsights('EUR');
+      expect(r.topMerchants).toHaveLength(1);
+      expect(merchant(r, 'Colruyt')).toMatchObject({
+        totalSpend: 75, // 25 + 50, not 2 x 90 at the latest rate
+        transactionCount: 2,
+        avgAmount: 37.5,
+        firstSeen: '2024-06-01',
+        lastSeen: '2024-09-01',
+      });
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -397,31 +442,6 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
   // PINNED real-DB behaviours (see the suite report — do NOT "fix" here)
   // ───────────────────────────────────────────────────────────────────────────
   describe('pinned discrepancies (current real behaviour)', () => {
-    // PIN 1 — the three recipient surfaces disagree on FX.
-    // getRecipientByYear (infoRepositoryRecipients.js:217-221) and
-    // getRecipientPivot (329-333) both pass
-    // `{ useHistoricalRatesByDate: true, dateField: 'date' }`, converting each
-    // row at the rate for ITS date; getRecipientInsights' top-merchants
-    // conversion (64-67) passes no options at all, so it converts every row at
-    // the CURRENT `is_latest` rate. The same USD purchase therefore contributes
-    // a different EUR figure to "Top merchants" than to "Top recipients by
-    // year" / the recipient pivot on the same page. The mock suite stubbed
-    // convertRowsToEur wholesale and could not see the argument difference
-    // become a numeric one.
-    it('PIN: top merchants convert at the LATEST rate while by-year/pivot use the historical one', async () => {
-      await seedBase();
-      await insertRate('USD', '2024-06-01', '0.25');
-      await insertRate('USD', '2026-01-01', '0.90', true);
-      await insertTxn({ date: '2024-06-01', amount: '-100.00', currency: 'USD', recipientId: rec.colruyt });
-
-      const insights = await recipientInsightsRepository.getRecipientInsights('EUR');
-      const byYear = await recipientInsightsRepository.getRecipientByYear('EUR');
-      const pivot = await recipientInsightsRepository.getRecipientPivot([], 'EUR');
-
-      expect(merchant(insights, 'Colruyt').totalSpend).toBe(90); // latest rate 0.90
-      expect(byYear.recipientsByYear['2024'][0].totalSpend).toBe(25); // 2024-06-01 rate
-      expect(pivot.recipientPivot['2024-06'][0].total).toBe(25);
-    });
 
     // PIN 2 — selecting an ALIAS in the pivot returns a series labelled with
     // the PRIMARY but holding only the alias's spend.
