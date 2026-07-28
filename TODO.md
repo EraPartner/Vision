@@ -881,7 +881,7 @@ look-changing one.
   - (a) `infoRepository.js:9-10` advertises `getStatistics` and `getTransactionSummary`; neither exists (the barrel's exact key-set is now pinned). (b) `infoRepositoryTags.js` exists but is not assembled into the barrel — confirm whether intentional. (c) `infoRepositoryMonthly.js:277-279` accumulates money with raw `+=` while the MV path uses Decimal — no observable drift at fixture scale, but inconsistent.
   - Fix: correct the doc comment; decide (b); align (c) on Decimal.
 
-- [ ] **`batch_id` is a string on `POST /api/import/csv` but a number on the review-commit route — same JSON field, two wire types (both import pipelines)** 🔼
+- [x] **`batch_id` is a string on `POST /api/import/csv` but a number on the review-commit route — same JSON field, two wire types (both import pipelines)** 🔼 ✅ 2026-07-28 · 6bc3ace (NUMBER chosen — matches coercedIdSchema, frontend guards, and MSW; documented with the >2^53 escape hatch. Number(id) at both stage boundaries, typedefs tightened, openapi.yaml string→integer, frontend generated types + imports.ts followed. Reader audit found a LIVE bug this fixes: the SSE review_required event relayed the string that z.number() rejects — imports needing review failed the progress stream. Cross-route strict-equality pins through the real createBatch; fail-against-old proven with 8 failures. MSW response-shape divergence filed below)
   - ↪ _from: Orchestration session 2026-07-28 · checkJs ratchet services pass (noticed while typing importPipeline; typed as current reality `string|number`)_
   - `apps/node-backend/src/services/importPipeline/stage.js:29` returns `result.rows[0].id` — pg emits BIGSERIAL as a **string** — while route-driven calls pass a `Number()` (`lib/importBatchIds.js:18` `coercedIdSchema`). Wire consequence: `routes/importRoutes.js:48` responds `batch_id: "<string>"`, `routes/importRoutes.js:570` responds `batch_id: <number>`. Identical split in the portfolio pipeline (`portfolioImportPipeline/stage.js:33` vs its index). Any client doing strict-equality on batch ids across the two responses breaks.
   - Fix: normalize at the boundary — pick one wire type (number, matching the coerced input schema, unless ids can exceed 2^53) and convert at stage/response; then tighten the `ImportBatchId` typedef from `string|number` to the chosen type.
@@ -896,7 +896,7 @@ look-changing one.
   - `apps/node-backend/src/services/portfolioPerformanceSnapshotService.js:41-43` applies `?? 0` to `stocks_etfs_invested`/`crypto_invested`/`metals_invested`, making them `number` when NULL and `string` otherwise (typed honestly as `string|number` in `PerformanceSnapshot`). Harmless today (`toDecimal` accepts both) but an inconsistency trap.
   - Fix: default with `?? '0'` to keep the NUMERIC-string contract uniform; tighten the typedef.
 
-- [ ] **`createErrorHandler` honours `err.status` only on AppError instances — malformed JSON and oversized payloads surface as 500, the latter with its reason hidden in production** 🔼
+- [x] **`createErrorHandler` honours `err.status` only on AppError instances — malformed JSON and oversized payloads surface as 500, the latter with its reason hidden in production** 🔼 ✅ 2026-07-28 · 6bc3ace (two-part rule documented in the handler: integer 4xx status/statusCode on non-AppErrors is forwarded, but the message is echoed only for body-parser allowlist types — other forwarded 4xx get a generic per-status phrase, so a status-bearing internal error can't leak wording. Malformed JSON → 400, >1MB → 413 with its reason surviving production; loan-schedule errors 500→400. All non-AppError status carriers in src/ audited (Ollama upstream statuses stay wrapped/generic). Both pins flipped + 14 new tests incl. production mode; fail-against-old proven with 12 failures)
   - ↪ _from: Orchestration session 2026-07-28 · supertest harness migration (pinned in tests/routes/transactions.test.js: "PIN: a malformed JSON body yields a 500..." and "PIN: an over-limit body yields a 500...")_
   - `apps/node-backend/src/middleware/errorHandler.js:117-119` — body-parser's HttpErrors carry a correct `.status` (SyntaxError 400 for truncated JSON, PayloadTooLargeError 413 for a >1MB body) but are not AppError instances, so both are reported as 500 INTERNAL_SERVER_ERROR. Because the 413 is thereby 5xx, the production branch (`errorHandler.js:139-141`) replaces "request entity too large" with the generic message — a client posting an oversized bulk/import payload cannot tell why it failed, and client typos count against server-error monitoring.
   - Fix: honour a numeric `err.status`/`err.statusCode` in the 4xx range for non-AppError errors (mapping to a sensible code, e.g. BAD_REQUEST/PAYLOAD_TOO_LARGE) before falling through to 500; flip both pins.
@@ -955,6 +955,16 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · category-name fix pass (noticed; consistent across both planned repos, so possibly deliberate — decide, don't assume)_
   - `apps/node-backend/src/repositories/plannedTransactionRepository.js` and `infoRepositoryPlanned.js` project `r.name` while transactions use `COALESCE(pr.name, r.name)`: a planned row under an alias shows the alias name, the equivalent transaction shows the primary's.
   - Fix: decide the intended display (probably the transactions convention) and align both planned repos; pin on the alias topology.
+
+- [ ] **MSW mock for `POST /api/import/csv` returns a response shape the backend never emits — and neither import route has a contract test, which is how the batch_id wire split survived** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · batch_id fix pass (noticed; root cause of the missed detection)_
+  - `apps/frontend/src/test/msw/handlers.ts:488,491` return `{ batch_id, rows, status: "queued" }` where the real route emits `total/imported/duplicates/errors/batch_id/auto_linked_count/status/error_message/links` (`routes/importRoutes.js:35-63`); no `contracts.test.ts` entry covers either csv route.
+  - Fix: align the MSW shapes with the real responses and add contract entries for both import routes.
+
+- [ ] **`loanSchedule` throws plain `Error` with `statusCode` instead of `ValidationError` — its useful message is now genericized to "Bad Request"** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · errorHandler fix pass (noticed; the fix upgraded these 500→400 but the safe "Invalid loan configuration: …" text is replaced by the generic phrase under the message allowlist)_
+  - `apps/node-backend/src/services/calculations/loanSchedule.js:70,102`, surfaced via `routes/plannedTransactions.js:247`.
+  - Fix: throw `ValidationError` (authored message, full fidelity through the handler's AppError path).
 
 
 
