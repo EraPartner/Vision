@@ -6,18 +6,17 @@
  * parseBrokerageParams' multipart-string coercion, buildPortfolioConfig's
  * required/enum/trim/default build, and normalizePortfolioParserConfig's
  * pass-through semantics — so the swap cannot change the wire.
+ *
+ * Driven over HTTP against the real router (tests/helpers/routeApp.js),
+ * mirroring importValidationPins.test.js: multer is stubbed to a pass-through
+ * (no real multipart parsing) and the uploaded file is injected by a `before`
+ * middleware, the same per-mount slot main.js uses (main.js:326 mounts
+ * importRateLimiter there for this router).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockConnection } from '../helpers/repoMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('multer', () => {
   const multer = vi.fn(() => ({
@@ -83,16 +82,25 @@ import { createBatch } from '../../src/services/portfolioImportPipeline/stage.js
 import { query as dbQuery } from '../../src/database/connection.js';
 import { getBatch, overrideInvestment } from '../../src/services/portfolioImportBatchService.js';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
-import { ValidationError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/portfolioImportRoutes.js');
 
-const mockResponse = () => createMockResponse();
-const file = () => ({ path: '/tmp/pin.csv', originalname: 'pin.csv', size: 10 });
+const { default: portfolioImportRouter } = await import('../../src/routes/portfolioImportRoutes.js');
+
+const UPLOAD = { path: '/tmp/pin.csv', originalname: 'pin.csv', size: 10 };
+const BASE = '/api/portfolio/import';
+// multer is stubbed, so nothing populates req.file — inject it in the same
+// per-mount slot main.js uses.
+const api = routeAgent(portfolioImportRouter, {
+  mountPath: BASE,
+  before: [(req, _res, next) => { req.file = { ...UPLOAD }; next(); }],
+});
+
+/** Encode a path segment so ids with spaces survive the URL round-trip. */
+const seg = (v) => encodeURIComponent(String(v));
 
 const minimalQuery = { date_column: 'D', name_column: 'N', default_asset_class: 'etf' };
 
 const runCustom = (query, body = {}) =>
-  routeHandlers['post:/csv/custom']({ file: file(), query, body }, mockResponse());
+  api.post(`${BASE}/csv/custom`).query(query).send(body);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -105,51 +113,55 @@ beforeEach(() => {
 describe('batch-id coercion pins', () => {
   it("accepts '12.0' / ' 12 ' via Number() coercion", async () => {
     getBatch.mockResolvedValue({ id: 12, status: 'complete' });
-    await routeHandlers['get:/batches/:id']({ params: { id: '12.0' } }, mockResponse());
+
+    await api.get(`${BASE}/batches/${seg('12.0')}`).expect(200);
     expect(getBatch).toHaveBeenLastCalledWith(12);
-    await routeHandlers['get:/batches/:id']({ params: { id: ' 12 ' } }, mockResponse());
+
+    await api.get(`${BASE}/batches/${seg(' 12 ')}`).expect(200);
     expect(getBatch).toHaveBeenLastCalledWith(12);
   });
 
   it('rejects fractional/garbage ids on the commit and override sites', async () => {
-    await expect(routeHandlers['post:/batches/:id/commit']({ params: { id: '2.5' }, body: {} }, mockResponse()))
-      .rejects.toBeInstanceOf(ValidationError);
-    await expect(routeHandlers['post:/batches/:id/rows/:rowId/investment-override'](
-      { params: { id: '3.5', rowId: '1' }, body: {} }, mockResponse(),
-    )).rejects.toBeInstanceOf(ValidationError);
+    const res1 = await api.post(`${BASE}/batches/${seg('2.5')}/commit`).send({}).expect(400);
+    expect(res1.body.error.code).toBe('VALIDATION_ERROR');
+
+    const res2 = await api.post(`${BASE}/batches/${seg('3.5')}/rows/1/investment-override`).send({}).expect(400);
+    expect(res2.body.error.code).toBe('VALIDATION_ERROR');
+
     expect(getBatch).not.toHaveBeenCalled();
   });
 
   it('coerces both ids on the investment-override site', async () => {
     overrideInvestment.mockResolvedValue(1);
-    await routeHandlers['post:/batches/:id/rows/:rowId/investment-override'](
-      { params: { id: '5.0', rowId: ' 6 ' }, body: { investment_id: null } },
-      mockResponse(),
-    );
+
+    await api.post(`${BASE}/batches/${seg('5.0')}/rows/${seg(' 6 ')}/investment-override`)
+      .send({ investment_id: null })
+      .expect(200);
+
     expect(overrideInvestment).toHaveBeenCalledWith({ batchId: 5, rowId: 6, investmentId: null });
   });
 });
 
 describe('parseBrokerageParams pins (POST /csv/custom)', () => {
   it("coerces multipart strings: is_brokerage 'true'/'false', account_id '7'", async () => {
-    await runCustom({ ...minimalQuery, is_brokerage: 'true', account_id: '7' });
+    await runCustom({ ...minimalQuery, is_brokerage: 'true', account_id: '7' }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
       expect.objectContaining({ isBrokerage: true, accountId: 7 }),
     );
 
-    await runCustom({ ...minimalQuery, is_brokerage: 'false', account_id: '7' });
+    await runCustom({ ...minimalQuery, is_brokerage: 'false', account_id: '7' }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
       expect.objectContaining({ isBrokerage: false, accountId: 7 }),
     );
 
-    await runCustom({ ...minimalQuery, is_brokerage: true, account_id: 7 });
+    await runCustom({ ...minimalQuery, is_brokerage: true, account_id: 7 }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
       expect.objectContaining({ isBrokerage: true, accountId: 7 }),
     );
   });
 
   it('treats an empty account_id as absent and defaults is_brokerage to false', async () => {
-    await runCustom({ ...minimalQuery, account_id: '' });
+    await runCustom({ ...minimalQuery, account_id: '' }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
       expect.objectContaining({ isBrokerage: false, accountId: undefined }),
     );
@@ -157,11 +169,11 @@ describe('parseBrokerageParams pins (POST /csv/custom)', () => {
 
   it('rejects non-integer account ids and a brokerage import without an account', async () => {
     for (const account_id of ['abc', '7.5', '-1', '0']) {
-      await expect(runCustom({ ...minimalQuery, account_id }))
-        .rejects.toThrow('account_id must be a positive integer');
+      const res = await runCustom({ ...minimalQuery, account_id }).expect(400);
+      expect(res.body.error.message).toContain('account_id must be a positive integer');
     }
-    await expect(runCustom({ ...minimalQuery, is_brokerage: 'true' }))
-      .rejects.toThrow(/brokerage import requires account_id/);
+    const res = await runCustom({ ...minimalQuery, is_brokerage: 'true' }).expect(400);
+    expect(res.body.error.message).toMatch(/brokerage import requires account_id/);
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
   });
 });
@@ -173,7 +185,7 @@ describe('buildPortfolioConfig pins (POST /csv/custom)', () => {
       default_asset_class: 'stock', default_type: 'sell', date_format: ' %d-%m-%Y ',
       separator: ';', encoding: ' latin1 ', skip_rows: '2.9',
       type_mapping: '{"K":"buy"}', adapter_name: ' custom ',
-    });
+    }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenCalledWith(expect.objectContaining({
       adapterName: 'custom',
       defaultAssetClass: 'stock',
@@ -195,7 +207,7 @@ describe('buildPortfolioConfig pins (POST /csv/custom)', () => {
   });
 
   it('applies defaults for a minimal config', async () => {
-    await runCustom(minimalQuery);
+    await runCustom(minimalQuery).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenCalledWith(expect.objectContaining({
       adapterName: 'portfolio_generic',
       defaultType: 'buy',
@@ -207,58 +219,67 @@ describe('buildPortfolioConfig pins (POST /csv/custom)', () => {
   });
 
   it('empty separator falls back to ","; malformed type_mapping falls back to {}', async () => {
-    await runCustom({ ...minimalQuery, separator: '', type_mapping: 'not-json' });
+    await runCustom({ ...minimalQuery, separator: '', type_mapping: 'not-json' }).expect(201);
     expect(runPortfolioImportPipeline).toHaveBeenCalledWith(expect.objectContaining({
       customConfig: expect.objectContaining({ separator: ',', type_mapping: {} }),
     }));
   });
 
   it('rejects each invalid field with its message', async () => {
-    await expect(runCustom({ name_column: 'N', default_asset_class: 'etf' }))
-      .rejects.toThrow('date_column is required');
-    await expect(runCustom({ date_column: 'D', default_asset_class: 'etf' }))
-      .rejects.toThrow('map at least one of symbol_column or name_column');
-    await expect(runCustom({ date_column: 'D', name_column: 'N' }))
-      .rejects.toThrow('default_asset_class is required and must be a valid asset class');
-    await expect(runCustom({ ...minimalQuery, default_asset_class: 'house' }))
-      .rejects.toThrow('default_asset_class is required and must be a valid asset class');
-    await expect(runCustom({ ...minimalQuery, default_type: 'yolo' }))
-      .rejects.toThrow('default_type "yolo" is not a valid transaction type');
-    await expect(runCustom({ ...minimalQuery, separator: ';;' }))
-      .rejects.toThrow('separator must be a single character');
-    await expect(runCustom({ ...minimalQuery, skip_rows: '-1' }))
-      .rejects.toThrow('skip_rows must be zero or a positive integer');
+    let res = await runCustom({ name_column: 'N', default_asset_class: 'etf' }).expect(400);
+    expect(res.body.error.message).toContain('date_column is required');
+
+    res = await runCustom({ date_column: 'D', default_asset_class: 'etf' }).expect(400);
+    expect(res.body.error.message).toContain('map at least one of symbol_column or name_column');
+
+    res = await runCustom({ date_column: 'D', name_column: 'N' }).expect(400);
+    expect(res.body.error.message).toContain('default_asset_class is required and must be a valid asset class');
+
+    res = await runCustom({ ...minimalQuery, default_asset_class: 'house' }).expect(400);
+    expect(res.body.error.message).toContain('default_asset_class is required and must be a valid asset class');
+
+    res = await runCustom({ ...minimalQuery, default_type: 'yolo' }).expect(400);
+    expect(res.body.error.message).toContain('default_type "yolo" is not a valid transaction type');
+
+    res = await runCustom({ ...minimalQuery, separator: ';;' }).expect(400);
+    expect(res.body.error.message).toContain('separator must be a single character');
+
+    res = await runCustom({ ...minimalQuery, skip_rows: '-1' }).expect(400);
+    expect(res.body.error.message).toContain('skip_rows must be zero or a positive integer');
+
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
   });
 });
 
 describe('normalizePortfolioParserConfig pins (POST /parsers)', () => {
-  const create = (config) =>
-    routeHandlers['post:/parsers']({ body: { name: 'P', config } }, mockResponse());
+  const create = (config) => api.post(`${BASE}/parsers`).send({ name: 'P', config });
 
   it('passes a valid config through UNCHANGED, unknown keys and all', async () => {
     const config = {
       dateColumn: ' Date ', symbolColumn: 'Sym', defaultAssetClass: 'stock',
       memoColumn: 42, separator: ';;', custom_extra: { nested: true },
     };
-    await create(config);
+    await create(config).expect(201);
     expect(customParserConfigRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ config, kind: 'portfolio' }),
     );
   });
 
   it('rejects missing dateColumn / symbol-or-name / bad asset class', async () => {
-    await expect(create({ symbolColumn: 'S', defaultAssetClass: 'stock' }))
-      .rejects.toThrow('config.dateColumn is required');
-    await expect(create({ dateColumn: 'D', defaultAssetClass: 'stock' }))
-      .rejects.toThrow('config requires symbolColumn or nameColumn');
-    await expect(create({ dateColumn: 'D', nameColumn: 'N', defaultAssetClass: 'house' }))
-      .rejects.toThrow('config.defaultAssetClass must be a valid asset class');
+    let res = await create({ symbolColumn: 'S', defaultAssetClass: 'stock' }).expect(400);
+    expect(res.body.error.message).toContain('config.dateColumn is required');
+
+    res = await create({ dateColumn: 'D', defaultAssetClass: 'stock' }).expect(400);
+    expect(res.body.error.message).toContain('config requires symbolColumn or nameColumn');
+
+    res = await create({ dateColumn: 'D', nameColumn: 'N', defaultAssetClass: 'house' }).expect(400);
+    expect(res.body.error.message).toContain('config.defaultAssetClass must be a valid asset class');
   });
 
   it('rejects a non-object or array config', async () => {
     for (const config of [null, 'str', [1]]) {
-      await expect(create(config)).rejects.toThrow('Missing or invalid "config"');
+      const res = await create(config).expect(400);
+      expect(res.body.error.message).toContain('Missing or invalid "config"');
     }
   });
 });
@@ -284,41 +305,35 @@ describe('batch_id wire type', () => {
     dbQuery.mockResolvedValueOnce({ rows: [{ id: String(BATCH_ID) }] });
     return createBatch({ adapterName: 'generic' });
   };
-  // createMockResponse's res.ok() funnels into the res.json spy as { ok, data }.
-  const payload = (res) => res.json.mock.calls[0][0].data;
 
   it('POST /csv/custom emits a numeric batch_id on both the 201 and the 202', async () => {
     runPortfolioImportPipeline.mockImplementation(async () => ({
       requiresReview: false, batchId: await realBatchId(), total: 1, skipped: 0, imported: 1, duplicates: 0, errors: 0,
     }));
-    const committed = mockResponse();
-    await routeHandlers['post:/csv/custom']({ file: file(), query: minimalQuery, body: {} }, committed);
-    expect(typeof payload(committed).batch_id).toBe('number');
-    expect(payload(committed).batch_id).toBe(BATCH_ID);
+    const committed = await runCustom(minimalQuery, {}).expect(201);
+    expect(typeof committed.body.data.batch_id).toBe('number');
+    expect(committed.body.data.batch_id).toBe(BATCH_ID);
 
     runPortfolioImportPipeline.mockImplementation(async () => ({
       requiresReview: true, batchId: await realBatchId(), matchSourceCounts: { symbol: 1 },
     }));
-    const review = mockResponse();
-    await routeHandlers['post:/csv/custom']({ file: file(), query: minimalQuery, body: {} }, review);
-    expect(typeof payload(review).batch_id).toBe('number');
-    expect(payload(review).batch_id).toStrictEqual(payload(committed).batch_id);
+    const review = await runCustom(minimalQuery, {}).expect(202);
+    expect(typeof review.body.data.batch_id).toBe('number');
+    expect(review.body.data.batch_id).toStrictEqual(committed.body.data.batch_id);
   });
 
   it('POST /batches/:id/commit emits the SAME type and value for the same batch', async () => {
     runPortfolioImportPipeline.mockImplementation(async () => ({
       requiresReview: true, batchId: await realBatchId(), matchSourceCounts: {},
     }));
-    const started = mockResponse();
-    await routeHandlers['post:/csv/custom']({ file: file(), query: minimalQuery, body: {} }, started);
+    const started = await runCustom(minimalQuery, {}).expect(202);
 
     getBatch.mockResolvedValue({ id: BATCH_ID, status: 'awaiting_review' });
     commitPortfolioImport.mockResolvedValue({ imported: 1, duplicates: 0, errors: 0 });
-    const committed = mockResponse();
-    await routeHandlers['post:/batches/:id/commit']({ params: { id: String(BATCH_ID) }, body: {} }, committed);
+    const committed = await api.post(`${BASE}/batches/${BATCH_ID}/commit`).send({}).expect(200);
 
-    expect(typeof payload(committed).batch_id).toBe('number');
+    expect(typeof committed.body.data.batch_id).toBe('number');
     // The whole point of the finding: strict equality across the two responses.
-    expect(payload(committed).batch_id).toStrictEqual(payload(started).batch_id);
+    expect(committed.body.data.batch_id).toStrictEqual(started.body.data.batch_id);
   });
 });

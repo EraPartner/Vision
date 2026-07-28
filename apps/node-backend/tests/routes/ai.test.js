@@ -1,19 +1,29 @@
 /**
  * AI chat route tests.
  *
- * Focus: POST /api/ai/chat/stream SSE route + shared validator via /chat.
- * Mirrors the mockRouter pattern from tests/routes/import.test.js.
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js). `router.use(enforceAiChatEnabled)` (ai.js:~120)
+ * was never reachable under the old mock-router harness — `router.use()` was
+ * recorded but never invoked, so `/chat` and `/chat/stream` validation errors
+ * were being asserted as rejected promises from a handler called directly,
+ * bypassing Express entirely. They now travel through the real error handler
+ * and come back as ADR-026 envelopes.
+ *
+ * SSE stream ('/chat/stream'): the harness's real HTTP server means
+ * `res.writeHead`/`res.write`/`res.end` are the genuine Node response methods,
+ * not stubs. supertest buffers a `text/event-stream` body (matches its
+ * `text/*` buffering rule) into `res.text`, so SSE frames are asserted by
+ * parsing that raw string instead of inspecting `res.write.mock.calls`.
+ *
+ * Per the routeApp.js fidelity map, the app-level `/api/ai/chat` rate limiter
+ * (main.js:342-348, only mounted when `settings.aiChat.enabled`) is a
+ * module-scoped per-IP counter and is deliberately NOT reproduced here — it
+ * would 429 this suite's own many `/chat` requests. It is a real gap this
+ * suite cannot see; not exercised in either the old or new harness.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
 vi.mock('../../src/services/aiChatService.js', () => {
   class AiChatServiceError extends Error {
@@ -72,48 +82,32 @@ import {
   renameConversation,
   runChatTurn,
 } from '../../src/services/aiChatService.js';
-import { ValidationError, AppError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/ai.js');
+import settings from '../../src/config/config.js';
+
+const { default: aiRouter } = await import('../../src/routes/ai.js');
+
+const api = routeAgent(aiRouter, { mountPath: '/api/ai' });
+const BASE = '/api/ai';
 
 const UUID = '11111111-2222-4333-8444-555555555555';
 
-function makeListenerStub() {
-  const listeners = {};
-  return {
-    on: vi.fn((event, cb) => {
-      listeners[event] = listeners[event] || [];
-      listeners[event].push(cb);
-    }),
-    emit(event, ...args) {
-      (listeners[event] || []).forEach((cb) => cb(...args));
-    },
-  };
-}
-
-function mockResponse() {
-  return createMockResponse(makeListenerStub());
-}
-
-function mockSseResponse() {
-  return {
-    writeHead: vi.fn(),
-    write: vi.fn(),
-    end: vi.fn(),
-    writableEnded: false,
-    ...makeListenerStub(),
-  };
-}
-
-function mockStreamReq(body) {
-  const listeners = {};
-  return {
-    body,
-    on: vi.fn((event, cb) => {
-      listeners[event] = listeners[event] || [];
-      listeners[event].push(cb);
-    }),
-    emit: (event, ...args) => (listeners[event] || []).forEach((cb) => cb(...args)),
-  };
+/**
+ * Split a buffered `text/event-stream` body into `{ name, data }` frames,
+ * skipping the leading padding comment (a `:`-prefixed line, ignored by the
+ * SSE spec — used to flush the browser's buffering threshold) and any
+ * heartbeat comments.
+ */
+function parseSseFrames(rawText) {
+  return rawText
+    .split('\n\n')
+    .filter((frame) => frame.startsWith('event:'))
+    .map((frame) => {
+      const [eventLine, dataLine] = frame.split('\n');
+      return {
+        name: eventLine.replace(/^event: /, ''),
+        data: JSON.parse(dataLine.replace(/^data: /, '')),
+      };
+    });
 }
 
 // ──────────────────────────────────────────
@@ -122,32 +116,26 @@ function mockStreamReq(body) {
 describe('POST /api/ai/chat/stream', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('throws ValidationError when message missing (before SSE headers)', async () => {
-    const req = mockStreamReq({ conversationId: UUID });
-    const res = mockSseResponse();
+  it('answers a 400 VALIDATION_ERROR envelope when message missing (before SSE headers)', async () => {
+    const res = await api.post(`${BASE}/chat/stream`).send({ conversationId: UUID }).expect(400);
 
-    await expect(routeHandlers['post:/chat/stream'](req, res)).rejects.toBeInstanceOf(ValidationError);
-
-    expect(res.writeHead).not.toHaveBeenCalled();
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+    expect(res.headers['content-type']).toMatch(/json/);
     expect(runChatTurn).not.toHaveBeenCalled();
   });
 
-  it('throws ValidationError when conversationId is not a UUID', async () => {
-    const req = mockStreamReq({ conversationId: 'not-a-uuid', message: 'hi' });
-    const res = mockSseResponse();
+  it('answers a 400 VALIDATION_ERROR envelope when conversationId is not a UUID', async () => {
+    const res = await api.post(`${BASE}/chat/stream`).send({ conversationId: 'not-a-uuid', message: 'hi' }).expect(400);
 
-    await expect(routeHandlers['post:/chat/stream'](req, res)).rejects.toBeInstanceOf(ValidationError);
-
-    expect(res.writeHead).not.toHaveBeenCalled();
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+    expect(res.headers['content-type']).toMatch(/json/);
   });
 
-  it('throws ValidationError when message exceeds max length', async () => {
-    const req = mockStreamReq({ message: 'x'.repeat(8001) });
-    const res = mockSseResponse();
+  it('answers a 400 VALIDATION_ERROR envelope when message exceeds max length', async () => {
+    const res = await api.post(`${BASE}/chat/stream`).send({ message: 'x'.repeat(8001) }).expect(400);
 
-    await expect(routeHandlers['post:/chat/stream'](req, res)).rejects.toBeInstanceOf(ValidationError);
-
-    expect(res.writeHead).not.toHaveBeenCalled();
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+    expect(res.headers['content-type']).toMatch(/json/);
   });
 
   it('streams SSE events in order: user_message → token → tool_call → tool_result → done', async () => {
@@ -174,24 +162,15 @@ describe('POST /api/ai/chat/stream', () => {
       };
     });
 
-    const req = mockStreamReq({ message: 'hi', conversationId: UUID });
-    const res = mockSseResponse();
+    const res = await api.post(`${BASE}/chat/stream`).send({ message: 'hi', conversationId: UUID }).expect(200);
 
-    await routeHandlers['post:/chat/stream'](req, res);
+    expect(res.headers['content-type']).toMatch(/^text\/event-stream/);
+    expect(res.headers['cache-control']).toBe('no-cache');
+    expect(res.headers.connection).toBe('keep-alive');
+    expect(res.headers['x-accel-buffering']).toBe('no');
 
-    expect(res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    }));
-
-    const writes = res.write.mock.calls
-      .map(([payload]) => payload)
-      // Skip the leading padding comment (lines beginning with `:`) used to
-      // flush the browser SSE buffer threshold.
-      .filter((p) => /^event:/.test(p));
-    const eventNames = writes.map((p) => p.match(/^event: (\w+)/)[1]);
+    const frames = parseSseFrames(res.text);
+    const eventNames = frames.map((f) => f.name);
     expect(eventNames).toEqual([
       'user_message',
       'token',
@@ -202,29 +181,19 @@ describe('POST /api/ai/chat/stream', () => {
       'done',
     ]);
 
-    const userFrame = writes[0];
-    expect(userFrame).toContain('data: ');
-    expect(JSON.parse(userFrame.split('data: ')[1].trim())).toEqual({ message: userMsg });
+    expect(frames[0].data).toEqual({ message: userMsg });
+    expect(frames[1].data).toBe('Your ');
 
-    const tokenFrame = writes[1];
-    expect(JSON.parse(tokenFrame.split('data: ')[1].trim())).toBe('Your ');
+    expect(frames[4].data.name).toBe('getSpendByCategory');
+    expect(frames[4].data.args.from).toBe('2025-01-01');
 
-    const toolCallFrame = writes[4];
-    const toolCallPayload = JSON.parse(toolCallFrame.split('data: ')[1].trim());
-    expect(toolCallPayload.name).toBe('getSpendByCategory');
-    expect(toolCallPayload.args.from).toBe('2025-01-01');
+    expect(frames[5].data).toEqual({ message: toolMsg });
 
-    const toolResultFrame = writes[5];
-    expect(JSON.parse(toolResultFrame.split('data: ')[1].trim())).toEqual({ message: toolMsg });
-
-    const doneFrame = writes[6];
-    const donePayload = JSON.parse(doneFrame.split('data: ')[1].trim());
+    const donePayload = frames[6].data;
     expect(donePayload.conversation).toEqual(conversation);
     expect(donePayload.assistantMessage).toEqual(assistantMsg);
     expect(donePayload.usage.evalCount).toBe(10);
     expect(donePayload.iterations).toBe(2);
-
-    expect(res.end).toHaveBeenCalledTimes(1);
   });
 
   it('passes AbortSignal to runChatTurn and streams with streaming:true', async () => {
@@ -237,9 +206,7 @@ describe('POST /api/ai/chat/stream', () => {
       iterations: 1,
     });
 
-    const req = mockStreamReq({ message: 'hi' });
-    const res = mockSseResponse();
-    await routeHandlers['post:/chat/stream'](req, res);
+    await api.post(`${BASE}/chat/stream`).send({ message: 'hi' }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
     const callArgs = runChatTurn.mock.calls[0][0];
@@ -255,43 +222,40 @@ describe('POST /api/ai/chat/stream', () => {
       status: 503,
     }));
 
-    const req = mockStreamReq({ message: 'hi' });
-    const res = mockSseResponse();
-    await routeHandlers['post:/chat/stream'](req, res);
+    const res = await api.post(`${BASE}/chat/stream`).send({ message: 'hi' }).expect(200);
 
-    const writes = res.write.mock.calls.map(([payload]) => payload);
-    expect(writes.some((p) => p.startsWith('event: error'))).toBe(true);
-
-    const errFrame = writes.find((p) => p.startsWith('event: error'));
-    const errPayload = JSON.parse(errFrame.split('data: ')[1].trim());
-    expect(errPayload).toEqual({ detail: 'Model unavailable', code: 'OLLAMA_UNREACHABLE' });
-
-    expect(writes.some((p) => p.startsWith('event: done'))).toBe(false);
-    expect(res.end).toHaveBeenCalledTimes(1);
+    const frames = parseSseFrames(res.text);
+    const errFrame = frames.find((f) => f.name === 'error');
+    expect(errFrame.data).toEqual({ detail: 'Model unavailable', code: 'OLLAMA_UNREACHABLE' });
+    expect(frames.some((f) => f.name === 'done')).toBe(false);
   });
 
   it('emits generic error SSE event on unexpected failure', async () => {
     runChatTurn.mockRejectedValue(new Error('db exploded'));
 
-    const req = mockStreamReq({ message: 'hi' });
-    const res = mockSseResponse();
-    await routeHandlers['post:/chat/stream'](req, res);
+    const res = await api.post(`${BASE}/chat/stream`).send({ message: 'hi' }).expect(200);
 
-    const writes = res.write.mock.calls.map(([payload]) => payload);
-    const errFrame = writes.find((p) => p.startsWith('event: error'));
+    const frames = parseSseFrames(res.text);
+    const errFrame = frames.find((f) => f.name === 'error');
     expect(errFrame).toBeDefined();
-    const errPayload = JSON.parse(errFrame.split('data: ')[1].trim());
-    expect(errPayload).toEqual({ detail: 'Failed to stream AI chat message' });
-    expect(errPayload.detail).not.toContain('db exploded');
-    expect(res.end).toHaveBeenCalledTimes(1);
+    expect(errFrame.data).toEqual({ detail: 'Failed to stream AI chat message' });
+    expect(JSON.stringify(errFrame.data)).not.toContain('db exploded');
   });
 
   it('aborts runChatTurn and stops writing on client disconnect', async () => {
     let capturedSignal;
+    let releaseTurn;
+    const released = new Promise((resolve) => { releaseTurn = resolve; });
+
     runChatTurn.mockImplementation(async ({ signal, onEvent }) => {
       capturedSignal = signal;
       onEvent({ type: 'user_message', data: { id: 'u1' } });
       onEvent({ type: 'token', data: 'hello' });
+      // Stay pending until the client abort has actually landed server-side
+      // (mirrors production, where the abort can race the in-flight tool loop)
+      // rather than resolving before res 'close' has had a chance to fire.
+      await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+      releaseTurn();
       return {
         conversation: { id: UUID },
         userMessage: { id: 'u1' },
@@ -302,17 +266,14 @@ describe('POST /api/ai/chat/stream', () => {
       };
     });
 
-    const req = mockStreamReq({ message: 'hi' });
-    const res = mockSseResponse();
+    const test = api.post(`${BASE}/chat/stream`).send({ message: 'hi' });
+    test.end(() => {}); // fire-and-forget: an aborted request rejects, and we assert server-side state instead
+    // Give the request time to reach the handler and commit the SSE headers.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    test.abort();
 
-    const promise = routeHandlers['post:/chat/stream'](req, res);
-    res.emit('close');
-    await promise;
-
+    await released;
     expect(capturedSignal?.aborted).toBe(true);
-    const writes = res.write.mock.calls.map(([payload]) => payload);
-    expect(writes.some((p) => p.startsWith('event: done'))).toBe(false);
-    expect(res.end).not.toHaveBeenCalled();
   });
 
   it('skips writes for unknown onEvent types', async () => {
@@ -329,15 +290,9 @@ describe('POST /api/ai/chat/stream', () => {
       };
     });
 
-    const req = mockStreamReq({ message: 'hi' });
-    const res = mockSseResponse();
-    await routeHandlers['post:/chat/stream'](req, res);
+    const res = await api.post(`${BASE}/chat/stream`).send({ message: 'hi' }).expect(200);
 
-    const writes = res.write.mock.calls.map(([payload]) => payload);
-    const eventNames = writes
-      .map((p) => p.match(/^event: (\w+)/)?.[1])
-      .filter(Boolean);
-
+    const eventNames = parseSseFrames(res.text).map((f) => f.name);
     expect(eventNames).not.toContain('unknown_event');
     expect(eventNames).not.toContain('assistant_message');
     expect(eventNames).toContain('done');
@@ -350,20 +305,16 @@ describe('POST /api/ai/chat/stream', () => {
 describe('POST /api/ai/chat', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('throws ValidationError when message missing', async () => {
-    const req = { body: {}, on: vi.fn() };
-    const res = mockResponse();
+  it('answers a 400 VALIDATION_ERROR envelope when message missing', async () => {
+    const res = await api.post(`${BASE}/chat`).send({}).expect(400);
 
-    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(ValidationError);
-
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     expect(runChatTurn).not.toHaveBeenCalled();
   });
 
-  it('throws ValidationError when model is an empty string', async () => {
-    const req = { body: { message: 'hi', model: '  ' }, on: vi.fn() };
-    const res = mockResponse();
-
-    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(ValidationError);
+  it('answers a 400 VALIDATION_ERROR envelope when model is an empty string', async () => {
+    const res = await api.post(`${BASE}/chat`).send({ message: 'hi', model: '  ' }).expect(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
   });
 
   it('returns 200 with turn payload on success', async () => {
@@ -377,44 +328,54 @@ describe('POST /api/ai/chat', () => {
     };
     runChatTurn.mockResolvedValue(turn);
 
-    const req = { body: { message: 'hi' }, on: vi.fn() };
-    const res = mockResponse();
-
-    await routeHandlers['post:/chat'](req, res);
+    const res = await api.post(`${BASE}/chat`).send({ message: 'hi' }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
     const callArgs = runChatTurn.mock.calls[0][0];
     expect(callArgs.streaming).toBeUndefined();
     expect(callArgs.message).toBe('hi');
-    expect(res.json).toHaveBeenCalledWith({
-      ok: true,
-      data: {
-        conversation: turn.conversation,
-        userMessage: turn.userMessage,
-        toolMessages: turn.toolMessages,
-        assistantMessage: turn.assistantMessage,
-        usage: turn.usage,
-        iterations: turn.iterations,
-      },
-    });
+    expect(res.body).toEqual(okEnvelope({
+      conversation: turn.conversation,
+      userMessage: turn.userMessage,
+      toolMessages: turn.toolMessages,
+      assistantMessage: turn.assistantMessage,
+      usage: turn.usage,
+      iterations: turn.iterations,
+    }));
   });
 
-  it('throws AppError when AiChatServiceError occurs', async () => {
+  it('answers with the AiChatServiceError status/code when the service rejects', async () => {
     runChatTurn.mockRejectedValue(new AiChatServiceError('bad', { code: 'INVALID_INPUT', status: 400 }));
 
-    const req = { body: { message: 'hi' }, on: vi.fn() };
-    const res = mockResponse();
-
-    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(AppError);
+    const res = await api.post(`${BASE}/chat`).send({ message: 'hi' }).expect(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'INVALID_INPUT', message: 'bad' }));
   });
 
-  it('throws AppError on generic error', async () => {
+  it('answers a sanitized 500 on a generic service error', async () => {
     runChatTurn.mockRejectedValue(new Error('internal'));
 
-    const req = { body: { message: 'hi' }, on: vi.fn() };
-    const res = mockResponse();
+    const res = await api.post(`${BASE}/chat`).send({ message: 'hi' }).expect(500);
+    expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to process AI chat message' }));
+  });
+});
 
-    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(AppError);
+// ──────────────────────────────────────────
+// Newly on-path: enforceAiChatEnabled (router.use, never reachable under the
+// old mock-router harness — `router.use()` calls were recorded but never
+// invoked).
+// ──────────────────────────────────────────
+describe('AI chat disabled gate (router.use(enforceAiChatEnabled))', () => {
+  const originalEnabled = settings.aiChat.enabled;
+
+  afterEach(() => {
+    settings.aiChat.enabled = originalEnabled;
+  });
+
+  it('answers 503 SERVICE_UNAVAILABLE for any /api/ai/* route when disabled', async () => {
+    settings.aiChat.enabled = false;
+
+    const res = await api.get(`${BASE}/status`).expect(503);
+    expect(res.body).toEqual(errEnvelope({ code: 'SERVICE_UNAVAILABLE', message: 'AI chat is disabled' }));
   });
 });
 
@@ -433,7 +394,7 @@ describe('POST /api/ai/chat body validation', () => {
     runChatTurn.mockResolvedValue(okTurn);
     const upper = UUID.toUpperCase();
 
-    await routeHandlers['post:/chat']({ body: { message: 'hi', conversationId: upper }, on: vi.fn() }, mockResponse());
+    await api.post(`${BASE}/chat`).send({ message: 'hi', conversationId: upper }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ conversationId: upper }));
   });
@@ -441,62 +402,55 @@ describe('POST /api/ai/chat body validation', () => {
   it('maps a null conversationId to null (new conversation)', async () => {
     runChatTurn.mockResolvedValue(okTurn);
 
-    await routeHandlers['post:/chat']({ body: { message: 'hi', conversationId: null }, on: vi.fn() }, mockResponse());
+    await api.post(`${BASE}/chat`).send({ message: 'hi', conversationId: null }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ conversationId: null }));
   });
 
   it('rejects a non-string conversationId', async () => {
-    const req = { body: { message: 'hi', conversationId: 42 }, on: vi.fn() };
-    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    const res = await api.post(`${BASE}/chat`).send({ message: 'hi', conversationId: 42 }).expect(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     expect(runChatTurn).not.toHaveBeenCalled();
   });
 
   it('accepts a message of exactly 4000 chars and rejects 4001', async () => {
     runChatTurn.mockResolvedValue(okTurn);
 
-    await routeHandlers['post:/chat']({ body: { message: 'x'.repeat(4000) }, on: vi.fn() }, mockResponse());
+    await api.post(`${BASE}/chat`).send({ message: 'x'.repeat(4000) }).expect(200);
     expect(runChatTurn).toHaveBeenCalledTimes(1);
 
-    await expect(
-      routeHandlers['post:/chat']({ body: { message: 'x'.repeat(4001) }, on: vi.fn() }, mockResponse()),
-    ).rejects.toBeInstanceOf(ValidationError);
+    await api.post(`${BASE}/chat`).send({ message: 'x'.repeat(4001) }).expect(400);
   });
 
   it('rejects a whitespace-only message', async () => {
-    const req = { body: { message: '   ' }, on: vi.fn() };
-    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    await api.post(`${BASE}/chat`).send({ message: '   ' }).expect(400);
   });
 
   it('rejects a non-string message', async () => {
-    const req = { body: { message: 123 }, on: vi.fn() };
-    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    await api.post(`${BASE}/chat`).send({ message: 123 }).expect(400);
   });
 
   it('maps a null model to null and rejects a non-string model', async () => {
     runChatTurn.mockResolvedValue(okTurn);
 
-    await routeHandlers['post:/chat']({ body: { message: 'hi', model: null }, on: vi.fn() }, mockResponse());
+    await api.post(`${BASE}/chat`).send({ message: 'hi', model: null }).expect(200);
     expect(runChatTurn).toHaveBeenCalledWith(expect.objectContaining({ model: null }));
 
-    await expect(
-      routeHandlers['post:/chat']({ body: { message: 'hi', model: 7 }, on: vi.fn() }, mockResponse()),
-    ).rejects.toBeInstanceOf(ValidationError);
+    await api.post(`${BASE}/chat`).send({ message: 'hi', model: 7 }).expect(400);
   });
 
   it('defaults useTools to true when omitted and honours an explicit false', async () => {
     runChatTurn.mockResolvedValue(okTurn);
 
-    await routeHandlers['post:/chat']({ body: { message: 'hi' }, on: vi.fn() }, mockResponse());
+    await api.post(`${BASE}/chat`).send({ message: 'hi' }).expect(200);
     expect(runChatTurn).toHaveBeenLastCalledWith(expect.objectContaining({ useTools: true }));
 
-    await routeHandlers['post:/chat']({ body: { message: 'hi', useTools: false }, on: vi.fn() }, mockResponse());
+    await api.post(`${BASE}/chat`).send({ message: 'hi', useTools: false }).expect(200);
     expect(runChatTurn).toHaveBeenLastCalledWith(expect.objectContaining({ useTools: false }));
   });
 
   it('rejects a non-boolean useTools', async () => {
-    const req = { body: { message: 'hi', useTools: 'yes' }, on: vi.fn() };
-    await expect(routeHandlers['post:/chat'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    await api.post(`${BASE}/chat`).send({ message: 'hi', useTools: 'yes' }).expect(400);
   });
 });
 
@@ -513,19 +467,15 @@ describe('AI conversation routes validation', () => {
       const rows = [{ id: UUID, title: 'One' }, { id: UUID, title: 'Two' }];
       listConversations.mockResolvedValue(rows);
 
-      const res = mockResponse();
-      await routeHandlers['get:/conversations']({}, res);
-
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: rows, total: 2 } });
+      const res = await api.get(`${BASE}/conversations`).expect(200);
+      expect(res.body).toEqual(okEnvelope({ items: rows, total: 2 }));
     });
 
     it('reports total 0 for an empty list', async () => {
       listConversations.mockResolvedValue([]);
 
-      const res = mockResponse();
-      await routeHandlers['get:/conversations']({}, res);
-
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [], total: 0 } });
+      const res = await api.get(`${BASE}/conversations`).expect(200);
+      expect(res.body).toEqual(okEnvelope({ items: [], total: 0 }));
     });
   });
 
@@ -533,17 +483,15 @@ describe('AI conversation routes validation', () => {
     it('creates with optional title/model absent (even without a body)', async () => {
       createEmptyConversation.mockResolvedValue({ id: UUID });
 
-      const res = mockResponse();
-      await routeHandlers['post:/conversations']({ body: undefined }, res);
+      await api.post(`${BASE}/conversations`).expect(201);
 
       expect(createEmptyConversation).toHaveBeenCalledWith({ title: undefined, model: undefined });
-      expect(res.status).toHaveBeenCalledWith(201);
     });
 
     it('accepts an empty-string title (only type and length are checked)', async () => {
       createEmptyConversation.mockResolvedValue({ id: UUID });
 
-      await routeHandlers['post:/conversations']({ body: { title: '' } }, mockResponse());
+      await api.post(`${BASE}/conversations`).send({ title: '' }).expect(201);
 
       expect(createEmptyConversation).toHaveBeenCalledWith({ title: '', model: undefined });
     });
@@ -551,29 +499,21 @@ describe('AI conversation routes validation', () => {
     it('accepts a title of exactly 200 chars and rejects 201', async () => {
       createEmptyConversation.mockResolvedValue({ id: UUID });
 
-      await routeHandlers['post:/conversations']({ body: { title: 't'.repeat(200) } }, mockResponse());
+      await api.post(`${BASE}/conversations`).send({ title: 't'.repeat(200) }).expect(201);
       expect(createEmptyConversation).toHaveBeenCalledTimes(1);
 
-      await expect(
-        routeHandlers['post:/conversations']({ body: { title: 't'.repeat(201) } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
+      await api.post(`${BASE}/conversations`).send({ title: 't'.repeat(201) }).expect(400);
     });
 
     it('rejects a non-string title', async () => {
-      await expect(
-        routeHandlers['post:/conversations']({ body: { title: 5 } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/conversations`).send({ title: 5 }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       expect(createEmptyConversation).not.toHaveBeenCalled();
     });
 
     it('rejects a blank or null model (null is NOT treated as absent here)', async () => {
-      await expect(
-        routeHandlers['post:/conversations']({ body: { model: '  ' } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
-
-      await expect(
-        routeHandlers['post:/conversations']({ body: { model: null } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
+      await api.post(`${BASE}/conversations`).send({ model: '  ' }).expect(400);
+      await api.post(`${BASE}/conversations`).send({ model: null }).expect(400);
     });
   });
 
@@ -581,16 +521,14 @@ describe('AI conversation routes validation', () => {
     it('renames with the exact (untrimmed) title', async () => {
       renameConversation.mockResolvedValue({ id: UUID, title: ' Hi ' });
 
-      await routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body: { title: ' Hi ' } }, mockResponse());
+      await api.patch(`${BASE}/conversations/${UUID}`).send({ title: ' Hi ' }).expect(200);
 
       expect(renameConversation).toHaveBeenCalledWith(UUID, ' Hi ');
     });
 
     it('rejects a missing, blank, or non-string title', async () => {
       for (const body of [{}, { title: '   ' }, { title: 9 }]) {
-        await expect(
-          routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body }, mockResponse()),
-        ).rejects.toBeInstanceOf(ValidationError);
+        await api.patch(`${BASE}/conversations/${UUID}`).send(body).expect(400);
       }
       expect(renameConversation).not.toHaveBeenCalled();
     });
@@ -598,18 +536,14 @@ describe('AI conversation routes validation', () => {
     it('accepts a title of exactly 200 chars and rejects 201', async () => {
       renameConversation.mockResolvedValue({ id: UUID });
 
-      await routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body: { title: 't'.repeat(200) } }, mockResponse());
+      await api.patch(`${BASE}/conversations/${UUID}`).send({ title: 't'.repeat(200) }).expect(200);
       expect(renameConversation).toHaveBeenCalledTimes(1);
 
-      await expect(
-        routeHandlers['patch:/conversations/:id']({ params: { id: UUID }, body: { title: 't'.repeat(201) } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
+      await api.patch(`${BASE}/conversations/${UUID}`).send({ title: 't'.repeat(201) }).expect(400);
     });
 
     it('rejects a malformed conversation id', async () => {
-      await expect(
-        routeHandlers['patch:/conversations/:id']({ params: { id: 'nope' }, body: { title: 'x' } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
+      await api.patch(`${BASE}/conversations/nope`).send({ title: 'x' }).expect(400);
     });
   });
 
@@ -618,19 +552,27 @@ describe('AI conversation routes validation', () => {
       const upper = UUID.toUpperCase();
       getConversationWithMessages.mockResolvedValue({ id: upper, messages: [] });
 
-      await routeHandlers['get:/conversations/:id']({ params: { id: upper } }, mockResponse());
+      await api.get(`${BASE}/conversations/${upper}`).expect(200);
 
       expect(getConversationWithMessages).toHaveBeenCalledWith(upper);
     });
 
     it('rejects a missing or malformed id', async () => {
-      await expect(
-        routeHandlers['get:/conversations/:id']({ params: { id: '123' } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
+      await api.get(`${BASE}/conversations/123`).expect(400);
 
-      await expect(
-        routeHandlers['delete:/conversations/:id']({ params: { id: '' } }, mockResponse()),
-      ).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.delete(`${BASE}/conversations/123`).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      expect(deleteConversation).not.toHaveBeenCalled();
+    });
+
+    // The original suite asserted this branch by calling the handler directly
+    // with a hand-built `{ params: { id: '' } }` — a request Express can never
+    // actually construct: `/conversations/` with no verb defined for the bare
+    // collection path other than GET/POST simply doesn't route to the
+    // GET/DELETE `:id` handler at all, it 404s via the funnel handler first.
+    it('funnels an empty :id segment to a 404, not the malformed-id ValidationError', async () => {
+      const res = await api.delete(`${BASE}/conversations/`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
       expect(deleteConversation).not.toHaveBeenCalled();
     });
   });
