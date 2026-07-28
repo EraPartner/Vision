@@ -847,6 +847,63 @@ describe('InfoRepository', () => {
       }
     });
 
+    // Recurrence expansion used to walk `Date`s: the pg DATE arrives at
+    // SERVER-LOCAL midnight, occurrences were rendered with toAppDateString
+    // (APP_TIMEZONE) and the fast-forward compared that instant against
+    // Date.UTC() of the window start. East of APP_TIMEZONE (TZ=Asia/Tokyo with
+    // the default Europe/Brussels) local midnight is still the previous day in
+    // the app zone, so every occurrence shifted a day back: the weekly row
+    // below started on 2026-06-30 instead of 2026-07-01 and every July
+    // occurrence landed 6 days off, and the monthly row shifted onto May 31 and
+    // then clamped to the 30th for the rest of the year. The expansion is pure
+    // calendar-string math now, so the occurrence days are identical on every
+    // host — hence the same expectations for each TZ below.
+    it.each([
+      // [host TZ, cadence, [stored y, m, d], expected occurrences in July 2026]
+      ...['UTC', 'Asia/Tokyo', 'America/Los_Angeles'].flatMap((tz) => [
+        [tz, 'weekly', [2026, 6, 3], ['2026-07-01', '2026-07-08', '2026-07-15', '2026-07-22', '2026-07-29']],
+        [tz, 'monthly', [2026, 6, 1], ['2026-07-01']],
+        // Month-end clamping compounds across sequential hops and must stay
+        // that way: Jan 31 → Feb 28 → Mar 28 → … → Jul 28 (never back to the
+        // 31st).
+        [tz, 'monthly', [2026, 1, 31], ['2026-07-28']],
+      ]),
+    ])('expands a recurring row on the same days regardless of host TZ (%s, %s)', async (
+      tz, pattern, [y, m, d], expected,
+    ) => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      const prevTz = process.env.TZ;
+      process.env.TZ = tz;
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z')); // → July 2026 window
+      try {
+        // Built with LOCAL components on purpose: that is exactly how pg hands
+        // back a DATE column (a Date at server-local midnight).
+        query.mockResolvedValueOnce({
+          rows: [
+            { id: 1, planned_date: new Date(y, m - 1, d), amount: '-50', currency: 'EUR', recipient_name: 'Gym', category_name: null, is_recurring: true, recurrence_pattern: pattern },
+          ],
+        });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+
+        expect(result.daily_data.map((day) => day.date)).toEqual(expected);
+        expect(result.summary.transaction_count).toBe(expected.length);
+        expect(result.summary.total_expenses).toBe(-50 * expected.length);
+      } finally {
+        vi.useRealTimers();
+        // Restore, not reassign: `process.env.TZ = undefined` writes the
+        // literal string "undefined", leaving Intl on an invalid zone for the
+        // rest of the file.
+        if (prevTz === undefined) delete process.env.TZ;
+        else process.env.TZ = prevTz;
+      }
+    });
+
     it('should compute average-vs-current spending projections on calendar-day denominators', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,
