@@ -826,17 +826,17 @@ look-changing one.
   - The comment describes `COALESCE(t.category_id, r.default_category_id)`; as of the 3-level fix (0defad0) every category-bearing surface resolves three levels.
   - Fix: update the comment to the 3-level expression.
 
-- [ ] **Bank list DATE columns leak raw pg Date objects — first/last_transaction shift a day east of UTC** 🔼
+- [x] **Bank list DATE columns leak raw pg Date objects — first/last_transaction shift a day east of UTC** 🔼 ✅ 2026-07-28 · 9c267bf (both routed through toWireDate; verifier reproduced the TZ=Asia/Tokyo day-shift on HEAD and its absence after; frontend type already declared string so the contract now holds at runtime)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepoBanks.db.test.js "PIN: first_transaction/last_transaction come back as raw pg Date objects")_
   - `apps/node-backend/src/repositories/infoRepositoryBanks.js:182-183` passes both DATE columns through raw while `anchor_date` on the same object is a wire string; `lib/dateFormat.js:38-44` states the project rule (raw pg DATE JSON-serializes to the previous day east of UTC — the systemic date-shift class).
   - Fix: route both through `toWireDate`; flip the pin.
 
-- [ ] **`getBankBalances` sums a multi-currency account's amounts across currencies, then converts the total at one rate** 🔼
+- [x] **`getBankBalances` sums a multi-currency account's amounts across currencies, then converts the total at one rate** 🔼 ✅ 2026-07-28 · 9c267bf (new per-currency partition lateral: a stamped balance anchors only its own currency's partition, each partition converts at its own rate, summed after conversion — 100 EUR + 100 USD @0.5 → 150; anchored+mixed case 1025 pinned; single-currency byte-identical; COMPUTED_BALANCE_LATERAL untouched so the hub/reconcile/cross-workspace consumers are unaffected. Adversarially verified incl. 36 random multi-currency ledgers vs independent brute force. The same defect on the four OTHER surfaces is filed below)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepoBanks.db.test.js "PIN: a multi-currency account adds EUR and USD amounts")_
   - `apps/node-backend/src/repositories/accountBalanceSql.js` — `SUM(t2.amount)` has no currency partitioning; `infoRepositoryBanks.js:69` picks the conversion currency from the single most-recent row. 100 EUR + 100 USD @0.5 → balance 100, correct is 150. The repository's own comment defers multi-currency partitioning as "D2" — this makes the deferral a wrong headline number, not a missing feature.
   - Fix: partition the balance computation per currency and convert each partition; flip the pin.
 
-- [ ] **Manual-only accounts reach `total_net_position` but never appear in balance history — headline disagrees with its own chart** 🔼
+- [x] **Manual-only accounts reach `total_net_position` but never appear in balance history — headline disagrees with its own chart** 🔼 ✅ 2026-07-28 · 9c267bf (history gate dropped via a set-based span-expansion series (per-currency, matching the headline); headline == today's chart point pinned on mixed and all-manual ledgers INCLUDING moving FX curves — the verifier caught the headline still keying FX at last-activity (32% divergence on foreign-currency accounts) and an O(days²) planner degradation (27× slower); both fixed pre-commit, end-to-end ~2× HEAD while emitting the previously-dropped accounts' points)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepoBanks.db.test.js "PIN: manual-only accounts reach total_net_position")_
   - The current-balance query dropped its `balance IS NOT NULL` gate (WP-A1) so manual-only accounts count in the headline, but the history query at `infoRepositoryBanks.js:129` still filters `WHERE lb.balance IS NOT NULL`: a mixed ledger renders total_net_position ≠ today's total_history point; an all-manual ledger renders a non-zero headline above an empty chart.
   - Fix: apply the same WP-A1 gate removal to the history query.
@@ -866,7 +866,7 @@ look-changing one.
   - `apps/node-backend/src/repositories/infoRepositoryAverageVsCurrent.js:66-75` seeds the month key before the `eur < 0` test: one 240-spend month → average 240; adding an income-only month halves it to 120 with zero extra spend. `avg_daily_spending` on the same object uses the true calendar denominator, so the two fields disagree by construction.
   - Fix: use the calendar window as the denominator (matching the daily sibling); flip the pin.
 
-- [ ] **Net-worth history: manual-only accounts appear only in the LAST point — the chart steps up overnight and reports it as a monthly gain** 🔼
+- [x] **Net-worth history: manual-only accounts appear only in the LAST point — the chart steps up overnight and reports it as a monthly gain** 🔼 ✅ 2026-07-28 · 9c267bf (same gate dropped with the same series builder, cross-currency to match ITS headline; phantom step gone (580,560,560,560,560 with monthlyChange −20); invariant pinned; 20 random net-worth ledgers cross-checked vs independent brute force)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepository.db.test.js "PIN: a manual-only account appears only in the LAST net-worth point")_
   - `apps/node-backend/src/repositories/infoRepositoryNetWorth.js:137` gates the history walk on `lb.balance IS NOT NULL` while the current point comes from the unstamped-tolerant lateral (`:147-162`, applied `:303-314`); the flow fallback only rescues "nothing stamped anywhere". Chart: 1000 → 1200 with no transaction, surfaced as a real gain. Same gate class as the banks history finding above — fix them consistently.
   - Fix: apply the unstamped-tolerant balance resolution to the history walk too; flip the pin.
@@ -910,6 +910,31 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · forecast fix pass (noticed; defense-in-depth, no live injection vector)_
   - `apps/node-backend/src/repositories/infoRepositoryForecast.js:194,205,300,314,466,477` (+ the new ledger-start probe, which follows the module convention for the `HISTORY_MONTHS` constant) — `historyMonths`/`daysBack`/`daysForward` are `Number.isInteger`+range-validated then template-interpolated. The validation is the only thing between a future caller and injection; the module is the last one with un-parameterised interpolation.
   - Fix: bind them as parameters (`interval '1 month' * $n` or `make_interval`), or leave the validation as the documented invariant if binding fights the interval syntax — decide once, comment it.
+
+- [ ] **Cross-currency `SUM(t2.amount)` still converts at one rate on four other surfaces — the fixed getBankBalances defect lives on in the hub, reconcile, cross-workspace, and net-worth current point** 🔼
+  - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (out of that finding's scope, which named getBankBalances; all four call sites read by the verifier)_
+  - `apps/node-backend/src/repositories/accountRepository.js:67` (hub `computed_balance` + drift), `services/reconcileService.js:85` (drift vs statement), `services/crossWorkspaceDataService.js:61` (converts the raw cross-currency total at `a.currency`), `repositories/infoRepositoryNetWorth.js:159` (current point) — all still use `COMPUTED_BALANCE_LATERAL`'s single cross-currency sum. For a multi-currency account each reports the 100+100@0.5→100 wrong number. The per-currency builder (`computedBalanceByCurrencyLateral`) now exists — adopting it per surface needs each surface's conversion point audited (the hub emits native currency; reconcile compares against a single-currency statement figure — decide what a multi-currency drift even means there).
+  - Fix: migrate each surface deliberately onto the per-currency builder (or document why a surface is single-currency by contract); keep hub/drift parity in mind.
+
+- [ ] **Account drift badge mixes conventions on multi-currency accounts: native-currency drift beside a per-currency converted balance** 🔽
+  - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (noticed; verifier reproduced balance 150 / drift −50 where statement−balance=0)_
+  - `apps/node-backend/src/repositories/infoRepositoryBanks.js:71-73` — `drift` deliberately still reads the cross-currency `lb.balance` for hub-badge parity, while `balance` on the same row is per-currency. Inconsistent at HEAD too (different numbers, same contradiction), but the fix makes the two figures on one badge visibly disagree in a new way. Depends on the hub finding above — resolve together.
+  - Fix: once the hub goes per-currency, re-derive drift per-currency (statement figure vs its own currency's partition) and the contradiction dissolves.
+
+- [ ] **Future-dated rows: banks headline counts them now, the chart only from their date — and an all-future account is 123 in banks but 0 in net worth** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (pre-existing, pinned as an explicit known-divergence test in tests/infoRepoBanks.db.test.js rather than silently changed — bounding the headline would break hub agreement)_
+  - The headline is unbounded (hub parity) while the chart stops at today. Corollary the verifier added: an account whose rows are ALL future-dated yields banks headline 123 with net worth reporting `snapshots=0, current.liquid=0` (empty grid skips the current-point override).
+  - Fix: decide the product stance on future-dated rows (exclude from headline until effective? include in both?) and align banks + net worth + hub on it.
+
+- [ ] **Net-worth transaction-flow fallback sums tracking-only transactions — a ledger whose only active accounts are `in_net_worth=false` reports THEIR running total as net worth instead of 0** 🔼
+  - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (pre-existing block, reproduced by the verifier: liquid −133.25 where 0 is correct; comment at the site now states the real trigger honestly)_
+  - `apps/node-backend/src/repositories/infoRepositoryNetWorth.js:193-201` — the fallback fires when the balance walk returns no rows, which happens not only for un-migrated ledgers but whenever every account with activity is excluded from net worth; it then sums ALL transactions with no account/`in_net_worth` predicate.
+  - Fix: constrain the fallback's sum to in-net-worth accounts (join through the account resolution the walk uses); an all-tracking ledger should report 0.
+
+- [ ] **`tests/infoRepository.test.js` mock dispatcher's bare `SELECT 1 FROM` guard is one branch-reorder away from silently swallowing production queries** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (noticed; the balance work deliberately kept its new SQL clear of the literal instead of widening the blast radius)_
+  - `tests/infoRepository.test.js:57,68,111,150,172,189,212,237,267,300,420` — `sql.includes('SELECT 1 FROM')` is meant to catch only `mvAvailable`'s probe but also matches `NOT EXISTS (SELECT 1 FROM anchor)` inside `COMPUTED_BALANCE_LATERAL`; only branch ordering saves it today (acknowledged in the comment at `:293-296`).
+  - Fix: tighten the guard to `SELECT 1 FROM mv_` at all 11 sites.
 
 
 
