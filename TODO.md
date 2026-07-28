@@ -801,12 +801,12 @@ look-changing one.
   - `services/materializedViewService.js:71` (`mv_monthly_summary` definition) and the monthly live path `repositories/infoRepositoryMonthly.js:184`, `services/recurringDetectionService.js:157`, and `services/calculations/aggregation/sankey.js:51,73` all still use the 2-level `COALESCE(t.category_id, r.default_category_id)` — alias rows categorised via their primary's default are treated as uncategorised on these surfaces, now inconsistent with the fixed transactions/breakdown/pivot 3-level resolution.
   - Fix: extend each to the canonical 3-level pattern; the MV change needs the same drop-and-rebuild migration treatment as 0084 (mv_monthly_summary drop).
 
-- [ ] **Sankey exclusion clauses are NULL-unsafe and not alias-aware — excluding any category silently erases every uncategorised row (income renders as €0 with flows still leaving it)** 🔼
+- [x] **Sankey exclusion clauses are NULL-unsafe and not alias-aware — excluding any category silently erases every uncategorised row (income renders as €0 with flows still leaving it)** 🔼 ✅ 2026-07-28 · c5f3d66 (routed through the shared buildExclusionClauses — sentinel + alias-aware forms, param offsetting handled; the €3000 row now survives exclusion (Income 3000, not 0) and a primary-recipient exclusion removes alias rows. Characterization test split into four real pins; fail-against-old reproduces the filed shapes exactly)
   - ↪ _from: Orchestration session 2026-07-28 · category-resolution verifier (reproduced live on the real service)_
   - `apps/node-backend/src/services/calculations/aggregation/sankey.js:58` — category exclusion is `COALESCE(...) != ALL($n)` with no `-1` NULL sentinel: a NULL effective category fails the comparison and the row is dropped, so excluding one category removed a €3000 uncategorised income row entirely — the graph showed `Income 0` with €40 still flowing out of it. The canonical form (with a comment documenting this exact bug) is `filterBuilder.js:356`: `COALESCE(..., -1) NOT IN (...)`. Sibling defect at `sankey.js:63`: recipient exclusion is `t.recipient_id != ALL(...)` — neither NULL-safe nor alias-aware (canonical: `COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN`), so excluding a primary recipient leaves its alias rows in the graph while the category exclusion beside it is now alias-aware.
   - Fix: move both clauses to the canonical sentinel forms (or route through `buildExclusionClauses`); pin with a live-DB test that has an uncategorised row + an active exclusion (the existing aliasCategoryResolution.db.test.js sankey exclusion assertion is characterization only and passes either way — its comment says so).
 
-- [ ] **Sankey has no `is_transfer` filter — internal transfers counted as income/spending in the flow graph** 🔼
+- [x] **Sankey has no `is_transfer` filter — internal transfers counted as income/spending in the flow graph** 🔼 ✅ 2026-07-28 · c5f3d66 (ADR-083 confirmed: excluded by default in ALL aggregations under the single runtime includeTransfers setting, explicitly not a separate node — sankey now applies the sibling conditional predicate; transfer pair off → Income 3000, on → 3900 with the legs visible, both pinned live)
   - ↪ _from: Orchestration session 2026-07-28 · category-resolution fix pass (noticed, out of scope)_
   - `apps/node-backend/src/services/calculations/aggregation/sankey.js:74` (the aggregation query's WHERE) filters `is_active` and date only — unlike every other money aggregation (ADR-083; e.g. mv_monthly_summary's `is_transfer = false`). A savings transfer inflates both the income and spending sides of the graph.
   - Fix: add `AND t.is_transfer = false` (confirm against ADR-083's exclusion semantics before assuming — sankey may arguably want transfers as a visible flow, in which case they should be a distinct node, not silent income/spending).
@@ -965,6 +965,11 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · errorHandler fix pass (noticed; the fix upgraded these 500→400 but the safe "Invalid loan configuration: …" text is replaced by the generic phrase under the message allowlist)_
   - `apps/node-backend/src/services/calculations/loanSchedule.js:70,102`, surfaced via `routes/plannedTransactions.js:247`.
   - Fix: throw `ValidationError` (authored message, full fidelity through the handler's AppError path).
+
+- [ ] **Sankey display residues: a real category named "Uncategorised" merges with the NULL bucket; an overspent year renders no deficit signal** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · sankey fix pass (noticed, out of scope; the label collision also exists in the pivot — pre-existing and consistent)_
+  - (a) `sankey.js` `COALESCE(c.general || ': ' || c.detail, 'Uncategorised')` merges a genuinely-named "Uncategorised" category with the NULL bucket (same shape in the pivot — fix together or accept). (b) `savings = Math.max(0, income − spending)`: an overspending year just omits the savings node instead of showing a deficit — display gap, possibly deliberate.
+  - Fix: (a) distinguish the NULL bucket with a sentinel id rather than a display-string collision; (b) decide whether the flow graph should render a deficit node.
 
 
 
