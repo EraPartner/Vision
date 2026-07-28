@@ -27,6 +27,8 @@ const isoOffsetFromToday = (offsetDays) => addDaysYmd(todayAppDateString(), offs
 
 vi.mock('../../src/repositories/infoRepository.js', () => ({
   infoRepository: {
+    // ADR-083 cache-key input (forecast/index.js filterHash).
+    getIncludeTransfers: vi.fn(async () => false),
     getCashflowForecastDataRolling: vi.fn(async (historyMonths, daysBack, daysForward) => ({
       history: buildHistory({ days: 400 }),
       currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({

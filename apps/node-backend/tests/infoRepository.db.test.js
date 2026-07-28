@@ -176,6 +176,10 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       'getCashflowForecastDataRolling',
       'getCategoryBreakdown',
       'getCategoryPivot',
+      // Not a sub-repository query: the ADR-083 toggle read, exposed on the
+      // barrel because the forecast cache key needs it before deciding whether
+      // to call any of the queries around it.
+      'getIncludeTransfers',
       'getMonthlyFinancialSummary',
       'getNetWorthFromSnapshots',
       'getPlannedExpensesNextMonth',

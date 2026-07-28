@@ -171,7 +171,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryForecast (real D
   // getCashflowComparison
   // ───────────────────────────────────────────────────────────────────────────
   describe('getCashflowComparison', () => {
-    it('averages the running cumulative net across the months that HAVE data', async () => {
+    it('averages the running cumulative net across the elapsed months of history', async () => {
       await seedBase();
       // Two past months inside the 24-month window; day 5 and day 10 exist in
       // every month, so these day buckets are calendar-independent.
@@ -186,7 +186,9 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryForecast (real D
       const r = await getCashflowComparison([], [], 'EUR');
       const byDay = Object.fromEntries(r.without_planned.map((d) => [d.day, d]));
 
-      // Divisor is the number of months WITH rows (2), not the 24-month span.
+      // Divisor is the elapsed months since this ledger's earliest in-window
+      // month (2 months back → 2), not the full 24-month span. The 25-months-back
+      // row is outside the window, so it does not stretch the span either.
       expect(byDay[4].average).toBe(0);
       expect(byDay[5].average).toBe(80); // (100 + 60) / 2
       expect(byDay[9].average).toBe(80); // cumulative carries forward
@@ -352,53 +354,203 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryForecast (real D
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // PINNED real-DB behaviours (see the suite report — do NOT "fix" here)
+  // ADR-083 transfer exclusion (was a PIN: the module counted transfer legs)
   // ───────────────────────────────────────────────────────────────────────────
-  describe('pinned discrepancies (current real behaviour)', () => {
-    // PIN — internal transfers are counted by every cash-flow forecast surface.
-    //
-    // ADR-083 says internal transfers must not inflate cash-flow aggregates
-    // unless the user opts in via the `includeTransfers` setting. Two sibling
-    // repositories honour that: infoRepositoryAverageVsCurrent.js:22-23 and
-    // infoRepositoryMonthly.js:38/194 both read getIncludeTransfers() and add
-    // `AND t.is_transfer = false`. Every query in infoRepositoryForecast.js —
-    // sqlPast/sqlCurrent (lines 93-116), getCashflowForecastData's two
-    // (261-280), …Rolling's two (362-381) and …ByCategory's two (462-479) —
-    // filters on `t.is_active = true` ONLY, with no transfer predicate and no
-    // getIncludeTransfers() call anywhere in the module. So the dashboard
-    // cash-flow chart and the forecast pipeline count both legs of an internal
-    // transfer while the monthly/average surfaces on the SAME dashboard do not.
-    // The mock suite asserted the SQL substrings it expected to be present and
-    // never noticed the absent one. Pinned as-is, with the contrast against
-    // getAverageVsCurrentSpending asserted on the identical fixture.
-    it('PIN: transfers inflate the cashflow comparison while getAverageVsCurrentSpending excludes them', async () => {
+  describe('ADR-083 internal-transfer exclusion', () => {
+    // Was pinned as a discrepancy: every query in infoRepositoryForecast.js
+    // filtered on `t.is_active = true` only, with no getIncludeTransfers() call
+    // anywhere in the module, while the sibling surfaces on the SAME dashboard
+    // (infoRepositoryAverageVsCurrent.js:22-23, infoRepositoryMonthly.js:38/194)
+    // honoured the setting. On this fixture the cash-flow chart read −1000 and
+    // the avg-vs-current card read 100. Now all three agree.
+    it('excludes transfer legs from the comparison, matching getAverageVsCurrentSpending', async () => {
       await seedBase();
       await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-100.00', isTransfer: false });
       await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-900.00', isTransfer: true });
 
       const comparison = await getCashflowComparison([], [], 'EUR');
       const current = comparison.without_planned.find((d) => d.day === comparison.current_day);
-      expect(current.current).toBe(-1000); // transfer leg included
+      expect(current.current).toBe(-100); // transfer leg excluded
 
       const avg = await getAverageVsCurrentSpending('EUR');
-      expect(avg.current_month.total_spending).toBe(100); // transfer leg excluded
+      expect(avg.current_month.total_spending).toBe(100); // same fixture, same answer
 
-      // The forecast pipeline inherits the same inclusion.
+      // The forecast pipeline inherits the exclusion.
       const forecast = await getCashflowForecastData(3, [], [], 'EUR');
-      expect(forecast.currentActual).toEqual([{ date: await ymd('CURRENT_DATE'), net: -1000 }]);
+      expect(forecast.currentActual).toEqual([{ date: await ymd('CURRENT_DATE'), net: -100 }]);
     });
 
-    // PIN — the historical average divides by "months that have rows", so a
-    // single outlier month in a 24-month window is reported at FULL weight
-    // instead of being averaged down. Seeding one month with 240 makes the
-    // "average" 240, not 240/24 = 10. Consequence: a ledger with sparse
-    // history draws an average line as tall as its single busiest month.
-    it('PIN: the 24-month average divides by populated months only, not by the window', async () => {
+    it('excludes transfer legs from the rolling and by-category surfaces too', async () => {
       await seedBase();
-      await insertTxn({ dateExpr: monthDay(7, 5), amount: '240.00' });
+      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-100.00', recipientId: rec.misc, categoryId: cat.Food });
+      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-900.00', recipientId: rec.misc, categoryId: cat.Food, isTransfer: true });
+      // History side of both windows.
+      await insertTxn({ dateExpr: monthDay(1, 5), amount: '50.00' });
+      await insertTxn({ dateExpr: monthDay(1, 5), amount: '-700.00', isTransfer: true });
+
+      const rolling = await getCashflowForecastDataRolling(12, 30, 60, [], [], 'EUR');
+      expect(rolling.currentActual).toEqual([{ date: await ymd('CURRENT_DATE'), net: -100 }]);
+      expect(rolling.history).toEqual([{ date: await ymd(monthDay(1, 5)), net: 50 }]);
+
+      const byCat = await getCashflowForecastDataByCategory(3, [], [], 'EUR');
+      expect(byCat.currentActualByCategory).toEqual([
+        { date: await ymd('CURRENT_DATE'), category_id: cat.Food, general: 'Food', detail: 'Groceries', net: -100 },
+      ]);
+      // The transfer leg would otherwise invent −900 of "Food" spending.
+      expect(byCat.historyByCategory).toEqual([
+        { date: await ymd(monthDay(1, 5)), category_id: null, general: 'Uncategorized', detail: 'Uncategorized', net: 50 },
+      ]);
+    });
+
+    // It is a runtime setting, not a hardcoded filter: opting in must bring the
+    // legs back, on every surface.
+    it('counts transfer legs again when includeTransfers is switched on', async () => {
+      await seedBase();
+      await getTestPool().query(
+        `INSERT INTO user_settings (key, value) VALUES ('includeTransfers', 'true'::jsonb)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      );
+      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-100.00' });
+      await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-900.00', isTransfer: true });
+
+      const comparison = await getCashflowComparison([], [], 'EUR');
+      const current = comparison.without_planned.find((d) => d.day === comparison.current_day);
+      expect(current.current).toBe(-1000);
+
+      const forecast = await getCashflowForecastData(3, [], [], 'EUR');
+      expect(forecast.currentActual).toEqual([{ date: await ymd('CURRENT_DATE'), net: -1000 }]);
+
+      const rolling = await getCashflowForecastDataRolling(12, 30, 60, [], [], 'EUR');
+      expect(rolling.currentActual).toEqual([{ date: await ymd('CURRENT_DATE'), net: -1000 }]);
+
+      const byCat = await getCashflowForecastDataByCategory(3, [], [], 'EUR');
+      expect(byCat.currentActualByCategory).toEqual([
+        { date: await ymd('CURRENT_DATE'), category_id: null, general: 'Uncategorized', detail: 'Uncategorized', net: -1000 },
+      ]);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Historical-average denominator (was a PIN: divided by populated months)
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('historical average denominator', () => {
+    // Was pinned as a discrepancy: the divisor was the number of months that
+    // HAPPEN to carry rows, so one 240 month in a 24-month window reported an
+    // "average" of 240 — a sparse ledger drew an average line as tall as its
+    // single busiest month. An elapsed month with no rows is a real zero.
+    it('divides a sparse window by every elapsed month, not by the populated ones', async () => {
+      await seedBase();
+      // Oldest month inside the 24-month window → the ledger's observed span is
+      // the full window, so the divisor is 24.
+      await insertTxn({ dateExpr: monthDay(24, 5), amount: '240.00' });
 
       const r = await getCashflowComparison([], [], 'EUR');
-      expect(r.without_planned.find((d) => d.day === 5).average).toBe(240);
+      expect(r.without_planned.find((d) => d.day === 5).average).toBe(10); // 240 / 24
+    });
+
+    // …and the counterweight: dividing by the whole window unconditionally
+    // would deflate a young ledger. Months BEFORE the first entry are not
+    // observations (the app did not exist for that user), so they must not be
+    // charged as zeros. Fresh-install shape: history starts 3 months ago.
+    it('does not charge phantom zeros for months before the ledger started', async () => {
+      await seedBase();
+      // Ledger opens 3 months back; month −2 is genuinely empty, month −1 has data.
+      await insertTxn({ dateExpr: monthDay(3, 5), amount: '30.00' });
+      await insertTxn({ dateExpr: monthDay(1, 5), amount: '30.00' });
+
+      const r = await getCashflowComparison([], [], 'EUR');
+      // 60 / 3 elapsed months. Old behaviour (populated months only) gave 30;
+      // dividing by the 24-month window would give 2.5.
+      expect(r.without_planned.find((d) => d.day === 5).average).toBe(20);
+    });
+
+    it('counts every elapsed month once history is contiguous', async () => {
+      await seedBase();
+      for (const back of [3, 2, 1]) {
+        await insertTxn({ dateExpr: monthDay(back, 5), amount: '30.00' });
+      }
+
+      const r = await getCashflowComparison([], [], 'EUR');
+      expect(r.without_planned.find((d) => d.day === 5).average).toBe(30); // 90 / 3
+    });
+
+    // One divisor for both historical series: a month with transactions but no
+    // planned rows is a month in which the user planned nothing (a real zero),
+    // so the planned overlay must not be re-based onto its own shorter span.
+    // Orientation A — ledger OLDER than the plan.
+    it('shares the ledger-wide divisor with the planned-history overlay', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: monthDay(3, 5), amount: '30.00' });
+      await insertPlanned({ dateExpr: monthDay(1, 5), amount: '-60.00' });
+
+      const r = await getCashflowComparison([], [], 'EUR');
+      const plain = r.without_planned.find((d) => d.day === 5);
+      const planned = r.with_planned.find((d) => d.day === 5);
+
+      expect(plain.average).toBe(10); // 30 / 3
+      // −60 / 3, not −60 / 1: the planned series rides the same 3-month span.
+      expect(planned.average).toBe(-10);
+    });
+
+    // Orientation B — plan OLDER than the ledger, the orientation where a
+    // union-of-keys divisor breaks. A recurring plan the auto-linker never
+    // matched keeps its original past planned_date forever, so a one-month-old
+    // ledger can easily carry an un-executed row dated 24 months back. That row
+    // must not stretch the divisor: it deflated the transactions average 24x
+    // (30 → 1.25), the exact "short history" failure the divisor exists to stop.
+    it('does not let a stale planned row stretch the divisor backwards', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: monthDay(1, 5), amount: '30.00' });
+      await insertPlanned({ dateExpr: monthDay(24, 5), amount: '-60.00' });
+
+      const r = await getCashflowComparison([], [], 'EUR');
+      // Ledger is one complete month old → divisor 1, so the transactions
+      // average is untouched by the plan's age.
+      expect(r.without_planned.find((d) => d.day === 5).average).toBe(30);
+      // The stale plan still contributes its numerator on the with-planned
+      // line (it is inside the window); it just cannot move the denominator.
+      expect(r.with_planned.find((d) => d.day === 5).average).toBe(-30);
+    });
+
+    // The divisor answers "when did this ledger start", which is a property of
+    // the ledger — not of the current view. Deriving it from the filtered rows
+    // let an exclusion that empties the oldest months re-base it, so toggling a
+    // category exclusion moved the average line by a factor unrelated to the
+    // rows it removed.
+    it('keeps the divisor when a category exclusion empties the oldest month', async () => {
+      await seedBase();
+      // Oldest month is Food-only; excluding Food empties it entirely.
+      await insertTxn({ dateExpr: monthDay(3, 5), amount: '30.00', recipientId: rec.misc, categoryId: cat.Food });
+      await insertTxn({ dateExpr: monthDay(1, 5), amount: '30.00', recipientId: rec.misc });
+
+      const all = await getCashflowComparison([], [], 'EUR');
+      expect(all.without_planned.find((d) => d.day === 5).average).toBe(20); // 60 / 3
+
+      const exclFood = await getCashflowComparison([cat.Food], [], 'EUR');
+      // Numerator drops to 30, denominator stays 3 → 10. If the divisor came
+      // from the filtered rows it would re-base to 1 and report 30.
+      expect(exclFood.without_planned.find((d) => d.day === 5).average).toBe(10);
+    });
+
+    // Same argument for the ADR-083 filter itself: excluding transfer legs must
+    // change the numerator only.
+    it('keeps the divisor when the transfer filter empties the oldest month', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: monthDay(3, 5), amount: '30.00', isTransfer: true });
+      await insertTxn({ dateExpr: monthDay(1, 5), amount: '30.00' });
+
+      const r = await getCashflowComparison([], [], 'EUR');
+      expect(r.without_planned.find((d) => d.day === 5).average).toBe(10); // 30 / 3, not 30 / 1
+    });
+
+    // Soft-deleted rows are not history, so they do not establish the start.
+    it('ignores inactive rows when locating the ledger start', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: monthDay(12, 5), amount: '-5000.00', isActive: false });
+      await insertTxn({ dateExpr: monthDay(2, 5), amount: '30.00' });
+
+      const r = await getCashflowComparison([], [], 'EUR');
+      expect(r.without_planned.find((d) => d.day === 5).average).toBe(15); // 30 / 2
     });
   });
 });

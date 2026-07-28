@@ -243,10 +243,22 @@ function buildSeed({ yyyymm, filterHash }) {
 // mcPercentiles, but nothing else guarded historyMonths — a request with
 // history_months=120 happily got a cached 36-month forecast served back, and
 // a non-default history cached under the same key, colliding both directions.
-function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, includePlanned, historyMonths }) {
+//
+// includeTransfers (ADR-083) is part of the key for the same reason: the
+// forecast repositories now apply the transfer predicate, so the setting
+// changes the numbers. Without it in the hash, toggling the setting kept
+// serving the pre-toggle forecast for the cache's 6h TTL — and the two answers
+// differ in polarity, not just magnitude, when transfers dominate the ledger.
+/**
+ * @param {{ excludedCategoryIds?: number[], excludedRecipientIds?: number[],
+ *   currency: string, includePlanned: boolean, historyMonths: number,
+ *   includeTransfers: boolean }} input
+ * @returns {string}
+ */
+function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, includePlanned, historyMonths, includeTransfers }) {
   const cats = [...(excludedCategoryIds ?? [])].sort((a, b) => a - b).join(',');
   const recs = [...(excludedRecipientIds ?? [])].sort((a, b) => a - b).join(',');
-  return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}`;
+  return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}|t${includeTransfers ? 1 : 0}`;
 }
 
 function isDefaultMcParams(mcPaths, mcPercentiles) {
@@ -276,7 +288,9 @@ export async function computeCashflowForecast({
   _forceCache = false,
 } = {}) {
   const { all, future, todayDay, daysInMonth, yyyymm } = currentMonthDates();
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths });
+  // Read before the cache probe: the setting is a cache-key input (ADR-083).
+  const includeTransfers = await infoRepository.getIncludeTransfers();
+  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths, includeTransfers });
 
   // Try cache when not forcing a refresh and using default MC params.
   if (!_forceCache && isDefaultMcParams(mcPaths, mcPercentiles)) {
@@ -432,7 +446,9 @@ export async function computeCashflowForecastRolling({
   userId = 'anonymous',
 } = {}) {
   const { all, future, todayIndex, todayIso } = rollingWindowDates(daysBack, daysForward);
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths });
+  // Read before the cache probe: the setting is a cache-key input (ADR-083).
+  const includeTransfers = await infoRepository.getIncludeTransfers();
+  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths, includeTransfers });
 
   // Cache check: skip for non-default rolling MC params or when backtest is requested.
   if (isDefaultRollingMcParams(mcPaths, mcPercentiles) && !includeBacktest) {

@@ -11,6 +11,7 @@ import {
   formatDateToYmd,
   mapRowsForAmountConversion,
   batchConvertGroupsWithHistoricalRateFallback,
+  getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import { ValidationError } from '../middleware/errorHandler.js';
@@ -31,15 +32,83 @@ function aggregateByDate(rows) {
   return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Absolute month index for a 'YYYY-MM' key, so month spans are plain integer
+// subtraction (year * 12 + zero-based month).
+/**
+ * @param {string} monthKey 'YYYY-MM'
+ * @returns {number}
+ */
+function monthIndex(monthKey) {
+  return Number(monthKey.slice(0, 4)) * 12 + (Number(monthKey.slice(5, 7)) - 1);
+}
+
+/**
+ * Denominator for the historical monthly average.
+ *
+ * The lookback is N *complete, already-elapsed* calendar months ending with the
+ * month before the current one. Two failure modes bracket the right answer:
+ *
+ *  - Dividing by "months that happen to carry rows" (the old behaviour) reports
+ *    a single busy month at FULL weight: 240 in one month of a 24-month window
+ *    became an "average" of 240. An elapsed month with no rows is a real
+ *    observation — the user spent nothing — and must count as a zero.
+ *  - Dividing by the whole window unconditionally deflates a short ledger: a
+ *    user who installed three months ago has no data for month -20 because the
+ *    app did not exist for them, not because they spent nothing. Charging them
+ *    21 phantom zeros would shrink the average line ~8x.
+ *
+ * So the divisor is the span from the month the ledger started through the last
+ * complete month, inclusive — "elapsed months since this ledger has history,
+ * capped at the lookback window". Empty months inside that span count as zero;
+ * months before the ledger's first entry are not counted at all.
+ *
+ * `ledgerStartMonth` MUST come from an unfiltered probe of `transactions`
+ * (sqlLedgerStart below), never from the month keys of the filtered result set
+ * — see the comment on that query for why, and for why a planned row cannot
+ * establish it.
+ *
+ * @param {string|null} ledgerStartMonth 'YYYY-MM' of the ledger's first
+ *   in-window transaction, or null when it has none.
+ * @param {number} lastCompleteMonthIdx {@link monthIndex} of the last complete month.
+ * @param {number} windowMonths Lookback length in months.
+ * @returns {number} Months to divide by; always >= 1.
+ */
+function countObservedMonths(ledgerStartMonth, lastCompleteMonthIdx, windowMonths) {
+  if (!ledgerStartMonth) return 1;
+  const span = lastCompleteMonthIdx - monthIndex(ledgerStartMonth) + 1;
+  // The clamp guarantees only that the divisor lands in [1, windowMonths] — it
+  // does NOT reconcile the two clocks feeding it. `ledgerStartMonth` comes from
+  // Postgres (CURRENT_DATE-anchored window) while `lastCompleteMonthIdx` comes
+  // from the app timezone (ADR-009); for the couple of hours a month where the
+  // two disagree on the calendar date across a month boundary, a mid-range span
+  // can still be one month off. That drift is tracked separately; the clamp is
+  // here so it can never produce a 0 (divide-by-zero) or an over-window span.
+  return Math.min(windowMonths, Math.max(1, span));
+}
+
+/**
+ * 'YYYY-MM' month key for a pg DATE column (a JS Date via node-postgres, or a
+ * string on some paths), or null when the column was NULL/absent.
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function monthKeyFromDbDate(value) {
+  if (value == null) return null;
+  const ymd = value instanceof Date ? formatDateToYmd(value) : String(value).slice(0, 10);
+  return /^\d{4}-\d{2}/.test(ymd) ? ymd.slice(0, 7) : null;
+}
+
 // Average, across months, of the running cumulative day-of-month net (SIMP-50).
-// `monthDayNet` is { monthKey: { dayOfMonth: net } }.
+// `monthDayNet` is { monthKey: { dayOfMonth: net } }. `monthCount` is the
+// divisor from countObservedMonths — NOT Object.keys(monthDayNet).length, see
+// that function for why.
 /**
  * @param {Record<string, Record<string, number>>} monthDayNet
+ * @param {number} monthCount Months to divide by (>= 1).
  * @returns {Record<string, number>} day-of-month → average cumulative net
  */
-function computeAvgCumulativeByDay(monthDayNet) {
+function computeAvgCumulativeByDay(monthDayNet, monthCount) {
   const monthKeys = Object.keys(monthDayNet);
-  const monthCount = monthKeys.length || 1;
   /** @type {Record<string, number>} */
   const out = {};
   for (const mk of monthKeys) {
@@ -84,6 +153,16 @@ export async function getCashflowComparison(
   const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
   const excludeParams = excl.params;
 
+  // ADR-083: internal transfers must not inflate cash-flow aggregates unless
+  // the user opts in via the runtime `includeTransfers` setting. Identical
+  // predicate and identical setting read as the sibling surfaces rendered on
+  // the same dashboard (infoRepositoryAverageVsCurrent.js:22-23,
+  // infoRepositoryMonthly.js:38/194, infoRepositoryStatistics.js:19/129) —
+  // without it a checking->savings transfer's outflow leg was counted here and
+  // excluded there, so two cards on one dashboard disagreed on one fixture.
+  const includeTransfers = await getIncludeTransfers();
+  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+
   // Aggregate in SQL per (date, currency) rather than streaming every row to
   // Node. batchConvertGroupsWithHistoricalRateFallback converts by (currency,
   // date), and every consumer below re-buckets by date — and rows sharing a
@@ -97,6 +176,7 @@ export async function getCashflowComparison(
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${HISTORY_MONTHS} months'
       AND t.date < date_trunc('month', CURRENT_DATE)
       ${categoryExclusionWhere}
@@ -109,12 +189,19 @@ export async function getCashflowComparison(
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
       ${categoryExclusionWhere}
     GROUP BY t.date, t.currency
   `;
 
+  // The two planned_transactions overlays below carry NO transfer predicate:
+  // ADR-083 added `is_transfer` / `transfer_peer_id` to `transactions` only,
+  // and planned_transactions has no such column. Planned rows are user-authored
+  // future intents, not reconciled bank legs, so there is no detected pair to
+  // net out; a user who plans an internal transfer excludes it the pre-ADR-083
+  // way, via category/recipient exclusions.
   const sqlPlannedCurrent = `
     SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date,
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month
@@ -138,12 +225,43 @@ export async function getCashflowComparison(
     GROUP BY pt.planned_date, pt.currency
   `;
 
-  const [pastResult, currentResult, plannedCurrentResult, plannedHistResult] = await Promise.all([
-    query(sqlPast, excludeParams),
-    query(sqlCurrent, excludeParams),
-    query(sqlPlannedCurrent),
-    query(sqlPlannedHist),
-  ]);
+  // Ledger start for the historical-average divisor (countObservedMonths).
+  // Deliberately UNFILTERED — no exclusions, no transfer predicate — and kept
+  // LAST in the Promise.all so the four data queries keep their call order.
+  //
+  // "When did this ledger start having history" is a property of the ledger,
+  // not of the current view. Deriving it from the month keys of the filtered
+  // result set let a category/recipient exclusion — or the ADR-083 transfer
+  // filter itself — empty the oldest months and silently re-base the divisor,
+  // so toggling an exclusion moved the average line by a factor that had
+  // nothing to do with the excluded rows.
+  //
+  // It also reads `transactions` ONLY. A planned row must never establish the
+  // start: a recurring plan the auto-linker never matched keeps its original
+  // past `planned_date` forever, and letting one un-executed row dated 24
+  // months back set the divisor deflated a one-month-old ledger's average 24x
+  // — precisely the "short history" failure this divisor exists to prevent. A
+  // planned row inside the window still contributes its numerator; it just
+  // cannot extend the timeline backwards. Both historical series then share
+  // this one divisor, so the overlay stays commensurable with the base line.
+  //
+  // `is_active` applies because a soft-deleted row is not history; the window
+  // floor applies because a row older than the lookback cannot shorten it.
+  const sqlLedgerStart = `
+    SELECT MIN(t.date) AS first_date
+    FROM transactions t
+    WHERE t.is_active = true
+      AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${HISTORY_MONTHS} months'
+  `;
+
+  const [pastResult, currentResult, plannedCurrentResult, plannedHistResult, ledgerStartResult] =
+    await Promise.all([
+      query(sqlPast, excludeParams),
+      query(sqlCurrent, excludeParams),
+      query(sqlPlannedCurrent),
+      query(sqlPlannedHist),
+      query(sqlLedgerStart),
+    ]);
 
   const [pastConverted, currentCashflowConverted, plannedCurrentConverted, plannedHistConverted] =
     await batchConvertGroupsWithHistoricalRateFallback(
@@ -165,8 +283,6 @@ export async function getCashflowComparison(
     if (!monthDayNet[mk]) monthDayNet[mk] = {};
     monthDayNet[mk][row.day_of_month] = (monthDayNet[mk][row.day_of_month] || 0) + eur;
   }
-
-  const avgCumulativeByDay = computeAvgCumulativeByDay(monthDayNet);
 
   /** @type {Record<string, number>} */
   const currentDayNet = {};
@@ -196,7 +312,20 @@ export async function getCashflowComparison(
     plannedHistMonthDay[mk][row.day_of_month] = (plannedHistMonthDay[mk][row.day_of_month] || 0) + row.amount_eur;
   }
 
-  const avgPlannedCumByDay = computeAvgCumulativeByDay(plannedHistMonthDay);
+  // ONE divisor for both historical series, taken from the unfiltered ledger
+  // probe above: a month with transactions but no *planned* rows is a month in
+  // which the user planned nothing (a real zero), so the overlay must not be
+  // re-based onto its own shorter span and averaged up.
+  const lastCompleteMonthIdx =
+    Number(todayYmd.slice(0, 4)) * 12 + (Number(todayYmd.slice(5, 7)) - 1) - 1;
+  const observedMonths = countObservedMonths(
+    monthKeyFromDbDate(ledgerStartResult.rows[0]?.first_date),
+    lastCompleteMonthIdx,
+    HISTORY_MONTHS,
+  );
+
+  const avgCumulativeByDay = computeAvgCumulativeByDay(monthDayNet, observedMonths);
+  const avgPlannedCumByDay = computeAvgCumulativeByDay(plannedHistMonthDay, observedMonths);
 
   const withoutPlanned = [];
   const withPlanned = [];
@@ -255,6 +384,10 @@ export async function getCashflowForecastData(
   const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
   const excludeParams = excl.params;
 
+  // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
+  const includeTransfers = await getIncludeTransfers();
+  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+
   // GROUP BY (date, currency) in SQL — aggregateByDate re-buckets by date and
   // conversion is per (currency, date), so this is identical to the old per-row
   // stream (see getCashflowComparison for the full rationale).
@@ -263,6 +396,7 @@ export async function getCashflowForecastData(
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${historyMonths} months'
       AND t.date < date_trunc('month', CURRENT_DATE)
       ${categoryExclusionWhere}
@@ -273,11 +407,14 @@ export async function getCashflowForecastData(
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
       ${categoryExclusionWhere}
     GROUP BY t.date, t.currency
   `;
+  // No transfer predicate on the planned overlays: planned_transactions has no
+  // `is_transfer` column (ADR-083 flagged `transactions` only).
   const sqlPlannedCurrent = `
     SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
@@ -357,6 +494,10 @@ export async function getCashflowForecastDataRolling(
   const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
   const excludeParams = excl.params;
 
+  // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
+  const includeTransfers = await getIncludeTransfers();
+  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+
   // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
   // GROUP BY (date, currency) — identical to the old per-row stream (aggregateByDate re-buckets by date).
   const sqlHistory = `
@@ -364,6 +505,7 @@ export async function getCashflowForecastDataRolling(
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= (CURRENT_DATE - interval '${daysBack} days') - interval '${historyMonths} months'
       AND t.date < (CURRENT_DATE - interval '${daysBack} days')
       ${categoryExclusionWhere}
@@ -374,11 +516,13 @@ export async function getCashflowForecastDataRolling(
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= (CURRENT_DATE - interval '${daysBack} days')
       AND t.date <= CURRENT_DATE
       ${categoryExclusionWhere}
     GROUP BY t.date, t.currency
   `;
+  // No transfer predicate — planned_transactions has no `is_transfer` column.
   const sqlPlannedFuture = `
     SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
@@ -436,6 +580,13 @@ export async function getCashflowForecastDataByCategory(
   const excludeParams = excl.params;
   const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
+  // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
+  // This matters doubly here: the category breakdown attributes a transfer leg
+  // to whatever category the account's recipient defaults to, inventing spend
+  // in a category the user never spent in.
+  const includeTransfers = await getIncludeTransfers();
+  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+
   // Aggregate per (date, currency, effective category) in SQL — aggregateByDateAndCategory
   // re-buckets by (date, category) and conversion is per (currency, date), so SUM-then-convert
   // is identical to the old per-row stream.
@@ -463,6 +614,7 @@ export async function getCashflowForecastDataByCategory(
     SELECT ${selectCols}
     FROM transactions t ${joins}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${historyMonths} months'
       AND t.date <  date_trunc('month', CURRENT_DATE)
       ${exclusionWhere}
@@ -472,6 +624,7 @@ export async function getCashflowForecastDataByCategory(
     SELECT ${selectCols}
     FROM transactions t ${joins}
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
       ${exclusionWhere}
