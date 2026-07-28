@@ -811,7 +811,7 @@ look-changing one.
   - `apps/node-backend/src/services/calculations/aggregation/sankey.js:74` (the aggregation query's WHERE) filters `is_active` and date only — unlike every other money aggregation (ADR-083; e.g. mv_monthly_summary's `is_transfer = false`). A savings transfer inflates both the income and spending sides of the graph.
   - Fix: add `AND t.is_transfer = false` (confirm against ADR-083's exclusion semantics before assuming — sankey may arguably want transfers as a visible flow, in which case they should be a distinct node, not silent income/spending).
 
-- [ ] **`transactionRepository` resolves effective category id and displayed name with OPPOSITE precedence — id says one category, name shows another** 🔼
+- [x] **`transactionRepository` resolves effective category id and displayed name with OPPOSITE precedence — id says one category, name shows another** 🔼 ✅ 2026-07-28 · 53af9bc (rc-before-pc in all four CASE copies — CATEGORY_NAME_SQL, the category sort column, and the getAll/getAllWithCount inlines; id and name verified agreeing across getById/getAll/getAllWithCount/create/update/update+tags and the category sort on the alias-with-own-default topology. The same wrong or weaker CASE on export/splits/planned surfaces is filed below)
   - ↪ _from: Orchestration session 2026-07-28 · category-resolution verifier (reproduced live: id=Food:Groceries, name="Bills:Utilities" on the same row)_
   - `apps/node-backend/src/repositories/transactionRepository.js:66` (`EFFECTIVE_CATEGORY_ID_SQL`: own → `rc` recipient default → `pc` primary default) vs `:67-72` (`CATEGORY_NAME_SQL`: `c` → **`pc` → `rc`**). For an alias recipient that has its own default AND a primary with a different default, the transactions list reports the recipient-default id but displays the primary-default name. The newly-fixed aggregation surfaces follow the id (matching `EFFECTIVE_CATEGORY_ID_SQL`), so they disagree with the reference surface's displayed name in this topology.
   - Fix: make `CATEGORY_NAME_SQL` join through the same COALESCE the id uses (`rc` before `pc`); pin with a DB test on the alias-with-own-default-and-differing-primary-default topology.
@@ -851,7 +851,7 @@ look-changing one.
   - `infoRepositoryForecast.js:41-42` divides by `monthKeys.length`: one populated month of 240 in a 24-month window reports a monthly average of 240 (correct: 10). Inflates every forecast fed by it.
   - Fix: divide by the window length (months elapsed), treating empty months as zero; flip the pin.
 
-- [ ] **Top merchants convert at the LATEST FX rate while by-year and pivot use the historical per-date rate — same recipient, three different EUR figures** 🔼
+- [x] **Top merchants convert at the LATEST FX rate while by-year and pivot use the historical per-date rate — same recipient, three different EUR figures** 🔼 ✅ 2026-07-28 · 53af9bc (aggregates per (recipient,date,currency), converts per date, reduces per recipient — the by-year/pivot shape; all three surfaces agree on a hostile multi-currency/same-day/alias fixture; counts/averages/seen-bounds re-reduce correctly. MoM on the same page still converts at latest — filed below)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepositoryRecipients.db.test.js "PIN: top merchants convert at the LATEST rate")_
   - `apps/node-backend/src/repositories/infoRepositoryRecipients.js:64-67` passes no options to `convertRowsToEur`; `:217-221` and `:329-333` pass `useHistoricalRatesByDate`. One USD purchase → 90 in Top merchants, 25 in by-year and pivot.
   - Fix: pass `useHistoricalRatesByDate` on the top-merchants path too; flip the pin.
@@ -861,7 +861,7 @@ look-changing one.
   - `infoRepositoryRecipients.js:293-296` expands member resolution downward only, then `GROUP BY COALESCE(pr.id, r.id)` (`:309-310`, `:324`) relabels upward: picking "Delhaize Wilrijk" returns a series named "Delhaize" worth 25 of the primary's 125 — the label promises the family, the number delivers one member.
   - Fix: either expand the selection to the full alias family (label honest) or keep the alias's own label (number honest) — decide which semantics the pivot wants.
 
-- [ ] **`avg_monthly_spending` divides by populated months (income-only months count), disagreeing with its own `avg_daily_spending` sibling** 🔼
+- [x] **`avg_monthly_spending` divides by populated months (income-only months count), disagreeing with its own `avg_daily_spending` sibling** 🔼 ✅ 2026-07-28 · 53af9bc (both fields now share one denominator — the forecast's elapsed-months counting rule on this card's 6-month window via the same unfiltered ledger probe; income-only months no longer halve the average, a single busy month is 1/1 not full-weight-as-6mo, young installs undeflated. avg_daily deliberately moved off the fixed 183-day calendar — verifier enumerated every consumer, none assumed the old window. The old pin was non-discriminating and was replaced by three tests that fail pre-fix; edge clamps (current-month-only, future-only, inactive-oldest) probed live)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepository.db.test.js "PIN: avg_monthly_spending divides by populated months")_
   - `apps/node-backend/src/repositories/infoRepositoryAverageVsCurrent.js:66-75` seeds the month key before the `eur < 0` test: one 240-spend month → average 240; adding an income-only month halves it to 120 with zero extra spend. `avg_daily_spending` on the same object uses the true calendar denominator, so the two fields disagree by construction.
   - Fix: use the calendar window as the denominator (matching the daily sibling); flip the pin.
@@ -903,7 +903,7 @@ look-changing one.
 
 - [ ] **Forecast month/day boundaries mix APP_TIMEZONE with Postgres `CURRENT_DATE` — off-by-one month for ~2h around month rollover** 🔽
   - ↪ _from: Orchestration session 2026-07-28 · forecast fix pass (noticed by implementer, drift confirmed live by verifier; the new divisor clamps only the extremes)_
-  - `apps/node-backend/src/repositories/infoRepositoryForecast.js:120-129` — `daysInMonth`/`currentDay`/`lastCompleteMonthIdx` derive from `todayAppDateString()` (APP_TIMEZONE, default Europe/Brussels) while every window predicate derives from Postgres `CURRENT_DATE` (session UTC). Between ~22:00 UTC and midnight on a month's last day the app clock is already next-month: window edges and month arithmetic disagree by one, inflating the average divisor by one month mid-range (clamp catches only 0/over-window extremes). Bounded (~2h/month) but systematic.
+  - `apps/node-backend/src/repositories/infoRepositoryForecast.js:120-129` — `daysInMonth`/`currentDay`/`lastCompleteMonthIdx` derive from `todayAppDateString()` (APP_TIMEZONE, default Europe/Brussels) while every window predicate derives from Postgres `CURRENT_DATE` (session UTC). **Broadened 2026-07-28:** `infoRepositoryAverageVsCurrent.js:164-175` now has the identical split (its new divisor compares a probe-derived `CURRENT_DATE` month against an app-TZ last-complete-month; acknowledged in its own comment) — fix both when this is taken. Between ~22:00 UTC and midnight on a month's last day the app clock is already next-month: window edges and month arithmetic disagree by one, inflating the average divisor by one month mid-range (clamp catches only 0/over-window extremes). Bounded (~2h/month) but systematic.
   - Fix: derive both sides from one clock — either pass the app-timezone "today" into the SQL as a parameter, or compute the JS-side month math from the DB's `CURRENT_DATE` returned by the query.
 
 - [ ] **`infoRepositoryForecast` string-interpolates range-validated integers into SQL instead of binding them** ⏬
@@ -935,6 +935,21 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (noticed; the balance work deliberately kept its new SQL clear of the literal instead of widening the blast radius)_
   - `tests/infoRepository.test.js:57,68,111,150,172,189,212,237,267,300,420` — `sql.includes('SELECT 1 FROM')` is meant to catch only `mvAvailable`'s probe but also matches `NOT EXISTS (SELECT 1 FROM anchor)` inside `COMPUTED_BALANCE_LATERAL`; only branch ordering saves it today (acknowledged in the comment at `:293-296`).
   - Fix: tighten the guard to `SELECT 1 FROM mv_` at all 11 sites.
+
+- [ ] **Recipient month-over-month still converts at the LATEST rate — now inconsistent with the fixed top-merchants/by-year/pivot on the same page** 🔽
+  - ↪ _from: Orchestration session 2026-07-28 · recipients-FX fix pass (same class, one function away; out of that finding's top-merchants scope)_
+  - `apps/node-backend/src/repositories/infoRepositoryRecipients.js:152-155` — `momConverted` passes no options to `convertRowsToEur` while grouping by `(recipient, period, currency)`: a rate move between the two compared months is invisible, and MoM's EUR figures won't match the now-historical sibling surfaces.
+  - Fix: same treatment — add `t.date` (or the period's representative dates) to the grouping and pass `useHistoricalRatesByDate`.
+
+- [ ] **Remaining category-NAME resolution defects: export + splits use pc-before-rc, planned surfaces resolve 2-level or 1-level** 🔼
+  - ↪ _from: Orchestration session 2026-07-28 · category-precedence fix pass (implementer noticed 4 sites; verifier reproduced all live, found a 5th, and confirmed the enumeration is otherwise exhaustive)_
+  - (a) `apps/node-backend/src/services/transactionExport.js:75-80` and `repositories/splitRepository.js:374-379` carry the pre-fix `pc`-before-`rc` CASE — the CSV/NDJSON export and the owed-splits export show "Bills:Utilities" for the row the transactions list now labels "Zzz:Last" (reproduced live). (b) `repositories/plannedTransactionRepository.js:41-45` and `:617-621` resolve `c → rc` only (no `pc` branch, no `pr` join). (c) `repositories/infoRepositoryPlanned.js:104-107` resolves `c` ONLY (joins neither `rc` nor `pc`) — `getPlannedExpensesNextMonth` reports `category_name: null` for rows its sibling plannedTransactionRepository categorises. Every other name-rendering site verified structurally consistent.
+  - Fix: (a) swap to the canonical rc-before-pc order; (b)+(c) extend to the full 3-level pattern with the `pr` join; pin each on the alias-with-own-default topology.
+
+- [ ] **Denominator-fix residues: `countObservedMonths` duplicated verbatim across two money files; mock probe guard doesn't pin its load-bearing predicates** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · denominator fix verification (non-blocking notes)_
+  - (a) `countObservedMonths` + `monthKeyFromDbDate` now live verbatim in both `infoRepositoryForecast.js:76-99` and `infoRepositoryAverageVsCurrent.js:26-73` — two copies of a money denominator is the drift risk the precedence finding is about, one layer up; a shared helper in `infoRepositoryHelpers.js` (parameterised on windowMonths) closes it. (b) `tests/infoRepository.test.js:855-862` asserts the ledger probe lacks `is_transfer`/`LIMIT` but not that it KEEPS `is_active = true` and the window floor — both load-bearing; only the DB suite catches their removal.
+  - Fix: extract the shared helper; strengthen the mock guard to assert the two retained predicates.
 
 
 
