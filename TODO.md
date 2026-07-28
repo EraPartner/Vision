@@ -841,12 +841,12 @@ look-changing one.
   - The current-balance query dropped its `balance IS NOT NULL` gate (WP-A1) so manual-only accounts count in the headline, but the history query at `infoRepositoryBanks.js:129` still filters `WHERE lb.balance IS NOT NULL`: a mixed ledger renders total_net_position ≠ today's total_history point; an all-manual ledger renders a non-zero headline above an empty chart.
   - Fix: apply the same WP-A1 gate removal to the history query.
 
-- [ ] **Forecast module never excludes transfers — all ten queries violate ADR-083 while sibling surfaces honor it** 🔼
+- [x] **Forecast module never excludes transfers — all ten queries violate ADR-083 while sibling surfaces honor it** 🔼 ✅ 2026-07-28 · 948980d (all 8 transactions-hitting queries got the sibling-identical conditional predicate; the 5 planned_transactions overlays deliberately did not — no is_transfer column exists there, pinned against a future 42703. includeTransfers added to the MC forecast cache key so toggling misses the 6h cache. Adversarially verified: trade-leg −5050→−50 live before/after; runtime-toggle proven; no balance-anchored query needed a carve-out)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepoForecast.db.test.js "PIN: transfers inflate the cashflow comparison")_
   - Every query in `apps/node-backend/src/repositories/infoRepositoryForecast.js` (93-116, 261-298, 362-390, 462-479) filters `is_active` only; the module never calls `getIncludeTransfers()`. Siblings `infoRepositoryAverageVsCurrent.js:22-23` and `infoRepositoryMonthly.js:38,194` do. Same fixture on one dashboard: cashflow comparison −1000 vs avg-vs-current 100.
   - Fix: thread the ADR-083 transfer-exclusion setting through the forecast queries; flip the pin.
 
-- [ ] **Forecast 24-month average divides by populated months only, not the window** 🔼
+- [x] **Forecast 24-month average divides by populated months only, not the window** 🔼 ✅ 2026-07-28 · 948980d (divisor = months from the ledger's first in-window transaction through the last complete month, from an UNFILTERED MIN(date) ledger probe: empty months inside history are real zeros (240→10), pre-ledger months are not charged (3-month install divides by 3, not 24). Verifier-found defects fixed before commit: a stale never-executed planned row can no longer deflate the divisor 24×, and category/recipient/transfer filters move the numerator only — both pinned in both orientations)
   - ↪ _from: Orchestration session 2026-07-28 · real-DB harness third increment (pinned in tests/infoRepoForecast.db.test.js "PIN: the 24-month average divides by populated months only")_
   - `infoRepositoryForecast.js:41-42` divides by `monthKeys.length`: one populated month of 240 in a 24-month window reports a monthly average of 240 (correct: 10). Inflates every forecast fed by it.
   - Fix: divide by the window length (months elapsed), treating empty months as zero; flip the pin.
@@ -900,6 +900,16 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-28 · supertest harness migration (pinned in tests/routes/transactions.test.js: "PIN: a malformed JSON body yields a 500..." and "PIN: an over-limit body yields a 500...")_
   - `apps/node-backend/src/middleware/errorHandler.js:117-119` — body-parser's HttpErrors carry a correct `.status` (SyntaxError 400 for truncated JSON, PayloadTooLargeError 413 for a >1MB body) but are not AppError instances, so both are reported as 500 INTERNAL_SERVER_ERROR. Because the 413 is thereby 5xx, the production branch (`errorHandler.js:139-141`) replaces "request entity too large" with the generic message — a client posting an oversized bulk/import payload cannot tell why it failed, and client typos count against server-error monitoring.
   - Fix: honour a numeric `err.status`/`err.statusCode` in the 4xx range for non-AppError errors (mapping to a sensible code, e.g. BAD_REQUEST/PAYLOAD_TOO_LARGE) before falling through to 500; flip both pins.
+
+- [ ] **Forecast month/day boundaries mix APP_TIMEZONE with Postgres `CURRENT_DATE` — off-by-one month for ~2h around month rollover** 🔽
+  - ↪ _from: Orchestration session 2026-07-28 · forecast fix pass (noticed by implementer, drift confirmed live by verifier; the new divisor clamps only the extremes)_
+  - `apps/node-backend/src/repositories/infoRepositoryForecast.js:120-129` — `daysInMonth`/`currentDay`/`lastCompleteMonthIdx` derive from `todayAppDateString()` (APP_TIMEZONE, default Europe/Brussels) while every window predicate derives from Postgres `CURRENT_DATE` (session UTC). Between ~22:00 UTC and midnight on a month's last day the app clock is already next-month: window edges and month arithmetic disagree by one, inflating the average divisor by one month mid-range (clamp catches only 0/over-window extremes). Bounded (~2h/month) but systematic.
+  - Fix: derive both sides from one clock — either pass the app-timezone "today" into the SQL as a parameter, or compute the JS-side month math from the DB's `CURRENT_DATE` returned by the query.
+
+- [ ] **`infoRepositoryForecast` string-interpolates range-validated integers into SQL instead of binding them** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · forecast fix pass (noticed; defense-in-depth, no live injection vector)_
+  - `apps/node-backend/src/repositories/infoRepositoryForecast.js:194,205,300,314,466,477` (+ the new ledger-start probe, which follows the module convention for the `HISTORY_MONTHS` constant) — `historyMonths`/`daysBack`/`daysForward` are `Number.isInteger`+range-validated then template-interpolated. The validation is the only thing between a future caller and injection; the module is the last one with un-parameterised interpolation.
+  - Fix: bind them as parameters (`interval '1 month' * $n` or `make_interval`), or leave the validation as the documented invariant if binding fights the interval syntax — decide once, comment it.
 
 
 
