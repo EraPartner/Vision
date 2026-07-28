@@ -49,11 +49,26 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  *
  * `src/services/` is being taken the same way, one whole subdirectory at a
  * time: a subdirectory is annotated to zero errors and only then added here as
- * a prefix, so new files under it are ratcheted from birth too. Held so far:
- * the two import pipelines, currency/FX, prices, tax, and info. Still OUTSIDE
- * the ratchet under `src/services/`: the ~33 top-level service files plus
- * `calculations/`, `research/`, `reports/`, `portfolio/`, and `aiChat/` — and
- * beyond services, `routes/` and `lib/`.
+ * a prefix, so new files under it are ratcheted from birth too. Held so far as
+ * prefixes: the two import pipelines, currency/FX, prices, tax, and info.
+ *
+ * The top level of `src/services/` (the ~51 `*.js` files directly in that
+ * directory, not its subdirectories) is ALMOST fully held too — but as
+ * individual file paths, not a `src/services/` prefix, because 7 files there
+ * are still implicit-any-dirty and a bare prefix would silently gate them
+ * (immediate CI failure) along with every still-dirty subdirectory below.
+ * LEFT at the top level: `aiChatService.js`, `belgianInflationService.js`,
+ * `dbEditor.js`, `deduplication.js`, `marketLookupService.js`,
+ * `priceProviderService.js`, `transactionExport.js`. Once those reach zero,
+ * the individual entries below can collapse to a plain `src/services/`
+ * top-level convention — but note that still would NOT cover subdirectories
+ * (each file's prefix match is per-string, not per-directory-tree; see
+ * `isRatcheted`), so the subdirectory prefixes above would still be needed.
+ *
+ * `calculations/`, `research/`, `reports/`, and `portfolio/` are each
+ * individually-clean-file-only so far (not yet whole subdirectories) — most
+ * of those directories are still implicit-any-dirty. `aiChat/` is untouched.
+ * Beyond services: `routes/` and `lib/` are untouched.
  *
  * @type {string[]}
  */
@@ -66,6 +81,68 @@ const RATCHETED = [
   'src/services/portfolioImportPipeline/',
   'src/services/prices/',
   'src/services/tax/',
+
+  // calculations/, research/, reports/, portfolio/ — individually-clean files
+  // only; the directories themselves are still mostly implicit-any-dirty.
+  'src/services/calculations/aggregation/_envelope.js',
+  'src/services/calculations/aggregation/_statisticsCache.js',
+  'src/services/calculations/aggregation/averageVsCurrent.js',
+  'src/services/calculations/aggregation/bankBalances.js',
+  'src/services/calculations/aggregation/category.js',
+  'src/services/calculations/forecast/methods/ensemble.js',
+  'src/services/calculations/forecast/methods/simpleAverage.js',
+  'src/services/calculations/normalization.js',
+  'src/services/portfolio/portfolioIncomeService.js',
+  'src/services/reports/dataFetcherPortfolio.js',
+  'src/services/reports/sectionCatalog.js',
+  'src/services/research/adapters/schemas.js',
+  'src/services/research/providerRegistry.js',
+
+  // Top level of src/services/ (44 of ~51 — see LEFT list above), alphabetical.
+  'src/services/accountMergeService.js',
+  'src/services/accountService.js',
+  'src/services/aggregationRefresh.js',
+  'src/services/attachmentCleanup.js',
+  'src/services/attachmentRecordService.js',
+  'src/services/attachmentService.js',
+  'src/services/bankAdapters.js',
+  'src/services/bulkSelection.js',
+  'src/services/cashForecastInsightService.js',
+  'src/services/categoryOutlierService.js',
+  'src/services/categoryService.js',
+  'src/services/crossWorkspaceAnalytics.js',
+  'src/services/crossWorkspaceDataService.js',
+  'src/services/customParserConfigService.js',
+  'src/services/dataImportService.js',
+  'src/services/importBatchService.js',
+  'src/services/infoService.js',
+  'src/services/insightsDigestService.js',
+  'src/services/materializedViewService.js',
+  'src/services/openingBalanceService.js',
+  'src/services/plannedExecutionService.js',
+  'src/services/plannedMatchService.js',
+  'src/services/plannedTransactionService.js',
+  'src/services/portfolioImportBatchService.js',
+  'src/services/portfolioPerformanceSnapshotService.js',
+  'src/services/providerHealthService.js',
+  'src/services/quoteBackfillService.js',
+  'src/services/recipientBankAccountService.js',
+  'src/services/recipientClusterService.js',
+  'src/services/recipientMergeService.js',
+  'src/services/recipientPatternService.js',
+  'src/services/recipientService.js',
+  'src/services/reconcileService.js',
+  'src/services/recurringDetectionService.js',
+  'src/services/routeManifest.js',
+  'src/services/savedChartsService.js',
+  'src/services/settingsService.js',
+  'src/services/splitService.js',
+  'src/services/subscriptionCreepService.js',
+  'src/services/tagService.js',
+  'src/services/transactionBulkService.js',
+  'src/services/transactionService.js',
+  'src/services/transferReconciliationService.js',
+  'src/services/watchlistService.js',
 ];
 
 /**

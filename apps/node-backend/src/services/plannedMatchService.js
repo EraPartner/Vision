@@ -28,15 +28,39 @@ const AMOUNT_TOLERANCE_PCT = 5;
 const DATE_WINDOW_DAYS = 5;
 const SUGGESTION_LOOKBACK_DAYS = 45;
 
+/**
+ * The fields `matchesTolerance` reads off a planned-payment side. Deliberately
+ * loose (not `HydratedPlannedTransactionRow`): callers also pass the
+ * synthetic `{ id, amount, transaction_date, recipient_cluster_id }` shape
+ * built in `autoLinkTransactions`, so only the fields this predicate touches
+ * are required.
+ * @typedef {{ recipient_cluster_id?: number|string|null, amount: number|string, planned_date?: Date|string|null }} PlannedLike
+ */
+
+/**
+ * The fields `matchesTolerance` reads off a transaction side — same looseness
+ * rationale as `PlannedLike`.
+ * @typedef {{ recipient_cluster_id?: number|string|null, amount: number|string, transaction_date?: Date|string|null }} TxLike
+ */
+
 // Normalize a DATE-ish value (pg Date at local midnight, or a 'YYYY-MM-DD' /
 // ISO string) to a plain 'YYYY-MM-DD' string. pg returns DATE columns as a JS
 // Date built from local Y/M/D, so local getters recover the calendar date.
+/**
+ * @param {Date|string|null|undefined} value
+ * @returns {string|undefined}
+ */
 function toYmd(value) {
   if (value == null) return undefined;
   if (value instanceof Date) return formatDateToYmd(value);
   return String(value).slice(0, 10);
 }
 
+/**
+ * @param {string} a 'YYYY-MM-DD'
+ * @param {string} b 'YYYY-MM-DD'
+ * @returns {number}
+ */
 function ymdDiffDays(a, b) {
   const [ay, am, ad] = a.split('-').map(Number);
   const [by, bm, bd] = b.split('-').map(Number);
@@ -47,6 +71,10 @@ function ymdDiffDays(a, b) {
  * Pure predicate: does `tx` fall within tolerance of planned payment `planned`?
  * Both objects must carry `recipient_cluster_id`, `amount`, and a date
  * (`planned_date` / `transaction_date`).
+ *
+ * @param {PlannedLike} planned
+ * @param {TxLike} tx
+ * @returns {boolean}
  */
 export function matchesTolerance(planned, tx) {
   if (planned?.recipient_cluster_id == null || tx?.recipient_cluster_id == null) return false;
@@ -94,9 +122,11 @@ async function isAutoClearEnabled() {
  * date (`transaction_date` or `date`). Never throws — per-pair failures are
  * logged and skipped so an import/create never fails because of auto-link.
  *
+ * @param {Array<{ id: number, recipient_id?: number|null, amount: number|string, transaction_date?: Date|string|null, date?: Date|string|null }>} txRows
  * @returns {Promise<{ autoLinkedCount: number, links: Array<{plannedTransactionId:number, transactionId:number}> }>}
  */
 export async function autoLinkTransactions(txRows) {
+  /** @type {{ autoLinkedCount: number, links: Array<{plannedTransactionId:number, transactionId:number}> }} */
   const result = { autoLinkedCount: 0, links: [] };
   if (!Array.isArray(txRows) || txRows.length === 0) return result;
   if (!(await isAutoClearEnabled())) return result;

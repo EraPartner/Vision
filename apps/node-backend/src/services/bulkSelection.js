@@ -20,13 +20,29 @@ const DEFAULT_ID_CAP = 500;
 const DEFAULT_FILTER_CAP = 5000;
 
 /**
+ * Wire filter body accepted by the bulk-action endpoints. Deliberately a
+ * dynamic property bag (`Record<string, any>`), not a fixed interface: it
+ * accepts BOTH the camelCase shape used internally and the snake_case
+ * query-string shape the frontend sends for the same field (see `pick`
+ * below), so any given key may or may not be present under either name.
+ * @typedef {Record<string, any>} BulkFilterInput
+ */
+
+/**
  * Coerce a wire filter object into the shape `buildTransactionWhere` expects.
  * Accepts both the camelCase shape used internally and the snake_case query-string
  * shape used by the frontend, so callers can forward request bodies as-is.
+ * @param {BulkFilterInput} filter
+ * @returns {object}
  */
 export function normalizeBulkFilter(filter) {
   if (!filter || typeof filter !== 'object') return {};
 
+  /**
+   * @param {string} camel
+   * @param {string} snake
+   * @returns {any}
+   */
   const pick = (camel, snake) => filter[camel] ?? filter[snake] ?? null;
 
   const tagSlugs = Array.isArray(filter.tagSlugs)
@@ -135,7 +151,7 @@ export async function resolveBulkSelection(selector = {}, opts = {}) {
     `SELECT t.id ${EXPORT_JOINS_SQL} WHERE ${whereSql} ORDER BY t.id`,
     params,
   );
-  return idsResult.rows.map((row) => row.id);
+  return idsResult.rows.map((/** @type {{ id: number }} */ row) => row.id);
 }
 
 export const BULK_SELECTION_DEFAULTS = Object.freeze({

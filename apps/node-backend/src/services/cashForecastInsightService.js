@@ -34,13 +34,24 @@ const MOVE_PCT = 0.15;
 const MOVE_ABS_FLOOR = 100;
 
 /**
+ * The subset of a computeCashflowForecast method result this module reads.
+ * The envelope's `methods` field is `any[]` (calculations/forecast/ is
+ * outside this ratchet slice) — narrowed locally to what this file touches.
+ * @typedef {object} ForecastMethod
+ * @property {string} id
+ * @property {string|null} [error]
+ * @property {Array<{ date: string, value: number }>} [cumulative] actuals-to-date folded with the projection.
+ * @property {{ p10?: Array<{ date: string, value: number }>, p90?: Array<{ date: string, value: number }> }|null} [bands] daily (non-cumulative) percentile series, MC methods only.
+ */
+
+/**
  * Pick the primary forecast method from the payload's `methods` array:
  * 1. first Monte-Carlo method (non-null `bands`, no `error`),
  * 2. else the ensemble method (no `error`),
  * 3. else the first method with no `error`.
  *
- * @param {Array<{ id: string, bands: object|null, error: string|null }>} methods
- * @returns {object|null} the chosen method, or null when none is usable
+ * @param {ForecastMethod[]} methods
+ * @returns {ForecastMethod|null} the chosen method, or null when none is usable
  */
 function pickPrimaryMethod(methods) {
   if (!Array.isArray(methods)) return null;
@@ -78,7 +89,7 @@ function foldDailyBandToMonthEnd(bandSeries, futureDays, anchor) {
 /**
  * Pure builder: distill a forecast payload into the month-end cash finding.
  *
- * @param {{ month: string, currency: string, current_day: number, methods: any[] }} payload
+ * @param {{ month: string, currency: string, current_day: number, methods: ForecastMethod[] }} payload
  *   The `data` payload of the computeCashflowForecast envelope.
  * @param {number|null} [previousMonthEndProjected] Month-end P50 from a prior
  *   run, used to detect a significant move; null disables the comparison.

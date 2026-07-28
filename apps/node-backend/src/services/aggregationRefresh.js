@@ -50,6 +50,7 @@ function clearForecastMcCaches() {
 
 // Mirrors the legacy service's 1s coalescing window for rapid single-row edits.
 const MC_CLEAR_DEBOUNCE_MS = 1000;
+/** @type {ReturnType<typeof setTimeout>|null} */
 let mcClearTimer = null;
 
 /**

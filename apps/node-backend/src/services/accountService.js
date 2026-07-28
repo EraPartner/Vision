@@ -33,6 +33,7 @@ const nameField = z.string({ error: 'name is required and must be a non-empty st
   .transform((s) => s.trim());
 
 // Clearable free-text: null clears, strings are trimmed, anything else rejects.
+/** @param {string} key */
 const clearableStringField = (key) => z.string({ error: `${key} must be a string` })
   .nullable()
   .transform((value) => (value === null ? null : value.trim()))
@@ -55,9 +56,14 @@ const currencyField = z.unknown().transform((value, ctx) => {
   return code;
 }).optional();
 
+/**
+ * @param {string} key
+ * @param {string[]} allowed
+ */
 const enumField = (key, allowed) =>
   z.enum(allowed, { error: `${key} must be one of: ${allowed.join(', ')}` }).optional();
 
+/** @param {string} key */
 const boolField = (key) => z.boolean({ error: `${key} must be a boolean` }).optional();
 
 // FK reference: null clears; otherwise Number() coercion + positive-integer
@@ -125,6 +131,8 @@ const accountCreateSchema = accountUpdateSchema.extend({ name: nameField });
 /**
  * Validate + normalize an account payload. On create, name is required; on
  * update every field is optional. Returns only the fields that were provided.
+ * @param {any} body unvalidated wire payload — zod does the actual validation.
+ * @param {{ requireName: boolean }} opts
  */
 function sanitize(body, { requireName }) {
   const schema = requireName ? accountCreateSchema : accountUpdateSchema;
@@ -142,6 +150,14 @@ function sanitize(body, { requireName }) {
  * A statement balance is only meaningful with its as-of date (ADR-094 drift
  * anchors on it). Enforced here for a friendly 4xx; migration 0065's CHECK
  * (ck_accounts_statement_balance_has_date) backstops at the DB.
+ *
+ * `balance` is `number|string` because callers pass either side of a "provided
+ * vs. stored" ternary: a zod-sanitized incoming value (coerced to `number`) or
+ * the value already on the row (`AccountRow.statement_balance`, pg NUMERIC —
+ * a `string`). Only presence is checked here, so the numeric-vs-string
+ * distinction doesn't matter to this function.
+ * @param {number|string|null|undefined} balance
+ * @param {string|null|undefined} date
  */
 function assertStatementBalanceHasDate(balance, date) {
   if (balance != null && date == null) {
@@ -184,12 +200,14 @@ export const accountService = {
     return { items, total };
   },
 
+  /** @param {number} id */
   async get(id) {
     const account = await accountRepository.getById(id);
     if (!account) throw new NotFoundError(`Account ${id} not found`);
     return account;
   },
 
+  /** @param {any} body unvalidated wire payload — see `sanitize`. */
   async create(body) {
     const fields = sanitize(body, { requireName: true });
     assertStatementBalanceHasDate(fields.statement_balance, fields.statement_balance_date);
@@ -204,6 +222,10 @@ export const accountService = {
     }
   },
 
+  /**
+   * @param {number} id
+   * @param {any} body unvalidated wire payload — see `sanitize`.
+   */
   async update(id, body) {
     // Widened for closed_at: server-stamped below by the lifecycle logic (D5),
     // never part of the parsed payload.
@@ -258,6 +280,7 @@ export const accountService = {
    * with zero referencing rows (FK ON DELETE RESTRICT); otherwise a 409 routes
    * the caller to the close flow (lifecycle D5: active → closed → deleted).
    */
+  /** @param {number} id */
   async remove(id) {
     let removed;
     try {

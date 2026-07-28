@@ -155,7 +155,9 @@ export async function previewMerge(sourceId, targetId) {
     'SELECT id, currency FROM accounts WHERE id = ANY($1::int[])',
     [[sourceId, targetId]],
   );
-  const byId = new Map(accounts.rows.map((r) => [r.id, r]));
+  const byId = new Map(accounts.rows.map(
+    (/** @type {{ id: number, currency: string }} */ r) => [r.id, r],
+  ));
   if (!byId.has(targetId)) throw new NotFoundError(`Account ${targetId} not found`);
   if (!byId.has(sourceId)) throw new NotFoundError(`Account ${sourceId} not found`);
 

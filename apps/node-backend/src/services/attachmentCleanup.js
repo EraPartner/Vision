@@ -15,6 +15,10 @@
 import { removeAttachmentFile } from './attachmentService.js';
 import { logger } from '../config/logger.js';
 
+/**
+ * @param {string[]} storedPaths
+ * @returns {Promise<void>}
+ */
 export async function removeAttachmentFilesBestEffort(storedPaths) {
   for (const storedPath of storedPaths) {
     try {

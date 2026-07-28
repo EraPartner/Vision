@@ -293,6 +293,26 @@
  * }} EnrichedRecipientRow
  */
 
+/**
+ * A row of `recipient_match_patterns` as returned by `SELECT *` (migration
+ * 0015). `pattern_kind` is CHECK-constrained to 'regex'|'glob'|'literal_prefix',
+ * `source` to 'user'|'suggested'|'system' — kept as plain `string` here since
+ * Postgres CHECK constraints are not reflected in the driver's row shape.
+ *
+ * @typedef {object} RecipientMatchPatternRow
+ * @property {number} id SERIAL
+ * @property {number} recipient_id FK → recipients, ON DELETE CASCADE
+ * @property {string} pattern
+ * @property {string} pattern_kind 'regex'|'glob'|'literal_prefix', DEFAULT 'literal_prefix'
+ * @property {boolean} case_sensitive DEFAULT false
+ * @property {number} priority DEFAULT 100
+ * @property {boolean} is_active DEFAULT true
+ * @property {string} source 'user'|'suggested'|'system', DEFAULT 'user'
+ * @property {string|null} notes
+ * @property {Date} created_at TIMESTAMPTZ
+ * @property {Date} updated_at TIMESTAMPTZ
+ */
+
 // ---------------------------------------------------------------------------
 // Categories
 // ---------------------------------------------------------------------------

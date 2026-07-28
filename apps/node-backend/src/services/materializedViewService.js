@@ -19,6 +19,10 @@ import { invalidateStatisticsCaches } from './info/cache.js';
  * session-level SET on a dedicated client and restore the pool default before
  * the client is reused.
  */
+/**
+ * @param {string} sql
+ * @returns {Promise<{ rows: any[], rowCount: number|null }>}
+ */
 async function runMaintenanceStatement(sql) {
   const client = await getClient();
   try {
@@ -256,7 +260,9 @@ export async function refreshMaterializedViews() {
 export const REFRESH_DEBOUNCE_MS = 5000;
 export const REFRESH_MAX_WAIT_MS = 10000;
 
+/** @type {ReturnType<typeof setTimeout>|null} */
 let debounceTimer = null;
+/** @type {number|null} */
 let debounceDeadline = null; // epoch ms the current burst must flush by
 
 export function scheduleRefresh() {

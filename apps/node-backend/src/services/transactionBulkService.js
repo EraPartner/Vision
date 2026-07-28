@@ -36,8 +36,11 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
     throw new ValidationError('transaction_ids contains no valid IDs');
   }
 
+  /** @type {number[]} */
   const addTagIds = [];
+  /** @type {number[]} */
   const removeTagIds = [];
+  /** @type {string[]} */
   const allUnknown = [];
 
   if (addSlugs.length > 0) {
@@ -45,7 +48,7 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
       'SELECT id, slug FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
       [addSlugs],
     );
-    const found = new Map(r.rows.map((row) => [row.slug, row.id]));
+    const found = new Map(r.rows.map((/** @type {{ id: number, slug: string }} */ row) => [row.slug, row.id]));
     for (const s of addSlugs) {
       if (!found.has(s)) allUnknown.push(s);
       else addTagIds.push(found.get(s));
@@ -57,7 +60,7 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
       'SELECT id, slug FROM tags WHERE slug = ANY($1::text[])',
       [removeSlugs],
     );
-    const found = new Map(r.rows.map((row) => [row.slug, row.id]));
+    const found = new Map(r.rows.map((/** @type {{ id: number, slug: string }} */ row) => [row.slug, row.id]));
     for (const s of removeSlugs) {
       if (!found.has(s)) allUnknown.push(s);
       else removeTagIds.push(found.get(s));
@@ -84,7 +87,7 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
         [txIds, addTagIds],
       );
       added = r.rows.length;
-      r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
+      r.rows.forEach((/** @type {{ transaction_id: number }} */ row) => affectedTxIds.add(row.transaction_id));
     }
 
     if (removeTagIds.length > 0) {
@@ -95,7 +98,7 @@ export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlug
         [txIds, removeTagIds],
       );
       removed = r.rows.length;
-      r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
+      r.rows.forEach((/** @type {{ transaction_id: number }} */ row) => affectedTxIds.add(row.transaction_id));
     }
 
     return { added, removed, transactions_affected: affectedTxIds.size };
@@ -139,6 +142,7 @@ export async function bulkUpdateTransactions({ ids, filter, fields }) {
 
   const txIds = await resolveBulkSelection({ ids, filter });
 
+  /** @type {string[]} */
   const setClauses = [];
   /** @type {Array<number[] | number | boolean | null>} */
   const params = [txIds];

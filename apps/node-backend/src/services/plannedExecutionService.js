@@ -30,6 +30,13 @@ export async function executePlanned({ id, executedTransactionId, executionDate 
   if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
   const execDate = executionDate || todayAppDateString();
+  /**
+   * Sanitized update payload for `plannedTransactionRepository.executeAndAdvance`
+   * — write-side values, NOT the read-side row shape: both dates go in as
+   * 'YYYY-MM-DD' strings (pg coerces on bind), whereas a fetched row's same
+   * columns come back as `Date` (see `PlannedTransactionRow` in types/rows.js).
+   * @type {{ is_executed: boolean, last_executed_date: string, planned_date?: string }}
+   */
   const updateFields = {
     is_executed: !existing.is_recurring,
     last_executed_date: execDate,

@@ -73,6 +73,7 @@ export function rebalanceDeployment({ actualValues, targetWeights, availableCash
   const totalAfter = actualTotal.plus(cash);
 
   // Shortfall per sleeve = max(0, desired − actual) where desired = totalAfter·target.
+  /** @type {Record<string, ReturnType<typeof toDecimal>>} */
   const shortfalls = {};
   let shortfallSum = toDecimal(0);
   for (const [sleeve, weight] of Object.entries(targetWeights ?? {})) {
