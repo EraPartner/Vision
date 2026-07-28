@@ -5,7 +5,11 @@ vi.mock('../src/database/connection.js', () => ({
 }));
 
 import { query } from '../src/database/connection.js';
-import { mvAvailable, clearMvCache } from '../src/repositories/infoRepositoryHelpers.js';
+import {
+  mvAvailable,
+  clearMvCache,
+  sanitizeIsolatedDailyInvestmentSpikes,
+} from '../src/repositories/infoRepositoryHelpers.js';
 import { sanitizeIsolatedValueSpikes } from '../src/utils/portfolioMath.js';
 
 describe('sanitizeIsolatedValueSpikes', () => {
@@ -21,6 +25,44 @@ describe('sanitizeIsolatedValueSpikes', () => {
     const rows = [{ value: 1000 }, { value: 2000 }, { value: 2010 }];
     const out = sanitizeIsolatedValueSpikes(rows, 'value');
     expect(out[1].value).toBe(2000); // next does not revert → not a needle
+  });
+});
+
+describe('sanitizeIsolatedDailyInvestmentSpikes', () => {
+  it('recomputes the corrected day netWorth including liabilities (liquid + liabilities + investments)', () => {
+    // Liabilities are stored as negative balances (ADR-092), exactly as the
+    // net-worth builder emits them: netWorth = liquid + liabilities + investments.
+    const snapshots = [
+      { date: '2025-01-01', liquid: 500, liabilities: -200, investments: 1000, netWorth: 1300 },
+      { date: '2025-01-02', liquid: 500, liabilities: -200, investments: 2000, netWorth: 2300 }, // isolated needle
+      { date: '2025-01-03', liquid: 500, liabilities: -200, investments: 1010, netWorth: 1310 },
+    ];
+
+    const out = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
+
+    // Corrected investments: geometric mean sqrt(1000 * 1010) ≈ 1004.99.
+    expect(out[1].investments).toBe(1004.99);
+    // Regression pin: netWorth must include the -200 liabilities term.
+    // The pre-fix recomputation (liquid + investments only) produced 1504.99.
+    expect(out[1].netWorth).toBe(1304.99);
+
+    // Control: non-spike neighbor days are untouched, liabilities included.
+    expect(out[0]).toEqual({ date: '2025-01-01', liquid: 500, liabilities: -200, investments: 1000, netWorth: 1300 });
+    expect(out[2]).toEqual({ date: '2025-01-03', liquid: 500, liabilities: -200, investments: 1010, netWorth: 1310 });
+
+    // Input is not mutated.
+    expect(snapshots[1].investments).toBe(2000);
+    expect(snapshots[1].netWorth).toBe(2300);
+  });
+
+  it('leaves a sustained investments move untouched', () => {
+    const snapshots = [
+      { date: '2025-01-01', liquid: 500, liabilities: -200, investments: 1000, netWorth: 1300 },
+      { date: '2025-01-02', liquid: 500, liabilities: -200, investments: 2000, netWorth: 2300 },
+      { date: '2025-01-03', liquid: 500, liabilities: -200, investments: 2010, netWorth: 2310 },
+    ];
+    const out = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
+    expect(out).toEqual(snapshots); // next does not revert → not a needle
   });
 });
 

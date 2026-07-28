@@ -357,8 +357,12 @@ export function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
     if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
       const correctedInvestments = Math.sqrt(prev * next);
       const liquid = Number(sanitized[i]?.liquid) || 0;
+      // Liabilities are stored as negative balances (ADR-092); the canonical
+      // formula everywhere else is netWorth = liquid + liabilities + investments,
+      // so the corrected point must include the liabilities term too.
+      const liabilities = Number(sanitized[i]?.liabilities) || 0;
       sanitized[i].investments = roundToCents(correctedInvestments);
-      sanitized[i].netWorth = roundToCents(liquid + correctedInvestments);
+      sanitized[i].netWorth = roundToCents(liquid + liabilities + correctedInvestments);
     }
   }
 
