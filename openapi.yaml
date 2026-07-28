@@ -656,8 +656,6 @@ components:
           type: number
         currency:
           type: string
-        balance:
-          type: number
         category_id:
           type: integer
           nullable: true

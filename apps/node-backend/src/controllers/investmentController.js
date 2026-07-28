@@ -104,6 +104,17 @@ const investmentBodySchema = z.looseObject({
   location: maxLenField('location', 300),
   municipality: maxLenField('municipality', 200),
   currency: currencyField,
+  // Provider columns (migration 0001): URL shape is checked separately
+  // (validateProviderUrls), but an over-length yet valid URL/path still
+  // reached the VARCHAR column as a raw 22001 500.
+  price_provider_id: maxLenField('price_provider_id', 200),
+  price_provider_url: maxLenField('price_provider_url', 500),
+  price_provider_latest_url: maxLenField('price_provider_latest_url', 500),
+  price_provider_latest_path: maxLenField('price_provider_latest_path', 300),
+  price_provider_history_url: maxLenField('price_provider_history_url', 500),
+  price_provider_history_path: maxLenField('price_provider_history_path', 300),
+  price_provider_history_ts_path: maxLenField('price_provider_history_ts_path', 300),
+  price_provider_history_price_path: maxLenField('price_provider_history_price_path', 300),
 });
 
 function parseInvestmentBody(body) {
@@ -497,6 +508,17 @@ export async function deleteTransaction(req, res) {
 export async function updateTransaction(req, res) {
   const txnId = requireTxnId(req);
   const fields = { ...(req.body || {}) };
+
+  // Validate a free-typed currency (ISO shape, uppercased) before it reaches
+  // the VARCHAR(10) column — create validates it, but PATCH forwarded the raw
+  // value (garbage stored; >10 chars 22001'd). The column is NOT NULL, so an
+  // explicit null/'' (clear) rejects instead of 500ing at the constraint.
+  if (fields.currency !== undefined) {
+    if (fields.currency === null || fields.currency === '') {
+      throw new ValidationError('currency cannot be cleared');
+    }
+    fields.currency = assertCurrency(fields.currency);
+  }
 
   // A date or currency change invalidates the stamped FX rate — recompute it
   // unless the client supplied one explicitly.

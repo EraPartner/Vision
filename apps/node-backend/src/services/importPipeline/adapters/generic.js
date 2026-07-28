@@ -5,7 +5,7 @@
 
 import { logger } from '../../../config/logger.js';
 import { normalizeToUppercase } from '../../../lib/textNormalization.js';
-import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat } from './_shared.js';
+import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat, normalizeIsoCurrency } from './_shared.js';
 
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
@@ -34,8 +34,10 @@ function rowToTransaction(row, config) {
   const recipient = String(row[colMap.recipient] || '').trim();
   const memo = colMap.memo ? String(row[colMap.memo] || '').trim() : '';
 
+  // ISO-shape normalize (uppercase) or null → commit's EUR default; a raw
+  // free-text cell failed the whole commit at the 0046 currency CHECK (500).
   let currency = null;
-  if (colMap.currency) currency = String(row[colMap.currency] || '').trim() || null;
+  if (colMap.currency) currency = normalizeIsoCurrency(row[colMap.currency]);
 
   let balance = null;
   if (colMap.balance) {

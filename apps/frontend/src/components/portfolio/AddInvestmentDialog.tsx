@@ -80,7 +80,13 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.assetClass || !form.name.trim()) return;
+    if (!form.assetClass) return;
+    // The input's `required` blocks a truly empty field, but a whitespace-only
+    // name passed it and this guard then silently no-op'd the Create.
+    if (!form.name.trim()) {
+      toast.error(t('addInv.nameRequired'));
+      return;
+    }
 
     // Validate the initial purchase BEFORE creating the investment. The old
     // flow created the row first, then either silently skipped the buy (empty

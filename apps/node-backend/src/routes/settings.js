@@ -161,6 +161,17 @@ const SETTING_SCHEMAS = {
   // Year-keyed maps: snapshots get the full profile validation per entry.
   belgian_tax_profile_snapshots_v1: z.record(z.string(), belgianTaxProfileSchema),
   belgian_tax_profile_snapshot_meta_v1: z.record(z.string(), jsonObjectSchema),
+  // Remaining first-party keys, same conservative top-level-shape guards.
+  // RecurringDetectionPanel stores an array of dismissed recipient ids (top-
+  // level shape only — entries stay unvalidated, matching the blob guards).
+  dismissed_recurring_patterns: z.array(z.unknown()),
+  // usePortfolioTaxAdjustments / usePortfolioTaxClassifications store
+  // "<year>:<investmentId>" / "<investmentId>"-keyed entry maps.
+  portfolio_tax_adjustments_v1: z.record(z.string(), jsonObjectSchema),
+  portfolio_tax_classifications_v1: z.record(z.string(), jsonObjectSchema),
+  // Internal one-shot FX-repair flag (written repository-side; guarded here so
+  // an API write can't corrupt its type).
+  fx_full_history_repair_done: z.boolean(),
 };
 
 const FORBIDDEN_SETTING_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -227,6 +238,27 @@ const SETTING_DEFAULTS = {
   includeTransfers: false,
 };
 
+/* ── Unknown-key policy ──────────────────────────────────────────────────────
+ * Every settings writer in the repo uses a fixed key (grep: frontend
+ * `saveSetting(` call sites, packaging/electron/main.js backup_settings, and
+ * the repository-side fx flag) — there is NO dynamic-key writer. So writes to
+ * a key outside the known set are typos/garbage and are rejected with a 400
+ * naming the known keys, instead of storing arbitrary JSON forever. Reads and
+ * DELETE stay unrestricted so legacy keys from restored backups can still be
+ * listed and cleaned up. */
+const KNOWN_SETTING_KEYS = new Set([
+  ...Object.keys(SETTING_SCHEMAS),
+  ...Object.keys(SETTING_DEFAULTS),
+]);
+
+function assertKnownSettingKey(key) {
+  if (!KNOWN_SETTING_KEYS.has(key)) {
+    throw new ValidationError(
+      `Unknown setting key '${key}'. Known keys: ${[...KNOWN_SETTING_KEYS].sort().join(', ')}`,
+    );
+  }
+}
+
 router.get('/:key', async (req, res) => {
   const { key } = req.params;
   const value = await settingsRepository.get(key);
@@ -262,6 +294,7 @@ router.put('/:key', async (req, res) => {
   const { value } = req.body;
 
   assertSettingKeyLength(key);
+  assertKnownSettingKey(key);
   if (value === undefined) throw new ValidationError('Missing "value" in request body');
 
   const result = await settingsRepository.set(key, validateSettingValue(key, value));
@@ -274,7 +307,10 @@ router.put('/', async (req, res) => {
     throw new ValidationError('Body must be a JSON object of key→value pairs');
   }
 
-  for (const key of Object.keys(settings)) assertSettingKeyLength(key, true);
+  for (const key of Object.keys(settings)) {
+    assertSettingKeyLength(key, true);
+    assertKnownSettingKey(key);
+  }
 
   const validatedEntries = new Map();
   for (const [key, value] of Object.entries(settings)) {

@@ -386,6 +386,28 @@ describe('Planned Transaction Routes', () => {
         .rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('normalises currency to uppercase ISO and rejects free text', async () => {
+      // Free-typed "euro" used to be uppercased to "EURO" by the repository and
+      // then violate the 0046 ISO CHECK as a raw 500.
+      const badReq = { body: { ...validBody, currency: 'euro' } };
+      await expect(routeHandlers['post:/'](badReq, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+
+      const okReq = { body: { ...validBody, currency: 'usd' } };
+      await routeHandlers['post:/'](okReq, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+      );
+    });
+
+    it('maps an absent/empty currency to undefined so the repository default (EUR) applies', async () => {
+      const req = { body: { ...validBody, currency: '' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: undefined }),
+      );
+    });
+
     it('drops truthy recurrence bounds on a loan instead of validating them', async () => {
       const req = {
         body: {
@@ -447,6 +469,71 @@ describe('Planned Transaction Routes', () => {
           .rejects.toBeInstanceOf(ValidationError);
       }
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('normalises a valid currency and rejects free-text or cleared currency on PATCH', async () => {
+      // PATCH forwarded the raw value to the SET builder, so "euro" hit the
+      // 0046 ISO CHECK as a raw 500 and null hit the NOT NULL constraint.
+      for (const body of [{ currency: 'euro' }, { currency: null }, { currency: '' }]) {
+        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { currency: 'usd' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ currency: 'USD' }),
+      );
+    });
+
+    it('coerces a valid amount and rejects zero/absurd/non-finite/cleared amounts on PATCH', async () => {
+      for (const body of [
+        { amount: 0 },
+        { amount: 1e15 },
+        { amount: 'Infinity' },
+        { amount: null },
+        { amount: '' },
+      ]) {
+        await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body }, mockResponse()))
+          .rejects.toBeInstanceOf(ValidationError);
+      }
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { amount: '-42.50' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ amount: -42.5 }),
+      );
+    });
+
+    it('rejects turning recurrence on (or clearing the pattern) when the merged state has no valid pattern', async () => {
+      // is_recurring:true on a row without a pattern used to store and leave
+      // the row perpetually due after /execute (the POST guard has an exact
+      // sibling); clearing the pattern on a recurring row recreated it.
+      await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body: { is_recurring: true } }, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false, is_recurring: true, recurrence_pattern: 'monthly' });
+      await expect(routeHandlers['patch:/:id']({ params: { id: '1' }, body: { recurrence_pattern: null } }, mockResponse()))
+        .rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+
+      // Turning recurrence on WITH a valid pattern still passes.
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false });
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { is_recurring: true, recurrence_pattern: 'monthly' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ is_recurring: true, recurrence_pattern: 'monthly' }),
+      );
+
+      // An unrelated edit to a legacy broken row (recurring, no pattern) is NOT blocked.
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false, is_recurring: true, recurrence_pattern: null });
+      await routeHandlers['patch:/:id']({ params: { id: '1' }, body: { memo: 'still editable' } }, mockResponse());
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ memo: 'still editable' }),
+      );
     });
 
     it('passes explicit nulls through to clear recurrence bounds and pattern', async () => {

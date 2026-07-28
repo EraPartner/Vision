@@ -206,6 +206,18 @@ describe('generic adapter — configurable mapping', () => {
       parseGeneric(writeTempCSV('generic', 'Date,Amount,Payee,Note,Cur\n31.12.2024,"-10,00",S,x,EUR'), cfg),
     ).rejects.toThrow(/Unsupported date_format/);
   });
+
+  it('normalizes ISO-shaped currency to uppercase and nulls free text (was a commit-time CHECK 500)', async () => {
+    const csv = [
+      'Date,Amount,Payee,Note,Cur',
+      '24/11/2025,"-10,00",SHOP,a,usd',   // lowercase ISO → USD
+      '23/11/2025,"-11,00",SHOP,b,euro',  // free text → null (commit defaults EUR)
+      '22/11/2025,"-12,00",SHOP,c,',      // empty → null
+    ].join('\n');
+    const txns = await parseGeneric(writeTempCSV('generic', csv), config);
+
+    expect(txns.map((t) => t.currency)).toEqual(['USD', null, null]);
+  });
 });
 
 describe('wise adapter — cross-currency direction', () => {

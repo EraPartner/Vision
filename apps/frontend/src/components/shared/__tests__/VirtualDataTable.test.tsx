@@ -318,6 +318,44 @@ describe("VirtualDataTable — inline editing", () => {
             ),
         );
     });
+
+    it("keeps the original number when the field is cleared (no silent 0.00 save)", async () => {
+        const user = userEvent.setup();
+        const onRowUpdate = vi.fn();
+        renderTable({ columns: EDITABLE_COLUMNS, onRowUpdate });
+
+        await user.dblClick(screen.getByText("Alpha"));
+        const valueInput = screen.getByRole("spinbutton");
+        await user.clear(valueInput);
+        await user.keyboard("{Enter}");
+
+        // Row 0's value is 100 — a cleared field must not become 0.
+        await waitFor(() =>
+            expect(onRowUpdate).toHaveBeenCalledWith(
+                0,
+                expect.objectContaining({ value: 100 }),
+            ),
+        );
+    });
+
+    it("parses an edited number value at save time", async () => {
+        const user = userEvent.setup();
+        const onRowUpdate = vi.fn();
+        renderTable({ columns: EDITABLE_COLUMNS, onRowUpdate });
+
+        await user.dblClick(screen.getByText("Alpha"));
+        const valueInput = screen.getByRole("spinbutton");
+        await user.clear(valueInput);
+        await user.type(valueInput, "12.5");
+        await user.keyboard("{Enter}");
+
+        await waitFor(() =>
+            expect(onRowUpdate).toHaveBeenCalledWith(
+                0,
+                expect.objectContaining({ value: 12.5 }),
+            ),
+        );
+    });
 });
 
 // ---------------------------------------------------------------------------

@@ -25,7 +25,9 @@ vi.mock('../../src/repositories/recipientBankAccountRepository.js', () => ({
   },
 }));
 
-vi.mock('../../src/middleware/validation.js', () => ({
+vi.mock('../../src/middleware/validation.js', async (importOriginal) => ({
+  // Keep the real helpers (assertMaxLength, …); only stub the middleware.
+  ...(await importOriginal()),
   validateIdParam: (req, res, next) => next(),
 }));
 
@@ -107,6 +109,30 @@ describe('Recipient Bank Account Routes', () => {
       const req = { params: { id: '1' }, body: {} };
       const res = mockResponse();
       await expect(routeHandlers['post:/:id/bank-accounts'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects an account_number longer than the VARCHAR(34) column (was a raw 22001 500)', async () => {
+      const req = { params: { id: '1' }, body: { account_number: 'X'.repeat(35) } };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/:id/bank-accounts'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(bankAccountRepo.createOrGet).not.toHaveBeenCalled();
+    });
+
+    it('accepts an account_number at the 34-char boundary (IBAN max)', async () => {
+      const acct = 'X'.repeat(34);
+      bankAccountRepo.createOrGet.mockResolvedValue({
+        bankAccount: { id: 2, account_number: acct },
+        created: true,
+      });
+
+      const req = { params: { id: '1' }, body: { account_number: acct } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/bank-accounts'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(bankAccountRepo.createOrGet).toHaveBeenCalledWith(
+        expect.objectContaining({ accountNumber: acct }),
+      );
     });
   });
 

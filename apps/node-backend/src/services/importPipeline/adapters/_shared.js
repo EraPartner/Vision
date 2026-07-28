@@ -29,6 +29,21 @@ export function parseDecimalSafe(value) {
 }
 
 /**
+ * Normalize a CSV currency cell to an uppercase ISO-4217-shaped code, or null
+ * when the cell doesn't hold one. transactions.currency is VARCHAR(3) with an
+ * `^[A-Z]{3}$` CHECK (migration 0046), so a free-text cell ("euro", "US$")
+ * forwarded raw failed the whole commit as a raw DB 500 mid-import; a null
+ * falls back to the pipeline's EUR default at commit instead.
+ *
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+export function normalizeIsoCurrency(value) {
+  const code = String(value ?? '').trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+
+/**
  * Read a text file, decoding as UTF-8 but falling back to latin1 (ISO-8859-1)
  * when the bytes aren't valid UTF-8. Belgian bank exports are frequently
  * windows-1252/latin-1, where e.g. `é` is the single byte 0xE9 — decoding that

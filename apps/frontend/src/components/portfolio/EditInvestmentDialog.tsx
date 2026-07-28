@@ -71,7 +71,12 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.name.trim()) return;
+    // The input's `required` blocks a truly empty field, but a whitespace-only
+    // name passed it and this guard then silently no-op'd the Save.
+    if (!form.name.trim()) {
+      toast.error(t('invEdit.nameRequired'));
+      return;
+    }
     if (unitBased && !form.symbol.trim()) {
       toast.error(t('invEdit.symbolRequired'));
       return;

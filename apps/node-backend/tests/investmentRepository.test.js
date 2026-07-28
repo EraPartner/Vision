@@ -14,6 +14,7 @@ describe('investmentRepository.create', () => {
 
   it('creates through legacy investments table when inheritance schema is absent', async () => {
     query
+      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
       .mockResolvedValueOnce({ rows: [{ id: 1, name: 'BTC', asset_class: 'crypto' }] });
 
@@ -27,10 +28,15 @@ describe('investmentRepository.create', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       1,
-      "SELECT to_regclass('public.investments_base') AS investments_base"
+      'SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1',
+      ['BTC', 0]
     );
     expect(query).toHaveBeenNthCalledWith(
       2,
+      "SELECT to_regclass('public.investments_base') AS investments_base"
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
       `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
       ['BTC', 'BTC', 'crypto', 'EUR', 50000, null, null, null, null, null, null, null, 'manual', null, null, null, null, null, null, null, null]
@@ -40,6 +46,7 @@ describe('investmentRepository.create', () => {
 
   it('falls back to inheritance tables when insert into investments view is not updatable', async () => {
     query
+      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
       .mockRejectedValueOnce({ message: 'cannot insert into view "investments"', code: '55000' })
       .mockResolvedValueOnce({ rows: [{ id: 17 }] })
@@ -57,22 +64,23 @@ describe('investmentRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      2,
+      3,
       `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
       ['AAPL', 'AAPL', 'stock', 'USD', 180.5, null, null, null, null, null, null, 'Tech stock', 'yahoo', 'AAPL', null, null, null, null, null, null, null]
     );
     expect(query).toHaveBeenNthCalledWith(
-      3,
+      4,
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       ['AAPL', 'USD', 'Tech stock', 'yahoo', 'AAPL', null, null, null, null, null, null, null, 'AAPL', 180.5]
     );
-    expect(query).toHaveBeenNthCalledWith(4, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [17]);
+    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [17]);
     expect(result).toEqual({ id: 17, asset_class: 'stock', name: 'AAPL' });
   });
 
   it('falls back to legacy insert columns when modern provider columns are missing', async () => {
     query
+      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
       .mockRejectedValueOnce({
         code: '42703',
@@ -92,7 +100,7 @@ describe('investmentRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      3,
+      4,
       `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
       ['Napoleon', 'NAPOLEON', 'metals', 'EUR', 706.5, null, null, null, null, null, null, null, 'custom', 'napoleon.price', 'https://example.com/latest']
@@ -102,6 +110,7 @@ describe('investmentRepository.create', () => {
 
   it('falls back to inheritance create when legacy insert also hits non-updatable investments view', async () => {
     query
+      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
       .mockRejectedValueOnce({
         code: '42703',
@@ -131,11 +140,11 @@ describe('investmentRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      5,
+      6,
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       ['Napoleon 20F', 'EUR', null, 'custom', null, null, 'https://example.com/latest', 'napoleon.price', 'https://example.com/history', 'points', 'timestamp_ms', 'price', 'NAPOLEON', 706.5]
     );
-    expect(query).toHaveBeenNthCalledWith(6, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [99]);
+    expect(query).toHaveBeenNthCalledWith(7, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [99]);
     expect(result).toEqual({ id: 99, asset_class: 'metals', name: 'Napoleon 20F' });
   });
 
@@ -167,6 +176,7 @@ describe('investmentRepository.create', () => {
 
   it('falls back to legacy inheritance columns when child table misses modern provider columns', async () => {
     query
+      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
       .mockResolvedValueOnce({ rows: [{ metals_investments: null }] })
       .mockRejectedValueOnce({
@@ -188,16 +198,17 @@ describe('investmentRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      4,
+      5,
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
       ['Napoleon 20F', 'EUR', null, 'custom', 'napoleon.price', 'https://example.com/latest', 'NAPOLEON', 705.2]
     );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [44]);
+    expect(query).toHaveBeenNthCalledWith(6, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [44]);
     expect(result).toEqual({ id: 44, asset_class: 'metals', name: 'Napoleon 20F' });
   });
 
   it('resyncs investments_base sequence and retries when inherited insert hits duplicate id', async () => {
     query
+      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
       .mockRejectedValueOnce({
         code: '23505',
@@ -218,21 +229,60 @@ describe('investmentRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      2,
+      3,
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       ['AAPL', 'USD', null, 'manual', null, null, null, null, null, null, null, null, 'AAPL', 180.5]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      3,
-      "SELECT setval(pg_get_serial_sequence('investments_base', 'id'), COALESCE((SELECT MAX(id) FROM investments_base), 0) + 1, false)"
     );
     expect(query).toHaveBeenNthCalledWith(
       4,
+      "SELECT setval(pg_get_serial_sequence('investments_base', 'id'), COALESCE((SELECT MAX(id) FROM investments_base), 0) + 1, false)"
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      5,
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       ['AAPL', 'USD', null, 'manual', null, null, null, null, null, null, null, null, 'AAPL', 180.5]
     );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [42]);
+    expect(query).toHaveBeenNthCalledWith(6, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [42]);
     expect(result).toEqual({ id: 42, asset_class: 'stock', name: 'AAPL' });
+  });
+});
+
+describe('investmentRepository.create symbol uniqueness', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    __resetInvestmentSchemaCache();
+  });
+
+  it('rejects a duplicate symbol on create with the same error shape as update', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 7 }] }); // uniqueness check finds a match
+
+    await expect(
+      investmentRepository.create({ name: 'Apple', symbol: ' aapl ', asset_class: 'stock', currency: 'USD' })
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: 'symbol must be unique' });
+
+    // Normalized (trim/uppercase) before the check; excludeId 0 matches no row.
+    expect(query).toHaveBeenCalledWith(
+      'SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1',
+      ['AAPL', 0]
+    );
+    expect(query).toHaveBeenCalledTimes(1); // nothing written
+  });
+
+  it('skips the uniqueness check when no symbol is provided', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 12 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 12, asset_class: 'savings', name: 'Book' }] });
+
+    const result = await investmentRepository.create({
+      name: 'Book', asset_class: 'savings', currency: 'EUR', interest_rate: 2,
+    });
+
+    expect(result).toEqual({ id: 12, asset_class: 'savings', name: 'Book' });
+    expect(query).not.toHaveBeenCalledWith(
+      'SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1',
+      expect.anything()
+    );
   });
 });
 

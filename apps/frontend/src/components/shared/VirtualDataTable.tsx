@@ -527,7 +527,20 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     const saveEditing = (sourceIndex: number, row: T) => {
         if (onRowUpdate) {
-            const updatedRow = { ...row, ...editValues } as T;
+            // Number columns keep the raw string while editing (so a decimal
+            // separator can be typed) and are parsed here. A cleared number
+            // field keeps the original value instead of saving a legit-looking
+            // 0.00 (`parseDecimal("") → 0`).
+            const values: Record<string, unknown> = { ...editValues };
+            for (const col of columns) {
+                if (!col.editable || col.type !== "number" || !(col.key in values)) continue;
+                const raw = values[col.key];
+                if (typeof raw === "string") {
+                    if (raw.trim() === "") delete values[col.key];
+                    else values[col.key] = parseDecimal(raw);
+                }
+            }
+            const updatedRow = { ...row, ...values } as T;
             onRowUpdate(sourceIndex, updatedRow);
         }
         setEditingRow(null);
@@ -847,11 +860,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                                 type={col.type || "text"}
                                                                 value={String(editValues[col.key] ?? "")}
                                                                 onChange={(e) =>
+                                                                    // Raw string for every type; number columns are parsed
+                                                                    // at save time (saveEditing) so clearing the field does
+                                                                    // not silently become a saved 0.00.
                                                                     setEditValues((prev) => ({
                                                                         ...prev,
-                                                                        [col.key]: col.type === "number"
-                                                                            ? parseDecimal(e.target.value)
-                                                                            : e.target.value,
+                                                                        [col.key]: e.target.value,
                                                                     }))
                                                                 }
                                                                 onKeyDown={(e) => {

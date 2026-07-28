@@ -83,6 +83,18 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     expect(txns[0].currency).toBe('EUR');
   });
 
+  it('uppercases an ISO currency and falls back to EUR for free text (was a commit-time CHECK 500)', async () => {
+    const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
+2026-03-04,Main,Acme,one,-10.00,usd,100.00,OTHER,
+2026-03-05,Main,Acme,two,-11.00,euro,89.00,OTHER,
+`;
+
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+
+    expect(txns.map((t) => t.currency)).toEqual(['USD', 'EUR']);
+  });
+
   it('builds comment from imported category and existing comment', async () => {
     const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
 2026-03-05,Personal,Electric Company,bill,-120.00,EUR,1859.80,UTILITIES,Paid by direct debit

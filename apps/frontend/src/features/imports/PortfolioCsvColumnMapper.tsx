@@ -70,6 +70,18 @@ export function PortfolioCsvColumnMapper({ file, separator, config, onChange }: 
     onChange({ ...config, typeMapping: next });
   };
 
+  // CSV columns mapped to more than one field. Legit for e.g. one "Instrument"
+  // column serving both symbol and name, but a plausible-corruption trap for
+  // amount/fees (every row would get fees = amount) — so warn, don't block.
+  const duplicateColumns = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const [key] of PORTFOLIO_COLUMN_FIELDS) {
+      const v = String(config[key] ?? "").trim();
+      if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
+    return [...counts.entries()].filter(([, n]) => n > 1).map(([col]) => col);
+  }, [config]);
+
   return (
     <div className="space-y-4">
       {/* Defaults */}
@@ -114,6 +126,12 @@ export function PortfolioCsvColumnMapper({ file, separator, config, onChange }: 
           />
         ))}
       </div>
+
+      {duplicateColumns.length > 0 && (
+        <p className="text-sm text-warning" role="alert">
+          {t("portfolioImport.duplicateColumnsWarning", { columns: duplicateColumns.join(", ") })}
+        </p>
+      )}
 
       {/* Type-value mapping */}
       {config.typeColumn && distinctTypeValues.length > 0 && (

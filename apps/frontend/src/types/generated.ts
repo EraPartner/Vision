@@ -3313,7 +3313,6 @@ export interface components {
             memo?: string | null;
             amount?: number;
             currency?: string;
-            balance?: number;
             category_id?: number | null;
             category_name?: string;
             comment?: string | null;

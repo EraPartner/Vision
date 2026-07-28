@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc, normalizeIsoCurrency } from './_shared.js';
 
 const NAME = 'vision';
 const BANK_LABEL = 'Vision';
@@ -30,7 +30,9 @@ function rowToTransaction(row) {
   const recipientRaw = (row['Recipient'] || '').trim();
   const recipient = recipientRaw ? normalizeToUppercase(cleanRecipientName(recipientRaw)) : 'UNKNOWN';
   const memo = row['Memo'] ? normalizeToUppercase(row['Memo'].trim()) : '';
-  const currency = (row['Currency'] || 'EUR').trim().toUpperCase();
+  // ISO-shape normalize: a hand-edited "euro" cell became "EURO" and failed
+  // the whole commit at the VARCHAR(3) + 0046 CHECK as a raw 500.
+  const currency = normalizeIsoCurrency(row['Currency']) || 'EUR';
   // Same guard-apostrophe cleanup as Amount, so a negative Balance survives the
   // round-trip instead of being silently nulled.
   const balanceStr = (row['Balance'] || '').replace(/'/g, '').trim();
