@@ -1,12 +1,13 @@
 /**
  * Real-Express route-test harness (supertest).
  *
- * The legacy harness (`routeHarness.js`) mocks `express` itself: `Router()`
- * returns a stub that keeps only the LAST handler registered per verb+path, so
- * every guard registered before it (`validateIdParam`, per-route rate limiters,
- * multer, …) is silently dropped, and handlers are invoked with hand-built
- * `{ query: {} }` objects that never went through Express's parsing, the
- * ADR-026 envelope middleware, or the centralized error handler.
+ * Replaces the retired `routeHarness.js`, which mocked `express` itself:
+ * `Router()` returned a stub that kept only the LAST handler registered per
+ * verb+path, so every guard registered before it (`validateIdParam`,
+ * per-route rate limiters, multer, …) was silently dropped, and handlers were
+ * invoked with hand-built `{ query: {} }` objects that never went through
+ * Express's parsing, the ADR-026 envelope middleware, or the centralized
+ * error handler.
  *
  * This module mounts the REAL router on a throwaway `express()` app wired the
  * way `src/main.js` wires the data plane, and hands back a supertest agent.

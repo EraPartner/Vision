@@ -3,7 +3,6 @@
  * Mirrors validation-related tests from Python test suite.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { createMockResponse as mockResponse } from './helpers/routeHarness.js';
 import {
   validateId, sanitizeString, validateNumber,
   validateDateString,
@@ -11,6 +10,15 @@ import {
   assertOptionalId,
 } from '../src/middleware/validation.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
+
+// validateIdParam is unit-tested as a plain middleware function
+// (req, res, next) — a minimal res stub is enough; there is no router/HTTP
+// path to exercise.
+function mockResponse() {
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
+  res.status.mockReturnValue(res);
+  return res;
+}
 
 describe('Validation Middleware', () => {
   describe('validateId', () => {
