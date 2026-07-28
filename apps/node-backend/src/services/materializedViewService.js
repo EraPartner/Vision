@@ -84,7 +84,12 @@ export async function createMaterializedViews() {
   // 2-3. Category totals and daily cashflow are fully independent of each other —
   //      create them in parallel.
   await Promise.all([
-    // 2. Category totals (all-time)
+    // 2. Category totals (all-time). Effective category resolves 3 levels
+    //    (own → recipient default → PRIMARY recipient's default) so the MV
+    //    fast path agrees with getCategoryBreakdown's live fallback and the
+    //    transactions surfaces. Changing this definition requires a migration
+    //    that DROPs the MV (see 0084): IF NOT EXISTS never redefines an
+    //    existing view, so already-migrated installs keep the old SQL otherwise.
     query(`
       CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals AS
       SELECT
@@ -95,7 +100,8 @@ export async function createMaterializedViews() {
         t.currency
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       WHERE t.is_active = true AND t.is_transfer = false
       GROUP BY
         COALESCE(c.id, -1),

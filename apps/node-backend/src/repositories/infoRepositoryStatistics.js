@@ -38,6 +38,11 @@ export const statisticsRepository = {
     // (category, currency) converted once equals Σ of the converted per-row
     // amounts (rate is linear and sign-preserving): numerically identical to
     // the old per-row loop, minus the row-cardinality transfer to Node.
+    //
+    // Effective category is the canonical 3-level resolution (own → recipient
+    // default → PRIMARY recipient's default), matching transactionRepository —
+    // an alias row categorised via its primary must not show as UNCATEGORISED
+    // here while the transactions list shows it categorised.
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
@@ -46,7 +51,8 @@ export const statisticsRepository = {
              t.currency
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       WHERE t.is_active = true
         ${includeTransfers ? '' : 'AND t.is_transfer = false'}
       GROUP BY COALESCE(c.id, -1),
@@ -138,9 +144,13 @@ export const statisticsRepository = {
     // the converted per-transaction amounts — numerically identical to the old
     // per-row loop. The sign-split also gives explicit income/expense per cell
     // so consumers no longer have to classify by the sign of the net total.
+    // Effective category is the canonical 3-level resolution (own →
+    // recipient default → PRIMARY recipient's default), matching
+    // transactionRepository — the same expression appears in the SELECT, the
+    // NOT NULL filter and the GROUP BY, and all three must stay identical.
     const sql = `
       SELECT
-        COALESCE(t.category_id, r.default_category_id) AS category_id,
+        COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
         CONCAT(c.general, ': ', c.detail) AS category_name,
         TO_CHAR(t.date, 'YYYY-MM') AS period,
         t.date, t.currency,
@@ -150,12 +160,12 @@ export const statisticsRepository = {
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       WHERE t.is_active = true
         ${includeTransfers ? '' : 'AND t.is_transfer = false'}
-        AND COALESCE(t.category_id, r.default_category_id) IS NOT NULL
+        AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NOT NULL
         ${exclusionWhere}
-      GROUP BY COALESCE(t.category_id, r.default_category_id), CONCAT(c.general, ': ', c.detail), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
+      GROUP BY COALESCE(t.category_id, r.default_category_id, pr.default_category_id), CONCAT(c.general, ': ', c.detail), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
       ORDER BY period
     `;
 

@@ -27,6 +27,7 @@ import {
   releaseDbSuiteLock,
 } from './setup/db.js';
 import { statisticsRepository } from '../src/repositories/infoRepositoryStatistics.js';
+import transactionRepository from '../src/repositories/transactionRepository.js';
 import { clearMvCache } from '../src/repositories/infoRepositoryHelpers.js';
 import { clearMemoryCache } from '../src/services/currency/currencyConversionService.js';
 import { closePool } from '../src/database/connection.js';
@@ -249,9 +250,9 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryStatistics (real
 
     it('sorts cells ascending by total and applies alias-aware exclusions', async () => {
       await seedBase();
-      // Recorded under the ALIAS with its OWN category (the pivot's category
-      // resolution is 2-level, so a category via the primary's default would
-      // not even enter the pivot — see the last test in this file).
+      // Recorded under the ALIAS with its OWN category. (Categories reached
+      // via the primary's default also enter the pivot — 3-level resolution,
+      // see the last test in this file.)
       await insertTxn({ date: '2024-02-10', amount: '-10.00', recipientId: rec.aldiAlias, categoryId: cat.Food });
       await insertTxn({ date: '2024-02-12', amount: '-20.00', recipientId: rec.misc, categoryId: cat.Bills });
 
@@ -269,19 +270,20 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryStatistics (real
       expect(exclCategory.categoryPivot['2024-02'].map((c) => c.categoryId)).toEqual([cat.Food]);
     });
 
-    // POSSIBLE BUG / cross-surface inconsistency (pinning current behaviour,
-    // flagged for the orchestrator): both statistics queries resolve the
-    // effective category over TWO levels only — COALESCE(t.category_id,
-    // r.default_category_id) — while the transactions surfaces (list, GET,
-    // uncategorised queue) resolve THREE (… , pr.default_category_id). A row
-    // recorded under an alias whose PRIMARY carries the default category is
-    // therefore categorised in the transactions list, but here it is
-    // UNCATEGORISED in the breakdown and silently ABSENT from the pivot
-    // (whose WHERE requires the 2-level COALESCE to be non-NULL). The mock
-    // suite's "missing category_id → Uncategorised" pivot case is unreachable
-    // through the real query for the same reason: the SQL filters those rows
-    // out before the JS 'Uncategorised' branch can ever see them.
-    it('alias row categorised only via its primary: UNCATEGORISED in breakdown, absent from pivot', async () => {
+    // Regression coverage (formerly a pinned cross-surface inconsistency):
+    // both statistics queries used to resolve the effective category over TWO
+    // levels only — COALESCE(t.category_id, r.default_category_id) — while
+    // the transactions surfaces (list, GET, uncategorised queue) resolve
+    // THREE (…, pr.default_category_id). A row recorded under an alias whose
+    // PRIMARY carries the default category was therefore categorised in the
+    // transactions list but UNCATEGORISED in the breakdown and silently
+    // ABSENT from the pivot (whose WHERE requires the COALESCE non-NULL).
+    // Both queries now use the canonical 3-level pattern, so the breakdown
+    // and pivot must AGREE with the transactions list. (Rows uncategorised at
+    // ALL three levels are still excluded from the pivot by design, so the
+    // mock suite's "missing category_id → Uncategorised" JS branch remains a
+    // defensive path never fed by the real query.)
+    it('alias row categorised only via its primary: Bills in breakdown and pivot, agreeing with the transactions list', async () => {
       const pool = getTestPool();
       await seedBase();
       const { rows } = await pool.query(
@@ -294,15 +296,33 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryStatistics (real
          VALUES ('Electrabel Invoicing', 'electrabel invoicing', $1) RETURNING id`,
         [rows[0].id],
       );
-      await insertTxn({ date: '2024-02-10', amount: '-120.00', recipientId: aliasRes.rows[0].id });
+      const txnId = await insertTxn({ date: '2024-02-10', amount: '-120.00', recipientId: aliasRes.rows[0].id });
 
+      // The transactions list categorises the row via the primary's default…
+      const listed = (await transactionRepository.getAll({})).find((t) => t.id === txnId);
+      expect(listed.effective_category_id).toBe(cat.Bills);
+      expect(listed.category_name).toBe('Bills:Utilities');
+
+      // …and the breakdown now agrees (formerly UNCATEGORISED here).
       const breakdown = await statisticsRepository.getCategoryBreakdown();
       expect(breakdown).toEqual([
-        { id: null, name: 'UNCATEGORISED', count: 1, total: -120 }, // ← NOT Bills
+        { id: cat.Bills, name: 'Bills:Utilities', count: 1, total: -120 },
       ]);
 
+      // …as does the pivot (the row formerly vanished from it entirely).
       const pivot = await statisticsRepository.getCategoryPivot();
-      expect(pivot.categoryPivot).toEqual({}); // the row vanishes from the pivot entirely
+      expect(pivot.categoryPivot).toEqual({
+        '2024-02': [
+          {
+            categoryId: cat.Bills,
+            categoryName: 'Bills: Utilities', // pivot format is 'general: detail'
+            total: -120,
+            income: 0,
+            expense: -120,
+            transactionCount: 1,
+          },
+        ],
+      });
     });
   });
 });
