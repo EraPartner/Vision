@@ -8,12 +8,21 @@ import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
 const NAME = 'belfius';
 const BANK_LABEL = 'Belfius';
 const HEADER_ROWS = 13;
 const BALANCE_LINE_INDEX = 9;
 const MIN_FIELDS = 12;
 
+/**
+ * @param {string} line the statement's "Laatste saldo;" header line
+ * @returns {number|null}
+ */
 function parseLastBalance(line) {
   if (!line.includes('Laatste saldo;')) return null;
   const parts = line.split(';');
@@ -25,6 +34,14 @@ function parseLastBalance(line) {
   return isNaN(val) ? null : val;
 }
 
+/**
+ * Walk the statement's closing balance backwards over the rows, stamping each
+ * one's `balance`. Mutates `transactions` in place.
+ *
+ * @param {ParsedBankTransaction[]} transactions
+ * @param {number|null} lastBalance
+ * @returns {void}
+ */
 function applyRunningBalances(transactions, lastBalance) {
   if (lastBalance === null || transactions.length === 0) return;
 
@@ -55,6 +72,10 @@ function applyRunningBalances(transactions, lastBalance) {
   }
 }
 
+/**
+ * @param {string} line one ';'-delimited statement record
+ * @returns {ParsedBankTransaction|null} null when the line is too short or unparseable
+ */
 function parseTransactionLine(line) {
   const parts = splitDelimitedRecord(line);
   if (!parts || parts.length < MIN_FIELDS) return null;
@@ -113,6 +134,10 @@ function parseTransactionLine(line) {
   };
 }
 
+/**
+ * @param {string|null|undefined} csvSample raw head of the uploaded file
+ * @returns {boolean}
+ */
 export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 15);
@@ -120,10 +145,14 @@ export function detect(csvSample) {
     || lines.some((line) => /^BE\d{2}/.test(line.trim()) && line.split(';').length >= MIN_FIELDS);
 }
 
+/**
+ * @param {string} filePath
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath) {
   const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   const lastBalance = lines.length > BALANCE_LINE_INDEX
     ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
     : null;

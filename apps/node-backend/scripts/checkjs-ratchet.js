@@ -45,19 +45,35 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  * Seeded with the core data-layer row shapes (`src/types/rows.js`), then grown
  * file-by-file until every repository was annotated. The whole data layer is
  * now held as directory prefixes, so a NEW file under either directory is
- * ratcheted from birth. Per the original plan, the next targets are further
- * directories (services/, routes/, …) — grow them file-by-file, then collapse
- * to the directory prefix once complete.
+ * ratcheted from birth.
+ *
+ * `src/services/` is being taken the same way, one whole subdirectory at a
+ * time: a subdirectory is annotated to zero errors and only then added here as
+ * a prefix, so new files under it are ratcheted from birth too. Held so far:
+ * the two import pipelines, currency/FX, prices, tax, and info. Still OUTSIDE
+ * the ratchet under `src/services/`: the ~33 top-level service files plus
+ * `calculations/`, `research/`, `reports/`, `portfolio/`, and `aiChat/` — and
+ * beyond services, `routes/` and `lib/`.
  *
  * @type {string[]}
  */
 const RATCHETED = [
   'src/types/',
   'src/repositories/',
+  'src/services/currency/',
+  'src/services/importPipeline/',
+  'src/services/info/',
+  'src/services/portfolioImportPipeline/',
+  'src/services/prices/',
+  'src/services/tax/',
 ];
 
-/** Directory the "ready to ratchet" hint scans for already-clean files. */
-const HINT_SCOPE = 'src/repositories/';
+/**
+ * Directory the "ready to ratchet" hint scans for already-clean files. Points
+ * at the frontier: `src/repositories/` is complete, so the hint now surfaces
+ * service files that are already implicit-any-clean and could be listed.
+ */
+const HINT_SCOPE = 'src/services/';
 
 /**
  * @param {string} absolutePath

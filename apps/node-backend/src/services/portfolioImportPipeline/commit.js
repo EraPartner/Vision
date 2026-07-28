@@ -23,16 +23,50 @@ import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
 // 500-1000 row brokerage CSV from thousands of sequential round trips to a
 // handful, while a per-row SAVEPOINT keeps crash-isolation (a bad row rolls back
 // to its savepoint without poisoning the chunk).
+/**
+ * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
+ * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
+ */
+
+/**
+ * The projection commit.js drains. `tx_date` is `to_char`-ed to a 'YYYY-MM-DD'
+ * string, `investment_id` is `COALESCE(user_override_investment_id,
+ * resolved_investment_id)`, and the two `inv.*` columns come from the LEFT JOIN
+ * on `investments` (null for cash rows and unresolved instruments).
+ *
+ * @typedef {Pick<PortfolioImportStagingRow,
+ *   'id'|'type'|'route'|'type_raw'|'units'|'price_per_unit'|'amount'|'fees'|'taxes'|'currency'|'fx_rate_to_eur'|'note'|'tx_hash'>
+ *   & {
+ *     tx_date: string|null,
+ *     investment_id: number|null,
+ *     asset_class: string|null,
+ *     investment_currency: string|null,
+ *   }} MatchedPortfolioStagingRow
+ */
+
 const COMMIT_CHUNK = 1000;
 
 // Staging stores cash magnitudes ABSOLUTE (adapter contract); the ledger sign
 // comes from the kind. Without this every withdrawal was credited as a
 // deposit (+500 instead of −500) — the sleeve error grew 2× per withdrawal.
+/**
+ * @param {Pick<MatchedPortfolioStagingRow, 'type_raw'|'amount'>} row
+ * @returns {number} the ledger-signed cash amount (negative for withdrawals)
+ */
 function signedCashAmount(row) {
   const { direction } = classifyBrokerageRow({ kind: row.type_raw });
   return (direction ?? 1) * Math.abs(Number(row.amount));
 }
 
+/**
+ * Run the commit phase: drain 'matched' staging rows into
+ * `portfolio_transactions` (and, for brokerage cash rows, `transactions`), with
+ * field-based dedup, an intra-batch hash guard, and a per-row SAVEPOINT.
+ *
+ * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback }} args
+ * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
+ */
 export async function commitBatch({ batchId, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
 
@@ -76,13 +110,20 @@ export async function commitBatch({ batchId, onProgress }) {
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
+  /** @type {Set<string>} */
   const committedHashes = new Set();
 
   // Per-batch FX cache: the on-or-before stored-rate lookup is deterministic for
   // a given (currency, tx_date), so resolve each pair once instead of issuing a
   // fresh uncached lookup on every row — a single-currency CSV collapses ~N
   // lookups to one per distinct trade date.
+  /** @type {Map<string, number|undefined>} */
   const fxCache = new Map();
+  /**
+   * @param {string|null} currency
+   * @param {string|null} date 'YYYY-MM-DD'
+   * @returns {Promise<number|undefined>}
+   */
   async function resolveFx(currency, date) {
     const key = `${String(currency || 'EUR').toUpperCase()}|${date}`;
     if (fxCache.has(key)) return fxCache.get(key);
@@ -256,11 +297,21 @@ export async function commitBatch({ batchId, onProgress }) {
 // precision, so validate against a digits-only regex to keep the interpolated
 // identifier injection-safe. Returns null for a non-numeric id so the caller
 // can skip the row rather than emit an unsafe savepoint name.
+/**
+ * @param {string|number} id
+ * @returns {string|null} null when the id is not digits-only (unsafe to interpolate)
+ */
 function savepointFor(id) {
   const idStr = String(id);
   return /^\d+$/.test(idStr) ? `sp_prow_${idStr}` : null;
 }
 
+/**
+ * @param {string|number} id
+ * @param {'committed'|'duplicate'|'error'} status
+ * @param {string|null} [message]
+ * @returns {Promise<void>}
+ */
 async function markRow(id, status, message) {
   await query(
     `UPDATE portfolio_import_staging_rows SET status = $2, error_message = $3 WHERE id = $1`,
@@ -270,6 +321,11 @@ async function markRow(id, status, message) {
 
 // Field-based dedup for an external brokerage cash row, so re-importing a
 // statement is a no-op (cash rows have no tx_hash partial-unique of their own here).
+/**
+ * @param {number} accountId the batch's brokerage sleeve account
+ * @param {MatchedPortfolioStagingRow} row
+ * @returns {Promise<boolean>}
+ */
 async function isCashFieldDuplicate(accountId, row) {
   const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
   const signed = signedCashAmount(row);
@@ -294,6 +350,11 @@ async function isCashFieldDuplicate(accountId, row) {
   return dup.rows.length > 0;
 }
 
+/**
+ * @param {MatchedPortfolioStagingRow} row
+ * @param {number|undefined} batchAccountId
+ * @returns {Promise<boolean>}
+ */
 async function isFieldDuplicate(row, batchAccountId) {
   // account_id and currency are part of the identity: the same-shaped fill on
   // a different account (or in a different currency) is a distinct trade, not

@@ -33,6 +33,41 @@ import { commitBatch } from './commit.js';
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
+/**
+ * Progress reporter threaded through every portfolio-pipeline phase.
+ *
+ * `imported` / `duplicates` / `errors` are only supplied by the commit phase.
+ *
+ * @typedef {(progress: {
+ *   phase: 'staging'|'validating'|'matching'|'committing',
+ *   current: number,
+ *   total: number,
+ *   imported?: number,
+ *   duplicates?: number,
+ *   errors?: number,
+ * }) => void} PortfolioImportProgressCallback
+ */
+
+/**
+ * A `portfolio_import_batches` id as it is actually passed around.
+ *
+ * `createBatch` returns the BIGSERIAL id, which node-postgres emits as a
+ * STRING; the review/commit routes instead parse it out of the URL through
+ * `coercedIdSchema`, which yields a NUMBER. Both reach the same functions and
+ * both work (the value is only ever bound as a query parameter).
+ *
+ * @typedef {string|number} PortfolioImportBatchId
+ */
+
+/**
+ * Stage → validate → match a batch that already exists, then decide whether it
+ * needs user review.
+ *
+ * @param {{ batchId: PortfolioImportBatchId, filePath: string, customConfig: object, onProgress?: PortfolioImportProgressCallback }} args
+ * @returns {Promise<{ batchId: PortfolioImportBatchId, rowsTotal: number, rowsSkipped: number, requiresReview: boolean, matchSourceCounts: Record<string, number>, validateErrors: number }>}
+ * @throws {ValidationError} when the column mapping / date format parsed zero rows
+ */
+
 export async function prepareImport({ batchId, filePath, customConfig, onProgress }) {
   const { rowsTotal, rowsSkipped } = await stageBatch({ batchId, filePath, customConfig, onProgress });
 
@@ -74,7 +109,10 @@ export async function prepareImport({ batchId, filePath, customConfig, onProgres
 }
 
 /**
- * @param {{ batchId: number, onProgress?: Function }} args
+ * Commit a prepared (or reviewed) batch and settle its final status.
+ *
+ * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback }} args
+ * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
  */
 export async function commitPortfolioImport({ batchId, onProgress }) {
   const { imported, duplicates, errors } = await commitBatch({ batchId, onProgress });
@@ -112,7 +150,12 @@ export async function commitPortfolioImport({ batchId, onProgress }) {
 }
 
 /**
- * @param {{ filePath: string, adapterName: string, customConfig: object, defaultAssetClass?: string, defaultType?: string, filename?: string, sizeBytes?: number, isBrokerage?: boolean, accountId?: number, onProgress?: Function }} args
+ * Full one-shot portfolio import: create the batch, prepare it, and either
+ * auto-commit (every row matched by exact symbol, nothing errored) or leave it
+ * in 'awaiting_review'.
+ *
+ * @param {{ filePath: string, adapterName: string, customConfig: object, defaultAssetClass?: string, defaultType?: string, filename?: string, sizeBytes?: number, isBrokerage?: boolean, accountId?: number, onProgress?: PortfolioImportProgressCallback }} args
+ * @returns {Promise<{ batchId: PortfolioImportBatchId, total: number, skipped: number, requiresReview: boolean, matchSourceCounts?: Record<string, number>, imported?: number, duplicates?: number, errors?: number }>}
  */
 export async function runPortfolioImportPipeline({ filePath, adapterName, customConfig, defaultAssetClass, defaultType, filename, sizeBytes, isBrokerage, accountId, onProgress }) {
   const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage, accountId });

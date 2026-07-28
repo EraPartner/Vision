@@ -31,11 +31,37 @@ import { reconcileTransfers } from '../transferReconciliationService.js';
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
 /**
+ * Progress reporter threaded through every pipeline phase. `imported` /
+ * `duplicates` / `errors` are only supplied by the commit phase.
+ *
+ * @typedef {(progress: {
+ *   phase: 'staging'|'validating'|'matching'|'committing',
+ *   current: number,
+ *   total: number,
+ *   imported?: number,
+ *   duplicates?: number,
+ *   errors?: number,
+ * }) => void} ImportProgressCallback
+ */
+
+/**
+ * An `import_batches` id as it is actually passed around.
+ *
+ * `createBatch` returns the BIGSERIAL id, which node-postgres emits as a
+ * STRING; the review/commit routes instead parse it out of the URL through
+ * `coercedIdSchema`, which yields a NUMBER. Both reach the same functions and
+ * both work (they are only ever interpolated as a query parameter), so the
+ * union is the truth rather than a widening.
+ *
+ * @typedef {string|number} ImportBatchId
+ */
+
+/**
  * Stage → validate → match a batch that already exists.
  * Decides whether the batch needs user review or can be auto-committed.
  *
- * @param {{ batchId: number, filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
- * @returns {Promise<{ batchId: number, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object, validateErrors: number }>}
+ * @param {{ batchId: ImportBatchId, filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: ImportProgressCallback }} args
+ * @returns {Promise<{ batchId: ImportBatchId, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object, validateErrors: number }>}
  */
 export async function prepareImport({ batchId, filePath, adapterName, customConfig, filename: _filename, sizeBytes: _sizeBytes, onProgress }) {
   const { rowsTotal } = await stageBatch({ batchId, filePath, adapterName, customConfig, onProgress });
@@ -71,7 +97,7 @@ export async function prepareImport({ batchId, filePath, adapterName, customConf
  * Commit a prepared (or reviewed) batch.
  * Applies user_override_recipient_id before writing transactions.
  *
- * @param {{ batchId: number, onProgress?: Function }} args
+ * @param {{ batchId: ImportBatchId, onProgress?: ImportProgressCallback }} args
  * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
  */
 export async function commitImport({ batchId, onProgress }) {
@@ -111,8 +137,8 @@ export async function commitImport({ batchId, onProgress }) {
  * auto-commits (all rows exact) or leaves the batch in 'awaiting_review'
  * for the frontend to present the ImportReviewPage.
  *
- * @param {{ filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
- * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object, autoLinkedCount?: number }>}
+ * @param {{ filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: ImportProgressCallback }} args
+ * @returns {Promise<{ batchId: ImportBatchId, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object, autoLinkedCount?: number }>}
  */
 export async function runImportPipeline({ filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
   const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig });

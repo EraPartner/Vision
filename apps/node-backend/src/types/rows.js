@@ -763,4 +763,241 @@
  * @property {number} transactions_remaining
  */
 
+// ---------------------------------------------------------------------------
+// Import staging
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of `import_staging_rows` — the transaction import pipeline's work
+ * table (migration 0001; `match_source` / `matched_pattern_id` /
+ * `match_similarity` / `user_override_recipient_id` added by 0015,
+ * `override_category_id` by 0020).
+ *
+ * Everything the adapter produced is nullable here on purpose: the STAGE phase
+ * writes whatever it parsed and the VALIDATE phase is what rejects rows. The
+ * pipeline phases select column subsets, so use `Pick<>` at the call site.
+ *
+ * `amount` and `balance` are NUMERIC → pg strings. `tx_date` is a DATE → a
+ * local-midnight `Date`; validate.js and commit.js both project it as
+ * `to_char(tx_date, 'YYYY-MM-DD')` instead, precisely so the fallback hash and
+ * the insert can't shift a day (see the comment at the top of validate.js).
+ * `match_similarity` is REAL, which pg DOES emit as a number.
+ *
+ * @typedef {object} ImportStagingRow
+ * @property {string} id BIGSERIAL — string, not number.
+ * @property {string} batch_id BIGINT — string.
+ * @property {number} row_index INTEGER
+ * @property {'pending'|'validated'|'matched'|'committed'|'duplicate'|'error'} status
+ * @property {Date|null} tx_date DATE — local-midnight `Date` when selected raw.
+ * @property {string|null} bank_account
+ * @property {string|null} recipient_raw
+ * @property {string|null} memo
+ * @property {string|null} amount NUMERIC(20,4) — string.
+ * @property {string|null} currency
+ * @property {string|null} balance NUMERIC(20,4) — string.
+ * @property {string|null} recipient_account
+ * @property {string|null} recipient_address
+ * @property {string|null} recipient_bank_name
+ * @property {string|null} comment
+ * @property {string|null} raw_data
+ * @property {string|null} tx_hash sha256 hex of raw_data (or the field fallback).
+ * @property {number|null} resolved_recipient_id
+ * @property {number|null} resolved_bank_account_id
+ * @property {string|null} error_message
+ * @property {'pattern'|'exact'|'fuzzy'|'new'|null} [match_source] migration 0015.
+ * @property {number|null} [matched_pattern_id] migration 0015.
+ * @property {number|null} [match_similarity] REAL — a number, not a string (migration 0015).
+ * @property {number|null} [user_override_recipient_id] migration 0015.
+ * @property {number|null} [override_category_id] migration 0020.
+ * @property {Date} created_at TIMESTAMPTZ
+ */
+
+/**
+ * A row of `portfolio_import_batches` (migration 0040; `account_id` added by
+ * 0057, `is_brokerage` by 0060, the 'complete_with_errors' status by 0081).
+ *
+ * @typedef {object} PortfolioImportBatchRow
+ * @property {string} id BIGSERIAL — string, not number.
+ * @property {string} adapter_name
+ * @property {string|null} source_filename
+ * @property {string|null} source_size_bytes BIGINT — string.
+ * @property {any} custom_config JSONB — pg hands it back already parsed.
+ * @property {string|null} default_asset_class `asset_class` enum.
+ * @property {string|null} default_type `portfolio_txn_type` enum.
+ * @property {'pending'|'staging'|'validating'|'matching'|'awaiting_review'|'committing'|'complete'|'complete_with_errors'|'failed'|'aborted'} status
+ * @property {number} rows_total
+ * @property {number} rows_imported
+ * @property {number} rows_duplicate
+ * @property {number} rows_error
+ * @property {string|null} error_summary
+ * @property {Date} started_at
+ * @property {Date|null} completed_at
+ * @property {number|null} account_id FK → accounts (migration 0057).
+ * @property {boolean} is_brokerage migration 0060.
+ */
+
+/**
+ * A row of `portfolio_import_staging_rows` — the portfolio import pipeline's
+ * work table (migration 0040; `route` added by 0060).
+ *
+ * Every parsed field is nullable: STAGE writes what the adapter produced and
+ * VALIDATE is what rejects rows. All NUMERIC columns are pg strings;
+ * `match_similarity` is REAL, which pg DOES emit as a number. `tx_date` is a
+ * DATE, so raw selects hand back a local-midnight `Date` — validate.js formats
+ * it with LOCAL getters (`toYmd`) on purpose.
+ *
+ * @typedef {object} PortfolioImportStagingRow
+ * @property {string} id BIGSERIAL — string, not number.
+ * @property {string} batch_id BIGINT — string.
+ * @property {number} row_index INTEGER
+ * @property {'pending'|'validated'|'matched'|'committed'|'duplicate'|'error'} status
+ * @property {Date|null} tx_date DATE — local-midnight `Date` when selected raw.
+ * @property {string|null} type_raw the CSV's own type label, pre-normalization.
+ * @property {string|null} type `portfolio_txn_type` enum — stamped by VALIDATE.
+ * @property {string|null} symbol_raw
+ * @property {string|null} name_raw
+ * @property {string|null} units NUMERIC(18,8) — string.
+ * @property {string|null} price_per_unit NUMERIC(18,6) — string.
+ * @property {string|null} amount NUMERIC(18,4) — string.
+ * @property {string|null} fees NUMERIC(18,4) — string.
+ * @property {string|null} taxes NUMERIC(18,4) — string.
+ * @property {string|null} currency
+ * @property {string|null} fx_rate_to_eur NUMERIC(20,10) — string.
+ * @property {string|null} note
+ * @property {string|null} raw_data
+ * @property {string|null} tx_hash
+ * @property {number|null} resolved_investment_id
+ * @property {number|null} user_override_investment_id
+ * @property {'symbol'|'name_exact'|null} match_source
+ * @property {number|null} match_similarity REAL — a number, not a string.
+ * @property {number|null} committed_txn_id
+ * @property {string|null} error_message
+ * @property {'cash'|'portfolio'|null} [route] migration 0060 — brokerage routing (ADR-095).
+ * @property {Date} created_at TIMESTAMPTZ
+ */
+
+// ---------------------------------------------------------------------------
+// Asset price history
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of `asset_price_history` (migration 0001; the FK to `investments` was
+ * added by 0026 and is dropped again by priceCache's `_dropForeignKey`).
+ *
+ * `close_price` is NUMERIC so pg emits it as a string, and `price_date` is a
+ * DATE so pg emits a local-midnight `Date` — `dateOnlyToTimestampMs` exists
+ * precisely to unpick that (see its comment: treating it as a string NaN'd out
+ * every cached read).
+ *
+ * @typedef {object} AssetPriceHistoryRow
+ * @property {number} id SERIAL
+ * @property {number} investment_id INTEGER NOT NULL
+ * @property {Date} price_date DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string.
+ * @property {string} close_price NUMERIC(18,6) — pg emits NUMERIC as a string.
+ * @property {string} source VARCHAR(50) DEFAULT 'provider'
+ * @property {Date} fetched_at TIMESTAMPTZ
+ * @property {Date|null} updated_at TIMESTAMPTZ
+ */
+
+/**
+ * One point of a price series as the price layer passes it around: an
+ * epoch-millis timestamp (pinned to UTC noon of the calendar day) and a
+ * finite, strictly-positive price. Produced by `normalizeHistoryPoints`, which
+ * drops anything failing those invariants.
+ *
+ * @typedef {object} PricePoint
+ * @property {number} timestampMs
+ * @property {number} price
+ */
+
+// ---------------------------------------------------------------------------
+// Portfolio performance snapshots
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of `portfolio_performance_snapshots` as returned by `SELECT *`
+ * (migration 0018; `value_fx_neutral` added by migration 0039).
+ *
+ * Every money/percentage column is NUMERIC, so pg emits it as a string — the
+ * consumers all run them through `toDecimal`/`toNumber`. Every column except
+ * `value_fx_neutral` is NOT NULL with a DEFAULT.
+ *
+ * `value_fx_neutral` is optional AND nullable on purpose: `getSnapshots` uses
+ * `SELECT *` precisely so the projection still works on a database that has not
+ * applied 0039 (the property is then absent, not null).
+ *
+ * @typedef {object} PortfolioPerformanceSnapshotRow
+ * @property {number} id SERIAL
+ * @property {Date} snapshot_date DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string.
+ * @property {string} invested NUMERIC(18,6)
+ * @property {string} value NUMERIC(18,6)
+ * @property {string} stocks_etfs_value NUMERIC(18,6)
+ * @property {string} crypto_value NUMERIC(18,6)
+ * @property {string} metals_value NUMERIC(18,6)
+ * @property {string} cash_value NUMERIC(18,6)
+ * @property {string} gain_loss NUMERIC(18,6)
+ * @property {string} return_pct NUMERIC(10,4)
+ * @property {string} inflation_adjusted_value NUMERIC(18,6)
+ * @property {string} cumulative_inflation NUMERIC(10,4) DEFAULT 1
+ * @property {string} real_return_pct NUMERIC(10,4)
+ * @property {string} stocks_etfs_invested NUMERIC(18,6)
+ * @property {string} crypto_invested NUMERIC(18,6)
+ * @property {string} metals_invested NUMERIC(18,6)
+ * @property {string} currency VARCHAR(3) DEFAULT 'EUR'
+ * @property {Date} computed_at TIMESTAMPTZ
+ * @property {string|null} [value_fx_neutral] NUMERIC(18,2), migration 0039 — absent on un-migrated databases.
+ */
+
+// ---------------------------------------------------------------------------
+// Exchange rates
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of `exchange_rates` (migration 0001; `fetched_at` made NOT NULL with a
+ * default in migration 0022).
+ *
+ * `rate_to_eur` is NUMERIC(20,10) so pg emits it as a string — every consumer
+ * runs it through `toNumber(toDecimal(...))`. `is_latest` has `DEFAULT false`
+ * but no NOT NULL, so it is nullable on paper.
+ *
+ * Note that most FX queries do NOT select `rate_date` raw: they project
+ * `to_char(rate_date, 'YYYY-MM-DD') AS rate_date` (or `rate_date::text`)
+ * precisely to avoid the local-midnight `Date`. Those projections are typed at
+ * the call site with `Pick<>` plus an explicit `rate_date: string` override
+ * rather than by loosening this typedef.
+ *
+ * @typedef {object} ExchangeRateRow
+ * @property {number} id SERIAL
+ * @property {string} currency_code VARCHAR(3)
+ * @property {string} rate_to_eur NUMERIC(20,10) — pg emits NUMERIC as a string.
+ * @property {Date} rate_date DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string.
+ * @property {boolean|null} is_latest BOOLEAN DEFAULT false (no NOT NULL constraint).
+ * @property {Date} fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW().
+ * @property {Date|null} updated_at TIMESTAMPTZ
+ */
+
+/**
+ * One entry of the in-memory historical-FX index built by
+ * `buildHistoricalRateIndex`: a 'YYYY-MM-DD' day and the already-numeric
+ * `rate_to_eur` for it.
+ *
+ * @typedef {object} HistoricalRatePoint
+ * @property {string} date 'YYYY-MM-DD'
+ * @property {number} rate
+ */
+
+/**
+ * The historical-FX index: currency code → date-ascending rate points.
+ *
+ * @typedef {Map<string, HistoricalRatePoint[]>} HistoricalRateIndex
+ */
+
+/**
+ * A `{ EUR: 1, USD: x, … }` map of "1 unit of X is this many EUR" multipliers,
+ * as returned by the ECB / open.er-api fetchers, `loadFromDatabase`, and the
+ * currency service's cache hierarchy.
+ *
+ * @typedef {Record<string, number>} RateTable
+ */
+
 export {};

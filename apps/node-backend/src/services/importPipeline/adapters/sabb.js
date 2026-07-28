@@ -6,6 +6,11 @@ import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNorma
 import { logger } from '../../../config/logger.js';
 import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDayMonthYear, parseDateFlexibleUtc } from './_shared.js';
 
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
 const NAME = 'sabb';
 const BANK_LABEL = 'SABB';
 
@@ -17,6 +22,10 @@ const BANK_LABEL = 'SABB';
 // silently dropping a settled transaction.
 const NON_COMPLETED_STATUS_RE = /pending|declin|reject|refus|revers|fail|cancel/i;
 
+/**
+ * @param {Record<string, string>} row a `columns: true` csv-parse record
+ * @returns {ParsedBankTransaction|null} null for a non-settled status or an unusable row
+ */
 function rowToTransaction(row) {
   const status = (row['Status'] || '').trim();
   if (NON_COMPLETED_STATUS_RE.test(status)) return null;
@@ -74,12 +83,20 @@ function rowToTransaction(row) {
   };
 }
 
+/**
+ * @param {string|null|undefined} csvSample raw head of the uploaded file
+ * @returns {boolean}
+ */
 export function detect(csvSample) {
   if (!csvSample) return false;
   const firstLine = (csvSample.split('\n')[0] || '').toLowerCase();
   return firstLine.includes('transaction date') && firstLine.includes('amount(sar)');
 }
 
+/**
+ * @param {string} filePath
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath) {
   const records = await parseCsvFile(filePath, {
     columns: true,
@@ -88,7 +105,7 @@ export async function parse(filePath) {
     trim: true,
   });
 
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
   for (const row of records) {
     try {

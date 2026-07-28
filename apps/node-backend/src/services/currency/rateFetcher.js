@@ -11,6 +11,19 @@ import { toDecimal, toNumber } from '../../lib/money.js';
 import { todayAppDateString } from '../../lib/timezone.js';
 import { formatDateToYmd, epochMsToUtcYmd } from '../../lib/dateFormat.js';
 
+/**
+ * @typedef {import('../../types/rows.js').ExchangeRateRow} ExchangeRateRow
+ * @typedef {import('../../types/rows.js').HistoricalRatePoint} HistoricalRatePoint
+ * @typedef {import('../../types/rows.js').HistoricalRateIndex} HistoricalRateIndex
+ * @typedef {import('../../types/rows.js').RateTable} RateTable
+ */
+
+/**
+ * A parsed ECB history feed: 'YYYY-MM-DD' → that day's rate table.
+ *
+ * @typedef {Map<string, RateTable>} RatesByDate
+ */
+
 const ECB_LATEST_URL       = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const ERAR_LATEST_URL      = 'https://open.er-api.com/v6/latest/EUR';
 const ECB_HISTORY_90D_URL  = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
@@ -26,7 +39,9 @@ export const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const HISTORICAL_FULL_CACHE_IDLE_MS = 60 * 60 * 1000; // 1 hour
 
 // { byDate: Map<YYYY-MM-DD, ratesMap>, timestamp }
+/** @type {{ byDate: RatesByDate, timestamp: number } | null} */
 let historicalEcb90dCache = null;
+/** @type {{ byDate: RatesByDate, timestamp: number } | null} */
 let historicalEcbFullCache = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let historicalEcbFullEvictTimer = null;
@@ -54,6 +69,17 @@ function scheduleHistoricalFullEviction() {
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
+/**
+ * Coerce whatever a caller has for a date into a 'YYYY-MM-DD' calendar day.
+ *
+ * Accepts the two shapes that actually reach it: a pg DATE/TIMESTAMPTZ value
+ * (a `Date`) and an already-stringy day (`to_char` projections, request query
+ * params). Anything else is stringified and matched against the leading
+ * YYYY-MM-DD, so unparseable input yields `null` rather than throwing.
+ *
+ * @param {string|Date|null|undefined} dateValue
+ * @returns {string|null} 'YYYY-MM-DD', or null when the input is empty/unparseable
+ */
 export function normalizeDateInput(dateValue) {
   if (!dateValue) return null;
   // pg returns DATE columns as a local-midnight JS Date, whose String() form is
@@ -75,8 +101,12 @@ export function normalizeDateInput(dateValue) {
  * Parse ECB daily/historical XML into a { EUR: 1, USD: x, ... } rates map.
  * ECB publishes EUR->X rates; we store X->EUR (1 / eurToX).
  * Handles both single-quoted and double-quoted attributes.
+ *
+ * @param {string} xmlText
+ * @returns {RateTable|null} null when the document contained no usable rates
  */
 function parseEcbXml(xmlText) {
+  /** @type {RateTable} */
   const rates = { EUR: 1.0 };
   const q = `['"]`;
   const currencyPattern = new RegExp(
@@ -93,7 +123,14 @@ function parseEcbXml(xmlText) {
   return Object.keys(rates).length > 1 ? rates : null;
 }
 
+/**
+ * Split an ECB history document into per-day rate tables.
+ *
+ * @param {string} xmlText
+ * @returns {RatesByDate}
+ */
 function parseEcbHistoricalXml(xmlText) {
+  /** @type {RatesByDate} */
   const byDate = new Map();
   const dayBlocks = xmlText.match(/<Cube\s+time=['"][0-9]{4}-[0-9]{2}-[0-9]{2}['"][\s\S]*?<\/Cube>/g) || [];
   for (const block of dayBlocks) {
@@ -111,6 +148,8 @@ function parseEcbHistoricalXml(xmlText) {
 /**
  * Fetch the latest rates from the ECB daily feed.
  * Returns a { EUR: 1, USD: x, ... } map (X->EUR), or null on failure.
+ *
+ * @returns {Promise<RateTable|null>}
  */
 export async function fetchFromEcb() {
   try {
@@ -134,6 +173,8 @@ export async function fetchFromEcb() {
 /**
  * Fetch the latest rates from open.er-api.com (supplementary source).
  * Returns a { EUR: 1, USD: x, ... } map (X->EUR), or null on failure.
+ *
+ * @returns {Promise<RateTable|null>}
  */
 export async function fetchFromErApi() {
   try {
@@ -147,6 +188,7 @@ export async function fetchFromErApi() {
       logger.error('Unexpected response from open.er-api', { result: data.result });
       return null;
     }
+    /** @type {RateTable} */
     const rates = { EUR: 1.0 };
     for (const [currency, eurToX] of Object.entries(data.rates)) {
       if (
@@ -166,6 +208,11 @@ export async function fetchFromErApi() {
   }
 }
 
+/**
+ * The last ~90 days of ECB reference rates, memoised for CACHE_LIFETIME_MS.
+ *
+ * @returns {Promise<RatesByDate>} empty map when the feed is unreachable
+ */
 export async function fetchHistoricalFromEcb90d() {
   if (historicalEcb90dCache && Date.now() - historicalEcb90dCache.timestamp < CACHE_LIFETIME_MS) {
     return historicalEcb90dCache.byDate;
@@ -182,6 +229,12 @@ export async function fetchHistoricalFromEcb90d() {
   }
 }
 
+/**
+ * The full ECB reference-rate history (daily, back to 1999), memoised for
+ * CACHE_LIFETIME_MS and idle-evicted by {@link scheduleHistoricalFullEviction}.
+ *
+ * @returns {Promise<RatesByDate>} empty map when the feed is unreachable
+ */
 export async function fetchHistoricalFromEcbFull() {
   if (historicalEcbFullCache && Date.now() - historicalEcbFullCache.timestamp < CACHE_LIFETIME_MS) {
     scheduleHistoricalFullEviction(); // touch: keep a live cache from being evicted
@@ -242,6 +295,8 @@ export function rateOnOrBeforeFromMap(byDate, currencyCode, dateStr, maxLookback
 /**
  * Load the stored latest rates from the database.
  * Returns null if no rows exist.
+ *
+ * @returns {Promise<RateTable|null>} null when nothing is stored or the query failed
  */
 export async function loadFromDatabase() {
   try {
@@ -250,8 +305,9 @@ export async function loadFromDatabase() {
     );
     if (result.rows.length === 0) return null;
 
+    /** @type {RateTable} */
     const rates = { EUR: 1.0 };
-    for (const row of result.rows) {
+    for (const row of /** @type {Pick<ExchangeRateRow, 'currency_code'|'rate_to_eur'>[]} */ (result.rows)) {
       rates[row.currency_code] = toNumber(toDecimal(row.rate_to_eur));
     }
     logger.debug(`Loaded ${result.rows.length} exchange rates from database`);
@@ -265,6 +321,9 @@ export async function loadFromDatabase() {
 /**
  * Replace stored rates with the freshly-fetched set.
  * Single transaction: clear latest markers, then upsert new rates.
+ *
+ * @param {RateTable} rates
+ * @returns {Promise<void>}
  */
 export async function saveToDatabase(rates) {
   try {
@@ -302,6 +361,14 @@ export async function saveToDatabase(rates) {
   }
 }
 
+/**
+ * Upsert one historical (non-latest) rate row.
+ *
+ * @param {string} currencyCode
+ * @param {string} dateStr 'YYYY-MM-DD'
+ * @param {number} rateToEur
+ * @returns {Promise<void>}
+ */
 export async function saveHistoricalRate(currencyCode, dateStr, rateToEur) {
   await query(
     `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
@@ -314,6 +381,14 @@ export async function saveHistoricalRate(currencyCode, dateStr, rateToEur) {
   );
 }
 
+/**
+ * Nearest stored rate for a currency at ANY distance from the date — the last
+ * resort of {@link getRateToEurForDate}.
+ *
+ * @param {string} currencyCode
+ * @param {string} dateStr 'YYYY-MM-DD'
+ * @returns {Promise<number|undefined>} undefined when nothing is stored for the currency
+ */
 export async function getNearestRateFromDatabase(currencyCode, dateStr) {
   const result = await query(
     `SELECT rate_to_eur
@@ -359,7 +434,22 @@ export async function getStoredRateToEurOnOrBefore(currencyCode, dateValue, maxL
 
 // ─── Historical rate index (in-memory binary search) ─────────────────────────
 
+/**
+ * Group stored `exchange_rates` rows into a per-currency, date-ascending index
+ * for binary search.
+ *
+ * `rate_date` is typed loosely on purpose: the two call sites project it
+ * differently — `getHistoricalRateIndex` selects the raw DATE (so pg hands back
+ * a local-midnight `Date`) while `loadHistoricalRateIndex` in
+ * portfolioSummaryService projects `to_char(rate_date, 'YYYY-MM-DD')` (a
+ * string). `normalizeDateInput` accepts both, so the index is identical either
+ * way.
+ *
+ * @param {Array<Pick<ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: Date|string }>} rows
+ * @returns {HistoricalRateIndex}
+ */
 export function buildHistoricalRateIndex(rows) {
+  /** @type {HistoricalRateIndex} */
   const byCurrency = new Map();
   for (const row of rows) {
     const currency = String(row.currency_code || '').toUpperCase().trim();
@@ -406,6 +496,15 @@ function searchRateIndex(index, currencyCode, dateStr, resolve) {
   return resolve(hi >= 0 ? entries[hi] : null, lo < entries.length ? entries[lo] : null);
 }
 
+/**
+ * Rate for a currency at the date, or the closest published date on EITHER
+ * side when the exact day is absent.
+ *
+ * @param {HistoricalRateIndex} index
+ * @param {string} currencyCode
+ * @param {string} dateStr 'YYYY-MM-DD'
+ * @returns {number|undefined}
+ */
 export function findNearestRateInIndex(index, currencyCode, dateStr) {
   return searchRateIndex(index, currencyCode, dateStr, (prev, next) => {
     if (!prev) return next?.rate;
@@ -421,6 +520,11 @@ export function findNearestRateInIndex(index, currencyCode, dateStr) {
  * Like {@link findNearestRateInIndex} but strictly ON-or-BEFORE the date —
  * the standard FX convention (a Saturday uses Friday's close, never Monday's).
  * Returns undefined when no rate exists on or before the date.
+ *
+ * @param {HistoricalRateIndex} index
+ * @param {string} currencyCode
+ * @param {string} dateStr 'YYYY-MM-DD'
+ * @returns {number|undefined}
  */
 export function findRateOnOrBeforeInIndex(index, currencyCode, dateStr) {
   return searchRateIndex(index, currencyCode, dateStr, (prev) => (prev ? prev.rate : undefined));
@@ -428,6 +532,15 @@ export function findRateOnOrBeforeInIndex(index, currencyCode, dateStr) {
 
 // ─── Historical rate point lookup ─────────────────────────────────────────────
 
+/**
+ * Point lookup of a currency's rate on a specific day, walking the tiers:
+ * exact stored row → 90-day ECB feed → full ECB history → nearest stored row.
+ *
+ * @param {string} currencyCode
+ * @param {string|Date|null|undefined} dateValue
+ * @param {{ saveFetchedHistoricalRate?: boolean }} [options] persist rates sourced from ECB (default true)
+ * @returns {Promise<number|undefined>} undefined when the date is unparseable or nothing resolves
+ */
 export async function getRateToEurForDate(currencyCode, dateValue, { saveFetchedHistoricalRate = true } = {}) {
   if (!currencyCode || currencyCode === 'EUR') return 1.0;
   const dateStr = normalizeDateInput(dateValue);

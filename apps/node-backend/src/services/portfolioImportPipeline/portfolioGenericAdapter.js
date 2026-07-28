@@ -12,7 +12,55 @@
 import { logger } from '../../config/logger.js';
 import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat } from '../importPipeline/adapters/_shared.js';
 
-// Absolute magnitude of a numeric cell, or null when blank/unparseable.
+/**
+ * One raw row as this adapter extracts it — field names are the staging
+ * columns' camelCase equivalents, and every numeric is stored as an ABSOLUTE
+ * magnitude (direction is carried by the later-normalized type).
+ *
+ * @typedef {object} ParsedPortfolioRow
+ * @property {Date} date UTC-midnight (see parseDateWithFormat).
+ * @property {string} typeRaw the CSV's own type label; '' when unmapped.
+ * @property {string} symbolRaw
+ * @property {string} nameRaw
+ * @property {number|null} units
+ * @property {number|null} pricePerUnit
+ * @property {number|null} amount
+ * @property {number|null} fees
+ * @property {number|null} taxes
+ * @property {string|null} currency
+ * @property {number|null} fxRateToEur
+ * @property {string} note
+ * @property {string} rawData source record, kept for dedup + provenance.
+ */
+
+/**
+ * A parsed row list carrying the adapter's count of rows it could not
+ * interpret (the counter rides on the array, matching the transaction
+ * adapters' contract).
+ *
+ * @typedef {ParsedPortfolioRow[] & { skipped?: number }} ParsedPortfolioRows
+ */
+
+/**
+ * The custom-parser definition a portfolio import runs on. It comes from the
+ * upload route or a saved `custom_parser_configs.config_json` row and is not
+ * re-validated here, so everything beyond `column_mapping` is optional.
+ *
+ * @typedef {object} PortfolioParserConfig
+ * @property {string} [date_format] must be one of SUPPORTED_DATE_FORMATS
+ * @property {string} [separator] CSV delimiter; defaults to ','
+ * @property {number} [skip_rows]
+ * @property {BufferEncoding} [encoding] defaults to 'utf-8'
+ * @property {Record<string, string>} [type_mapping] raw type label → canonical portfolio_txn_type (read by validate.js)
+ * @property {{ date?: string, type?: string, symbol?: string, name?: string, units?: string, price?: string, amount?: string, fees?: string, taxes?: string, currency?: string, fx_rate?: string, note?: string }} [column_mapping] source column NAMES, not indices
+ */
+
+/**
+ * Absolute magnitude of a numeric cell, or null when blank/unparseable.
+ *
+ * @param {unknown} raw
+ * @returns {number|null}
+ */
 function parseMagnitude(raw) {
   if (raw === undefined || raw === null || String(raw).trim() === '') return null;
   const n = parseAmountField(raw);
@@ -20,11 +68,21 @@ function parseMagnitude(raw) {
   return Math.abs(n);
 }
 
+/**
+ * @param {Record<string, string>} row a `columns: true` csv-parse record
+ * @param {string|undefined} key the mapped source column name; '' when unmapped
+ * @returns {string} trimmed cell value, '' when the column is unmapped or absent
+ */
 function cell(row, key) {
   if (!key) return '';
   return String(row[key] ?? '').trim();
 }
 
+/**
+ * @param {Record<string, string>} row a `columns: true` csv-parse record
+ * @param {PortfolioParserConfig} config
+ * @returns {ParsedPortfolioRow|null} null when the mapped date cell is missing or unparseable
+ */
 function rowToParsed(row, config) {
   const colMap = config.column_mapping || {};
   const dateStr = cell(row, colMap.date);
@@ -52,6 +110,12 @@ function rowToParsed(row, config) {
   };
 }
 
+/**
+ * @param {string} filePath
+ * @param {PortfolioParserConfig} config
+ * @returns {Promise<ParsedPortfolioRows>}
+ * @throws {Error} when `date_format` is not one of SUPPORTED_DATE_FORMATS
+ */
 export async function parseWithConfig(filePath, config) {
   const dateFormat = config.date_format || '';
   if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
@@ -72,7 +136,7 @@ export async function parseWithConfig(filePath, config) {
     config.encoding || 'utf-8',
   );
 
-  const rows = /** @type {any[] & { skipped?: number }} */ ([]);
+  const rows = /** @type {ParsedPortfolioRows} */ ([]);
   let skipped = 0;
   for (const record of records) {
     try {

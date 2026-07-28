@@ -18,13 +18,52 @@ import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.js';
 import { getYahooClient } from './yahooClient.js';
 
+/**
+ * @typedef {import('../../types/rows.js').InvestmentRow} InvestmentRow
+ * @typedef {import('../../types/rows.js').PricePoint} PricePoint
+ */
+
+/**
+ * The custom-provider history extraction config, as resolved from an
+ * investment's `price_provider_history_*` columns. Every field is a
+ * dot-separated path into the provider's JSON except `historyUrl`.
+ *
+ * @typedef {object} CustomHistoryConfig
+ * @property {string} historyUrl
+ * @property {string} historyPath path to the point array
+ * @property {string} timestampPath path to a point's epoch-millis timestamp
+ * @property {string} pricePath path to a point's price
+ */
+
+/**
+ * One provider strategy's answer for a single key. `currency` and `source` are
+ * optional because the `custom` strategy has no way to know either — it only
+ * ever returns `{ price }`.
+ *
+ * @typedef {object} LivePriceQuote
+ * @property {number} price
+ * @property {string} [currency]
+ * @property {'live'|'close'} [source]
+ */
+
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
+/**
+ * @param {unknown} path dot-separated path, e.g. `data.points`
+ * @returns {string[]} trimmed non-empty segments; [] for non-string input
+ */
 function _splitPath(path) {
   if (typeof path !== 'string') return [];
   return path.trim().split('.').map(seg => seg.trim()).filter(Boolean);
 }
 
+/**
+ * Walk a dot-separated path into arbitrary provider JSON.
+ *
+ * @param {any} input parsed provider JSON — shape is user-configured, so genuinely unknown
+ * @param {unknown} path an empty path returns `input` itself
+ * @returns {any} undefined as soon as any hop is null/undefined
+ */
 function _readPathValue(input, path) {
   const segments = _splitPath(path);
   if (segments.length === 0) return input;
@@ -38,6 +77,13 @@ function _readPathValue(input, path) {
 
 // ─── Config resolvers ─────────────────────────────────────────────────────────
 
+/**
+ * The Yahoo ticker for an investment: the explicit `price_provider_id`, else
+ * the instrument symbol, uppercased. Empty string when neither is set.
+ *
+ * @param {Partial<InvestmentRow>|null|undefined} inv
+ * @returns {string}
+ */
 export function resolveYahooSymbol(inv) {
   const providerId = (inv?.price_provider_id || '').trim();
   if (providerId) return providerId.toUpperCase();
@@ -45,12 +91,20 @@ export function resolveYahooSymbol(inv) {
   return symbol ? symbol.toUpperCase() : '';
 }
 
+/**
+ * @param {Partial<InvestmentRow>|null|undefined} inv
+ * @returns {{ latestUrl: string, latestPath: string }} empty `latestUrl` when no URL column is set
+ */
 function _resolveCustomLatestConfig(inv) {
   const latestUrl = (inv?.price_provider_latest_url || inv?.price_provider_url || inv?.price_provider_history_url || '').trim();
   const latestPath = (inv?.price_provider_latest_path || inv?.price_provider_id || 'price').trim();
   return { latestUrl, latestPath };
 }
 
+/**
+ * @param {Partial<InvestmentRow>|null|undefined} inv
+ * @returns {CustomHistoryConfig} empty `historyUrl` when no URL column is set
+ */
 export function resolveCustomHistoryConfig(inv) {
   const historyUrl = (inv?.price_provider_history_url || inv?.price_provider_latest_url || inv?.price_provider_url || '').trim();
   const historyPath = (inv?.price_provider_history_path || 'points').trim();
@@ -60,6 +114,7 @@ export function resolveCustomHistoryConfig(inv) {
 }
 
 // Kinesis API only provides USD-denominated symbols. Map EUR variants to USD.
+/** @type {Record<string, string>} */
 const KINESIS_EUR_TO_USD = {
   'KAU_EUR': 'KAU_USD',
   'KAG_EUR': 'KAG_USD',
@@ -69,6 +124,16 @@ const KINESIS_EUR_TO_USD = {
   'XPD_EUR': 'XPD_USD',
 };
 
+/**
+ * Resolve the Kinesis symbol + trendline window for an investment, remapping a
+ * EUR symbol to its USD variant (Kinesis only quotes USD) and falling back to
+ * the name-keyed asset catalogue.
+ *
+ * @param {Partial<InvestmentRow>|null|undefined} inv
+ * @returns {{ symbol: string, timeframe: number, fromDate: string, needsUsdToEur: boolean }}
+ *   `symbol` is '' when nothing could be resolved; `needsUsdToEur` flags that
+ *   the fetched prices are USD and must be converted before use.
+ */
 export function resolveKinesisConfig(inv) {
   const providerId = (inv?.price_provider_id || '').trim();
   const assetName = (inv?.name || inv?.symbol || '').toLowerCase().trim();
@@ -124,6 +189,9 @@ function _assertResponseWithinCap(res, provider) {
  * (scheme + private/loopback/link-local block, DNS-resolved). Redirects are
  * followed manually so a public host cannot 302 the request to an internal
  * address, and the response body is size-capped.
+ *
+ * @param {string} url
+ * @returns {Promise<any>} parsed provider JSON — shape is user-configured
  */
 async function _fetchJson(url) {
   let current = String(url);
@@ -152,10 +220,19 @@ async function _fetchJson(url) {
 
 // ─── Custom endpoint parsing ──────────────────────────────────────────────────
 
+/**
+ * Extract a date-ascending point series from a custom provider's JSON using the
+ * configured paths. Malformed rows and non-positive prices are dropped.
+ *
+ * @param {any} data parsed provider JSON
+ * @param {CustomHistoryConfig} config
+ * @returns {PricePoint[]}
+ */
 function _parseCustomHistoryPoints(data, config) {
   const listValue = _readPathValue(data, config.historyPath);
   if (!Array.isArray(listValue)) return [];
 
+  /** @type {PricePoint[]} */
   const points = [];
   for (const row of listValue) {
     const timestampMs = Number(_readPathValue(row, config.timestampPath));
@@ -168,12 +245,27 @@ function _parseCustomHistoryPoints(data, config) {
   return points;
 }
 
+/**
+ * Last price of a custom provider's history payload — the fallback when the
+ * latest-price endpoint yields nothing usable.
+ *
+ * @param {any} data parsed provider JSON
+ * @param {CustomHistoryConfig} historyConfig
+ * @returns {number|undefined}
+ */
 function _deriveLatestPriceFromHistoryPayload(data, historyConfig) {
   const points = _parseCustomHistoryPoints(data, historyConfig);
   if (!points.length) return undefined;
   return points[points.length - 1]?.price;
 }
 
+/**
+ * Public wrapper over the custom-provider history parser.
+ *
+ * @param {any} data parsed provider JSON
+ * @param {CustomHistoryConfig} config
+ * @returns {PricePoint[]}
+ */
 export function parseCustomHistoryPoints(data, config) {
   return _parseCustomHistoryPoints(data, config);
 }
@@ -183,8 +275,14 @@ export function parseCustomHistoryPoints(data, config) {
 // Removes runs of ≥ minRunLength consecutive identical prices (stale API data).
 // Keeps only the first point of each such run so the series resumes at the
 // correct price when real updates arrive.
+/**
+ * @param {PricePoint[]} points
+ * @param {number} [minRunLength] run length at/above which the repeats are dropped
+ * @returns {PricePoint[]} a new array (the input is not mutated)
+ */
 function _removeStaleRuns(points, minRunLength = 8) {
   if (points.length < 2) return [...points];
+  /** @type {PricePoint[]} */
   const result = [];
   let i = 0;
   while (i < points.length) {
@@ -200,6 +298,14 @@ function _removeStaleRuns(points, minRunLength = 8) {
   return result;
 }
 
+/**
+ * Kinesis-specific data cleanup: drop stale repeated-price runs, then flatten
+ * isolated one-point needles (edges against their single neighbour, interior
+ * against a MAD-based robust threshold).
+ *
+ * @param {PricePoint[]|null|undefined} points
+ * @returns {PricePoint[]} a shallow-copied, repaired series
+ */
 export function sanitizeKinesisIsolatedSpikes(points) {
   if (!Array.isArray(points) || points.length < 2) return points || [];
 
@@ -230,6 +336,7 @@ export function sanitizeKinesisIsolatedSpikes(points) {
 
   if (sanitized.length < 5) return sanitized;
 
+  /** @type {number[]} */
   const logReturns = [];
   for (let i = 1; i < sanitized.length; i += 1) {
     const prev = toNumber(sanitized[i - 1]?.price);
@@ -267,9 +374,17 @@ export function sanitizeKinesisIsolatedSpikes(points) {
   return sanitized;
 }
 
+/**
+ * Kinesis trendline rows → sanitized point series. Kinesis dates its points
+ * with an ISO `createdAt` rather than an epoch, so it needs its own parser.
+ *
+ * @param {any} rawPoints the `data[symbol]` array of the Kinesis response
+ * @returns {PricePoint[]}
+ */
 function _parseKinesisTrendlinePoints(rawPoints) {
   if (!Array.isArray(rawPoints)) return [];
 
+  /** @type {PricePoint[]} */
   const points = [];
   for (const point of rawPoints) {
     const createdAt = point?.createdAt;
@@ -286,6 +401,13 @@ function _parseKinesisTrendlinePoints(rawPoints) {
 
 // ─── Yahoo helper ─────────────────────────────────────────────────────────────
 
+/**
+ * Most recent valid daily close from Yahoo's chart endpoint (5-day window) —
+ * the per-symbol fallback when the batched quote call yields nothing.
+ *
+ * @param {string} symbol
+ * @returns {Promise<number|undefined>}
+ */
 async function _fetchYahooLatestClose(symbol) {
   const yahooFinance = await getYahooClient();
   const chart = await yahooFinance.chart(symbol, {
@@ -304,6 +426,14 @@ async function _fetchYahooLatestClose(symbol) {
 
 // ─── Historical price point lookup ───────────────────────────────────────────
 
+/**
+ * Binary-search a date-ascending series for the last price at or before a
+ * timestamp.
+ *
+ * @param {PricePoint[]|null|undefined} points must be date-ascending
+ * @param {number} timestampMs
+ * @returns {number|undefined} undefined when the series is empty or starts later
+ */
 export function getHistoricalPriceAt(points, timestampMs) {
   if (!Array.isArray(points) || points.length === 0) return undefined;
 
@@ -328,11 +458,21 @@ export function getHistoricalPriceAt(points, timestampMs) {
 
 // ─── Provider strategies ──────────────────────────────────────────────────────
 
+/**
+ * Provider strategies. The two shapes are deliberate (SIMP-33): `binance` and
+ * `yahoo` batch by a resolved provider id and key their result by that id;
+ * `custom` and `kinesis` take investment rows and key by `inv.id`.
+ */
 export const PROVIDERS = {
+  /**
+   * @param {string[]} providerIds Binance ticker symbols
+   * @returns {Promise<Record<string, LivePriceQuote>>} keyed by symbol; missing symbols are simply absent
+   */
   async binance(providerIds) {
     const uniqueSymbols = [...new Set(providerIds.map(id => (id || '').toUpperCase()))].filter(Boolean);
     if (uniqueSymbols.length === 0) return {};
 
+    /** @type {Record<string, LivePriceQuote>} */
     const prices = {};
     try {
       const res = await fetch('https://data-api.binance.vision/api/v3/ticker/price', {
@@ -343,6 +483,7 @@ export const PROVIDERS = {
       _assertResponseWithinCap(res, 'Binance');
       const data = await res.json();
 
+      /** @type {Record<string, number>} */
       const priceMap = {};
       for (const item of data) {
         if (!item.symbol || !item.price) continue;
@@ -365,8 +506,14 @@ export const PROVIDERS = {
     return prices;
   },
 
+  /**
+   * @param {string[]} providerIds Yahoo ticker symbols
+   * @returns {Promise<Record<string, LivePriceQuote>>} keyed by uppercased symbol
+   */
   async yahoo(providerIds) {
+    /** @type {Record<string, LivePriceQuote>} */
     const prices = {};
+    /** @type {Set<string>} */
     const resolved = new Set();
 
     const symbols = [...new Set(providerIds.map((s) => (s || '').toUpperCase()).filter(Boolean))];
@@ -421,10 +568,15 @@ export const PROVIDERS = {
     return prices;
   },
 
+  /**
+   * @param {InvestmentRow[]} investments holdings whose price_provider is 'custom'
+   * @returns {Promise<Record<string, LivePriceQuote>>} keyed by investment id; `{ price }` only
+   */
   async custom(investments) {
     // Per-holding fetches run concurrently — each iteration self-catches, and
     // serially one hung endpoint (10s timeout, up to 2 fetches per holding on
     // the fallback path) stalled every holding behind it.
+    /** @type {Record<string, LivePriceQuote>} */
     const prices = {};
     await Promise.all(investments.map(async (inv) => {
       const { latestUrl, latestPath } = _resolveCustomLatestConfig(inv);
@@ -466,9 +618,14 @@ export const PROVIDERS = {
     return prices;
   },
 
+  /**
+   * @param {InvestmentRow[]} investments holdings whose price_provider is 'kinesis'
+   * @returns {Promise<Record<string, LivePriceQuote>>} keyed by investment id
+   */
   async kinesis(investments) {
     // Same concurrency rationale as custom(): these ran one sequential fetch
     // per holding with a 15s timeout — worst case ~75s for 5 holdings.
+    /** @type {Record<string, LivePriceQuote>} */
     const prices = {};
     await Promise.all(investments.map(async (inv) => {
       const { symbol, timeframe, fromDate, needsUsdToEur } = resolveKinesisConfig(inv);

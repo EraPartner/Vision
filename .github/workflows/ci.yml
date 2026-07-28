@@ -228,8 +228,9 @@ jobs:
   # Two steps, one program: the base config is loose (strict/noImplicitAny off)
   # and covers all of src/; the ratchet re-runs it with noImplicitAny: true and
   # fails only on the paths listed in scripts/checkjs-ratchet.js (the data-layer
-  # row contracts + the repositories annotated against them). See that script's
-  # header for why this is not a second directory-scoped tsconfig.
+  # row contracts, every repository, and the service subdirectories annotated
+  # against them). See that script's header for why this is not a second
+  # directory-scoped tsconfig, and its RATCHETED list for what is still out.
   # ─────────────────────────────────────────────────────────────────────────────
   typecheck-backend:
     name: Type Check (Backend)

@@ -6,9 +6,19 @@ import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNorma
 import { logger } from '../../../config/logger.js';
 import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc } from './_shared.js';
 
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
 const NAME = 'wise';
 const BANK_LABEL = 'Wise';
 
+/**
+ * @param {string} amountStr
+ * @param {string} direction Wise's 'IN' / 'OUT' / 'NEUTRAL' column
+ * @returns {number|null} signed amount, or null when unparseable
+ */
 function resolveAmount(amountStr, direction) {
   const parsed = parseAmountField(amountStr);
   if (isNaN(parsed)) return null;
@@ -17,6 +27,15 @@ function resolveAmount(amountStr, direction) {
   return parsed;
 }
 
+/**
+ * @param {Record<string, string>} row
+ * @param {string} direction
+ * @param {string} sourceAmountStr
+ * @param {string} targetAmountStr
+ * @param {string} sourceCurrency
+ * @param {string} targetCurrency
+ * @returns {string|null}
+ */
 function buildWiseComment(row, direction, sourceAmountStr, targetAmountStr, sourceCurrency, targetCurrency) {
   const sourceFee = (row['Source fee amount'] || '').trim();
   const sourceFeeCurrency = (row['Source fee currency'] || '').trim();
@@ -36,6 +55,10 @@ function buildWiseComment(row, direction, sourceAmountStr, targetAmountStr, sour
   return buildOptionalComment(commentParts);
 }
 
+/**
+ * @param {Record<string, string>} row a `columns: true` csv-parse record
+ * @returns {ParsedBankTransaction|null} null unless the row is COMPLETED and parseable
+ */
 function rowToTransaction(row) {
   const status = (row['Status'] || '').trim().toUpperCase();
   if (status !== 'COMPLETED') return null;
@@ -98,6 +121,10 @@ function rowToTransaction(row) {
   };
 }
 
+/**
+ * @param {string|null|undefined} csvSample raw head of the uploaded file
+ * @returns {boolean}
+ */
 export function detect(csvSample) {
   if (!csvSample) return false;
   const firstLine = (csvSample.split('\n')[0] || '').toLowerCase();
@@ -106,6 +133,10 @@ export function detect(csvSample) {
     && firstLine.includes('source amount');
 }
 
+/**
+ * @param {string} filePath
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath) {
   const records = await parseCsvFile(filePath, {
     columns: true,
@@ -114,7 +145,7 @@ export async function parse(filePath) {
     trim: true,
   });
 
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
   for (const row of records) {
     try {

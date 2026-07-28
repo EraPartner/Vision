@@ -9,19 +9,46 @@ import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { epochMsToUtcYmd } from '../../lib/dateFormat.js';
 
+/**
+ * @typedef {import('../../types/rows.js').AssetPriceHistoryRow} AssetPriceHistoryRow
+ * @typedef {import('../../types/rows.js').PricePoint} PricePoint
+ */
+
+/**
+ * A raw, unvalidated price point as it arrives from a provider adapter or a DB
+ * projection — both fields may be missing, non-finite, or the wrong type;
+ * `normalizeHistoryPoints` is the gate that turns these into {@link PricePoint}s.
+ *
+ * @typedef {{ timestampMs?: any, price?: any }} RawPricePoint
+ */
+
 export const PRICE_CACHE_TTL_MS = 5 * 60_000;
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 
 // Key: `${provider}:${providerId}` — Value: { data, expiresAt }
+// The payload differs per call site (a live quote, a point array, a provider
+// response) and this module never inspects it, so it stays `any`.
+/** @type {Map<string, { data: any, expiresAt: number }>} */
 const _cache = new Map();
 
 // ─── Shared numeric helpers ───────────────────────────────────────────────────
 
+/**
+ * Coerce to a finite number, or undefined. Deliberately accepts anything —
+ * it is applied to raw provider JSON and to NUMERIC columns (pg strings).
+ *
+ * @param {any} value
+ * @returns {number|undefined}
+ */
 export function toNumber(value) {
   const num = Number(value);
   return Number.isFinite(num) ? num : undefined;
 }
 
+/**
+ * @param {any} value
+ * @returns {boolean} true only for a finite, strictly-positive number
+ */
 export function isValidPrice(value) {
   const num = toNumber(value);
   return num !== undefined && num > 0;
@@ -29,11 +56,19 @@ export function isValidPrice(value) {
 
 // ─── Date / timestamp helpers ─────────────────────────────────────────────────
 
+/**
+ * @param {number} timestampMs
+ * @returns {string|undefined} the UTC calendar day as 'YYYY-MM-DD'
+ */
 export function toDateOnly(timestampMs) {
   if (!Number.isFinite(timestampMs)) return undefined;
   return epochMsToUtcYmd(timestampMs);
 }
 
+/**
+ * @param {string|Date|null|undefined} dateOnly a 'YYYY-MM-DD' string or a pg DATE (local-midnight `Date`)
+ * @returns {number} epoch ms at UTC noon of that day, or NaN when unparseable
+ */
 export function dateOnlyToTimestampMs(dateOnly) {
   if (!dateOnly) return Number.NaN;
   // pg returns DATE columns as local-midnight Date objects. String() on one is
@@ -53,8 +88,16 @@ export function dateOnlyToTimestampMs(dateOnly) {
 
 // ─── History point helpers ────────────────────────────────────────────────────
 
+/**
+ * Validate, de-duplicate by calendar day (last one wins) and date-sort a raw
+ * point series. Non-array input and malformed points are dropped, not thrown.
+ *
+ * @param {RawPricePoint[]|null|undefined} points
+ * @returns {PricePoint[]} date-ascending, one point per day
+ */
 export function normalizeHistoryPoints(points) {
   if (!Array.isArray(points) || points.length === 0) return [];
+  /** @type {Map<string, PricePoint>} */
   const byDate = new Map();
 
   for (const point of points) {
@@ -106,6 +149,14 @@ export function needsHistoryRefresh(points, { fromMs, toMs } = {}) {
   return false;
 }
 
+/**
+ * Count positionally-aligned points whose price actually moved. Used to report
+ * how much a refetch changed; non-array or malformed input counts as 0.
+ *
+ * @param {RawPricePoint[]|null|undefined} beforePoints
+ * @param {RawPricePoint[]|null|undefined} afterPoints
+ * @returns {number}
+ */
 export function countChangedPointPrices(beforePoints, afterPoints) {
   if (!Array.isArray(beforePoints) || !Array.isArray(afterPoints)) return 0;
   const len = Math.min(beforePoints.length, afterPoints.length);
@@ -121,6 +172,10 @@ export function countChangedPointPrices(beforePoints, afterPoints) {
 
 // ─── In-memory cache ──────────────────────────────────────────────────────────
 
+/**
+ * @param {string} key `${provider}:${providerId}`
+ * @returns {any} the cached payload, or undefined when absent/expired
+ */
 export function cacheGet(key) {
   const entry = _cache.get(key);
   if (!entry) return undefined;
@@ -128,6 +183,11 @@ export function cacheGet(key) {
   return entry.data;
 }
 
+/**
+ * @param {string} key `${provider}:${providerId}`
+ * @param {any} data payload shape varies per call site
+ * @returns {void}
+ */
 export function cacheSet(key, data) {
   _cache.set(key, { data, expiresAt: Date.now() + PRICE_CACHE_TTL_MS });
 }
@@ -175,7 +235,8 @@ export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, t
     );
 
     return normalizeHistoryPoints(
-      result.rows.map((row) => ({
+      /** @type {Pick<AssetPriceHistoryRow, 'price_date'|'close_price'>[]} */
+      (result.rows).map((row) => ({
         timestampMs: dateOnlyToTimestampMs(row.price_date),
         price: toNumber(row.close_price),
       }))
@@ -207,8 +268,9 @@ export async function loadLatestHistoricalPointByInvestmentIds(investmentIds) {
       [ids]
     );
 
+    /** @type {Map<number, PricePoint>} */
     const byId = new Map();
-    for (const row of result.rows) {
+    for (const row of /** @type {Pick<AssetPriceHistoryRow, 'investment_id'|'price_date'|'close_price'>[]} */ (result.rows)) {
       byId.set(row.investment_id, {
         timestampMs: dateOnlyToTimestampMs(row.price_date),
         price: toNumber(row.close_price),
@@ -242,6 +304,15 @@ async function _dropForeignKey() {
   }
 }
 
+/**
+ * Upsert a normalized point series for one investment. Silently no-ops when the
+ * table is absent (42P01) or nothing survives normalization.
+ *
+ * @param {number} investmentId
+ * @param {RawPricePoint[]|null|undefined} points
+ * @param {string|null|undefined} source provider id; defaults to 'provider'
+ * @returns {Promise<void>}
+ */
 export async function saveHistoricalPointsToDatabase(investmentId, points, source) {
   const normalized = normalizeHistoryPoints(points);
   if (!Number.isFinite(Number(investmentId)) || normalized.length === 0) return;

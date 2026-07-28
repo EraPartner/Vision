@@ -14,6 +14,26 @@
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 
+/**
+ * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
+ * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
+ */
+
+/**
+ * One resolution outcome for a (symbol, name) pair.
+ *
+ * @typedef {{ investmentId: number|null, matchSource: 'symbol'|'name_exact'|null }} InstrumentMatch
+ */
+
+/**
+ * Run the match phase: resolve each validated row to an existing investment by
+ * unambiguous symbol, then unambiguous exact name. Cash rows (brokerage
+ * deposits/withdrawals) skip resolution entirely.
+ *
+ * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback }} args
+ * @returns {Promise<{ matchSourceCounts: Record<string, number>, unresolved: number, total: number }>}
+ */
 export async function matchBatch({ batchId, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'matching' WHERE id = $1`, [batchId]);
 
@@ -53,9 +73,16 @@ export async function matchBatch({ batchId, onProgress }) {
 
   // Resolve once per distinct (symbol, name) pair — brokerage exports repeat the
   // same instrument across many rows.
+  /** @type {Map<string, InstrumentMatch>} */
   const cache = new Map();
-  const resolveKey = (symbol, name) => `${symbol || ''}\x00${name || ''}`;
+  const resolveKey = (/** @type {string|null} */ symbol, /** @type {string|null} */ name) =>
+    `${symbol || ''}\x00${name || ''}`;
 
+  /**
+   * @param {string|null} symbolRaw
+   * @param {string|null} nameRaw
+   * @returns {InstrumentMatch}
+   */
   const classify = (symbolRaw, nameRaw) => {
     const symbol = String(symbolRaw || '').trim();
     if (symbol) {
@@ -77,13 +104,17 @@ export async function matchBatch({ batchId, onProgress }) {
     return { investmentId: null, matchSource: null };
   };
 
+  /** @type {string[]} */
   const ids = [];
+  /** @type {(number|null)[]} */
   const investmentIds = [];
+  /** @type {(string|null)[]} */
   const matchSources = [];
+  /** @type {Record<string, number>} */
   const counts = { symbol: 0, name_exact: 0, unresolved: 0 };
 
   let seen = 0;
-  for (const row of rows) {
+  for (const row of /** @type {Pick<PortfolioImportStagingRow, 'id'|'symbol_raw'|'name_raw'>[]} */ (rows)) {
     const key = resolveKey(row.symbol_raw, row.name_raw);
     let resolved = cache.get(key);
     if (resolved === undefined) {
@@ -128,15 +159,17 @@ export async function matchBatch({ batchId, onProgress }) {
  * match, >1 → ambiguous/unresolved" rule; MIN(id) is the resolved id when the
  * count is 1 (identical to the old ORDER BY id LIMIT 1 on a single match).
  *
- * @param {{ symbol_raw: string }[]} rows
+ * @param {{ symbol_raw: string|null }[]} rows
  * @returns {Promise<Map<string, { id: number, count: number }>>} keyed by lowercased symbol
  */
 async function resolveBySymbolBatch(rows) {
+  /** @type {Set<string>} */
   const symbols = new Set();
   for (const row of rows) {
     const symbol = String(row.symbol_raw || '').trim();
     if (symbol) symbols.add(symbol.toLowerCase());
   }
+  /** @type {Map<string, { id: number, count: number }>} */
   const map = new Map();
   if (symbols.size === 0) return map;
   const r = await query(
@@ -158,11 +191,12 @@ async function resolveBySymbolBatch(rows) {
  * that carry no symbol — reach the name path; a row with an ambiguous symbol is
  * excluded, mirroring the old function's early return before name matching.
  *
- * @param {{ symbol_raw: string, name_raw: string }[]} rows
+ * @param {{ symbol_raw: string|null, name_raw: string|null }[]} rows
  * @param {Map<string, { id: number, count: number }>} symbolMatches
  * @returns {Promise<Map<string, { id: number, count: number }>>} keyed by lowercased trimmed name
  */
 async function resolveByNameBatch(rows, symbolMatches) {
+  /** @type {Set<string>} */
   const names = new Set();
   for (const row of rows) {
     const symbol = String(row.symbol_raw || '').trim();
@@ -171,6 +205,7 @@ async function resolveByNameBatch(rows, symbolMatches) {
     const name = String(row.name_raw || '').trim();
     if (name) names.add(name.toLowerCase());
   }
+  /** @type {Map<string, { id: number, count: number }>} */
   const map = new Map();
   if (names.size === 0) return map;
   const r = await query(

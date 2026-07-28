@@ -20,6 +20,9 @@ import { transactionRepository } from '../../repositories/transactionRepository.
 import { toDecimal, roundToCents } from '../../lib/money.js';
 import { classifyDeduction } from './deductionClassifier.js';
 
+/** A decimal.js money value, as produced by the shared `toDecimal` helper. */
+/** @typedef {ReturnType<typeof toDecimal>} Money */
+
 /**
  * Compute per-deduction-type candidate totals for one calendar year.
  *
@@ -51,6 +54,7 @@ export async function computeDeductionCandidates({ year }) {
   });
 
   // Pass 1: group outflows by raw category name, classifying each category.
+  /** @type {Map<string, { category: string, deductionType: string, total: Money, count: number }>} */
   const byCategory = new Map();
   for (const row of rows) {
     const amount = toDecimal(row.amount ?? 0);
@@ -75,6 +79,7 @@ export async function computeDeductionCandidates({ year }) {
 
   // Pass 2: roll categories up per deduction type, keeping the contributors
   // nested (totals stay Decimal until the final rounding).
+  /** @type {Map<string, { total: Money, categories: Array<{ category: string, total: number, count: number }> }>} */
   const typeAgg = new Map();
   for (const entry of byCategory.values()) {
     const agg = typeAgg.get(entry.deductionType) || { total: toDecimal(0), categories: [] };
