@@ -563,10 +563,16 @@ look-changing one.
   - In the sign-based model (− expense / + income) a 0-amount row is meaningless and pollutes aggregations.
   - Fix: reject `amountValue === 0` client-side; tighten backend to `Number.isFinite` + non-zero.
 
-- [ ] **Raw English backend error messages leak into toasts on every failed mutation** 🔽 🔎 verified-present 2026-07-11
+- [x] **Raw English backend error messages leak into toasts on every failed mutation** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-28 · 632cf8b (half 1 was already fixed since verification: lib/api/errorMessage.ts apiErrorToMessage(error, t) maps ApiClientError codes → apiError.* keys and is used by 33 files incl. all 7 useTransactions mutations — zero raw error.message toasts remained. Half 2 landed here: GlobalMutationErrorToaster subscribes to the mutation cache and toasts mapped copy for the 9 mutations that had no onError at all (silent failures: attachment upload, watchlist delete, research mapping dialogs…), skipping mutations with options.onError or meta.suppressErrorToast; RebalancePage inline raw message also mapped; 5 tests pin copy + both silence gates)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - `hooks/useTransactions.ts:78-81` (toast description = raw `error.message`); no global `MutationCache` onError in `App.tsx:93-101`, so any mutation without a hook-level handler silently swallows errors (none confirmed, hooks unaudited — see residue)
   - Fix: map backend error codes to i18n keys at the toast layer; add a global MutationCache onError as backstop.
+
+- [ ] **Residual raw-error surfaces: query-context inline errors show raw `error.message`; AddTransactionDialog branches on error-message substring** ⏬
+  - ↪ _from: Orchestration session 2026-07-28 · error-toast fix pass (noticed, out of that finding's mutation-toast scope)_
+  - Query (not mutation) inline error surfaces still render raw `error.message`: `pages/RecipientsPage.tsx:340`, `pages/CategoriesPage.tsx:118`, `pages/TransactionsPage.tsx:415`, `pages/ImportReviewPage.tsx` (load error), `NetWorthPage.tsx:132`, `PortfolioImportPage.tsx:141`, plus `AdminErrorState`/`ErrorBoundary` diagnostics (arguably fine as developer surfaces). And `AddTransactionDialog.tsx:120` branches on `error.message.includes('Duplicate')` — fragile string matching that should key off `ApiClientError.code`/status (control flow, not copy).
+  - Fix: route the inline query-error surfaces through `apiErrorToMessage`; replace the Duplicate substring check with a code/status check.
+
 
 - [x] **Chart tooltips + two pages format via browser locale, not the app language setting** 🔽 ✅ 2026-07-13 · d9e4bf9 (#84, Area/Line/ComposedChart fallbacks use formatDateWithAppSettings(appSettings.dateFormat); ToolResultCard and DbMaintenancePage use numberFormatToLocale/formatDateTimeWithAppSettings)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
