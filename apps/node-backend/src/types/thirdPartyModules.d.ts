@@ -32,6 +32,19 @@
 // pg.Pool(...)` — a value import TS7016 fires on regardless of use site. That
 // file defines its own structural `PgPoolClient`/`PgQueryResult` typedefs to
 // keep its JSDoc precise despite `pg` itself resolving to `any` here.
+//
+// `express` joins the list for the routes/ slice: every route file does
+// `import { Router } from 'express'` (and calls `Router()`) — a VALUE import,
+// same TS7016-on-the-import-statement-itself situation as `multer`/`pg`
+// above. Elsewhere `express` is referenced in TYPE position only
+// (`import('express').X`), which is exactly what this codebase avoids —
+// `src/types/express.js`'s structural typedefs (`ExpressRequest`,
+// `ExpressResponse`, `ExpressNextFunction`, `ExpressRouter`, `ExpressHandler`)
+// are the intentional replacement for that, and remain what route handlers
+// are annotated with. This ambient entry only silences the import-statement
+// complaint; `Router`/the returned router instance still resolve to `any`,
+// same as `multer`/`pg` always have.
 
 declare module 'multer';
 declare module 'pg';
+declare module 'express';

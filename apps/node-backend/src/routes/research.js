@@ -12,6 +12,7 @@
  * and a "not mapped / unavailable" state instead of a silent empty.
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
@@ -22,9 +23,17 @@ import { runPortfolioForecast } from '../services/research/projection/portfolioP
 import { fundamentalsScorecard } from '../services/research/fundamentalsScorecard.js';
 import { MACRO_PROVIDERS, isValidSeriesId } from '../services/research/adapters/macroCatalog.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
-/** Stable empty shapes so the frontend gets a consistent payload when unavailable. */
+// Keyed by `dataType` (a runtime string from the aggregator's capability map,
+// not a closed union here), and the per-key shapes genuinely differ (items[]
+// vs points[] vs a bare object) — `Record<string, any>` reflects both.
+/** @type {Record<string, any>} Stable empty shapes so the frontend gets a consistent payload when unavailable. */
 const EMPTY_BY_TYPE = {
   search: { items: [] },
   quote: undefined,
@@ -34,6 +43,7 @@ const EMPTY_BY_TYPE = {
   news: { articles: [] },
 };
 
+/** @param {any} value */
 function single(value) {
   if (Array.isArray(value)) return value.length ? String(value[0]) : '';
   if (value == null) return '';
@@ -47,6 +57,7 @@ function single(value) {
  */
 
 // A required param: single()-normalized, must be non-empty after trimming.
+/** @param {string} message */
 const requiredParamSchema = (message) =>
   z.unknown().transform(single).refine((value) => value.length > 0, { error: message });
 
@@ -67,6 +78,12 @@ const mappingsArraySchema = z.array(z.unknown(), { error: 'mappings must be a no
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
 // Messages already name their param, so issues join without path prefixes.
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} value
+ * @returns {T}
+ */
 function parseResearchParam(schema, value) {
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -75,35 +92,48 @@ function parseResearchParam(schema, value) {
   return result.data;
 }
 
+/** @param {unknown} value */
 const requireSymbol = (value) => parseResearchParam(symbolSchema, value);
 
 /**
  * Run an aggregator fetch and emit the unified envelope with provenance meta.
- * @param {import('express').Response} res
+ * @param {ExpressResponse} res
  * @param {string} dataType
  * @param {object} params
  */
 async function respond(res, dataType, params) {
   const result = await researchAggregator.fetch(dataType, params);
   const data = result.source === 'unavailable' ? EMPTY_BY_TYPE[dataType] : result.data;
-  res.ok(data ?? null, { provider: result.provider ?? null, source: result.source });
+  // `ResponseMeta` (@vision/types/api) only declares `requestId`/`extra`, but
+  // envelope.js's wrapResponse spreads whatever `meta` object it's given onto
+  // the body directly — `provider`/`source` land at the top level at runtime
+  // exactly as passed here. That's a real divergence from the documented
+  // "arbitrary facts belong under meta.extra" convention (see api.js), predating
+  // this annotation pass; binding to a local (not a fresh object literal) sidesteps
+  // the excess-property check without changing what's sent on the wire.
+  const meta = { provider: result.provider ?? null, source: result.source };
+  res.ok(data ?? null, meta);
 }
 
 // GET /api/research/search?q=apple
-router.get('/search', async (req, res) => {
+router.get('/search', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const q = single(req.query.q);
-  if (!q) return res.ok({ items: [] }, { provider: null, source: 'live' });
+  if (!q) {
+    /** @type {{ provider: string|null, source: string }} */
+    const meta = { provider: null, source: 'live' };
+    return res.ok({ items: [] }, meta);
+  }
   await respond(res, 'search', { symbol: q });
 });
 
 // GET /api/research/quote?symbol=AAPL&asset_class=stock
-router.get('/quote', async (req, res) => {
+router.get('/quote', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'quote', { symbol, assetClass: single(req.query.asset_class) || undefined });
 });
 
 // GET /api/research/chart?symbol=AAPL&asset_class=stock&range=1mo
-router.get('/chart', async (req, res) => {
+router.get('/chart', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'chart', {
     symbol,
@@ -115,24 +145,26 @@ router.get('/chart', async (req, res) => {
 // GET /api/research/fundamentals?symbol=AAPL
 // Fundamentals are MERGED across FMP + Yahoo (FMP preferred, Yahoo fills gaps),
 // not raced like the other data types.
-router.get('/fundamentals', async (req, res) => {
+router.get('/fundamentals', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   const result = await researchAggregator.fetchFundamentals({
     symbol,
     assetClass: single(req.query.asset_class) || undefined,
   });
   const data = result.source === 'unavailable' ? EMPTY_BY_TYPE.fundamentals : result.data;
-  res.ok(data ?? null, { provider: result.provider ?? null, source: result.source });
+  // See the comment in respond() above re: ResponseMeta vs. actual meta shape.
+  const meta = { provider: result.provider ?? null, source: result.source };
+  res.ok(data ?? null, meta);
 });
 
 // GET /api/research/analyst?symbol=AAPL
-router.get('/analyst', async (req, res) => {
+router.get('/analyst', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'analyst', { symbol, assetClass: single(req.query.asset_class) || undefined });
 });
 
 // GET /api/research/news?symbol=AAPL
-router.get('/news', async (req, res) => {
+router.get('/news', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   await respond(res, 'news', { symbol });
 });
@@ -142,15 +174,21 @@ router.get('/news', async (req, res) => {
 // and unions a catalog/search; macro/series fetches one provider's observations.
 
 // GET /api/research/macro/search?q=inflation
-router.get('/macro/search', async (req, res) => {
+router.get('/macro/search', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const q = single(req.query.q);
-  if (!q) return res.ok({ items: [] }, { provider: null, source: 'live' });
+  if (!q) {
+    /** @type {{ provider: string|null, source: string }} */
+    const meta = { provider: null, source: 'live' };
+    return res.ok({ items: [] }, meta);
+  }
   const result = await researchAggregator.searchMacro(q);
-  res.ok({ items: result.items ?? [] }, { provider: null, source: result.source });
+  /** @type {{ provider: string|null, source: string }} */
+  const meta = { provider: null, source: result.source };
+  res.ok({ items: result.items ?? [] }, meta);
 });
 
 // GET /api/research/macro/series?provider=fred&series_id=CPIAUCSL&range=5y
-router.get('/macro/series', async (req, res) => {
+router.get('/macro/series', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const provider = parseResearchParam(macroProviderSchema, req.query.provider);
   const seriesId = single(req.query.series_id);
   // Cross-field: the series_id shape depends on the (validated) provider, so
@@ -161,26 +199,30 @@ router.get('/macro/series', async (req, res) => {
   const range = single(req.query.range) || '5y';
   const result = await researchAggregator.fetchMacroSeries({ provider, seriesId, range });
   const data = result.source === 'unavailable' ? { provider, seriesId, points: [] } : result.data;
-  res.ok(data ?? null, { provider: result.provider ?? provider, source: result.source });
+  const meta = { provider: result.provider ?? provider, source: result.source };
+  res.ok(data ?? null, meta);
 });
 
 // ─── Analytics: portfolio forecast + fundamentals scorecard (ADR-081) ───────
 
 // GET /api/research/scorecard?symbol=AAPL — heuristic flags + health score.
-router.get('/scorecard', async (req, res) => {
+router.get('/scorecard', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   const result = await researchAggregator.fetchFundamentals({
     symbol,
     assetClass: single(req.query.asset_class) || undefined,
   });
   if (result.source === 'unavailable') {
-    return res.ok(undefined, { provider: null, source: 'unavailable' });
+    /** @type {{ provider: string|null, source: string }} */
+    const meta = { provider: null, source: 'unavailable' };
+    return res.ok(undefined, meta);
   }
   const scorecard = fundamentalsScorecard(/** @type {Record<string, unknown>} */ (result.data));
-  res.ok({ symbol, fundamentals: result.data, scorecard }, {
+  const meta = {
     provider: result.provider ?? null,
     source: result.source,
-  });
+  };
+  res.ok({ symbol, fundamentals: result.data, scorecard }, meta);
 });
 
 // POST /api/research/portfolio-forecast — Monte-Carlo portfolio value projection.
@@ -188,7 +230,7 @@ router.get('/scorecard', async (req, res) => {
 // Body keys are snake_case only — the camelCase spellings this handler used to
 // also accept were a second, undocumented contract. See "Wire Casing
 // Convention" in docs/reference/code-patterns.md.
-router.post('/portfolio-forecast', async (req, res) => {
+router.post('/portfolio-forecast', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const body = req.body ?? {};
   const result = await runPortfolioForecast({
     horizonMonths: body.horizon_months,
@@ -205,12 +247,20 @@ router.post('/portfolio-forecast', async (req, res) => {
 
 // ─── Cross-provider symbol mapping (ADR-079) ────────────────────────────────
 
+/** @param {unknown} value */
 const keyType = (value) => parseResearchParam(keyTypeSchema, value);
+/** @param {unknown} value */
 const requireInstrumentKey = (value) => parseResearchParam(instrumentKeySchema, value);
 
-/** Coerce an optional id to a positive integer; undefined when absent or invalid. */
+/**
+ * Coerce an optional id to a positive integer; undefined when absent or invalid.
+ * @param {unknown} value
+ */
 function positiveInt(value) {
-  const n = Number.parseInt(value, 10);
+  // Number.parseInt coerces a non-string argument via String(...) at runtime;
+  // String(value) here makes that coercion explicit for the type checker
+  // without changing what gets parsed.
+  const n = Number.parseInt(String(value), 10);
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
@@ -218,14 +268,14 @@ function positiveInt(value) {
 //
 // Canonical collection shape `{items, total}`; unpaginated, so `total` is the
 // row count (present so pagination can land without breaking the shape).
-router.get('/mappings', async (req, res) => {
+router.get('/mappings', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const instrumentKey = requireInstrumentKey(req.query.instrument_key);
   const rows = await researchMappingService.list(instrumentKey, keyType(req.query.key_type));
   res.ok({ items: rows, total: rows.length });
 });
 
 // POST /api/research/mappings/resolve  { instrument_key, key_type, asset_class, query, investment_id }
-router.post('/mappings/resolve', async (req, res) => {
+router.post('/mappings/resolve', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { instrument_key, key_type, asset_class, query, investment_id } = req.body ?? {};
   const q = parseResearchParam(querySchema, query);
   const result = await researchMappingService.resolve({
@@ -241,18 +291,24 @@ router.post('/mappings/resolve', async (req, res) => {
 // POST /api/research/mappings  { instrument_key, key_type, mappings: [...] }
 // Answers the updated mapping set in the same canonical `{items, total}`
 // collection shape as GET /mappings (one response type for both).
-router.post('/mappings', async (req, res) => {
+router.post('/mappings', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { instrument_key, key_type, mappings } = req.body ?? {};
   const rows = await researchMappingService.save({
     instrumentKey: requireInstrumentKey(instrument_key),
     keyType: keyType(key_type),
-    mappings: parseResearchParam(mappingsArraySchema, mappings),
+    // mappingsArraySchema only validates "is a non-empty array" — item shape
+    // (provider/providerSymbol/...) is unchecked by zod and forwarded as-is to
+    // save(), exactly as before this annotation pass; the cast documents the
+    // shape save() actually reads instead of retyping the zod schema itself.
+    mappings: /** @type {Array<{ provider: string, providerSymbol?: string, provider_symbol?: string, resolvedName?: string, resolved_name?: string, exchange?: string, currency?: string, status?: string }>} */ (
+      parseResearchParam(mappingsArraySchema, mappings)
+    ),
   });
   res.ok({ items: rows, total: rows.length });
 });
 
 // DELETE /api/research/mappings/:id
-router.delete('/mappings/:id', async (req, res) => {
+router.delete('/mappings/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = Number.parseInt(req.params.id, 10);
   if (!Number.isInteger(id) || id <= 0) throw new ValidationError('valid mapping id required');
   // Idempotent hard delete (an already-removed mapping is not an error) →
@@ -262,7 +318,7 @@ router.delete('/mappings/:id', async (req, res) => {
 });
 
 // POST /api/research/mappings/audit  { instrument_key, key_type }
-router.post('/mappings/audit', async (req, res) => {
+router.post('/mappings/audit', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { instrument_key, key_type } = req.body ?? {};
   const result = await researchMappingService.audit({
     instrumentKey: requireInstrumentKey(instrument_key),
@@ -278,14 +334,14 @@ router.post('/mappings/audit', async (req, res) => {
 //
 // Canonical collection shape `{items, total}` (fixed provider roster, so
 // `total` is simply the row count).
-router.get('/provider-keys', async (_req, res) => {
+router.get('/provider-keys', /** @param {ExpressRequest} _req @param {ExpressResponse} res */ async (_req, res) => {
   const items = await researchProviderKeyService.listKeyStatuses();
   res.ok({ items, total: items.length });
 });
 
 // PUT /api/research/provider-keys/:provider  { api_key }
 // Answers the refreshed statuses in the same `{items, total}` shape as the GET.
-router.put('/provider-keys/:provider', async (req, res) => {
+router.put('/provider-keys/:provider', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { api_key } = req.body ?? {};
   await researchProviderKeyService.setKey(req.params.provider, api_key);
   const items = await researchProviderKeyService.listKeyStatuses();
@@ -293,7 +349,7 @@ router.put('/provider-keys/:provider', async (req, res) => {
 });
 
 // DELETE /api/research/provider-keys/:provider
-router.delete('/provider-keys/:provider', async (req, res) => {
+router.delete('/provider-keys/:provider', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   // Idempotent hard delete (clearing an unset key is not an error) → 204 No
   // Content (docs/reference/code-patterns.md, "DELETE responses"). The Settings
   // UI refetches GET /provider-keys after a clear, so the response carries no

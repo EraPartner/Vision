@@ -31,8 +31,11 @@ export {
  * new holding" action.
  *
  * @param {{ batchId: number, rowId: number }} args
- * @returns {Promise<object|undefined>} the created investment row, or
- *          `undefined` when the staging row does not exist.
+ * @returns {Promise<import('../types/rows.js').InvestmentRow|null|undefined>} the
+ *          created investment row, `undefined` when the staging row does not
+ *          exist, or (in principle) `null` per investmentRepository.create's
+ *          own return type — never actually null here since the insert above
+ *          always finds the row it just created.
  */
 export async function createInvestmentForRow({ batchId, rowId }) {
   const row = await getRowForInvestmentCreation({ batchId, rowId });

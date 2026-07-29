@@ -44,7 +44,7 @@ export async function listBatches({ limit = 50, offset = 0 } = {}) {
 
 /**
  * @param {number} id
- * @returns {Promise<object|undefined>}
+ * @returns {Promise<Record<string, any>|undefined>}
  */
 export async function getBatch(id) {
   const { rows } = await query(`SELECT ${BATCH_COLUMNS} FROM portfolio_import_batches WHERE id = $1`, [id]);
@@ -56,7 +56,7 @@ export async function getBatch(id) {
  * Caller groups by effective investment.
  *
  * @param {number} batchId
- * @returns {Promise<object[]>}
+ * @returns {Promise<Record<string, any>[]>}
  */
 export async function getPreviewRows(batchId) {
   const { rows } = await query(

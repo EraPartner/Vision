@@ -7,6 +7,7 @@
  * validateId so accepted shapes keep parseInt coercion exactly as before.
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 import splitRepository from '../services/splitService.js';
@@ -15,14 +16,35 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { escapeCsvValue } from '../lib/csv.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
+/**
+ * The row shape yielded by splitRepository.getOwedExportRowsByRecipient.
+ * @typedef {object} OwedExportRow
+ * @property {Date} date
+ * @property {string|null} bank_account
+ * @property {string|null} recipient_name
+ * @property {string|null} memo
+ * @property {number} amount
+ * @property {string|null} currency
+ * @property {string|null} balance
+ * @property {string} category_name
+ * @property {string|null} comment
+ */
+
 const router = Router();
 
 const OWED_EXPORT_HEADER = 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
 
+/** @param {ExpressRequest} req */
 function parseRouteId(req) {
   return parseInt(req.params.id, 10);
 }
 
+/** @param {OwedExportRow} row */
 function buildOwedExportCsvRow(row) {
   return [
     escapeCsvValue(row.date),
@@ -37,11 +59,13 @@ function buildOwedExportCsvRow(row) {
   ].join(',');
 }
 
+/** @param {OwedExportRow[]} rows */
 function buildOwedExportCsv(rows) {
   const csvRows = rows.map(buildOwedExportCsvRow);
   return [OWED_EXPORT_HEADER, ...csvRows].join('\n');
 }
 
+/** @param {number} recipientId */
 function buildOwedExportFilename(recipientId) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   return `owed_transactions_recipient_${recipientId}_${timestamp}.csv`;
@@ -52,6 +76,7 @@ function buildOwedExportFilename(recipientId) {
 // Reuses validateId so the accepted id shapes stay identical (parseInt
 // coercion: '12abc' → 12; 1..2^31-1 bounds); the coerced integer replaces the
 // raw input.
+/** @param {string} field */
 const validatedIdField = (field) => z.unknown().transform((value, ctx) => {
   const result = validateId(value, field);
   if (!result.valid) {
@@ -112,6 +137,10 @@ const payBodySchema = z.looseObject({}).superRefine((data, ctx) => {
   }
 });
 
+/**
+ * @param {z.ZodError} error
+ * @param {string} separator
+ */
 function formatIssues(error, separator) {
   return error.issues
     .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
@@ -119,6 +148,12 @@ function formatIssues(error, separator) {
 }
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} body
+ * @returns {T}
+ */
 function parseSplitsBody(schema, body) {
   const result = schema.safeParse(body);
   if (!result.success) {
@@ -132,8 +167,11 @@ function parseSplitsBody(schema, body) {
 // batch never landed; now any bad row aborts the request before a single write.
 // Every offending row is collected first so the 400 names them all — one
 // round-trip to fix the whole payload, rather than one per bad row.
+/** @param {unknown[]} splits */
 function normalizeBatchSplitInputs(splits) {
+  /** @type {z.infer<typeof batchSplitRowSchema>[]} */
   const prepared = [];
+  /** @type {string[]} */
   const rejected = [];
 
   splits.forEach((split, index) => {
@@ -148,8 +186,13 @@ function normalizeBatchSplitInputs(splits) {
   return prepared;
 }
 
+/** @param {ExpressRequest} req */
 function resolveActor(req) {
-  return req.get('x-actor') || req.user?.id || null;
+  // `req.user` is never assigned anywhere in this codebase (grep confirms: no
+  // auth middleware sets it) — this `?? req.user?.id` branch is dead code,
+  // always falling through to the `x-actor` header or null. Left as-is (zero
+  // behavior change); flagged as a backlog finding rather than fixed here.
+  return req.get('x-actor') || /** @type {any} */ (req).user?.id || null;
 }
 
 // Pagination is opt-in on every list below: without limit/offset the whole
@@ -158,14 +201,14 @@ function resolveActor(req) {
 // The owed summary is derived in JS after the aggregate (see the repository),
 // so this one pages the computed array rather than the query; `total` is still
 // the full group count.
-router.get('/owed', async (req, res) => {
+router.get('/owed', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const summary = await splitRepository.getOwedSummary();
   const items = page ? summary.slice(page.offset, page.offset + page.limit) : summary;
   res.ok(listBody(items, summary.length, page));
 });
 
-router.get('/owed/:id', validateIdParam, async (req, res) => {
+router.get('/owed/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseRouteId(req);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const splits = await splitRepository.getOwedByRecipient(recipientId, page ?? {});
@@ -175,7 +218,7 @@ router.get('/owed/:id', validateIdParam, async (req, res) => {
   res.ok(listBody(splits, total, page));
 });
 
-router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
+router.get('/owed/:id/export/csv', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseRouteId(req);
   const rows = await splitRepository.getOwedExportRowsByRecipient(recipientId);
   if (rows.length === 0) throw new NotFoundError('No unsettled owed transactions found for recipient');
@@ -190,7 +233,7 @@ router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
   res.send(csv);
 });
 
-router.get('/transaction/:id', validateIdParam, async (req, res) => {
+router.get('/transaction/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const transactionId = parseRouteId(req);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const splits = await splitRepository.getSplitsByTransaction(transactionId, page ?? {});
@@ -200,10 +243,17 @@ router.get('/transaction/:id', validateIdParam, async (req, res) => {
   res.ok(listBody(splits, total, page));
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { transaction_id, recipient_id, amount, note } = parseSplitsBody(createSplitSchema, req.body);
 
-  const split = await splitRepository.createSplitAtomic({ transaction_id, recipient_id, amount, note });
+  // createSplitSchema is `z.looseObject({})` — raw values forwarded unchanged
+  // (see module doc); superRefine validates shape/presence but zod's inferred
+  // type is still `unknown` per field. The cast documents what's actually
+  // been checked by the time this line runs.
+  const split = await splitRepository.createSplitAtomic(
+    /** @type {{ transaction_id: number, recipient_id: number, amount: number|string, note?: string|null }} */
+    ({ transaction_id, recipient_id, amount, note }),
+  );
   await splitRepository.writeAudit({
     split_id: split.id,
     action: 'create',
@@ -214,7 +264,7 @@ router.post('/', async (req, res) => {
   res.ok(split);
 });
 
-router.post('/batch', async (req, res) => {
+router.post('/batch', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { transaction_id, splits } = parseSplitsBody(batchSplitsSchema, req.body);
 
   // Throws on any malformed row, so nothing is written unless every row is
@@ -222,10 +272,15 @@ router.post('/batch', async (req, res) => {
   // never reach the repository as an empty `splits`, since the body schema
   // already rejects an empty array).
   const preparedSplits = normalizeBatchSplitInputs(/** @type {unknown[]} */ (splits));
-  const created = await splitRepository.createSplitsBatchAtomic({
-    transaction_id,
-    splits: preparedSplits,
-  });
+  // batchSplitsSchema is `z.looseObject({})` — transaction_id is validated by
+  // superRefine but zod's inferred type is still `unknown`; preparedSplits'
+  // per-row shape traces back through a zod .transform() chain whose output
+  // type doesn't narrow past `any`/`unknown` here either. Both are cast to
+  // what's actually been validated by the time this line runs.
+  const created = await splitRepository.createSplitsBatchAtomic(
+    /** @type {{ transaction_id: number, splits: Array<{ recipient_id: number, amount: number, note?: string }> }} */
+    ({ transaction_id, splits: preparedSplits }),
+  );
   const actor = resolveActor(req);
   // Independent rows — write audits in parallel.
   await Promise.all(created.map((split) => splitRepository.writeAudit({
@@ -244,23 +299,29 @@ router.post('/batch', async (req, res) => {
   res.ok({ items: created, total: created.length });
 });
 
-router.post('/:id/pay', validateIdParam, async (req, res) => {
+router.post('/:id/pay', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const splitId = parseRouteId(req);
   const { amount, note, paid_at } = parseSplitsBody(payBodySchema, req.body);
+  // payBodySchema is `z.looseObject({})` — amount is validated by superRefine
+  // but zod's inferred type is still `unknown` (raw values forwarded
+  // unchanged, see module doc). Cast documents what's actually been checked.
   // Repo serializes existence + overpayment check + insert under
   // SELECT … FOR UPDATE; routes no longer precheck (race window).
-  const payment = await splitRepository.addPayment({
-    split_id: splitId,
-    amount,
-    note,
-    paid_at,
-    actor: resolveActor(req),
-  });
+  const payment = await splitRepository.addPayment(
+    /** @type {{ split_id: number, amount: number, note?: string|null, paid_at?: string|null, actor?: string|null }} */
+    ({
+      split_id: splitId,
+      amount,
+      note,
+      paid_at,
+      actor: resolveActor(req),
+    }),
+  );
   res.status(201);
   res.ok(payment);
 });
 
-router.get('/:id/payments', validateIdParam, async (req, res) => {
+router.get('/:id/payments', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const splitId = parseRouteId(req);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const payments = await splitRepository.getPayments(splitId, page ?? {});
@@ -268,7 +329,7 @@ router.get('/:id/payments', validateIdParam, async (req, res) => {
   res.ok(listBody(payments, total, page));
 });
 
-router.post('/:id/settle', validateIdParam, async (req, res) => {
+router.post('/:id/settle', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const splitId = parseRouteId(req);
   const split = await splitRepository.settleSplit(splitId);
   if (!split) throw new NotFoundError('Split not found');
@@ -282,7 +343,7 @@ router.post('/:id/settle', validateIdParam, async (req, res) => {
   res.ok(split);
 });
 
-router.post('/owed/:id/settle-all', validateIdParam, async (req, res) => {
+router.post('/owed/:id/settle-all', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseRouteId(req);
   const result = await splitRepository.settleAllByRecipient(recipientId);
   if (result.settled_count > 0) {
@@ -296,7 +357,7 @@ router.post('/owed/:id/settle-all', validateIdParam, async (req, res) => {
   res.ok(result);
 });
 
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const splitId = parseRouteId(req);
   const splitBefore = await splitRepository.getSplitById(splitId);
   if (!splitBefore) throw new NotFoundError('Split not found');

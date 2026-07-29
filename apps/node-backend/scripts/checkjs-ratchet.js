@@ -65,7 +65,20 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  * surface, unlike the report-generation one-offs `ExpressResponse` in
  * services/transactionExport.js and services/reports/index.js predate).
  *
- * Beyond that: only `routes/` and `main.js` are untouched.
+ * `routes/` is being taken file-by-file, largest-first, rather than as a
+ * whole/prefix (unlike every directory above): the directory is 20+ files and
+ * far from uniformly clean, so a prefix would gate a mix of annotated and
+ * still-dirty files together. Slice A (the eight largest files, 353 errors)
+ * is listed individually below. `express` itself joined
+ * `src/types/thirdPartyModules.d.ts`'s ambient-module list in this slice —
+ * every route file does `import { Router } from 'express'`, a VALUE import
+ * that trips TS7016 same as `multer`/`pg` — and `src/types/express.js`'s
+ * `ExpressResponse` grew `write`/`once`/`set` (the streaming-export and
+ * `Idempotent-Replay` header call sites needed them) plus a `ResponseMetaLoose`
+ * alias for the `ok(data, meta)` second argument (bare `ResponseMeta` trips
+ * TS's weak-type check the moment a route passes provenance meta like
+ * `{provider, source}` — see the comment on `ResponseMetaLoose` itself). The
+ * rest of `routes/` and `main.js` remain untouched.
  *
  * @type {string[]}
  */
@@ -81,6 +94,17 @@ const RATCHETED = [
   'src/config/',
   'src/utils/',
   'src/database/',
+  // routes/ slice A — the eight largest route files (largest-first below),
+  // taken individually rather than as a `src/routes/` prefix: see the
+  // module doc above for why the rest of routes/ stays unratcheted for now.
+  'src/routes/portfolioImportRoutes.js',
+  'src/routes/research.js',
+  'src/routes/admin.js',
+  'src/routes/transactions.js',
+  'src/routes/splits.js',
+  'src/routes/importRoutes.js',
+  'src/routes/plannedTransactions.js',
+  'src/routes/ai.js',
 ];
 
 /**

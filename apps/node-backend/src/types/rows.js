@@ -167,13 +167,14 @@
  */
 
 /**
- * A row of `planned_transaction_executions`.
+ * A row of `planned_transaction_executions` (`SELECT *`, migration 0001).
  *
  * @typedef {object} PlannedExecutionRow
  * @property {number} id
  * @property {number} planned_transaction_id
  * @property {number} executed_transaction_id
  * @property {Date} execution_date DATE
+ * @property {Date|null} [created_at] TIMESTAMPTZ DEFAULT NOW().
  */
 
 /**

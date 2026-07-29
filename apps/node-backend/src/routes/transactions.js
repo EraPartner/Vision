@@ -13,6 +13,7 @@
  * bulk-action SQL in transactionBulkService.
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 import transactionService from '../services/transactionService.js';
@@ -48,8 +49,15 @@ import { resolveBulkSelection } from '../services/bulkSelection.js';
 import { parsePagination } from '../lib/pagination.js';
 import { toWireDate } from '../lib/dateFormat.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow
+ */
+
 const router = Router();
 
+/** @param {ExpressRequest} req */
 function parseRouteId(req) {
   return parseInt(req.params.id, 10);
 }
@@ -91,6 +99,7 @@ const currencyField = ({ rejectEmpty = false } = {}) => z.unknown().transform((v
 // but a present non-null value must be a positive integer — a non-integer here
 // otherwise reached the DB as an FK type error and surfaced as a 500. The
 // coerced integer replaces the raw input.
+/** @param {string} field */
 const nullableFkField = (field) => z.unknown().transform((value, ctx) => {
   if (value === null) return null;
   const idNum = Number(value);
@@ -194,6 +203,12 @@ const bulkUpdateFieldsSchema = z.object({
 });
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} body
+ * @returns {T}
+ */
 function parseTransactionBody(schema, body) {
   const result = schema.safeParse(body);
   if (!result.success) {
@@ -205,6 +220,10 @@ function parseTransactionBody(schema, body) {
   return result.data;
 }
 
+// `query` is req.query — an Express querystring object whose values are
+// string|string[]|undefined at runtime; typed `any` here (as the rest of this
+// file's req.query reads always have been) rather than modelling every key.
+/** @param {any} query */
 function parseTransactionListQuery(query) {
   const {
     transaction_id,
@@ -274,6 +293,7 @@ function parseTransactionListQuery(query) {
  * `bank_accounts=a,b,c` → array of trimmed strings (legacy escape hatch).
  *
  * Returns { whereSql, params, nextParamIdx }.
+ * @param {any} query req.query — see parseTransactionListQuery.
  */
 function buildExportFilters(query) {
   const opts = parseTransactionListQuery(query);
@@ -319,6 +339,7 @@ function buildExportFilters(query) {
   return { whereSql: sql, params, nextParamIdx };
 }
 
+/** @param {any} body */
 function normalizeTransactionPatchFields(body) {
   // Immutable-rest sanitization (docs/reference/code-patterns.md) — strip
   // read-only keys via destructuring, never with in-place delete.
@@ -337,11 +358,13 @@ function normalizeTransactionPatchFields(body) {
 // The name→id resolvers return the id to use (or undefined to leave the
 // column untouched) instead of mutating the fields object — the caller strips
 // the *_name keys immutably and applies the resolved ids itself.
+/** @param {any} fields */
 async function resolveRecipientNameToId(fields) {
   if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
   return resolveRecipientIdByName(fields.recipient_name);
 }
 
+/** @param {any} fields */
 async function resolveCategoryNameToId(fields) {
   if (!fields.category_name || fields.category_id) return fields.category_id;
   return resolveCategoryIdByName(fields.category_name);
@@ -352,12 +375,12 @@ async function resolveCategoryNameToId(fields) {
 // segment so they never collide with the single-segment `/:id` handlers.
 
 // GET /api/transactions/transfer-suggestions — ambiguous transfer matches
-router.get('/transfer-suggestions', async (req, res) => {
+router.get('/transfer-suggestions', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   res.ok({ items: await getTransferSuggestions() });
 });
 
 // POST /api/transactions/transfers — manually confirm a transfer pair (sticky)
-router.post('/transfers', async (req, res) => {
+router.post('/transfers', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const aId = parseInt(req.body?.aId, 10);
   const bId = parseInt(req.body?.bId, 10);
   if (!Number.isInteger(aId) || !Number.isInteger(bId) || aId === bId) {
@@ -369,7 +392,7 @@ router.post('/transfers', async (req, res) => {
 });
 
 // DELETE /api/transactions/transfers/:id — clear a transfer mark and its peer
-router.delete('/transfers/:id', validateIdParam, async (req, res) => {
+router.delete('/transfers/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   await unmarkTransfer(parseInt(req.params.id, 10));
   scheduleReconcile();
   // Deleting the transfer mark reports nothing the caller can't derive →
@@ -378,7 +401,7 @@ router.delete('/transfers/:id', validateIdParam, async (req, res) => {
 });
 
 // GET /api/transactions
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { uncategorised, normalize_to_eur = 'false', target_currency } = req.query;
   const opts = parseTransactionListQuery(req.query);
 
@@ -411,7 +434,7 @@ router.get('/', async (req, res) => {
 router.get(
   '/export/csv',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-csv' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const includeBalance = req.query.include_balance === 'true';
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
     await streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance });
@@ -423,7 +446,7 @@ router.get(
 router.get(
   '/export/json',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-json' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
     await streamNdjsonExport(res, { whereSql, params, nextParamIdx });
   },
@@ -433,13 +456,18 @@ router.get(
 router.post(
   '/bulk-tag',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-tag' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const { transaction_ids, add_slugs, remove_slugs } = parseTransactionBody(bulkTagSchema, req.body);
 
+    // bulkTagSchema only validates "is an array" (add_slugs/remove_slugs item
+    // type is unchecked, matching pre-zod behavior) while bulkTagTransactions
+    // expects string[] — it forwards each slug straight into a `::text[]`
+    // parameterized query, so a non-string element behaves exactly as before
+    // this annotation pass (pg's own text coercion / cast error).
     const result = await bulkTagTransactions({
       transactionIds: transaction_ids,
-      addSlugs: add_slugs,
-      removeSlugs: remove_slugs,
+      addSlugs: /** @type {string[]} */ (add_slugs),
+      removeSlugs: /** @type {string[]} */ (remove_slugs),
     });
     res.ok(result);
   },
@@ -452,7 +480,7 @@ router.post(
 router.post(
   '/bulk-delete',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-delete' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const { ids, filter } = req.body ?? {};
     const deleted = await bulkDeleteTransactions({ ids, filter });
     res.ok({ deleted });
@@ -466,7 +494,7 @@ router.post(
 router.post(
   '/bulk-update',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-update' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const { ids, filter, fields } = req.body ?? {};
 
     if (!fields || typeof fields !== 'object') {
@@ -497,7 +525,7 @@ router.post(
 router.post(
   '/bulk-export',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-export' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const { ids, filter, format = 'csv', include_balance = false } = req.body ?? {};
     if (format !== 'csv' && format !== 'json') {
       throw new ValidationError("`format` must be 'csv' or 'json'");
@@ -520,7 +548,7 @@ router.post(
 );
 
 // GET /api/transactions/:id
-router.get('/:id', validateIdParam, async (req, res) => {
+router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const transaction = await transactionService.getById(parseInt(req.params.id, 10));
   if (!transaction) {
     throw new NotFoundError(`Transaction with ID ${req.params.id} not found`);
@@ -529,18 +557,28 @@ router.get('/:id', validateIdParam, async (req, res) => {
 });
 
 // POST /api/transactions
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   // Validated body: currency is coerced (uppercased / undefined → repo
   // default); everything else is forwarded raw, exactly as before the schema.
   // The dup-check → insert → raw-mirror → auto-link → reconcile chain lives
   // in the service; a duplicate surfaces as ConflictError (409) from there.
   const data = parseTransactionBody(createTransactionSchema, req.body);
 
-  const { transaction, autoLink } = await transactionService.createManualTransaction(data);
+  // createTransactionSchema is a loose passthrough object (see module doc) —
+  // its zod-inferred type makes every field optional, but the schema's own
+  // superRefine already enforces date/bank_account/recipient_id/amount are
+  // present before this line runs (400s otherwise), matching
+  // createManualTransaction's required-field param type.
+  const { transaction, autoLink } = await transactionService.createManualTransaction(
+    /** @type {{ transaction_date?: string, date?: string, bank_account?: string|null, recipient_id?: number|null, amount: number|string, memo?: string|null, currency?: string|null, category_id?: number|null, comment?: string|null, tags?: string[]|null }} */ (data),
+  );
 
   res.status(201);
   res.ok({
-    ...formatTransaction(transaction),
+    // transactionService.createManualTransaction's own @returns widens
+    // `transaction` to `object` at the service seam, but it's a pass-through
+    // of transactionRepository.create()'s EnrichedTransactionRow|null.
+    ...formatTransaction(/** @type {EnrichedTransactionRow} */ (transaction)),
     auto_linked: autoLink.links[0]?.plannedTransactionId ?? null,
   });
 });
@@ -550,7 +588,7 @@ router.patch(
   '/:id',
   validateIdParam,
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-patch' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const id = parseRouteId(req);
     // Whitelist-strip read-only keys, then validate/coerce the typed fields.
     // Absent keys stay absent (partial PATCH), null keeps its clear semantics
@@ -569,7 +607,12 @@ router.patch(
     if (recipientId !== undefined) patch.recipient_id = recipientId;
     if (categoryId !== undefined) patch.category_id = categoryId;
 
-    const updated = await transactionService.update(id, patch);
+    // patchTransactionSchema's tagsField only validates "is an array" (item
+    // type unchecked, matching pre-zod behavior); transactionRepository.update
+    // types `tags` as `string[]` since that's what it writes to the junction
+    // table — same "loose zod passthrough vs. typed repository param" gap as
+    // the POST handler above.
+    const updated = await transactionService.update(id, /** @type {Record<string, any> & { tags?: string[] }} */ (patch));
     if (!updated) {
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
@@ -580,7 +623,7 @@ router.patch(
 );
 
 // DELETE /api/transactions/:id
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseRouteId(req);
   const deleted = await transactionService.hardDeleteWithCleanup(id);
   if (!deleted) {
@@ -594,6 +637,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
  * Format a transaction row for API response.
  * Maps the DB "date" column to "transaction_date" and adds empty links array.
  */
+/** @param {(EnrichedTransactionRow & { amount_eur?: number|string }) | null} row `amount_eur` is added at runtime by convertRowsToEur() when normalize_to_eur=true — not part of the repository's own row shape. */
 function formatTransaction(row) {
   if (!row) return null;
   const amount = toNumber(toDecimal(row.amount));
@@ -627,6 +671,7 @@ function formatTransaction(row) {
     is_active: row.is_active,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    /** @type {any[]} */
     links: [],
   };
 }
