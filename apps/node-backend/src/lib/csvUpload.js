@@ -12,6 +12,22 @@ import path from 'path';
 import { logger } from '../config/logger.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
+/**
+ * The slice of a multer `File` this module reads. `multer` ships no type
+ * declarations and `@types/multer` is not a workspace dependency, so this is
+ * a local structural stand-in rather than `import('multer').File` (same
+ * reasoning as the ambient `declare module 'multer'` in
+ * thirdPartyModules.d.ts, which only silences the VALUE import above — it
+ * does not give the resulting `multer` binding's members any real shape).
+ * @typedef {object} MulterFile
+ * @property {string} [originalname]
+ * @property {string} [mimetype]
+ */
+
+/**
+ * @param {MulterFile|null|undefined} file
+ * @returns {boolean}
+ */
 export function isLikelyCsvFile(file) {
   const originalName = file?.originalname?.toLowerCase() || '';
   const mimeType = file?.mimetype?.toLowerCase() || '';
@@ -27,7 +43,7 @@ export function isLikelyCsvFile(file) {
 export const csvUpload = multer({
   dest: os.tmpdir(),
   limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (/** @type {unknown} */ req, /** @type {MulterFile} */ file, /** @type {(err: Error|null, acceptFile?: boolean) => void} */ cb) => {
     if (!isLikelyCsvFile(file)) {
       cb(new Error('File must be a CSV'));
     } else {
@@ -38,6 +54,9 @@ export const csvUpload = multer({
 
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
+/**
+ * @param {string|null|undefined} filePath
+ */
 export function cleanup(filePath) {
   if (!filePath) return;
   const basename = path.basename(filePath);
@@ -54,6 +73,14 @@ export function cleanup(filePath) {
  * Express error middleware that converts multer's upload errors into typed
  * ValidationErrors so the global handler emits the standard envelope. Mount at
  * the end of any router that uses csvUpload.
+ */
+/**
+ * @param {any} err arbitrary upstream error shape — multer errors, thrown
+ *   Errors, and anything else the router's error chain can hand this
+ *   middleware; narrowed by `instanceof`/`.message` checks below.
+ * @param {unknown} req
+ * @param {unknown} res
+ * @param {(err?: unknown) => void} next
  */
 export function csvUploadErrorTranslator(err, req, res, next) {
   if (err instanceof multer.MulterError) {

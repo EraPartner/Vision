@@ -25,7 +25,20 @@ function resolveZone() {
 export const APP_TIMEZONE = resolveZone();
 
 /**
+ * @typedef {object} AppTzParts
+ * @property {number} year
+ * @property {number} month 1-12
+ * @property {number} day
+ * @property {number} hour
+ * @property {number} minute
+ * @property {number} second
+ */
+
+/**
  * Convert UTC Date to zoned wall-clock components.
+ * @param {Date} utcDate
+ * @param {string} [zone]
+ * @returns {AppTzParts}
  */
 export function toAppTz(utcDate, zone = APP_TIMEZONE) {
   if (!(utcDate instanceof Date) || Number.isNaN(utcDate.getTime())) {
@@ -42,6 +55,7 @@ export function toAppTz(utcDate, zone = APP_TIMEZONE) {
     hour12: false,
   }).formatToParts(utcDate);
 
+  /** @param {Intl.DateTimeFormatPartTypes} type */
   const get = (type) => Number(parts.find((p) => p.type === type)?.value);
   let year = get('year');
   let month = get('month');
@@ -69,6 +83,9 @@ export function toAppTz(utcDate, zone = APP_TIMEZONE) {
 /**
  * Convert zoned wall-clock components to a UTC Date.
  * Uses a fixed-point pass to handle DST boundaries.
+ * @param {{ year: number, month: number, day: number, hour?: number, minute?: number, second?: number }} parts
+ * @param {string} [zone]
+ * @returns {Date}
  */
 export function toUtc({ year, month, day, hour = 0, minute = 0, second = 0 }, zone = APP_TIMEZONE) {
   let ts = Date.UTC(year, month - 1, day, hour, minute, second);
@@ -92,6 +109,9 @@ export function toUtc({ year, month, day, hour = 0, minute = 0, second = 0 }, zo
 
 /**
  * Format a UTC Date as YYYY-MM-DD in APP_TIMEZONE.
+ * @param {Date} utcDate
+ * @param {string} [zone]
+ * @returns {string}
  */
 export function toAppDateString(utcDate, zone = APP_TIMEZONE) {
   const { year, month, day } = toAppTz(utcDate, zone);
@@ -105,12 +125,20 @@ export function toAppDateString(utcDate, zone = APP_TIMEZONE) {
  * `new Date().toISOString()` reads the UTC calendar day, which is yesterday
  * between local midnight and 01:00/02:00 in UTC+ zones (ADR-009).
  */
+/**
+ * @param {string} [zone]
+ * @returns {string}
+ */
 export function todayAppDateString(zone = APP_TIMEZONE) {
   return toAppDateString(new Date(), zone);
 }
 
 const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/**
+ * @param {string} yyyyMmDd
+ * @returns {{ year: number, month: number, day: number }}
+ */
 function parseYmdParts(yyyyMmDd) {
   const match = YMD_RE.exec(yyyyMmDd);
   if (!match) throw new TypeError(`Expected YYYY-MM-DD, got: ${yyyyMmDd}`);
@@ -120,6 +148,11 @@ function parseYmdParts(yyyyMmDd) {
 /**
  * Add `days` (may be negative) to a YYYY-MM-DD string. Pure calendar math —
  * no timezone involved, so the result is identical on every host.
+ */
+/**
+ * @param {string} yyyyMmDd
+ * @param {number} days
+ * @returns {string}
  */
 export function addDaysYmd(yyyyMmDd, days) {
   const { year, month, day } = parseYmdParts(yyyyMmDd);
@@ -134,6 +167,11 @@ export function addDaysYmd(yyyyMmDd, days) {
  * First day of the month `monthOffset` months relative to a YYYY-MM-DD string
  * (0 = same month, -11 = eleven months back). Pure calendar math.
  */
+/**
+ * @param {string} yyyyMmDd
+ * @param {number} [monthOffset]
+ * @returns {string}
+ */
 export function firstOfMonthYmd(yyyyMmDd, monthOffset = 0) {
   const { year, month } = parseYmdParts(yyyyMmDd);
   const shifted = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
@@ -144,6 +182,11 @@ export function firstOfMonthYmd(yyyyMmDd, monthOffset = 0) {
 
 /**
  * Parse a YYYY-MM-DD string into a UTC Date representing start-of-day in APP_TIMEZONE.
+ */
+/**
+ * @param {string} yyyyMmDd
+ * @param {string} [zone]
+ * @returns {Date}
  */
 export function appDateStringToUtc(yyyyMmDd, zone = APP_TIMEZONE) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(yyyyMmDd);

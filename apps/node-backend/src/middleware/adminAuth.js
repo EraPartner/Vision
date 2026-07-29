@@ -20,6 +20,11 @@ import { Buffer } from 'buffer';
 import { timingSafeEqual } from 'crypto';
 import { UnauthorizedError } from './errorHandler.js';
 
+/**
+ * @param {string} provided
+ * @param {string} configured
+ * @returns {boolean}
+ */
 function safeTokenEquals(provided, configured) {
   const a = Buffer.from(String(provided), 'utf8');
   const b = Buffer.from(String(configured), 'utf8');
@@ -35,6 +40,10 @@ function safeTokenEquals(provided, configured) {
  * (unless ADMIN_ALLOW_TOKENLESS_NONLOOPBACK acknowledges an outer layer, e.g.
  * Docker publishing the container port on host loopback only).
  */
+/**
+ * @param {string|null|undefined} host
+ * @returns {boolean}
+ */
 export function isLoopbackHost(host) {
   const h = String(host ?? '').trim().toLowerCase();
   if (!h) return false;
@@ -43,13 +52,25 @@ export function isLoopbackHost(host) {
   return /^(::ffff:)?127(\.\d{1,3}){3}$/.test(h);
 }
 
+/**
+ * @param {unknown} authorizationHeader
+ * @returns {string|undefined}
+ */
 export function extractAdminBearerToken(authorizationHeader) {
   if (typeof authorizationHeader !== 'string') return undefined;
   const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : undefined;
 }
 
+/**
+ * @param {() => string|undefined} getConfiguredToken
+ */
 export function createAdminAuthMiddleware(getConfiguredToken) {
+  /**
+   * @param {import('../types/express.js').ExpressRequest} req
+   * @param {import('../types/express.js').ExpressResponse} res
+   * @param {import('../types/express.js').ExpressNextFunction} next
+   */
   return function adminAuthMiddleware(req, res, next) {
     const configuredToken = getConfiguredToken();
     if (!configuredToken) {

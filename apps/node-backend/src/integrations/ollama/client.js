@@ -28,6 +28,10 @@ export class OllamaError extends Error {
   }
 }
 
+/**
+ * @param {AbortSignal|null|undefined} signal
+ * @param {number} timeoutMs
+ */
 function withTimeout(signal, timeoutMs) {
   const controller = new AbortController();
   let timedOut = false;
@@ -50,13 +54,17 @@ function withTimeout(signal, timeoutMs) {
     cancel: () => clearTimeout(timer),
     isTimeout: () => timedOut,
     /** Restart the timer with a new window (used per streamed chunk). */
-    rearm: (ms) => {
+    rearm: (/** @type {number} */ ms) => {
       clearTimeout(timer);
       timer = setTimeout(onTimeout, ms);
     },
   };
 }
 
+/**
+ * @param {Response} response
+ * @returns {Promise<any>}
+ */
 async function readJson(response) {
   const text = await response.text();
   if (!text) return null;
@@ -99,6 +107,7 @@ export function createOllamaClient({
     throw new OllamaError('No fetch implementation available');
   }
 
+  /** @param {string} path */
   const url = (path) => `${baseUrl}${path}`;
 
   /**
@@ -161,7 +170,7 @@ export function createOllamaClient({
   async function listModels({ signal } = {}) {
     const data = await request('/api/tags', { signal, timeoutMs: healthTimeoutMs });
     const raw = Array.isArray(data?.models) ? data.models : [];
-    return raw.map((m) => ({
+    return raw.map((/** @type {any} */ m) => ({
       name: m.name,
       size: m.size ?? null,
       family: m.details?.family ?? null,
@@ -299,8 +308,10 @@ export function createOllamaClient({
     // Tool calls can arrive spread across several NDJSON chunks; accumulate
     // them all. Some Ollama builds re-emit the complete list on the final
     // done chunk, so dedupe by call signature rather than trusting order.
+    /** @type {any[]} */
     const toolCalls = [];
     const seenToolCallSigs = new Set();
+    /** @param {any[]} calls */
     const addToolCalls = (calls) => {
       for (const call of calls) {
         const sig = JSON.stringify([
@@ -314,12 +325,17 @@ export function createOllamaClient({
       }
     };
     let modelName = model;
+    /** @type {number|null} */
     let evalCount = null;
+    /** @type {number|null} */
     let promptEvalCount = null;
+    /** @type {number|null} */
     let totalDurationNs = null;
+    /** @type {string|null} */
     let doneReason = null;
     let isDone = false;
 
+    /** @param {string} line */
     const handleLine = async (line) => {
       const trimmed = line.trim();
       if (!trimmed) return;
@@ -420,6 +436,7 @@ export function createOllamaClient({
   };
 }
 
+/** @type {ReturnType<typeof createOllamaClient>|null} */
 let defaultClient = null;
 export function getOllamaClient() {
   if (!defaultClient) defaultClient = createOllamaClient();

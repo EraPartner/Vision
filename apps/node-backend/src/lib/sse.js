@@ -37,13 +37,14 @@ const SSE_FLUSH_PADDING = `:${' '.repeat(2048)}\n\n`;
  * - write() is a no-op when the client has disconnected.
  * - end() is a no-op if the response has already ended.
  *
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @returns {{
- *   readonly closed: boolean,
- *   write(event: string, data: unknown): Promise<void>,
- *   end(): void,
- * }}
+ * `req`/`res` are typed via `node:http`'s base classes rather than
+ * `import('express').Request/Response` — express ships no type declarations
+ * and `@types/express` is not a workspace dependency, so referencing its
+ * types resolves to an implicit `any` (TS7016) under `noImplicitAny`. At
+ * runtime these ARE `http.IncomingMessage`/`http.ServerResponse` (express
+ * augments the prototypes, it doesn't replace them), and this function only
+ * ever touches members both share with plain Node http, so the base classes
+ * type it exactly, not just structurally.
  */
 // Heartbeat comment cadence. Behind a reverse proxy with a default idle
 // timeout (nginx 60s), a silent stream — e.g. an Ollama cold-load that takes
@@ -52,6 +53,15 @@ const SSE_FLUSH_PADDING = `:${' '.repeat(2048)}\n\n`;
 // starting with `:`) are ignored by the EventSource spec.
 const SSE_HEARTBEAT_MS = 20_000;
 
+/**
+ * @param {import('http').IncomingMessage} req
+ * @param {import('http').ServerResponse} res
+ * @returns {{
+ *   readonly closed: boolean,
+ *   write(event: string, data: unknown): Promise<void>,
+ *   end(): void,
+ * }}
+ */
 export function createSseWriter(req, res) {
   let closed = false;
 
@@ -87,6 +97,10 @@ export function createSseWriter(req, res) {
   return {
     get closed() { return closed; },
 
+    /**
+     * @param {string} event
+     * @param {unknown} data
+     */
     async write(event, data) {
       if (closed) return;
       const safeEvent = String(event).replace(/[\r\n]/g, '_');

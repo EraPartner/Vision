@@ -20,6 +20,29 @@ import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal } from
  */
 
 /**
+ * Raw projection of splitRepository.getOwedSummary's aggregate query — see
+ * that file for the SQL. `total_owed`/`total_paid` are `SUM(NUMERIC)`, which
+ * pg emits as strings; `split_count` is `COUNT(...)`, also a string (bigint
+ * on the wire).
+ * @typedef {object} SplitOutstandingRow
+ * @property {number} recipient_id
+ * @property {string} recipient_name
+ * @property {string} total_owed
+ * @property {string} total_paid
+ * @property {string} split_count
+ */
+
+/**
+ * @typedef {object} OwedSummaryRow
+ * @property {number} recipient_id
+ * @property {string} recipient_name
+ * @property {number} total_owed
+ * @property {number} total_paid
+ * @property {number} remaining
+ * @property {number} split_count
+ */
+
+/**
  * Round to cents using Decimal-backed banker's rounding.
  * @param {number|string|import('decimal.js').default} value
  * @returns {number}
@@ -140,8 +163,8 @@ export function computeSplitRemaining(split) {
  *
  * Output row shape adds `remaining` and is sorted by `remaining DESC`.
  *
- * @param {Array<object>} rows
- * @returns {Array<object>}
+ * @param {SplitOutstandingRow[]} rows
+ * @returns {OwedSummaryRow[]}
  */
 export function computeOwedSummary(rows) {
   if (!Array.isArray(rows)) return [];

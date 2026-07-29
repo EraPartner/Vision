@@ -30,6 +30,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const devLocalPath = join(__dirname, '..', '..', '.env.local'); // apps/node-backend/.env.local
 const sharedRootPath = join(__dirname, '..', '..', '..', '.env'); // <repo-root>/.env
 
+/**
+ * @param {string} filePath
+ * @returns {string | undefined}
+ */
 function applyDotenvFile(filePath) {
   if (!existsSync(filePath)) return undefined;
   const content = readFileSync(filePath, 'utf-8');

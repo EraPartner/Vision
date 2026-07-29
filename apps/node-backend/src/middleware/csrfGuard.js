@@ -28,6 +28,11 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  *        allowlist ('*' for wildcard, an array, or a single origin string).
  */
 export function createCsrfGuard(getAllowedOrigins) {
+  /**
+   * @param {import('../types/express.js').ExpressRequest} req
+   * @param {import('../types/express.js').ExpressResponse} res
+   * @param {import('../types/express.js').ExpressNextFunction} next
+   */
   return function csrfGuard(req, res, next) {
     if (SAFE_METHODS.has(String(req.method).toUpperCase())) return next();
 
@@ -43,7 +48,13 @@ export function createCsrfGuard(getAllowedOrigins) {
 
     const allowed = getAllowedOrigins();
     if (allowed === '*') return next();
-    const isAllowed = Array.isArray(allowed) ? allowed.includes(origin) : allowed === origin;
+    // `origin` is typed string|string[] (the header type in general), but an
+    // Origin header is never repeated in practice; a duplicate would fail
+    // both branches below exactly as before this cast (array !== any allowed
+    // string, and Array.prototype.includes never matches an array element),
+    // so this only narrows the type, not the behavior.
+    const originValue = /** @type {string} */ (origin);
+    const isAllowed = Array.isArray(allowed) ? allowed.includes(originValue) : allowed === originValue;
     if (isAllowed) return next();
 
     return next(new ForbiddenError('Cross-origin request blocked'));

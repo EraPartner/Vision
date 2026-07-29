@@ -23,17 +23,22 @@ import net from 'node:net';
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
 export class BlockedUrlError extends Error {
+  /** @param {string} message */
   constructor(message) {
     super(message);
     this.name = 'BlockedUrlError';
   }
 }
 
+/**
+ * @param {string} ip
+ * @returns {number[]|undefined}
+ */
 function parseIpv4Octets(ip) {
   const parts = ip.split('.');
   if (parts.length !== 4) return undefined;
-  const octets = parts.map((p) => Number(p));
-  if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return undefined;
+  const octets = parts.map((/** @type {string} */ p) => Number(p));
+  if (octets.some((/** @type {number} */ n) => !Number.isInteger(n) || n < 0 || n > 255)) return undefined;
   return octets;
 }
 

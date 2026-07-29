@@ -14,6 +14,16 @@
 import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
 
+/**
+ * The slice of an Express `Request` these parsers read. Structural, not
+ * `import('express').Request` — express ships no type declarations and
+ * `@types/express` is not a workspace dependency, so referencing its types
+ * resolves to an implicit `any` (TS7016) under `noImplicitAny` (same
+ * reasoning as `ExpressResponse` in services/transactionExport.js).
+ * @typedef {object} ExpressRequest
+ * @property {Record<string, string>} params
+ */
+
 export const coercedIdSchema = z.unknown().transform((value, ctx) => {
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) {
@@ -23,14 +33,22 @@ export const coercedIdSchema = z.unknown().transform((value, ctx) => {
   return id;
 });
 
-/** Parse `req.params.id` as a batch id or throw the canonical 400. */
+/**
+ * Parse `req.params.id` as a batch id or throw the canonical 400.
+ * @param {ExpressRequest} req
+ * @returns {number}
+ */
 export function parseBatchIdParam(req) {
   const result = coercedIdSchema.safeParse(req.params.id);
   if (!result.success) throw new ValidationError('Invalid batch id');
   return result.data;
 }
 
-/** Parse `req.params.{id,rowId}` as a batch/row id pair or throw the canonical 400. */
+/**
+ * Parse `req.params.{id,rowId}` as a batch/row id pair or throw the canonical 400.
+ * @param {ExpressRequest} req
+ * @returns {{ batchId: number, rowId: number }}
+ */
 export function parseBatchRowIdParams(req) {
   const batch = coercedIdSchema.safeParse(req.params.id);
   const row = coercedIdSchema.safeParse(req.params.rowId);

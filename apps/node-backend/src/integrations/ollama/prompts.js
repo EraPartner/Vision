@@ -15,6 +15,31 @@
  * chat endpoint accepts.
  */
 
+/**
+ * @typedef {import('../../types/rows.js').AiMessageRow} AiMessageRow
+ */
+
+/**
+ * `toOllamaMessage` below reads `row.tool_result`/`row.tool_name` as a
+ * fallback alongside the real `AiMessageRow` fields `toolResult`/`toolName`.
+ * aiChatRepository's `MESSAGE_COLUMNS` always aliases these to camelCase in
+ * SQL (see types/rows.js `AiMessageRow`), and `buildChatMessages`'s only
+ * caller (aiChatService.js) always passes `AiMessageRow[]` from
+ * `aiChatRepository.getMessages`, so the snake_case branch is dead — no row
+ * shape reaching this function has ever had `tool_result`/`tool_name`.
+ * Typed here (rather than dropped) to keep this a pure annotation pass; see
+ * orchestrator report for the dead-code finding.
+ * @typedef {AiMessageRow & { tool_result?: any, tool_name?: string }} OllamaSourceRow
+ */
+
+/**
+ * The shape sent to Ollama's /api/chat `messages` field. Mirrors
+ * `OllamaMessage` in services/aiChatService.js — duplicated locally rather
+ * than imported so this integrations-layer module doesn't reach up into
+ * services/ for a type.
+ * @typedef {{ role: string, content: string, tool_calls?: any[], name?: string }} OllamaMessage
+ */
+
 const SYSTEM_PROMPT_TEMPLATE = `You are Vision's built-in financial assistant. You help a single user reason about their personal finances, budget, portfolio, planned transactions, and Belgian tax situation.
 
 ## Ground rules
@@ -59,6 +84,8 @@ You cannot modify data. You cannot send transactions. You cannot reach the inter
 /**
  * Build the system prompt string. `toolNames` is an array of strings — the
  * names from `getToolNames()` in the tool registry.
+ * @param {string[]} toolNames
+ * @returns {string}
  */
 export function buildSystemPrompt(toolNames) {
   const names = Array.isArray(toolNames) && toolNames.length > 0
@@ -81,6 +108,8 @@ export function buildSystemPrompt(toolNames) {
  * For persisted assistant rows, we only have the final text (`content`). We
  * don't replay prior tool_calls in history — the tool_result rows carry the
  * ground-truth numbers, which is what the model needs to stay grounded.
+ * @param {OllamaSourceRow|null|undefined} row
+ * @returns {OllamaMessage|null}
  */
 export function toOllamaMessage(row) {
   if (!row || !row.role) return null;
@@ -106,9 +135,10 @@ export function toOllamaMessage(row) {
  *
  * @param {object} args
  * @param {string[]} args.toolNames - registered tool names (for system prompt)
- * @param {object[]} args.history   - persisted `ai_messages` rows, oldest first
+ * @param {AiMessageRow[]} args.history - persisted `ai_messages` rows, oldest first
  * @param {string}   args.userInput - the new user message text
  * @param {number}   [args.maxHistoryMessages] - cap (default 30)
+ * @returns {OllamaMessage[]}
  */
 export function buildChatMessages({
   toolNames,

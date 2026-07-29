@@ -43,6 +43,7 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
+  /** @param {string} message */
   constructor(message, opts = {}) {
     super(message, { status: 400, code: ApiErrorCode.VALIDATION_ERROR, ...opts });
   }
@@ -67,6 +68,7 @@ export class NotFoundError extends AppError {
 }
 
 export class ConflictError extends AppError {
+  /** @param {string} message */
   constructor(message, opts = {}) {
     super(message, { status: 409, code: ApiErrorCode.CONFLICT, ...opts });
   }
@@ -174,7 +176,7 @@ function forwardable4xx(err) {
   return {
     status: raw,
     code: codeForForwardedStatus(raw),
-    message: trusted ? err.message : (GENERIC_4XX_MESSAGES[raw] || 'Request rejected'),
+    message: trusted ? err.message : (GENERIC_4XX_MESSAGES[/** @type {keyof typeof GENERIC_4XX_MESSAGES} */ (raw)] || 'Request rejected'),
   };
 }
 
@@ -183,8 +185,13 @@ function forwardable4xx(err) {
  * `isProduction` predicate. Injecting the predicate keeps this module free of
  * side-effect imports so it can be unit-tested without spinning up config.
  *
+ * `express`'s `ErrorRequestHandler` type is not referenced here — express
+ * ships no type declarations and `@types/express` is not a workspace
+ * dependency, so referencing its types resolves to an implicit `any`
+ * (TS7016) under `noImplicitAny`; the returned function is typed inline via
+ * the shared structural types instead (types/express.js).
  * @param {() => boolean} isProduction
- * @returns {import('express').ErrorRequestHandler}
+ * @returns {(err: any, req: import('../types/express.js').ExpressRequest, res: import('../types/express.js').ExpressResponse, next: import('../types/express.js').ExpressNextFunction) => void}
  */
 export function createErrorHandler(isProduction) {
   return function errorHandler(err, req, res, next) {
@@ -237,9 +244,11 @@ export function createErrorHandler(isProduction) {
       message = err.message;
     }
 
+    /** @type {{ code: any, message: any, details?: unknown }} */
     const error = { code, message };
     if (isApp && err.details !== undefined) error.details = err.details;
 
+    /** @type {{ ok: false, error: typeof error, meta?: import('@vision/types/api').ResponseMeta }} */
     const body = { ok: false, error };
     if (req.id) body.meta = { requestId: req.id };
 

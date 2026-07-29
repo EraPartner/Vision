@@ -7,6 +7,13 @@
  *                                             + bankAccount/date predicates)
  *   - repositories/splitRepository.js        (primary-recipient COALESCE pattern)
  *
+ * `buildTransactionWhere` and `buildExclusionClauses` both derive their
+ * `opts` object type from the dotted `@param opts.field` entries in their own
+ * JSDoc — TS's JSDoc support builds a structural type out of those. This
+ * file's third builder, `buildAggregationFilter`, reuses both option shapes
+ * via `Parameters<typeof fn>[0]` rather than re-listing every field a third
+ * time.
+ *
  * Phase 0 is additive: this module is created and unit-tested, but callers are NOT
  * migrated here. Call-site migration happens in Phases 2 (dashboard) and 5 (transactions).
  *
@@ -28,6 +35,8 @@ export const MIN_SEARCH_LENGTH = 2;
  * Keep only safe PostgreSQL INT4 ids. Drops null, undefined, non-integer, non-positive,
  * and out-of-range values. Returns an array (possibly empty) — callers decide how to
  * treat empty lists (typically: skip the clause).
+ * @param {unknown} ids
+ * @returns {number[]}
  */
 export function validateInt4Ids(ids) {
   if (!Array.isArray(ids)) return [];
@@ -42,6 +51,9 @@ export function validateInt4Ids(ids) {
  *
  * Single source of truth for the list endpoint (routes/transactions.js) and
  * bulk selection (services/bulkSelection.js), which must stay in lockstep.
+ * @param {unknown} value
+ * @param {boolean} [signed]
+ * @returns {number|null}
  */
 export function parseAmountFilter(value, signed = false) {
   if (value === undefined || value === null || value === '') return null;
@@ -376,7 +388,8 @@ export function buildExclusionClauses(opts = {}) {
  * Combine a base transaction WHERE with exclusion clauses, sharing a param counter.
  * Convenience wrapper that most aggregation callers will use verbatim.
  *
- * @param {object} opts Union of buildTransactionWhere and buildExclusionClauses options.
+ * @param {NonNullable<Parameters<typeof buildTransactionWhere>[0]> & NonNullable<Parameters<typeof buildExclusionClauses>[0]>} [opts]
+ *   Union of buildTransactionWhere and buildExclusionClauses options.
  * @returns {{ joinSql: string, whereSql: string, params: any[], nextParamIdx: number }}
  */
 export function buildAggregationFilter(opts = {}) {

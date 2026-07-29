@@ -9,6 +9,40 @@ import pg from 'pg';
 import { getSettings } from '../config/config.js';
 import { logger } from '../config/logger.js';
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
+
+/**
+ * Structural stand-in for `pg`'s `PoolClient`, scoped to what this module
+ * calls on it. `pg` ships no type declarations and `@types/pg` is not a
+ * workspace dependency; unlike the type-only `pg` references elsewhere (see
+ * `QueryRunner` in types/rows.js), this file imports `pg` as a VALUE
+ * (`new pg.Pool(...)`), so the ambient `declare module 'pg'` in
+ * thirdPartyModules.d.ts (multer precedent) is also needed to silence TS7016
+ * on the import itself — which makes the `pg` namespace `any`, so these local
+ * typedefs are what keep client/result shapes precise at the JSDoc call sites
+ * below.
+ * @typedef {object} PgPoolClient
+ * @property {(text: string | { name: string, text: string, values?: any[] }, params?: any[]) => Promise<PgQueryResult>} query
+ * @property {(err?: any) => void} release
+ */
+
+/**
+ * `rows` is deliberately `any` rather than `any[]`: a declared array type
+ * makes `.map()`/`.forEach()` at call sites apply real generic inference to
+ * the callback, which surfaces latent shape mismatches in already-ratcheted
+ * consumer files this slice is not scoped to touch (e.g.
+ * services/portfolioPerformanceSnapshotService.js's `stocks_etfs_invested:
+ * row.stocks_etfs_invested ?? 0` widens a documented-`string` column to
+ * `string|number` — a real pre-existing bug, reported to the orchestrator,
+ * left unfixed here per the zero-behavior-change rule). `any` preserves the
+ * pre-annotation behavior (an unresolved `pg.QueryResult` reference was
+ * already implicitly `any` end-to-end) while still being an explicit, not
+ * implicit, `any` for noImplicitAny purposes.
+ * @typedef {object} PgQueryResult
+ * @property {any} rows
+ * @property {number|null} rowCount
+ */
+
 // Ambient transaction context: withTransaction() runs its callback inside this
 // store so module-level query() joins the transaction instead of grabbing a
 // separate pool connection. Without it, a repo call inside withTransaction
@@ -22,7 +56,7 @@ const txStorage = new AsyncLocalStorage();
  * The pg client of the withTransaction() this code is running inside, or null.
  * Exposed for callers that must adapt to ambient-transaction mode (e.g. wrap a
  * catch-and-retry INSERT in a SAVEPOINT — see withSavepointIfInTransaction).
- * @returns {pg.PoolClient|null}
+ * @returns {PgPoolClient|null}
  */
 export function getAmbientTransactionClient() {
   return txStorage.getStore()?.client ?? null;
@@ -52,7 +86,7 @@ const pool = new pg.Pool({
   idle_in_transaction_session_timeout: 60_000,
 });
 
-pool.on('error', (err) => {
+pool.on('error', (/** @type {unknown} */ err) => {
   logger.error('Unexpected error on idle database client', err);
 });
 
@@ -76,7 +110,7 @@ function isRetryableStatement(sql) {
  * @param {string} text - SQL query
  * @param {any[]} [params] - Query parameters
  * @param {{ retries?: number }} [opts]
- * @returns {Promise<pg.QueryResult>}
+ * @returns {Promise<PgQueryResult>}
  */
 export async function query(text, params, opts = {}) {
   // Inside withTransaction(): run on the transaction's client, and never
@@ -139,7 +173,7 @@ export async function query(text, params, opts = {}) {
  * @param {string} name      - Unique statement name (stable across calls)
  * @param {string} text      - SQL text
  * @param {any[]}  [values]  - Bound parameters
- * @returns {Promise<pg.QueryResult>}
+ * @returns {Promise<PgQueryResult>}
  */
 export async function queryPrepared(name, text, values) {
   // Inside withTransaction(): run on the ambient client so repo methods built on
@@ -156,7 +190,7 @@ export async function queryPrepared(name, text, values) {
 /**
  * Get a client from the pool for transactions.
  * Remember to call client.release() when done.
- * @returns {Promise<pg.PoolClient>}
+ * @returns {Promise<PgPoolClient>}
  */
 export async function getClient() {
   return pool.connect();
@@ -169,7 +203,7 @@ export async function getClient() {
  * on success or ROLLBACKs on throw. Always releases the client.
  *
  * @template T
- * @param {(client: pg.PoolClient) => Promise<T>} fn
+ * @param {(client: PgPoolClient) => Promise<T>} fn
  * @returns {Promise<T>}
  */
 export async function withTransaction(fn) {

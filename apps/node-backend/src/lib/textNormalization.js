@@ -16,6 +16,10 @@ const KBC_TRANSACTION_TYPES = [
 
 const KBC_SEPARATORS = [' VIA ', ' NAAR ', ' VAN ', ' MET ', ' DOOR ', ' OP ', ' OM '];
 
+/**
+ * @param {string|null|undefined} recipient
+ * @returns {string|null|undefined}
+ */
 export function cleanRecipientName(recipient) {
   if (!recipient) return recipient;
   let cleaned = recipient.trim();
@@ -28,6 +32,10 @@ export function cleanRecipientName(recipient) {
   return cleaned;
 }
 
+/**
+ * @param {string|null|undefined} recipient
+ * @returns {string|null|undefined}
+ */
 export function cleanKbcRecipientName(recipient) {
   if (!recipient) return recipient;
   recipient = recipient.trim();
@@ -59,8 +67,14 @@ export function cleanKbcRecipientName(recipient) {
   return recipient;
 }
 
+/**
+ * @param {unknown} name
+ * @returns {string|null|undefined} pass-through of any falsy `name` (see
+ *   tests/textNormalization.test.js: `normalizeToUppercase(null) === null`),
+ *   otherwise the trimmed/uppercased string. Throws for a truthy non-string.
+ */
 export function normalizeToUppercase(name) {
-  if (!name) return name;
+  if (!name) return /** @type {string|null|undefined} */ (name);
   if (typeof name !== 'string') throw new Error(`Name must be a string, got ${typeof name}`);
   return name.trim().toUpperCase();
 }
@@ -114,6 +128,10 @@ export function normalizeForMatching(name) {
   return substantial.sort().join(' ');
 }
 
+/**
+ * @param {string|null|undefined} amountStr
+ * @returns {number|null}
+ */
 export function formatAmountString(amountStr) {
   if (!amountStr) return null;
   amountStr = amountStr.trim();
@@ -128,6 +146,10 @@ export function formatAmountString(amountStr) {
   return isNaN(val) ? null : val;
 }
 
+/**
+ * @param {string|null|undefined} currencyStr
+ * @returns {string|null}
+ */
 export function extractCurrencyCode(currencyStr) {
   if (!currencyStr) return null;
   const parts = currencyStr.split(/\s+/);

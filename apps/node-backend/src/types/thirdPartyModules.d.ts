@@ -24,5 +24,14 @@
 // `/// <reference path="../types/thirdPartyModules.d.ts" />` comment, after
 // which the ambient declarations below are visible to the whole program
 // (ambient declarations are global once included, not per-importer).
+//
+// `pg` is here for the same VALUE-import reason as `multer`: every other
+// file references `pg` in TYPE position only (`import('pg').PoolClient`) and
+// uses a structural typedef instead (see `QueryRunner` in rows.js), but
+// database/connection.js does `import pg from 'pg'` and calls `new
+// pg.Pool(...)` — a value import TS7016 fires on regardless of use site. That
+// file defines its own structural `PgPoolClient`/`PgQueryResult` typedefs to
+// keep its JSDoc precise despite `pg` itself resolving to `any` here.
 
 declare module 'multer';
+declare module 'pg';

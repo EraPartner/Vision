@@ -11,7 +11,35 @@ import { cleanup } from './csvUpload.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { logger } from '../config/logger.js';
 
+/**
+ * The `{ phase, current, total, ... }` shape both pipelines' `onProgress`
+ * callback is invoked with.
+ * @typedef {object} ImportProgressEvent
+ * @property {'staging'|'validating'|'matching'|'committing'|'complete'|string} phase
+ * @property {number} [current]
+ * @property {number} [total]
+ * @property {number} [imported]
+ * @property {number} [duplicates]
+ * @property {number} [errors]
+ */
+
+/**
+ * The pipeline-result shape this shared skeleton reads directly (both
+ * runImportPipeline and runPortfolioImportPipeline resolve with a superset of
+ * this — see routes/importRoutes.js and routes/portfolioImportRoutes.js
+ * `buildComplete` mappers for the rest of each pipeline's own fields, which
+ * this module never touches).
+ * @typedef {object} StreamImportResult
+ * @property {boolean} [requiresReview]
+ * @property {number|string} [batchId]
+ * @property {any} [matchSourceCounts]
+ * @property {number} [errors]
+ */
+
 /* eslint-disable vision-local-money/no-raw-money-arithmetic */
+/**
+ * @param {ImportProgressEvent} ev
+ */
 export function progressToPercent(ev) {
   const { phase, current = 0, total = 0, imported = 0, duplicates = 0, errors = 0 } = ev;
   const frac = total > 0 ? current / total : 0;
@@ -35,13 +63,30 @@ export function progressToPercent(ev) {
  * safe, actionable message; anything else stays generic to avoid leaking
  * internals. Always cleans up the uploaded file.
  *
- * @param {import('express').Request} req
- * @param {import('express').Response} res
+ * `req`/`res` are typed via `node:http`'s base classes rather than
+ * `import('express').Request/Response` — express ships no type declarations
+ * and `@types/express` is not a workspace dependency, so referencing its
+ * types resolves to an implicit `any` (TS7016) under `noImplicitAny`. This
+ * function only forwards both straight into `createSseWriter`, which is
+ * typed the same way (see lib/sse.js).
+ *
+ * `run`'s resolved value and `buildComplete`'s parameter are typed `any`,
+ * not `StreamImportResult`: the two current callers (routes/importRoutes.js,
+ * routes/portfolioImportRoutes.js) resolve with genuinely different pipeline
+ * result shapes (each has fields — `total`/`autoLinkedCount` vs.
+ * `total`/`skipped` — the other doesn't), and a shared skeleton generic over
+ * a caller-specific result type is exactly the "different upstream shape per
+ * call site" case `any` is for. This function's OWN reads of the result
+ * (requiresReview/batchId/matchSourceCounts/errors below) are cast to the
+ * precise `StreamImportResult` locally instead, so a typo there still gets
+ * caught.
+ * @param {import('http').IncomingMessage} req
+ * @param {import('http').ServerResponse} res
  * @param {{
  *   filePath: string,
  *   errorLogMessage: string,
- *   run: (onProgress: (ev: object) => Promise<void>) => Promise<object>,
- *   buildComplete: (result: object) => object,
+ *   run: (onProgress: (ev: ImportProgressEvent) => Promise<void>) => Promise<any>,
+ *   buildComplete: (result: any) => object,
  * }} opts  `run` executes the pipeline; `buildComplete` maps its result to the
  *   `complete` event payload (status/percent are appended here).
  */
@@ -49,7 +94,9 @@ export async function streamImport(req, res, { filePath, errorLogMessage, run, b
   const writer = createSseWriter(req, res);
 
   try {
-    const result = await run(async (ev) => { await writer.write('progress', progressToPercent(ev)); });
+    const runResult = await run(async (ev) => { await writer.write('progress', progressToPercent(ev)); });
+    /** @type {StreamImportResult} */
+    const result = runResult;
 
     if (result.requiresReview) {
       if (!writer.closed) {

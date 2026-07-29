@@ -15,14 +15,21 @@ const DEFAULT_PROBE_PORT = 443;
 const DEFAULT_TIMEOUT_MS = 1500;
 const CACHE_TTL_MS = 30_000;
 
+/** @type {boolean|null} */
 let cachedResult = null;
 let cachedAt = 0;
+/** @type {Promise<boolean>|null} */
 let inflight = null;
 
+/**
+ * @param {{ host: string, port: number, timeoutMs: number }} opts
+ * @returns {Promise<boolean>}
+ */
 function probe({ host, port, timeoutMs }) {
   return new Promise((resolve) => {
     const socket = net.createConnection({ host, port });
     let settled = false;
+    /** @param {boolean} ok */
     const finish = (ok) => {
       if (settled) return;
       settled = true;

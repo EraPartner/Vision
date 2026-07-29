@@ -24,18 +24,28 @@ import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
 import { parsePagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow
+ * @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow
+ */
+
 // Custom price-provider URLs are fetched server-side at refresh time, so reject
 // non-public targets at the write boundary too (SSRF defense-in-depth). DNS is
 // not resolved here — that would couple investment writes to DNS availability;
 // the full DNS-resolved check runs at fetch time in priceProviderRegistry.
 const PROVIDER_URL_FIELDS = ['price_provider_url', 'price_provider_latest_url', 'price_provider_history_url'];
 
+/**
+ * @param {Record<string, unknown>} body
+ */
 async function validateProviderUrls(body) {
   for (const field of PROVIDER_URL_FIELDS) {
     const value = body?.[field];
     if (value === undefined || value === null || value === '') continue;
     try {
-      await assertPublicHttpUrl(value, { resolveDns: false });
+      await assertPublicHttpUrl(/** @type {string} */ (value), { resolveDns: false });
     } catch (err) {
       throw new ValidationError(`Invalid ${field}: ${err.message}`);
     }
@@ -57,6 +67,11 @@ async function validateProviderUrls(body) {
 // null passes through (explicit clear, null-to-clear PATCH semantics); a
 // cleared '' form field means "no value", not 0 — and ''::numeric is a pg cast
 // error (500) if forwarded raw.
+/**
+ * @param {string} field
+ * @param {number} min
+ * @param {number} max
+ */
 const boundedNumberField = (field, min, max) => z.unknown().transform((value, ctx) => {
   if (value === null || value === '') return null;
   const result = validateNumber(value, { min, max, fieldName: field });
@@ -71,6 +86,10 @@ const boundedNumberField = (field, min, max) => z.unknown().transform((value, ct
 // exceed the frontend maxLength cap (which only clamps typed input) and reach
 // the column as a raw 22001 500 instead of a clean 400. Values within the width
 // pass through untouched (assertMaxLength never trims or stringifies).
+/**
+ * @param {string} field
+ * @param {number} max
+ */
 const maxLenField = (field, max) => z.unknown().transform((value, ctx) => {
   try {
     return assertMaxLength(value, max, field);
@@ -117,6 +136,10 @@ const investmentBodySchema = z.looseObject({
   price_provider_history_price_path: maxLenField('price_provider_history_price_path', 300),
 });
 
+/**
+ * @param {unknown} body
+ * @returns {any}
+ */
 function parseInvestmentBody(body) {
   // Non-object bodies skipped field validation pre-zod; keep that boundary.
   if (!body || typeof body !== 'object') return body;
@@ -134,7 +157,9 @@ function parseInvestmentBody(body) {
 
 const INVESTMENTS_CACHE_TTL_MS = 60_000;
 
+/** @type {{ data: any, expiresAt: number }} */
 let investmentsCache = { data: undefined, expiresAt: 0 };
+/** @type {{ data: any, key: string, expiresAt: number }} */
 let bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
 
 export function clearInvestmentsCaches() {
@@ -145,18 +170,34 @@ export function clearInvestmentsCaches() {
 
 // ── Request parsers ──────────────────────────────────────────────────────────
 
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
 function parseInteger(value) {
-  return parseInt(value, 10);
+  return parseInt(/** @type {string} */ (value), 10);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @returns {number}
+ */
 export function parseRequestId(req) {
   return parseInteger(req.params.id);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @returns {number}
+ */
 export function parseTxnRequestId(req) {
   return parseInteger(req.params.txnId);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @returns {number}
+ */
 export function requireTxnId(req) {
   const txnId = parseTxnRequestId(req);
   if (isNaN(txnId) || txnId <= 0) {
@@ -168,6 +209,10 @@ export function requireTxnId(req) {
 /**
  * Translate repository VALIDATION_ERROR into a typed ValidationError so the
  * envelope surfaces a clean 400. Unknown errors propagate unchanged.
+ * @param {any} err arbitrary upstream error shape — a thrown repository
+ *   error, possibly carrying a `code`, or anything else a repository call
+ *   can reject with.
+ * @returns {never}
  */
 function translateRepoError(err) {
   if (err?.code === 'VALIDATION_ERROR') {
@@ -176,6 +221,10 @@ function translateRepoError(err) {
   throw err;
 }
 
+/**
+ * @param {unknown} rawInvestmentIds
+ * @returns {number[]}
+ */
 function parseInvestmentIdsQuery(rawInvestmentIds) {
   return String(rawInvestmentIds)
     .split(',')
@@ -183,10 +232,19 @@ function parseInvestmentIdsQuery(rawInvestmentIds) {
     .filter((value) => Number.isInteger(value) && value > 0);
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
 function parseDbOnlyQueryValue(raw) {
   return raw === '1' || raw === 'true' || raw === 1 || raw === true;
 }
 
+/**
+ * @param {unknown} raw
+ * @param {boolean} defaultValue
+ * @returns {boolean}
+ */
 function parseDbOnlyOrDefault(raw, defaultValue) {
   if (raw === undefined || raw === null || raw === '') return defaultValue;
   if (raw === '0' || raw === 'false' || raw === 0 || raw === false) return false;
@@ -197,22 +255,31 @@ function parseDbOnlyOrDefault(raw, defaultValue) {
 // other list routes) so limit is bounded to maxLimit, a falsy/absent limit falls
 // back to the default, and offset can never go negative — instead of the
 // hand-rolled arithmetic that left offset unclamped.
+/**
+ * @param {Record<string, unknown>} query
+ * @returns {{ limit: number, offset: number, assetClass: string|null, active: boolean }}
+ */
 export function parseDefaultListOptions(query) {
   const { asset_class, active = 'true' } = query;
   const { limit, offset } = parsePagination(query, { defaultLimit: 200, maxLimit: 1000 });
   return {
     limit,
     offset,
-    assetClass: asset_class || null,
+    assetClass: /** @type {string|null} */ (asset_class || null),
     active: active !== 'false',
   };
 }
 
+/**
+ * @param {Record<string, unknown>} query
+ * @param {number[]} investmentIds
+ * @returns {{ investmentIds: number[], type: string|null, perInvestmentLimit: number, limit: number|null, offset: number }}
+ */
 function parseBulkTransactionsOptions(query, investmentIds) {
   const { type, per_investment_limit = 1000, limit, offset = 0 } = query;
   return {
     investmentIds,
-    type: type || null,
+    type: /** @type {string|null} */ (type || null),
     perInvestmentLimit: Math.max(1, Math.min(parseInteger(per_investment_limit) || 1000, 5000)),
     limit: limit == null || limit === ''
       ? null
@@ -221,11 +288,16 @@ function parseBulkTransactionsOptions(query, investmentIds) {
   };
 }
 
+/**
+ * @param {Record<string, unknown>} query
+ * @param {number} investmentId
+ * @returns {{ investmentId: number, type: string|null, limit: number, offset: number }}
+ */
 function parseInvestmentTransactionsOptions(query, investmentId) {
   const { type, limit = 200, offset = 0 } = query;
   return {
     investmentId,
-    type: type || null,
+    type: /** @type {string|null} */ (type || null),
     limit: Math.min(parseInteger(limit) || 200, 1000),
     offset: parseInteger(offset) || 0,
   };
@@ -233,6 +305,10 @@ function parseInvestmentTransactionsOptions(query, investmentId) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * @param {InvestmentRow} investment
+ * @returns {boolean}
+ */
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
   if (!provider || provider === 'manual') return false;
@@ -260,6 +336,10 @@ function hasLivePriceRefreshConfig(investment) {
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function listInvestments(req, res) {
   const opts = parseDefaultListOptions(req.query);
 
@@ -274,6 +354,7 @@ export async function listInvestments(req, res) {
     total: result.total,
     limit: opts.limit,
     offset: opts.offset,
+    /** @type {any[]} */
     links: [],
   };
 
@@ -284,6 +365,10 @@ export async function listInvestments(req, res) {
   res.ok(payload);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function createInvestment(req, res) {
   const body = parseInvestmentBody(req.body);
   const { name, asset_class } = body;
@@ -305,10 +390,18 @@ export async function createInvestment(req, res) {
   res.ok(inv);
 }
 
+/**
+ * @param {ExpressRequest} _req
+ * @param {ExpressResponse} res
+ */
 export function listProviders(_req, res) {
   res.ok({ providers: SUPPORTED_PROVIDERS });
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function refreshPrices(req, res) {
   const allInvestments = await investmentRepository.getAll({ limit: 1000, active: true });
   const toRefresh = allInvestments.filter(hasLivePriceRefreshConfig);
@@ -321,6 +414,7 @@ export async function refreshPrices(req, res) {
     toRefresh.map(i => [i.id, Number(i.current_price)])
   );
   const prices = await fetchLivePricesDetailed(toRefresh, { cachedPricesByInvestmentId });
+  /** @type {Record<string, string>} */
   const priceSources = {};
 
   // Collect the fresh prices, then write them in ONE UNNEST-driven UPDATE —
@@ -351,6 +445,10 @@ export async function refreshPrices(req, res) {
   });
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function getBulkTransactions(req, res) {
   const rawInvestmentIds = req.query.investment_ids;
   if (rawInvestmentIds == null || rawInvestmentIds === '') {
@@ -379,6 +477,7 @@ export async function getBulkTransactions(req, res) {
     total,
     limit: opts.limit ?? items.length,
     offset: opts.offset,
+    /** @type {any[]} */
     links: [],
   };
 
@@ -386,6 +485,10 @@ export async function getBulkTransactions(req, res) {
   res.ok(payload);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function getPriceHistory(req, res) {
   const investmentId = parseRequestId(req);
   const inv = await investmentRepository.getById(investmentId);
@@ -401,12 +504,20 @@ export async function getPriceHistory(req, res) {
   res.ok({ investment_id: investmentId, provider: inv.price_provider, points });
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function getInvestment(req, res) {
   const inv = await investmentRepository.getById(parseRequestId(req));
   if (!inv) throw new NotFoundError('Investment not found');
   res.ok(inv);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function updateInvestment(req, res) {
   const body = parseInvestmentBody(req.body);
   await validateProviderUrls(body);
@@ -422,6 +533,10 @@ export async function updateInvestment(req, res) {
   res.ok(inv);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function deleteInvestment(req, res) {
   const investmentId = parseRequestId(req);
 
@@ -432,6 +547,10 @@ export async function deleteInvestment(req, res) {
   res.status(204).send();
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function listTransactions(req, res) {
   const opts = parseInvestmentTransactionsOptions(req.query, parseRequestId(req));
   const result = await portfolioTransactionRepository.getAllWithCount(opts);
@@ -440,10 +559,15 @@ export async function listTransactions(req, res) {
     total: result.total,
     limit: opts.limit,
     offset: opts.offset,
+    /** @type {any[]} */
     links: [],
   });
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function createTransaction(req, res) {
   const investment_id = parseRequestId(req);
   const inv = await investmentRepository.getById(investment_id);
@@ -489,6 +613,10 @@ export async function createTransaction(req, res) {
   res.ok(txn);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function deleteTransaction(req, res) {
   const txnId = requireTxnId(req);
 
@@ -505,6 +633,10 @@ export async function deleteTransaction(req, res) {
   res.status(204).send();
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function updateTransaction(req, res) {
   const txnId = requireTxnId(req);
   const fields = { ...(req.body || {}) };
@@ -550,6 +682,10 @@ export async function updateTransaction(req, res) {
   res.ok(txn);
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ */
 export async function getInvestmentSummary(req, res) {
   const investmentId = parseRequestId(req);
   const summary = await portfolioTransactionRepository.getSummary(investmentId);

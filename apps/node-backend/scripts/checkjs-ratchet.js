@@ -57,7 +57,15 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  * under `src/services/`, including new ones from birth — no more per-
  * subdirectory or per-file entries needed here.
  *
- * Beyond services/: `routes/` and `lib/` are untouched.
+ * The non-routes backend tail — `lib/`, `middleware/`, `controllers/`,
+ * `integrations/`, `startup/`, `config/`, `utils/`, `database/` — was taken
+ * next, all eight directories in one slice (272 errors across 35 files).
+ * Shared Express req/res/router structural types for this layer live in
+ * `src/types/express.js` (multiple middleware/controller files need the same
+ * surface, unlike the report-generation one-offs `ExpressResponse` in
+ * services/transactionExport.js and services/reports/index.js predate).
+ *
+ * Beyond that: only `routes/` and `main.js` are untouched.
  *
  * @type {string[]}
  */
@@ -65,13 +73,21 @@ const RATCHETED = [
   'src/types/',
   'src/repositories/',
   'src/services/',
+  'src/lib/',
+  'src/middleware/',
+  'src/controllers/',
+  'src/integrations/',
+  'src/startup/',
+  'src/config/',
+  'src/utils/',
+  'src/database/',
 ];
 
 /**
  * Directory the "ready to ratchet" hint scans for already-clean files. Points
- * at the frontier: `src/repositories/` and `src/services/` are both complete,
- * so the hint now surfaces `routes/` files that are already implicit-any-clean
- * and could be listed.
+ * at the frontier: everything except `src/routes/` and `src/main.js` is now
+ * ratcheted, so the hint surfaces `routes/` files that are already
+ * implicit-any-clean and could be listed.
  */
 const HINT_SCOPE = 'src/routes/';
 
