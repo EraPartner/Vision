@@ -540,6 +540,27 @@
  */
 
 /**
+ * A row of `portfolioTxRepo.reads.getRowsForPortfolioMath` — portfolio_transactions
+ * JOINed to investments, deliberately NOT passed through `mapPortfolioTxRow` (see
+ * that function's comment): every NUMERIC column stays a pg string, and the
+ * transaction day is emitted under both `date` and `day` (identical values).
+ *
+ * @typedef {object} PortfolioMathTxRow
+ * @property {number} id
+ * @property {number} investment_id
+ * @property {string} type `portfolio_txn_type` enum.
+ * @property {string} amount NUMERIC(18,4), `COALESCE(pt.amount, 0)` — pg emits NUMERIC as a string.
+ * @property {string} units NUMERIC(18,8), `COALESCE(pt.units, 0)`.
+ * @property {string} fees NUMERIC, `COALESCE(pt.fees, 0)`.
+ * @property {string} taxes NUMERIC, `COALESCE(pt.taxes, 0)`.
+ * @property {string} date 'YYYY-MM-DD' — `to_char(pt.date::date, …)`.
+ * @property {string} day 'YYYY-MM-DD' — same value as `date`, second alias.
+ * @property {string} currency `COALESCE(pt.currency, i.currency, 'EUR')`.
+ * @property {string|null} fx_rate_to_eur NUMERIC(20,10), not coalesced — null when unset.
+ * @property {number|null} account_id
+ */
+
+/**
  * Per-type aggregate from `portfolioTxRepo.reads.getSummary`.
  *
  * @typedef {object} PortfolioTransactionSummaryRow

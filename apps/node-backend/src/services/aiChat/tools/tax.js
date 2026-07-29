@@ -23,6 +23,7 @@ const MAX_YEAR = 3000;
 const DISCLAIMER_APPROX =
   'Approximation only. Vision does not apply Belgian tax rules, withholdings, exemptions, or lot-level cost basis. Figures are derived heuristically from ledger data — verify with your accountant.';
 
+/** @param {number} year */
 function yearRange(year) {
   return {
     from: `${year}-01-01`,
@@ -30,6 +31,7 @@ function yearRange(year) {
   };
 }
 
+/** @param {unknown} value */
 function parseYear(value) {
   return parsePositiveInt(value, 'year', { min: MIN_YEAR, max: MAX_YEAR });
 }
@@ -39,6 +41,10 @@ function parseYear(value) {
 // PREVIOUS UTC year for Jan-1 rows, so comparing against Date.UTC bounds
 // misattributed them to the prior tax year. toYmd uses local getters for
 // Dates and passes 'YYYY-MM-DD' strings through unchanged.
+/**
+ * @param {string|Date} dateValue
+ * @param {number} year
+ */
 function inYear(dateValue, year) {
   return toYmd(dateValue).slice(0, 4) === String(year);
 }
@@ -62,6 +68,10 @@ export const getTaxableIncomeSummary = {
     },
     required: ['year'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parseYear(args.year);
     const { from, to } = yearRange(year);
@@ -95,7 +105,8 @@ export const getTaxableIncomeSummary = {
     for (const t of portfolioTxns) {
       if (!inYear(t.date, year)) continue;
       if (!(t.type in buckets)) continue;
-      buckets[t.type] = buckets[t.type].plus(toDecimal(t.amount ?? 0).abs());
+      const bucketKey = /** @type {keyof typeof buckets} */ (t.type);
+      buckets[bucketKey] = buckets[bucketKey].plus(toDecimal(t.amount ?? 0).abs());
     }
 
     const rows = [
@@ -148,6 +159,10 @@ export const getCapitalGainsForYear = {
     },
     required: ['year'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parseYear(args.year);
     const { from, to } = yearRange(year);
@@ -244,6 +259,10 @@ export const getDeductibles = {
     },
     required: ['year'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const year = parseYear(args.year);
 

@@ -14,6 +14,132 @@ import { sanitizeSnapshotSpikes, calendarDaysBetween, toYmd } from '../../utils/
 import { toDecimal, roundMoney } from '../../lib/money.js';
 import { todayAppDateString } from '../../lib/timezone.js';
 
+/** @typedef {import('decimal.js').default} Decimal */
+
+/**
+ * Unit-priced (stock/etf/crypto/metals) `investments` row, as narrowed by the
+ * day walk's seed query.
+ * @typedef {object} UnitInvestmentRow
+ * @property {number} id
+ * @property {string} currency `COALESCE(i.currency, 'EUR')`.
+ * @property {string} current_price NUMERIC(18,6), `COALESCE(i.current_price, 0)` — pg emits NUMERIC as a string.
+ * @property {string} asset_class
+ */
+
+/**
+ * Non-unit (savings/bond/real_estate) `investments` row, as narrowed by the
+ * day walk's seed query.
+ * @typedef {object} NonUnitInvestmentRow
+ * @property {number} id
+ * @property {string} currency `COALESCE(i.currency, 'EUR')`.
+ * @property {string} current_price NUMERIC(18,6), `COALESCE(i.current_price, 0)`.
+ * @property {string} interest_rate NUMERIC(8,4), `COALESCE(i.interest_rate, 0)`.
+ * @property {string} asset_class
+ * @property {string} active_from 'YYYY-MM-DD' — `COALESCE(created_at::date, $1::date)::text`.
+ */
+
+/**
+ * @typedef {object} PriceHistoryRow
+ * @property {number} investment_id
+ * @property {string} day 'YYYY-MM-DD' — `to_char(price_date, 'YYYY-MM-DD')`.
+ * @property {string} close_price NUMERIC(18,6).
+ */
+
+/** @typedef {object} InflationRateRow
+ * @property {string} month 'YYYY-MM' — `to_char(month_date, 'YYYY-MM')`.
+ * @property {string} monthly_rate NUMERIC(10,8).
+ */
+
+/**
+ * @typedef {object} FxLatestRow
+ * @property {string} currency_code
+ * @property {string} rate_to_eur NUMERIC(20,10).
+ */
+
+/**
+ * @typedef {object} FxHistoryRow
+ * @property {string} currency_code
+ * @property {string} day 'YYYY-MM-DD' — `to_char(rate_date, 'YYYY-MM-DD')`.
+ * @property {string} rate_to_eur NUMERIC(20,10).
+ */
+
+/**
+ * `investmentsById` value — a {@link UnitInvestmentRow} with numeric fields
+ * parsed (`id`, `current_price` → `currentPrice`).
+ * @typedef {object} ParsedUnitInvestment
+ * @property {number} id
+ * @property {string} currency
+ * @property {number} currentPrice
+ * @property {string} assetClass
+ */
+
+/**
+ * `nonUnitInvestments` entry — a {@link NonUnitInvestmentRow} with numeric
+ * fields parsed and `active_from` re-sliced to a bare 'YYYY-MM-DD'.
+ * @typedef {object} ParsedNonUnitInvestment
+ * @property {number} id
+ * @property {string} currency
+ * @property {number} currentPrice
+ * @property {number} interestRate
+ * @property {string} assetClass
+ * @property {string} activeFrom
+ */
+
+/**
+ * `fxNeutralState` value — cost-weighted purchase-date FX accumulator (see the
+ * day walk's m̄ comment).
+ * @typedef {object} FxNeutralAccumulator
+ * @property {Decimal} weight
+ * @property {Decimal} weightedRate
+ */
+
+/**
+ * `nonUnitState` value — running invested/appreciation for one non-unit
+ * investment across the day walk.
+ * @typedef {object} NonUnitRunningState
+ * @property {Decimal} runningInvested
+ * @property {Decimal} runningAppreciation
+ * @property {string|null} lastInterestDate 'YYYY-MM-DD'
+ * @property {string|null} firstBuyDate 'YYYY-MM-DD'
+ */
+
+/**
+ * One replayed transaction, coerced from {@link
+ * import('../../types/rows.js').PortfolioMathTxRow} for the day walk (numeric
+ * strings parsed to number, `fx_rate_to_eur` collapsed to `undefined` when unset).
+ * @typedef {object} SnapshotTxEntry
+ * @property {number} investmentId
+ * @property {string} type
+ * @property {number} amount
+ * @property {number} units
+ * @property {string} currency
+ * @property {number|undefined} fxRateToEur
+ */
+
+/**
+ * One day's computed snapshot, as pushed by the day walk and (for `gain_loss` /
+ * `return_pct` / `inflation_adjusted_value`) rewritten after
+ * `sanitizeSnapshotSpikes`. Money/percentage fields are plain numbers —
+ * `roundMoney` converts the running Decimal accumulators before they reach
+ * this shape.
+ * @typedef {object} SnapshotRow
+ * @property {string} snapshot_date 'YYYY-MM-DD'
+ * @property {number} invested
+ * @property {number} value
+ * @property {number} value_fx_neutral
+ * @property {number} stocks_etfs_value
+ * @property {number} crypto_value
+ * @property {number} metals_value
+ * @property {number} cash_value
+ * @property {number} stocks_etfs_invested
+ * @property {number} crypto_invested
+ * @property {number} metals_invested
+ * @property {number} cumulative_inflation
+ * @property {number} inflation_adjusted_value
+ * @property {number} [gain_loss] Added by the post-sanitize pass.
+ * @property {number} [return_pct] Added by the post-sanitize pass.
+ */
+
 const FIXED_INCOME_ASSET_CLASSES = new Set(['savings', 'bond']);
 const REAL_ESTATE_ASSET_CLASS = 'real_estate';
 const NON_UNIT_ASSET_CLASSES = ['savings', 'bond', 'real_estate'];
@@ -39,7 +165,7 @@ export async function getFirstDataDate() {
  * Pure data computation — no DB writes.
  *
  * @param {string} targetCurrency
- * @returns {Promise<object[]>}
+ * @returns {Promise<SnapshotRow[]>}
  */
 export async function computeDailySnapshots(targetCurrency = 'EUR') {
   const firstDataDate = await getFirstDataDate();
@@ -64,19 +190,19 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     fxResult,
     fxHistoryResult,
   ] = await Promise.all([
-    query(`
+    /** @type {Promise<{ rows: UnitInvestmentRow[] }>} */ (query(`
       SELECT i.id, COALESCE(i.currency, 'EUR') AS currency,
              COALESCE(i.current_price, 0) AS current_price, i.asset_class
       FROM investments i
       WHERE i.is_active = true
         AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-    `),
+    `)),
     portfolioTransactionRepository.getRowsForPortfolioMath({
       dateFrom: firstDateYmd,
       dateTo: todayYmd,
       sellsLastWithinDay: true,
     }),
-    query(`
+    /** @type {Promise<{ rows: NonUnitInvestmentRow[] }>} */ (query(`
       SELECT id, COALESCE(currency, 'EUR') AS currency,
              COALESCE(current_price, 0) AS current_price,
              COALESCE(interest_rate, 0) AS interest_rate,
@@ -85,30 +211,32 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       FROM investments
       WHERE is_active = true
         AND asset_class::text = ANY($2::text[])
-    `, [firstDateYmd, NON_UNIT_ASSET_CLASSES]),
-    query(`
+    `, [firstDateYmd, NON_UNIT_ASSET_CLASSES])),
+    /** @type {Promise<{ rows: PriceHistoryRow[] }>} */ (query(`
       SELECT investment_id, to_char(price_date, 'YYYY-MM-DD') AS day, close_price
       FROM asset_price_history
       WHERE price_date >= $1::date AND price_date <= $2::date
       ORDER BY investment_id, price_date
-    `, [firstDateYmd, todayYmd]),
-    query(`
+    `, [firstDateYmd, todayYmd])),
+    /** @type {Promise<{ rows: InflationRateRow[] }>} */ (query(`
       SELECT to_char(month_date, 'YYYY-MM') AS month, monthly_rate
       FROM belgian_inflation_rates
       WHERE month_date >= $1::date
       ORDER BY month_date
-    `, [firstDateYmd]),
-    query(`SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`)
-      .catch(() => ({ rows: [] })),
+    `, [firstDateYmd])),
+    /** @type {Promise<{ rows: FxLatestRow[] }>} */ (
+      query(`SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`)
+        .catch(() => ({ rows: /** @type {FxLatestRow[]} */ ([]) }))
+    ),
     // Historical FX so each day of the walk converts at the rate that applied
     // then, not today's. Sparse/empty is fine — convertAmount falls back to the
     // latest (is_latest) rate when no historical row precedes the day.
-    query(`
+    /** @type {Promise<{ rows: FxHistoryRow[] }>} */ (query(`
       SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur
       FROM exchange_rates
       WHERE rate_date >= $1::date
       ORDER BY currency_code, rate_date
-    `, [firstDateYmd]).catch(() => ({ rows: [] })),
+    `, [firstDateYmd]).catch(() => ({ rows: /** @type {FxHistoryRow[]} */ ([]) }))),
   ]);
 
   // --- Build lookup maps ---
@@ -136,7 +264,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   const nonUnitInvestmentsById = new Map(nonUnitInvestments.map(inv => [inv.id, inv]));
 
   // { investmentId: { day: price } }  +  sorted day arrays for binary-search forward-fill
+  /** @type {Record<number, Record<string, number>>} */
   const priceHistoryByInvestment = {};
+  /** @type {Record<number, string[]>} */
   const priceHistorySortedDays = {};
   for (const row of priceHistoryResult.rows) {
     const invId = Number(row.investment_id);
@@ -157,6 +287,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     inflationResult.rows.map(row => [row.month, Number(row.monthly_rate) || 0])
   );
 
+  /** @type {Record<string, number>} */
   const fxRates = { EUR: 1 };
   for (const row of fxResult.rows) {
     fxRates[row.currency_code] = Number(row.rate_to_eur) || 1;
@@ -165,7 +296,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // Historical rate_to_eur per currency, with sorted day arrays for binary-search
   // nearest-on-or-before lookup (mirrors the price-history forward-fill above).
   // { CURRENCY: { day: rate } } + { CURRENCY: [day, ...] }
+  /** @type {Record<string, Record<string, number>>} */
   const fxHistoryByCurrency = {};
+  /** @type {Record<string, string[]>} */
   const fxHistorySortedDays = {};
   for (const row of fxHistoryResult.rows) {
     const cur = row.currency_code;
@@ -190,6 +323,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // deleted). Mirrors the query's ORDER BY sell-last key; kept defensively in JS
   // (per the same pattern as the price-history sort) so the day-walk stays
   // correct regardless of raw row order.
+  /** @type {Record<string, SnapshotTxEntry[]>} */
   const txByDay = {};
   for (const row of allTxRows) {
     if (!txByDay[row.day]) txByDay[row.day] = [];
@@ -275,6 +409,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // converted via convertAmount(units*price, inv.currency, …) and is overwritten
   // by price-history values that are in inv.currency). Storing tx.amount/tx.units
   // raw mixed the transaction's currency in when tx.currency != inv.currency.
+  /**
+   * @param {SnapshotTxEntry} tx
+   * @param {string|undefined} invCurrency
+   * @param {string} asOfDay
+   * @returns {number}
+   */
   function txFallbackPrice(tx, invCurrency, asOfDay) {
     const from = (tx.currency || 'EUR').toUpperCase();
     const to = (invCurrency || 'EUR').toUpperCase();
@@ -287,6 +427,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     return toDecimal(perUnit).times(rateFrom).div(rateTo).toNumber();
   }
 
+  /**
+   * @param {ParsedUnitInvestment} inv
+   * @param {string} day
+   * @param {Record<number, number>} lastKnownPrice
+   * @returns {number}
+   */
   function resolvePrice(inv, day, lastKnownPrice) {
     const histPrices = priceHistoryByInvestment[inv.id];
     if (!histPrices) {
@@ -323,6 +469,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     allDays.push(d.toISOString().split('T')[0]);
   }
 
+  /** @type {Record<number, number>} */
   const unitsByInvestment = {};
   // Cost-weighted average purchase-date FX multiplier per unit investment:
   // m̄ = Σ(buyAmount_i × m_i) / Σ(buyAmount_i), where m_i is the txn-date
@@ -330,6 +477,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // the day's rate yields the FX-neutral series — `value − value_fx_neutral`
   // is the cumulative currency effect on current holdings. Sells reduce both
   // sums proportionally (m̄ of the remaining position is unchanged).
+  /** @type {Map<number, FxNeutralAccumulator>} */
   const fxNeutralState = new Map();
   // Money accumulators stay Decimal — float drift compounds across a multi-year
   // day walk and is persisted into portfolio_performance_snapshots.
@@ -339,7 +487,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   let metalsInvested = toDecimal(0);
   let cumulativeInflation = toDecimal(1);
   let lastInflationMonth = '';
+  /** @type {Record<number, number>} */
   const lastKnownPrice = {};
+  /** @type {SnapshotRow[]} */
   const snapshots = [];
 
   // Per-investment running state for non-unit assets (mirrors live summary
@@ -348,6 +498,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   //   real-estate:                 value = runningInvested + runningAppreciation
   // runningInvested is kept in target currency, accumulated using per-txn FX
   // (same convention as cumulativeInvested above).
+  /** @type {Map<number, NonUnitRunningState>} */
   const nonUnitState = new Map();
   for (const inv of nonUnitInvestments) {
     nonUnitState.set(inv.id, {
@@ -553,6 +704,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   // Sanitize spike noise from raw price feeds
+  /** @type {SnapshotRow[]} */
   const sanitized = sanitizeSnapshotSpikes(snapshots);
 
   // Compute gain/loss fields after sanitization
@@ -589,7 +741,7 @@ async function hasFxNeutralColumn() {
  * Recompute all daily snapshots and persist to portfolio_performance_snapshots.
  *
  * @param {string} targetCurrency
- * @returns {Promise<object[]>} Stored snapshots
+ * @returns {Promise<SnapshotRow[]>} Stored snapshots
  */
 export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
   logger.info('Computing portfolio performance snapshots...');
@@ -613,6 +765,7 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
     'stocks_etfs_invested', 'crypto_invested', 'metals_invested',
     ...(includeFxNeutral ? ['value_fx_neutral'] : []),
   ];
+  /** @param {SnapshotRow} snap */
   const snapParams = (snap) => [
     snap.snapshot_date, snap.invested, snap.value,
     snap.stocks_etfs_value, snap.crypto_value, snap.metals_value, snap.cash_value,

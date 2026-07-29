@@ -13,6 +13,17 @@
  *
  * The cached value is the factory's promise, so concurrent callers share one
  * in-flight query rather than racing duplicates.
+ *
+ * `cache` is typed loosely (`Map<string, Promise<any>>`) rather than per-call:
+ * one cache instance is shared across a turn's differently-shaped tool fetches
+ * (investments, transactions, …), each keyed distinctly — this function's own
+ * `T` generic gives each call site the precise return type it needs.
+ *
+ * @template T
+ * @param {Map<string, Promise<any>>|undefined} cache
+ * @param {string} key
+ * @param {() => Promise<T>} factory
+ * @returns {Promise<T>}
  */
 export function memoizeAsync(cache, key, factory) {
   if (!cache) return factory();

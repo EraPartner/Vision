@@ -50,38 +50,41 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  * `src/services/` is being taken the same way, one whole subdirectory at a
  * time: a subdirectory is annotated to zero errors and only then added here as
  * a prefix, so new files under it are ratcheted from birth too. Held so far as
- * prefixes: the two import pipelines, currency/FX, prices, tax, and info.
+ * prefixes: the two import pipelines, currency/FX, prices, tax, info,
+ * portfolio, and aiChat.
  *
  * The top level of `src/services/` (all 51 `*.js` files directly in that
  * directory, not its subdirectories) is now fully held — but still as 51
  * individual file paths, not a `src/services/` prefix: `isRatcheted`'s prefix
  * match is per-string-prefix, not per-directory-level, so a `src/services/`
- * entry would ALSO match every still-dirty subdirectory below (`aiChat/` and
- * most of `calculations/`/`research/`/`reports/`/`portfolio/`) and gate them
- * sight-unseen — instant CI failure on this script's next run. Collapsing the
- * 51 entries to a directory prefix is only safe once those subdirectories are
- * themselves fully clean (at which point `src/services/` alone, without the
+ * entry would ALSO match every still-dirty subdirectory below (most of
+ * `calculations/`/`research/`/`reports/`) and gate them sight-unseen —
+ * instant CI failure on this script's next run. Collapsing the 51 entries to
+ * a directory prefix is only safe once those subdirectories are themselves
+ * fully clean (at which point `src/services/` alone, without the
  * now-redundant subdirectory prefixes, would cover the whole tree).
  *
- * `calculations/`, `research/`, `reports/`, and `portfolio/` are each
- * individually-clean-file-only so far (not yet whole subdirectories) — most
- * of those directories are still implicit-any-dirty. `aiChat/` is untouched.
- * Beyond services: `routes/` and `lib/` are untouched.
+ * `calculations/`, `research/`, and `reports/` are each individually-clean-
+ * file-only so far (not yet whole subdirectories) — most of those directories
+ * are still implicit-any-dirty. Beyond services: `routes/` and `lib/` are
+ * untouched.
  *
  * @type {string[]}
  */
 const RATCHETED = [
   'src/types/',
   'src/repositories/',
+  'src/services/aiChat/',
   'src/services/currency/',
   'src/services/importPipeline/',
   'src/services/info/',
+  'src/services/portfolio/',
   'src/services/portfolioImportPipeline/',
   'src/services/prices/',
   'src/services/tax/',
 
-  // calculations/, research/, reports/, portfolio/ — individually-clean files
-  // only; the directories themselves are still mostly implicit-any-dirty.
+  // calculations/, research/, reports/ — individually-clean files only; the
+  // directories themselves are still mostly implicit-any-dirty.
   'src/services/calculations/aggregation/_envelope.js',
   'src/services/calculations/aggregation/_statisticsCache.js',
   'src/services/calculations/aggregation/averageVsCurrent.js',
@@ -90,7 +93,6 @@ const RATCHETED = [
   'src/services/calculations/forecast/methods/ensemble.js',
   'src/services/calculations/forecast/methods/simpleAverage.js',
   'src/services/calculations/normalization.js',
-  'src/services/portfolio/portfolioIncomeService.js',
   'src/services/reports/dataFetcherPortfolio.js',
   'src/services/reports/sectionCatalog.js',
   'src/services/research/adapters/schemas.js',

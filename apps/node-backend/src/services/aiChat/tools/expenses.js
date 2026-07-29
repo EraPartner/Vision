@@ -19,6 +19,8 @@ import {
   ToolValidationError,
 } from './_validate.js';
 
+/** @typedef {import('../../../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow */
+
 const UNCATEGORISED_LABEL = 'Uncategorised';
 const UNKNOWN_RECIPIENT_LABEL = 'Unknown';
 const MAX_ROWS = 50_000;
@@ -30,8 +32,9 @@ const MAX_ROWS = 50_000;
  * single DB read (up to 50k rows) instead of rescanning per tool. When `cache`
  * is absent (standalone/unit calls) the read runs directly, unchanged.
  *
- * @param {Map|undefined} cache
+ * @param {Map<string, Promise<any>>|undefined} cache
  * @param {{ from?: string, to?: string, limit?: number, categoryId?: number|null, recipientId?: number|null }} params
+ * @returns {Promise<EnrichedTransactionRow[]>}
  */
 function fetchTransactionsInRange(cache, { from, to, limit = MAX_ROWS, categoryId = null, recipientId = null }) {
   const key = `expenses:txn:${from ?? ''}:${to ?? ''}:${limit}:${categoryId ?? '*'}:${recipientId ?? '*'}`;
@@ -46,6 +49,7 @@ function fetchTransactionsInRange(cache, { from, to, limit = MAX_ROWS, categoryI
   }));
 }
 
+/** @param {{ category_name?: string|null }} row */
 function categoryLabel(row) {
   if (row.category_name) return row.category_name;
   return UNCATEGORISED_LABEL;
@@ -57,6 +61,9 @@ function categoryLabel(row) {
  * `month` (default) → "YYYY-MM"; `quarter` → "YYYY-Qn". Callers pass an
  * already-normalised ymd (typically `toYmd(row.date)`) so the same
  * local-midnight handling applies at every site.
+ *
+ * @param {string} ymd
+ * @param {string} [groupBy]
  */
 function bucketKey(ymd, groupBy = 'month') {
   const y = ymd.slice(0, 4);
@@ -69,6 +76,7 @@ function bucketKey(ymd, groupBy = 'month') {
 
 /**
  * Standard transaction-row shape for list/table payloads.
+ * @param {EnrichedTransactionRow} row
  */
 function shapeTxnRow(row) {
   return {
@@ -99,6 +107,10 @@ export const getSpendByCategory = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -156,6 +168,10 @@ export const getMonthlySpend = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -226,6 +242,10 @@ export const getTopRecipients = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -287,6 +307,10 @@ export const getTransactionsInRange = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -379,6 +403,10 @@ export const getMonthlyCategoryBreakdown = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -412,6 +440,10 @@ export const searchTransactions = {
     },
     required: ['query'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     if (!args.query || !String(args.query).trim()) {
       throw new ToolValidationError('query is required and must be non-empty', 'query');
@@ -457,6 +489,10 @@ export const getLargestTransactions = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -504,6 +540,10 @@ export const getSpendTrendForCategory = {
     },
     required: ['categoryId'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const categoryId = parsePositiveInt(args.categoryId, 'categoryId', { min: 1, max: Number.MAX_SAFE_INTEGER });
     const months = parsePositiveInt(args.months, 'months', { min: 1, max: 36, defaultValue: 12 });
@@ -555,6 +595,10 @@ export const getYearOverYearComparison = {
     },
     required: ['year'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parsePositiveInt(args.year, 'year', { min: 2000, max: 2100 });
     const prevYear = args.prevYear != null
@@ -566,6 +610,7 @@ export const getYearOverYearComparison = {
       fetchTransactionsInRange(cache, { from: `${prevYear}-01-01`, to: `${prevYear}-12-31` }),
     ]);
 
+    /** @param {EnrichedTransactionRow[]} txns */
     function sumByCategory(txns) {
       const map = new Map();
       for (const row of txns) {
@@ -614,6 +659,10 @@ export const getUncategorisedTransactions = {
       limit: { type: 'integer', description: 'Max rows. Default 50, max 200.', minimum: 1, maximum: 200 },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const limit = parsePositiveInt(args.limit, 'limit', { min: 1, max: 200, defaultValue: 50 });
 
@@ -654,6 +703,10 @@ export const getNetCashflow = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');

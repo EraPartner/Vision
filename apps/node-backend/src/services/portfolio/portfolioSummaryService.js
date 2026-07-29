@@ -19,12 +19,46 @@ import { portfolioTransactionRepository } from '../../repositories/portfolioTran
 import { todayAppDateString } from '../../lib/timezone.js';
 import { toDecimal, addAll, multiply, divide, roundMoney } from '../../lib/money.js';
 
+/** @typedef {import('@vision/shared-utils/money').DecimalInput} DecimalInput */
+/** @typedef {import('decimal.js').default} Decimal */
+
+/** @param {DecimalInput} value */
 const round2 = (value) => roundMoney(value, 2);
+/** @param {DecimalInput} value */
 const round6 = (value) => roundMoney(value, 6);
 
 const COST_BASIS_METHODS = new Set(['weighted_avg', 'fifo', 'lifo']);
 
 /** @typedef {import('@vision/shared-utils/portfolio').CostBasisMethod} CostBasisMethod */
+
+/**
+ * `investments` row from `SELECT i.*, COALESCE(...)` above — same shape as
+ * {@link import('../../types/rows.js').InvestmentRow} except `current_price`
+ * and `interest_rate` are COALESCE-defaulted (never null) and NOT coerced to
+ * number here — still pg NUMERIC strings, parsed downstream with `Number()`.
+ * @typedef {Omit<import('../../types/rows.js').InvestmentRow, 'current_price'|'interest_rate'> & {
+ *   current_price: string,
+ *   interest_rate: string,
+ *   description?: undefined,
+ * }} RawInvestmentRow
+ */
+// `description` is NOT an `investments` column (see 0001_initial_database_schema.py)
+// — buildInvestmentSummary's `description: inv.description` below has always
+// evaluated to `undefined`. Typed as such (rather than dropped) to keep this
+// slice behavior-preserving; flagged in the ratchet report as a probable dead
+// field for the orchestrator to triage.
+
+/**
+ * A {@link import('../../types/rows.js').PortfolioMathTxRow} after
+ * `annotateTransactionFxMultipliers`: every txn used downstream also carries
+ * an `fxMultiplier` (its currency → target multiplier, resolved at its date)
+ * and, when neither the stamped nor a historical rate could be resolved,
+ * `_fxFellBack: true`.
+ * @typedef {import('../../types/rows.js').PortfolioMathTxRow & {
+ *   fxMultiplier?: number,
+ *   _fxFellBack?: boolean,
+ * }} AnnotatedTxRow
+ */
 
 /**
  * Resolve the user's configured cost-basis method (Settings → General).
@@ -47,7 +81,13 @@ async function resolveCostBasisMethod() {
  * summaries plus aggregated totals — all pre-converted to targetCurrency.
  *
  * @param {string} targetCurrency
- * @returns {Promise<{ currency: string, computed_at: string, totals: object, summaries: object[], byAccount: object[] }>}
+ * @returns {Promise<{
+ *   currency: string,
+ *   computed_at: string,
+ *   totals: ReturnType<typeof aggregateTotals>,
+ *   summaries: ReturnType<typeof buildInvestmentSummary>[],
+ *   byAccount: ReturnType<typeof aggregateByAccount>,
+ * }>}
  */
 export async function getPortfolioSummary(targetCurrency = 'EUR') {
   const target = (targetCurrency || 'EUR').toUpperCase();
@@ -56,7 +96,7 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   const todayYmd = todayAppDateString();
 
   const [investmentsResult, txnRows] = await Promise.all([
-    query(`
+    /** @type {Promise<{ rows: RawInvestmentRow[] }>} */ (query(`
       SELECT i.*,
              COALESCE(i.currency, 'EUR') AS currency,
              COALESCE(i.current_price, 0) AS current_price,
@@ -64,8 +104,10 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
       FROM investments i
       WHERE i.is_active = true
       ORDER BY i.name
-    `),
-    portfolioTransactionRepository.getRowsForPortfolioMath({ activeInvestmentsOnly: true }),
+    `)),
+    /** @type {Promise<AnnotatedTxRow[]>} */ (
+      portfolioTransactionRepository.getRowsForPortfolioMath({ activeInvestmentsOnly: true })
+    ),
   ]);
 
   const txnsByInvestment = new Map();
@@ -133,11 +175,19 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
  * equals the per-investment totals (locked by a parity test). Unassigned lots
  * (account_id NULL) collapse into a single { account_id: null } row. Names are
  * resolved by the caller (the accounts list) — this returns ids only.
+ *
+ * @param {RawInvestmentRow[]} investmentRows
+ * @param {Map<number, AnnotatedTxRow[]>} txnsByInvestment
+ * @param {string} target
+ * @param {Map<string, number>} multiplierByCurrency
+ * @param {{ costBasisMethod: CostBasisMethod, todayYmd: string }} opts
  */
 function aggregateByAccount(investmentRows, txnsByInvestment, target, multiplierByCurrency, opts) {
+  /** @type {Map<number|null, { account_id: number|null, currentValue: Decimal, totalInvested: Decimal, gainLoss: Decimal }>} */
   const acc = new Map(); // account_id (or null) → aggregate
   for (const inv of investmentRows) {
     const txns = txnsByInvestment.get(Number(inv.id)) ?? [];
+    /** @type {Map<number|null, AnnotatedTxRow[]>} */
     const groups = new Map();
     for (const txn of txns) {
       const key = txn.account_id == null ? null : Number(txn.account_id);
@@ -171,10 +221,15 @@ function aggregateByAccount(investmentRows, txnsByInvestment, target, multiplier
 /**
  * Load all stored historical rates for the involved currencies into an
  * in-memory index (sorted per currency, binary-searched per lookup).
+ *
+ * @param {string[]} currencies
+ * @param {string} target
+ * @returns {Promise<import('../../types/rows.js').HistoricalRateIndex>}
  */
 async function loadHistoricalRateIndex(currencies, target) {
   const relevant = [...new Set([...currencies, target])].filter((c) => c && c !== 'EUR');
   if (relevant.length === 0) return new Map();
+  /** @type {{ rows: Array<Pick<import('../../types/rows.js').ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: string }> }} */
   const result = await query(
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
      FROM exchange_rates
@@ -190,6 +245,11 @@ async function loadHistoricalRateIndex(currencies, target) {
  * transaction row, preferring the rate stamped on the transaction
  * (fx_rate_to_eur). Rows whose historical rate is unresolvable fall back to
  * today's rate and are flagged so the response can disclose it.
+ *
+ * @param {AnnotatedTxRow[]} txns
+ * @param {string} target
+ * @param {import('../../types/rows.js').HistoricalRateIndex} historicalIndex
+ * @param {Map<string, number>} multiplierByCurrency
  */
 function annotateTransactionFxMultipliers(txns, target, historicalIndex, multiplierByCurrency) {
   for (const txn of txns) {
@@ -228,8 +288,8 @@ function annotateTransactionFxMultipliers(txns, target, historicalIndex, multipl
  * resulting gain therefore includes the FX component, decomposed into
  * assetGain + fxGain (ADR: FX attribution).
  *
- * @param {object} inv  raw investment row
- * @param {Array}  txns transaction rows for this investment (fxMultiplier-annotated)
+ * @param {RawInvestmentRow} inv  raw investment row
+ * @param {AnnotatedTxRow[]}  txns transaction rows for this investment (fxMultiplier-annotated)
  * @param {string} targetCurrency
  * @param {Map<string, number>} multiplierByCurrency  FX multiplier per currency
  * @param {{ costBasisMethod: CostBasisMethod, todayYmd: string }} opts
@@ -241,6 +301,7 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
 
   const core = buildInvestmentSummaryCore(inv, txns, { ...opts, fxMultiplierNow: multiplier });
   const cv = core.converted;
+  /** @param {DecimalInput} v */
   const conv = (v) => multiply(v, multiplier);
 
   const convertedCurrentValue = cv.currentValue;
@@ -347,6 +408,7 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
 // matches. Treat this as "gross buy cost (acquisition costs included where the
 // asset class records them per-row)"; documented here rather than re-grained to
 // avoid changing every reported invested figure.
+/** @param {ReturnType<typeof buildInvestmentSummary>[]} summaries */
 function aggregateTotals(summaries) {
   const acc = {
     totalPortfolioValue: addAll(summaries.map((s) => s.currentValue)),

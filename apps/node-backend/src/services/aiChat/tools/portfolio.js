@@ -16,9 +16,14 @@ import {
   assertDateOrder,
 } from './_validate.js';
 
+/** @typedef {import('../../../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** Start-of-day UTC epoch ms for a YYYY-MM-DD string. */
+/**
+ * Start-of-day UTC epoch ms for a YYYY-MM-DD string.
+ * @param {string} ymd
+ */
 function startOfDayMs(ymd) {
   return new Date(`${ymd}T00:00:00Z`).getTime();
 }
@@ -27,6 +32,7 @@ function startOfDayMs(ymd) {
  * Inclusive end-of-day UTC epoch ms for a YYYY-MM-DD string. A `to` date
  * parsed as plain UTC midnight would otherwise exclude same-day transactions
  * carrying a non-midnight timestamp (tax.js already does it this way).
+ * @param {string} ymd
  */
 function endOfDayMs(ymd) {
   return startOfDayMs(ymd) + (MS_PER_DAY - 1);
@@ -38,8 +44,11 @@ const UNIT_DEBIT_TYPES = new Set(['sell']);
 
 /**
  * Group transaction rows by their `investment_id`, preserving order.
+ * @param {PortfolioTransactionRow[]} txns
+ * @returns {Map<number, PortfolioTransactionRow[]>}
  */
 function groupTxnsByInvestment(txns) {
+  /** @type {Map<number, PortfolioTransactionRow[]>} */
   const byInvestment = new Map();
   for (const t of txns) {
     const list = byInvestment.get(t.investment_id) || [];
@@ -56,14 +65,21 @@ function groupTxnsByInvestment(txns) {
  * fee/tax amounts plus every row's fees and taxes. Rows outside
  * [from, to] (inclusive, end-of-day) are skipped. Returns a Map of
  * investment_id → `{ income, costs, count }` (Decimals + count).
+ * @param {PortfolioTransactionRow[]} txns
+ * @param {{ from: string, to: string }} range
+ * @returns {Map<number, { income: import('decimal.js').default, costs: import('decimal.js').default, count: number }>}
  */
 function aggregateFlows(txns, { from, to }) {
   const fromMs = startOfDayMs(from);
   const toMs = endOfDayMs(to);
 
+  /** @type {Map<number, { income: import('decimal.js').default, costs: import('decimal.js').default, count: number }>} */
   const byInvestment = new Map();
   for (const t of txns) {
-    const d = t.date instanceof Date ? t.date : new Date(t.date);
+    // t.date is typed as a string ('YYYY-MM-DD', see PortfolioTransactionRow),
+    // but this guards defensively in case a caller ever hands back a raw Date.
+    const rawDate = /** @type {string|Date} */ (t.date);
+    const d = rawDate instanceof Date ? rawDate : new Date(rawDate);
     const ms = d.getTime();
     if (ms < fromMs || ms > toMs) continue;
 
@@ -90,6 +106,7 @@ function aggregateFlows(txns, { from, to }) {
   return byInvestment;
 }
 
+/** @param {PortfolioTransactionRow[]} txns */
 function computeNetUnits(txns) {
   let net = toDecimal(0);
   // Rows arrive date-ordered from the repository query.
@@ -126,6 +143,10 @@ export const getPortfolioHoldings = {
       },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
@@ -192,6 +213,10 @@ export const getReturnsForRange = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -256,6 +281,10 @@ export const getDividendIncome = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
@@ -273,7 +302,10 @@ export const getDividendIncome = {
     let grandTotal = toDecimal(0);
 
     for (const t of txns) {
-      const d = t.date instanceof Date ? t.date : new Date(t.date);
+      // t.date is typed as a string ('YYYY-MM-DD', see PortfolioTransactionRow),
+      // but this guards defensively in case a caller ever hands back a raw Date.
+      const rawDate = /** @type {string|Date} */ (t.date);
+      const d = rawDate instanceof Date ? rawDate : new Date(rawDate);
       const ms = d.getTime();
       if (ms < fromMs || ms > toMs) continue;
 
@@ -329,6 +361,10 @@ export const getAssetAllocation = {
     type: 'object',
     properties: {},
   },
+  /**
+   * @param {Record<string, unknown>} _args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(_args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const investments = await loadActiveInvestments(cache);
 
@@ -394,6 +430,10 @@ export const getUnrealizedGains = {
       assetClass: { type: 'string', enum: ASSET_CLASSES, description: 'Optional filter by asset class.' },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
@@ -414,7 +454,12 @@ export const getUnrealizedGains = {
       for (const t of invTxns) {
         if (t.type !== 'buy') continue;
         const units = toDecimal(t.units ?? 0);
-        const pricePerUnit = toDecimal(t.price_per_unit ?? t.amount_per_unit ?? 0);
+        // `amount_per_unit` is NOT a portfolio_transactions column (nor computed
+        // anywhere) — this fallback has always evaluated to `undefined`, so the
+        // effective expression is `t.price_per_unit ?? 0`. Typed as such (rather
+        // than dropped) to keep this slice behavior-preserving; flagged in the
+        // ratchet report as a probable dead fallback for the orchestrator to triage.
+        const pricePerUnit = toDecimal(t.price_per_unit ?? /** @type {undefined} */ (/** @type {any} */ (t).amount_per_unit) ?? 0);
         costBasis = costBasis.plus(units.times(pricePerUnit));
       }
 
@@ -470,6 +515,10 @@ export const getBestWorstPerformers = {
     },
     required: ['from', 'to'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');

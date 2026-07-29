@@ -54,6 +54,15 @@ import {
 } from './insights.js';
 import { ToolValidationError } from './_validate.js';
 
+/**
+ * @typedef {object} Tool
+ * @property {string} name
+ * @property {string} description
+ * @property {object} parameters JSON-schema `parameters` for the LLM tool-call spec.
+ * @property {(args: Record<string, unknown>, context?: import('./_validate.js').ToolContext) => Promise<object>} run
+ */
+
+/** @type {Record<string, Tool>} */
 export const TOOLS = Object.freeze({
   [getSpendByCategory.name]: getSpendByCategory,
   [getMonthlySpend.name]: getMonthlySpend,
@@ -106,9 +115,13 @@ export function getToolNames() {
   return Object.keys(TOOLS);
 }
 
+/**
+ * @param {unknown} rawArgs
+ * @returns {Record<string, unknown>}
+ */
 function coerceArguments(rawArgs) {
   if (rawArgs == null) return {};
-  if (typeof rawArgs === 'object') return rawArgs;
+  if (typeof rawArgs === 'object') return /** @type {Record<string, unknown>} */ (rawArgs);
   if (typeof rawArgs === 'string') {
     const trimmed = rawArgs.trim();
     if (!trimmed) return {};
@@ -124,6 +137,10 @@ function coerceArguments(rawArgs) {
   throw new ToolValidationError('arguments must be an object or JSON string');
 }
 
+// Errors are of genuinely arbitrary shape here — anything a tool's `run()` can
+// throw, not just ToolValidationError — so `err` stays `any` (dbEditor
+// pg-error precedent).
+/** @param {any} err */
 function formatError(err) {
   if (err instanceof ToolValidationError) {
     return {
@@ -150,6 +167,11 @@ function formatError(err) {
  * Returns `{ok, data, meta}` on success, `{ok: false, error}` on failure.
  * Never throws — the chat service feeds the error payload back to the
  * model so it can correct its args and retry.
+ *
+ * @param {string} name
+ * @param {unknown} rawArgs
+ * @param {import('./_validate.js').ToolContext} [context]
+ * @returns {Promise<object>}
  */
 export async function dispatchTool(name, rawArgs, context = {}) {
   const tool = TOOLS[name];

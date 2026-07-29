@@ -13,6 +13,11 @@
 import { getStoredRateToEurOnOrBefore, normalizeDateInput } from '../currency/rateFetcher.js';
 import { logger } from '../../config/logger.js';
 
+/**
+ * @param {string} currency
+ * @param {string|Date|null|undefined} date
+ * @returns {Promise<number|undefined>}
+ */
 export async function autoResolveFxRateToEur(currency, date) {
   const code = String(currency || 'EUR').toUpperCase().trim();
   if (code === 'EUR') return undefined;
