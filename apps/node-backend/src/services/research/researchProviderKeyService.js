@@ -26,7 +26,10 @@ const LABELS = Object.freeze({
   fred: 'FRED (economic data)',
 });
 
-/** Mask a key to its last 4 chars; never expose the full value. */
+/**
+ * Mask a key to its last 4 chars; never expose the full value.
+ * @param {string | undefined} key
+ */
 function mask(key) {
   if (!key) return undefined;
   return key.length > 4 ? `••••${key.slice(-4)}` : '••••';
@@ -41,15 +44,22 @@ export async function hydrate() {
 
 /**
  * Status of every keyed provider for the Settings UI. Never includes a full key.
- * @returns {Promise<Array<{ provider, label, envVar, configured, source, masked }>>}
+ * @returns {Promise<Array<{
+ *   provider: string,
+ *   label: string,
+ *   envVar: string | undefined,
+ *   configured: boolean,
+ *   source: 'settings' | 'env' | 'none',
+ *   masked: string | undefined,
+ * }>>}
  */
 export async function listKeyStatuses() {
   return KEYED_PROVIDERS.map((provider) => {
     const source = keySource(provider);
     return {
       provider,
-      label: LABELS[provider] ?? provider,
-      envVar: ENV_VAR_BY_PROVIDER[provider],
+      label: LABELS[/** @type {keyof typeof LABELS} */ (provider)] ?? provider,
+      envVar: ENV_VAR_BY_PROVIDER[/** @type {keyof typeof ENV_VAR_BY_PROVIDER} */ (provider)],
       configured: source !== 'none',
       source, // 'settings' | 'env' | 'none'
       masked: mask(providerKey(provider)),
@@ -57,6 +67,7 @@ export async function listKeyStatuses() {
   });
 }
 
+/** @param {string} provider */
 function assertKeyedProvider(provider) {
   if (!KEYED_PROVIDERS.includes(provider)) {
     throw new ValidationError(`Unknown keyed provider: ${provider}`);

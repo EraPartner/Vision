@@ -54,9 +54,9 @@ const timeSeriesResponseSchema = z.looseObject({
   })),
 });
 
-const RANGE_TO_OUTPUTSIZE = {
+const RANGE_TO_OUTPUTSIZE = Object.freeze({
   '1d': 2, '5d': 7, '1mo': 23, '3mo': 66, '6mo': 130, '1y': 260, '2y': 520, '5y': 1300, max: 5000,
-};
+});
 
 function key() {
   const k = providerKey('twelve_data');
@@ -64,15 +64,24 @@ function key() {
   return k;
 }
 
+/**
+ * @param {unknown} payload raw JSON body — upstream shape is undocumented outside
+ *   the happy path, so it is checked defensively rather than typed.
+ * @returns {unknown}
+ */
 function assertOk(payload) {
   // Twelve Data signals failure with { status: 'error', code, message }.
-  if (payload && payload.status === 'error') throw new Error(payload.message || 'twelve_data error');
+  if (payload && typeof payload === 'object') {
+    const p = /** @type {Record<string, unknown>} */ (payload);
+    if (p.status === 'error') throw new Error(p.message ? String(p.message) : 'twelve_data error');
+  }
   return payload;
 }
 
 const twelveDataAdapter = {
   key: 'twelve_data',
 
+  /** @param {string} query */
   async search(query) {
     const url = `${BASE}/symbol_search?symbol=${encodeURIComponent(query)}&outputsize=8&apikey=${key()}`;
     const payload = assertOk(await getJson(url));
@@ -86,6 +95,7 @@ const twelveDataAdapter = {
     return { items };
   },
 
+  /** @param {string} symbol */
   async quote(symbol) {
     const url = `${BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${key()}`;
     const payload = assertOk(await getJson(url));
@@ -113,8 +123,13 @@ const twelveDataAdapter = {
     };
   },
 
+  /**
+   * @param {string} symbol
+   * @param {{ range?: string }} [opts]
+   */
   async chart(symbol, { range = '1mo' } = {}) {
-    const outputsize = RANGE_TO_OUTPUTSIZE[range] ?? RANGE_TO_OUTPUTSIZE['1mo'];
+    const outputsize = RANGE_TO_OUTPUTSIZE[/** @type {keyof typeof RANGE_TO_OUTPUTSIZE} */ (range)]
+      ?? RANGE_TO_OUTPUTSIZE['1mo'];
     const url = `${BASE}/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=${outputsize}&apikey=${key()}`;
     const payload = assertOk(await getJson(url));
     const { meta, values } = parseOr(timeSeriesResponseSchema, payload, { meta: {}, values: [] });

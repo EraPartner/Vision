@@ -53,9 +53,9 @@ const newsRowSchema = z.looseObject({
   headline: looseString, url: looseString, source: looseString, datetime: numish, image: looseString,
 });
 
-const RANGE_TO_DAYS = {
+const RANGE_TO_DAYS = Object.freeze({
   '1d': 1, '5d': 5, '1mo': 31, '3mo': 93, '6mo': 186, '1y': 366, '2y': 731, '5y': 1827, max: 7300,
-};
+});
 
 function key() {
   const k = providerKey('finnhub');
@@ -70,6 +70,7 @@ const ymd = epochMsToUtcYmd;
 const finnhubAdapter = {
   key: 'finnhub',
 
+  /** @param {string} query */
   async search(query) {
     const data = await getJson(`${BASE}/search?q=${encodeURIComponent(query)}&token=${key()}`);
     const { result } = parseOr(searchResponseSchema, data, { result: [] });
@@ -82,6 +83,7 @@ const finnhubAdapter = {
     return { items };
   },
 
+  /** @param {string} symbol */
   async quote(symbol) {
     const data = await getJson(`${BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${key()}`);
     // Pre-zod, a null body threw on field access; keep throwing so the
@@ -101,8 +103,12 @@ const finnhubAdapter = {
     };
   },
 
+  /**
+   * @param {string} symbol
+   * @param {{ range?: string }} [opts]
+   */
   async chart(symbol, { range = '1mo' } = {}) {
-    const days = RANGE_TO_DAYS[range] ?? RANGE_TO_DAYS['1mo'];
+    const days = RANGE_TO_DAYS[/** @type {keyof typeof RANGE_TO_DAYS} */ (range)] ?? RANGE_TO_DAYS['1mo'];
     const to = nowSec();
     const from = to - days * 86_400;
     const c = parseOr(
@@ -112,7 +118,9 @@ const finnhubAdapter = {
       ),
       undefined,
     );
-    if (c?.s !== 'ok') return { symbol, currency: undefined, points: [] };
+    if (c?.s !== 'ok') {
+      return { symbol, currency: /** @type {string | undefined} */ (undefined), points: [] };
+    }
     const points = c.t.map((ts, i) => ({
       time: ts * 1000,
       close: num(c.c[i]),
@@ -120,22 +128,24 @@ const finnhubAdapter = {
       low: num(c.l[i]),
       volume: num(c.v[i]),
     }));
-    return { symbol, currency: undefined, points };
+    return { symbol, currency: /** @type {string | undefined} */ (undefined), points };
   },
 
+  /** @param {string} symbol */
   async fundamentals(symbol) {
     const data = await getJson(`${BASE}/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${key()}`);
     const { metric: m } = parseOr(metricResponseSchema, data, { metric: {} });
     // Finnhub reports most ratios as percentages (e.g. margins, growth, yield);
     // normalize those to fractions so they match the cross-provider contract.
+    /** @param {unknown} v */
     const pct = (v) => { const n = num(v); return n == null ? undefined : n / 100; };
     return {
       symbol,
       name: symbol,
-      currency: undefined,
+      currency: /** @type {string | undefined} */ (undefined),
       marketCap: num(m.marketCapitalization), // reported in millions by Finnhub
       pe: num(m.peTTM ?? m.peBasicExclExtraTTM),
-      forwardPE: undefined,
+      forwardPE: /** @type {number | undefined} */ (undefined),
       pegRatio: num(m.pegTTM),
       dividendYield: pct(m.dividendYieldIndicatedAnnual),
       payoutRatio: pct(m.payoutRatioTTM ?? m.payoutRatioAnnual),
@@ -156,6 +166,7 @@ const finnhubAdapter = {
     };
   },
 
+  /** @param {string} symbol */
   async analyst(symbol) {
     const recs = await getJson(`${BASE}/stock/recommendation?symbol=${encodeURIComponent(symbol)}&token=${key()}`);
     const latestRaw = parseOr(z.array(z.any()), recs, [])[0];
@@ -189,10 +200,14 @@ const finnhubAdapter = {
       targetHigh: targets.targetHigh,
       targetLow: targets.targetLow,
       numberOfAnalysts,
-      recentActions: [],
+      recentActions: /** @type {unknown[]} */ ([]),
     };
   },
 
+  /**
+   * @param {string} symbol
+   * @param {{ count?: number }} [opts]
+   */
   async news(symbol, { count = 20 } = {}) {
     const to = Date.now();
     const from = to - 30 * DAY_MS;

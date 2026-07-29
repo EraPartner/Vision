@@ -29,8 +29,19 @@ import investmentRepo from '../../repositories/investmentRepository.js';
 /** Relative price agreement tolerance for the self-audit (5%). */
 export const AUDIT_PRICE_TOLERANCE = 0.05;
 
+/** @param {unknown} err */
 const errMessage = (err) => (err instanceof Error ? err.message : String(err));
 
+/**
+ * @param {Object} [deps]
+ * @param {typeof mapRepo} [deps.repo]
+ * @param {typeof investmentRepo} [deps.investments]
+ * @param {Record<string, any>} [deps.adapters]  provider key → adapter object
+ * @param {typeof defaultGovernor} [deps.governor]
+ * @param {(provider: string) => boolean} [deps.isKeyed]
+ * @param {(provider: string) => unknown} [deps.recordSuccess]
+ * @param {(provider: string, error: unknown) => unknown} [deps.recordError]
+ */
 export function createResearchMappingService({
   repo = mapRepo,
   investments = investmentRepo,
@@ -40,9 +51,18 @@ export function createResearchMappingService({
   recordSuccess = providerHealth.recordSuccess,
   recordError = providerHealth.recordError,
 } = {}) {
+  /** @param {string} p */
   const noteSuccess = (p) => Promise.resolve(recordSuccess(p)).catch(() => {});
+  /**
+   * @param {string} p
+   * @param {unknown} e
+   */
   const noteError = (p, e) => Promise.resolve(recordError(p, e)).catch(() => {});
 
+  /**
+   * @param {string} instrumentKey
+   * @param {string} keyType
+   */
   function list(instrumentKey, keyType) {
     return repo.listByInstrument(instrumentKey, keyType);
   }
@@ -138,7 +158,12 @@ export function createResearchMappingService({
 
   /**
    * Persist user-confirmed mappings.
-   * @param {{ instrumentKey: string, keyType: string, mappings: object[] }} params
+   * @param {{ instrumentKey: string, keyType: string, mappings: Array<{
+   *   provider: string,
+   *   providerSymbol?: string, provider_symbol?: string,
+   *   resolvedName?: string, resolved_name?: string,
+   *   exchange?: string, currency?: string, status?: string,
+   * }> }} params
    */
   async function save({ instrumentKey, keyType, mappings }) {
     for (const m of mappings) {
@@ -156,6 +181,7 @@ export function createResearchMappingService({
     return repo.listByInstrument(instrumentKey, keyType);
   }
 
+  /** @param {number} id */
   function remove(id) {
     return repo.deleteById(id);
   }
@@ -194,6 +220,11 @@ export function createResearchMappingService({
   return { list, resolve, save, remove, audit };
 }
 
+/**
+ * @param {string} provider
+ * @param {import('../../types/rows.js').InstrumentProviderMapRow} row
+ * @param {string} status
+ */
 function fromStore(provider, row, status) {
   return {
     provider,
@@ -208,7 +239,7 @@ function fromStore(provider, row, status) {
 
 /**
  * Flag currency mismatches and price outliers across provider quotes.
- * @param {object[]} quotes
+ * @param {Array<{ provider: string, currency?: string, price?: number, error?: string, skipped?: string }>} quotes
  * @returns {object[]} discrepancies
  */
 export function analyzeQuotes(quotes) {

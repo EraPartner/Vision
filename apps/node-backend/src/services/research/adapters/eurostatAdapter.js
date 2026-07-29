@@ -41,11 +41,12 @@ const jsonStatSchema = z.looseObject({
 export function parseJsonStat(payload) {
   const parsed = parseOr(jsonStatSchema, payload, undefined);
   if (!parsed) return [];
-  const timeIndex = parsed.dimension.time.category.index;
-  const values = parsed.value;
+  const timeIndex = /** @type {Record<string, unknown>} */ (parsed.dimension.time.category.index);
+  const values = /** @type {Record<string, unknown>} */ (parsed.value);
   const out = [];
   for (const [period, idx] of Object.entries(timeIndex)) {
-    const value = num(values[idx] ?? values[String(idx)]);
+    const idxKey = /** @type {string} */ (idx);
+    const value = num(values[idxKey] ?? values[String(idxKey)]);
     if (value === undefined) continue;
     const time = periodToMs(period);
     if (time === undefined) continue;
@@ -58,10 +59,15 @@ export function parseJsonStat(payload) {
 const eurostatAdapter = {
   key: 'eurostat',
 
+  /** @param {string} query */
   async macroSearch(query) {
     return { items: searchCatalog('eurostat', query) };
   },
 
+  /**
+   * @param {string} seriesId
+   * @param {{ range?: string }} [opts]
+   */
   async macroSeries(seriesId, { range = '5y' } = {}) {
     // seriesId already carries the `?dim=val&…` query; append directly to the
     // fixed Eurostat host (no user-supplied host — see macroCatalog shape guard).
@@ -69,9 +75,9 @@ const eurostatAdapter = {
     const points = parseJsonStat(data).map((p) => ({
       time: p.time,
       close: p.value,
-      high: undefined,
-      low: undefined,
-      volume: undefined,
+      high: /** @type {number | undefined} */ (undefined),
+      low: /** @type {number | undefined} */ (undefined),
+      volume: /** @type {number | undefined} */ (undefined),
     }));
     const entry = catalogEntry('eurostat', seriesId);
     return {

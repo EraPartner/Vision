@@ -52,6 +52,7 @@ function key() {
 const fredAdapter = {
   key: 'fred',
 
+  /** @param {string} query */
   async macroSearch(query) {
     const url =
       `${BASE}/series/search?search_text=${encodeURIComponent(query)}` +
@@ -66,12 +67,16 @@ const fredAdapter = {
         title: s.title || s.id,
         units: s.units_short || s.units || undefined,
         frequency: s.frequency || s.frequency_short || undefined,
-        region: undefined,
+        region: /** @type {string | undefined} */ (undefined),
         source: 'FRED',
       }));
     return { items };
   },
 
+  /**
+   * @param {string} seriesId
+   * @param {{ range?: string }} [opts]
+   */
   async macroSeries(seriesId, { range = '5y' } = {}) {
     const k = key();
     const enc = encodeURIComponent(seriesId);
@@ -82,13 +87,19 @@ const fredAdapter = {
     const metaUrl = `${BASE}/series?series_id=${enc}&api_key=${k}&file_type=json`;
     const [obs, meta] = await Promise.all([
       getJson(obsUrl),
-      getJson(metaUrl).catch(() => undefined),
+      getJson(metaUrl).catch(() => /** @type {unknown} */ (undefined)),
     ]);
     const { observations } = parseOr(observationsResponseSchema, obs, { observations: [] });
     const points = observations
       .map((o) => ({ time: Date.parse(o.date), close: o.value }))
       .filter((p) => Number.isFinite(p.time) && p.close !== undefined)
-      .map((p) => ({ time: p.time, close: p.close, high: undefined, low: undefined, volume: undefined }));
+      .map((p) => ({
+        time: p.time,
+        close: p.close,
+        high: /** @type {number | undefined} */ (undefined),
+        low: /** @type {number | undefined} */ (undefined),
+        volume: /** @type {number | undefined} */ (undefined),
+      }));
     const m = parseOr(metaResponseSchema, meta, { seriess: [] }).seriess[0];
     return {
       provider: 'fred',

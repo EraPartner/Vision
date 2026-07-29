@@ -31,20 +31,24 @@ const RANGE_TO_PERIOD1 = {
   max: () => new Date('1970-01-01'),
 };
 
+/** @param {number} n */
 function monthsAgo(n) {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth() - n, d.getDate());
 }
 
+/** @param {number} n */
 function yearsAgo(n) {
   const d = new Date();
   return new Date(d.getFullYear() - n, d.getMonth(), d.getDate());
 }
 
+/** @param {string} range */
 function rangeToDate(range) {
-  return (RANGE_TO_PERIOD1[range] ?? RANGE_TO_PERIOD1['1mo'])();
+  return (RANGE_TO_PERIOD1[/** @type {keyof typeof RANGE_TO_PERIOD1} */ (range)] ?? RANGE_TO_PERIOD1['1mo'])();
 }
 
+/** @param {unknown} url */
 function normalizeThumbnailUrl(url) {
   if (!url || typeof url !== 'string') return undefined;
   const trimmed = url.trim();
@@ -55,6 +59,9 @@ function normalizeThumbnailUrl(url) {
   return undefined;
 }
 
+/**
+ * @param {any} thumbnail raw yahoo-finance2 payload (NO_VALIDATE — see file header).
+ */
 function pickBestThumbnail(thumbnail) {
   const resolutions = Array.isArray(thumbnail?.resolutions) ? thumbnail.resolutions : [];
   for (let i = resolutions.length - 1; i >= 0; i -= 1) {
@@ -67,14 +74,15 @@ function pickBestThumbnail(thumbnail) {
 const yahooAdapter = {
   key: 'yahoo',
 
+  /** @param {string} query */
   async search(query) {
     const yahoo = await getYahooClient();
     const results = /** @type {any} */ (
       await yahoo.search(query, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE)
     );
     const items = (results.quotes || [])
-      .filter((r) => r.symbol)
-      .map((r) => ({
+      .filter((/** @type {any} */ r) => r.symbol)
+      .map((/** @type {any} */ r) => ({
         symbol: r.symbol,
         name: r.shortname || r.longname || r.symbol,
         type: r.quoteType || 'UNKNOWN',
@@ -83,6 +91,7 @@ const yahooAdapter = {
     return { items };
   },
 
+  /** @param {string} symbol */
   async quote(symbol) {
     const yahoo = await getYahooClient();
     const q = /** @type {any} */ (await yahoo.quote(symbol, {}, NO_VALIDATE));
@@ -106,14 +115,18 @@ const yahooAdapter = {
     };
   },
 
+  /**
+   * @param {string} symbol
+   * @param {{ range?: string, interval?: string }} [opts]
+   */
   async chart(symbol, { range = '1mo', interval = '1d' } = {}) {
     const yahoo = await getYahooClient();
     const result = /** @type {any} */ (
       await yahoo.chart(symbol, { period1: rangeToDate(range), interval: /** @type {any} */ (interval), includePrePost: false }, NO_VALIDATE)
     );
     const points = (result?.quotes || [])
-      .filter((p) => p.close != null)
-      .map((p) => ({
+      .filter((/** @type {any} */ p) => p.close != null)
+      .map((/** @type {any} */ p) => ({
         time: new Date(p.date).getTime(),
         close: p.close,
         high: p.high,
@@ -123,6 +136,7 @@ const yahooAdapter = {
     return { symbol: result?.meta?.symbol ?? symbol, currency: result?.meta?.currency, points };
   },
 
+  /** @param {string} symbol */
   async fundamentals(symbol) {
     const yahoo = await getYahooClient();
     const s = /** @type {any} */ (
@@ -176,6 +190,7 @@ const yahooAdapter = {
     };
   },
 
+  /** @param {string} symbol */
   async analyst(symbol) {
     const yahoo = await getYahooClient();
     const s = /** @type {any} */ (
@@ -186,7 +201,7 @@ const yahooAdapter = {
       )
     );
     const trendBuckets = s?.recommendationTrend?.trend || [];
-    const current = trendBuckets.find((t) => t.period === '0m') || trendBuckets[0];
+    const current = trendBuckets.find((/** @type {any} */ t) => t.period === '0m') || trendBuckets[0];
     const consensus = current
       ? {
           strongBuy: current.strongBuy ?? 0,
@@ -197,7 +212,7 @@ const yahooAdapter = {
         }
       : undefined;
     const fd = s?.financialData || {};
-    const recentActions = (s?.upgradeDowngradeHistory?.history || []).slice(0, 10).map((h) => ({
+    const recentActions = (s?.upgradeDowngradeHistory?.history || []).slice(0, 10).map((/** @type {any} */ h) => ({
       date: h.epochGradeDate,
       firm: h.firm,
       toGrade: h.toGrade,
@@ -215,13 +230,17 @@ const yahooAdapter = {
     };
   },
 
+  /**
+   * @param {string} symbol
+   * @param {{ count?: number }} [opts]
+   */
   async news(symbol, { count = 20 } = {}) {
     const yahoo = await getYahooClient();
     const newsCount = Math.min(count, 50);
     const results = /** @type {any} */ (
       await yahoo.search(symbol, { quotesCount: 0, newsCount }, NO_VALIDATE)
     );
-    const articles = (results.news || []).map((n) => ({
+    const articles = (results.news || []).map((/** @type {any} */ n) => ({
       title: n.title,
       link: n.link,
       publisher: n.publisher,

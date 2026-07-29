@@ -25,6 +25,7 @@ function key() {
   return k;
 }
 
+/** @param {unknown} arr */
 const first = (arr) => (Array.isArray(arr) ? arr[0] : undefined);
 
 // Response row shapes (tolerant — see schemas.js). FMP wraps everything in
@@ -114,6 +115,7 @@ const gradesConsensusRowSchema = z.looseObject({
 const fmpAdapter = {
   key: 'fmp',
 
+  /** @param {string} query */
   async search(query) {
     const k = key();
     const enc = encodeURIComponent(query);
@@ -121,8 +123,8 @@ const fmpAdapter = {
     // name (search-name) lookups; query both and merge so either form resolves,
     // as the old combined endpoint did.
     const [bySymbol, byName] = await Promise.all([
-      getJson(`${BASE}/search-symbol?query=${enc}&limit=8&apikey=${k}`).catch(() => []),
-      getJson(`${BASE}/search-name?query=${enc}&limit=8&apikey=${k}`).catch(() => []),
+      getJson(`${BASE}/search-symbol?query=${enc}&limit=8&apikey=${k}`).catch(() => /** @type {unknown[]} */ ([])),
+      getJson(`${BASE}/search-name?query=${enc}&limit=8&apikey=${k}`).catch(() => /** @type {unknown[]} */ ([])),
     ]);
     const rows = [
       ...parseOr(looseArray(searchRowSchema), bySymbol, []),
@@ -143,6 +145,7 @@ const fmpAdapter = {
     return { items };
   },
 
+  /** @param {string} symbol */
   async quote(symbol) {
     const raw = first(await getJson(`${BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${key()}`));
     if (!raw) throw new Error('fmp: no quote');
@@ -153,7 +156,7 @@ const fmpAdapter = {
       price: q.price,
       change: q.change,
       changePercent: q.changePercentage,
-      currency: undefined, // FMP /quote omits currency
+      currency: /** @type {string | undefined} */ (undefined), // FMP /quote omits currency
       exchange: q.exchange,
       open: q.open,
       dayHigh: q.dayHigh,
@@ -166,6 +169,7 @@ const fmpAdapter = {
     };
   },
 
+  /** @param {string} symbol */
   async fundamentals(symbol) {
     const k = key();
     const enc = encodeURIComponent(symbol);
@@ -176,12 +180,16 @@ const fmpAdapter = {
     // a bare "no fundamentals".
     /** @type {Error | undefined} */
     let coreError;
+    /**
+     * @param {Error} err
+     * @returns {undefined}
+     */
     const onCoreError = (err) => { if (!coreError) coreError = err; return undefined; };
     const [profileRaw, ratiosRaw, keyMetricsRaw, growthRaw] = await Promise.all([
       getJson(`${BASE}/profile?symbol=${enc}&apikey=${k}`).then(first).catch(onCoreError),
       getJson(`${BASE}/ratios-ttm?symbol=${enc}&apikey=${k}`).then(first).catch(onCoreError),
-      getJson(`${BASE}/key-metrics-ttm?symbol=${enc}&apikey=${k}`).then(first).catch(() => undefined),
-      getJson(`${BASE}/financial-growth?symbol=${enc}&limit=1&apikey=${k}`).then(first).catch(() => undefined),
+      getJson(`${BASE}/key-metrics-ttm?symbol=${enc}&apikey=${k}`).then(first).catch(() => /** @type {unknown} */ (undefined)),
+      getJson(`${BASE}/financial-growth?symbol=${enc}&limit=1&apikey=${k}`).then(first).catch(() => /** @type {unknown} */ (undefined)),
     ]);
     if (!profileRaw && !ratiosRaw) {
       throw new Error(`fmp: no fundamentals${coreError ? ` (${coreError.message})` : ''}`);
@@ -197,7 +205,7 @@ const fmpAdapter = {
       sector: profile?.sector,
       marketCap: profile?.marketCap,
       pe: ratios?.priceToEarningsRatioTTM,
-      forwardPE: undefined,
+      forwardPE: /** @type {number | undefined} */ (undefined),
       pegRatio: ratios?.priceToEarningsGrowthRatioTTM,
       dividendYield: ratios?.dividendYieldTTM,
       payoutRatio: ratios?.dividendPayoutRatioTTM,
@@ -207,7 +215,7 @@ const fmpAdapter = {
       profitMargin: ratios?.netProfitMarginTTM,
       grossMargin: ratios?.grossProfitMarginTTM,
       operatingMargin: ratios?.operatingProfitMarginTTM,
-      revenue: undefined,
+      revenue: /** @type {number | undefined} */ (undefined),
       revenueGrowth: growth?.revenueGrowth,
       earningsGrowth: growth?.epsgrowth,
       returnOnEquity: keyMetrics?.returnOnEquityTTM,
@@ -219,13 +227,14 @@ const fmpAdapter = {
     };
   },
 
+  /** @param {string} symbol */
   async analyst(symbol) {
     const k = key();
     const enc = encodeURIComponent(symbol);
     const [consensusTargetsRaw, gradesRaw, gradesConsensusRaw] = await Promise.all([
-      getJson(`${BASE}/price-target-consensus?symbol=${enc}&apikey=${k}`).then(first).catch(() => undefined),
-      getJson(`${BASE}/grades?symbol=${enc}&limit=10&apikey=${k}`).catch(() => []),
-      getJson(`${BASE}/grades-consensus?symbol=${enc}&apikey=${k}`).then(first).catch(() => undefined),
+      getJson(`${BASE}/price-target-consensus?symbol=${enc}&apikey=${k}`).then(first).catch(() => /** @type {unknown} */ (undefined)),
+      getJson(`${BASE}/grades?symbol=${enc}&limit=10&apikey=${k}`).catch(() => /** @type {unknown[]} */ ([])),
+      getJson(`${BASE}/grades-consensus?symbol=${enc}&apikey=${k}`).then(first).catch(() => /** @type {unknown} */ (undefined)),
     ]);
     const consensusTargets = parseOr(targetConsensusRowSchema, consensusTargetsRaw, undefined);
     const recentActions = parseOr(looseArray(gradeRowSchema), gradesRaw, []).slice(0, 10).map((g) => ({

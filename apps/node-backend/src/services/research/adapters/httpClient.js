@@ -27,7 +27,11 @@ export async function getJson(url, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   return JSON.parse(text);
 }
 
-/** Finite-number coercion: returns undefined for null/''/NaN so the UI can blank it. */
+/**
+ * Finite-number coercion: returns undefined for null/''/NaN so the UI can blank it.
+ * @param {unknown} value
+ * @returns {number | undefined}
+ */
 export function num(value) {
   if (value === null || value === undefined || value === '') return undefined;
   const n = Number(value);

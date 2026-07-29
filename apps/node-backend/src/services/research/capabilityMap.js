@@ -72,9 +72,11 @@ const CAPABILITY = Object.freeze({
  * @returns {string[]}
  */
 export function providerChain(dataType, assetClass) {
-  const byClass = CAPABILITY[dataType];
+  const byClass = CAPABILITY[/** @type {keyof typeof CAPABILITY} */ (dataType)];
   if (!byClass) return [];
-  const chain = byClass[assetClass] ?? byClass.default ?? [];
+  const chain = /** @type {Record<string, string[]>} */ (byClass)[assetClass ?? '']
+    ?? byClass.default
+    ?? [];
   return [...chain];
 }
 

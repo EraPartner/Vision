@@ -51,8 +51,13 @@ export function loadKeyOverrides(rows) {
   }
 }
 
+/**
+ * @param {string} provider
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {string | undefined}
+ */
 function envKey(provider, env) {
-  const varName = ENV_VAR_BY_PROVIDER[provider];
+  const varName = ENV_VAR_BY_PROVIDER[/** @type {keyof typeof ENV_VAR_BY_PROVIDER} */ (provider)];
   if (!varName) return undefined;
   const value = env[varName];
   return value && String(value).trim() ? String(value).trim() : undefined;
@@ -75,7 +80,7 @@ export function providerKey(provider, env = process.env) {
  * @returns {boolean}
  */
 export function isProviderKeyed(provider, env = process.env) {
-  if (!ENV_VAR_BY_PROVIDER[provider]) return true; // no key required
+  if (!ENV_VAR_BY_PROVIDER[/** @type {keyof typeof ENV_VAR_BY_PROVIDER} */ (provider)]) return true; // no key required
   return Boolean(providerKey(provider, env));
 }
 
