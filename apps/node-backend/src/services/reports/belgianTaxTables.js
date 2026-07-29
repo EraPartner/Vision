@@ -15,6 +15,32 @@ const TOB_DEFAULT = {
   distributingFunds: { rate: 0.0012, cap: 1300 },
 };
 
+/**
+ * One TOB (beurstaks) instrument bracket.
+ * @typedef {{ rate: number; cap: number }} TobBracket
+ */
+
+/**
+ * A year's Belgian tax bracket data.
+ * @typedef {{
+ *   year: number,
+ *   dividendExemption: number,
+ *   dividendWHTRate: number,
+ *   capitalGainsTaxRate: number,
+ *   capitalGainsTaxExemptionSingle: number,
+ *   capitalGainsTaxExemptionMarried: number,
+ *   reyndersTaxRate: number,
+ *   reyndersBondThreshold: number,
+ *   tob: {
+ *     bonds: TobBracket,
+ *     sharesAndOther: TobBracket,
+ *     accumulatingFunds: TobBracket,
+ *     distributingFunds: TobBracket,
+ *   },
+ * }} TaxYearTable
+ */
+
+/** @type {Record<number, TaxYearTable>} */
 const TABLES = {
   2024: {
     year: 2024,
@@ -63,7 +89,7 @@ const LATEST_YEAR = 2026;
  * "rates approximated from <latestYear>" note instead of silently using stale numbers.
  *
  * @param {number} year
- * @returns {typeof TABLES[keyof typeof TABLES] & { approximated?: boolean, approximatedFrom?: number }}
+ * @returns {TaxYearTable & { approximated?: boolean, approximatedFrom?: number }}
  */
 export function getTaxTable(year) {
   if (TABLES[year]) return TABLES[year];

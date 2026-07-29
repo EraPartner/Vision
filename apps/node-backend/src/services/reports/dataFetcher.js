@@ -24,6 +24,114 @@ import { toAppTz } from '../../lib/timezone.js';
  */
 
 /**
+ * A row of the `months` array shared by `monthly`/`filteredMonthly` below —
+ * `computeMonthlySummary`'s envelope `.data`
+ * (calculations/aggregation/monthly.js, backed by
+ * infoRepositoryMonthly.js `getMonthlyFinancialSummary`), one row per
+ * calendar month.
+ * @typedef {{
+ *   month: number, year: number,
+ *   period_start: string|null, period_end: string|null,
+ *   total_spending: number, total_income: number,
+ *   net_amount: number, transaction_count: number,
+ * }} MonthRow
+ */
+
+/**
+ * The rolled-up totals across a `months` array
+ * (infoRepositoryHelpers.js `buildMonthlySummary`).
+ * @typedef {{
+ *   total_spending: number, total_income: number, net_amount: number,
+ *   transaction_count: number,
+ *   period_start: string|undefined, period_end: string|undefined,
+ * }} MonthlySummaryTotals
+ */
+
+/** @typedef {{ months: MonthRow[]; summary: MonthlySummaryTotals }} MonthlyData */
+
+/**
+ * `computeCategoryBreakdown`'s envelope `.data`
+ * (infoRepositoryStatistics.js `getCategoryBreakdown`).
+ * @typedef {{ id: number|null, name: string, count: number, total: number }} CategoryRow
+ */
+/** @typedef {{ categories: CategoryRow[] }} CategoryData */
+
+/**
+ * `computeRecipientInsights`'s envelope `.data`
+ * (infoRepositoryRecipients.js `getRecipientInsights`).
+ * @typedef {{
+ *   recipientId: number, name: string,
+ *   totalSpend: number, transactionCount: number,
+ *   firstSeen: string, lastSeen: string, avgAmount: number,
+ * }} TopMerchantRow
+ * @typedef {{
+ *   recipientId: number, name: string,
+ *   currentSpend: number, previousSpend: number, changePercent: number,
+ * }} MonthOverMonthRow
+ * @typedef {{ topMerchants: TopMerchantRow[]; monthOverMonth: MonthOverMonthRow[] }} RecipientData
+ */
+
+/**
+ * `computeBankBalances`'s envelope `.data`
+ * (infoRepositoryBanks.js `getBankBalances`).
+ * @typedef {{
+ *   bank_account: string, display_name: string, balance: number,
+ *   drift?: number, anchor_date?: string, post_anchor_count?: number,
+ *   transaction_count: number,
+ *   first_transaction: string|null, last_transaction: string|null,
+ * }} BankAccountRow
+ * @typedef {{
+ *   accounts: BankAccountRow[],
+ *   total_net_position: number,
+ *   history: Record<string, Array<{ date: string; balance: number }>>,
+ *   total_history: Array<{ date: string; balance: number }>,
+ * }} BanksData
+ */
+
+/**
+ * `computeAverageVsCurrent`'s envelope `.data`
+ * (infoRepositoryAverageVsCurrent.js `getAverageVsCurrentSpending`).
+ * @typedef {{
+ *   past_6_months: { avg_daily_spending: number; avg_monthly_spending: number; months_counted: number };
+ *   current_month: { daily_data: Array<{ date: string; spending: number; income: number }>; total_spending: number; days_elapsed: number; days_in_month: number };
+ *   comparison: { projected_monthly_total: number; avg_monthly_spending: number; variance: number; pace: number|null };
+ * }} AveragesData
+ */
+
+/**
+ * `infoRepository.getPlannedExpensesNextMonth`'s raw return shape — this
+ * source carries no aggregation envelope (see the `planned:` comment in
+ * `fetchFinancialData`'s return below).
+ * @typedef {{
+ *   id: number, recipient_name: string|null, amount: number,
+ *   category_name: string|null, is_recurring: boolean, recurrence_pattern: string|null,
+ * }} PlannedTxnRow
+ * @typedef {{
+ *   date: string, total_income: number, total_expenses: number, transactions: PlannedTxnRow[],
+ * }} PlannedDayBucket
+ * @typedef {{
+ *   month: number, year: number, period_start: string, period_end: string,
+ *   daily_data: PlannedDayBucket[],
+ *   summary: { total_income: number; total_expenses: number; net_amount: number; transaction_count: number },
+ * }} PlannedData
+ */
+
+/**
+ * Full result of {@link fetchFinancialData} — the data payload financial
+ * report section renderers consume.
+ * @typedef {{
+ *   monthly: MonthlyData | null;
+ *   filteredMonthly: MonthlyData | null;
+ *   categories: CategoryData | null;
+ *   recipients: RecipientData | null;
+ *   banks: BanksData | null;
+ *   averages: AveragesData | null;
+ *   planned: PlannedData | null;
+ *   exclusions: { categoryIds: number[]; recipientIds: number[] };
+ * }} FinancialReportData
+ */
+
+/**
  * Unwrap a settled Promise result; log and return null on rejection.
  *
  * @template T
@@ -42,6 +150,7 @@ function unwrap(result, label) {
  * Used to skip fetching sources whose sections were not requested, instead of
  * always aggregating all seven. Keep in sync with the section renderers'
  * `data.<source>` reads.
+ * @type {Record<string, string[]>}
  */
 const FINANCIAL_SECTION_SOURCES = {
   executiveSummary: ['monthly', 'filteredMonthly'],
@@ -61,16 +170,7 @@ const FINANCIAL_SECTION_SOURCES = {
  *   `sections`, when provided, limits fetching to the sources those sections
  *   render from; unrequested sources resolve to null (renderers handle null).
  *   Omit / pass null to fetch every source (default behaviour).
- * @returns {Promise<{
- *   monthly: { months: object[]; summary: object } | null;
- *   filteredMonthly: { months: object[]; summary: object } | null;
- *   categories: { categories: object[] } | null;
- *   recipients: { topMerchants: object[]; monthOverMonth: object[] } | null;
- *   banks: { accounts: object[]; total_net_position: number; history: object; total_history: object[] } | null;
- *   averages: { past_6_months: object; current_month: object; comparison: object } | null;
- *   planned: { summary: object; daily_data: object[] } | null;
- *   exclusions: { categoryIds: number[]; recipientIds: number[] };
- * }>}
+ * @returns {Promise<FinancialReportData>}
  */
 export async function fetchFinancialData(currency, { excludedCategoryIds = [], excludedRecipientIds = [], sections = null } = {}) {
   const hasExclusions = excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
@@ -80,6 +180,7 @@ export async function fetchFinancialData(currency, { excludedCategoryIds = [], e
   const neededSources = sections
     ? new Set(sections.flatMap((id) => FINANCIAL_SECTION_SOURCES[id] ?? []))
     : null;
+  /** @param {string} source */
   const want = (source) => !neededSources || neededSources.has(source);
 
   const [monthly, filteredMonthly, categories, recipients, banks, averages, planned] = await Promise.allSettled([
@@ -114,9 +215,9 @@ export async function fetchFinancialData(currency, { excludedCategoryIds = [], e
  * Filter a months array to the rows that fall within a given period.
  * Each month entry must have `year` (number) and `month` (1-based number) fields.
  *
- * @param {object[]} months
+ * @param {MonthRow[]} months
  * @param {Period} period
- * @returns {object[]}
+ * @returns {MonthRow[]}
  */
 export function filterMonthsByPeriod(months, period) {
   if (!months?.length) return [];

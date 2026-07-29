@@ -18,7 +18,7 @@ const MAX_TABLE_ROWS = 15;
 const MAX_MOM_ROWS = 8;
 
 /**
- * @param {{ recipients: { topMerchants: object[]; monthOverMonth: object[] } | null; exclusions?: { categoryIds: number[]; recipientIds: number[] } }} data
+ * @param {Pick<import('../dataFetcher.js').FinancialReportData, 'recipients' | 'exclusions'>} data
  * @param {{ currency: string }} opts
  * @returns {string}
  */

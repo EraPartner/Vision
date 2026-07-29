@@ -7,7 +7,7 @@
 import { escapeHtml, fmtCurrency, fmtMonthLabel, svgGenericGroupedBarChart } from '../sectionHelpers.js';
 
 /**
- * @param {object | null} data  fetchPortfolioData result
+ * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */

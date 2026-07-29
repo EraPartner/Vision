@@ -7,7 +7,7 @@
 import { escapeHtml, fmtCurrency, fmtPct } from '../sectionHelpers.js';
 
 /**
- * @param {object | null} data  fetchTaxData result
+ * @param {import('../dataFetcherTax.js').TaxReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */
@@ -75,6 +75,12 @@ export function renderBelgianRulesSummary(data, { currency }) {
     </div>`;
 }
 
+/**
+ * @param {import('../dataFetcherTax.js').PrecomputedPIT} pit
+ * @param {import('../dataFetcherTax.js').TaxProfile | null} profile
+ * @param {string} currency
+ * @returns {string}
+ */
 function renderPITBlock(pit, profile, currency) {
   if (!pit) return '';
 

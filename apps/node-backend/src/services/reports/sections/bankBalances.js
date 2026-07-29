@@ -12,7 +12,7 @@ import {
 } from '../sectionHelpers.js';
 
 /**
- * @param {{ banks: object | null }} data
+ * @param {Pick<import('../dataFetcher.js').FinancialReportData, 'banks'>} data
  * @param {{ currency: string }} opts
  * @returns {string}
  */

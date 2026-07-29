@@ -6,6 +6,7 @@
 
 import { escapeHtml, fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
 
+/** @type {Record<string, string>} */
 const ASSET_CLASS_LABELS = {
   stock:       'Stocks',
   etf:         'ETFs',
@@ -18,7 +19,7 @@ const ASSET_CLASS_LABELS = {
 };
 
 /**
- * @param {object | null} data  fetchPortfolioData result
+ * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */
@@ -37,9 +38,15 @@ export function renderPortfolioAllocation(data, { currency }) {
   }
 
   // Build asset-class buckets from latest snapshot fields
+  /** @type {Array<{ label: string; value: number; invested: number }>} */
   const classes = [];
 
   if (latest) {
+    /**
+     * @param {string} label
+     * @param {string} value
+     * @param {string} invested
+     */
     const add = (label, value, invested) => {
       const v = Number(value ?? 0);
       const i = Number(invested ?? 0);
@@ -51,6 +58,7 @@ export function renderPortfolioAllocation(data, { currency }) {
     if (Number(latest.cash_value ?? 0) > 0) classes.push({ label: 'Cash / Savings', value: Number(latest.cash_value), invested: Number(latest.cash_value) });
   } else {
     // Fall back to breakdown summaries
+    /** @type {Map<string, { label: string; value: number; invested: number }>} */
     const grouped = new Map();
     for (const inv of (data.breakdown ?? [])) {
       const ac = inv.assetClass ?? inv.asset_class ?? 'other';

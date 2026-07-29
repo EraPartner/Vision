@@ -7,12 +7,12 @@
 import { fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
 
 /**
- * @param {object | null} data  fetchTaxData result
+ * @param {import('../dataFetcherTax.js').TaxReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */
 export function renderTaxTypeBreakdown(data, { currency }) {
-  const totals = data?.totals ?? {};
+  const totals = data?.totals ?? /** @type {import('../dataFetcherTax.js').LegacyTaxTotalsFallback} */ ({});
 
   const components = [
     { label: 'TOB (Transaction Tax)',      amount: totals.tobTotal         ?? 0 },

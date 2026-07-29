@@ -7,7 +7,7 @@
 import { fmtCurrency, fmtMonthLabel, svgGenericGroupedBarChart } from '../sectionHelpers.js';
 
 /**
- * @param {object | null} data  fetchTaxData result
+ * @param {import('../dataFetcherTax.js').TaxReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */

@@ -320,7 +320,9 @@ export function svgLineChart(series, { labels = [], height = 160 } = {}) {
   const n = labels.length;
   const baseline = PAD_T + chartH;
 
+  /** @param {number} i */
   const xOf = (i) => PAD_L + (i / Math.max(n - 1, 1)) * chartW;
+  /** @param {number} v */
   const yOf = (v) => baseline - (v / maxVal) * chartH;
 
   let paths = '';

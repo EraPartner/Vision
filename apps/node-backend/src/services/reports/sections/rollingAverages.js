@@ -13,7 +13,7 @@ import {
 } from '../sectionHelpers.js';
 
 /**
- * @param {{ averages: object | null }} data
+ * @param {Pick<import('../dataFetcher.js').FinancialReportData, 'averages'>} data
  * @param {{ currency: string }} opts
  * @returns {string}
  */
@@ -30,9 +30,12 @@ export function renderRollingAverages(data, { currency }) {
       </div>`;
   }
 
-  const past = avg.past_6_months ?? {};
-  const current = avg.current_month ?? {};
-  const comparison = avg.comparison ?? {};
+  // `?? {}` is defensive-only — `avg` (once truthy) always carries all three
+  // sub-objects in practice (computeAverageVsCurrent always populates them) —
+  // cast the fallback so the defensive shape doesn't widen the field types.
+  const past = avg.past_6_months ?? /** @type {import('../dataFetcher.js').AveragesData['past_6_months']} */ ({});
+  const current = avg.current_month ?? /** @type {import('../dataFetcher.js').AveragesData['current_month']} */ ({});
+  const comparison = avg.comparison ?? /** @type {import('../dataFetcher.js').AveragesData['comparison']} */ ({});
 
   const pace = comparison.pace ?? null; // ratio: 1.0 = on track, >1 = over
   const variance = comparison.variance ?? 0;

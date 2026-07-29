@@ -16,7 +16,7 @@ import {
 const MAX_DAYS = 31;
 
 /**
- * @param {{ planned: object | null }} data
+ * @param {Pick<import('../dataFetcher.js').FinancialReportData, 'planned'>} data
  * @param {{ currency: string }} opts
  * @returns {string}
  */

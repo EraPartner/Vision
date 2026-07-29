@@ -7,7 +7,7 @@
 import { escapeHtml, fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
 
 /**
- * @param {object | null} data  fetchTaxData result
+ * @param {import('../dataFetcherTax.js').TaxReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */
@@ -19,7 +19,7 @@ export function renderFeeBreakdown(data, { currency }) {
     .filter(r => r.fees > 0)
     .sort((a, b) => b.fees - a.fees);
 
-  const totalFees  = (data?.totals?.feesTotal ?? 0);
+  const totalFees  = (/** @type {import('../dataFetcherTax.js').LegacyTaxTotalsFallback | undefined} */ (data?.totals)?.feesTotal ?? 0);
 
   if (!rows.length && totalFees === 0) {
     return `
