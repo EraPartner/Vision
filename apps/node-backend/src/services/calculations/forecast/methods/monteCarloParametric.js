@@ -14,6 +14,10 @@ export const label = 'Monte Carlo (parametric)';
 const DEFAULT_PATHS = 1000;
 const DEFAULT_PERCENTILES = [10, 50, 90];
 
+/**
+ * @param {number[]} sortedAsc
+ * @param {number} p
+ */
 function quantile(sortedAsc, p) {
   if (sortedAsc.length === 0) return 0;
   const idx = (p / 100) * (sortedAsc.length - 1);
@@ -24,6 +28,16 @@ function quantile(sortedAsc, p) {
   return sortedAsc[lo] * (1 - frac) + sortedAsc[hi] * frac;
 }
 
+/**
+ * @param {{
+ *   history: Array<{date: string, net: number}>,
+ *   forecastDates: string[],
+ *   paths?: number,
+ *   percentiles?: number[],
+ *   seed?: number|string,
+ * }} ctx
+ * @returns {{ series: Array<{date: string, value: number}>, bands: Record<string, Array<{date: string, value: number}>> }}
+ */
 export function forecast({
   history,
   forecastDates,
@@ -37,6 +51,7 @@ export function forecast({
   const H = forecastDates.length;
   if (H === 0) return { series: [], bands: {} };
 
+  /** @type {number[][]} */
   const samples = Array.from({ length: H }, () => new Array(paths));
   for (let p = 0; p < paths; p++) {
     for (let h = 0; h < H; h++) {
@@ -46,6 +61,7 @@ export function forecast({
     }
   }
 
+  /** @type {Record<string, number[]>} */
   const bands = {};
   for (const q of percentiles) bands[`p${q}`] = new Array(H);
   const median = new Array(H);
@@ -57,6 +73,7 @@ export function forecast({
   }
 
   const series = forecastDates.map((date, h) => ({ date, value: median[h] }));
+  /** @type {Record<string, Array<{date: string, value: number}>>} */
   const bandsByDate = {};
   for (const q of percentiles) {
     bandsByDate[`p${q}`] = forecastDates.map((date, h) => ({ date, value: bands[`p${q}`][h] }));

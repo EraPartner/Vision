@@ -11,10 +11,15 @@ export const id = 'ewma';
 export const label = 'EWMA';
 export const DEFAULT_ALPHA = 0.15;
 
+/** @param {string} date */
 function monthKey(date) {
   return date.slice(0, 7);
 }
 
+/**
+ * @param {{history: Array<{date:string, net:number}>, forecastDates: string[], alpha?: number}} ctx
+ * @returns {Array<{date:string, value:number}>}
+ */
 export function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
   const monthOrder = [];
   const monthSeen = new Set();

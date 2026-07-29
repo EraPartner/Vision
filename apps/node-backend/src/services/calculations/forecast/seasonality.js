@@ -13,15 +13,30 @@ import { isBelgianHoliday } from './holidays/be.js';
 
 const MIN_BUCKET_SAMPLES = 3;
 
+/**
+ * @typedef {{ mean: number, variance: number, std: number, n: number }} BucketStats
+ * @typedef {{
+ *   byDowDom: Map<string, BucketStats>,
+ *   byDow: Map<number, BucketStats>,
+ *   overall: BucketStats,
+ * }} SeasonalityBuckets
+ */
+
+/** @param {string} isoDateStr */
 export function dayOfWeek(isoDateStr) {
   const [y, m, d] = isoDateStr.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
+/** @param {string} isoDateStr */
 export function dayOfMonth(isoDateStr) {
   return Number(isoDateStr.slice(8, 10));
 }
 
+/**
+ * @param {number[]} values
+ * @returns {BucketStats}
+ */
 function stats(values) {
   const n = values.length;
   if (n === 0) return { mean: 0, variance: 0, std: 0, n: 0 };
@@ -40,15 +55,14 @@ function stats(values) {
 
 /**
  * @param {Array<{date: string, net: number}>} history
- * @returns {{
- *   byDowDom: Map<string, {mean, variance, std, n}>,
- *   byDow: Map<number, {mean, variance, std, n}>,
- *   overall: {mean, variance, std, n}
- * }}
+ * @returns {SeasonalityBuckets}
  */
 export function buildSeasonalityBuckets(history) {
+  /** @type {Map<string, number[]>} */
   const byDowDom = new Map();
+  /** @type {Map<number, number[]>} */
   const byDow = new Map();
+  /** @type {number[]} */
   const all = [];
 
   for (const row of history) {
@@ -56,13 +70,19 @@ export function buildSeasonalityBuckets(history) {
     const dom = dayOfMonth(row.date);
     const key = `${dow}:${dom}`;
     if (!byDowDom.has(key)) byDowDom.set(key, []);
-    byDowDom.get(key).push(row.net);
+    /** @type {number[]} */ (byDowDom.get(key)).push(row.net);
     if (!byDow.has(dow)) byDow.set(dow, []);
-    byDow.get(dow).push(row.net);
+    /** @type {number[]} */ (byDow.get(dow)).push(row.net);
     all.push(row.net);
   }
 
+  /**
+   * @template K
+   * @param {Map<K, number[]>} map
+   * @returns {Map<K, BucketStats>}
+   */
   const finalize = (map) => {
+    /** @type {Map<K, BucketStats>} */
     const out = new Map();
     for (const [k, arr] of map) out.set(k, stats(arr));
     return out;
@@ -77,6 +97,10 @@ export function buildSeasonalityBuckets(history) {
 
 /**
  * Look up bucket stats for a target date with hierarchical fallback.
+ *
+ * @param {SeasonalityBuckets} buckets
+ * @param {string} isoDateStr
+ * @returns {BucketStats}
  */
 export function lookupBucket(buckets, isoDateStr) {
   const dow = dayOfWeek(isoDateStr);

@@ -21,16 +21,19 @@ const GRID = [0.05, 0.2, 0.4];
 export const id = 'holt_winters';
 export const label = 'Holt-Winters';
 
+/** @param {Array<{date: string, net: number}>} history */
 function denseDaily(history) {
   // history can have gaps; Holt-Winters needs a regular grid. Fill missing dates with 0 net.
   if (history.length === 0) return [];
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
+  /** @param {string} d */
   const parse = (d) => {
     const [y, m, dd] = d.split('-').map(Number);
     return Date.UTC(y, m - 1, dd);
   };
   const start = parse(sorted[0].date);
   const end = parse(sorted[sorted.length - 1].date);
+  /** @type {Map<string, number>} */
   const map = new Map();
   for (const r of sorted) map.set(r.date, (map.get(r.date) ?? 0) + r.net);
   const out = [];
@@ -40,6 +43,14 @@ function denseDaily(history) {
   return out;
 }
 
+/**
+ * @param {number[]} y
+ * @param {number} alpha
+ * @param {number} beta
+ * @param {number} g1
+ * @param {number} g2
+ * @returns {{ sse: number, level: number, trend: number, s1: number[], s2: number[], n: number, params?: {alpha: number, beta: number, gamma1: number, gamma2: number} } | null}
+ */
 function fitRecurrence(y, alpha, beta, g1, g2) {
   const n = y.length;
   if (n < M2 * 2) return null;
@@ -84,12 +95,17 @@ function fitRecurrence(y, alpha, beta, g1, g2) {
   return { sse, level, trend, s1, s2, n };
 }
 
+/**
+ * @param {{history: Array<{date: string, net: number}>, forecastDates: string[]}} ctx
+ * @returns {Array<{date: string, value: number}>}
+ */
 export function forecast({ history, forecastDates }) {
   const y = denseDaily(history).map((r) => r.net);
   if (y.length < M2 * 2) {
     return forecastDates.map((date) => ({ date, value: 0 }));
   }
 
+  /** @type {ReturnType<typeof fitRecurrence>} */
   let best = null;
   for (const a of GRID) {
     for (const b of GRID) {

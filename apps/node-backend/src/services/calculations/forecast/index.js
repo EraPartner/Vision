@@ -34,7 +34,89 @@ const DEFAULT_MC_PERCENTILES = [10, 50, 90];
 const DEFAULT_ROLLING_MC_PATHS = 500;
 const DEFAULT_ROLLING_MC_PERCENTILES = [25, 75];
 
+/**
+ * @typedef {{date: string, net: number}} DailyNetPoint
+ * @typedef {{date: string, value: number}} ForecastPoint
+ * @typedef {{date: string, net: number|null, cumulative: number|null}} ActualPoint
+ * @typedef {{date: string, value: number}} CumulativePoint
+ *
+ * A point-estimate method module (methods/simpleAverage.js etc.) — forecast()
+ * always returns the series array directly.
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   forecast: (ctx: { history: DailyNetPoint[], forecastDates: string[] }) => ForecastPoint[],
+ * }} PointMethodModule
+ *
+ * A Monte Carlo method module (methods/monteCarlo*.js) — forecast() always
+ * returns { series, bands }.
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   forecast: (ctx: {
+ *     history: DailyNetPoint[],
+ *     forecastDates: string[],
+ *     paths?: number,
+ *     percentiles?: number[],
+ *     seed?: number|string,
+ *   }) => { series: ForecastPoint[], bands: Record<string, ForecastPoint[]> },
+ * }} McMethodModule
+ *
+ * One method's output as assembled by `runForecastEngine`, pre-cumulative-fold.
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   series: ForecastPoint[],
+ *   bands?: Record<string, ForecastPoint[]>,
+ *   error?: string,
+ * }} MethodOutput
+ *
+ * One method's output as it appears in the final response payload
+ * (post-cumulative-fold, `runForecastEngine`'s `methods` return field).
+ * @typedef {{
+ *   id: string,
+ *   label: string,
+ *   daily: ForecastPoint[],
+ *   cumulative: CumulativePoint[],
+ *   bands: Record<string, ForecastPoint[]> | null,
+ *   error: string | null,
+ * }} MethodResult
+ *
+ * @typedef {{
+ *   history_months: number,
+ *   backtest: Array<{
+ *     method_id: string,
+ *     label: string,
+ *     mae: number,
+ *     rmse: number,
+ *     mape: number,
+ *     months: number,
+ *     per_month: Array<{ month: string, mae: number, rmse: number, mape: number, sample_days: number }>,
+ *   }>,
+ * }} DiagnosticsPayload
+ *
+ * Response payload shape for `computeCashflowForecast`, matching both a
+ * freshly-built `basePayload` and a cache-read `cached.payload` (the cache
+ * repo's JSDoc types the column as bare `object` — this is what's actually
+ * stored/read).
+ * @typedef {{
+ *   month: string,
+ *   currency: string,
+ *   days_in_month: number,
+ *   current_day: number,
+ *   actual: ActualPoint[],
+ *   planned: DailyNetPoint[],
+ *   methods: MethodResult[],
+ *   diagnostics: DiagnosticsPayload | null,
+ *   history_months: number,
+ *   include_planned: boolean,
+ *   category_breakdown?: unknown,
+ * }} ForecastPayload
+ */
+
+/** @type {PointMethodModule[]} */
 const POINT_METHODS = [simpleAverage, weightedAverage, ewma, holtWinters, prophetLite];
+/** @type {McMethodModule[]} */
 const MC_METHODS = [monteCarloParametric, monteCarloBlockBootstrap];
 
 function currentMonthDates() {
@@ -55,10 +137,17 @@ function currentMonthDates() {
   return { all, future, todayDay, daysInMonth, yyyymm: `${y}-${String(m + 1).padStart(2, '0')}` };
 }
 
+/**
+ * @param {DailyNetPoint[]} currentActual
+ * @param {string[]} allDates
+ * @param {number} todayIndex
+ * @returns {ActualPoint[]}
+ */
 function actualCumulativeDaily(currentActual, allDates, todayIndex) {
   // todayIndex is 1-based count of past+today entries in allDates.
   // Indices < todayIndex carry actuals; indices >= todayIndex are future (null).
   const byDate = new Map(currentActual.map((r) => [r.date, r.net]));
+  /** @type {ActualPoint[]} */
   const out = [];
   let cum = 0;
   for (let i = 0; i < allDates.length; i++) {
@@ -74,6 +163,10 @@ function actualCumulativeDaily(currentActual, allDates, todayIndex) {
   return out;
 }
 
+/**
+ * @param {number} daysBack
+ * @param {number} daysForward
+ */
 function rollingWindowDates(daysBack, daysForward) {
   // Builds a date list spanning [today - daysBack ... today + daysForward].
   // Anchored on the app-timezone today (ADR-009); pure calendar math after.
@@ -95,6 +188,22 @@ function rollingWindowDates(daysBack, daysForward) {
  * Runs the 8-method forecast pipeline against an arbitrary anchor + forecast window.
  * Pure orchestration: assumes data is already fetched. Returns method outputs
  * with cumulative folded against actuals + planned overlay.
+ *
+ * @param {{
+ *   history: DailyNetPoint[],
+ *   currentActual: DailyNetPoint[],
+ *   plannedCurrent: DailyNetPoint[],
+ *   all: string[],
+ *   future: string[],
+ *   todayIndex: number,
+ *   todayIso: string,
+ *   includePlanned: boolean,
+ *   mcPaths: number,
+ *   mcPercentiles: number[],
+ *   seed: number|string,
+ *   userId: string,
+ * }} ctx
+ * @returns {Promise<{ actualDaily: ActualPoint[], methods: MethodResult[], planned: DailyNetPoint[], trainHistory: DailyNetPoint[] }>}
  */
 async function runForecastEngine({
   history,
@@ -121,6 +230,7 @@ async function runForecastEngine({
     todayIso,
   );
 
+  /** @type {MethodOutput[]} */
   const methodOutputs = [];
   for (const mod of POINT_METHODS) {
     try {
@@ -142,13 +252,32 @@ async function runForecastEngine({
 
   // Ensemble: inverse-MSE weighted combination of point methods.
   try {
+    /**
+     * @type {Array<
+     *   import('../../../repositories/cashflowForecastAccuracyRepository.js').AccuracyRow
+     *   | import('./accuracyStore.js').FallbackAccuracyRow
+     * >}
+     */
     let accuracyRows = [];
     try {
       accuracyRows = await getLatestAccuracyByMethod({ userId });
     } catch {
       // DB unavailable — equal-weight fallback
     }
-    const weights = ensemble.computeWeights(accuracyRows, POINT_METHODS.map((m) => m.id));
+    // NOTE (surfaced by typing, not fixed here — see accuracyStore.js's
+    // FallbackAccuracyRow doc comment): the real DB path returns snake_case
+    // rows (method_id/sample_days) but ensemble.computeWeights reads
+    // camelCase (methodId/sampleDays). `r.methodId` is therefore always
+    // `undefined` for DB-backed rows, `methodIds.includes(undefined)` is
+    // always false, `rows` in computeWeights ends up empty, and it always
+    // returns the equal-weight fallback Map — the persisted-accuracy
+    // weighting this pipeline exists for never actually activates outside
+    // the (differently-shaped) in-memory fallback path. Cast below preserves
+    // current behavior; see report for the fix.
+    const weights = ensemble.computeWeights(
+      /** @type {Array<{methodId: string, rmse: number, sampleDays?: number}>} */ (accuracyRows),
+      POINT_METHODS.map((m) => m.id),
+    );
     const ensembleSeries = ensemble.forecast({
       forecastDates: future,
       methodOutputs: methodOutputs.filter((m) => !m.error),
@@ -190,12 +319,20 @@ async function runForecastEngine({
   }
 
   // Fold actual-to-date into each method's cumulative series.
+  /** @type {Map<string, number>} */
   const actualCumByDate = new Map(
-    actualDaily.filter((r) => r.cumulative !== null).map((r) => [r.date, r.cumulative]),
+    actualDaily
+      .filter((r) => r.cumulative !== null)
+      .map((r) => [r.date, /** @type {number} */ (r.cumulative)]),
   );
   const lastActualCum = todayIndex > 0 ? (actualCumByDate.get(all[todayIndex - 1]) ?? 0) : 0;
 
+  /**
+   * @param {ForecastPoint[]} dailySeries
+   * @returns {CumulativePoint[]}
+   */
   const cumulativeFor = (dailySeries) => {
+    /** @type {CumulativePoint[]} */
     const out = [];
     let cum = lastActualCum;
     const byDate = new Map(dailySeries.map((p) => [p.date, p.value]));
@@ -229,12 +366,18 @@ async function runForecastEngine({
   return { actualDaily, methods, planned, trainHistory };
 }
 
+/**
+ * @param {DailyNetPoint[]} plannedCurrent
+ * @returns {Map<string, number>}
+ */
 function plannedDailyMap(plannedCurrent) {
+  /** @type {Map<string, number>} */
   const map = new Map();
   for (const r of plannedCurrent) map.set(r.date, (map.get(r.date) ?? 0) + r.net);
   return map;
 }
 
+/** @param {{ yyyymm: string, filterHash: string }} args */
 function buildSeed({ yyyymm, filterHash }) {
   return fnv1aHash(`${yyyymm}|${filterHash}`);
 }
@@ -261,18 +404,41 @@ function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, inclu
   return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}|t${includeTransfers ? 1 : 0}`;
 }
 
+/**
+ * @param {number} mcPaths
+ * @param {number[]} mcPercentiles
+ */
 function isDefaultMcParams(mcPaths, mcPercentiles) {
   if (mcPaths !== DEFAULT_MC_PATHS) return false;
   if (mcPercentiles.length !== DEFAULT_MC_PERCENTILES.length) return false;
   return DEFAULT_MC_PERCENTILES.every((p, i) => p === mcPercentiles[i]);
 }
 
+/**
+ * @param {number} mcPaths
+ * @param {number[]} mcPercentiles
+ */
 function isDefaultRollingMcParams(mcPaths, mcPercentiles) {
   if (mcPaths !== DEFAULT_ROLLING_MC_PATHS) return false;
   if (mcPercentiles.length !== DEFAULT_ROLLING_MC_PERCENTILES.length) return false;
   return DEFAULT_ROLLING_MC_PERCENTILES.every((p, i) => p === mcPercentiles[i]);
 }
 
+/**
+ * @param {{
+ *   excludedCategoryIds?: number[],
+ *   excludedRecipientIds?: number[],
+ *   targetCurrency?: string,
+ *   includePlanned?: boolean,
+ *   historyMonths?: number,
+ *   mcPaths?: number,
+ *   mcPercentiles?: number[],
+ *   includeBacktest?: boolean,
+ *   includeBreakdown?: boolean,
+ *   userId?: string,
+ *   _forceCache?: boolean,
+ * }} [opts]
+ */
 export async function computeCashflowForecast({
   excludedCategoryIds = [],
   excludedRecipientIds = [],
@@ -295,7 +461,11 @@ export async function computeCashflowForecast({
   // Try cache when not forcing a refresh and using default MC params.
   if (!_forceCache && isDefaultMcParams(mcPaths, mcPercentiles)) {
     try {
-      const cached = await mcCacheRepo.get({ userId, month: yyyymm, filterHash: hash });
+      const cachedRaw = await mcCacheRepo.get({ userId, month: yyyymm, filterHash: hash });
+      // mcCacheRepo types the stored column as bare `object` (repository.js is
+      // out of this slice's scope); cast to the real payload shape it's always
+      // written as (see basePayload below) rather than widen the repo's type.
+      const cached = /** @type {{ payload: ForecastPayload, computed_at: Date } | null} */ (cachedRaw);
       // Don't serve a diagnostics-free cache entry when backtest is needed.
       const diagnosticsOk = !includeBacktest || cached?.payload?.diagnostics != null;
       if (cached && mcCacheRepo.isFresh(cached.computed_at) && diagnosticsOk) {
@@ -352,11 +522,14 @@ export async function computeCashflowForecast({
 
   let diagnostics = null;
   if (includeBacktest) {
+    /** @type {import('./backtest.js').BacktestMethod[]} */
     const backtestMethods = [...POINT_METHODS, ...MC_METHODS].map((mod) => ({
       id: mod.id,
       label: mod.label,
+      /** @param {{history: DailyNetPoint[], forecastDates: string[]}} ctx */
       forecast: (ctx) => {
-        const out = mod.forecast({ ...ctx, seed });
+        const fullCtx = { ...ctx, seed };
+        const out = mod.forecast(fullCtx);
         return Array.isArray(out) ? out : out.series;
       },
     }));
@@ -374,13 +547,15 @@ export async function computeCashflowForecast({
         rmse: b.aggregate.rmse,
         mape: b.aggregate.mape,
         months: b.aggregate.months,
-        per_month: b.perMonth.map(({ month, mae, rmse, mape, sampleDays }) => ({
-          month,
-          mae,
-          rmse,
-          mape,
-          sample_days: sampleDays,
-        })),
+        per_month: b.perMonth.map(
+          (/** @type {{ month: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ { month, mae, rmse, mape, sampleDays }) => ({
+            month,
+            mae,
+            rmse,
+            mape,
+            sample_days: sampleDays,
+          }),
+        ),
       })),
     };
     await Promise.all(backtest.map((b) => recordAccuracy({
@@ -390,7 +565,7 @@ export async function computeCashflowForecast({
       mae: b.aggregate.mae,
       rmse: b.aggregate.rmse,
       mape: b.aggregate.mape,
-      sampleDays: b.perMonth.reduce((s, r) => s + r.sampleDays, 0),
+      sampleDays: b.perMonth.reduce((/** @type {number} */ s, /** @type {{ sampleDays: number }} */ r) => s + r.sampleDays, 0),
     })));
   }
 
@@ -431,6 +606,20 @@ export async function computeCashflowForecast({
  * days of statistical projection on a continuous date axis. Cumulative is
  * window-relative (anchored at 0 at window start). Supports MC cache and
  * optional walk-forward backtest.
+ *
+ * @param {{
+ *   excludedCategoryIds?: number[],
+ *   excludedRecipientIds?: number[],
+ *   targetCurrency?: string,
+ *   includePlanned?: boolean,
+ *   historyMonths?: number,
+ *   daysBack?: number,
+ *   daysForward?: number,
+ *   mcPaths?: number,
+ *   mcPercentiles?: number[],
+ *   includeBacktest?: boolean,
+ *   userId?: string,
+ * }} [opts]
  */
 export async function computeCashflowForecastRolling({
   excludedCategoryIds = [],
@@ -490,11 +679,14 @@ export async function computeCashflowForecastRolling({
 
   let diagnostics = null;
   if (includeBacktest) {
+    /** @type {import('./backtest.js').BacktestMethod[]} */
     const backtestMethods = [...POINT_METHODS, ...MC_METHODS].map((mod) => ({
       id: mod.id,
       label: mod.label,
+      /** @param {{history: DailyNetPoint[], forecastDates: string[]}} ctx */
       forecast: (ctx) => {
-        const out = mod.forecast({ ...ctx, seed });
+        const fullCtx = { ...ctx, seed };
+        const out = mod.forecast(fullCtx);
         return Array.isArray(out) ? out : out.series;
       },
     }));
@@ -513,13 +705,15 @@ export async function computeCashflowForecastRolling({
         rmse: b.aggregate.rmse,
         mape: b.aggregate.mape,
         months: b.aggregate.windows,
-        per_month: b.perWindow.map(({ window_end, mae, rmse, mape, sampleDays }) => ({
-          month: window_end,
-          mae,
-          rmse,
-          mape,
-          sample_days: sampleDays,
-        })),
+        per_month: b.perWindow.map(
+          (/** @type {{ window_end: string, mae: number, rmse: number, mape: number, sampleDays: number }} */ { window_end, mae, rmse, mape, sampleDays }) => ({
+            month: window_end,
+            mae,
+            rmse,
+            mape,
+            sample_days: sampleDays,
+          }),
+        ),
       })),
     };
   }
@@ -552,6 +746,17 @@ export async function computeCashflowForecastRolling({
 /**
  * Fetch category-level data and append `category_breakdown` to an existing payload.
  * Used both for cache-hit augmentation and live-compute augmentation.
+ *
+ * @param {ForecastPayload} payload
+ * @param {{
+ *   excludedCategoryIds: number[],
+ *   excludedRecipientIds: number[],
+ *   targetCurrency: string,
+ *   historyMonths: number,
+ *   all: string[],
+ *   future: string[],
+ *   todayDay: number,
+ * }} args
  */
 async function augmentPayloadWithBreakdown(payload, {
   excludedCategoryIds, excludedRecipientIds, targetCurrency,

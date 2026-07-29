@@ -37,6 +37,20 @@ const MAX_MONTHS = 24;
 const MAX_OCCURRENCES_PER_ITEM = 500; // guard against infinite-loop on tiny intervals
 
 /**
+ * @typedef {{
+ *   id: number,
+ *   currency: string,
+ *   amount: number,
+ *   memo: string|null,
+ *   recipient_name: string|null,
+ *   category_name: string|null,
+ *   is_recurring: boolean,
+ *   recurrence_pattern: string|null,
+ *   planned_date: string,
+ * }} ForecastItem
+ */
+
+/**
  * @param {Date} d  UTC Date
  * @returns {string} 'YYYY-MM' in APP_TIMEZONE
  */
@@ -67,10 +81,10 @@ function buildMonthKeys(todayParts, months) {
 /**
  * Expand one planned-transaction row into forecast occurrences within [start, end].
  *
- * @param {object} row
+ * @param {import('../../../types/rows.js').PlannedForecastRow} row
  * @param {Date} start  inclusive
  * @param {Date} end    inclusive
- * @returns {Array<{date: Date, item: object}>}
+ * @returns {Array<{date: Date, item: ForecastItem}>}
  */
 function expandOccurrences(row, start, end) {
   const amount = toDecimal(row.amount).toNumber();
@@ -120,11 +134,11 @@ export async function computeCashflowForecast({ months = 3 } = {}) {
 
   // Build month buckets — income/expenses/net accumulate as Decimal so a long
   // window of many occurrences doesn't drift before the round-on-emit below.
-  /** @type {Map<string, { month: string, income: import('decimal.js').default, expenses: import('decimal.js').default, net: import('decimal.js').default, items: any[] }>} */
+  /** @type {Map<string, { month: string, income: import('decimal.js').default, expenses: import('decimal.js').default, net: import('decimal.js').default, items: ForecastItem[] }>} */
   const buckets = new Map(
     monthKeys.map((k) => [
       k,
-      { month: k, income: toDecimal(0), expenses: toDecimal(0), net: toDecimal(0), items: [] },
+      { month: k, income: toDecimal(0), expenses: toDecimal(0), net: toDecimal(0), items: /** @type {ForecastItem[]} */ ([]) },
     ])
   );
 

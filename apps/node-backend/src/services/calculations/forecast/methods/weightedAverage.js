@@ -10,10 +10,15 @@ import { dayOfMonth } from '../seasonality.js';
 export const id = 'weighted_avg';
 export const label = 'Weighted average';
 
+/** @param {string} date */
 function monthKey(date) {
   return date.slice(0, 7);
 }
 
+/**
+ * @param {{history: Array<{date:string, net:number}>, forecastDates: string[]}} ctx
+ * @returns {Array<{date:string, value:number}>}
+ */
 export function forecast({ history, forecastDates }) {
   const monthOrder = [];
   const monthSeen = new Set();

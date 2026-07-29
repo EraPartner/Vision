@@ -14,6 +14,9 @@ import infoRepository from '../../../repositories/infoRepository.js';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN, assertMonthlyInvariants } from './_invariants.js';
 
+/**
+ * @param {{ targetCurrency?: string, excludedCategoryIds?: number[], excludedRecipientIds?: number[], allTime?: boolean }} [opts]
+ */
 export async function computeMonthlySummary({
   targetCurrency = 'EUR',
   excludedCategoryIds = [],

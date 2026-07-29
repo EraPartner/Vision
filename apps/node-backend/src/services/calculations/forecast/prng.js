@@ -5,6 +5,7 @@
  * yield identical paths (plan requirement).
  */
 
+/** @param {string} str */
 export function fnv1aHash(str) {
   let h = 0x811c9dc5 >>> 0;
   for (let i = 0; i < str.length; i++) {
@@ -14,6 +15,10 @@ export function fnv1aHash(str) {
   return h >>> 0;
 }
 
+/**
+ * @param {number|string} seedInput
+ * @returns {() => number}
+ */
 export function makeRng(seedInput) {
   let state = typeof seedInput === 'number' ? seedInput >>> 0 : fnv1aHash(String(seedInput));
   if (state === 0) state = 1;
@@ -28,6 +33,7 @@ export function makeRng(seedInput) {
   };
 }
 
+/** @param {() => number} rng */
 export function gaussian(rng) {
   // Box-Muller. Returns one N(0,1) per call; pair-caching not needed at our scale.
   let u1 = rng();

@@ -32,7 +32,13 @@ const SAVINGS_NODE_ID = '__savings__';
 const TOP_N = 12;
 
 /**
- * @param {{ targetCurrency?: string, year?: number, excludedCategoryIds?: any[], excludedRecipientIds?: any[] }} [opts]
+ * Shape of a row from the SQL aggregate above: `amount` is a SUM(ABS(...))
+ * NUMERIC, so pg returns it as a string.
+ * @typedef {{ category_name: string, currency: string, is_income: boolean, amount: string }} SankeyRow
+ */
+
+/**
+ * @param {{ targetCurrency?: string, year?: number, excludedCategoryIds?: number[], excludedRecipientIds?: number[] }} [opts]
  */
 export async function computeSankeyFlow({
   targetCurrency = 'EUR',
@@ -113,7 +119,7 @@ export async function computeSankeyFlow({
 
   // Convert to target currency
   const rows = await convertRowsToEur(
-    result.rows.map((r) => ({ ...r, amount: Math.abs(parseFloat(r.amount)) })),
+    result.rows.map((/** @type {SankeyRow} */ r) => ({ ...r, amount: Math.abs(parseFloat(r.amount)) })),
     targetCurrency,
   );
 
@@ -187,6 +193,7 @@ export async function computeSankeyFlow({
   return buildEnvelope(data, { source: 'live' });
 }
 
+/** @param {number} n */
 function round(n) {
   return roundMoney(n);
 }

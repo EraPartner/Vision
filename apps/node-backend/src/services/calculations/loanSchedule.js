@@ -16,9 +16,36 @@ import { roundMoney } from '../../lib/money.js';
 const EPSILON = 0.0000001;
 
 /**
+ * Raw loan config as received from the planned-transactions request body
+ * (JSON, so numeric fields may arrive as `number` or numeric `string`);
+ * `validateLoanConfig` coerces every field before use.
+ * @typedef {{
+ *   loan_type?: unknown,
+ *   loan_principal?: unknown,
+ *   loan_annual_interest_rate?: unknown,
+ *   loan_term_months?: unknown,
+ *   loan_start_date?: unknown,
+ *   loan_payment_day?: unknown,
+ * }} LoanConfig
+ *
+ * @typedef {{
+ *   loan_type: string,
+ *   loan_principal: number,
+ *   loan_annual_interest_rate: number,
+ *   loan_term_months: number,
+ *   loan_start_date: unknown,
+ *   loan_payment_day: number,
+ * }} NormalizedLoanConfig
+ */
+
+/**
  * Returns the YYYY-MM-DD string `monthOffset` months after `baseDateStr`,
  * clamped to the last day of the target month if `preferredDay` exceeds it
  * (e.g. Jan 31 + 1 month → Feb 28/29).
+ *
+ * @param {string} baseDateStr
+ * @param {number} monthOffset
+ * @param {number} preferredDay
  */
 function addMonthsAtDay(baseDateStr, monthOffset, preferredDay) {
   const [year, month] = baseDateStr.split('-').map(Number);
@@ -33,6 +60,10 @@ function addMonthsAtDay(baseDateStr, monthOffset, preferredDay) {
   return result.toISOString().split('T')[0];
 }
 
+/**
+ * @param {LoanConfig} config
+ * @returns {{ errors: string[], normalized: NormalizedLoanConfig }}
+ */
 export function validateLoanConfig(config) {
   const errors = [];
   const principal = Number(config.loan_principal);
@@ -45,7 +76,7 @@ export function validateLoanConfig(config) {
   if (!Number.isFinite(principal) || principal <= 0) errors.push('loan_principal must be a positive number');
   if (!Number.isFinite(annualRate) || annualRate < 0 || annualRate > 100) errors.push('loan_annual_interest_rate must be between 0 and 100');
   if (!Number.isInteger(termMonths) || termMonths < 1 || termMonths > 600) errors.push('loan_term_months must be an integer between 1 and 600');
-  if (!config.loan_start_date || !/^\d{4}-\d{2}-\d{2}$/.test(config.loan_start_date)) errors.push('loan_start_date must be in YYYY-MM-DD format');
+  if (!config.loan_start_date || !/^\d{4}-\d{2}-\d{2}$/.test(String(config.loan_start_date))) errors.push('loan_start_date must be in YYYY-MM-DD format');
   if (!Number.isInteger(paymentDay) || paymentDay < 1 || paymentDay > 31) errors.push('loan_payment_day must be an integer between 1 and 31');
 
   return {
@@ -61,6 +92,7 @@ export function validateLoanConfig(config) {
   };
 }
 
+/** @param {LoanConfig} config */
 export function generateLoanRepaymentSchedule(config) {
   const { errors, normalized } = validateLoanConfig(config);
   if (errors.length > 0) {
@@ -107,11 +139,12 @@ export function generateLoanRepaymentSchedule(config) {
   // (e.g. start 2026-06-20, payment day 5 → 2026-06-05), the first installment
   // would be dated before the loan exists. Shift the whole schedule one month.
   // addMonthsAtDay returns YYYY-MM-DD, so the comparison is lexicographic-safe.
-  const startYmd = String(startDate).slice(0, 10);
-  const monthOffset = addMonthsAtDay(startDate, 0, paymentDay) < startYmd ? 1 : 0;
+  const startDateStr = String(startDate);
+  const startYmd = startDateStr.slice(0, 10);
+  const monthOffset = addMonthsAtDay(startDateStr, 0, paymentDay) < startYmd ? 1 : 0;
 
   for (let i = 1; i <= termMonths; i++) {
-    const dueDate = addMonthsAtDay(startDate, i - 1 + monthOffset, paymentDay);
+    const dueDate = addMonthsAtDay(startDateStr, i - 1 + monthOffset, paymentDay);
     // Whole-month convention: installment 1 charges a full month of interest
     // even when the loan started mid-month (start 06-05, payment day 20 → 15
     // days of life, one month of interest). Standard simplification — no

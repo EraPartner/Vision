@@ -47,116 +47,33 @@ const CONFIG_PATH = path.join(ROOT, 'tsconfig.check.strict.json');
  * now held as directory prefixes, so a NEW file under either directory is
  * ratcheted from birth.
  *
- * `src/services/` is being taken the same way, one whole subdirectory at a
- * time: a subdirectory is annotated to zero errors and only then added here as
- * a prefix, so new files under it are ratcheted from birth too. Held so far as
- * prefixes: the two import pipelines, currency/FX, prices, tax, info,
- * portfolio, aiChat, research, and reports.
+ * `src/services/` was taken the same way, one whole subdirectory at a time —
+ * a subdirectory annotated to zero errors, then added as a prefix — until
+ * `calculations/` (aggregation endpoints, the forecast engine, golden-tested
+ * pure calc modules), the last holdout, itself reached zero. With every
+ * subdirectory AND the top level clean, the whole tree collapses to the
+ * single `src/services/` prefix below: `isRatcheted`'s match is per-string-
+ * prefix, not per-directory-level, so this one entry now covers every file
+ * under `src/services/`, including new ones from birth — no more per-
+ * subdirectory or per-file entries needed here.
  *
- * The top level of `src/services/` (all 51 `*.js` files directly in that
- * directory, not its subdirectories) is now fully held — but still as 51
- * individual file paths, not a `src/services/` prefix: `isRatcheted`'s prefix
- * match is per-string-prefix, not per-directory-level, so a `src/services/`
- * entry would ALSO match the one still-dirty subdirectory left below
- * (`calculations/`) and gate it sight-unseen — instant CI failure on this
- * script's next run. Collapsing the 51 entries to a directory prefix is only
- * safe once `calculations/` is itself fully clean (at which point
- * `src/services/` alone, without the now-redundant subdirectory prefixes,
- * would cover the whole tree).
- *
- * `calculations/` is still individually-clean-file-only (not yet a whole
- * subdirectory) — most of it is still implicit-any-dirty. `research/` and
- * `reports/` are now fully held as directory prefixes. Beyond services:
- * `routes/` and `lib/` are untouched.
+ * Beyond services/: `routes/` and `lib/` are untouched.
  *
  * @type {string[]}
  */
 const RATCHETED = [
   'src/types/',
   'src/repositories/',
-  'src/services/aiChat/',
-  'src/services/currency/',
-  'src/services/importPipeline/',
-  'src/services/info/',
-  'src/services/portfolio/',
-  'src/services/portfolioImportPipeline/',
-  'src/services/prices/',
-  'src/services/reports/',
-  'src/services/research/',
-  'src/services/tax/',
-
-  // calculations/ — the last services/ subdirectory not yet fully clean;
-  // individually-clean files only, the directory itself is still mostly
-  // implicit-any-dirty.
-  'src/services/calculations/aggregation/_envelope.js',
-  'src/services/calculations/aggregation/_statisticsCache.js',
-  'src/services/calculations/aggregation/averageVsCurrent.js',
-  'src/services/calculations/aggregation/bankBalances.js',
-  'src/services/calculations/aggregation/category.js',
-  'src/services/calculations/forecast/methods/ensemble.js',
-  'src/services/calculations/forecast/methods/simpleAverage.js',
-  'src/services/calculations/normalization.js',
-
-  // Top level of src/services/ — all 51 files, alphabetical.
-  'src/services/accountMergeService.js',
-  'src/services/accountService.js',
-  'src/services/aggregationRefresh.js',
-  'src/services/aiChatService.js',
-  'src/services/attachmentCleanup.js',
-  'src/services/attachmentRecordService.js',
-  'src/services/attachmentService.js',
-  'src/services/bankAdapters.js',
-  'src/services/belgianInflationService.js',
-  'src/services/bulkSelection.js',
-  'src/services/cashForecastInsightService.js',
-  'src/services/categoryOutlierService.js',
-  'src/services/categoryService.js',
-  'src/services/crossWorkspaceAnalytics.js',
-  'src/services/crossWorkspaceDataService.js',
-  'src/services/customParserConfigService.js',
-  'src/services/dataImportService.js',
-  'src/services/dbEditor.js',
-  'src/services/deduplication.js',
-  'src/services/importBatchService.js',
-  'src/services/infoService.js',
-  'src/services/insightsDigestService.js',
-  'src/services/marketLookupService.js',
-  'src/services/materializedViewService.js',
-  'src/services/openingBalanceService.js',
-  'src/services/plannedExecutionService.js',
-  'src/services/plannedMatchService.js',
-  'src/services/plannedTransactionService.js',
-  'src/services/portfolioImportBatchService.js',
-  'src/services/portfolioPerformanceSnapshotService.js',
-  'src/services/priceProviderService.js',
-  'src/services/providerHealthService.js',
-  'src/services/quoteBackfillService.js',
-  'src/services/recipientBankAccountService.js',
-  'src/services/recipientClusterService.js',
-  'src/services/recipientMergeService.js',
-  'src/services/recipientPatternService.js',
-  'src/services/recipientService.js',
-  'src/services/reconcileService.js',
-  'src/services/recurringDetectionService.js',
-  'src/services/routeManifest.js',
-  'src/services/savedChartsService.js',
-  'src/services/settingsService.js',
-  'src/services/splitService.js',
-  'src/services/subscriptionCreepService.js',
-  'src/services/tagService.js',
-  'src/services/transactionBulkService.js',
-  'src/services/transactionExport.js',
-  'src/services/transactionService.js',
-  'src/services/transferReconciliationService.js',
-  'src/services/watchlistService.js',
+  'src/services/',
 ];
 
 /**
  * Directory the "ready to ratchet" hint scans for already-clean files. Points
- * at the frontier: `src/repositories/` is complete, so the hint now surfaces
- * service files that are already implicit-any-clean and could be listed.
+ * at the frontier: `src/repositories/` and `src/services/` are both complete,
+ * so the hint now surfaces `routes/` files that are already implicit-any-clean
+ * and could be listed.
  */
-const HINT_SCOPE = 'src/services/';
+const HINT_SCOPE = 'src/routes/';
 
 /**
  * @param {string} absolutePath

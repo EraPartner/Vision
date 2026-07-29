@@ -46,6 +46,7 @@ function collectBadNumerics(value, path, out) {
  */
 export function assertNoNaN(data, context) {
   if (!ENABLED) return;
+  /** @type {string[]} */
   const bad = [];
   collectBadNumerics(data, '', bad);
   if (bad.length > 0) {

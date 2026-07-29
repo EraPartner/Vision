@@ -11,6 +11,9 @@ import infoRepository from '../../../repositories/infoRepository.js';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
 
+/**
+ * @param {{ targetCurrency?: string, excludedCategoryIds?: number[], excludedRecipientIds?: number[] }} [opts]
+ */
 export async function computeRecipientInsights({
   targetCurrency = 'EUR',
   excludedCategoryIds = [],

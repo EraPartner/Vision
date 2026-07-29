@@ -10,7 +10,9 @@
  */
 
 const DAY_MS = 86_400_000;
+/** @param {Date|string} d */
 const toMs = (d) => (d instanceof Date ? d : new Date(d)).getTime();
+/** @param {import('../../types/rows.js').TransactionRow} t */
 const ccyOf = (t) => t.currency || 'EUR';
 
 /**
@@ -20,7 +22,9 @@ const ccyOf = (t) => t.currency || 'EUR';
  * @returns {{autoPairs:{outId:number,inId:number}[], suggestions:{outId:number,candidateInIds:number[]}[]}}
  */
 export function resolveTransferMatches(candidatePairs) {
+  /** @type {Map<number, number[]>} */
   const outToIns = new Map();
+  /** @type {Map<number, number[]>} */
   const inToOuts = new Map();
   for (const { outId, inId } of candidatePairs) {
     if (!outToIns.has(outId)) outToIns.set(outId, []);
@@ -56,7 +60,7 @@ export function resolveTransferMatches(candidatePairs) {
  *
  * Only "open" rows participate: active, not already a transfer, not manually
  * decided, non-zero amount, with a bank account.
- * @param {Array<object>} transactions
+ * @param {Array<import('../../types/rows.js').TransactionRow>} transactions
  * @param {{windowDays?:number}} [opts]
  */
 export function findTransferMatches(transactions, { windowDays = 3 } = {}) {
