@@ -24,11 +24,17 @@ import {
 import { resolveLivePortfolioValue } from '../../services/info/liveSummary.js';
 import { parseOptionalPagination } from '../../lib/pagination.js';
 
+/**
+ * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 router.get(
   '/net-worth',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'net-worth' }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
     const targetCurrency = getTargetCurrency(req);
     const cacheKey = targetCurrency;

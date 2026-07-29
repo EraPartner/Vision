@@ -14,6 +14,11 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam, validateNumber, assertMaxLength, assertCurrency } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 const WATCHLIST_ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals'];
@@ -37,7 +42,13 @@ const nameField = z.unknown().transform((value, ctx) => {
     return z.NEVER;
   }
   try {
-    return assertMaxLength(value, 200, 'name');
+    // assertMaxLength's declared return is `unknown` (it's a generic
+    // length guard shared by many field shapes) but this branch already
+    // rejected null/empty above, so the surviving value is the caller-
+    // supplied name as-is — narrowed here for watchlistRepository.create's
+    // `name: string` param, matching the repository's contract, not a
+    // runtime coercion.
+    return /** @type {string} */ (assertMaxLength(value, 200, 'name'));
   } catch (err) {
     ctx.addIssue({ code: 'custom', message: err.message });
     return z.NEVER;
@@ -46,9 +57,16 @@ const nameField = z.unknown().transform((value, ctx) => {
 
 // VARCHAR column widths: a provider-/market-prefilled value can exceed the
 // HTML maxLength cap (which only clamps typed input).
+/**
+ * @param {number} maxLength
+ * @param {string} field
+ */
 const maxLenField = (maxLength, field) => z.unknown().transform((value, ctx) => {
   try {
-    return assertMaxLength(value, maxLength, field);
+    // Same narrowing rationale as nameField above; assertMaxLength passes
+    // null/undefined through unchanged, matching watchlistRepository's
+    // `string|null` field shapes for symbol/price_provider_id.
+    return /** @type {string|null|undefined} */ (assertMaxLength(value, maxLength, field));
   } catch (err) {
     ctx.addIssue({ code: 'custom', message: err.message });
     return z.NEVER;
@@ -58,6 +76,10 @@ const maxLenField = (maxLength, field) => z.unknown().transform((value, ctx) => 
 // Numeric prices: Number() coercion + [0, MAX_PRICE] bounds via the shared
 // validateNumber guard; the coerced number replaces the raw input. null passes
 // through (explicit clear), undefined is absent.
+/**
+ * @param {string} field
+ * @param {{ rejectZero?: boolean }} [opts]
+ */
 const priceField = (field, { rejectZero = false } = {}) => z.unknown().transform((value, ctx) => {
   if (value === null) return null;
   const result = validateNumber(value, { min: 0, max: MAX_PRICE, fieldName: field });
@@ -104,6 +126,10 @@ const watchlistCreateSchema = z.looseObject({
     error: `asset_class must be one of: ${WATCHLIST_ASSET_CLASSES.join(', ')}`,
   }).optional(),
   currency: currencyField,
+  // No dedicated width/shape rule (free text) — listed explicitly only so its
+  // output type matches watchlistRepository.create's `notes?: string|null`
+  // param; `z.looseObject` would otherwise pass it through as `unknown`.
+  notes: z.unknown().transform((value) => /** @type {string|null|undefined} */ (value)).optional(),
 });
 
 // Partial-update variant: same field rules, except added_price is captured
@@ -118,6 +144,12 @@ const watchlistUpdateSchema = watchlistCreateSchema.extend({
   }).optional(),
 });
 
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} body
+ * @returns {T}
+ */
 function parseWatchlistBody(schema, body) {
   const result = schema.safeParse(body);
   if (!result.success) {
@@ -129,7 +161,7 @@ function parseWatchlistBody(schema, body) {
   return result.data;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { asset_class } = req.query;
   const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
   const opts = {
@@ -146,13 +178,13 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.get('/:id', validateIdParam, async (req, res) => {
+router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const item = await watchlistRepository.getById(parseInt(req.params.id, 10));
   if (!item) throw new NotFoundError('Watchlist item not found');
   res.ok(item);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.body.name || !req.body.asset_class || req.body.target_price == null) {
     throw new ValidationError('name, asset_class, and target_price are required');
   }
@@ -165,7 +197,7 @@ router.post('/', async (req, res) => {
   res.ok(item);
 });
 
-router.patch('/:id', validateIdParam, async (req, res) => {
+router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const data = parseWatchlistBody(watchlistUpdateSchema, req.body);
   const item = await watchlistRepository.update(id, data);
@@ -173,7 +205,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   res.ok(item);
 });
 
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const deleted = await watchlistRepository.delete(parseInt(req.params.id, 10));
   if (!deleted) throw new NotFoundError('Watchlist item not found');
   res.status(204).send();

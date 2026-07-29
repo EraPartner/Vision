@@ -27,17 +27,34 @@ import {
   getCurrentDateString,
 } from './_queryParams.js';
 
+/**
+ * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ */
+
+// The pg row shape for `exchange_rates` as SELECTed above — NUMERIC columns
+// arrive as strings (see toDecimal/toNumber below), DATE as a Date at local
+// midnight (verified against alembic/versions' exchange_rates definition).
+/**
+ * @typedef {object} ExchangeRateRow
+ * @property {string} currency_code
+ * @property {string} rate_to_eur
+ * @property {Date} rate_date
+ * @property {Date} fetched_at
+ */
+
 const router = Router();
 
 router.get(
   '/exchange-rates',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'exchange-rates' }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
     const dbOnly = isTruthyQueryParam(req.query.db_only);
 
     const result = await listLatestStoredRates();
 
-    const rates = result.rows.map(row => ({
+    const rates = (/** @type {ExchangeRateRow[]} */ (result.rows)).map((row) => ({
       currency: row.currency_code,
       rate_to_eur: toNumber(toDecimal(row.rate_to_eur)),
       rate_date: row.rate_date instanceof Date ? formatDateToYmd(row.rate_date) : String(row.rate_date),
@@ -47,7 +64,7 @@ router.get(
     const today = getCurrentDateString();
     const storedDate = rates.length > 0 ? rates[0].rate_date : null;
     const isStale = !storedDate || storedDate < today;
-    const lastFetchedAt = rates.reduce((latest, row) => {
+    const lastFetchedAt = rates.reduce((/** @type {number} */ latest, row) => {
       const ts = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN;
       return Number.isFinite(ts) && ts > latest ? ts : latest;
     }, 0);
@@ -71,7 +88,7 @@ router.get(
   },
 );
 
-router.post('/exchange-rates/refresh', adminRateLimiter, async (req, res) => {
+router.post('/exchange-rates/refresh', adminRateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   clearMemoryCache();
   await warmCache();
   res.ok({ message: 'Exchange rates refreshed from ECB' });
@@ -80,6 +97,7 @@ router.post('/exchange-rates/refresh', adminRateLimiter, async (req, res) => {
 router.get(
   '/inflation-rates',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'inflation-rates' }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
     const startMonth = getMonthParam(req.query.start_month);
     const endMonth = getMonthParam(req.query.end_month);
@@ -106,7 +124,7 @@ router.get(
   },
 );
 
-router.post('/inflation-rates/refresh', adminRateLimiter, async (req, res) => {
+router.post('/inflation-rates/refresh', adminRateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   clearInflationMemoryCache();
   const result = await getInflationRates({ forceRefresh: true });
   res.ok({

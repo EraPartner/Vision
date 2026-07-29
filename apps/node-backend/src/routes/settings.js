@@ -14,6 +14,11 @@ import settingsRepository from '../services/settingsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────────
@@ -81,6 +86,7 @@ const themeSettingsSchema = z.looseObject({
 // Shares validateIntArray with the query-param routes so accepted shapes stay
 // identical (scalar wrapped to array, parseInt coercion, 1..2^31-1 bounds); the
 // coerced ints replace the raw input in the stored value, as before.
+/** @param {string} field */
 const intArrayField = (field) => z.unknown().transform((value, ctx) => {
   const result = validateIntArray(value, field);
   if (!result.valid) {
@@ -176,6 +182,10 @@ const SETTING_SCHEMAS = {
 
 const FORBIDDEN_SETTING_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
+/**
+ * @param {string} key
+ * @param {boolean} [includeKeyInMessage]
+ */
 function assertSettingKeyLength(key, includeKeyInMessage = false) {
   if (FORBIDDEN_SETTING_KEYS.has(key)) {
     throw new ValidationError(`Setting key '${key}' is not allowed`);
@@ -188,11 +198,15 @@ function assertSettingKeyLength(key, includeKeyInMessage = false) {
   }
 }
 
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const settings = await settingsRepository.getAll();
   res.ok(settings);
 });
 
+// Heterogeneous per-key default shapes (booleans, arrays, nested config
+// objects) read only via `SETTING_DEFAULTS[key]` (a runtime string) below —
+// a closed union would buy nothing a lookup table doesn't already need.
+/** @type {Record<string, any>} */
 const SETTING_DEFAULTS = {
   onboarding_complete: false,
   dismissed_recurring_patterns: [],
@@ -251,6 +265,7 @@ const KNOWN_SETTING_KEYS = new Set([
   ...Object.keys(SETTING_DEFAULTS),
 ]);
 
+/** @param {string} key */
 function assertKnownSettingKey(key) {
   if (!KNOWN_SETTING_KEYS.has(key)) {
     throw new ValidationError(
@@ -259,7 +274,7 @@ function assertKnownSettingKey(key) {
   }
 }
 
-router.get('/:key', async (req, res) => {
+router.get('/:key', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { key } = req.params;
   const value = await settingsRepository.get(key);
   if (value === null) {
@@ -276,8 +291,13 @@ router.get('/:key', async (req, res) => {
 // bulk endpoint can't bypass the rules the single-key endpoint enforces.
 // Returns the value to store (zod parse output for schema'd keys — identical to
 // the input except dashboard int-array coercion — the input as-is otherwise).
+/**
+ * @param {string} key
+ * @param {any} value
+ * @returns {any}
+ */
 function validateSettingValue(key, value) {
-  const schema = Object.hasOwn(SETTING_SCHEMAS, key) ? SETTING_SCHEMAS[key] : undefined;
+  const schema = Object.hasOwn(SETTING_SCHEMAS, key) ? SETTING_SCHEMAS[/** @type {keyof typeof SETTING_SCHEMAS} */ (key)] : undefined;
   if (!schema) return value;
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -289,7 +309,7 @@ function validateSettingValue(key, value) {
   return result.data;
 }
 
-router.put('/:key', async (req, res) => {
+router.put('/:key', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { key } = req.params;
   const { value } = req.body;
 
@@ -301,7 +321,7 @@ router.put('/:key', async (req, res) => {
   res.ok(result);
 });
 
-router.put('/', async (req, res) => {
+router.put('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const settings = req.body;
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
     throw new ValidationError('Body must be a JSON object of key→value pairs');
@@ -322,7 +342,7 @@ router.put('/', async (req, res) => {
   res.ok({ saved: Object.keys(validated).length });
 });
 
-router.delete('/:key', async (req, res) => {
+router.delete('/:key', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { key } = req.params;
   const deleted = await settingsRepository.delete(key);
   if (!deleted) throw new NotFoundError(`Setting '${key}' not found`);

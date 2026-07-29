@@ -36,7 +36,7 @@
  * @property {{ remoteAddress?: string }} [socket]
  * @property {string} [ip]
  * @property {(name: string) => string|undefined} get
- * @property {{ path?: string, filename?: string, originalname?: string, mimetype?: string, size?: number }} [file] Attached by multer's `.single(...)`.
+ * @property {{ path?: string, filename?: string, originalname?: string, mimetype?: string, size?: number, buffer?: Buffer }} [file] Attached by multer's `.single(...)`. `buffer` is populated only under multer's memoryStorage (routes/attachments.js); `path`/`filename` only under diskStorage (routes/importRoutes.js, portfolioImportRoutes.js) — the two configurations are mutually exclusive per route, never both populated on the same request.
  * @property {Record<string, string>} [cookies]
  */
 
@@ -52,8 +52,15 @@
  * @property {number} statusCode
  * @property {boolean} headersSent
  * @property {boolean} writableEnded
- * @property {(chunk?: any) => boolean} write Node's `http.ServerResponse#write`, used by the streaming CSV/NDJSON export pipeline (services/transactionExport.js).
- * @property {(chunk?: any) => void} end
+ * @property {(chunk?: any, encoding?: any, cb?: any) => boolean} write Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.js) and, reassigned wholesale, by main.js's gzip wrapper.
+ * @property {(chunk?: any, encoding?: any, cb?: any) => ExpressResponse|void} end Same overload shape as `write` above; main.js's gzip wrapper reassigns this too.
+ * @property {(path: string, callback?: (err: any) => void) => void} [sendFile] Express's `res.sendFile`, used by routes/attachments.js's download endpoint.
+ * @property {(statusCode: number) => ExpressResponse} [writeHead] Node's `http.ServerResponse#writeHead`, used by main.js's CORS preflight short-circuit.
+ * @property {(name: string) => any} [getHeader]
+ * @property {(name: string) => void} [removeHeader]
+ * @property {(contentType: string) => ExpressResponse} [type] Express's `res.type`, used by main.js's SPA fallback.
+ * @property {(event: string, ...args: any[]) => boolean} [emit] Node's `EventEmitter#emit` (`ExpressResponse` is a `http.ServerResponse`, which is one) — used by main.js's gzip wrapper to re-surface `gz`'s `'drain'` event on `res`.
+ * @property {(err?: Error) => void} [destroy]
  * @property {(data: any, meta?: ResponseMetaLoose) => ExpressResponse} [ok] Attached by middleware/envelope.js's `wrapResponse`.
  * @property {Record<string, any>} [locals]
  */

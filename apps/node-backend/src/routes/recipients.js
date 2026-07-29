@@ -23,15 +23,20 @@ import { parsePagination } from '../lib/pagination.js';
 // dashboard serves the old grouping until an unrelated transaction mutation.
 import { scheduleRefresh } from '../services/materializedViewService.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
-router.get('/clusters', async (req, res) => {
+router.get('/clusters', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const minCount = Math.max(2, parseInt(req.query.min_count, 10) || 2);
   const clusters = await findRecipientClusters({ minCount });
   res.ok({ items: clusters, total: clusters.length });
 });
 
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const {
     name, default_category_id,
     active = 'true', search, uncategorized = 'false', sort_by, sort_dir,
@@ -56,7 +61,11 @@ router.get('/', async (req, res) => {
   ]);
 
   res.ok({
-    items: items.map((r) => ({ ...r, links: [] })),
+    items: items.map((r) => ({
+      ...r,
+      /** @type {any[]} */
+      links: [],
+    })),
     total,
     limit: opts.limit,
     offset: opts.offset,
@@ -64,7 +73,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { name, default_category_id, notes } = req.body;
   if (!name) throw new ValidationError('Missing required field: name');
 
@@ -79,13 +88,13 @@ router.post('/', async (req, res) => {
   res.ok({ ...finalRecipient, links: [] });
 });
 
-router.get('/:id', validateIdParam, async (req, res) => {
+router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipient = await recipientRepository.getById(parseInt(req.params.id, 10));
   if (!recipient) throw new NotFoundError('Recipient not found');
   res.ok({ ...recipient, links: [] });
 });
 
-router.patch('/:id', validateIdParam, async (req, res) => {
+router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const updated = await recipientRepository.update(id, req.body);
   if (!updated) throw new NotFoundError('Recipient not found');
@@ -93,7 +102,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   res.ok({ ...updated, links: [] });
 });
 
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const deleted = await recipientRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError('Recipient not found');
@@ -102,7 +111,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   res.status(204).send();
 });
 
-router.post('/:id/merge', validateIdParam, async (req, res) => {
+router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const primaryId = parseInt(req.params.id, 10);
   const { alias_ids } = req.body;
   if (!alias_ids || !Array.isArray(alias_ids) || alias_ids.length === 0) {
@@ -153,7 +162,7 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
   });
 });
 
-router.post('/:id/unmerge', validateIdParam, async (req, res) => {
+router.post('/:id/unmerge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const success = await recipientRepository.unmergeRecipient(id);
   if (!success) throw new NotFoundError('Recipient not found');
@@ -162,24 +171,28 @@ router.post('/:id/unmerge', validateIdParam, async (req, res) => {
   res.ok({ ...recipient, links: [] });
 });
 
-router.get('/:id/aliases', validateIdParam, async (req, res) => {
+router.get('/:id/aliases', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const aliases = await recipientRepository.getAliases(id);
   res.ok({
-    items: aliases.map((a) => ({ ...a, links: [] })),
+    items: aliases.map((a) => ({
+      ...a,
+      /** @type {any[]} */
+      links: [],
+    })),
     total: aliases.length,
   });
 });
 
 // ── Pattern sub-routes ───────────────────────────────────────────────────────
 
-router.get('/:id/patterns', validateIdParam, async (req, res) => {
+router.get('/:id/patterns', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const patterns = await listPatternsForRecipient(id);
   res.ok({ items: patterns, total: patterns.length });
 });
 
-router.post('/:id/patterns', validateIdParam, async (req, res) => {
+router.post('/:id/patterns', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseInt(req.params.id, 10);
   const { pattern, pattern_kind, case_sensitive, priority, notes } = req.body;
   if (!pattern) throw new ValidationError('Missing required field: pattern');
@@ -188,21 +201,21 @@ router.post('/:id/patterns', validateIdParam, async (req, res) => {
   res.ok(result);
 });
 
-router.post('/:id/patterns/preview', validateIdParam, async (req, res) => {
+router.post('/:id/patterns/preview', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { pattern, pattern_kind, case_sensitive } = req.body;
   if (!pattern) throw new ValidationError('Missing required field: pattern');
   const result = await previewPatternMatches({ pattern, pattern_kind: pattern_kind ?? 'literal_prefix', case_sensitive: case_sensitive ?? false });
   res.ok(result);
 });
 
-router.patch('/:id/patterns/:patternId', validateIdParam, async (req, res) => {
+router.patch('/:id/patterns/:patternId', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const patternId = parseInt(req.params.patternId, 10);
   if (!Number.isInteger(patternId) || patternId <= 0) throw new ValidationError('Invalid patternId');
   await updatePattern(patternId, req.body);
   res.ok({ patternId });
 });
 
-router.delete('/:id/patterns/:patternId', validateIdParam, async (req, res) => {
+router.delete('/:id/patterns/:patternId', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const patternId = parseInt(req.params.patternId, 10);
   if (!Number.isInteger(patternId) || patternId <= 0) throw new ValidationError('Invalid patternId');
   await deletePattern(patternId);

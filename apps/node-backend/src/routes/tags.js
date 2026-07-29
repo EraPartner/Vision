@@ -15,9 +15,14 @@ import tagService from '../services/tagService.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { active = 'true' } = req.query;
   const activeFilter = active === 'all' ? null : active !== 'false';
   const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
@@ -25,7 +30,7 @@ router.get('/', async (req, res) => {
   res.ok({ items, total, limit, offset, links: [] });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { tag, reactivated, wasInactive, junctionCount } = await tagService.createOrReactivate(req.body);
 
   res.status(reactivated && !wasInactive ? 200 : 201);
@@ -37,7 +42,7 @@ router.post('/', async (req, res) => {
   });
 });
 
-router.patch('/:id', validateIdParam, async (req, res) => {
+router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const updated = await tagService.update(id, req.body);
   res.ok({ ...updated, links: [] });
@@ -46,7 +51,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
 // Deactivation, not a hard delete: the row survives with is_active = false, so
 // this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
 // "DELETE responses").
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const deactivated = await tagService.softDelete(id);
   res.ok({ ...deactivated, links: [] });

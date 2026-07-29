@@ -15,11 +15,17 @@ import {
   resolveCacheWithInflight,
 } from '../../services/info/cache.js';
 
+/**
+ * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 router.get(
   '/portfolio-summary',
   rateLimiter({ windowMs: 60_000, maxRequests: 60 }),
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
     const targetCurrency = getTargetCurrency(req);
     const cacheKey = targetCurrency;

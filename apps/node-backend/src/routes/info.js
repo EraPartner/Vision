@@ -47,6 +47,7 @@ router.use('/', performanceRouter);
 router.use('/', portfolioSummaryRouter);
 router.use('/', maintenanceRouter);
 
+/** @param {string} targetCurrency */
 async function warmNetWorthCache(targetCurrency) {
   try {
     const liveInvestments = await resolveLivePortfolioValue(targetCurrency);
@@ -58,6 +59,7 @@ async function warmNetWorthCache(targetCurrency) {
   }
 }
 
+/** @param {string} targetCurrency */
 async function warmPortfolioPerformanceCache(targetCurrency) {
   try {
     const startDate = '2000-01-01';
@@ -72,6 +74,7 @@ async function warmPortfolioPerformanceCache(targetCurrency) {
   }
 }
 
+/** @param {string} targetCurrency */
 async function warmPortfolioSummaryCache(targetCurrency) {
   try {
     const payload = await getPortfolioSummary(targetCurrency);
@@ -87,6 +90,7 @@ async function warmPortfolioSummaryCache(targetCurrency) {
  * so the first request after startup is served instantly from memory.
  * Warmers run in parallel; failures are isolated per cache.
  */
+/** @param {string} [targetCurrency] */
 export async function warmInfoCaches(targetCurrency = 'EUR') {
   await Promise.allSettled([
     warmNetWorthCache(targetCurrency),

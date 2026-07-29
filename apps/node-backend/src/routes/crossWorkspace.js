@@ -16,6 +16,11 @@ import { rebalanceDeployment, resolveDeployableCash } from '../services/crossWor
 import { CLASSIC_PORTFOLIOS, normalizeWeights, foldTargetSleeves } from '../services/portfolio/allocationAnalytics.js';
 import { assembleRebalanceInputs } from '../services/crossWorkspaceDataService.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
@@ -49,6 +54,12 @@ const targetWeightsSchema = z.unknown().transform((value, ctx) => {
 });
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} value
+ * @returns {T}
+ */
 function parseRebalanceInput(schema, value) {
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -64,7 +75,7 @@ function parseRebalanceInput(schema, value) {
  *     targetWeights?: Record<string, number> }            // explicit, by asset class
  * `targetWeights` wins over `model`; both are normalized to sum to 1.
  */
-router.post('/rebalance', async (req, res) => {
+router.post('/rebalance', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const body = req.body ?? {};
   const currency = typeof body.currency === 'string' ? body.currency.toUpperCase() : 'EUR';
 
@@ -77,7 +88,7 @@ router.post('/rebalance', async (req, res) => {
   if (body.targetWeights && typeof body.targetWeights === 'object') {
     rawTarget = parseRebalanceInput(targetWeightsSchema, body.targetWeights);
   } else if (body.model) {
-    rawTarget = CLASSIC_PORTFOLIOS[body.model];
+    rawTarget = CLASSIC_PORTFOLIOS[/** @type {keyof typeof CLASSIC_PORTFOLIOS} */ (body.model)];
     if (!rawTarget) throw new ValidationError(`Unknown model '${body.model}' (expected one of: ${Object.keys(CLASSIC_PORTFOLIOS).join(', ')})`);
   } else {
     throw new ValidationError('Provide either `model` or `targetWeights`');

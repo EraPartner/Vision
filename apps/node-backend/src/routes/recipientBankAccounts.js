@@ -7,22 +7,28 @@ import recipientBankAccountRepository from '../services/recipientBankAccountServ
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam, assertMaxLength } from '../middleware/validation.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
+/** @param {string} raw */
 function parseAccountId(raw) {
   const n = parseInt(raw, 10);
   if (Number.isNaN(n) || n < 1) throw new ValidationError('Invalid account ID');
   return n;
 }
 
-router.get('/:id/bank-accounts', validateIdParam, async (req, res) => {
+router.get('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseInt(req.params.id, 10);
   const activeOnly = req.query.active !== 'false';
   const accounts = await recipientBankAccountRepository.getByRecipientId(recipientId, activeOnly);
   res.ok({ items: accounts, total: accounts.length });
 });
 
-router.post('/:id/bank-accounts', validateIdParam, async (req, res) => {
+router.post('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseInt(req.params.id, 10);
   const { account_number, bank_name, address, account_label, set_as_primary } = req.body;
 
@@ -44,7 +50,7 @@ router.post('/:id/bank-accounts', validateIdParam, async (req, res) => {
   res.ok({ ...bankAccount, links: [] });
 });
 
-router.patch('/:id/bank-accounts/:accountId', validateIdParam, async (req, res) => {
+router.patch('/:id/bank-accounts/:accountId', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const accountId = parseAccountId(req.params.accountId);
   const { bank_name, address, account_label } = req.body;
   const updated = await recipientBankAccountRepository.update(accountId, {
@@ -59,7 +65,7 @@ router.patch('/:id/bank-accounts/:accountId', validateIdParam, async (req, res) 
 // Deactivation, not a hard delete: the row survives with is_active = false, so
 // this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
 // "DELETE responses") — same shape as set-primary below.
-router.delete('/:id/bank-accounts/:accountId', validateIdParam, async (req, res) => {
+router.delete('/:id/bank-accounts/:accountId', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const accountId = parseAccountId(req.params.accountId);
   const deactivated = await recipientBankAccountRepository.softDelete(accountId);
   if (!deactivated) throw new NotFoundError('Bank account not found');
@@ -67,7 +73,7 @@ router.delete('/:id/bank-accounts/:accountId', validateIdParam, async (req, res)
   res.ok({ ...account, links: [] });
 });
 
-router.post('/:id/bank-accounts/:accountId/set-primary', validateIdParam, async (req, res) => {
+router.post('/:id/bank-accounts/:accountId/set-primary', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseInt(req.params.id, 10);
   const accountId = parseAccountId(req.params.accountId);
   const success = await recipientBankAccountRepository.setPrimary(accountId, recipientId);
