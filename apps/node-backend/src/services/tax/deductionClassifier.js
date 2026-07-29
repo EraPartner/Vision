@@ -62,12 +62,31 @@ function tokenize(value) {
     .filter(Boolean);
 }
 
-/** True when any token in `tokens` is exactly one of `words`. */
+/**
+ * Tokenized category parts a rule tests against: `all` is general + detail
+ * concatenated.
+ *
+ * @typedef {{ general: string[], detail: string[], all: string[] }} CategoryTokens
+ */
+
+/**
+ * True when any token in `tokens` is exactly one of `words`.
+ *
+ * @param {string[]} tokens
+ * @param {readonly string[]} words
+ * @returns {boolean}
+ */
 function hasWord(tokens, words) {
   return tokens.some((t) => words.includes(t));
 }
 
-/** True when `phrase` (an array of words) appears as consecutive tokens. */
+/**
+ * True when `phrase` (an array of words) appears as consecutive tokens.
+ *
+ * @param {string[]} tokens
+ * @param {readonly string[]} phrase
+ * @returns {boolean}
+ */
 function hasPhrase(tokens, phrase) {
   for (let i = 0; i + phrase.length <= tokens.length; i += 1) {
     let matched = true;
@@ -86,6 +105,10 @@ function hasPhrase(tokens, phrase) {
  * Phrase lookup within EITHER the general or the detail part (phrases do not
  * span the general/detail boundary — that boundary is a deliberate split the
  * user made, not adjacent words).
+ *
+ * @param {CategoryTokens} cat
+ * @param {readonly (readonly string[])[]} phrases
+ * @returns {boolean}
  */
 function hasAnyPhrase(cat, phrases) {
   return phrases.some((p) => hasPhrase(cat.general, p) || hasPhrase(cat.detail, p));
@@ -152,6 +175,8 @@ const MORTGAGE_INTEREST_WORDS = Object.freeze(['HYPOTHEEKRENTE']);
  *   - groupInsurance is checked BEFORE lifeInsurance so an employer-scheme
  *     name like "GROUP LIFE INSURANCE" lands in the more specific
  *     groupInsurance (2nd pillar), not lifeInsurance.
+ *
+ * @type {ReadonlyArray<{ type: string, test: (cat: CategoryTokens) => boolean }>}
  */
 const RULES = Object.freeze([
   {

@@ -12,10 +12,6 @@ const BUCKET_MS = 60_000; // 1-minute buckets
 const MAX_LATENCY_SAMPLES_PER_BUCKET = 1000; // cap memory; reservoir-sample beyond
 const MAX_ROUTE_STORES = 500; // prevent unbounded growth from unmatched/scanned URLs
 
-// Map<routeKey, BucketStore>
-// routeKey = "METHOD /path/pattern"
-const stores = new Map();
-
 /**
  * @typedef {Object} BucketStore
  * @property {Map<number, Bucket>} buckets  key = bucket start timestamp (floored to BUCKET_MS)
@@ -26,21 +22,40 @@ const stores = new Map();
  * @property {number} count
  * @property {number} errors
  * @property {number[]} latencies
+ * @property {number} sampled  total observations seen (reservoir counter; >= latencies.length once capped)
  */
 
+// Map<routeKey, BucketStore>
+// routeKey = "METHOD /path/pattern"
+/** @type {Map<string, BucketStore>} */
+const stores = new Map();
+
+/**
+ * @param {number} now
+ * @returns {number}
+ */
 function bucketKey(now) {
   return Math.floor(now / BUCKET_MS) * BUCKET_MS;
 }
 
+/**
+ * @param {BucketStore} store
+ * @param {number} key
+ * @returns {Bucket}
+ */
 function getOrCreateBucket(store, key) {
   if (!store.buckets.has(key)) {
     store.buckets.set(key, { count: 0, errors: 0, latencies: [], sampled: 0 });
   }
-  return store.buckets.get(key);
+  return /** @type {Bucket} */ (store.buckets.get(key));
 }
 
-// Reservoir sample so unbounded traffic does not balloon memory while keeping
-// percentile estimates statistically representative.
+/**
+ * Reservoir sample so unbounded traffic does not balloon memory while keeping
+ * percentile estimates statistically representative.
+ * @param {Bucket} bucket
+ * @param {number} durationMs
+ */
 function recordLatency(bucket, durationMs) {
   bucket.sampled += 1;
   if (bucket.latencies.length < MAX_LATENCY_SAMPLES_PER_BUCKET) {
@@ -53,6 +68,10 @@ function recordLatency(bucket, durationMs) {
   }
 }
 
+/**
+ * @param {BucketStore} store
+ * @param {number} now
+ */
 function evictOldBuckets(store, now) {
   const cutoff = now - WINDOW_MINUTES * BUCKET_MS;
   for (const key of store.buckets.keys()) {
@@ -60,20 +79,33 @@ function evictOldBuckets(store, now) {
   }
 }
 
+/**
+ * @param {string} routeKey
+ * @returns {BucketStore|null}
+ */
 function getOrCreateStore(routeKey) {
   if (!stores.has(routeKey)) {
     if (stores.size >= MAX_ROUTE_STORES) return null;
     stores.set(routeKey, { buckets: new Map() });
   }
-  return stores.get(routeKey);
+  return /** @type {BucketStore} */ (stores.get(routeKey));
 }
 
+/**
+ * @param {number[]} sorted
+ * @param {number} p
+ * @returns {number|null}
+ */
 function percentile(sorted, p) {
   if (sorted.length === 0) return null;
   const idx = Math.ceil((p / 100) * sorted.length) - 1;
   return sorted[Math.max(0, idx)];
 }
 
+/**
+ * @param {import('../types/express.js').ExpressRequest} req
+ * @returns {string}
+ */
 function normalizeRoute(req) {
   // Unmatched routes (no req.route) collapse to a single bucket per method
   // to prevent URL scanners/bots from inflating the stores Map.
@@ -84,9 +116,9 @@ function normalizeRoute(req) {
 
 /**
  * Express middleware — record timing and status after response finishes.
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
+ * @param {import('../types/express.js').ExpressRequest} req
+ * @param {import('../types/express.js').ExpressResponse} res
+ * @param {import('../types/express.js').ExpressNextFunction} next
  */
 export function requestMetrics(req, res, next) {
   const startMs = Date.now();

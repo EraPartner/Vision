@@ -55,7 +55,7 @@ export function classifyBrokerageRow(row) {
  * @returns {string}
  */
 export function tradeDedupKey(row) {
-  const norm = (v) => (v == null ? '' : String(v).trim());
+  const norm = (/** @type {unknown} */ v) => (v == null ? '' : String(v).trim());
   return [
     norm(row.account_id),
     norm(row.investment_id),

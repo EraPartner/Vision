@@ -22,6 +22,12 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 import { logger } from '../config/logger.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.js').ExpressNextFunction} ExpressNextFunction
+ */
+
 const router = Router();
 
 // ── Upload ─────────────────────────────────────────────────────────────────────
@@ -37,8 +43,9 @@ const router = Router();
 router.post(
   '/transaction/:id',
   validateIdParam,
+  /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */
   (req, res, next) => {
-    attachmentUpload.single('file')(req, res, (err) => {
+    attachmentUpload.single('file')(req, res, (/** @type {any} */ err) => {
       if (err instanceof multer.MulterError) {
         return next(new ValidationError(`Upload error: ${err.message}`));
       }
@@ -48,16 +55,25 @@ router.post(
       next();
     });
   },
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */
   async (req, res) => {
     const transactionId = parseInt(req.params.id, 10);
 
     if (!req.file) {
       throw new ValidationError('No file uploaded. Send a file as multipart/form-data with field name "file".');
     }
+    // ExpressRequest.file's members are individually optional (it also
+    // describes multer's diskStorage shape, used by other routes) but this
+    // route configures multer's memoryStorage (see attachmentUpload in
+    // services/attachmentService.js), which always populates
+    // originalname/buffer/mimetype together — the `!req.file` guard above is
+    // the real runtime check; this narrows to the shape verifyAttachmentContent/
+    // storeAttachment declare.
+    const uploadedFile = /** @type {{ originalname: string, buffer: Buffer, mimetype: string }} */ (req.file);
 
     let sniffedMime;
     try {
-      sniffedMime = verifyAttachmentContent(req.file);
+      sniffedMime = verifyAttachmentContent(uploadedFile);
     } catch (err) {
       throw new ValidationError(err.message);
     }
@@ -67,7 +83,7 @@ router.post(
       throw new NotFoundError('Transaction not found');
     }
 
-    const storedPath = await storeAttachment(transactionId, req.file);
+    const storedPath = await storeAttachment(transactionId, uploadedFile);
 
     // The existence check above races a concurrent hard delete — if the insert
     // fails (FK gone, DB error) the stored file would sit on disk with no row
@@ -76,7 +92,7 @@ router.post(
     try {
       attachment = await attachmentRepository.create({
         transaction_id: transactionId,
-        filename: req.file.originalname,
+        filename: uploadedFile.originalname,
         stored_path: storedPath,
         mime_type: sniffedMime,
         size_bytes: req.file.size,
@@ -106,7 +122,7 @@ router.post(
  * List attachments for a transaction. Pagination is opt-in: without
  * limit/offset every attachment is returned, as before.
  */
-router.get('/transaction/:id', validateIdParam, async (req, res) => {
+router.get('/transaction/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const transactionId = parseInt(req.params.id, 10);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const attachments = await attachmentRepository.listByTransaction(transactionId, page ?? {});
@@ -127,7 +143,7 @@ router.get('/transaction/:id', validateIdParam, async (req, res) => {
 // applied to this whole router via mountRouter('/api/attachments',
 // attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
-router.get('/:id/download', validateIdParam, async (req, res, next) => {
+router.get('/:id/download', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ async (req, res, next) => {
   const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
   if (!attachment) throw new NotFoundError('Attachment not found');
 
@@ -141,7 +157,7 @@ router.get('/:id/download', validateIdParam, async (req, res, next) => {
   );
   // Pass a callback so a file that's missing on disk (DB row exists, bytes
   // gone) becomes a clean 404 instead of a raw ENOENT 500.
-  res.sendFile(absPath, (err) => {
+  res.sendFile(absPath, (/** @type {any} */ err) => {
     if (!err) return;
     if (res.headersSent) {
       res.end();
@@ -164,7 +180,7 @@ router.get('/:id/download', validateIdParam, async (req, res, next) => {
 // applied to this whole router via mountRouter('/api/attachments',
 // attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
   if (!attachment) throw new NotFoundError('Attachment not found');
 

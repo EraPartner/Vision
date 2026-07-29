@@ -12,6 +12,7 @@
 import { VALID_PORTFOLIO_TXN_TYPES } from '../../lib/portfolioTxnTypes.js';
 
 // Lowercased raw → canonical. Covers common English/Dutch/German brokerage labels.
+/** @type {Record<string, string>} */
 export const BUILTIN_TYPE_ALIASES = {
   buy: 'buy', purchase: 'buy', bought: 'buy', koop: 'buy', aankoop: 'buy', kauf: 'buy',
   sell: 'sell', sale: 'sell', sold: 'sell', verkoop: 'sell', verkauf: 'sell',

@@ -7,7 +7,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from './helpers/mockLogger.js';
-import { createMockRouter } from './helpers/routeHarness.js';
 
 // ── Mock dependencies before importing main ──────────────────
 
@@ -35,13 +34,6 @@ vi.mock('../src/middleware/rateLimiter.js', () => ({
   adminMutateLimiter: (req, res, next) => next(),
   importRateLimiter: (req, res, next) => next(),
 }));
-
-// Mock all route modules to avoid pulling in full dependency trees
-const { router: mockRouter } = createMockRouter();
-vi.mock('express', async () => {
-  const actual = await vi.importActual('express');
-  return { ...actual, default: actual.default, Router: () => mockRouter };
-});
 
 import { getSettings } from '../src/config/config.js';
 import { checkConnection } from '../src/database/connection.js';

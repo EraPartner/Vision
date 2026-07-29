@@ -13,8 +13,31 @@ import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { parsedDateToYmd } from '../../lib/importDates.js';
 
+/**
+ * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('./index.js').ImportBatchId} ImportBatchId
+ * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
+ */
+
 const VALIDATE_CHUNK = 500;
 
+/**
+ * The projection validate.js reads. `tx_date` is `to_char`-ed to a
+ * 'YYYY-MM-DD' string rather than selected raw (see the comment below), so it
+ * overrides the raw DATE on {@link ImportStagingRow}.
+ *
+ * @typedef {Pick<ImportStagingRow,
+ *   'id'|'row_index'|'amount'|'recipient_raw'|'memo'|'currency'|'raw_data'|'bank_account'|'balance'>
+ *   & { tx_date: string|null }} PendingStagingRow
+ */
+
+/**
+ * Run the validate phase: reject unusable rows, hash the rest, and flag
+ * intra-batch duplicates.
+ *
+ * @param {{ batchId: ImportBatchId, onProgress?: ImportProgressCallback }} args
+ * @returns {Promise<{ validated: number, duplicates: number, errors: number }>}
+ */
 export async function validateBatch({ batchId, onProgress }) {
   await query(`UPDATE import_batches SET status = 'validating' WHERE id = $1`, [batchId]);
 
@@ -38,17 +61,22 @@ export async function validateBatch({ batchId, onProgress }) {
   // tx_hashes seen so far in this batch — a repeat is an intra-batch duplicate
   // (the same row twice in one CSV) and is dropped here rather than inserted
   // twice at commit time.
+  /** @type {Set<string>} */
   const seenHashes = new Set();
 
   if (onProgress) onProgress({ phase: 'validating', current: 0, total });
 
   for (let start = 0; start < total; start += VALIDATE_CHUNK) {
     const chunk = pending.slice(start, start + VALIDATE_CHUNK);
+    /** @type {string[]} */
     const ids = [];
+    /** @type {string[]} */
     const statuses = [];
+    /** @type {(string|null)[]} */
     const txHashes = [];
+    /** @type {(string|null)[]} */
     const errorMessages = [];
-    for (const row of chunk) {
+    for (const row of /** @type {PendingStagingRow[]} */ (chunk)) {
       const issue = validateRow(row);
       ids.push(row.id);
       if (issue) {
@@ -102,6 +130,10 @@ export async function validateBatch({ batchId, onProgress }) {
   return { validated, duplicates, errors };
 }
 
+/**
+ * @param {PendingStagingRow} row
+ * @returns {string|null} the rejection reason, or null when the row is usable
+ */
 function validateRow(row) {
   if (!row.tx_date) return 'missing tx_date';
   if (row.amount == null) return 'missing amount';
@@ -110,6 +142,13 @@ function validateRow(row) {
   return null;
 }
 
+/**
+ * sha256 of the literal source record, falling back to a
+ * date|amount|recipient|memo field hash when the adapter kept no raw record.
+ *
+ * @param {PendingStagingRow} row
+ * @returns {string} lowercase hex digest
+ */
 function computeRowHash(row) {
   let raw;
   if (row.raw_data) {

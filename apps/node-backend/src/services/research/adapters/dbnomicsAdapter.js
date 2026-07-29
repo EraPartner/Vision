@@ -35,10 +35,15 @@ const seriesDocSchema = z.looseObject({
 const dbnomicsAdapter = {
   key: 'dbnomics',
 
+  /** @param {string} query */
   async macroSearch(query) {
     return { items: searchCatalog('dbnomics', query) };
   },
 
+  /**
+   * @param {string} seriesId
+   * @param {{ range?: string }} [opts]
+   */
   async macroSeries(seriesId, { range = '5y' } = {}) {
     const data = await getJson(`${BASE}/${seriesId}?observations=1`);
     const docRaw = parseOr(seriesEnvelopeSchema, data, { series: { docs: [] } }).series.docs[0];

@@ -5,6 +5,28 @@
  * a flat list of { method, path } entries.  Consumed by GET /api/admin/endpoints.
  */
 
+/**
+ * The slice of an Express `Layer` this module actually reads. Deliberately
+ * structural rather than `import('express').Layer`: express ships no type
+ * declarations and `@types/express` is not a dependency, so referencing its
+ * types resolves to an implicit `any` (TS7016) under `noImplicitAny` — same
+ * reasoning as `QueryRunner` in types/rows.js for `pg`.
+ *
+ * @typedef {object} ExpressLayer
+ * @property {{ source?: string }} [regexp]
+ * @property {string} [_mountPath]
+ * @property {{ path: string, methods: Record<string, boolean> }} [route]
+ * @property {{ stack?: ExpressLayer[], _mountPath?: string }} [handle]
+ */
+
+/**
+ * The slice of an Express `Application` this module actually reads/calls.
+ * @typedef {object} ExpressApp
+ * @property {{ stack?: ExpressLayer[] }} [router]
+ * @property {{ stack?: ExpressLayer[] }} [_router]
+ * @property {(path: string, ...fns: any[]) => void} use
+ */
+
 /** @type {{ method: string, path: string }[]} */
 let manifest = [];
 
@@ -13,7 +35,7 @@ let manifest = [];
  * Express converts the mount path into a regexp with source like:
  *   ^\/api\/transactions\/?(?=\/|$)
  * We strip the ^ prefix and the \/?(?=\/|$) suffix, then unescape \/ → /.
- * @param {import('express').IRouterMatcher} layer
+ * @param {ExpressLayer} layer
  * @returns {string|null}
  */
 function extractPrefix(layer) {
@@ -30,11 +52,12 @@ function extractPrefix(layer) {
 
 /**
  * Recursively scan a Layer array and collect route definitions.
- * @param {any[]} stack
+ * @param {ExpressLayer[]} stack
  * @param {string} prefix
  * @returns {{ method: string, path: string }[]}
  */
 function scanStack(stack, prefix) {
+  /** @type {{ method: string, path: string }[]} */
   const routes = [];
 
   for (const layer of stack) {
@@ -59,7 +82,7 @@ function scanStack(stack, prefix) {
 /**
  * Scan the Express app's router stack and store the manifest.
  * Call once after all routes are registered in main.js.
- * @param {import('express').Application} app
+ * @param {ExpressApp} app
  */
 export function buildRouteManifest(app) {
   const router = app.router ?? app._router;
@@ -69,7 +92,7 @@ export function buildRouteManifest(app) {
 /**
  * Mount a router at a path and tag it with _mountPath so scanStack can resolve
  * the prefix in Express v5 (which no longer exposes layer.regexp).
- * @param {import('express').Application} app
+ * @param {ExpressApp} app
  * @param {string} path
  * @param {...any} fns
  */

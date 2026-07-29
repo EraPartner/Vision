@@ -20,14 +20,27 @@ import { normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
 const NAME = 'ing';
 const BANK_LABEL = 'ING';
 const MIN_FIELDS = 9;
 
+/**
+ * @param {string} line
+ * @returns {boolean}
+ */
 function isHeaderLine(line) {
   return line.includes('Omzetnummer') && line.includes('Boekingsdatum');
 }
 
+/**
+ * @param {string} line one ';'-delimited statement record
+ * @returns {ParsedBankTransaction|null} null when too short or unparseable
+ */
 function parseLine(line) {
   const parts = splitDelimitedRecord(line);
   if (!parts || parts.length < MIN_FIELDS) return null;
@@ -72,6 +85,10 @@ function parseLine(line) {
   };
 }
 
+/**
+ * @param {string|null|undefined} csvSample raw head of the uploaded file
+ * @returns {boolean}
+ */
 export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 3);
@@ -80,10 +97,14 @@ export function detect(csvSample) {
   );
 }
 
+/**
+ * @param {string} filePath
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath) {
   const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
   let headerSeen = false;
 

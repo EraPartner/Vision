@@ -38,8 +38,14 @@ import { getTargetCurrency, parseBoolQueryParam } from './info/_queryParams.js';
 import { parseIntClamped } from '../lib/pagination.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
+/** @param {any} raw */
 function parseNumericArrayQueryParam(raw) {
   if (!raw) return [];
   const values = Array.isArray(raw) ? raw : [raw];
@@ -48,7 +54,7 @@ function parseNumericArrayQueryParam(raw) {
     .filter((n) => Number.isFinite(n));
 }
 
-router.get('/monthly-summary', async (req, res) => {
+router.get('/monthly-summary', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const allTime = req.query.all_time === 'true' || req.query.all_time === '1';
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
@@ -59,14 +65,14 @@ router.get('/monthly-summary', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/category-breakdown', async (req, res) => {
+router.get('/category-breakdown', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeCategoryBreakdown({
     targetCurrency: getTargetCurrency(req),
   });
   res.ok({ data, meta });
 });
 
-router.get('/recipient-insights', async (req, res) => {
+router.get('/recipient-insights', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeRecipientInsights({
     targetCurrency: getTargetCurrency(req),
     excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
@@ -75,7 +81,7 @@ router.get('/recipient-insights', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/cashflow-comparison', async (req, res) => {
+router.get('/cashflow-comparison', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeCashflowComparison({
     targetCurrency: getTargetCurrency(req),
     excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
@@ -84,27 +90,27 @@ router.get('/cashflow-comparison', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/average-vs-current', async (req, res) => {
+router.get('/average-vs-current', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeAverageVsCurrent({
     targetCurrency: getTargetCurrency(req),
   });
   res.ok({ data, meta });
 });
 
-router.get('/bank-balances', async (req, res) => {
+router.get('/bank-balances', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeBankBalances({
     targetCurrency: getTargetCurrency(req),
   });
   res.ok({ data, meta });
 });
 
-router.get('/cashflow-forecast', async (req, res) => {
+router.get('/cashflow-forecast', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const months = parseIntClamped(req.query.months, { max: 24, fallback: 3 });
   const { data, meta } = await computeCashflowForecast({ months });
   res.ok({ data, meta: { ...meta, months } });
 });
 
-router.get('/cashflow-forecast-methods', async (req, res) => {
+router.get('/cashflow-forecast-methods', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const mcPaths = parseIntClamped(req.query.mc_paths, { max: 5000, fallback: 1000 });
   const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });
   const percentiles = parseNumericArrayQueryParam(req.query.mc_percentiles);
@@ -132,7 +138,7 @@ router.get('/cashflow-forecast-methods', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/cashflow-forecast-rolling', async (req, res) => {
+router.get('/cashflow-forecast-rolling', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const daysBack = parseIntClamped(req.query.days_back, { max: 365, fallback: 90 });
   const daysForward = parseIntClamped(req.query.days_forward, { max: 365, fallback: 90 });
   if (daysBack + daysForward > 730) {
@@ -163,7 +169,7 @@ router.get('/cashflow-forecast-rolling', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/cashflow-forecast-accuracy', async (req, res) => {
+router.get('/cashflow-forecast-accuracy', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const userId = req.get('x-actor') || 'anonymous';
   const limitMonths = parseIntClamped(req.query.limit_months, { max: 48, fallback: 24 });
 
@@ -194,7 +200,7 @@ router.get('/cashflow-forecast-accuracy', async (req, res) => {
   res.ok({ data: { methods, limit_months: limitMonths }, meta: { source: 'db', userId } });
 });
 
-router.get('/sankey', async (req, res) => {
+router.get('/sankey', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const targetCurrency = getTargetCurrency(req);
   const rawYear = parseInt(req.query.year, 10);
   const year = Number.isFinite(rawYear) && rawYear > 2000 ? rawYear : undefined;
@@ -207,7 +213,7 @@ router.get('/sankey', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/category-pivot', async (req, res) => {
+router.get('/category-pivot', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeCategoryPivot({
     targetCurrency: getTargetCurrency(req),
     excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
@@ -216,7 +222,7 @@ router.get('/category-pivot', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/recipient-by-year', async (req, res) => {
+router.get('/recipient-by-year', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeRecipientByYear({
     targetCurrency: getTargetCurrency(req),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
@@ -225,7 +231,7 @@ router.get('/recipient-by-year', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/recipient-pivot', async (req, res) => {
+router.get('/recipient-pivot', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
   const startDate = req.query.start || null;
   const endDate = req.query.end || null;
@@ -241,7 +247,7 @@ router.get('/recipient-pivot', async (req, res) => {
   res.ok({ data, meta });
 });
 
-router.get('/tag-pivot', async (req, res) => {
+router.get('/tag-pivot', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
   const startDate = req.query.start || null;
   const endDate = req.query.end || null;

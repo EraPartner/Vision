@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMockResponse } from './helpers/routeHarness.js';
 
 vi.mock('../src/config/config.js', () => ({
   getSettings: () => ({ isDevelopment: () => false }),
@@ -25,7 +24,13 @@ function createRequest({ ip, remoteAddress } = {}) {
   return req;
 }
 
-const createResponse = () => createMockResponse({ setHeader: vi.fn() });
+// rateLimiter is unit-tested as a plain middleware function (req, res, next)
+// — a minimal res stub is enough; there is no router/HTTP path to exercise.
+function createResponse() {
+  const res = { json: vi.fn(), status: vi.fn(), setHeader: vi.fn() };
+  res.status.mockReturnValue(res);
+  return res;
+}
 
 describe('rateLimiter middleware', () => {
   afterEach(() => {

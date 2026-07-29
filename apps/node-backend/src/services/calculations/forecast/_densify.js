@@ -22,6 +22,7 @@ export function densifyDailyHistory(history, endIso) {
   const startIso = sortedDates[0];
   const lastObserved = sortedDates[sortedDates.length - 1];
   const endStr = endIso && endIso >= startIso ? endIso : lastObserved;
+  /** @param {string} d */
   const parse = (d) => { const [y, m, dd] = d.split('-').map(Number); return Date.UTC(y, m - 1, dd); };
   const out = [];
   for (let t = parse(startIso); t <= parse(endStr); t += 86_400_000) {

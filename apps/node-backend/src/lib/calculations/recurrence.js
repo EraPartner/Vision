@@ -23,6 +23,11 @@ const SUPPORTED_PATTERNS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly
 // Guard against infinite expansion on tiny custom intervals.
 const MAX_OCCURRENCES = 500;
 
+/**
+ * @param {string|number|Date} dateLike
+ * @param {number} days
+ * @returns {Date}
+ */
 function addDaysUtc(dateLike, days) {
   const source = new Date(dateLike);
   const result = new Date(source.getTime());
@@ -34,6 +39,9 @@ function addDaysUtc(dateLike, days) {
  * Adds `monthDelta` months in APP_TIMEZONE wall-clock, clamping to the last
  * day of the target month when the source day doesn't exist (Jan 31 → Feb 28).
  * Preserves wall-clock hour/minute/second to avoid TZ-induced day shifts.
+ * @param {string|number|Date} dateLike
+ * @param {number} monthDelta
+ * @returns {Date}
  */
 function addMonthsClampedInAppTz(dateLike, monthDelta) {
   const source = new Date(dateLike);
@@ -55,6 +63,11 @@ function addMonthsClampedInAppTz(dateLike, monthDelta) {
   });
 }
 
+/**
+ * @param {string|number|Date} currentDate
+ * @param {string|null|undefined} recurrencePattern
+ * @returns {Date|null}
+ */
 export function calculateNextDate(currentDate, recurrencePattern) {
   if (!recurrencePattern) return null;
   const pattern = recurrencePattern.toLowerCase().trim();
@@ -78,6 +91,10 @@ export function calculateNextDate(currentDate, recurrencePattern) {
   return null;
 }
 
+/**
+ * @param {string|null|undefined} pattern
+ * @returns {boolean}
+ */
 export function isValidPattern(pattern) {
   if (!pattern) return false;
   const normalized = pattern.toLowerCase().trim();

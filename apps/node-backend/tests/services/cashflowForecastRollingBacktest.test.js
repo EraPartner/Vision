@@ -43,6 +43,8 @@ const stubMethod = (id) => ({
 
 vi.mock('../../src/repositories/infoRepository.js', () => ({
   infoRepository: {
+    // ADR-083 cache-key input (forecast/index.js filterHash).
+    getIncludeTransfers: vi.fn(async () => false),
     getCashflowForecastDataRolling: vi.fn(async (historyMonths, daysBack, daysForward) => ({
       history: buildHistory({ days: 400 }),
       currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
@@ -270,6 +272,30 @@ describe('computeCashflowForecastRolling — MC cache', () => {
     expect(mcRollingCacheRepo.get).not.toHaveBeenCalled();
     await Promise.resolve();
     expect(mcRollingCacheRepo.upsert).not.toHaveBeenCalled();
+  });
+
+  // ADR-083 `includeTransfers` changes what the forecast repositories return,
+  // so it must be part of the cache identity. Before it was hashed in, toggling
+  // the setting kept serving the pre-toggle forecast for the cache's 6h TTL.
+  it('includeTransfers is a cache-key input → toggling it misses the cache', async () => {
+    const { computeCashflowForecastRolling } = await import(
+      '../../src/services/calculations/forecast/index.js'
+    );
+    const args = { daysBack: 10, daysForward: 10, mcPaths: 500, mcPercentiles: [25, 75], userId: 'u_tx' };
+
+    infoRepository.getIncludeTransfers.mockResolvedValue(false);
+    await computeCashflowForecastRolling(args);
+    const hashOff = mcRollingCacheRepo.get.mock.calls.at(-1)[0].filterHash;
+
+    infoRepository.getIncludeTransfers.mockResolvedValue(true);
+    await computeCashflowForecastRolling(args);
+    const hashOn = mcRollingCacheRepo.get.mock.calls.at(-1)[0].filterHash;
+
+    expect(hashOff).not.toBe(hashOn);
+    // Every other input is identical, so the difference is the toggle alone.
+    expect(hashOff.replace(/\|t0$/, '')).toBe(hashOn.replace(/\|t1$/, ''));
+
+    infoRepository.getIncludeTransfers.mockResolvedValue(false);
   });
 });
 

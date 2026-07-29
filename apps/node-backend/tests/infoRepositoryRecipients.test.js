@@ -88,6 +88,14 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
     // day-of-month so a partial current month isn't compared to a full prior one.
     const momSql = query.mock.calls[1][0];
     expect(momSql).toContain("(CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)");
+    // MoM converts at HISTORICAL per-date rates like every other recipient
+    // surface — the no-DB guard for the fix that ended latest-rate conversion
+    // here (the DB pin proves the numbers; this pins the contract).
+    expect(momSql).toContain('t.date');
+    expect(convertRowsToEur).toHaveBeenNthCalledWith(2, expect.any(Array), 'EUR', {
+      useHistoricalRatesByDate: true,
+      dateField: 'date',
+    });
   });
 
   it('caps month-over-month list to top-10 by current spend', async () => {

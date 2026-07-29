@@ -27,9 +27,9 @@ const dailySeriesEnvelopeSchema = z.looseObject({
   'Time Series (Daily)': z.record(z.string(), z.any()).catch({}),
 });
 
-const RANGE_TO_DAYS = {
+const RANGE_TO_DAYS = Object.freeze({
   '1d': 2, '5d': 7, '1mo': 31, '3mo': 93, '6mo': 186, '1y': 366, '2y': 731, '5y': 1827, max: 100000,
-};
+});
 
 function key() {
   const k = providerKey('alpha_vantage');
@@ -39,9 +39,16 @@ function key() {
 
 // Rate-limit / info responses carry no data — surface them as errors so the
 // aggregator falls through instead of caching an empty result.
+/**
+ * @param {unknown} payload raw JSON body — upstream shape is undocumented outside
+ *   the happy path, so it is checked defensively rather than typed.
+ * @returns {unknown}
+ */
 function assertData(payload) {
-  if (payload && (payload.Note || payload.Information || payload['Error Message'])) {
-    throw new Error(payload.Note || payload.Information || payload['Error Message']);
+  if (payload && typeof payload === 'object') {
+    const p = /** @type {Record<string, unknown>} */ (payload);
+    const message = p.Note || p.Information || p['Error Message'];
+    if (message) throw new Error(String(message));
   }
   return payload;
 }
@@ -49,6 +56,7 @@ function assertData(payload) {
 const alphaVantageAdapter = {
   key: 'alpha_vantage',
 
+  /** @param {string} symbol */
   async quote(symbol) {
     const url = `${BASE}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${key()}`;
     const q = parseOr(globalQuoteEnvelopeSchema, assertData(await getJson(url)), { 'Global Quote': {} })['Global Quote'];
@@ -67,8 +75,12 @@ const alphaVantageAdapter = {
     };
   },
 
+  /**
+   * @param {string} symbol
+   * @param {{ range?: string }} [opts]
+   */
   async chart(symbol, { range = '1mo' } = {}) {
-    const days = RANGE_TO_DAYS[range] ?? RANGE_TO_DAYS['1mo'];
+    const days = RANGE_TO_DAYS[/** @type {keyof typeof RANGE_TO_DAYS} */ (range)] ?? RANGE_TO_DAYS['1mo'];
     const outputsize = days > 100 ? 'full' : 'compact';
     const url = `${BASE}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=${outputsize}&apikey=${key()}`;
     const series = parseOr(dailySeriesEnvelopeSchema, assertData(await getJson(url)), { 'Time Series (Daily)': {} })['Time Series (Daily)'];
@@ -83,7 +95,7 @@ const alphaVantageAdapter = {
       }))
       .filter((p) => Number.isFinite(p.time) && p.time >= cutoff && p.close !== undefined)
       .sort((a, b) => a.time - b.time);
-    return { symbol, currency: undefined, points };
+    return { symbol, currency: /** @type {string | undefined} */ (undefined), points };
   },
 };
 

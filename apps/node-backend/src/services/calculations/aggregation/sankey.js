@@ -19,6 +19,8 @@
  */
 
 import { query } from '../../../database/connection.js';
+import { buildExclusionClauses } from '../../../lib/filterBuilder.js';
+import { getIncludeTransfers } from '../../../repositories/infoRepositoryHelpers.js';
 import { convertRowsToEur } from '../../currency/currencyConversionService.js';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
@@ -30,7 +32,13 @@ const SAVINGS_NODE_ID = '__savings__';
 const TOP_N = 12;
 
 /**
- * @param {{ targetCurrency?: string, year?: number, excludedCategoryIds?: any[], excludedRecipientIds?: any[] }} [opts]
+ * Shape of a row from the SQL aggregate above: `amount` is a SUM(ABS(...))
+ * NUMERIC, so pg returns it as a string.
+ * @typedef {{ category_name: string, currency: string, is_income: boolean, amount: string }} SankeyRow
+ */
+
+/**
+ * @param {{ targetCurrency?: string, year?: number, excludedCategoryIds?: number[], excludedRecipientIds?: number[] }} [opts]
  */
 export async function computeSankeyFlow({
   targetCurrency = 'EUR',
@@ -44,17 +52,38 @@ export async function computeSankeyFlow({
 
   /** @type {any[]} */
   const params = [yearStart, yearEnd];
-  const clauses = [];
 
-  if (excludedCategoryIds.length > 0) {
-    params.push(excludedCategoryIds);
-    clauses.push(`AND COALESCE(t.category_id, r.default_category_id) != ALL($${params.length})`);
-  }
+  // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses),
+  // shared with every other money surface: the 3-level effective-category
+  // COALESCE (own → recipient default → PRIMARY recipient's default, matching
+  // transactionRepository and the category JOIN below) and the ALIAS-AWARE
+  // recipient form, both carrying the `-1` NULL sentinel.
+  //
+  // This file used to hand-roll both, and drifted from the canonical pair in
+  // two ways. `!= ALL($n)` without the sentinel evaluates to NULL — not true —
+  // for a NULL effective category, so *every uncategorised row* was silently
+  // dropped as soon as any exclusion was applied: excluding one spending
+  // category erased an unrelated €3000 uncategorised income row and rendered
+  // "Income 0" with money still flowing out of it. And the bare
+  // `t.recipient_id != ALL(...)` was not alias-aware, so excluding a PRIMARY
+  // recipient left its aliases' rows in the graph. Routing through the shared
+  // builder keeps sankey out of the exclusion-drift business for good.
+  //
+  // The date filter owns $1/$2, so the exclusion placeholders start at $3.
+  const excl = buildExclusionClauses({
+    excludedCategoryIds,
+    excludedRecipientIds,
+    startParamIdx: params.length + 1,
+  });
+  params.push(...excl.params);
+  const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
-  if (excludedRecipientIds.length > 0) {
-    params.push(excludedRecipientIds);
-    clauses.push(`AND t.recipient_id != ALL($${params.length})`);
-  }
+  // ADR-083: internal transfers are excluded from income/spending by default —
+  // a savings transfer's two legs would otherwise inflate BOTH sides of the
+  // flow graph (fake income in, fake spending out). Governed by the same
+  // runtime `includeTransfers` setting every other aggregation honours, so a
+  // user who opted in to seeing transfers sees them here too.
+  const includeTransfers = await getIncludeTransfers();
 
   // Aggregate in SQL: this endpoint converts with latest rates only (one rate
   // per currency below), so SUM(ABS(amount)) per (category, currency, is_income)
@@ -70,10 +99,12 @@ export async function computeSankeyFlow({
       SUM(ABS(t.amount)) AS amount
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
     WHERE t.is_active = true
+      ${includeTransfers ? '' : 'AND t.is_transfer = false'}
       AND t.date BETWEEN $1 AND $2
-      ${clauses.join('\n      ')}
+      ${exclusionWhere}
     GROUP BY 1, 2, 3
     `,
     params,
@@ -88,7 +119,7 @@ export async function computeSankeyFlow({
 
   // Convert to target currency
   const rows = await convertRowsToEur(
-    result.rows.map((r) => ({ ...r, amount: Math.abs(parseFloat(r.amount)) })),
+    result.rows.map((/** @type {SankeyRow} */ r) => ({ ...r, amount: Math.abs(parseFloat(r.amount)) })),
     targetCurrency,
   );
 
@@ -162,6 +193,7 @@ export async function computeSankeyFlow({
   return buildEnvelope(data, { source: 'live' });
 }
 
+/** @param {number} n */
 function round(n) {
   return roundMoney(n);
 }

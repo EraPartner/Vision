@@ -13,6 +13,8 @@ import finnhubAdapter from './research/adapters/finnhubAdapter.js';
 import fmpAdapter from './research/adapters/fmpAdapter.js';
 import alphaVantageAdapter from './research/adapters/alphaVantageAdapter.js';
 
+/** @typedef {import('../repositories/providerHealthRepository.js').ProviderHealth} ProviderHealth */
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PROBE_TIMEOUT_MS = 10_000;
@@ -89,6 +91,7 @@ const PROVIDER_DEFINITIONS = {
 
 // ─── Probe helpers ────────────────────────────────────────────────────────────
 
+/** @param {string} url */
 async function probeUrl(url) {
   const res = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -126,7 +129,7 @@ async function probeKinesis() {
  * @param {string} provider  Key from PROVIDER_DEFINITIONS
  */
 export async function recordSuccess(provider) {
-  const def = PROVIDER_DEFINITIONS[provider];
+  const def = PROVIDER_DEFINITIONS[/** @type {keyof typeof PROVIDER_DEFINITIONS} */ (provider)];
   if (!def) return;
   try {
     await providerHealthRepository.recordSuccess(provider, def.kind);
@@ -142,7 +145,7 @@ export async function recordSuccess(provider) {
  * @param {Error|string} error
  */
 export async function recordError(provider, error) {
-  const def = PROVIDER_DEFINITIONS[provider];
+  const def = PROVIDER_DEFINITIONS[/** @type {keyof typeof PROVIDER_DEFINITIONS} */ (provider)];
   if (!def) return;
   const message = error instanceof Error ? error.message : String(error);
   try {
@@ -184,7 +187,7 @@ export async function listProviderHealth() {
  * @returns {Promise<{ ok: boolean, error?: string, provider: Object }>}
  */
 export async function probeProvider(provider) {
-  const def = PROVIDER_DEFINITIONS[provider];
+  const def = PROVIDER_DEFINITIONS[/** @type {keyof typeof PROVIDER_DEFINITIONS} */ (provider)];
   if (!def) {
     throw Object.assign(new Error(`Unknown provider: ${provider}`), { status: 404 });
   }
@@ -205,6 +208,11 @@ export async function probeProvider(provider) {
   return { ok: true, provider: enrichRow(provider, def, row) };
 }
 
+/**
+ * @param {string} key
+ * @param {{ label: string, kind: string }} def
+ * @param {ProviderHealth|null} row
+ */
 function enrichRow(key, def, row) {
   return {
     provider: key,

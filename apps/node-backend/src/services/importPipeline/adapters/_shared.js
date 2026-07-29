@@ -11,6 +11,35 @@ import { parse } from 'csv-parse/sync';
 import { toDecimal } from '../../../lib/money.js';
 
 /**
+ * The row shape every bank CSV adapter emits and `stage.js` persists into
+ * `import_staging`. Adapters differ only in how they GET here; the shape itself
+ * is a contract shared by the whole pipeline.
+ *
+ * @typedef {object} ParsedBankTransaction
+ * @property {Date} date UTC-midnight (see parseDateFlexibleUtc) — never a local-midnight Date.
+ * @property {string} bankAccount canonical IBAN ({@link canonicalIban}) or the bank literal when the export carries no account.
+ * @property {string} recipient uppercased, cleaned counterparty name; 'UNKNOWN' when absent.
+ * @property {string} memo
+ * @property {number} amount signed — negative is an outflow.
+ * @property {string|null} currency ISO-4217 ({@link normalizeIsoCurrency}); null when the CSV had none, and commit defaults it to EUR.
+ * @property {number|null} balance the export's stamped running balance; null when the export carries none (ADR-094).
+ * @property {string|null} recipientAccount
+ * @property {string|null} recipientAddress
+ * @property {string|null} recipientBankName
+ * @property {string|null} comment
+ * @property {string} rawData the source line/record, kept for dedup + provenance.
+ * @property {[number, number]} [_seq] belfius only: (statement no, transaction no); consumed and stripped by its applyRunningBalances.
+ */
+
+/**
+ * A parsed transaction list carrying the adapter's own count of rows it could
+ * not interpret. The counter rides on the array (rather than a wrapper object)
+ * because that is the shape every adapter's `parse` has always returned.
+ *
+ * @typedef {ParsedBankTransaction[] & { skipped?: number }} ParsedBankTransactions
+ */
+
+/**
  * Parse an already-cleaned numeric string into a number via the canonical
  * decimal path. Returns NaN for empty or non-numeric input. Use instead of
  * raw `parseFloat` so the imported amount has one well-defined interpretation.
@@ -63,6 +92,13 @@ export async function readTextWithEncodingFallback(filePath) {
   return utf8;
 }
 
+/**
+ * Parse a `DD/MM/YYYY` cell into a UTC-midnight Date, rejecting out-of-range
+ * components rather than letting Date.UTC roll them over.
+ *
+ * @param {string} dateStr
+ * @returns {Date|null}
+ */
 export function parseDayMonthYear(dateStr) {
   const dateParts = String(dateStr).split('/');
   if (dateParts.length !== 3) return null;
@@ -126,6 +162,12 @@ export function parseDateWithFormat(dateStr, fmt) {
   // (Date.UTC(2024, 24, 12) → 2026-01-12 for a MM/DD file parsed as %d/%m/%Y),
   // and a 2-digit year like "24" becomes 1924. Reject instead of importing a
   // wrong day — matches parseDayMonthYear's validation.
+  /**
+   * @param {number} y
+   * @param {number} m 1-based month
+   * @param {number} d
+   * @returns {Date|null}
+   */
   const build = (y, m, d) => {
     if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
     if (y < 100) return null; // 2-digit-year misparse (e.g. "24" → 1924)
@@ -159,6 +201,13 @@ export function parseDateWithFormat(dateStr, fmt) {
   return parseDateFlexibleUtc(dateStr);
 }
 
+/**
+ * Parse an EU-formatted decimal cell ("1.234,56"). A dot-decimal cell without a
+ * comma is left untouched.
+ *
+ * @param {unknown} value
+ * @returns {number} NaN when the cell isn't numeric
+ */
 export function parseCommaDecimal(value) {
   const s = String(value).replace(/\s/g, '');
   // EU format: comma is the decimal separator and dots are thousands separators.
@@ -174,6 +223,9 @@ export function parseCommaDecimal(value) {
 /**
  * Robust amount parser that handles both EU (1.234,56) and US (1,234.56)
  * formats, currency symbols, parenthetical negatives, and leading sign.
+ *
+ * @param {unknown} raw
+ * @returns {number} NaN when the cell isn't numeric
  */
 export function parseAmountField(raw) {
   let s = String(raw || '').trim();
@@ -214,6 +266,12 @@ export function parseAmountField(raw) {
 
 const UTF8_BOM_RE = /^\uFEFF/;
 
+/**
+ * Split file content into physical lines, stripping a leading UTF-8 BOM.
+ *
+ * @param {unknown} content
+ * @returns {string[]}
+ */
 export function splitCsvLines(content) {
   // Strip the UTF-8 BOM (U+FEFF) that Excel and several Windows tools
   // prepend to exported CSVs. Without this, the first header byte leaks
@@ -247,6 +305,12 @@ export function splitDelimitedRecord(line, delimiter = ';') {
   }
 }
 
+/**
+ * Join the adapter's collected comment fragments, or null when there are none.
+ *
+ * @param {string[]} commentParts
+ * @returns {string|null}
+ */
 export function buildOptionalComment(commentParts) {
   return commentParts.length ? commentParts.join(' | ') : null;
 }
@@ -266,15 +330,30 @@ export function canonicalIban(value) {
 }
 
 /**
+ * Read and parse a CSV file with csv-parse.
+ *
+ * The element type genuinely depends on `options`: with `columns: true` (what
+ * every record-based adapter passes) csv-parse yields `Record<string, string>`
+ * objects, otherwise `string[]` tuples. csv-parse's own signature only models
+ * the tuple case, so this is typed `any[]` and each adapter states the shape it
+ * asked for on its own row handler.
+ *
  * @param {string} filePath
- * @param {object} options
+ * @param {object} options csv-parse options
  * @param {BufferEncoding} [encoding]
+ * @returns {Promise<any[]>}
  */
 export async function parseCsvFile(filePath, options, encoding = 'utf-8') {
   const content = await fs.promises.readFile(filePath, encoding);
   return parse(content, options);
 }
 
+/**
+ * Flatten a parsed CSV record into the `rawData` provenance string.
+ *
+ * @param {Record<string, any>} row a `columns: true` csv-parse record
+ * @returns {string}
+ */
 export function buildRawRowString(row) {
   return Object.values(row).join('|');
 }

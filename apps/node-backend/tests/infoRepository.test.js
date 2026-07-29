@@ -75,7 +75,7 @@ describe('InfoRepository', () => {
             ],
           };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return {
             rows: [
               { day: '2026-02-01', bank_account: 'Chase', balance: '4500', currency: 'EUR' },
@@ -118,7 +118,7 @@ describe('InfoRepository', () => {
             ],
           };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return {
             rows: [
               { day: '2026-02-01', bank_account: 'Chase', balance: '4500', currency: 'EUR' },
@@ -152,7 +152,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [{ day: todayKey, investments: '4470' }] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'Chase', balance: '5000', currency: 'EUR' }] };
         }
         return { rows: [] };
@@ -191,7 +191,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'Main', balance: '1234.56', currency: 'EUR' }] };
         }
         return { rows: [] };
@@ -214,7 +214,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return {
             rows: [
               { day: firstDayKey, bank_account: 'A', balance: '1000', currency: 'EUR' },
@@ -234,15 +234,13 @@ describe('InfoRepository', () => {
     it('should fall back to cumulative transaction flow when no bank balances are available', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
-        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
-        if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
-          return { rows: [{ day: todayKey, investments: '500' }] };
-        }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
-          return { rows: [] };
-        }
-        if (sql.includes('COALESCE(SUM(t.amount), 0) AS amount')) {
+        // Discriminated by 'tx_cumulative', the fallback's own CTE:
+        // `COALESCE(SUM(t.amount), 0) AS amount` also appears inside the
+        // shared balance-series CTEs, so it cross-matches the history walk.
+        // Like the 'WITH anchor' branch below, this MUST come before the
+        // generic 'SELECT 1 FROM' one — the fallback's tracking-only exclusion
+        // contains `NOT EXISTS (SELECT 1 FROM accounts a …)`.
+        if (sql.includes('tx_cumulative')) {
           return {
             rows: [
               { day: '2026-02-01', currency: 'EUR', value: '1200' },
@@ -250,10 +248,25 @@ describe('InfoRepository', () => {
             ],
           };
         }
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
+        if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
+          return { rows: [{ day: todayKey, investments: '500' }] };
+        }
+        if (sql.includes('balance_series')) {
+          return { rows: [] };
+        }
         return { rows: [] };
       });
 
       const result = await infoRepository.getNetWorthFromSnapshots();
+
+      // The fallback query must carry the tracking-only exclusion: a ledger
+      // whose only active accounts are in_net_worth=false must not have THEIR
+      // running total reported as net worth.
+      const fallbackSql = query.mock.calls.map(([s]) => s)
+        .find((s) => typeof s === 'string' && s.includes('tx_cumulative'));
+      expect(fallbackSql).toContain('a.in_net_worth = false');
 
       expect(result.current.liquid).toBe(1500);
       expect(result.current.investments).toBe(500);
@@ -274,7 +287,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'FallbackAccount', balance: '99', currency: 'EUR' }] };
         }
         return { rows: [] };
@@ -289,10 +302,11 @@ describe('InfoRepository', () => {
     // ── WP-A1: current point uses the unified computed-balance definition ──
     //
     // The unified current-balance query is discriminated by 'WITH anchor'
-    // (the shared lateral's CTE) — the stamped history walk has 'account_list'
-    // instead, so the two mocks can't cross-match. The 'WITH anchor' branch
-    // MUST come before the generic 'SELECT 1 FROM' branch: the lateral's
-    // no-stamp fallback contains `NOT EXISTS (SELECT 1 FROM anchor)`.
+    // (the shared lateral's CTE) — the daily history walk ends in a
+    // 'balance_series' CTE instead, so the two mocks can't cross-match. The
+    // 'WITH anchor' branch MUST come before the generic 'SELECT 1 FROM'
+    // branch: the lateral's no-stamp fallback contains
+    // `NOT EXISTS (SELECT 1 FROM anchor)`.
     const mockUnifiedNetWorth = ({ firstDataDate, investmentsRows, walkRows, currentRows }) => {
       query.mockImplementation(async (sql) => {
         if (sql.includes('WITH anchor')) return { rows: currentRows };
@@ -301,7 +315,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: investmentsRows };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: walkRows };
         }
         return { rows: [] };
@@ -421,7 +435,7 @@ describe('InfoRepository', () => {
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
         }
-        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+        if (sql.includes('balance_series')) {
           return { rows: [{ day: todayKey, bank_account: 'Main', balance: '1000', currency: 'EUR' }] };
         }
         return { rows: [] };
@@ -729,6 +743,50 @@ describe('InfoRepository', () => {
       }
     });
 
+    // The month window used to be built as LOCAL Dates (`new Date(today.year,
+    // today.month, 1)`) but read back for the `month`/`year` fields with UTC
+    // getters. On a server east of UTC — including the default
+    // APP_TIMEZONE=Europe/Brussels — local midnight of the 1st is still the
+    // PREVIOUS month in UTC, so the response named month 6 while period_start
+    // (local extraction) named 2026-07-01, and at a year boundary it named the
+    // previous YEAR too. Neither CI nor the container can see it: both run
+    // TZ=UTC, where local and UTC getters agree.
+    it.each([
+      ['mid-year', '2026-06-15T12:00:00Z', 7, 2026, '2026-07-01', '2026-07-31'],
+      ['across the year boundary', '2026-12-15T12:00:00Z', 1, 2027, '2027-01-01', '2027-01-31'],
+    ])('names the next month consistently with period_start east of UTC (%s)', async (
+      _label, systemTime, month, year, periodStart, periodEnd,
+    ) => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      const prevTz = process.env.TZ;
+      process.env.TZ = 'Asia/Tokyo'; // UTC+9 — local midnight is the day before in UTC
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(systemTime));
+      try {
+        query.mockResolvedValueOnce({ rows: [] });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+
+        expect(result.period_start).toBe(periodStart);
+        expect(result.period_end).toBe(periodEnd);
+        // The headline month/year must name the SAME month period_start does.
+        expect({ month: result.month, year: result.year }).toEqual({ month, year });
+        // …and the SQL window must be bound to that same month.
+        expect(query.mock.calls[0][1]).toEqual([periodStart, expect.any(String)]);
+      } finally {
+        vi.useRealTimers();
+        // Restore, not reassign: `process.env.TZ = undefined` writes the literal
+        // string "undefined", leaving Intl on an invalid zone for the rest of
+        // the file.
+        if (prevTz === undefined) delete process.env.TZ;
+        else process.env.TZ = prevTz;
+      }
+    });
+
     it('expands a recurring planned tx into its next-month occurrences', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,
@@ -789,6 +847,63 @@ describe('InfoRepository', () => {
       }
     });
 
+    // Recurrence expansion used to walk `Date`s: the pg DATE arrives at
+    // SERVER-LOCAL midnight, occurrences were rendered with toAppDateString
+    // (APP_TIMEZONE) and the fast-forward compared that instant against
+    // Date.UTC() of the window start. East of APP_TIMEZONE (TZ=Asia/Tokyo with
+    // the default Europe/Brussels) local midnight is still the previous day in
+    // the app zone, so every occurrence shifted a day back: the weekly row
+    // below started on 2026-06-30 instead of 2026-07-01 and every July
+    // occurrence landed 6 days off, and the monthly row shifted onto May 31 and
+    // then clamped to the 30th for the rest of the year. The expansion is pure
+    // calendar-string math now, so the occurrence days are identical on every
+    // host — hence the same expectations for each TZ below.
+    it.each([
+      // [host TZ, cadence, [stored y, m, d], expected occurrences in July 2026]
+      ...['UTC', 'Asia/Tokyo', 'America/Los_Angeles'].flatMap((tz) => [
+        [tz, 'weekly', [2026, 6, 3], ['2026-07-01', '2026-07-08', '2026-07-15', '2026-07-22', '2026-07-29']],
+        [tz, 'monthly', [2026, 6, 1], ['2026-07-01']],
+        // Month-end clamping compounds across sequential hops and must stay
+        // that way: Jan 31 → Feb 28 → Mar 28 → … → Jul 28 (never back to the
+        // 31st).
+        [tz, 'monthly', [2026, 1, 31], ['2026-07-28']],
+      ]),
+    ])('expands a recurring row on the same days regardless of host TZ (%s, %s)', async (
+      tz, pattern, [y, m, d], expected,
+    ) => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      const prevTz = process.env.TZ;
+      process.env.TZ = tz;
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z')); // → July 2026 window
+      try {
+        // Built with LOCAL components on purpose: that is exactly how pg hands
+        // back a DATE column (a Date at server-local midnight).
+        query.mockResolvedValueOnce({
+          rows: [
+            { id: 1, planned_date: new Date(y, m - 1, d), amount: '-50', currency: 'EUR', recipient_name: 'Gym', category_name: null, is_recurring: true, recurrence_pattern: pattern },
+          ],
+        });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+
+        expect(result.daily_data.map((day) => day.date)).toEqual(expected);
+        expect(result.summary.transaction_count).toBe(expected.length);
+        expect(result.summary.total_expenses).toBe(-50 * expected.length);
+      } finally {
+        vi.useRealTimers();
+        // Restore, not reassign: `process.env.TZ = undefined` writes the
+        // literal string "undefined", leaving Intl on an invalid zone for the
+        // rest of the file.
+        if (prevTz === undefined) delete process.env.TZ;
+        else process.env.TZ = prevTz;
+      }
+    });
+
     it('should compute average-vs-current spending projections on calendar-day denominators', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,
@@ -807,7 +922,10 @@ describe('InfoRepository', () => {
             { amount: '-5', currency: 'EUR', date: '2026-03-03' },
             { amount: '1', currency: 'EUR', date: '2026-03-03' },
           ],
-        });
+        })
+        // Third call: the unfiltered ledger-start probe. A first row back at the
+        // window floor means the full 6 observed months apply.
+        .mockResolvedValueOnce({ rows: [{ first_date: '2025-09-04' }] });
 
       // Pin the clock so the calendar-day denominators are deterministic.
       vi.useFakeTimers();
@@ -815,9 +933,12 @@ describe('InfoRepository', () => {
       try {
         const result = await infoRepository.getAverageVsCurrentSpending('EUR');
 
-        // 6-month window = 2025-09-01 → 2026-03-01 = 181 calendar days; spend 30.
-        // Old (buggy) code divided by 2 transaction days → 15.
+        // Observed window = 2025-09-01 → 2026-03-01 = 6 months = 181 calendar
+        // days; spend 30. Old (buggy) code divided by 2 transaction days → 15.
         expect(result.past_6_months.avg_daily_spending).toBeCloseTo(30 / 181, 2);
+        // The monthly sibling divides the SAME 30 by the SAME window in months.
+        expect(result.past_6_months.months_counted).toBe(6);
+        expect(result.past_6_months.avg_monthly_spending).toBeCloseTo(30 / 6, 2);
         expect(result.current_month.total_spending).toBe(5);
         // daysElapsed is the calendar day (15), not the 1 day that had a txn.
         expect(result.current_month.days_elapsed).toBe(15);
@@ -844,11 +965,20 @@ describe('InfoRepository', () => {
 
       await infoRepository.getAverageVsCurrentSpending('EUR');
 
-      for (const [sql] of query.mock.calls) {
+      // Calls 0/1 are the two aggregate windows; call 2 is the ledger-start
+      // probe, which is a MIN(date) scalar and has nothing to group by.
+      for (const [sql] of query.mock.calls.slice(0, 2)) {
         expect(sql).toContain('GROUP BY t.date, t.currency');
         expect(sql).toContain('SUM(t.amount)');
         expect(sql).not.toMatch(/LIMIT/i);
       }
+      // The average denominator must be probed UNFILTERED: an exclusion or the
+      // ADR-083 transfer predicate emptying the oldest months would silently
+      // re-base the divisor (see infoRepositoryForecast's sqlLedgerStart).
+      const probeSql = query.mock.calls[2][0];
+      expect(probeSql).toContain('MIN(t.date)');
+      expect(probeSql).not.toMatch(/is_transfer/);
+      expect(probeSql).not.toMatch(/LIMIT/i);
     });
   });
 });

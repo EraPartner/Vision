@@ -23,15 +23,18 @@ const RIDGE_LAMBDA = 1.0;
 const CHANGEPOINT_FRACTION = 0.8;
 const NUM_CHANGEPOINTS = 10;
 
+/** @param {string} iso */
 function parseIso(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   return Date.UTC(y, m - 1, d);
 }
 
+/** @param {string} iso */
 function daysSinceEpoch(iso) {
   return parseIso(iso) / 86_400_000;
 }
 
+/** @param {string} iso */
 function dayOfYear(iso) {
   const ms = parseIso(iso);
   const [y] = iso.split('-').map(Number);
@@ -39,6 +42,12 @@ function dayOfYear(iso) {
   return (ms - startMs) / 86_400_000;
 }
 
+/**
+ * @param {number} t
+ * @param {string} dayIso
+ * @param {number[]} changepoints
+ * @returns {number[]}
+ */
 function featureRow(t, dayIso, changepoints) {
   const row = [1, t];
   for (const cp of changepoints) {
@@ -58,6 +67,12 @@ function featureRow(t, dayIso, changepoints) {
   return row;
 }
 
+/**
+ * @param {number[][]} X
+ * @param {number[]} y
+ * @param {number} lambda
+ * @returns {number[]}
+ */
 function solveRidge(X, y, lambda) {
   const n = X.length;
   const p = X[0].length;
@@ -79,6 +94,11 @@ function solveRidge(X, y, lambda) {
   return gaussianElimination(XtX, Xty);
 }
 
+/**
+ * @param {number[][]} A
+ * @param {number[]} b
+ * @returns {number[]}
+ */
 function gaussianElimination(A, b) {
   const n = A.length;
   const M = A.map((row, i) => [...row, b[i]]);
@@ -104,11 +124,16 @@ function gaussianElimination(A, b) {
   return x;
 }
 
+/**
+ * @param {Array<{date: string, net: number}>} history
+ * @returns {Array<{date: string, net: number}>}
+ */
 function denseDaily(history) {
   if (history.length === 0) return [];
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
   const start = parseIso(sorted[0].date);
   const end = parseIso(sorted[sorted.length - 1].date);
+  /** @type {Map<string, number>} */
   const map = new Map();
   for (const r of sorted) map.set(r.date, (map.get(r.date) ?? 0) + r.net);
   const out = [];
@@ -119,6 +144,10 @@ function denseDaily(history) {
   return out;
 }
 
+/**
+ * @param {{history: Array<{date: string, net: number}>, forecastDates: string[]}} ctx
+ * @returns {Array<{date: string, value: number}>}
+ */
 export function forecast({ history, forecastDates }) {
   const dense = denseDaily(history);
   if (dense.length < 60 || forecastDates.length === 0) {
@@ -128,6 +157,7 @@ export function forecast({ history, forecastDates }) {
   const t0 = daysSinceEpoch(dense[0].date);
   const ts = dense.map((r) => daysSinceEpoch(r.date) - t0);
   const tMax = ts[ts.length - 1];
+  /** @type {number[]} */
   const changepoints = [];
   const cpEnd = tMax * CHANGEPOINT_FRACTION;
   for (let k = 1; k <= NUM_CHANGEPOINTS; k++) {

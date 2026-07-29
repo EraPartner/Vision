@@ -15,7 +15,7 @@ const MAX_CHART_ITEMS = 10;
 const MAX_TABLE_ROWS = 20;
 
 /**
- * @param {{ categories: { categories: object[] } | null; exclusions?: { categoryIds: number[]; recipientIds: number[] } }} data
+ * @param {Pick<import('../dataFetcher.js').FinancialReportData, 'categories' | 'exclusions'>} data
  * @param {{ currency: string; period: import('../dataFetcher.js').Period }} opts
  * @returns {string}
  */

@@ -5,9 +5,14 @@
 import { query } from '../database/connection.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { toYmd } from '../utils/portfolioMath.js';
-import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
+import {
+  COMPUTED_BALANCE_LATERAL,
+  computedBalanceByCurrencyLateral,
+  computedBalanceSeriesCtes,
+} from './accountBalanceSql.js';
 import {
   roundToCents,
+  toWireDate,
   batchConvertGroupsWithHistoricalRateFallback,
 } from './infoRepositoryHelpers.js';
 
@@ -35,10 +40,27 @@ export const banksRepository = {
    *   - `anchor_date` / `post_anchor_count` — balance provenance from the
    *     shared lateral ("as of {date} statement + {n} entries since" vs
    *     "sum of {n} entries" when anchor_date is absent).
+   *
+   * Multi-currency accounts: the anchor+delta computation is partitioned by
+   * `transactions.currency` (`computedBalanceByCurrencyLateral`) and each
+   * partition is converted at its own rate before the per-account total is
+   * summed. The previous single-partition form added a EUR amount to a USD
+   * amount as bare numbers and converted the sum at the most recent row's rate
+   * (100 EUR + 100 USD at rate 0.5 → 100 instead of 150). Single-currency accounts
+   * have exactly one partition and are unaffected.
+   *
+   * The 12-month history uses that SAME definition evaluated as of each day,
+   * and both sides convert at the rate of the day they represent (the history
+   * at each day, the headline at today — `CURRENT_DATE`, where the series
+   * ends). So the last history point equals `total_net_position`, in every
+   * currency, by construction. The series is no longer gated on stamped rows
+   * (which hid manual-only accounts from the chart while they counted in the
+   * headline, and froze stamped accounts at their last statement figure). An
+   * account contributes no point at all before its first active row (not a
+   * zero, and not its first known balance carried backwards).
    */
   async getBankBalances(targetCurrency = 'EUR') {
     const accounts = [];
-    let totalNetPosition = 0;
 
     // Both queries are independent — run in parallel, then batch-convert
     // with one historical-rate lookup instead of two.
@@ -46,27 +68,39 @@ export const banksRepository = {
       query(`
         SELECT a.name AS bank_account,
                COALESCE(a.display_name, a.name) AS display_name,
-               tx.currency,
-               COALESCE(lb.balance, 0) AS balance,
+               bal.currency,
+               bal.balance,
                CASE WHEN a.statement_balance IS NOT NULL
                     THEN a.statement_balance - COALESCE(lb.balance, 0)
                     ELSE NULL END AS drift,
                lb.anchor_date,
                lb.post_anchor_count,
-               tx.last_transaction AS date,
+               -- FX anchor for the conversion below: TODAY, the day this
+               -- balance represents — the same day the history series ends on,
+               -- so the headline and the last chart point convert at one rate.
+               -- Keying it on the account's last activity instead (as this did)
+               -- revalued a stamped foreign-currency account at the rate of its
+               -- last statement while the chart moved with the daily rate: a
+               -- USD account last imported 30 days ago showed 500 over a chart
+               -- ending at 900. Native-currency figures (drift) are unaffected.
+               to_char(CURRENT_DATE, 'YYYY-MM-DD') AS date,
                tx.transaction_count,
                tx.first_transaction,
                tx.last_transaction
         FROM accounts a
         ${COMPUTED_BALANCE_LATERAL}
+        -- One row per currency the account holds, each with its own anchored
+        -- running balance, converted independently below (the per-account total
+        -- is summed after conversion). lb above stays the account-level
+        -- (cross-currency) figure ONLY for drift and the provenance fields, so
+        -- the drift badge keeps matching the accounts hub, which reads the same
+        -- lateral.
+        ${computedBalanceByCurrencyLateral({ account: 'a.id' })}
         JOIN LATERAL (
-          -- Per-account activity metadata over active rows. The currency is the
-          -- most recent active row's (multi-currency partitioning is D2); the
-          -- date anchors the FX conversion below to the latest activity.
+          -- Per-account activity metadata over active rows.
           SELECT COUNT(*) AS transaction_count,
                  MIN(t.date) AS first_transaction,
-                 MAX(t.date) AS last_transaction,
-                 (ARRAY_AGG(COALESCE(t.currency, 'EUR') ORDER BY t.date DESC, t.id DESC))[1] AS currency
+                 MAX(t.date) AS last_transaction
           FROM transactions t
           WHERE t.account_id = a.id AND t.is_active = true
         ) tx ON true
@@ -76,7 +110,7 @@ export const banksRepository = {
           -- leaves this widget the moment it is closed, matching net worth.
           AND a.in_net_worth = true
           AND tx.transaction_count > 0
-        ORDER BY a.name
+        ORDER BY a.name, bal.currency
       `),
       query(`
         WITH days AS (
@@ -97,37 +131,37 @@ export const banksRepository = {
               SELECT t.account_id FROM transactions t
                WHERE t.is_active = true AND t.account_id IS NOT NULL
             )
-        )
-        -- One index-backed LATERAL probe per (account, day) for the latest
-        -- balance ≤ day, instead of a ROW_NUMBER over a series×transactions
-        -- CROSS JOIN that materialized many copies of the table. Mirrors the
-        -- "latest balance ≤ day" pattern in infoRepositoryNetWorth.js; same
-        -- tie-break (date DESC, id DESC). Uses idx_transactions_account_date_active.
+        ),
+        -- The series carries the SAME per-currency anchor+delta definition the
+        -- current balance above uses, evaluated at every day. The old "latest
+        -- STAMPED balance ≤ day" probe (plus a WHERE lb.balance IS NOT NULL
+        -- gate) dropped never-stamped accounts from the chart while they
+        -- counted in total_net_position, and froze stamped accounts at their
+        -- last statement, so today's chart point disagreed with the headline
+        -- sitting above it. A day before the account's first active row still
+        -- yields no point, so a series starts at first activity rather than
+        -- back-filling zeroes.
+        --
         -- Daily (not month-end) points: the dashboard Balance History chart's
         -- time-scale auto-ticks outnumbered monthly datapoints, duplicating
-        -- month labels; ~365 probes per account stay cheap index scans.
+        -- month labels.
+        --
+        -- Note the series is bounded at each day while the headline (like the
+        -- accounts hub) is unbounded, so a FUTURE-dated row counts in the
+        -- headline before it reaches the chart. That is pre-existing and
+        -- deliberate: bounding the headline instead would diverge it from the
+        -- hub.
+        ${computedBalanceSeriesCtes({ byCurrency: true })}
         -- to_char keeps the day a plain string (pg DATE → local-midnight JS Date
         -- otherwise — the recurring day-shift hazard).
         SELECT
           a.bank_account,
-          to_char(d.day, 'YYYY-MM-DD') AS day,
-          COALESCE(lb.currency, 'EUR') AS currency,
-          lb.balance,
-          lb.date
-        FROM days d
-        CROSS JOIN account_list a
-        LEFT JOIN LATERAL (
-          SELECT t.currency, t.balance, t.date
-          FROM transactions t
-          WHERE t.is_active = true
-            AND t.account_id = a.account_id
-            AND t.balance IS NOT NULL
-            AND t.date <= d.day
-          ORDER BY t.date DESC, t.id DESC
-          LIMIT 1
-        ) lb ON true
-        WHERE lb.balance IS NOT NULL
-        ORDER BY a.account_id, d.day
+          to_char(s.day, 'YYYY-MM-DD') AS day,
+          s.currency,
+          s.balance
+        FROM balance_series s
+        JOIN account_list a ON a.account_id = s.account_id
+        ORDER BY s.account_id, s.day, s.currency
       `),
     ]);
 
@@ -145,14 +179,18 @@ export const banksRepository = {
             amount: toNumber(toDecimal(r.balance)),
             currency: r.currency || 'EUR',
           })),
+          // History rows carry no `date`: the conversion helper falls back to
+          // `day` (see resolveDateFromRow), which is the right FX anchor for an
+          // as-of-that-day balance — and the convention net worth's history
+          // already follows.
           historyResult.rows
             .filter((/** @type {{
               bank_account: string, day: string, currency: string,
-              balance: string, date: Date,
+              balance: string,
             }} */ r) => r.bank_account)
             .map((/** @type {{
               bank_account: string, day: string, currency: string,
-              balance: string, date: Date,
+              balance: string,
             }} */ r) => ({
               ...r,
               amount: toNumber(toDecimal(r.balance)),
@@ -163,41 +201,69 @@ export const banksRepository = {
         'date'
       );
 
+    // One row per (account, currency partition): sum the CONVERTED partitions
+    // back into a single per-account balance, keeping the account metadata from
+    // whichever partition arrived first (it is identical across them).
+    /** @type {Map<string, { account: Record<string, any>, balance: import('decimal.js').Decimal }>} */
+    const accountsByName = new Map();
     for (const row of currentBalancesConverted) {
-      const balance = roundToCents(row.amount_eur);
-      accounts.push({
-        bank_account: row.bank_account,
-        display_name: row.display_name || row.bank_account,
-        balance,
-        // Native-currency drift, matching the hub's badge (accountRepository).
-        // SQL NULL (no statement balance) → undefined, never null (convention).
-        drift: row.drift == null ? undefined : roundToCents(toNumber(toDecimal(row.drift))),
-        // Provenance (WP-A1): anchor_date is already a YYYY-MM-DD string via
-        // to_char in the lateral; NULL (no stamp) → undefined.
-        anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
-        post_anchor_count: row.post_anchor_count == null
-          ? undefined
-          : parseInt(row.post_anchor_count, 10),
-        transaction_count: parseInt(row.transaction_count, 10),
-        first_transaction: row.first_transaction,
-        last_transaction: row.last_transaction,
-      });
-      totalNetPosition += balance;
+      let entry = accountsByName.get(row.bank_account);
+      if (!entry) {
+        entry = {
+          account: {
+            bank_account: row.bank_account,
+            display_name: row.display_name || row.bank_account,
+            balance: 0,
+            // Native-currency drift, matching the hub's badge (accountRepository).
+            // SQL NULL (no statement balance) → undefined, never null (convention).
+            drift: row.drift == null ? undefined : roundToCents(toNumber(toDecimal(row.drift))),
+            // Provenance (WP-A1): anchor_date is already a YYYY-MM-DD string via
+            // to_char in the lateral; NULL (no stamp) → undefined.
+            anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
+            post_anchor_count: row.post_anchor_count == null
+              ? undefined
+              : parseInt(row.post_anchor_count, 10),
+            transaction_count: parseInt(row.transaction_count, 10),
+            // DATE columns cross the wire as calendar-day strings: pg reads DATE
+            // as a local-midnight Date, which JSON-serializes to the PREVIOUS
+            // day east of UTC (lib/dateFormat.js).
+            first_transaction: toWireDate(row.first_transaction),
+            last_transaction: toWireDate(row.last_transaction),
+          },
+          balance: toDecimal(0),
+        };
+        accountsByName.set(row.bank_account, entry);
+        accounts.push(entry.account);
+      }
+      entry.balance = entry.balance.plus(toDecimal(row.amount_eur));
+    }
+    let totalNetPositionDec = toDecimal(0);
+    for (const entry of accountsByName.values()) {
+      entry.account.balance = roundToCents(entry.balance);
+      totalNetPositionDec = totalNetPositionDec.plus(toDecimal(entry.account.balance));
+    }
+    const totalNetPosition = toNumber(totalNetPositionDec);
+
+    // Same per-(account, day) fold: a multi-currency account contributes one
+    // converted partition per currency to the same chart point.
+    /** @type {Record<string, Map<string, import('decimal.js').Decimal>>} */
+    const historyByDay = {};
+    for (const row of historyConverted) {
+      const key = row.bank_account;
+      if (!historyByDay[key]) historyByDay[key] = new Map();
+      // toYmd uses local getters for the defensive Date branch (the SQL emits
+      // day via to_char, so this normally passes the string straight through).
+      const day = toYmd(row.day);
+      const dayTotals = historyByDay[key];
+      dayTotals.set(day, (dayTotals.get(day) ?? toDecimal(0)).plus(toDecimal(row.amount_eur)));
     }
 
     /** @type {Record<string, Array<{ date: string, balance: number }>>} */
     const historyMap = {};
-    for (const row of historyConverted) {
-      const key = row.bank_account;
-      if (!historyMap[key]) historyMap[key] = [];
-
-      // toYmd uses local getters for the defensive Date branch (the SQL emits
-      // day via to_char, so this normally passes the string straight through).
-      historyMap[key].push({ date: toYmd(row.day), balance: roundToCents(row.amount_eur) });
-    }
-
-    for (const key of Object.keys(historyMap)) {
-      historyMap[key].sort((a, b) => a.date.localeCompare(b.date));
+    for (const [key, dayTotals] of Object.entries(historyByDay)) {
+      historyMap[key] = [...dayTotals.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, balance]) => ({ date, balance: roundToCents(balance) }));
     }
 
     const totalsByDate = new Map();

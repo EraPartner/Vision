@@ -90,7 +90,10 @@ export const MACRO_CATALOG = Object.freeze([
   },
 ]);
 
-/** Normalise a catalog entry to the wire `MacroSeriesItem` shape. */
+/**
+ * Normalise a catalog entry to the wire `MacroSeriesItem` shape.
+ * @param {typeof MACRO_CATALOG[number]} e
+ */
 function toItem(e) {
   return {
     provider: e.provider,
@@ -99,7 +102,7 @@ function toItem(e) {
     region: e.region,
     units: e.units,
     frequency: e.frequency,
-    source: SOURCE_LABEL[e.provider] ?? e.provider,
+    source: SOURCE_LABEL[/** @type {keyof typeof SOURCE_LABEL} */ (e.provider)] ?? e.provider,
   };
 }
 
@@ -139,6 +142,6 @@ export function catalogEntry(provider, seriesId) {
  * @returns {boolean}
  */
 export function isValidSeriesId(provider, seriesId) {
-  const re = SERIES_ID_PATTERN[provider];
+  const re = SERIES_ID_PATTERN[/** @type {keyof typeof SERIES_ID_PATTERN} */ (provider)];
   return Boolean(re && typeof seriesId === 'string' && re.test(seriesId));
 }

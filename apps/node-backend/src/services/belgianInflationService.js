@@ -3,6 +3,8 @@ import { logger } from '../config/logger.js';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
 import { roundMoney } from '../lib/money.js';
 
+/** @typedef {import('../types/rows.js').BelgianInflationRate} BelgianInflationRate */
+
 // belgian_inflation_rates.monthly_rate is NUMERIC(10,8): keep the full 8 dp of
 // stored scale. Rounding to 6 dp here threw away precision the column could
 // hold, and the truncation compounds multiplicatively in snapshotBuilder.
@@ -22,10 +24,16 @@ const STATBEL_CANDIDATE_URLS = [
 const EUROSTAT_HICP_INDEX_URL =
   'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_midx?geo=BE&coicop=CP00&unit=I15';
 
-let memoryCache = null; // { rates: Array<{ month: string, monthly_rate: number }>, timestamp: number }
+/** @type {{ rates: BelgianInflationRate[], timestamp: number }|null} */
+let memoryCache = null;
 let statbelFailureLogState = { lastWarnAt: 0, suppressed: 0 };
+/** @type {Promise<void>|null} */
 let backgroundRefreshPromise = null;
 
+/**
+ * @param {any} value
+ * @returns {boolean}
+ */
 function isTruthy(value) {
   if (value === true || value === 1) return true;
   if (typeof value === 'string') {
@@ -38,10 +46,17 @@ function isTruthy(value) {
 // Deliberately global-setTimeout-based (not node:timers/promises): the retry
 // throttle test drives this with vi.useFakeTimers(), which patches the global
 // but cannot fake timers/promises.
+/**
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * @param {any} error
+ */
 function logStatbelFallbackWarning(error) {
   const now = Date.now();
   if (now - statbelFailureLogState.lastWarnAt >= STATBEL_WARN_THROTTLE_MS) {
@@ -60,6 +75,10 @@ function logStatbelFallbackWarning(error) {
   });
 }
 
+/**
+ * @param {any} value
+ * @returns {string|undefined} 'YYYY-MM'
+ */
 function normalizeMonthInput(value) {
   if (!value) return undefined;
   const text = String(value).trim();
@@ -75,6 +94,10 @@ function normalizeMonthInput(value) {
   return undefined;
 }
 
+/**
+ * @param {any} value
+ * @returns {string|undefined} 'YYYY-MM'
+ */
 function monthKeyFromDatabaseValue(value) {
   if (value === null || value === undefined) return undefined;
 
@@ -96,6 +119,10 @@ function monthKeyFromDatabaseValue(value) {
   return undefined;
 }
 
+/**
+ * @param {any} value
+ * @returns {number|undefined}
+ */
 function parseNumeric(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value !== 'string') return undefined;
@@ -105,6 +132,7 @@ function parseNumeric(value) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/** @type {Record<string, number>} */
 const MONTH_NAME_TO_NUMBER = {
   january: 1, jan: 1, januari: 1, janvier: 1,
   february: 2, feb: 2, februari: 2, fevrier: 2, février: 2,
@@ -120,12 +148,20 @@ const MONTH_NAME_TO_NUMBER = {
   december: 12, dec: 12, decembre: 12, décembre: 12,
 };
 
+/**
+ * @param {any} value
+ * @returns {number|undefined}
+ */
 function parseMonthName(value) {
   if (!value) return undefined;
   const normalized = String(value).trim().toLowerCase();
   return MONTH_NAME_TO_NUMBER[normalized];
 }
 
+/**
+ * @param {any} row raw provider payload row — key set varies by upstream (EN/NL/FR).
+ * @returns {string|undefined} 'YYYY-MM'
+ */
 function parseMonthFromRow(row) {
   const directMonth = normalizeMonthInput(
     row.month
@@ -149,6 +185,10 @@ function parseMonthFromRow(row) {
   return `${Math.trunc(year)}-${String(Math.trunc(monthNumber)).padStart(2, '0')}`;
 }
 
+/**
+ * @param {any} row raw provider payload row — key set varies by upstream (EN/NL/FR).
+ * @returns {number|undefined}
+ */
 function parseMonthlyRateFromRow(row) {
   const candidateKeys = [
     'monthly_rate',
@@ -189,6 +229,15 @@ function parseMonthlyRateFromRow(row) {
   return parsed;
 }
 
+/**
+ * Recursively flatten a nested provider JSON payload (structure varies by
+ * upstream) down to the leaf "row-like" objects — those with at least one
+ * string/number property, which is `parseMonthFromRow`/`parseMonthlyRateFromRow`'s
+ * signal that an object is a data row rather than a container.
+ *
+ * @param {any} payload
+ * @returns {any[]}
+ */
 function extractObjectRows(payload) {
   if (Array.isArray(payload)) {
     return payload.flatMap((item) => extractObjectRows(item));
@@ -200,11 +249,16 @@ function extractObjectRows(payload) {
   const objectValues = values.filter((value) => value && typeof value === 'object');
 
   const looksLikeRow = Object.values(payload).some((value) => ['string', 'number'].includes(typeof value));
+  /** @type {any[]} */
   const nestedRows = objectValues.flatMap((value) => extractObjectRows(value));
 
   return looksLikeRow ? [payload, ...nestedRows] : nestedRows;
 }
 
+/**
+ * @param {any} payload
+ * @returns {BelgianInflationRate[]}
+ */
 function normalizeRatesFromPayload(payload) {
   const rows = extractObjectRows(payload);
   const byMonth = new Map();
@@ -222,6 +276,10 @@ function normalizeRatesFromPayload(payload) {
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
+/**
+ * @param {any} value e.g. 'January 2024'.
+ * @returns {string|undefined} 'YYYY-MM'
+ */
 function parseStatbelMonthString(value) {
   if (!value) return undefined;
   const parts = String(value).trim().split(/\s+/);
@@ -232,6 +290,10 @@ function parseStatbelMonthString(value) {
   return `${Math.trunc(year)}-${String(monthNum).padStart(2, '0')}`;
 }
 
+/**
+ * @param {any} payload
+ * @returns {BelgianInflationRate[]}
+ */
 function normalizeRatesFromStatbelPayload(payload) {
   const facts = payload?.facts;
   if (!Array.isArray(facts) || facts.length === 0) return [];
@@ -260,6 +322,10 @@ function normalizeRatesFromStatbelPayload(payload) {
   return rates;
 }
 
+/**
+ * @param {any} payload
+ * @returns {BelgianInflationRate[]}
+ */
 function normalizeRatesFromEurostatIndexPayload(payload) {
   const timeIndex = payload?.dimension?.time?.category?.index;
   const values = payload?.value;
@@ -304,6 +370,7 @@ function normalizeRatesFromEurostatIndexPayload(payload) {
 }
 
 async function fetchFromStatbel() {
+  /** @type {(url: string) => Promise<BelgianInflationRate[]>} */
   const fetchWithRetries = async (url) => {
     let lastError;
 
@@ -429,6 +496,11 @@ function scheduleBackgroundInflationRefresh() {
   })();
 }
 
+/**
+ * @param {string} [startMonth] 'YYYY-MM'
+ * @param {string} [endMonth] 'YYYY-MM'
+ * @returns {Promise<BelgianInflationRate[]>}
+ */
 async function loadFromDatabase(startMonth, endMonth) {
   const result = await query(
     `SELECT month_date, monthly_rate
@@ -439,24 +511,33 @@ async function loadFromDatabase(startMonth, endMonth) {
     [startMonth ? `${startMonth}-01` : null, endMonth ? `${endMonth}-01` : null]
   );
 
-  return result.rows
+  return /** @type {Pick<import('../types/rows.js').BelgianInflationRateRow, 'month_date'|'monthly_rate'>[]} */ (result.rows)
     .map((row) => ({
       month: monthKeyFromDatabaseValue(row.month_date),
       monthly_rate: Number(row.monthly_rate),
     }))
-    .filter((row) => row.month);
+    .filter(
+      /** @returns {row is BelgianInflationRate} */
+      (row) => Boolean(row.month),
+    );
 }
 
 // Postgres caps each query at 65535 bind parameters. With 3 params per row
 // (month_date, monthly_rate, source), 1000 rows per chunk leaves headroom.
 const INFLATION_INSERT_CHUNK = 1000;
 
+/**
+ * @param {BelgianInflationRate[]} rates
+ * @param {string} [source]
+ * @returns {Promise<void>}
+ */
 async function saveToDatabase(rates, source = 'statbel') {
   if (!Array.isArray(rates) || rates.length === 0) return;
 
   await withTransaction(async (client) => {
     for (let i = 0; i < rates.length; i += INFLATION_INSERT_CHUNK) {
       const chunk = rates.slice(i, i + INFLATION_INSERT_CHUNK);
+      /** @type {any[]} */
       const params = [];
       const valueRows = chunk.map((rate, idx) => {
         const offset = idx * 3;
@@ -479,6 +560,12 @@ async function saveToDatabase(rates, source = 'statbel') {
   });
 }
 
+/**
+ * @param {BelgianInflationRate[]} rates
+ * @param {string|undefined} startMonth 'YYYY-MM'
+ * @param {string|undefined} endMonth 'YYYY-MM'
+ * @returns {BelgianInflationRate[]}
+ */
 function filterRates(rates, startMonth, endMonth) {
   return rates.filter((rate) => {
     if (startMonth && rate.month < startMonth) return false;

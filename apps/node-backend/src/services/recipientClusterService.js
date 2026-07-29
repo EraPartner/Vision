@@ -34,6 +34,7 @@ const MAX_CLUSTERS = 50;
  * }>>}
  */
 export async function findRecipientClusters({ minCount = 2 } = {}) {
+  /** @type {{ rows: Array<{ id: number, name: string, default_category_id: number|null }> }} */
   const { rows } = await query(`
     SELECT id, name, default_category_id
     FROM   recipients
@@ -42,6 +43,7 @@ export async function findRecipientClusters({ minCount = 2 } = {}) {
     ORDER BY name
   `);
 
+  /** @type {Map<string, Array<{ id: number, name: string, default_category_id: number|null }>>} */
   const buckets = new Map();
   for (const r of rows) {
     const upper = r.name.trim().toUpperCase();

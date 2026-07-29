@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from './helpers/mockLogger.js';
 import { mockConnection } from './helpers/repoMocks.js';
-import { createMockRouter, createMockResponse } from './helpers/routeHarness.js';
+import { routeAgent, errEnvelope } from './helpers/routeApp.js';
 import {
   mockDeduplication,
   mockCurrencyConversion,
@@ -13,12 +13,6 @@ import {
 // as `SET "date" = ''` (22007 → 500), and non-numeric amount / non-integer
 // FK ids surfaced as DB cast errors instead of 400s.
 
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
 vi.mock('../src/database/connection.js', () =>
   mockConnection({ query: vi.fn().mockResolvedValue({ rows: [] }) }));
 vi.mock('../src/services/transactionService.js', () => ({
@@ -42,11 +36,12 @@ vi.mock('../src/services/transactionExport.js', () => ({
 vi.mock('../src/services/bulkSelection.js', () => ({ resolveBulkSelection: vi.fn() }));
 
 import transactionRepository from '../src/services/transactionService.js';
-import { ValidationError } from '../src/middleware/errorHandler.js';
-await import('../src/routes/transactions.js');
 
-const patchReq = (body) => ({ params: { id: '1' }, body });
-const runPatch = (body) => routeHandlers['patch:/:id'](patchReq(body), createMockResponse());
+const { default: transactionsRouter } = await import('../src/routes/transactions.js');
+
+const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
+
+const runPatch = (body) => api.patch('/api/transactions/1').send(body);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -55,17 +50,26 @@ beforeEach(() => {
 
 describe('PATCH /api/transactions/:id validation', () => {
   it('rejects a cleared date instead of forwarding SET "date" = \'\'', async () => {
-    await expect(runPatch({ date: '' })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPatch({ transaction_date: null })).rejects.toBeInstanceOf(ValidationError);
+    let res = await runPatch({ date: '' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+
+    res = await runPatch({ transaction_date: null });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+
     expect(transactionRepository.update).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed date', async () => {
-    await expect(runPatch({ date: 'banana' })).rejects.toBeInstanceOf(ValidationError);
+    const res = await runPatch({ date: 'banana' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
   });
 
   it('accepts a valid Y-M-D date and remaps it to transaction_date', async () => {
-    await runPatch({ date: '2026-07-01' });
+    const res = await runPatch({ date: '2026-07-01' });
+    expect(res.status).toBe(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ transaction_date: '2026-07-01' }),
@@ -73,13 +77,16 @@ describe('PATCH /api/transactions/:id validation', () => {
   });
 
   it('rejects non-numeric or cleared amounts', async () => {
-    await expect(runPatch({ amount: 'abc' })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPatch({ amount: null })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPatch({ amount: '' })).rejects.toBeInstanceOf(ValidationError);
+    for (const amount of ['abc', null, '']) {
+      const res = await runPatch({ amount });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+    }
   });
 
   it('coerces a numeric-string amount', async () => {
-    await runPatch({ amount: '-12.5' });
+    const res = await runPatch({ amount: '-12.5' });
+    expect(res.status).toBe(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ amount: -12.5 }),
@@ -87,10 +94,16 @@ describe('PATCH /api/transactions/:id validation', () => {
   });
 
   it('rejects non-integer FK ids but lets null clear them', async () => {
-    await expect(runPatch({ recipient_id: 'abc' })).rejects.toBeInstanceOf(ValidationError);
-    await expect(runPatch({ category_id: 1.5 })).rejects.toBeInstanceOf(ValidationError);
+    let res = await runPatch({ recipient_id: 'abc' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
 
-    await runPatch({ recipient_id: null, category_id: null });
+    res = await runPatch({ category_id: 1.5 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+
+    res = await runPatch({ recipient_id: null, category_id: null });
+    expect(res.status).toBe(200);
     expect(transactionRepository.update).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ recipient_id: null, category_id: null }),

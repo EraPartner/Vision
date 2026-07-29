@@ -6,9 +6,18 @@ import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNorma
 import { logger } from '../../../config/logger.js';
 import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc, normalizeIsoCurrency } from './_shared.js';
 
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
 const NAME = 'vision';
 const BANK_LABEL = 'Vision';
 
+/**
+ * @param {Record<string, string>} row a `columns: true` csv-parse record
+ * @returns {ParsedBankTransaction|null} null when the row is unusable (no date / non-numeric amount)
+ */
 function rowToTransaction(row) {
   const dateStr = (row['Date'] || '').trim();
   if (!dateStr) return null;
@@ -68,6 +77,10 @@ function rowToTransaction(row) {
 // extended exports still detect.
 const EXPORT_HEADER_PREFIX = ['date', 'bank account', 'recipient', 'memo', 'amount', 'currency'];
 
+/**
+ * @param {string|null|undefined} csvSample raw head of the uploaded file
+ * @returns {boolean}
+ */
 export function detect(csvSample) {
   if (!csvSample) return false;
   // Strip a UTF-8 BOM — detect() receives raw file content, not the
@@ -77,6 +90,10 @@ export function detect(csvSample) {
   return EXPORT_HEADER_PREFIX.every((name, i) => cols[i] === name);
 }
 
+/**
+ * @param {string} filePath
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath) {
   const records = await parseCsvFile(filePath, {
     columns: true,
@@ -85,7 +102,7 @@ export async function parse(filePath) {
     trim: true,
   });
 
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
   for (const row of records) {
     try {

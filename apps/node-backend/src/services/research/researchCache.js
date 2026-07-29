@@ -29,7 +29,7 @@ const DEFAULT_TTL = 10 * 60_000;
  * @returns {number}
  */
 export function ttlForType(dataType) {
-  return TTL_BY_TYPE[dataType] ?? DEFAULT_TTL;
+  return TTL_BY_TYPE[/** @type {keyof typeof TTL_BY_TYPE} */ (dataType)] ?? DEFAULT_TTL;
 }
 
 /**
@@ -40,6 +40,7 @@ export function createResearchCache({ now = () => Date.now() } = {}) {
   /** @type {Map<string, { value: unknown, expiresAt: number }>} */
   const store = new Map();
 
+  /** @param {string} key */
   function get(key) {
     const entry = store.get(key);
     if (!entry) return undefined;
@@ -50,6 +51,11 @@ export function createResearchCache({ now = () => Date.now() } = {}) {
     return entry.value;
   }
 
+  /**
+   * @param {string} key
+   * @param {unknown} value
+   * @param {number} ttlMs
+   */
   function set(key, value, ttlMs) {
     store.set(key, { value, expiresAt: now() + ttlMs });
   }

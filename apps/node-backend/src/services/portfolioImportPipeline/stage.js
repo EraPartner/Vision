@@ -12,8 +12,29 @@ import { logger } from '../../config/logger.js';
 import { parsedDateToYmd } from '../../lib/importDates.js';
 import { parseWithConfig } from './portfolioGenericAdapter.js';
 
+/**
+ * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
+ * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
+ */
+
 const STAGE_INSERT_CHUNK = 500;
 
+/**
+ * Create a new portfolio import batch row.
+ *
+ * @param {{ adapterName: string, filename?: string|null, sizeBytes?: number|null, customConfig?: object|null, defaultAssetClass?: string|null, defaultType?: string|null, isBrokerage?: boolean, accountId?: number|string|null }} args
+ * @returns {Promise<number>} the new batch id, as a NUMBER.
+ *
+ *   `portfolio_import_batches.id` is BIGSERIAL and node-postgres hands BIGINT
+ *   back as a STRING. Normalized here for the same reason as the transaction
+ *   pipeline (see importPipeline/stage.js `createBatch`): the streaming/immediate
+ *   import responses would otherwise emit `batch_id: "12"` while the review-commit
+ *   route (routes/portfolioImportRoutes.js:491) emits `batch_id: 12`. NUMBER is
+ *   the single wire type — it matches `coercedIdSchema` (lib/importBatchIds.js:17)
+ *   and the frontend guards (`batch_id: z.number()` in
+ *   apps/frontend/src/lib/api/portfolioImports.ts).
+ */
 export async function createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage = false, accountId }) {
   const result = await query(
     `INSERT INTO portfolio_import_batches
@@ -31,9 +52,16 @@ export async function createBatch({ adapterName, filename, sizeBytes, customConf
       accountId != null ? Number(accountId) : null,
     ],
   );
-  return result.rows[0].id;
+  return Number(result.rows[0].id);
 }
 
+/**
+ * Run the stage phase: parse the file, bulk-insert staging rows.
+ *
+ * @param {{ batchId: PortfolioImportBatchId, filePath: string, customConfig: import('./portfolioGenericAdapter.js').PortfolioParserConfig, onProgress?: PortfolioImportProgressCallback }} args
+ * @returns {Promise<{ rowsTotal: number, rowsSkipped: number }>} `rowsSkipped` is
+ *   the adapter's own count of data rows it could not interpret.
+ */
 export async function stageBatch({ batchId, filePath, customConfig, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'staging' WHERE id = $1`, [batchId]);
 
@@ -54,10 +82,21 @@ export async function stageBatch({ batchId, filePath, customConfig, onProgress }
   return { rowsTotal: total, rowsSkipped: skipped };
 }
 
+/**
+ * Bulk-insert one chunk of parsed rows as `portfolio_import_staging_rows`
+ * (status 'pending' via the column default) in one multi-VALUES statement.
+ *
+ * @param {PortfolioImportBatchId} batchId
+ * @param {import('./portfolioGenericAdapter.js').ParsedPortfolioRow[]} rows
+ * @param {number} startIndex the chunk's offset, written to `row_index`
+ * @returns {Promise<void>}
+ */
 async function insertStagingChunk(batchId, rows, startIndex) {
   if (!rows.length) return;
   await withTransaction(async (client) => {
+    /** @type {any[]} */
     const values = [];
+    /** @type {string[]} */
     const placeholders = [];
     rows.forEach((r, i) => {
       const idx = startIndex + i;

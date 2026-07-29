@@ -40,7 +40,12 @@ export function resolveLiveSummary(targetCurrency = 'EUR') {
  */
 export async function resolveLivePortfolioValue(targetCurrency = 'EUR') {
   try {
-    const summary = await resolveLiveSummary(targetCurrency);
+    // `resolveLiveSummary` is declared as `Promise<object>` (the cache helper is
+    // payload-agnostic); narrow to the one field read here. getPortfolioSummary
+    // builds `totals.totalPortfolioValue` as a rounded number.
+    const summary = /** @type {{ totals?: { totalPortfolioValue?: number } }} */ (
+      await resolveLiveSummary(targetCurrency)
+    );
     const value = summary?.totals?.totalPortfolioValue;
     return Number.isFinite(value) ? value : undefined;
   } catch (err) {

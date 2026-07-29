@@ -28,6 +28,12 @@ import { requestMetrics } from './middleware/requestMetrics.js';
 import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.js';
 import { runWarmupTasks } from './startup/warmup.js';
 
+/**
+ * @typedef {import('./types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('./types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('./types/express.js').ExpressNextFunction} ExpressNextFunction
+ */
+
 const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
 // Blocks cross-site state-changing requests (browser CSRF), which the loopback
 // binding alone cannot stop. Mounted across the whole data plane below; the
@@ -89,14 +95,23 @@ const CORS_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
 const CORS_ALLOWED_HEADERS = 'Content-Type,Authorization,X-Request-Id';
 const CORS_EXPOSED_HEADERS = 'X-Request-Id';
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
+  // The Origin request header is single-valued per fetch/HTTP semantics —
+  // ExpressRequest.headers types every header generically as
+  // string|string[]|undefined (some headers, e.g. Set-Cookie-likes, do
+  // repeat), but Origin never does.
+  const origin = /** @type {string|undefined} */ (req.headers.origin);
   const allowed = settings.api.corsOrigins;
+  // corsOrigins is `string[] | string` (config/config.js), but env.CORS_ORIGINS
+  // (csvEnv) always parses to string[], never the bare string '*' — this
+  // comparison can consequently never be true. Pre-existing dead branch,
+  // already filed as a real-mismatch finding (see config/config.js's comment
+  // on corsOrigins); annotated faithfully here, not fixed.
   const isWildcard = allowed === '*';
   // Never combine wildcard origin with credentials (browsers reject; CodeQL flags
   // it as an injection vector). Reflect only origins on an explicit allowlist.
   const originAllowed = Array.isArray(allowed)
-    ? allowed.includes(origin)
+    ? allowed.includes(/** @type {string} */ (origin))
     : !isWildcard && allowed === origin;
 
   if (originAllowed && origin) {
@@ -130,7 +145,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '1mb' }));
 
 // Security headers (production-ready)
-app.use((req, res, next) => {
+app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '0'); // Deprecated; rely on CSP instead
@@ -147,12 +162,17 @@ app.use((req, res, next) => {
 const COMPRESSIBLE_RE = /json|text|javascript|xml|svg|x-www-form-urlencoded/;
 const NO_COMPRESS_BELOW = 1024;
 
-app.use((req, res, next) => {
-  const acceptEncoding = req.headers['accept-encoding'] ?? '';
+app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
+  // Header value is typed generically as string|string[]|undefined; `.includes`
+  // exists on both but means different things (substring vs. exact-element) —
+  // preserved as-is (`any`) rather than coercing to `String(...)`, which would
+  // change the (rare, multi-valued Accept-Encoding) array-branch behavior.
+  const acceptEncoding = /** @type {any} */ (req.headers['accept-encoding'] ?? '');
   if (!acceptEncoding.includes('gzip')) return next();
 
-  const _write = res.write.bind(res);
-  const _end = res.end.bind(res);
+  const _write = /** @type {(chunk?: any, encoding?: any, cb?: any) => boolean} */ (res.write.bind(res));
+  const _end = /** @type {(chunk?: any, encoding?: any, cb?: any) => ExpressResponse} */ (res.end.bind(res));
+  /** @type {import('node:zlib').Gzip|null} */
   let gz = null;
   let setupDone = false;
 
@@ -195,13 +215,17 @@ app.use((req, res, next) => {
     gz.on('error', (err) => res.destroy(err));
   };
 
-  res.write = (chunk, encoding, cb) => {
+  // Node's http.ServerResponse#write/#end are overloaded
+  // ((chunk, cb?) | (chunk, encoding, cb?)) — `any` here mirrors that
+  // genuinely-polymorphic upstream shape rather than re-declaring the
+  // overload set locally.
+  res.write = (/** @type {any} */ chunk, /** @type {any} */ encoding, /** @type {any} */ cb) => {
     setup();
     if (gz) return gz.write(chunk, encoding, cb);
     return _write(chunk, encoding, cb);
   };
 
-  res.end = (chunk, encoding, cb) => {
+  res.end = (/** @type {any} */ chunk, /** @type {any} */ encoding, /** @type {any} */ cb) => {
     setup();
     if (gz) {
       if (typeof chunk === 'function') {
@@ -223,7 +247,7 @@ app.use((req, res, next) => {
 });
 
 // Request logging
-app.use((req, res, next) => {
+app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
   logger.debug(`[REQ] ${req.method} ${req.originalUrl}`, { requestId: req.id });
   next();
 });
@@ -241,7 +265,7 @@ app.use(wrapResponse);
 const WARMUP_KEYS = ['exchangeRates', 'inflation', 'portfolioSnapshots', 'infoCaches', 'materializedViews'];
 const warmupStatus = Object.fromEntries(WARMUP_KEYS.map((k) => [k, 'pending']));
 
-app.get('/health', (req, res) => {
+app.get('/health', /** @param {ExpressRequest} req @param {ExpressResponse} res */ (req, res) => {
   res.json({
     status: 'healthy',
     service: 'financial-transaction-manager-node',
@@ -264,7 +288,7 @@ async function checkConnectionCached() {
   return value;
 }
 
-app.get('/health/detailed', async (req, res) => {
+app.get('/health/detailed', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const states = Object.values(warmupStatus);
   const warming = states.includes('pending');
   const degraded = states.includes('failed');
@@ -289,7 +313,7 @@ app.get('/health/detailed', async (req, res) => {
 
 // ==================== API Root ====================
 
-app.get('/api/', (req, res) => {
+app.get('/api/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ (req, res) => {
   res.json({
     version: settings.api.version,
     title: settings.api.title,
@@ -374,7 +398,7 @@ if (settings.isProduction()) {
     index: false,
     maxAge: '1y',
     immutable: true,
-    setHeaders: (res, filePath) => {
+    setHeaders: (/** @type {ExpressResponse} */ res, /** @type {string} */ filePath) => {
       if (!filePath.startsWith(hashedAssetsPrefix)) {
         res.setHeader('Cache-Control', 'no-cache');
       }
@@ -383,7 +407,7 @@ if (settings.isProduction()) {
   // Preload the SPA shell once at startup; the fallback route then serves it
   // from memory with no per-request file I/O.
   const indexHtml = fs.readFileSync(resolve(distPath, 'index.html'), 'utf-8');
-  app.get(/^(?!\/api)/, spaRateLimiter, (_req, res) => {
+  app.get(/^(?!\/api)/, spaRateLimiter, /** @param {ExpressRequest} _req @param {ExpressResponse} res */ (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.type('html').send(indexHtml);
   });
@@ -392,7 +416,7 @@ if (settings.isProduction()) {
 // ==================== Error Handling ====================
 
 // 404 handler — funnel through the error handler so the envelope stays uniform.
-app.use((req, res, next) => {
+app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (req, res, next) => {
   next(new NotFoundError(`Not Found: ${req.method} ${req.path}`));
 });
 
@@ -406,12 +430,20 @@ const PORT = settings.server.port;
 const HOST = settings.server.host;
 
 // Background interval handles — captured here so graceful shutdown can clear them.
+/** @type {NodeJS.Timeout|null} */
 let exchangeRateRefreshInterval = null;
+/** @type {NodeJS.Timeout|null} */
 let quotesRefreshInterval = null;
+/** @type {NodeJS.Timeout|null} */
 let cashflowForecastRefreshInterval = null;
+/** @type {NodeJS.Timeout|null} */
 let holdingGapBackfillInterval = null;
 
 // HTTP server handle — module-scoped so shutdown() can drain in-flight requests.
+// `app.listen(...)` returns whatever express's ambient `any` import resolves
+// to (see thirdPartyModules.d.ts) — kept `any` here to match, rather than
+// asserting the real `http.Server` shape express doesn't publish types for.
+/** @type {any} */
 let httpServer = null;
 // Guards shutdown() against a second SIGINT/SIGTERM re-entering mid-drain.
 let isShuttingDown = false;
@@ -419,7 +451,9 @@ let isShuttingDown = false;
 // ── Boot instrumentation ───────────────────────────────────────────────────
 const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== '0';
 const _bootT0 = Date.now();
+/** @type {{ phase: string, ms: number }[]} */
 const _bootMarks = [];
+/** @param {string} phase */
 function bootMark(phase) {
   const t0 = Date.now();
   return () => {
@@ -554,7 +588,7 @@ async function start() {
 
     httpServer = server;
 
-    server.on('error', (err) => {
+    server.on('error', (/** @type {any} */ err) => {
       logger.error('HTTP server error', { error: err.message });
       process.exit(1);
     });
@@ -567,6 +601,7 @@ async function start() {
 // Graceful shutdown
 const SHUTDOWN_FORCE_EXIT_MS = 10_000;
 
+/** @param {string} [signal] */
 async function shutdown(signal) {
   // A second SIGINT/SIGTERM while a drain is already in progress should not
   // restart the sequence — just note it and let the first run finish.
@@ -620,6 +655,10 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 // to hand control back to the supervisor for a clean restart. Many of the
 // fire-and-forget chains here (warmup, deferred refresh, SSE) are exactly where
 // a stray rejection would otherwise escape unseen.
+/**
+ * @param {string} kind
+ * @param {unknown} err
+ */
 function logFatal(kind, err) {
   const error = err instanceof Error ? err : new Error(String(err));
   logger.error(`${kind} — exiting`, {

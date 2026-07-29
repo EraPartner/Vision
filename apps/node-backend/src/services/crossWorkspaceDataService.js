@@ -42,9 +42,13 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
 
   const { summaries } = await getPortfolioSummary(target);
   const actualValues = /** @type {Record<string, number>} */ ({});
-  for (const s of summaries) {
+  // getPortfolioSummary's JSDoc return type is deliberately loose
+  // (`summaries: object[]`) since portfolioSummaryService.js is outside this
+  // ratchet slice — narrow locally to the two fields this loop actually reads.
+  const typedSummaries = /** @type {Array<{ asset_class?: string, currentValue?: number }>} */ (summaries);
+  for (const s of typedSummaries) {
     const assetClass = s.asset_class || 'other';
-    const key = SLEEVE_ROLLUP[assetClass] ?? assetClass;
+    const key = /** @type {string} */ (SLEEVE_ROLLUP[/** @type {keyof typeof SLEEVE_ROLLUP} */ (assetClass)] ?? assetClass);
     actualValues[key] = toNumber(roundToCents(toDecimal(actualValues[key] ?? 0).plus(toDecimal(s.currentValue ?? 0))));
   }
 

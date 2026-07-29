@@ -13,10 +13,34 @@ import { parsedDateToYmd } from '../../lib/importDates.js';
 import { getAdapter } from './adapters/index.js';
 import generic from './adapters/generic.js';
 
+/**
+ * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('./index.js').ImportBatchId} ImportBatchId
+ * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
+ */
+
 const STAGE_INSERT_CHUNK = 500;
 
 /**
- * Create a new import batch row. Returns its id.
+ * Create a new import batch row.
+ *
+ * @param {{ adapterName: string, filename?: string|null, sizeBytes?: number|null, customConfig?: object|null }} args
+ * @returns {Promise<number>} the new batch id, as a NUMBER.
+ *
+ *   `import_batches.id` is BIGSERIAL and node-postgres hands BIGINT back as a
+ *   STRING, so this used to leak a string all the way to the wire: POST
+ *   /api/import/csv answered `batch_id: "12"` while the review-commit route
+ *   (routes/importRoutes.js:570), which reads the id back off the URL through
+ *   `coercedIdSchema` (lib/importBatchIds.js:17), answered `batch_id: 12` —
+ *   same JSON field, two types, so strict-equality across the two responses
+ *   broke. Normalizing here, at the single boundary where the id enters the
+ *   application, makes NUMBER the one wire type; it matches the coerced input
+ *   schema and the frontend runtime guards (`batch_id: z.number()` in
+ *   apps/frontend/src/lib/api/imports.ts).
+ *
+ *   Safe for this app: BIGSERIAL starts at 1 and increments per CSV import, so
+ *   reaching 2^53 is not physically attainable. If that ever changes, the fix
+ *   is to make the WIRE type a string everywhere, not to reintroduce the split.
  */
 export async function createBatch({ adapterName, filename, sizeBytes, customConfig }) {
   const result = await query(
@@ -26,11 +50,15 @@ export async function createBatch({ adapterName, filename, sizeBytes, customConf
      RETURNING id`,
     [adapterName, filename || null, sizeBytes || null, customConfig ? JSON.stringify(customConfig) : null]
   );
-  return result.rows[0].id;
+  return Number(result.rows[0].id);
 }
 
 /**
  * Run the stage phase: parse the file, bulk-insert staging rows.
+ *
+ * @param {{ batchId: ImportBatchId, filePath: string, adapterName: string, customConfig?: object|null, onProgress?: ImportProgressCallback }} args
+ * @returns {Promise<{ rowsTotal: number, rowsSkipped: number }>} `rowsSkipped` is
+ *   the adapter's own count of data rows it could not interpret.
  */
 export async function stageBatch({ batchId, filePath, adapterName, customConfig, onProgress }) {
   await query(
@@ -73,10 +101,21 @@ export async function stageBatch({ batchId, filePath, adapterName, customConfig,
   return { rowsTotal: total, rowsSkipped: skipped };
 }
 
+/**
+ * Bulk-insert one chunk of parsed rows as `import_staging_rows` (status
+ * 'pending') in a single multi-VALUES statement.
+ *
+ * @param {ImportBatchId} batchId
+ * @param {import('./adapters/_shared.js').ParsedBankTransaction[]} rows
+ * @param {number} startIndex the chunk's offset, written to `row_index`
+ * @returns {Promise<void>}
+ */
 async function insertStagingChunk(batchId, rows, startIndex) {
   if (!rows.length) return;
   await withTransaction(async (client) => {
+    /** @type {any[]} */
     const values = [];
+    /** @type {string[]} */
     const placeholders = [];
     rows.forEach((r, i) => {
       const idx = startIndex + i;

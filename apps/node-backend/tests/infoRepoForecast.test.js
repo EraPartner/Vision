@@ -4,16 +4,24 @@ vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
+// getIncludeTransfers() reads `user_settings` (ADR-083). Stub it so the module
+// under test does not spend a `query` mock call on the settings lookup — the
+// call-count/param assertions below are about the cash-flow SQL only. Its
+// behaviour is exercised for real in infoRepoForecast.db.test.js.
 vi.mock('../src/repositories/infoRepositoryHelpers.js', async () => {
   const actual = await vi.importActual('../src/repositories/infoRepositoryHelpers.js');
   return {
     ...actual,
     batchConvertGroupsWithHistoricalRateFallback: vi.fn(),
+    getIncludeTransfers: vi.fn().mockResolvedValue(false),
   };
 });
 
 import { query } from '../src/database/connection.js';
-import { batchConvertGroupsWithHistoricalRateFallback } from '../src/repositories/infoRepositoryHelpers.js';
+import {
+  batchConvertGroupsWithHistoricalRateFallback,
+  getIncludeTransfers,
+} from '../src/repositories/infoRepositoryHelpers.js';
 import {
   getCashflowComparison,
   getCashflowForecastData,
@@ -24,22 +32,37 @@ import { ValidationError } from '../src/middleware/errorHandler.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks wipes the factory's mockResolvedValue — restore the default.
+  getIncludeTransfers.mockResolvedValue(false);
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2025-04-15T12:00:00Z'));
 });
 
 afterEach(() => vi.useRealTimers());
 
+/** Matches the unfiltered ledger-start probe (last query of getCashflowComparison). */
+const isLedgerStartSql = (sql) => /MIN\(t\.date\)/.test(sql);
+
+/**
+ * query() stub. The ledger-start probe answers with `firstDate` (a 'YYYY-MM-DD'
+ * string or null); every other query returns no rows. Needed because the probe
+ * — not the result rows — is what sets the historical-average divisor.
+ */
+function stubQueries(firstDate = null) {
+  query.mockImplementation(async (sql) =>
+    isLedgerStartSql(sql) ? { rows: [{ first_date: firstDate }] } : { rows: [] });
+}
+
 describe('getCashflowComparison', () => {
   function setupEmpty() {
-    query.mockResolvedValue({ rows: [] });
+    stubQueries(null);
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValue([[], [], [], []]);
   }
 
-  it('runs four parallel queries (past, current, planned current, planned hist)', async () => {
+  it('runs five parallel queries (past, current, planned current, planned hist, ledger start)', async () => {
     setupEmpty();
     await getCashflowComparison([], [], 'EUR');
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(5);
     expect(query.mock.calls[0][0]).toContain("date >= date_trunc('month', CURRENT_DATE) - interval '24 months'");
     expect(query.mock.calls[0][0]).toContain("date < date_trunc('month', CURRENT_DATE)");
     expect(query.mock.calls[1][0]).toContain('CURRENT_DATE');
@@ -49,6 +72,9 @@ describe('getCashflowComparison', () => {
     // executed non-recurring row double-counts against its real transaction.
     expect(query.mock.calls[2][0]).toContain('is_executed = false');
     expect(query.mock.calls[3][0]).toContain('is_executed = false');
+    // The ledger-start probe is appended LAST so the four data queries keep
+    // their call order, and carries no filters of any kind (see D2 below).
+    expect(query.mock.calls[4][0]).toContain('MIN(t.date)');
   });
 
   it('returns days_in_month, current_day, month, year aligned to the system clock', async () => {
@@ -72,7 +98,7 @@ describe('getCashflowComparison', () => {
   });
 
   it('builds cumulative averages from past month data', async () => {
-    query.mockResolvedValue({ rows: [] });
+    stubQueries('2025-01-05'); // ledger starts 2025-01
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
       [
         { day_of_month: 5, month_key: '2025-01', amount_eur: 100 },
@@ -88,10 +114,14 @@ describe('getCashflowComparison', () => {
     ]);
 
     const r = await getCashflowComparison([], [], 'EUR');
-    // Day 5: avg of (100 from Jan, 60 from Feb)/2 = 80
-    expect(r.without_planned.find((d) => d.day === 5).average).toBe(80);
-    // Day 10: ((100-30) + 60)/2 = 65
-    expect(r.without_planned.find((d) => d.day === 10).average).toBe(65);
+    // Divisor is elapsed months since the ledger STARTED (the unfiltered probe
+    // says 2025-01), NOT the count of months carrying rows: "today" is
+    // 2025-04-15, so Jan/Feb/Mar are all elapsed and March's silence is a real
+    // zero → 3.
+    // Day 5: (100 from Jan + 60 from Feb) / 3 = 53.33
+    expect(r.without_planned.find((d) => d.day === 5).average).toBe(53.33);
+    // Day 10: ((100-30) + 60) / 3 = 43.33
+    expect(r.without_planned.find((d) => d.day === 10).average).toBe(43.33);
     // Current day 1: 50; day 3 cumulative: 40
     expect(r.without_planned.find((d) => d.day === 1).current).toBe(50);
     expect(r.without_planned.find((d) => d.day === 3).current).toBe(40);
@@ -262,5 +292,89 @@ describe('getCashflowForecastDataByCategory', () => {
     await getCashflowForecastDataByCategory(3, [10, 11], [22]);
     const [, params] = query.mock.calls[0];
     expect(params).toEqual([10, 11, 22]);
+  });
+});
+
+// ADR-083: every `transactions` query in this module must carry the transfer
+// predicate unless the user opted in, exactly like the sibling surfaces
+// (infoRepositoryAverageVsCurrent.js, infoRepositoryMonthly.js). The previous
+// version of this suite asserted the substrings it expected to be PRESENT and
+// so never noticed the absent one; these cases assert both directions.
+describe('ADR-083 transfer exclusion', () => {
+  /**
+   * SQL of every DATA query issued against `transactions`. Excludes the
+   * ledger-start probe, which is unfiltered by design (asserted separately).
+   */
+  const transactionSqls = () =>
+    query.mock.calls
+      .map((c) => c[0])
+      .filter((sql) => /FROM transactions\b/.test(sql) && !isLedgerStartSql(sql));
+
+  const cases = [
+    ['getCashflowComparison', () => getCashflowComparison([], [], 'EUR'), 4, 2],
+    ['getCashflowForecastData', () => getCashflowForecastData(12, [], [], 'EUR'), 4, 2],
+    ['getCashflowForecastDataRolling', () => getCashflowForecastDataRolling(12, 30, 60), 3, 2],
+    ['getCashflowForecastDataByCategory', () => getCashflowForecastDataByCategory(6), 2, 2],
+  ];
+
+  for (const [name, call, queryCount, txnQueryCount] of cases) {
+    it(`${name} excludes transfers by default`, async () => {
+      query.mockResolvedValue({ rows: [] });
+      batchConvertGroupsWithHistoricalRateFallback.mockResolvedValue(
+        Array.from({ length: queryCount }, () => []),
+      );
+
+      await call();
+      const sqls = transactionSqls();
+      expect(sqls).toHaveLength(txnQueryCount);
+      for (const sql of sqls) expect(sql).toContain('AND t.is_transfer = false');
+    });
+
+    it(`${name} keeps transfers when includeTransfers is on`, async () => {
+      getIncludeTransfers.mockResolvedValue(true);
+      query.mockResolvedValue({ rows: [] });
+      batchConvertGroupsWithHistoricalRateFallback.mockResolvedValue(
+        Array.from({ length: queryCount }, () => []),
+      );
+
+      await call();
+      for (const sql of transactionSqls()) expect(sql).not.toContain('is_transfer');
+    });
+  }
+
+  // planned_transactions has no `is_transfer` column (ADR-083 flagged
+  // `transactions` only), so the planned overlays deliberately carry no
+  // predicate. Pinned so a future "consistency" edit does not add one and
+  // break the query with a 42703 undefined_column.
+  it('never puts a transfer predicate on the planned_transactions overlays', async () => {
+    query.mockResolvedValue({ rows: [] });
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValue([[], [], [], []]);
+
+    await getCashflowComparison([], [], 'EUR');
+    await getCashflowForecastData(12, [], [], 'EUR');
+    const plannedSqls = query.mock.calls
+      .map((c) => c[0])
+      .filter((sql) => /FROM planned_transactions\b/.test(sql));
+    expect(plannedSqls).toHaveLength(4);
+    for (const sql of plannedSqls) expect(sql).not.toContain('is_transfer');
+  });
+
+  // The ledger-start probe decides the historical-average divisor. If any
+  // filter reached it, excluding a category (or excluding transfers) could
+  // empty the oldest months and silently re-base the divisor — the average
+  // line would move for reasons unrelated to the excluded rows.
+  it('never filters the ledger-start probe', async () => {
+    stubQueries('2024-01-01');
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValue([[], [], [], []]);
+
+    await getCashflowComparison([1, 2], [9], 'EUR');
+    const [probeSql, probeParams] = query.mock.calls.find((c) => isLedgerStartSql(c[0]));
+    expect(probeSql).not.toContain('is_transfer');
+    expect(probeSql).not.toContain('NOT IN');
+    expect(probeSql).not.toContain('LEFT JOIN');
+    expect(probeSql).not.toContain('planned_transactions');
+    expect(probeParams).toBeUndefined();
+    // Still window-clamped: a row older than the lookback cannot lengthen it.
+    expect(probeSql).toContain("interval '24 months'");
   });
 });

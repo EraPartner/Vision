@@ -201,7 +201,7 @@ export async function getById(id) {
  * @param {string} [options.dateFrom] inclusive YYYY-MM-DD lower bound on pt.date
  * @param {string} [options.dateTo] inclusive YYYY-MM-DD upper bound on pt.date
  * @param {boolean} [options.sellsLastWithinDay=false] replay ordering: sells after other types within the same day (snapshot day-walk); otherwise pt.date, pt.id
- * @returns {Promise<object[]>} raw joined rows
+ * @returns {Promise<import('../types/rows.js').PortfolioMathTxRow[]>} raw joined rows
  */
 export async function getRowsForPortfolioMath({
   activeInvestmentsOnly = false,

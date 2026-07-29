@@ -64,10 +64,19 @@ const TRANSACTION_JOINS = `
 // getById/create paths resolve categories identically to the list paths — an
 // alias recipient must not show categorized in lists but uncategorized on GET.
 const EFFECTIVE_CATEGORY_ID_SQL = 'COALESCE(t.category_id, r.default_category_id, pr.default_category_id)';
+// Displayed name for exactly the category EFFECTIVE_CATEGORY_ID_SQL resolves,
+// so the two can never denote different categories. The branch order therefore
+// mirrors that COALESCE: own (c) → recipient default (rc) → primary-recipient
+// default (pc). It used to test `pc` before `rc`, so an ALIAS recipient with its
+// own default whose PRIMARY carried a different one reported the alias's
+// category id next to the primary's category name — and the aggregation
+// surfaces, which follow the id, then disagreed with this list's label.
+// (The same CASE is inlined at the sort-column map and in getAll /
+// getAllWithCount below; all four copies share this order.)
 const CATEGORY_NAME_SQL = `CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END`;
 const RECIPIENT_NAME_SQL = 'COALESCE(pr.name, r.name)';
@@ -102,8 +111,8 @@ const TRANSACTION_SORT_COLUMNS = {
   recipient: 'COALESCE(pr.name, r.name)',
   category: `CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END`,
   bank: 't.bank_account',
@@ -218,8 +227,8 @@ export const transactionRepository = {
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END AS category_name${runningBalanceCol}
       FROM transactions t
@@ -572,8 +581,8 @@ export const transactionRepository = {
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END AS category_name${runningBalanceCol}
       FROM transactions t

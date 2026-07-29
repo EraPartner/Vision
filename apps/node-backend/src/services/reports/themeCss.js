@@ -95,6 +95,9 @@ export function buildThemeCss(tokens) {
  * chart1..chart8  →  --chart-1..--chart-8
  * primary         →  --primary
  * muted           →  --muted
+ *
+ * @param {string} key
+ * @returns {string}
  */
 function tokenToCssVar(key) {
   // chart1..chart8 → --chart-1..--chart-8

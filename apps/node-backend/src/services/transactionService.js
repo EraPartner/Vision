@@ -30,6 +30,18 @@ import { logger } from '../config/logger.js';
  * unambiguously matches one; an auto-link failure must never fail the create,
  * so it is caught and logged.
  *
+ * @param {{
+ *   transaction_date?: string,
+ *   date?: string,
+ *   bank_account?: string|null,
+ *   recipient_id?: number|null,
+ *   amount: number|string,
+ *   memo?: string|null,
+ *   currency?: string|null,
+ *   category_id?: number|null,
+ *   comment?: string|null,
+ *   tags?: string[]|null,
+ * }} data zod-validated POST body — loose passthrough (see module doc above).
  * @returns {Promise<{ transaction: object, autoLink: { autoLinkedCount: number, links: Array<{ plannedTransactionId?: number }> } }>}
  */
 async function createManualTransaction(data) {
@@ -77,6 +89,7 @@ async function createManualTransaction(data) {
 
   // Auto-clear a matching planned payment if this transaction unambiguously
   // matches one. Never let an auto-link failure fail the create.
+  /** @type {{ autoLinkedCount: number, links: Array<{ plannedTransactionId?: number, transactionId?: number }> }} */
   let autoLink = { autoLinkedCount: 0, links: [] };
   try {
     autoLink = await autoLinkTransactions([transaction]);

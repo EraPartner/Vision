@@ -22,7 +22,13 @@ const gymRow = (id, date, amount) => ({
   bank_account: 'BE00',
   recipient_id: 42,
   recipient_name: 'Gym',
+  // The scan query resolves and emits `effective_category_id` (the same
+  // 3-level COALESCE `category_name` is resolved from) — kept equal to the
+  // raw `category_id` here since none of these fixtures exercise a
+  // recipient-default resolution; see the dedicated test below for the case
+  // where they diverge.
   category_id: 7,
+  effective_category_id: 7,
   category_name: 'HEALTH:GYM',
 });
 
@@ -48,6 +54,7 @@ describe('detectRecurringPatterns', () => {
             recipient_id: 42,
             recipient_name: 'Gym',
             category_id: 7,
+            effective_category_id: 7,
             category_name: 'HEALTH:GYM',
           },
           {
@@ -60,6 +67,7 @@ describe('detectRecurringPatterns', () => {
             recipient_id: 42,
             recipient_name: 'Gym',
             category_id: 7,
+            effective_category_id: 7,
             category_name: 'HEALTH:GYM',
           },
           {
@@ -72,6 +80,7 @@ describe('detectRecurringPatterns', () => {
             recipient_id: 42,
             recipient_name: 'Gym',
             category_id: 7,
+            effective_category_id: 7,
             category_name: 'HEALTH:GYM',
           },
         ],
@@ -100,6 +109,7 @@ describe('detectRecurringPatterns', () => {
       recipient_id: 42,
       recipient_name: 'Employer & Landlord',
       category_id: 7,
+      effective_category_id: 7,
       category_name: 'MISC:MISC',
     });
     mockQuery
@@ -146,5 +156,63 @@ describe('detectRecurringPatterns', () => {
     // Same memoised object, and no additional DB round-trips on the second call.
     expect(second).toBe(first);
     expect(mockQuery.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  // The scan must resolve the effective category over all THREE levels (own →
+  // recipient default → PRIMARY recipient's default), matching
+  // transactionRepository. With the former 2-level resolution a pattern whose
+  // transactions sit under an alias recipient — categorised only via the
+  // PRIMARY's default — reported categoryName: null while the transactions
+  // list showed it categorised. Behavioural coverage lives in
+  // tests/aliasCategoryResolution.db.test.js.
+  it('resolves the effective category over three levels in the scan query', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    await detectRecurringPatterns();
+
+    const sql = mockQuery.mock.calls[0][0];
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(sql).toContain(
+      'LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id',
+    );
+    // The pattern's emitted categoryId must come from the same COALESCE
+    // categoryName is resolved from, not the raw t.category_id — otherwise a
+    // recipient-default-categorised pattern reports categoryId: null beside a
+    // non-null categoryName.
+    expect(sql).toContain(
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id',
+    );
+  });
+
+  // Pins the categoryId fix directly: a row whose own category_id is null but
+  // whose recipient/primary default resolves it (effective_category_id: 7)
+  // must surface as pattern.categoryId === 7, not the raw null. Pre-fix, the
+  // service read `category_id` off the row and this assertion failed while
+  // `categoryName` was already correct.
+  it('emits the resolved effective_category_id as categoryId, not the raw category_id', async () => {
+    const row = (id, date) => ({
+      id,
+      date: new Date(`${date}T00:00:00.000Z`),
+      amount: '-120.00',
+      currency: 'EUR',
+      memo: `Electrabel ${id}`,
+      bank_account: 'BE00',
+      recipient_id: 99,
+      recipient_name: 'Electrabel Invoicing',
+      category_id: null,
+      effective_category_id: 7,
+      category_name: 'Bills:Utilities',
+    });
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [row(1, '2026-01-01'), row(2, '2026-02-01'), row(3, '2026-03-01')],
+      })
+      .mockResolvedValueOnce({ rows: [{ exists: true }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await detectRecurringPatterns();
+
+    expect(result.patterns[0].categoryId).toBe(7);
+    expect(result.patterns[0].categoryName).toBe('Bills:Utilities');
   });
 });

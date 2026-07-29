@@ -4,6 +4,14 @@
 
 import { todayAppDateString } from '../../lib/timezone.js';
 
+/**
+ * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
+ */
+
+/**
+ * @param {ExpressRequest} req
+ * @returns {string}
+ */
 export function getTargetCurrency(req) {
   const raw = req.query.currency ?? req.query.target_currency;
   if (raw == null || raw === '') return 'EUR';
@@ -12,6 +20,10 @@ export function getTargetCurrency(req) {
   return /^[A-Z]{3}$/.test(value) ? value : 'EUR';
 }
 
+/**
+ * @param {any} raw
+ * @returns {string|undefined}
+ */
 export function getMonthParam(raw) {
   if (raw == null || raw === '') return undefined;
   const value = String(raw).trim();
@@ -20,6 +32,10 @@ export function getMonthParam(raw) {
   return undefined;
 }
 
+/**
+ * @param {any} raw
+ * @returns {boolean}
+ */
 export function isTruthyQueryParam(raw) {
   if (raw === true || raw === 1) return true;
   if (typeof raw === 'string') {
@@ -39,6 +55,11 @@ export function isTruthyQueryParam(raw) {
  * different spellings per endpoint. Accepts true/1/'true'/'1' → true,
  * false/0/'false'/'0' → false; any other value falls back to `defaultValue`.
  */
+/**
+ * @param {any} raw
+ * @param {boolean} [defaultValue]
+ * @returns {boolean}
+ */
 export function parseBoolQueryParam(raw, defaultValue = false) {
   if (raw == null || raw === '') return defaultValue;
   if (raw === true || raw === 1) return true;
@@ -52,6 +73,7 @@ export function parseBoolQueryParam(raw, defaultValue = false) {
 // Kept as the import point for the /api/info sub-routers; the implementation
 // is the shared APP_TIMEZONE "today" (UTC read here was yesterday until
 // 01:00/02:00 local in UTC+ zones).
+/** @returns {string} */
 export function getCurrentDateString() {
   return todayAppDateString();
 }

@@ -27,6 +27,10 @@ const SIG_RIFF = Buffer.from('RIFF');
 const SIG_WEBP = Buffer.from('WEBP');
 const SIG_PDF = Buffer.from('%PDF-');
 
+/**
+ * @param {unknown} buffer
+ * @returns {string|null}
+ */
 export function sniffMime(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 4) return null;
 
@@ -65,7 +69,11 @@ const EXTENSION_FAMILY = {
   '.pdf': 'application/pdf',
 };
 
+/**
+ * @param {string|null|undefined} ext
+ * @returns {string|null}
+ */
 export function extensionMime(ext) {
   if (!ext) return null;
-  return EXTENSION_FAMILY[ext.toLowerCase()] || null;
+  return EXTENSION_FAMILY[/** @type {keyof typeof EXTENSION_FAMILY} */ (ext.toLowerCase())] || null;
 }

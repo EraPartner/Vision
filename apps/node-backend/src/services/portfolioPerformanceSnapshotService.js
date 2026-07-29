@@ -10,12 +10,36 @@ import { computeMetrics, computeHeatmap } from '../utils/portfolioMath.js';
 import { computeAndStoreSnapshots } from './portfolio/snapshotBuilder.js';
 import { getPortfolioSummary, getBreakdownSummary } from './portfolio/portfolioSummaryService.js';
 
+/** @typedef {import('../types/rows.js').PortfolioPerformanceSnapshotRow} PortfolioPerformanceSnapshotRow */
+
 // Re-export the imported bindings so both `import { x } from` consumers and the
 // default-object consumers below share a single declaration each (SIMP-51).
 export { computeMetrics, computeHeatmap };
 export { computeAndStoreSnapshots };
 export { getPortfolioSummary, getBreakdownSummary };
 
+/**
+ * @param {string} startDate 'YYYY-MM-DD'
+ * @param {string} endDate 'YYYY-MM-DD'
+ * @param {string} [currency]
+ * @returns {Promise<Array<{
+ *   snapshot_date: Date,
+ *   invested: string,
+ *   value: string,
+ *   stocks_etfs_value: string,
+ *   crypto_value: string,
+ *   metals_value: string,
+ *   cash_value: string,
+ *   gain_loss: string,
+ *   return_pct: string,
+ *   inflation_adjusted_value: string,
+ *   stocks_etfs_invested: string,
+ *   crypto_invested: string,
+ *   metals_invested: string,
+ *   currency: string,
+ *   value_fx_neutral: string|undefined,
+ * }>>}
+ */
 export async function getSnapshots(startDate, endDate, currency = 'EUR') {
   // SELECT * + shape in JS: value_fx_neutral only exists once migration 0039
   // is applied, and enumerating it in SQL would break un-migrated databases.
@@ -27,7 +51,7 @@ export async function getSnapshots(startDate, endDate, currency = 'EUR') {
     ORDER BY snapshot_date ASC
   `, [currency, startDate, endDate]);
 
-  return result.rows.map((row) => ({
+  return result.rows.map((/** @type {PortfolioPerformanceSnapshotRow} */ row) => ({
     snapshot_date: row.snapshot_date,
     invested: row.invested,
     value: row.value,

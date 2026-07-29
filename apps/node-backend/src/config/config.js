@@ -9,10 +9,15 @@
 import { readFileSync, existsSync } from 'fs';
 import { env } from './env.js';
 
+/**
+ * @template {object} T
+ * @param {T} object
+ * @returns {T}
+ */
 function deepFreeze(object) {
   Object.freeze(object);
   for (const key of Object.getOwnPropertyNames(object)) {
-    const value = object[key];
+    const value = /** @type {Record<string, unknown>} */ (object)[key];
     if (
       value
       && (typeof value === 'object' || typeof value === 'function')
@@ -68,7 +73,14 @@ const settings = deepFreeze({
     title: 'Financial Transaction Manager',
     version: '1.0.0',
     description: 'Import and manage financial transactions from various banks',
-    corsOrigins: env.CORS_ORIGINS,
+    // env.CORS_ORIGINS (csvEnv) always parses to string[], never the bare
+    // string '*' — main.js's CORS middleware nonetheless checks
+    // `corsOrigins === '*'` for a documented wildcard-dev-bypass mode, which
+    // is consequently dead code (that comparison can never be true). Typed
+    // as the union main.js expects rather than fixing either side — out of
+    // scope for an annotation-only pass; reported to the orchestrator as a
+    // real-mismatch finding.
+    corsOrigins: /** @type {string[] | string} */ (env.CORS_ORIGINS),
   },
 
   admin: {

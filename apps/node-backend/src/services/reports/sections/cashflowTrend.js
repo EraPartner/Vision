@@ -15,7 +15,7 @@ import {
 import { filterMonthsByPeriod } from '../dataFetcher.js';
 
 /**
- * @param {{ monthly: object | null }} data
+ * @param {Pick<import('../dataFetcher.js').FinancialReportData, 'monthly'>} data
  * @param {{ currency: string; period: import('../dataFetcher.js').Period }} opts
  * @returns {string}
  */

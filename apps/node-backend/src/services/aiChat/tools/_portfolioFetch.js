@@ -13,7 +13,7 @@ import { memoizeAsync } from '../toolCache.js';
 
 /**
  * Active investments, optionally filtered by asset class.
- * @param {Map|undefined} cache
+ * @param {Map<string, Promise<any>>|undefined} cache
  * @param {string|null} assetClass
  */
 export function loadActiveInvestments(cache, assetClass = null) {
@@ -26,7 +26,7 @@ export function loadActiveInvestments(cache, assetClass = null) {
  * discriminator as {@link loadActiveInvestments} (since `ids` is derived from
  * it) plus the optional transaction type.
  *
- * @param {Map|undefined} cache
+ * @param {Map<string, Promise<any>>|undefined} cache
  * @param {string|null} assetClass  discriminator used to build the cache key
  * @param {number[]} ids
  * @param {{ type?: string|null }} [opts]

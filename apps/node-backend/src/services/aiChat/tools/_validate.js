@@ -8,7 +8,22 @@
  * dispatcher can feed the error back to the model for retry.
  */
 
+/**
+ * Per-turn context threaded through every tool's `run(args, context)` by
+ * `dispatchTool` (see ./index.js). `cache` is the per-turn memoization Map
+ * (../toolCache.js); `maxRows` bounds a tool's own row scans; `conversationId`
+ * reaches the few tools that reference the conversation.
+ * @typedef {object} ToolContext
+ * @property {number} [maxRows]
+ * @property {Map<string, Promise<any>>} [cache]
+ * @property {string} [conversationId] UUID — `ai_conversations.id`.
+ */
+
 export class ToolValidationError extends Error {
+  /**
+   * @param {string} message
+   * @param {string} [field]
+   */
   constructor(message, field) {
     super(message);
     this.name = 'ToolValidationError';
@@ -18,6 +33,11 @@ export class ToolValidationError extends Error {
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {string|null}
+ */
 export function parseDate(value, field) {
   if (value == null) return null;
   if (typeof value !== 'string' || !ISO_DATE_RE.test(value)) {
@@ -33,15 +53,29 @@ export function parseDate(value, field) {
   return value;
 }
 
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {string}
+ */
 export function requireDate(value, field) {
   const parsed = parseDate(value, field);
   if (!parsed) throw new ToolValidationError(`${field} is required`, field);
   return parsed;
 }
 
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @param {{ min?: number, max?: number, defaultValue?: number|null }} [opts]
+ * @returns {number|null}
+ */
 export function parsePositiveInt(value, field, { min = 1, max = 1000, defaultValue = null } = {}) {
   if (value == null) return defaultValue;
-  const n = typeof value === 'string' ? parseInt(value, 10) : value;
+  // Non-string branch is passed through as-is (no coercion) — matches
+  // original runtime behavior: a non-numeric non-string value fails the
+  // isInteger check below rather than being silently Number()-coerced first.
+  const n = typeof value === 'string' ? parseInt(value, 10) : /** @type {number} */ (value);
   if (!Number.isInteger(n) || n < min || n > max) {
     throw new ToolValidationError(
       `${field} must be an integer between ${min} and ${max}`,
@@ -51,6 +85,13 @@ export function parsePositiveInt(value, field, { min = 1, max = 1000, defaultVal
   return n;
 }
 
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @param {readonly string[]} allowed
+ * @param {{ defaultValue?: string|null, required?: boolean }} [opts]
+ * @returns {string|null}
+ */
 export function parseEnum(value, field, allowed, { defaultValue = null, required = false } = {}) {
   if (value == null) {
     if (required) throw new ToolValidationError(`${field} is required`, field);
@@ -65,6 +106,11 @@ export function parseEnum(value, field, allowed, { defaultValue = null, required
   return value;
 }
 
+/**
+ * @param {string|null|undefined} from
+ * @param {string|null|undefined} to
+ * @returns {void}
+ */
 export function assertDateOrder(from, to) {
   if (from && to && from > to) {
     throw new ToolValidationError('`from` must be on or before `to`', 'from');

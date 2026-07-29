@@ -9,6 +9,8 @@
  * arrives as a server-local-midnight Date and must be formatted with local
  * getters instead (see importPipeline/commit.js) — toISOString() there would
  * roll back a day for timezones east of UTC. Do not use this helper for that.
+ * @param {unknown} value
+ * @returns {string|undefined}
  */
 export function parsedDateToYmd(value) {
   if (value instanceof Date) return value.toISOString().split('T')[0];

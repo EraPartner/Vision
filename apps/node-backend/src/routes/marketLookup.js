@@ -14,6 +14,11 @@ import {
   searchSymbols,
 } from '../services/marketLookupService.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 /** Test-only re-export: clear the per-symbol quote cache between cases. */
@@ -35,7 +40,7 @@ function coerceQueryString(value) {
 }
 
 // GET /api/market/search?q=apple
-router.get('/search', async (req, res) => {
+router.get('/search', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 1) return res.ok({ items: [] });
 
@@ -46,7 +51,7 @@ router.get('/search', async (req, res) => {
 // `detail=basic` returns price fields only; the default (full) additionally
 // fetches quoteSummary for fundamentals/analyst data. Results are per-symbol
 // cached and concurrent identical fetches are coalesced (see the service).
-router.get('/quote', async (req, res) => {
+router.get('/quote', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbols = coerceQueryString(req.query.symbols);
   if (!symbols) throw new ValidationError('symbols parameter required');
   const basic = coerceQueryString(req.query.detail).trim() === 'basic';
@@ -57,7 +62,7 @@ router.get('/quote', async (req, res) => {
 });
 
 // GET /api/market/chart?symbol=AAPL&range=1mo&interval=1d
-router.get('/chart', async (req, res) => {
+router.get('/chart', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbol = coerceQueryString(req.query.symbol);
   // `range`/`interval` are passed through untouched — yahoo-finance2 validates
   // them against its own literal-union types, so leave them loosely typed.
@@ -68,7 +73,7 @@ router.get('/chart', async (req, res) => {
 });
 
 // GET /api/market/news?symbols=AAPL,MSFT&count=20
-router.get('/news', async (req, res) => {
+router.get('/news', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const symbols = coerceQueryString(req.query.symbols);
   const count = coerceQueryString(req.query.count) || '20';
 

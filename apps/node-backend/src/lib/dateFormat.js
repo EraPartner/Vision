@@ -13,6 +13,8 @@
  * Do NOT pass UTC-constructed values (new Date(Date.UTC(…)) or new Date('YYYY-MM-DD'))
  * — construct locally instead, or the day shifts west of UTC.
  * (For staging dates parsed from CSV adapters use lib/importDates.)
+ * @param {Date} date
+ * @returns {string}
  */
 export function formatDateToYmd(date) {
   const y = date.getFullYear();

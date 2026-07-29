@@ -55,11 +55,23 @@ export function createResearchAggregator({
   /** @type {Map<string, Promise<any>>} */
   const inFlight = new Map();
 
+  /**
+   * @param {string} provider
+   * @param {string} dataType
+   */
   function supports(provider, dataType) {
-    return adapterSupports(provider, METHOD_BY_TYPE[dataType], adapters);
+    return adapterSupports(
+      provider,
+      METHOD_BY_TYPE[/** @type {keyof typeof METHOD_BY_TYPE} */ (dataType)],
+      adapters,
+    );
   }
 
-  /** Usable, ordered provider chain (adapter present + method + keyed). Quota is checked per attempt. */
+  /**
+   * Usable, ordered provider chain (adapter present + method + keyed). Quota is checked per attempt.
+   * @param {string} dataType
+   * @param {string} [assetClass]
+   */
   function usableChain(dataType, assetClass) {
     return resolveProviderChain(dataType, assetClass, {
       isUsable: (provider) => supports(provider, dataType) && isKeyed(provider),
@@ -72,7 +84,7 @@ export function createResearchAggregator({
    * @returns {Promise<{ provider?: string, data?: unknown, source: 'cache'|'live'|'unavailable', attempted?: object[] }>}
    */
   async function fetch(dataType, params = {}) {
-    const method = METHOD_BY_TYPE[dataType];
+    const method = METHOD_BY_TYPE[/** @type {keyof typeof METHOD_BY_TYPE} */ (dataType)];
     if (!method) throw new Error(`Unknown research data type: ${dataType}`);
 
     const { symbol, assetClass, range, count, cacheKey } = params;
@@ -85,6 +97,7 @@ export function createResearchAggregator({
     if (existing) return existing;
 
     const work = /** @type {Promise<{ provider?: string, data?: unknown, source: 'live'|'cache'|'unavailable', attempted?: any[] }>} */ ((async () => {
+      /** @type {Array<{ provider: string, skipped?: string, error?: string }>} */
       const attempted = [];
       for (const provider of usableChain(dataType, assetClass)) {
         if (!(await governor.canSpend(provider))) {
@@ -121,6 +134,7 @@ export function createResearchAggregator({
    * @param {Array<Record<string, any>>} snapshots  highest-precedence first
    */
   function mergeFundamentals(snapshots) {
+    /** @type {Record<string, any>} */
     const merged = {};
     // Overlay lowest → highest so the highest-precedence present value lands last.
     for (const snap of [...snapshots].reverse()) {
@@ -151,6 +165,7 @@ export function createResearchAggregator({
     // fallback. Drop any provider without an adapter method or key.
     const order = ['fmp', 'yahoo'].filter((p) => supports(p, 'fundamentals') && isKeyed(p));
 
+    /** @type {Array<{ provider: string, skipped?: string, error?: string }>} */
     const attempted = [];
     const settled = await Promise.all(
       order.map(async (provider) => {
@@ -202,6 +217,7 @@ export function createResearchAggregator({
     const providers = MACRO_PROVIDERS.filter(
       (p) => adapterSupports(p, 'macroSearch', adapters) && isKeyed(p),
     );
+    /** @type {Array<{ provider: string, skipped?: string, error?: string }>} */
     const attempted = [];
     const settled = await Promise.all(
       providers.map(async (provider) => {

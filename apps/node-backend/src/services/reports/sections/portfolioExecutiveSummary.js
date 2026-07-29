@@ -8,7 +8,7 @@
 import { escapeHtml, fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
 
 /**
- * @param {object | null} data  fetchPortfolioData result
+ * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
  * @param {{ currency: string; period: object }} ctx
  * @returns {string}  HTML page div
  */

@@ -93,6 +93,15 @@ export async function renderHtmlToPdf(html, opts = {}) {
   }
 }
 
+/**
+ * @param {string} html
+ * @param {{
+ *   footerTemplate?: string;
+ *   headerTemplate?: string;
+ *   margin?: { top?: string; right?: string; bottom?: string; left?: string };
+ * }} [opts]
+ * @returns {Promise<Buffer>}
+ */
 async function renderHtmlToPdfInner(html, opts = {}) {
   const b = await getBrowser();
   const page = await b.newPage();

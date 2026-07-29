@@ -41,6 +41,17 @@ import * as researchProviderKeyService from '../services/research/researchProvid
 import { isInternetReachable } from '../lib/network.js';
 import investmentRepository from '../repositories/investmentRepository.js';
 
+/**
+ * Each value is tri-state: 'pending' | 'ready' | 'failed' (see module doc
+ * comment above). Typed as a plain string index signature, not named
+ * literal-union properties, to match what main.js actually constructs and
+ * passes in by reference: `Object.fromEntries(WARMUP_KEYS.map((k) => [k,
+ * 'pending']))`, which TS infers as `{ [k: string]: string }` (main.js is
+ * outside this ratchet slice, so that construction site isn't itself typed
+ * more precisely).
+ * @typedef {Record<string, string>} WarmupStatus
+ */
+
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -124,6 +135,10 @@ function withInFlightGuard(name, fn) {
   };
 }
 
+/**
+ * @param {import('../types/rows.js').InvestmentRow} investment
+ * @returns {boolean}
+ */
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
   if (!provider || provider === 'manual') return false;
@@ -149,11 +164,19 @@ function hasLivePriceRefreshConfig(investment) {
   return Boolean(investment?.price_provider_id);
 }
 
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
 function isValidStoredPrice(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0;
 }
 
+/**
+ * @param {Record<number, import('../services/priceProviderService.js').ResolvedPrice>} prices
+ * @returns {Promise<number>}
+ */
 async function persistRefreshedPrices(prices) {
   const updateResults = await Promise.all(
     Object.entries(prices).map(async ([investmentId, priceData]) => {
@@ -185,7 +208,9 @@ async function refreshInvestmentPricesOnStartup() {
     toRefresh.map(i => [i.id, Number(i.current_price)])
   );
 
+  /** @type {import('../types/rows.js').InvestmentRow[]} */
   const deferredKinesisRefresh = [];
+  /** @type {import('../types/rows.js').InvestmentRow[]} */
   const immediateRefresh = [];
 
   for (const investment of toRefresh) {
@@ -231,7 +256,7 @@ async function refreshInvestmentPricesOnStartup() {
  *     snapshots → info caches.
  *  4. Schedule recurring intervals (12h FX, 1h quotes, 24h cashflow MC).
  *
- * @param {{ warmupStatus: object }} args
+ * @param {{ warmupStatus: WarmupStatus }} args
  * @returns {Promise<{ exchangeRateRefreshInterval: NodeJS.Timeout, quotesRefreshInterval: NodeJS.Timeout, cashflowForecastRefreshInterval: NodeJS.Timeout, holdingGapBackfillInterval: NodeJS.Timeout }>}
  */
 export async function runWarmupTasks({ warmupStatus }) {
@@ -382,10 +407,13 @@ export async function runWarmupTasks({ warmupStatus }) {
         logger.debug('Skipping scheduled holding-gap backfill — offline');
         return;
       }
-      const result = await backfillHoldingGaps().catch((err) => {
-        logger.error('Scheduled holding-gap backfill failed', { error: err.message });
-        return undefined;
-      });
+      const result = await backfillHoldingGaps().catch(
+        /** @returns {undefined} */
+        (err) => {
+          logger.error('Scheduled holding-gap backfill failed', { error: err.message });
+          return undefined;
+        },
+      );
       if (result && result.filled > 0) {
         await computeAndStoreSnapshots().catch((err) => {
           logger.error('Snapshot recompute after holding-gap backfill failed', { error: err.message });

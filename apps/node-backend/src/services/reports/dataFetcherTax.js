@@ -21,6 +21,172 @@ import { logger } from '../../config/logger.js';
  */
 
 /**
+ * Belgian PIT tax profile the frontend may attach to a tax-report request
+ * (routes/reports.js `taxProfileSchema`) — every field optional, since the
+ * client may omit any of them.
+ * @typedef {{
+ *   filingStatus?: string,
+ *   region?: string,
+ *   taxYear?: number,
+ * }} TaxProfile
+ */
+
+/**
+ * Precomputed Belgian PIT figures the frontend may attach to a tax-report
+ * request (routes/reports.js `precomputedPITSchema`) — computed client-side
+ * so the report doesn't have to re-derive the bracket math.
+ * @typedef {{
+ *   taxableIncome?: number,
+ *   totalTax?: number,
+ *   brackets?: Array<{
+ *     label?: string,
+ *     rate?: number,
+ *     taxableIncome?: number,
+ *     taxAmount?: number,
+ *   }>,
+ * }} PrecomputedPIT
+ */
+
+/**
+ * `portfolio_transactions` JOINed to `investments`, as selected by
+ * `fetchTaxTransactions` below. `amount`/`taxes`/`fees` are NUMERIC columns
+ * COALESCE-defaulted to 0 — pg still emits NUMERIC as a string even through
+ * COALESCE with a numeric literal, so they stay strings here (parsed via
+ * `Number()`/`convert()` below), matching `PortfolioMathTxRow` in types/rows.js.
+ * @typedef {{
+ *   id: number,
+ *   investment_id: number,
+ *   investment_name: string,
+ *   symbol: string|null,
+ *   asset_class: string,
+ *   type: string,
+ *   amount: string,
+ *   taxes: string,
+ *   fees: string,
+ *   currency: string,
+ *   rate_date: string,
+ *   year: number,
+ *   month: number,
+ * }} TaxTxnRow
+ */
+
+/**
+ * One month's tax/fee totals, keyed 'YYYY-MM' in `byMonth`.
+ *
+ * `sections/taxMonthlyTrend.js` also reads `m.taxes` (a combined tob+wht+
+ * sell+other figure), which this bucket has never carried — only the four
+ * split fields plus `fees` — so that read is always `undefined` and the
+ * renderer's "Taxes" series/column is always 0. Kept as an always-`undefined`
+ * optional field (not fixed) to stay behavior-preserving; flagged for the
+ * orchestrator.
+ * @typedef {{
+ *   year: number, month: number,
+ *   tob: number, wht: number, sell: number, other: number, fees: number,
+ *   taxes?: undefined,
+ * }} TaxMonthBucket
+ */
+
+/**
+ * Per-asset-class tax/fee subtotal. `byAssetClass` (below) is an ARRAY of
+ * these, keyed by nothing — but `sections/feeBreakdown.js` and
+ * `taxByAssetClass.js` both read it via `Object.entries(byAssetClass)` as if
+ * it were an object keyed by asset-class name, using the entry's numeric
+ * array-index KEY as the row label instead of the entry's own `.assetClass`
+ * field. `.taxes`/`.fees` (the VALUES) are unaffected and render correctly —
+ * only the label is wrong, showing "0", "1", "2", … instead of "stock",
+ * "crypto", etc. Type-safe (arrays satisfy `Object.entries`'s `ArrayLike`
+ * overload) so this doesn't surface as a compile error; flagged for the
+ * orchestrator instead.
+ * @typedef {{ assetClass: string, taxes: number, fees: number }} TaxAssetClassBucket
+ */
+
+/**
+ * Per-investment tax/fee subtotal.
+ *
+ * `sections/topInvestmentsByCost.js` reads `inv.taxes` (combined tax figure —
+ * never carried; only `tob`/`wht`/`sell`/`other` are) and `inv.tobTotal` /
+ * `inv.dividendWHTTotal` / `inv.sellTaxTotal` (those exact names belong to
+ * {@link TaxTransactionAggregates}'s TOP-level report-wide totals, not this
+ * per-investment bucket, whose equivalents are named `tob`/`wht`/`sell`). All
+ * four reads are always `undefined`, so that table's TOB / Div. WHT / Sell Tax
+ * columns always render 0, its "Total Cost" column is fees-only (understated
+ * by the missing tax components), and its sort-by-cost is effectively
+ * sort-by-fees. Kept as always-`undefined` optional fields (not fixed) to stay
+ * behavior-preserving; flagged for the orchestrator.
+ * @typedef {{
+ *   investmentId: number, name: string, symbol: string|null, assetClass: string,
+ *   tob: number, wht: number, sell: number, other: number, fees: number, total: number,
+ *   taxes?: undefined, tobTotal?: undefined, dividendWHTTotal?: undefined, sellTaxTotal?: undefined,
+ * }} TaxInvestmentBucket
+ */
+
+/**
+ * Aggregated result of {@link fetchTaxTransactions}.
+ * @typedef {{
+ *   tobTotal: number,
+ *   dividendWHTTotal: number,
+ *   sellTaxTotal: number,
+ *   otherTaxTotal: number,
+ *   feesTotal: number,
+ *   dividendsReceived: number,
+ *   byMonth: TaxMonthBucket[],
+ *   byAssetClass: TaxAssetClassBucket[],
+ *   byInvestment: TaxInvestmentBucket[],
+ *   unconvertedCurrencies: string[],
+ * }} TaxTransactionAggregates
+ */
+
+/**
+ * Result of {@link fetchTaxData} — the full data payload tax-report section
+ * renderers consume. The tax totals (`tobTotal`, `dividendWHTTotal`, etc.)
+ * live at the TOP level here, unwrapped from `fetchTaxTransactions`'s result —
+ * there has never been a nested `totals` object.
+ *
+ * `sections/taxExecutiveSummary.js`, `feeBreakdown.js`, and
+ * `taxTypeBreakdown.js` all read `data.totals.*` regardless, so `totals` is
+ * always `undefined` and every figure those three sections derive from it
+ * falls back to 0 — `taxTypeBreakdown` in particular filters out every
+ * zero-amount component, so its component list is always empty and it always
+ * renders the "no tax data" placeholder. Kept as an always-`undefined`
+ * optional field (not fixed) to stay behavior-preserving; flagged for the
+ * orchestrator.
+ * @typedef {{
+ *   taxYear: number,
+ *   startDate: string,
+ *   endDate: string,
+ *   currency: string,
+ *   period: Period,
+ *   periodNote: string | null,
+ *   taxTables: import('./belgianTaxTables.js').TaxYearTable & { approximated?: boolean, approximatedFrom?: number },
+ *   taxProfile: TaxProfile | undefined,
+ *   precomputedPIT: PrecomputedPIT | undefined,
+ *   tobTotal: number,
+ *   dividendWHTTotal: number,
+ *   sellTaxTotal: number,
+ *   otherTaxTotal: number,
+ *   feesTotal: number,
+ *   dividendsReceived: number,
+ *   byMonth: TaxMonthBucket[],
+ *   byAssetClass: TaxAssetClassBucket[],
+ *   byInvestment: TaxInvestmentBucket[],
+ *   unconvertedCurrencies: string[],
+ *   totals?: undefined,
+ * }} TaxReportData
+ */
+
+/**
+ * The shape `sections/taxExecutiveSummary.js`, `feeBreakdown.js`, and
+ * `taxTypeBreakdown.js` assume `data.totals` has — it never does (see the
+ * `totals?: undefined` note on {@link TaxReportData} above). Used only to
+ * type those three files' `data?.totals ?? {}` fallback so the defensive `??`
+ * chain keeps compiling without asserting the field actually exists.
+ * @typedef {{
+ *   tobTotal?: number, dividendWHTTotal?: number, sellTaxTotal?: number,
+ *   otherTaxTotal?: number, feesTotal?: number, dividendsReceived?: number,
+ * }} LegacyTaxTotalsFallback
+ */
+
+/**
  * Unwrap a settled Promise result; log and return null on rejection.
  *
  * @template T
@@ -84,10 +250,10 @@ export function periodToTaxContext(period) {
  * @param {string} targetCurrency
  * @param {string} startDate
  * @param {string} endDate
- * @returns {Promise<object>}
+ * @returns {Promise<TaxTransactionAggregates>}
  */
 async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
-  const result = await query(`
+  const result = await /** @type {Promise<{ rows: TaxTxnRow[] }>} */ (query(`
     SELECT
       pt.id,
       pt.investment_id,
@@ -108,7 +274,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
       AND (pt.taxes > 0 OR pt.fees > 0 OR pt.type IN ('dividend', 'tax', 'fee'))
     ORDER BY pt.date
     LIMIT 100000
-  `, [startDate, endDate]);
+  `, [startDate, endDate]));
 
   // Aggregation accumulators
   let tobTotal          = 0;
@@ -118,14 +284,18 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   let feesTotal         = 0;
   let dividendsReceived = 0;
 
+  /** @type {Map<string, TaxMonthBucket>} */
   const byMonthMap      = new Map(); // key: 'YYYY-MM'
+  /** @type {Map<string, TaxAssetClassBucket>} */
   const byAssetClass    = new Map();
+  /** @type {Map<number, TaxInvestmentBucket>} */
   const byInvestment    = new Map();
 
   // Currencies for which no rate (historical or current) could be resolved, so a
   // row was summed into the target total at an unconverted 1:1 rate. Surfaced so
   // the PDF can annotate the figure as approximate instead of silently reporting
   // e.g. 1000 KRW as 1000 EUR. (ADR-085.)
+  /** @type {Set<string>} */
   const missingRateCurrencies = new Set();
 
   // Belgian tax values foreign-currency income and transactions at the exchange rate
@@ -153,6 +323,10 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
 
   // Rate-to-EUR for a currency on a given date: the stored historical rate on or
   // before the date when available, else the current rate. EUR is always 1.
+  /**
+   * @param {string} code
+   * @param {string} dateStr
+   */
   const rateToEurForDate = (code, dateStr) => {
     const c = String(code || 'EUR').toUpperCase().trim();
     if (c === 'EUR') return 1;
@@ -180,6 +354,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     if (cur !== toCur && cur !== 'EUR' && (fromRate === undefined || fromRate === null)) {
       missingRateCurrencies.add(cur);
     }
+    /** @param {string} v */
     const convert = (v) =>
       cur !== toCur ? convertWithRates(Number(v), cur, toCur, rowRates) : Number(v);
 
@@ -275,8 +450,8 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
  *
  * @param {string} currency  Target currency (e.g. "EUR")
  * @param {Period} period
- * @param {{ taxProfile?: object; precomputedPIT?: object }} [extra]
- * @returns {Promise<object>}
+ * @param {{ taxProfile?: TaxProfile; precomputedPIT?: PrecomputedPIT }} [extra]
+ * @returns {Promise<TaxReportData>}
  */
 export async function fetchTaxData(currency, period, { taxProfile, precomputedPIT } = {}) {
   const { taxYear, startDate, endDate, periodNote } = periodToTaxContext(period);

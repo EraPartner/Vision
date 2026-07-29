@@ -33,6 +33,22 @@ import {
 } from './prices/priceProviderRegistry.js';
 import { getYahooClient } from './prices/yahooClient.js';
 
+/** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
+/** @typedef {import('../types/rows.js').PricePoint} PricePoint */
+/** @typedef {import('./prices/priceProviderRegistry.js').LivePriceQuote} LivePriceQuote */
+
+/**
+ * A resolved live-price result for one investment. `source` reflects which
+ * tier of the fetch → cache → cached-price → historical-fallback chain
+ * produced it: a `LivePriceQuote.source` value ('live'|'close') when it came
+ * straight off a provider/cache hit, or 'cached'/'historical_fallback' for
+ * the two degraded tiers below.
+ * @typedef {object} ResolvedPrice
+ * @property {number} price
+ * @property {string} source
+ * @property {number|null} [stale_as_of_ms] only set for 'historical_fallback'.
+ */
+
 export {
   saveHistoricalPointsToDatabase,
   resetPriceCache as __resetPriceCache,
@@ -50,6 +66,10 @@ export const SUPPORTED_PROVIDERS = [
 
 // ─── Live price fetching ──────────────────────────────────────────────────────
 
+/**
+ * @param {InvestmentRow[]} investments
+ * @returns {Promise<Record<number, number>>}
+ */
 export async function fetchLivePrices(investments) {
   const detailed = await fetchLivePricesDetailed(investments);
   return Object.fromEntries(
@@ -57,8 +77,15 @@ export async function fetchLivePrices(investments) {
   );
 }
 
+/**
+ * @param {InvestmentRow[]} investments
+ * @param {{ cachedPricesByInvestmentId?: Record<number, any> }} [opts]
+ * @returns {Promise<Record<number, ResolvedPrice>>}
+ */
 export async function fetchLivePricesDetailed(investments, { cachedPricesByInvestmentId = {} } = {}) {
+  /** @type {Record<number, ResolvedPrice>} */
   const results = {};
+  /** @type {Record<string, InvestmentRow[]>} */
   const stale = { binance: [], yahoo: [], custom: [], kinesis: [] };
 
   for (const inv of investments) {
@@ -86,6 +113,12 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
   // Provider fetch tasks. Two shapes (SIMP-33): id-based providers batch by a
   // resolved symbol and key results/cache by that symbol; investment-based
   // providers pass the investments through and key by inv.id.
+  /**
+   * @param {string} key
+   * @param {string} label
+   * @param {() => Promise<void>} task
+   * @returns {Promise<void>}
+   */
   const runProviderTask = async (key, label, task) => {
     try {
       await task();
@@ -97,11 +130,13 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
   };
 
   // { key, resolveId, batchFn, label }
+  /** @type {Array<{ key: string, resolveId: (inv: InvestmentRow) => string, batchFn: (ids: string[]) => Promise<Record<string, LivePriceQuote>>, label: string }>} */
   const idBasedProviders = [
     { key: 'binance', resolveId: (inv) => (inv.price_provider_id || '').toUpperCase(), batchFn: PROVIDERS.binance, label: 'Binance batch fetch' },
     { key: 'yahoo', resolveId: resolveYahooSymbol, batchFn: PROVIDERS.yahoo, label: 'Yahoo Finance batch fetch' },
   ];
   // { key, batchFn, label } — kinesis already converts EUR-symbol prices out of USD.
+  /** @type {Array<{ key: string, batchFn: (investments: InvestmentRow[]) => Promise<Record<string, LivePriceQuote>>, label: string }>} */
   const investmentBasedProviders = [
     { key: 'custom', batchFn: PROVIDERS.custom, label: 'Custom price fetch' },
     { key: 'kinesis', batchFn: PROVIDERS.kinesis, label: 'Kinesis price fetch' },
@@ -187,6 +222,10 @@ const BINANCE_DAY_MS = 24 * 60 * 60 * 1000;
 const BINANCE_PAGE_LIMIT = 1000;
 const BINANCE_MAX_PAGES = 30; // 30 × 1000 daily candles ≈ 82 years — a runaway guard, not a real bound
 
+/**
+ * @param {number} ms
+ * @returns {number}
+ */
 function _dayKey(ms) {
   return Math.floor(Number(ms) / BINANCE_DAY_MS);
 }
@@ -228,6 +267,12 @@ async function _fetchBinanceKlines(binanceSymbol, startMs, endMs) {
   return collected;
 }
 
+/**
+ * @param {PricePoint[]} points
+ * @param {number} [fromMs]
+ * @param {number} [toMs]
+ * @returns {PricePoint[]}
+ */
 function _filterHistoricalPoints(points, fromMs, toMs) {
   return filterPointsByRange(points, { fromMs, toMs });
 }
@@ -307,8 +352,8 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
           includePrePost: false,
         });
 
-        points = normalizeHistoryPoints((chart?.quotes || [])
-          .map((q) => ({
+        points = normalizeHistoryPoints((/** @type {any[]} */ (chart?.quotes) || [])
+          .map((/** @type {any} */ q) => ({
             timestampMs: q?.date ? new Date(q.date).getTime() : Number.NaN,
             price: toNumber(q?.close),
           }))

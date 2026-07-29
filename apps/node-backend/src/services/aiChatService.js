@@ -24,6 +24,17 @@ import { getOllamaClient, OllamaError } from '../integrations/ollama/client.js';
 import { buildChatMessages } from '../integrations/ollama/prompts.js';
 import { dispatchTool, getToolSchemas, getToolNames } from './aiChat/tools/index.js';
 
+/** @typedef {import('../types/rows.js').AiConversationRow} AiConversationRow */
+/** @typedef {import('../types/rows.js').AiMessageRow} AiMessageRow */
+
+/**
+ * A message in the array sent to/received from the Ollama `/api/chat`
+ * endpoint (see integrations/ollama/prompts.js `toOllamaMessage`). `tool_calls`
+ * only appears on an assistant message that invoked a tool; `name` only
+ * appears on a `role: 'tool'` result message.
+ * @typedef {{ role: string, content: string, tool_calls?: any[], name?: string }} OllamaMessage
+ */
+
 const MAX_TOOL_ITERATIONS = 6;
 const DEFAULT_CONVERSATION_TITLE = 'New conversation';
 
@@ -41,6 +52,11 @@ export class AiChatServiceError extends AppError {
   }
 }
 
+/**
+ * @param {any} rawArgs raw `function.arguments` from an Ollama tool call —
+ *   either an already-parsed object, a JSON string, or absent.
+ * @returns {any}
+ */
 function parseToolCallArguments(rawArgs) {
   if (rawArgs == null) return {};
   if (typeof rawArgs === 'object') return rawArgs;
@@ -56,6 +72,10 @@ function parseToolCallArguments(rawArgs) {
   return rawArgs;
 }
 
+/**
+ * @param {any} toolCall raw Ollama `tool_calls[]` entry.
+ * @returns {{ name: string|null, args: any }}
+ */
 function normalizeToolCall(toolCall) {
   const fn = toolCall?.function || toolCall || {};
   const name = fn.name || toolCall?.name || null;
@@ -63,6 +83,11 @@ function normalizeToolCall(toolCall) {
   return { name, args };
 }
 
+/**
+ * @param {string|null|undefined} text
+ * @param {number} [maxLen]
+ * @returns {string}
+ */
 function truncateTitle(text, maxLen = 60) {
   const trimmed = (text || '').trim().replace(/\s+/g, ' ');
   if (!trimmed) return DEFAULT_CONVERSATION_TITLE;
@@ -73,6 +98,9 @@ function truncateTitle(text, maxLen = 60) {
 /**
  * Ensure a conversation exists. If `conversationId` is provided, validate it;
  * otherwise create a new one titled from the first user message.
+ *
+ * @param {{ conversationId?: string|null, model?: string|null, firstUserMessage?: string }} args
+ * @returns {Promise<AiConversationRow>}
  */
 async function ensureConversation({ conversationId, model, firstUserMessage }) {
   if (conversationId) {
@@ -221,6 +249,7 @@ async function runChatTurnInner({
 
   const toolSchemas = useTools ? getToolSchemas() : [];
   const toolNames = useTools ? getToolNames() : [];
+  /** @type {OllamaMessage[]} */
   const baseMessages = buildChatMessages({
     toolNames,
     history,
@@ -228,8 +257,10 @@ async function runChatTurnInner({
     maxHistoryMessages: settings.aiChat.maxHistoryMessages,
   });
 
+  /** @type {AiMessageRow[]} */
   const toolMessages = [];
   let iterations = 0;
+  /** @type {{ evalCount: number|null, promptEvalCount: number|null, totalDurationMs: number|null }} */
   let lastUsage = { evalCount: null, promptEvalCount: null, totalDurationMs: null };
 
   // Request-scoped cache shared across every tool call in this chat turn so
@@ -295,7 +326,7 @@ async function runChatTurnInner({
           messages: baseMessages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
           signal,
-          onToken: async (delta) => {
+          onToken: async (/** @type {string} */ delta) => {
             if (delta) await onEvent?.({ type: 'token', data: delta });
           },
         });
@@ -419,6 +450,10 @@ export async function listConversations() {
   return aiChatRepository.listConversations();
 }
 
+/**
+ * @param {string} id UUID.
+ * @returns {Promise<{ conversation: AiConversationRow, messages: AiMessageRow[] }|null>}
+ */
 export async function getConversationWithMessages(id) {
   const conversation = await aiChatRepository.getConversation(id);
   if (!conversation) return null;
@@ -426,6 +461,10 @@ export async function getConversationWithMessages(id) {
   return { conversation, messages };
 }
 
+/**
+ * @param {{ title?: string|null, model?: string|null }} args
+ * @returns {Promise<{ conversation: AiConversationRow, messages: AiMessageRow[] }>}
+ */
 export async function createEmptyConversation({ title, model }) {
   const conversation = await aiChatRepository.createConversation({
     title: truncateTitle(title) || DEFAULT_CONVERSATION_TITLE,
@@ -434,10 +473,19 @@ export async function createEmptyConversation({ title, model }) {
   return { conversation, messages: [] };
 }
 
+/**
+ * @param {string} id UUID.
+ * @param {string} title
+ * @returns {Promise<AiConversationRow|null>}
+ */
 export async function renameConversation(id, title) {
   return aiChatRepository.renameConversation(id, truncateTitle(title));
 }
 
+/**
+ * @param {string} id UUID.
+ * @returns {Promise<boolean>}
+ */
 export async function deleteConversation(id) {
   return aiChatRepository.deleteConversation(id);
 }

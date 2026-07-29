@@ -181,7 +181,12 @@ export async function getMonthlyFinancialSummary(
         t.amount,
         t.currency,
         t.date,
-        COALESCE(t.category_id, r.default_category_id) AS effective_category_id
+        -- Canonical 3-level effective category (own → recipient default →
+        -- PRIMARY recipient's default), matching transactionRepository and the
+        -- mv_monthly_summary definition. The exclusion clauses above already
+        -- resolve 3 levels via buildExclusionClauses, so this column keeps the
+        -- CTE's own resolution consistent with them.
+        COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id

@@ -1,17 +1,37 @@
 /**
  * Info/Statistics route tests.
  * Mirrors: apps/backend/tests/test_info.py
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js). `info.js` is a barrel over six sub-routers
+ * (statistics/netWorth/rates/performance/portfolioSummary/maintenance); the
+ * old mock-router harness flattened all of them into one handler map by
+ * aliasing every nested `Router()` call to the same stub — which also meant
+ * every per-route guard (`rateLimiter`/`adminRateLimiter` declared INSIDE
+ * netWorth.js, rates.js, performance.js, portfolioSummary.js) was silently
+ * dropped. Those limiters are real now; this suite's request counts per
+ * keyPrefix stay far under every limit (30-500/60s) so nothing 429s.
+ *
+ * Mount path is /api/info — no app-level per-mount middleware (main.js:322).
+ *
+ * Several handlers here cascade into real (unmocked) services —
+ * getPortfolioSummary, resolveLivePortfolioValue, settingsRepository,
+ * portfolioTransactionRepository, the adapter registry — exactly as they did
+ * under the old harness (only Express itself was mocked there, never these
+ * imports). `database/connection.js`'s `query` is mocked to `{rows: []}` by
+ * default so that cascade resolves to an empty-but-valid summary instead of
+ * hitting a real DB.
+ *
+ * Dropped: "should register /refresh-views and /inflation-rates/refresh
+ * routes" — that was a structural check against the mock router's handler
+ * map (`routeHandlers['post:/refresh-views']` etc. being a function), which
+ * has no equivalent against a real router and is redundant with the
+ * dedicated POST /refresh-views and POST /inflation-rates/refresh tests
+ * below, which already prove the routes exist and work.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/infoRepository.js', () => ({
   default: {
@@ -80,7 +100,11 @@ vi.mock('../../src/services/portfolioPerformanceSnapshotService.js', () => ({
 
 import infoRepository from '../../src/repositories/infoRepository.js';
 import { logger } from '../../src/config/logger.js';
+const { default: infoRouter } = await import('../../src/routes/info.js');
 const { warmInfoCaches } = await import('../../src/routes/info.js');
+
+const BASE = '/api/info';
+const api = routeAgent(infoRouter, { mountPath: BASE });
 
 describe('Info Routes', () => {
   beforeEach(() => {
@@ -93,17 +117,10 @@ describe('Info Routes', () => {
     mockGetSnapshots.mockResolvedValue([]);
   });
 
-  it('should register /refresh-views and /inflation-rates/refresh routes', () => {
-    expect(routeHandlers['post:/refresh-views']).toBeTypeOf('function');
-    expect(routeHandlers['post:/inflation-rates/refresh']).toBeTypeOf('function');
-  });
-
   describe('GET /supported-adapters', () => {
     it('serves the registry-derived adapter list (no hardcoded drift)', async () => {
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/supported-adapters'](req, res);
-      const { data } = res.json.mock.calls[0][0];
+      const res = await api.get(`${BASE}/supported-adapters`).expect(200);
+      const { data } = res.body;
 
       // Registry-derived: one entry per non-generic adapter, keyed by name with
       // the adapter's bankName label. Adding an adapter exposes it automatically.
@@ -117,37 +134,38 @@ describe('Info Routes', () => {
       expect(bnp.name).toBe('BNP Paribas Fortis');
       expect(bnp.adapter_class).toBeUndefined();
     });
+
+    it('should return supported adapters', async () => {
+      const res = await api.get(`${BASE}/supported-adapters`).expect(200);
+
+      const result = res.body.data;
+      expect(result.items).toBeDefined();
+      expect(result.total).toBeGreaterThan(0);
+    });
   });
 
   describe('GET /banks', () => {
     it('should return bank list', async () => {
       infoRepository.getBanks.mockResolvedValue(['Chase', 'Revolut']);
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/banks'](req, res);
+      const res = await api.get(`${BASE}/banks`).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.items).toHaveLength(2);
+      expect(res.body.data.items).toHaveLength(2);
     });
 
     it('should return empty for no banks', async () => {
       infoRepository.getBanks.mockResolvedValue([]);
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/banks'](req, res);
+      const res = await api.get(`${BASE}/banks`).expect(200);
 
-      expect(res.json.mock.calls[0][0].data).toEqual({ items: [], total: 0 });
+      expect(res.body.data).toEqual({ items: [], total: 0 });
     });
 
     it('should handle database errors', async () => {
       infoRepository.getBanks.mockRejectedValue(new Error('DB error'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/banks'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      const res = await api.get(`${BASE}/banks`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -155,43 +173,24 @@ describe('Info Routes', () => {
     it('should return count', async () => {
       infoRepository.getTransactionCount.mockResolvedValue(42);
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/transaction-count'](req, res);
+      const res = await api.get(`${BASE}/transaction-count`).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(42);
+      expect(res.body.data.total_transactions).toBe(42);
     });
 
     it('should return 0 for empty', async () => {
       infoRepository.getTransactionCount.mockResolvedValue(0);
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/transaction-count'](req, res);
+      const res = await api.get(`${BASE}/transaction-count`).expect(200);
 
-      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(0);
+      expect(res.body.data.total_transactions).toBe(0);
     });
 
     it('should handle errors', async () => {
       infoRepository.getTransactionCount.mockRejectedValue(new Error('DB error'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/transaction-count'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe('GET /supported-adapters', () => {
-    it('should return supported adapters', async () => {
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/supported-adapters'](req, res);
-
-      const result = res.json.mock.calls[0][0].data;
-      expect(result.items).toBeDefined();
-      expect(result.total).toBeGreaterThan(0);
+      const res = await api.get(`${BASE}/transaction-count`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -199,21 +198,15 @@ describe('Info Routes', () => {
     it('should return planned expenses', async () => {
       infoRepository.getPlannedExpensesNextMonth.mockResolvedValue({ total: 500 });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/planned-expenses-next-month'](req, res);
-
-      expect(res.json).toHaveBeenCalled();
+      const res = await api.get(`${BASE}/planned-expenses-next-month`).expect(200);
+      expect(res.body.ok).toBe(true);
     });
 
     it('should handle errors', async () => {
       infoRepository.getPlannedExpensesNextMonth.mockRejectedValue(new Error('DB error'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/planned-expenses-next-month'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      const res = await api.get(`${BASE}/planned-expenses-next-month`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'DB error' }));
     });
   });
 
@@ -230,11 +223,9 @@ describe('Info Routes', () => {
         ],
       });
 
-      const req = { query: { currency: 'EUR' } };
-      const res = mockResponse();
-      await routeHandlers['get:/net-worth'](req, res);
+      const res = await api.get(`${BASE}/net-worth`).query({ currency: 'EUR' }).expect(200);
 
-      const result = res.json.mock.calls[0][0].data;
+      const result = res.body.data;
       expect(result.current.netWorth).toBe(15000);
       expect(result.monthlyChange).toBe(500);
       expect(result.snapshots).toHaveLength(3);
@@ -248,11 +239,9 @@ describe('Info Routes', () => {
         snapshots: [],
       });
 
-      const req = { query: { currency: 'USD' } };
-      const res = mockResponse();
-      await routeHandlers['get:/net-worth'](req, res);
+      const res = await api.get(`${BASE}/net-worth`).query({ currency: 'USD' }).expect(200);
 
-      const result = res.json.mock.calls[0][0].data;
+      const result = res.body.data;
       expect(result.current.netWorth).toBe(0);
       expect(result.snapshots).toHaveLength(0);
     });
@@ -260,11 +249,8 @@ describe('Info Routes', () => {
     it('should handle errors', async () => {
       infoRepository.getNetWorthFromSnapshots.mockRejectedValue(new Error('DB error'));
 
-      const req = { query: { currency: 'GBP' } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/net-worth'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      const res = await api.get(`${BASE}/net-worth`).query({ currency: 'GBP' }).expect(500);
+      expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
     });
 
     it('should paginate snapshots newest-first when limit/offset supplied', async () => {
@@ -281,12 +267,9 @@ describe('Info Routes', () => {
         ],
       });
 
-      const req = { query: { currency: 'AUD', limit: '2', offset: '0' } };
-      const res = mockResponse();
-      await routeHandlers['get:/net-worth'](req, res);
+      const res = await api.get(`${BASE}/net-worth`).query({ currency: 'AUD', limit: '2', offset: '0' }).expect(200);
 
-      const body = res.json.mock.calls[0][0];
-      const result = body.data;
+      const result = res.body.data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-05');
       expect(result.snapshots[1].date).toBe('2026-03-04');
@@ -295,7 +278,7 @@ describe('Info Routes', () => {
       // meta.pagination convention is retired (packages/types/src/api.js).
       expect(result.snapshotsLimit).toBe(2);
       expect(result.snapshotsOffset).toBe(0);
-      expect(body.meta).toBeUndefined();
+      expect(res.body.meta.requestId).toEqual(expect.any(String));
     });
 
     it('should honor offset for pagination', async () => {
@@ -311,11 +294,9 @@ describe('Info Routes', () => {
         ],
       });
 
-      const req = { query: { currency: 'CAD', limit: '2', offset: '2' } };
-      const res = mockResponse();
-      await routeHandlers['get:/net-worth'](req, res);
+      const res = await api.get(`${BASE}/net-worth`).query({ currency: 'CAD', limit: '2', offset: '2' }).expect(200);
 
-      const result = res.json.mock.calls[0][0].data;
+      const result = res.body.data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-02');
       expect(result.snapshots[1].date).toBe('2026-03-01');
@@ -334,19 +315,15 @@ describe('Info Routes', () => {
         ],
       });
 
-      const req = { query: { currency: 'CHF' } };
-      const res = mockResponse();
-      await routeHandlers['get:/net-worth'](req, res);
+      const res = await api.get(`${BASE}/net-worth`).query({ currency: 'CHF' }).expect(200);
 
-      const body = res.json.mock.calls[0][0];
-      const result = body.data;
+      const result = res.body.data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-01');
       // Unpaginated: no pagination fields at all — the body IS the whole series.
       expect(result.snapshotsTotal).toBeUndefined();
       expect(result.snapshotsLimit).toBeUndefined();
       expect(result.snapshotsOffset).toBeUndefined();
-      expect(body.meta).toBeUndefined();
     });
   });
 
@@ -357,28 +334,21 @@ describe('Info Routes', () => {
         total: 1,
       });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/recurring-patterns'](req, res);
+      const res = await api.get(`${BASE}/recurring-patterns`).expect(200);
 
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { patterns: [{ recipient: 'Netflix', interval_days: 30 }], total: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ patterns: [{ recipient: 'Netflix', interval_days: 30 }], total: 1 }));
     });
 
     it('should return empty recurring payload when detector fails', async () => {
       mockDetectRecurringPatterns.mockRejectedValue(new Error('detector failed'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/recurring-patterns'](req, res);
+      const res = await api.get(`${BASE}/recurring-patterns`).expect(200);
 
       expect(logger.error).toHaveBeenCalledWith(
         'Error detecting recurring patterns; returning empty result',
         expect.objectContaining({ error: 'detector failed' })
       );
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { patterns: [], total: 0 } });
+      expect(res.body).toEqual(okEnvelope({ patterns: [], total: 0 }));
     });
   });
 
@@ -398,30 +368,25 @@ describe('Info Routes', () => {
           ],
         });
 
-        const req = { query: {} };
-        const res = mockResponse();
-        await routeHandlers['get:/exchange-rates'](req, res);
+        const res = await api.get(`${BASE}/exchange-rates`).expect(200);
 
         expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
         expect(mockWarmCache).toHaveBeenCalledTimes(1);
-        expect(res.json).toHaveBeenCalledWith({
-          ok: true,
-          data: {
-            total_rates: 1,
-            rates: [
-              {
-                currency: 'USD',
-                rate_to_eur: 1.2345,
-                rate_date: '2026-04-10',
-                fetched_at: '2026-04-10T08:30:00.000Z',
-              },
-            ],
-            fallback_rates: { USD: 1.1 },
-            source: 'database',
-            is_stale: true,
-            last_fetched_at: '2026-04-10T08:30:00.000Z',
-          },
-        });
+        expect(res.body).toEqual(okEnvelope({
+          total_rates: 1,
+          rates: [
+            {
+              currency: 'USD',
+              rate_to_eur: 1.2345,
+              rate_date: '2026-04-10',
+              fetched_at: '2026-04-10T08:30:00.000Z',
+            },
+          ],
+          fallback_rates: { USD: 1.1 },
+          source: 'database',
+          is_stale: true,
+          last_fetched_at: '2026-04-10T08:30:00.000Z',
+        }));
       } finally {
         vi.useRealTimers();
       }
@@ -442,21 +407,14 @@ describe('Info Routes', () => {
           ],
         });
 
-        const req = { query: {} };
-        const res = mockResponse();
-        await routeHandlers['get:/exchange-rates'](req, res);
+        const res = await api.get(`${BASE}/exchange-rates`).expect(200);
 
         expect(mockClearMemoryCache).not.toHaveBeenCalled();
         expect(mockWarmCache).not.toHaveBeenCalled();
-        expect(res.json).toHaveBeenCalledWith(
-          expect.objectContaining({
-            ok: true,
-            data: expect.objectContaining({
-              total_rates: 1,
-              rates: [expect.objectContaining({ currency: 'GBP', rate_date: '2026-04-11' })],
-            }),
-          })
-        );
+        expect(res.body).toEqual(okEnvelope(expect.objectContaining({
+          total_rates: 1,
+          rates: [expect.objectContaining({ currency: 'GBP', rate_date: '2026-04-11' })],
+        })));
       } finally {
         vi.useRealTimers();
       }
@@ -478,9 +436,8 @@ describe('Info Routes', () => {
         });
         mockWarmCache.mockRejectedValueOnce(new Error('refresh failed'));
 
-        const req = { query: {} };
-        const res = mockResponse();
-        await routeHandlers['get:/exchange-rates'](req, res);
+        await api.get(`${BASE}/exchange-rates`).expect(200);
+        await Promise.resolve();
         await Promise.resolve();
 
         expect(logger.warn).toHaveBeenCalledWith(
@@ -495,68 +452,43 @@ describe('Info Routes', () => {
     it('should handle exchange-rate query errors', async () => {
       mockListLatestStoredRates.mockRejectedValue(new Error('query failed'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/exchange-rates'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
-      );
+      const res = await api.get(`${BASE}/exchange-rates`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
     });
   });
 
   describe('POST /exchange-rates/refresh', () => {
     it('should clear cache and refresh exchange rates', async () => {
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/exchange-rates/refresh'](req, res);
+      const res = await api.post(`${BASE}/exchange-rates/refresh`).send({}).expect(200);
 
       expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
       expect(mockWarmCache).toHaveBeenCalledTimes(1);
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { message: 'Exchange rates refreshed from ECB' } });
+      expect(res.body).toEqual(okEnvelope({ message: 'Exchange rates refreshed from ECB' }));
     });
 
     it('should handle exchange refresh errors', async () => {
       mockWarmCache.mockRejectedValueOnce(new Error('ecb down'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/exchange-rates/refresh'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
-      );
+      const res = await api.post(`${BASE}/exchange-rates/refresh`).send({}).expect(500);
+      expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
     });
   });
 
   describe('POST /refresh-views', () => {
     it('should refresh materialized views and return duration', async () => {
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/refresh-views'](req, res);
+      const res = await api.post(`${BASE}/refresh-views`).send({}).expect(200);
 
       expect(mockRefreshMaterializedViews).toHaveBeenCalledTimes(1);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          ok: true,
-          data: expect.objectContaining({ message: 'Materialized views refreshed', duration_ms: expect.any(Number) }),
-        })
-      );
+      expect(res.body).toEqual(okEnvelope(expect.objectContaining({
+        message: 'Materialized views refreshed', duration_ms: expect.any(Number),
+      })));
     });
 
     it('should handle refresh-view failures', async () => {
       mockRefreshMaterializedViews.mockRejectedValueOnce(new Error('view refresh failed'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/refresh-views'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
-      );
+      const res = await api.post(`${BASE}/refresh-views`).send({}).expect(500);
+      expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
     });
   });
 
@@ -582,37 +514,30 @@ describe('Info Routes', () => {
           },
         ]);
 
-        const req = { query: { currency: 'USD' } };
-        const res = mockResponse();
-        await routeHandlers['get:/portfolio-performance'](req, res);
+        const res = await api.get(`${BASE}/portfolio-performance`).query({ currency: 'USD' }).expect(200);
 
         expect(mockGetSnapshots).toHaveBeenCalledWith('2000-01-01', '2026-04-11', 'USD');
-        expect(res.json).toHaveBeenCalledWith(
-          expect.objectContaining({
-            ok: true,
-            data: expect.objectContaining({
-              currency: 'USD',
-              start_date: '2000-01-01',
-              end_date: '2026-04-11',
-              snapshots: [
-                {
-                  date: '2026-04-10',
-                  invested: 1000.5,
-                  value: 1234.56,
-                  stocks_etfs_value: 500,
-                  crypto_value: 200,
-                  metals_value: 100,
-                  stocks_etfs_invested: 450,
-                  crypto_invested: 180,
-                  metals_invested: 90,
-                  inflation_adjusted_value: 1234.56,
-                  gain_loss: 234.06,
-                  return_pct: 23.4,
-                },
-              ],
-            }),
-          })
-        );
+        expect(res.body).toEqual(okEnvelope(expect.objectContaining({
+          currency: 'USD',
+          start_date: '2000-01-01',
+          end_date: '2026-04-11',
+          snapshots: [
+            {
+              date: '2026-04-10',
+              invested: 1000.5,
+              value: 1234.56,
+              stocks_etfs_value: 500,
+              crypto_value: 200,
+              metals_value: 100,
+              stocks_etfs_invested: 450,
+              crypto_invested: 180,
+              metals_invested: 90,
+              inflation_adjusted_value: 1234.56,
+              gain_loss: 234.06,
+              return_pct: 23.4,
+            },
+          ],
+        })));
       } finally {
         vi.useRealTimers();
       }
@@ -624,9 +549,7 @@ describe('Info Routes', () => {
         vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
         mockGetSnapshots.mockResolvedValue([]);
 
-        const req = { query: { currency: 'invalid-currency' } };
-        const res = mockResponse();
-        await routeHandlers['get:/portfolio-performance'](req, res);
+        await api.get(`${BASE}/portfolio-performance`).query({ currency: 'invalid-currency' }).expect(200);
 
         expect(mockGetSnapshots).toHaveBeenCalledWith('2000-01-01', '2026-04-11', 'EUR');
       } finally {
@@ -637,14 +560,10 @@ describe('Info Routes', () => {
     it('should handle portfolio performance errors', async () => {
       mockGetSnapshots.mockRejectedValue(new Error('snapshots failed'));
 
-      const req = { query: { start_date: '2026-01-01', end_date: '2026-01-31' } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/portfolio-performance'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
-      );
+      const res = await api.get(`${BASE}/portfolio-performance`)
+        .query({ start_date: '2026-01-01', end_date: '2026-01-31' })
+        .expect(500);
+      expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
     });
   });
 
@@ -677,23 +596,15 @@ describe('Info Routes', () => {
 
         await warmInfoCaches('JPY');
 
-        const netWorthReq = { query: { currency: 'JPY' } };
-        const netWorthRes = mockResponse();
-        await routeHandlers['get:/net-worth'](netWorthReq, netWorthRes);
-
-        const perfReq = { query: { currency: 'JPY' } };
-        const perfRes = mockResponse();
-        await routeHandlers['get:/portfolio-performance'](perfReq, perfRes);
+        const netWorthRes = await api.get(`${BASE}/net-worth`).query({ currency: 'JPY' }).expect(200);
+        const perfRes = await api.get(`${BASE}/portfolio-performance`).query({ currency: 'JPY' }).expect(200);
 
         expect(infoRepository.getNetWorthFromSnapshots).toHaveBeenCalledTimes(1);
         expect(mockGetSnapshots).toHaveBeenCalledTimes(1);
-        expect(netWorthRes.json).toHaveBeenCalledWith({ ok: true, data: netWorthPayload });
-        expect(perfRes.json).toHaveBeenCalledWith(
-          expect.objectContaining({
-            ok: true,
-            data: expect.objectContaining({ currency: 'JPY', start_date: '2000-01-01', end_date: '2026-04-11' }),
-          })
-        );
+        expect(netWorthRes.body).toEqual(okEnvelope(netWorthPayload));
+        expect(perfRes.body).toEqual(okEnvelope(expect.objectContaining({
+          currency: 'JPY', start_date: '2000-01-01', end_date: '2026-04-11',
+        })));
       } finally {
         vi.useRealTimers();
       }
@@ -747,9 +658,7 @@ describe('Info Routes', () => {
         ],
       });
 
-      const req = { query: { start_month: '2024-01', end_month: '2024-12' } };
-      const res = mockResponse();
-      await routeHandlers['get:/inflation-rates'](req, res);
+      const res = await api.get(`${BASE}/inflation-rates`).query({ start_month: '2024-01', end_month: '2024-12' }).expect(200);
 
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
         startMonth: '2024-01',
@@ -757,7 +666,7 @@ describe('Info Routes', () => {
         dbOnly: true,
         scheduleBackgroundRefresh: true,
       });
-      const payload = res.json.mock.calls[0][0].data;
+      const payload = res.body.data;
       expect(payload.total_rates).toBe(2);
       expect(payload.source).toBe('database');
     });
@@ -765,9 +674,7 @@ describe('Info Routes', () => {
     it('should ignore invalid month params', async () => {
       mockInflationService.getInflationRates.mockResolvedValue({ source: 'memory', rates: [] });
 
-      const req = { query: { start_month: 'invalid', end_month: '2024/01' } };
-      const res = mockResponse();
-      await routeHandlers['get:/inflation-rates'](req, res);
+      await api.get(`${BASE}/inflation-rates`).query({ start_month: 'invalid', end_month: '2024/01' }).expect(200);
 
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
         startMonth: undefined,
@@ -783,9 +690,7 @@ describe('Info Routes', () => {
         rates: [{ month: '2024-01', monthly_rate: 0.004 }],
       });
 
-      const req = { query: { db_only: 'true', start_month: '2024-01' } };
-      const res = mockResponse();
-      await routeHandlers['get:/inflation-rates'](req, res);
+      await api.get(`${BASE}/inflation-rates`).query({ db_only: 'true', start_month: '2024-01' }).expect(200);
 
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
         startMonth: '2024-01',
@@ -801,9 +706,7 @@ describe('Info Routes', () => {
         rates: [{ month: '2024-01', monthly_rate: 0.004 }],
       });
 
-      const req = { query: { db_only: 'false' } };
-      const res = mockResponse();
-      await routeHandlers['get:/inflation-rates'](req, res);
+      await api.get(`${BASE}/inflation-rates`).query({ db_only: 'false' }).expect(200);
 
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
         startMonth: undefined,
@@ -816,11 +719,8 @@ describe('Info Routes', () => {
     it('should handle inflation route errors', async () => {
       mockInflationService.getInflationRates.mockRejectedValue(new Error('boom'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/inflation-rates'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      const res = await api.get(`${BASE}/inflation-rates`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
     });
   });
 
@@ -828,13 +728,11 @@ describe('Info Routes', () => {
     it('should refresh Belgian inflation rates', async () => {
       mockInflationService.getInflationRates.mockResolvedValue({ source: 'statbel', rates: [{ month: '2024-01', monthly_rate: 0.004 }] });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['post:/inflation-rates/refresh'](req, res);
+      const res = await api.post(`${BASE}/inflation-rates/refresh`).send({}).expect(200);
 
       expect(mockInflationService.clearInflationMemoryCache).toHaveBeenCalled();
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({ forceRefresh: true });
-      const payload = res.json.mock.calls[0][0].data;
+      const payload = res.body.data;
       expect(payload.total_rates).toBe(1);
       expect(payload.source).toBe('statbel');
     });
@@ -842,34 +740,8 @@ describe('Info Routes', () => {
     it('should handle refresh errors', async () => {
       mockInflationService.getInflationRates.mockRejectedValue(new Error('refresh failed'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/inflation-rates/refresh'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      const res = await api.post(`${BASE}/inflation-rates/refresh`).send({}).expect(500);
+      expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
     });
   });
 });
-
-function mockResponse() {
-  return createMockResponse();
-}
-
-/**
- * Simulates Express error-handler middleware for routes that throw typed errors.
- * Routes use `throw new AppError / NotFoundError / ValidationError` which
- * propagates to the centralized error handler in production. In unit tests we
- * catch the error here and replicate the handler's response shape.
- */
-async function callHandler(handler, req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    const code = err.code ?? 'INTERNAL_SERVER_ERROR';
-    const message = err.message ?? 'Internal server error';
-    const error = { code, message };
-    if (err.details !== undefined) error.details = err.details;
-    res.status(status).json({ ok: false, error });
-  }
-}

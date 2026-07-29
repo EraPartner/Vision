@@ -420,6 +420,8 @@ describe('orchestrator computeCashflowForecast', () => {
       const history = syntheticHistory({ days: 400 });
       return {
         infoRepository: {
+          // ADR-083 cache-key input (forecast/index.js filterHash).
+          getIncludeTransfers: vi.fn().mockResolvedValue(false),
           getCashflowForecastData: vi.fn().mockResolvedValue({
             history,
             currentActual: [],
@@ -458,6 +460,8 @@ describe('orchestrator computeCashflowForecast', () => {
       const history = syntheticHistory({ days: 200 });
       return {
         infoRepository: {
+          // ADR-083 cache-key input (forecast/index.js filterHash).
+          getIncludeTransfers: vi.fn().mockResolvedValue(false),
           getCashflowForecastData: vi.fn().mockResolvedValue({
             history,
             currentActual: [],
@@ -480,6 +484,8 @@ describe('orchestrator computeCashflowForecast', () => {
       const history = syntheticHistory({ days: 200 });
       return {
         infoRepository: {
+          // ADR-083 cache-key input (forecast/index.js filterHash).
+          getIncludeTransfers: vi.fn().mockResolvedValue(false),
           getCashflowForecastData: vi.fn().mockResolvedValue({
             history,
             currentActual: [],

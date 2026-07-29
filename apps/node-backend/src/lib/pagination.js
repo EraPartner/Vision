@@ -52,6 +52,7 @@ export function parsePagination(query = {}, { defaultLimit = 50, maxLimit } = {}
  * @returns {{ limit: number, offset: number } | null}
  */
 export function parseOptionalPagination(query, { defaultLimit, maxLimit }) {
+  /** @param {string} key */
   const supplied = (key) => {
     const value = query?.[key];
     return value !== undefined && value !== null && value !== '';

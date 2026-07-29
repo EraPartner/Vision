@@ -28,6 +28,10 @@ export const getBankBalances = {
     type: 'object',
     properties: {},
   },
+  /**
+   * @param {Record<string, unknown>} _args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const result = await infoRepository.getBankBalances('EUR');
 
@@ -73,6 +77,10 @@ export const getSpendingPace = {
       },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [_context]
+   */
   async run(args, _context = {}) {
     const period = parseEnum(args.period, 'period', ['monthly', 'yearly'], { defaultValue: 'monthly' });
     const mult = period === 'yearly' ? 12 : 1;
@@ -120,6 +128,10 @@ export const getRecipientInsights = {
       limit: { type: 'integer', description: 'Max recipients when listing all (ignored when recipientId set). Default 20, max 100.', minimum: 1, maximum: 100 },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const limit = parsePositiveInt(args.limit, 'limit', { min: 1, max: 100, defaultValue: 20 });
     const recipientId = args.recipientId != null
@@ -203,6 +215,10 @@ export const getWatchlist = {
       assetClass: { type: 'string', enum: ASSET_CLASSES, description: 'Optional filter by asset class.' },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
@@ -267,6 +283,10 @@ export const getCategories = {
       search: { type: 'string', description: 'Optional text filter on category name.' },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const rows = await categoryRepository.getAll({
       limit: 500,
@@ -308,6 +328,10 @@ export const getRecurringDetected = {
       },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const minOccurrences = parsePositiveInt(args.minOccurrences, 'minOccurrences', { min: 2, max: 20, defaultValue: 3 });
 
@@ -359,6 +383,10 @@ export const insightsDigest = {
     type: 'object',
     properties: {},
   },
+  /**
+   * @param {Record<string, unknown>} _args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const { subscriptionCreep, categoryOutliers, cashForecast } = await getInsightsDigest();
 

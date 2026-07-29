@@ -31,6 +31,73 @@ import {
   NotFoundError,
 } from '../middleware/errorHandler.js';
 
+/** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
+
+/**
+ * Column metadata for one table column, as introspected from
+ * `information_schema.columns` + the primary-key query. Genuinely dynamic —
+ * this editor works against any public table, so there is no fixed row shape
+ * to type against; `ColumnMeta`/`TableMeta` describe the editor's own
+ * bookkeeping, not the tables it edits.
+ * @typedef {object} ColumnMeta
+ * @property {string} name
+ * @property {string} dataType
+ * @property {string} udtName
+ * @property {boolean} nullable
+ * @property {boolean} hasDefault
+ * @property {boolean} generated
+ * @property {boolean} writable
+ */
+
+/**
+ * @typedef {object} TableMeta
+ * @property {string} table
+ * @property {ColumnMeta[]} columns
+ * @property {string[]} primaryKey
+ */
+
+/**
+ * A structured filter clause from the browse UI (see the ADR-101 note on
+ * `readRows` — the raw-WHERE escape hatch was removed).
+ * @typedef {object} Filter
+ * @property {string} column
+ * @property {string} [op] one of FILTER_OPS; defaults to 'eq'.
+ * @property {unknown} [value]
+ */
+
+/**
+ * A pending row edit from the DB editor UI. `values`/`set`/`pk` are raw
+ * column-name → value maps — genuinely dynamic (any editable table, any
+ * column set), typed as `Record<string, unknown>` rather than a fixed shape.
+ * @typedef {object} Change
+ * @property {'insert'|'update'|'delete'} op
+ * @property {Record<string, unknown>} [values] insert only.
+ * @property {Record<string, unknown>} [set] update only — changed columns.
+ * @property {Record<string, unknown>} [pk] update/delete — primary-key column values identifying the row.
+ * @property {unknown} [xmin] optimistic-concurrency token (the row's `xmin`) from the row the client loaded.
+ */
+
+/**
+ * Per-change context threaded through the mutation builders.
+ * @typedef {object} MutationCtx
+ * @property {Map<string, ColumnMeta>} colMeta
+ * @property {string[]} primaryKey
+ * @property {number} index
+ */
+
+/**
+ * One row of the `db_editor_audit` sink (both the DB table and the
+ * structured-logger mirror) — mirrors whatever table/row was edited, so
+ * `pk`/`before`/`after` are the same dynamic row shape as `Change`.
+ * @typedef {object} AuditEntry
+ * @property {string} table
+ * @property {string} op
+ * @property {Record<string, unknown>|undefined} pk
+ * @property {Record<string, unknown>|undefined} before
+ * @property {Record<string, unknown>|undefined} after
+ * @property {string} statement
+ */
+
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
 const READ_TIMEOUT_MS = 15_000;
@@ -46,12 +113,26 @@ const FILTER_OPS = new Set([
 
 // ── Identifier safety ───────────────────────────────────────────────────────
 
+/**
+ * @param {unknown} name
+ * @returns {string}
+ */
 function quoteIdent(name) {
   return `"${String(name).replace(/"/g, '""')}"`;
 }
 
+/**
+ * @param {unknown} value
+ * @param {number} fallback
+ * @param {number} min
+ * @param {number} max
+ * @returns {number}
+ */
 function clampInt(value, fallback, min, max) {
-  const n = Number.parseInt(value, 10);
+  // String(value): Number.parseInt already ToStrings a non-string argument
+  // internally (same algorithm), so this is a no-op for behavior — it only
+  // satisfies parseInt's string-typed signature.
+  const n = Number.parseInt(String(value), 10);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(Math.max(n, min), max);
 }
@@ -72,11 +153,15 @@ async function listUserTables() {
     `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
     [],
   );
-  const set = new Set(r.rows.map((row) => row.relname));
+  const set = new Set(r.rows.map((/** @type {{ relname: string }} */ row) => row.relname));
   userTablesCache = { value: set, expiresAt: now + META_TTL_MS };
   return set;
 }
 
+/**
+ * @param {unknown} table
+ * @returns {Promise<void>}
+ */
 async function assertEditableTable(table) {
   if (typeof table !== 'string' || table.length === 0) {
     throw new ValidationError('Table name is required');
@@ -92,6 +177,7 @@ async function assertEditableTable(table) {
 /**
  * Column + primary-key metadata for a public table.
  * @param {string} table
+ * @returns {Promise<TableMeta>}
  */
 export async function getTableMeta(table) {
   await assertEditableTable(table);
@@ -121,7 +207,8 @@ export async function getTableMeta(table) {
     ),
   ]);
 
-  const columns = colsRes.rows.map((r) => {
+  /** @typedef {{ column_name: string, data_type: string, udt_name: string, is_nullable: string, column_default: string|null, is_generated: string, is_identity: string, ordinal_position: number }} RawColumnRow */
+  const columns = (/** @type {RawColumnRow[]} */ (colsRes.rows)).map((r) => {
     const generatedAlways = r.is_generated === 'ALWAYS' || r.is_identity === 'YES';
     return {
       name: r.column_name,
@@ -135,13 +222,23 @@ export async function getTableMeta(table) {
     };
   });
 
-  const meta = { table, columns, primaryKey: pkRes.rows.map((r) => r.column_name) };
+  const meta = {
+    table,
+    columns,
+    primaryKey: (/** @type {{ column_name: string }[]} */ (pkRes.rows)).map((r) => r.column_name),
+  };
   tableMetaCache.set(table, { value: meta, expiresAt: now + META_TTL_MS });
   return meta;
 }
 
 // ── Reads (browse / filter / sort / paginate) ───────────────────────────────
 
+/**
+ * @param {Filter} filter
+ * @param {unknown[]} params
+ * @param {Set<string>} columnNames
+ * @returns {string}
+ */
 function buildFilterFragment(filter, params, columnNames) {
   if (!columnNames.has(filter.column)) {
     throw new ValidationError(`Unknown filter column: ${filter.column}`);
@@ -163,7 +260,9 @@ function buildFilterFragment(filter, params, columnNames) {
       params.push(`${filter.value}%`);
       return `${col}::text ILIKE $${params.length}`;
     default: {
-      const sqlOp = { eq: '=', ne: '<>', lt: '<', lte: '<=', gt: '>', gte: '>=' }[op];
+      /** @type {Record<string, string>} */
+      const sqlOpByOp = { eq: '=', ne: '<>', lt: '<', lte: '<=', gt: '>', gte: '>=' };
+      const sqlOp = sqlOpByOp[op];
       params.push(filter.value);
       return `${col} ${sqlOp} $${params.length}`;
     }
@@ -180,8 +279,8 @@ function buildFilterFragment(filter, params, columnNames) {
  * the rest of the statement past the `;` guard.
  * @param {string} table
  * @param {{limit?:number, offset?:number, orderBy?:string, dir?:string,
- *          filters?:Array<{column:string,op?:string,value?:unknown}>,
- *          where?:string}} opts `where` is accepted only to be rejected (400) —
+ *          filters?:Filter[],
+ *          where?:string}} [opts] `where` is accepted only to be rejected (400) —
  *          the raw-WHERE escape hatch was removed.
  */
 export async function readRows(table, opts = {}) {
@@ -191,7 +290,9 @@ export async function readRows(table, opts = {}) {
   const limit = clampInt(opts.limit, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
   const offset = clampInt(opts.offset, 0, 0, Number.MAX_SAFE_INTEGER);
 
+  /** @type {unknown[]} */
   const params = [];
+  /** @type {string[]} */
   const whereParts = [];
 
   for (const filter of opts.filters ?? []) {
@@ -249,6 +350,10 @@ export async function readRows(table, opts = {}) {
 
 // ── Mutation building ───────────────────────────────────────────────────────
 
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
 function literalForDisplay(value) {
   if (value === undefined || value === null) return 'NULL';
   if (typeof value === 'number') return String(value);
@@ -257,10 +362,19 @@ function literalForDisplay(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+/**
+ * @param {string} sql
+ * @param {unknown[]} params
+ * @returns {string}
+ */
 function renderPreview(sql, params) {
   return sql.replace(/\$(\d+)/g, (_, n) => literalForDisplay(params[Number(n) - 1]));
 }
 
+/**
+ * @param {unknown} value
+ * @returns {unknown}
+ */
 function normalizeWrite(value) {
   return value === undefined ? null : value;
 }
@@ -268,7 +382,12 @@ function normalizeWrite(value) {
 /**
  * Build the primary mutation statement (INSERT/UPDATE/DELETE) for a change.
  * Used both for dry-run previews and for execution, so the SQL shown to the
- * user is exactly what runs. Returns { sql, params }.
+ * user is exactly what runs.
+ *
+ * @param {string} table
+ * @param {Change} change
+ * @param {MutationCtx} ctx
+ * @returns {{ sql: string, params: unknown[] }}
  */
 function buildMutationSql(table, change, ctx) {
   const tbl = quoteIdent(table);
@@ -310,6 +429,7 @@ function buildMutationSql(table, change, ctx) {
         throw new ValidationError(`Column "${c}" is generated and cannot be written`);
       }
     }
+    /** @type {unknown[]} */
     const params = [];
     const assigns = cols.map((c) => {
       params.push(normalizeWrite(change.set[c]));
@@ -324,6 +444,7 @@ function buildMutationSql(table, change, ctx) {
   }
 
   if (change.op === 'delete') {
+    /** @type {unknown[]} */
     const params = [];
     const where = ctx.primaryKey.map((k) => {
       params.push(change.pk[k]);
@@ -335,6 +456,11 @@ function buildMutationSql(table, change, ctx) {
   throw new ValidationError(`Unknown op: ${change.op}`);
 }
 
+/**
+ * @param {Change} change
+ * @param {MutationCtx} ctx
+ * @returns {void}
+ */
 function validateChange(change, ctx) {
   if (!change || typeof change !== 'object') {
     throw new ValidationError(`Change #${ctx.index} is malformed`);
@@ -353,12 +479,25 @@ function validateChange(change, ctx) {
 
 // ── Mutation execution ──────────────────────────────────────────────────────
 
+/**
+ * @param {Record<string, unknown>|null|undefined} row
+ * @param {string[]} primaryKey
+ * @returns {Record<string, unknown>}
+ */
 function pickPk(row, primaryKey) {
+  /** @type {Record<string, unknown>} */
   const pk = {};
   for (const k of primaryKey) pk[k] = row?.[k];
   return pk;
 }
 
+/**
+ * @param {QueryRunner} client
+ * @param {string} table
+ * @param {Change} change
+ * @param {MutationCtx} ctx
+ * @returns {Promise<{ op: string, after?: Record<string, unknown>, audit: AuditEntry }>}
+ */
 async function applyOne(client, table, change, ctx) {
   // INSERT: no row to lock; structural constraints enforced by Postgres.
   if (change.op === 'insert') {
@@ -374,6 +513,7 @@ async function applyOne(client, table, change, ctx) {
 
   // UPDATE / DELETE: lock the row, verify its version, then mutate.
   const tbl = quoteIdent(table);
+  /** @type {unknown[]} */
   const lockParams = [];
   const pkWhere = ctx.primaryKey.map((k) => {
     lockParams.push(change.pk[k]);
@@ -408,6 +548,11 @@ async function applyOne(client, table, change, ctx) {
   return { op: 'update', after, audit: { table, op: 'update', pk: change.pk, before, after, statement: renderPreview(sql, params) } };
 }
 
+/**
+ * @param {QueryRunner} client
+ * @param {AuditEntry[]} audit
+ * @returns {Promise<void>}
+ */
 async function writeAuditRows(client, audit) {
   for (const a of audit) {
     await client.query(
@@ -424,7 +569,7 @@ async function writeAuditRows(client, audit) {
  * transaction (all-or-nothing) and writes an audit row per change.
  *
  * @param {string} table
- * @param {Array<object>} changes
+ * @param {Change[]} changes
  * @param {{dryRun?:boolean}} [opts]
  */
 export async function applyMutations(table, changes, { dryRun = false } = {}) {
@@ -436,6 +581,7 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
     throw new ValidationError('No changes provided');
   }
 
+  /** @type {Map<string, ColumnMeta>} */
   const colMeta = new Map(columns.map((c) => [c.name, c]));
 
   const statements = changes.map((change, index) => {
@@ -450,11 +596,13 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
   }
 
   const client = await getClient();
+  /** @type {AuditEntry[]} */
   const audit = [];
   try {
     await client.query('BEGIN');
     await client.query(`SET LOCAL statement_timeout = ${WRITE_TIMEOUT_MS}`);
 
+    /** @type {Array<{ op: string, after: Record<string, unknown>|undefined }>} */
     const results = [];
     for (let index = 0; index < changes.length; index++) {
       const ctx = { colMeta, primaryKey, index };
@@ -488,6 +636,9 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
 /**
  * Translate raw Postgres error codes into friendly, typed API errors so the
  * UI can show "Column X cannot be null" instead of an opaque SQLSTATE.
+ *
+ * @param {any} err raw pg driver error — shape (code/detail/column/constraint) is upstream-defined.
+ * @returns {AppError}
  */
 function mapDbError(err) {
   if (err instanceof AppError) return err;

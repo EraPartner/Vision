@@ -606,6 +606,91 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
     });
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Effective-category id vs displayed name — one category, one label
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // Formerly a real disagreement: EFFECTIVE_CATEGORY_ID_SQL resolves
+  // own → recipient default (rc) → primary default (pc), while the category-name
+  // CASE tested `pc` BEFORE `rc`. The two orders only diverge on one topology —
+  // an ALIAS recipient that has its OWN default category AND a primary carrying
+  // a DIFFERENT one — which the shared corpus does not contain (its alias has no
+  // default of its own). On that topology the transactions list reported the
+  // alias's category id next to the primary's category NAME, and the aggregation
+  // surfaces, which follow the id, disagreed with the list's label.
+  describe('alias with its own default under a differently-defaulted primary', () => {
+    let aliasId;
+    let aliasTxn;
+
+    beforeEach(async () => {
+      const pool = getTestPool();
+      // Sorts after every other fixture category, so the ORDER BY assertion
+      // below can tell the two resolutions apart.
+      const { rows: catRows } = await pool.query(
+        `INSERT INTO categories (general, detail) VALUES ('Zzz', 'Last') RETURNING id`,
+      );
+      cat.Zzz = catRows[0].id;
+      // ALIAS of Electrabel (whose default is Bills) with its OWN default Zzz.
+      const { rows: recRows } = await pool.query(
+        `INSERT INTO recipients (name, normalized_name, default_category_id, primary_recipient_id)
+         VALUES ('Electrabel Retail', 'electrabel retail', $1, $2) RETURNING id`,
+        [cat.Zzz, rec.electrabel],
+      );
+      aliasId = recRows[0].id;
+      aliasTxn = await insertTxn({ date: '2024-03-05', amount: '-11.11', recipientId: aliasId });
+    });
+
+    it('getById / getAll / getAllWithCount label the row with the category the id names', async () => {
+      const expected = { effective_category_id: cat.Zzz, category_name: 'Zzz:Last' };
+
+      expect(await transactionRepository.getById(aliasTxn)).toMatchObject(expected);
+
+      const all = await transactionRepository.getAll({});
+      expect(all.find((r) => r.id === aliasTxn)).toMatchObject(expected);
+
+      const paged = await transactionRepository.getAllWithCount({});
+      expect(paged.rows.find((r) => r.id === aliasTxn)).toMatchObject(expected);
+    });
+
+    it('create / update return the same pairing as an immediate GET', async () => {
+      const created = await transactionRepository.create({
+        transaction_date: '2024-03-06',
+        recipient_id: aliasId,
+        amount: '-22.22',
+        category_id: null,
+        comment: null,
+      });
+      expect(created.effective_category_id).toBe(cat.Zzz);
+      expect(created.category_name).toBe('Zzz:Last');
+      expect(await transactionRepository.getById(created.id)).toEqual(created);
+
+      const updated = await transactionRepository.update(aliasTxn, { amount: '-33.33' });
+      expect(updated.effective_category_id).toBe(cat.Zzz);
+      expect(updated.category_name).toBe('Zzz:Last');
+      expect(await transactionRepository.getById(aliasTxn)).toEqual(updated);
+
+      // The tags-path fetch (fields + tags in one PATCH) resolves identically.
+      const withTags = await transactionRepository.update(aliasTxn, { amount: '-34.00', tags: [] });
+      expect(withTags.effective_category_id).toBe(cat.Zzz);
+      expect(withTags.category_name).toBe('Zzz:Last');
+    });
+
+    it("an own category_id still wins over both defaults", async () => {
+      const row = await transactionRepository.update(aliasTxn, { category_id: cat.Food });
+      expect(row.effective_category_id).toBe(cat.Food);
+      expect(row.category_name).toBe('Food:Groceries');
+    });
+
+    it('sorts by the same resolved name it displays', async () => {
+      const rows = await transactionRepository.getAll({ sortBy: 'category', sortDir: 'asc' });
+      const ids = rows.map((r) => r.id);
+      // 'Zzz:Last' sorts after t7's 'Bills:Utilities'. Under the old pc-first
+      // order the alias row was labelled 'Bills:Utilities' and — being the
+      // later date — sorted BEFORE t7 on the tiebreaker.
+      expect(ids.indexOf(aliasTxn)).toBeGreaterThan(ids.indexOf(T.t7));
+    });
+  });
+
   describe('hardDelete', () => {
     it('deletes exactly once (junction rows cascade)', async () => {
       expect(await transactionRepository.hardDelete(T.t1)).toBe(true);

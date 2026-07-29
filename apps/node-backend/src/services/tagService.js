@@ -71,7 +71,10 @@ export const tagService = {
     return updated;
   },
 
-  /** Soft-delete (deactivate) a tag. */
+  /**
+   * Soft-delete (deactivate) a tag.
+   * @param {number} id
+   */
   async softDelete(id) {
     const deleted = await tagRepository.softDelete(id);
     if (!deleted) throw new NotFoundError(`Tag ${id} not found`);

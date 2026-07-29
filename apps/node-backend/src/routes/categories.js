@@ -13,9 +13,14 @@ import { parsePagination } from '../lib/pagination.js';
 // unrelated transaction mutation happens to refresh the views.
 import { scheduleRefresh } from '../services/materializedViewService.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { general, detail, active = 'true', search } = req.query;
   const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
   const opts = {
@@ -33,7 +38,11 @@ router.get('/', async (req, res) => {
   ]);
 
   res.ok({
-    items: items.map((c) => ({ ...c, links: [] })),
+    items: items.map((c) => ({
+      ...c,
+      /** @type {any[]} */
+      links: [],
+    })),
     total,
     limit: opts.limit,
     offset: opts.offset,
@@ -41,7 +50,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { general, detail, description } = req.body;
   if (!general || !detail) throw new ValidationError('Missing required fields: general, detail');
 
@@ -51,7 +60,7 @@ router.post('/', async (req, res) => {
 });
 
 // Must precede /:id route so "assign" does not match as id param.
-router.post('/assign', async (req, res) => {
+router.post('/assign', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { category_general, category_detail, recipient_ids } = req.body;
   if (!category_general || !category_detail) {
     throw new ValidationError('Missing required fields: category_general, category_detail');
@@ -68,13 +77,13 @@ router.post('/assign', async (req, res) => {
   res.ok({ updated_recipients: updated, links: [] });
 });
 
-router.get('/:id', validateIdParam, async (req, res) => {
+router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const category = await categoryRepository.getById(parseInt(req.params.id, 10));
   if (!category) throw new NotFoundError(`Category ${req.params.id} not found`);
   res.ok({ ...category, links: [] });
 });
 
-router.patch('/:id', validateIdParam, async (req, res) => {
+router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const updated = await categoryRepository.update(id, req.body);
   if (!updated) throw new NotFoundError(`Category ${id} not found`);
@@ -82,7 +91,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   res.ok({ ...updated, links: [] });
 });
 
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const deleted = await categoryRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Category ${id} not found`);
@@ -91,7 +100,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   res.status(204).send();
 });
 
-router.post('/:id/assign', validateIdParam, async (req, res) => {
+router.post('/:id/assign', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const categoryId = parseInt(req.params.id, 10);
   let { recipient_ids } = req.body;
   if (!recipient_ids) throw new ValidationError('Missing recipient_ids');

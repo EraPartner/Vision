@@ -30,7 +30,7 @@ const RANGE_MONTHS = Object.freeze({
  */
 export function trimToRange(points, range) {
   if (range === 'max' || !Array.isArray(points) || points.length === 0) return points;
-  const months = RANGE_MONTHS[range];
+  const months = RANGE_MONTHS[/** @type {keyof typeof RANGE_MONTHS} */ (range)];
   if (!months) return points;
   const lastTime = points[points.length - 1].time;
   const d = new Date(lastTime);

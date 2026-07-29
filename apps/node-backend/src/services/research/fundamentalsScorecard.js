@@ -28,7 +28,7 @@ const RULES = [
   // ── Leverage & liquidity ──────────────────────────────────────────────────
   {
     key: 'currentRatio', category: 'liquidity', better: 'higher',
-    evaluate: (v) => v < 1
+    evaluate: (/** @type {number} */ v) => v < 1
       ? ['risk', 'Current liabilities exceed current assets — short-term liquidity risk', '≥ 1.5', 'deficit']
       : v < 1.5
         ? ['caution', 'Thin short-term liquidity cushion', '≥ 1.5', 'thin']
@@ -36,13 +36,13 @@ const RULES = [
   },
   {
     key: 'quickRatio', category: 'liquidity', better: 'higher',
-    evaluate: (v) => v < 1
+    evaluate: (/** @type {number} */ v) => v < 1
       ? ['warn', 'Liquid assets alone do not cover current liabilities', '≥ 1', 'uncovered']
       : ['ok', 'Liquid assets cover current liabilities', '≥ 1', 'ok'],
   },
   {
     key: 'debtToEquity', category: 'leverage', better: 'lower',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['risk', 'Negative shareholder equity', '< 1', 'negativeEquity']
       : v > 2
         ? ['risk', 'High leverage — debt is more than double equity', '< 1', 'high']
@@ -52,7 +52,7 @@ const RULES = [
   },
   {
     key: 'interestCoverage', category: 'leverage', better: 'higher',
-    evaluate: (v) => v < 1.5
+    evaluate: (/** @type {number} */ v) => v < 1.5
       ? ['risk', 'Operating income barely covers interest expense', '> 3', 'thin']
       : v < 3
         ? ['warn', 'Modest interest coverage', '> 3', 'modest']
@@ -61,7 +61,7 @@ const RULES = [
   // ── Profitability ──────────────────────────────────────────────────────────
   {
     key: 'profitMargin', category: 'profitability', better: 'higher',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['risk', 'Company is unprofitable on a net basis', '> 5%', 'unprofitable']
       : v < 0.05
         ? ['caution', 'Slim net margin', '> 5%', 'slim']
@@ -69,19 +69,19 @@ const RULES = [
   },
   {
     key: 'operatingMargin', category: 'profitability', better: 'higher',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['warn', 'Core operations are loss-making', '> 0%', 'lossmaking']
       : ['ok', 'Operations are profitable', '> 0%', 'ok'],
   },
   {
     key: 'grossMargin', category: 'profitability', better: 'higher',
-    evaluate: (v) => v < 0.2
+    evaluate: (/** @type {number} */ v) => v < 0.2
       ? ['caution', 'Thin gross margin leaves little room for opex', '> 20%', 'thin']
       : ['ok', 'Solid gross margin', '> 20%', 'ok'],
   },
   {
     key: 'returnOnEquity', category: 'profitability', better: 'higher',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['warn', 'Negative return on equity', '> 8%', 'negative']
       : v < 0.05
         ? ['caution', 'Low return on equity', '> 8%', 'low']
@@ -90,13 +90,13 @@ const RULES = [
   // ── Cash flow ────────────────────────────────────────────────────────────
   {
     key: 'freeCashFlow', category: 'cashflow', better: 'higher',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['warn', 'Negative free cash flow — burning cash', '> 0', 'negative']
       : ['ok', 'Generates positive free cash flow', '> 0', 'ok'],
   },
   {
     key: 'fcfYield', category: 'cashflow', better: 'higher',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['warn', 'Negative free-cash-flow yield', '> 2%', 'negative']
       : v < 0.02
         ? ['caution', 'Low free-cash-flow yield relative to price', '> 2%', 'low']
@@ -105,7 +105,7 @@ const RULES = [
   // ── Growth ───────────────────────────────────────────────────────────────
   {
     key: 'revenueGrowth', category: 'growth', better: 'higher',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['warn', 'Revenue is shrinking year-over-year', '> 0%', 'shrinking']
       : v < 0.03
         ? ['caution', 'Sluggish revenue growth', '> 0%', 'sluggish']
@@ -113,14 +113,14 @@ const RULES = [
   },
   {
     key: 'earningsGrowth', category: 'growth', better: 'higher',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['caution', 'Earnings are declining year-over-year', '> 0%', 'declining']
       : ['ok', 'Earnings are growing', '> 0%', 'ok'],
   },
   // ── Valuation ──────────────────────────────────────────────────────────────
   {
     key: 'pe', category: 'valuation', better: 'lower',
-    evaluate: (v) => v < 0
+    evaluate: (/** @type {number} */ v) => v < 0
       ? ['warn', 'No trailing earnings to value against (negative P/E)', '< 40', 'noEarnings']
       : v > 80
         ? ['warn', 'Very high earnings multiple', '< 40', 'veryHigh']
@@ -130,7 +130,7 @@ const RULES = [
   },
   {
     key: 'pegRatio', category: 'valuation', better: 'lower',
-    evaluate: (v) => v <= 0
+    evaluate: (/** @type {number} */ v) => v <= 0
       ? ['caution', 'PEG not meaningful (non-positive)', '< 2', 'notMeaningful']
       : v > 3
         ? ['warn', 'Price looks expensive relative to growth', '< 2', 'expensive']
@@ -140,14 +140,14 @@ const RULES = [
   },
   {
     key: 'priceToBook', category: 'valuation', better: 'lower',
-    evaluate: (v) => v > 10
+    evaluate: (/** @type {number} */ v) => v > 10
       ? ['caution', 'Trading at a steep premium to book value', '< 10', 'premium']
       : ['ok', 'Price-to-book within a normal range', '< 10', 'ok'],
   },
   // ── Dividend ───────────────────────────────────────────────────────────────
   {
     key: 'payoutRatio', category: 'dividend', better: 'lower',
-    evaluate: (v) => v > 1
+    evaluate: (/** @type {number} */ v) => v > 1
       ? ['warn', 'Dividend exceeds earnings — payout may be unsustainable', '< 80%', 'unsustainable']
       : v > 0.8
         ? ['caution', 'High payout ratio leaves little earnings retained', '< 80%', 'high']
@@ -155,12 +155,13 @@ const RULES = [
   },
   {
     key: 'dividendYield', category: 'dividend', better: 'higher',
-    evaluate: (v) => v > 0.08
+    evaluate: (/** @type {number} */ v) => v > 0.08
       ? ['caution', 'Unusually high yield can signal a yield trap', '—', 'yieldTrap']
       : ['ok', 'Dividend yield in a normal range', '—', 'ok'],
   },
 ];
 
+/** @param {number | null} score */
 function gradeFor(score) {
   if (score == null) return 'unknown';
   if (score >= 85) return 'strong';
@@ -176,10 +177,18 @@ function gradeFor(score) {
  *   counts: Record<string, number>, flags: Array<object> }}
  */
 export function fundamentalsScorecard(fundamentals) {
+  /** @type {{ score: number|null, grade: string, evaluated: number, counts: Record<string, number>, flags: Array<object> }} */
   const empty = { score: null, grade: 'unknown', evaluated: 0, counts: { ok: 0, caution: 0, warn: 0, risk: 0 }, flags: [] };
   if (!fundamentals || typeof fundamentals !== 'object') return empty;
 
+  /**
+   * @type {Array<{
+   *   metric: string, category: string, better: string, value: number,
+   *   severity: string, code: string, reasonKey: string, reason: string, benchmark: string,
+   * }>}
+   */
   const flags = [];
+  /** @type {Record<string, number>} */
   const counts = { ok: 0, caution: 0, warn: 0, risk: 0 };
   let penalty = 0;
 
@@ -200,7 +209,7 @@ export function fundamentalsScorecard(fundamentals) {
       benchmark,
     });
     counts[severity] = (counts[severity] ?? 0) + 1;
-    penalty += PENALTY[severity] ?? 0;
+    penalty += PENALTY[/** @type {keyof typeof PENALTY} */ (severity)] ?? 0;
   }
 
   const evaluated = flags.length;
@@ -208,6 +217,7 @@ export function fundamentalsScorecard(fundamentals) {
 
   const score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
   // Surface worst-first so the UI leads with problems.
+  /** @type {Record<string, number>} */
   const order = { risk: 0, warn: 1, caution: 2, ok: 3 };
   flags.sort((a, b) => order[a.severity] - order[b.severity]);
 

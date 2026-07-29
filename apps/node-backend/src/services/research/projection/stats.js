@@ -4,6 +4,7 @@
  * working cash-flow forecast path (services/calculations/forecast) is untouched.
  */
 
+/** @param {number[]} arr */
 export function mean(arr) {
   if (!arr.length) return 0;
   let s = 0;
@@ -11,7 +12,10 @@ export function mean(arr) {
   return s / arr.length;
 }
 
-/** Sample standard deviation (n-1). Returns 0 for fewer than two points. */
+/**
+ * Sample standard deviation (n-1). Returns 0 for fewer than two points.
+ * @param {number[]} arr
+ */
 export function stdev(arr) {
   if (arr.length < 2) return 0;
   const m = mean(arr);
@@ -20,7 +24,11 @@ export function stdev(arr) {
   return Math.sqrt(s / (arr.length - 1));
 }
 
-/** Linear-interpolated percentile of an ascending-sorted array. p in [0,100]. */
+/**
+ * Linear-interpolated percentile of an ascending-sorted array. p in [0,100].
+ * @param {number[]} sortedAsc
+ * @param {number} p
+ */
 export function quantile(sortedAsc, p) {
   if (!sortedAsc.length) return 0;
   const idx = (p / 100) * (sortedAsc.length - 1);
@@ -31,6 +39,11 @@ export function quantile(sortedAsc, p) {
   return sortedAsc[lo] * (1 - frac) + sortedAsc[hi] * frac;
 }
 
+/**
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ */
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -54,6 +67,9 @@ export function clamp(value, min, max) {
  * leave the tracked portfolio) and dropped rather than poisoning drift/vol.
  * When `invested` is absent the flow term is 0, degrading to a raw value return.
  *
+ * @param {number[]} values
+ * @param {number[]} [invested]
+ * @param {number} [maxDailyMove]
  * @returns {{ returns: number[], droppedDays: number }}
  */
 export function flowAdjustedLogReturns(values, invested = [], maxDailyMove = 0.5) {

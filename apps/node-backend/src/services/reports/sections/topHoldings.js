@@ -6,6 +6,7 @@
 
 import { escapeHtml, fmtCurrency, fmtPct, signClass } from '../sectionHelpers.js';
 
+/** @type {Record<string, string>} */
 const ASSET_CLASS_LABELS = {
   stock:       'Stock',
   etf:         'ETF',
@@ -18,7 +19,7 @@ const ASSET_CLASS_LABELS = {
 };
 
 /**
- * @param {object | null} data  fetchPortfolioData result
+ * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */

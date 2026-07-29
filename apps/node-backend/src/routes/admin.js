@@ -12,6 +12,7 @@
  * This endpoint is focused on backend/container update metadata.
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import https from 'https';
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- admin table stats/VACUUM are legitimately DB-level (ADR-067 documented exemption)
@@ -28,6 +29,11 @@ import { adminMutateLimiter } from '../middleware/rateLimiter.js';
 import { isAccuracyTableHealthy } from '../services/calculations/forecast/accuracyStore.js';
 import { getTableMeta, readRows, applyMutations } from '../services/dbEditor.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
 const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
@@ -39,6 +45,9 @@ const UPDATE_MODE_DOCKER_COMPOSE = 'docker-compose';
 /**
  * Fetch the latest GitHub Release metadata.
  * Returns a plain object — callers handle errors.
+ * @returns {Promise<any>} The GitHub Releases API response body, an
+ *   arbitrary upstream JSON shape this module only reads a few fields from
+ *   defensively (hasValidReleaseTag/buildUpdateCheckPayload below).
  */
 const GITHUB_FETCH_TIMEOUT_MS = 5000;
 
@@ -75,6 +84,7 @@ function fetchLatestRelease() {
   });
 }
 
+/** @param {any} release Arbitrary upstream GitHub Releases API shape — see fetchLatestRelease. */
 function hasValidReleaseTag(release) {
   return !(release.message === 'Not Found' || !release.tag_name);
 }
@@ -83,6 +93,10 @@ function detectCurrentAppVersion() {
   return env.APP_VERSION || env.APP_IMAGE_TAG || 'unknown';
 }
 
+/**
+ * @param {any} release Arbitrary upstream GitHub Releases API shape — see fetchLatestRelease.
+ * @param {string} currentVersion
+ */
 function buildUpdateCheckPayload(release, currentVersion) {
   const latestVersion = release.tag_name;
   const upToDate = latestVersion === currentVersion || latestVersion === `v${currentVersion}`;
@@ -110,25 +124,30 @@ function buildUpdateCheckPayload(release, currentVersion) {
   };
 }
 
+/**
+ * @param {boolean} isConnected
+ * @param {number} tableCount
+ */
 function formatAdminStatusPayload(isConnected, tableCount) {
   return {
     is_initialised: isConnected && tableCount > 0,
     table_count: tableCount,
     accuracy_table_healthy: isAccuracyTableHealthy(),
     timestamp: new Date().toISOString(),
+    /** @type {any[]} */
     links: [],
   };
 }
 
 const router = Router();
 
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const isConnected = await checkConnection();
   const tableCount = isConnected ? await getTableCount() : 0;
   res.ok(formatAdminStatusPayload(isConnected, tableCount));
 });
 
-router.post('/database/init', async (req, res) => {
+router.post('/database/init', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const isConnected = await checkConnection();
   if (!isConnected) throw new AppError('Cannot connect to database', { status: 500 });
 
@@ -140,7 +159,7 @@ router.post('/database/init', async (req, res) => {
   });
 });
 
-router.post('/database/reset', adminMutateLimiter, async (req, res) => {
+router.post('/database/reset', adminMutateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const settings = getSettings();
   if (!settings.admin.enableResetDb) {
     throw new NotFoundError('Database reset endpoint disabled');
@@ -160,7 +179,7 @@ router.post('/database/reset', adminMutateLimiter, async (req, res) => {
   });
 });
 
-router.get('/update/check', async (req, res) => {
+router.get('/update/check', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const release = await fetchLatestRelease();
 
   if (!hasValidReleaseTag(release)) {
@@ -175,21 +194,21 @@ router.get('/update/check', async (req, res) => {
   res.ok(payload);
 });
 
-router.post('/update/apply', async (req, res) => {
+router.post('/update/apply', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   res.ok({
     success: true,
     note: 'Updates are applied automatically by the desktop app. If an update is available, use the notification in the Vision app window to download and install it.',
   });
 });
 
-router.post('/update/apply-and-restart', async (req, res) => {
+router.post('/update/apply-and-restart', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   res.ok({
     success: true,
     note: 'Updates are managed by the Vision desktop app via Docker image pulls and the desktop shell updater. No manual action is required.',
   });
 });
 
-router.post('/investments/kinesis/sanitize-history', adminMutateLimiter, async (req, res) => {
+router.post('/investments/kinesis/sanitize-history', adminMutateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const result = await sanitizePersistedKinesisHistory();
   res.ok({
     message: 'Kinesis historical spikes sanitization completed',
@@ -199,7 +218,7 @@ router.post('/investments/kinesis/sanitize-history', adminMutateLimiter, async (
 
 // ── Database Maintenance ───────────────────────────────────────────────────────
 
-router.get('/database/stats', async (_req, res) => {
+router.get('/database/stats', /** @param {ExpressRequest} _req @param {ExpressResponse} res */ async (_req, res) => {
   const [tablesResult, sizeResult] = await Promise.all([
     query(`
       SELECT
@@ -225,7 +244,7 @@ router.get('/database/stats', async (_req, res) => {
 // codeql[js/missing-rate-limiting]: adminMutateLimiter is applied as middleware
 // on this exact route (30 req/min). Scanner does not see middleware bound at
 // the route level.
-router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
+router.post('/database/vacuum', adminMutateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { table } = req.body ?? {};
 
   // Validate table name against actual user tables to prevent injection
@@ -233,7 +252,7 @@ router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
     `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
     []
   );
-  const allowedNames = new Set(allowed.rows.map((r) => r.relname));
+  const allowedNames = new Set(allowed.rows.map((/** @type {{ relname: string }} */ r) => r.relname));
 
   if (table !== undefined && table !== null && !allowedNames.has(table)) {
     throw new ValidationError(`Unknown table: ${table}`);
@@ -265,12 +284,12 @@ router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
 
 // ── Data Editor (JetBrains-style table browser/editor) ─────────────────────────
 
-router.get('/database/tables/:table/schema', async (req, res) => {
+router.get('/database/tables/:table/schema', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const meta = await getTableMeta(req.params.table);
   res.ok(meta);
 });
 
-router.get('/database/tables/:table/rows', async (req, res) => {
+router.get('/database/tables/:table/rows', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   let filters = [];
   if (req.query.filters !== undefined) {
     try {
@@ -297,7 +316,7 @@ router.get('/database/tables/:table/rows', async (req, res) => {
 // codeql[js/missing-rate-limiting]: adminMutateLimiter is applied as middleware
 // on this exact route. Identifiers are validated against the live catalog and
 // double-quoted in dbEditor.js; values are parameterized.
-router.post('/database/tables/:table/mutate', adminMutateLimiter, async (req, res) => {
+router.post('/database/tables/:table/mutate', adminMutateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { changes, dryRun } = req.body ?? {};
   const result = await applyMutations(req.params.table, changes, { dryRun: dryRun === true });
   res.ok(result);
@@ -307,12 +326,12 @@ router.post('/database/tables/:table/mutate', adminMutateLimiter, async (req, re
 
 // Canonical collection shape `{items, total}` (unpaginated — `total` is the
 // row count, present so pagination can land without breaking the shape).
-router.get('/providers/health', async (_req, res) => {
+router.get('/providers/health', /** @param {ExpressRequest} _req @param {ExpressResponse} res */ async (_req, res) => {
   const items = await listProviderHealth();
   res.ok({ items, total: items.length });
 });
 
-router.post('/providers/:provider/probe', adminMutateLimiter, async (req, res) => {
+router.post('/providers/:provider/probe', adminMutateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { provider } = req.params;
   const result = await probeProvider(provider);
   res.ok(result);
@@ -322,7 +341,7 @@ router.post('/providers/:provider/probe', adminMutateLimiter, async (req, res) =
 
 // Canonical collection shape `{items, total}` (unpaginated — `total` is the
 // row count, present so pagination can land without breaking the shape).
-router.get('/metrics/requests', (_req, res) => {
+router.get('/metrics/requests', /** @param {ExpressRequest} _req @param {ExpressResponse} res */ (_req, res) => {
   const items = getMetrics();
   res.ok({ items, total: items.length });
 });
@@ -330,12 +349,12 @@ router.get('/metrics/requests', (_req, res) => {
 // ── Endpoint Manifest ─────────────────────────────────────────────────────────
 
 // Both manifest endpoints use the canonical `{items, total}` collection shape.
-router.get('/endpoints', (_req, res) => {
+router.get('/endpoints', /** @param {ExpressRequest} _req @param {ExpressResponse} res */ (_req, res) => {
   const items = getRouteManifest();
   res.ok({ items, total: items.length });
 });
 
-router.get('/endpoint-liveness', (_req, res) => {
+router.get('/endpoint-liveness', /** @param {ExpressRequest} _req @param {ExpressResponse} res */ (_req, res) => {
   const items = getRouteManifest().map((entry) => ({ ...entry, live: true }));
   res.ok({ items, total: items.length });
 });

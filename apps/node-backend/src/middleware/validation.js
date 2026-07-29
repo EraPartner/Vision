@@ -5,7 +5,23 @@
 
 import { ValidationError } from './errorHandler.js';
 
+/**
+ * Deliberately a flat optional-property shape, not a `{valid:true,...} |
+ * {valid:false,...}` discriminated union: in this program (many files, this
+ * TS version — see project notes), `if (!result.valid) ... result.error`
+ * fails to narrow the union and reports `error`/`value` as missing on the
+ * still-unnarrowed type, even though the identical pattern narrows correctly
+ * in an isolated single-file check. Every call site here already accesses
+ * `.error`/`.value` only after checking `.valid`, so the flat shape costs no
+ * real safety and sidesteps the narrowing issue entirely.
+ * @typedef {object} FieldValidationResult
+ * @property {boolean} valid
+ * @property {any} [value]
+ * @property {string} [error]
+ */
+
 // Whitelist of allowed DB columns per resource type
+/** @type {Record<string, Set<string>>} */
 const ALLOWED_COLUMNS = {
   transactions: new Set([
     // `balance` is deliberately NOT editable here. The running balance is the
@@ -49,11 +65,15 @@ const ALLOWED_COLUMNS = {
 /**
  * Validate and filter update fields to only allowed column names.
  * Prevents SQL injection through dynamic column names.
+ * @param {string} resourceType
+ * @param {Record<string, unknown>} fields
+ * @returns {Record<string, unknown>}
  */
 export function sanitizeUpdateFields(resourceType, fields) {
   const allowed = ALLOWED_COLUMNS[resourceType];
   if (!allowed) throw new Error(`Unknown resource type: ${resourceType}`);
 
+  /** @type {Record<string, unknown>} */
   const sanitized = {};
   for (const [key, value] of Object.entries(fields)) {
     const normalizedKey = key.toLowerCase().trim();
@@ -67,9 +87,12 @@ export function sanitizeUpdateFields(resourceType, fields) {
 
 /**
  * Validate that an ID parameter is a positive integer.
+ * @param {unknown} value
+ * @param {string} [fieldName]
+ * @returns {FieldValidationResult}
  */
 export function validateId(value, fieldName = 'id') {
-  const num = parseInt(value, 10);
+  const num = parseInt(/** @type {string} */ (value), 10);
   if (isNaN(num) || num < 1 || num > 2147483647) {
     return { valid: false, error: `${fieldName} must be a positive integer` };
   }
@@ -81,6 +104,9 @@ export function validateId(value, fieldName = 'id') {
  * the value is absent/empty, the parsed integer when valid, and raises
  * ValidationError on malformed input — so `?account_id=abc` becomes a 400
  * instead of a `NaN` param that Postgres rejects (22P02) as a 500.
+ * @param {unknown} value
+ * @param {string} [fieldName]
+ * @returns {number|null}
  */
 export function assertOptionalId(value, fieldName = 'id') {
   if (value == null || value === '') return null;
@@ -91,6 +117,9 @@ export function assertOptionalId(value, fieldName = 'id') {
 
 /**
  * Validate and sanitize a string input.
+ * @param {unknown} value
+ * @param {number} [maxLength]
+ * @returns {string|null}
  */
 export function sanitizeString(value, maxLength = 500) {
   if (value == null) return null;
@@ -109,6 +138,9 @@ export const MAX_MONEY_VALUE = 1e12;
  * Validate numeric values. Rejects non-finite input (NaN and, critically,
  * Infinity — `Infinity > Infinity` is false, so the old `isNaN`-only check let
  * a JSON `"Infinity"` through every no-max caller straight to a DB 500).
+ * @param {unknown} value
+ * @param {{ min?: number, max?: number, fieldName?: string }} [opts]
+ * @returns {FieldValidationResult}
  */
 export function validateNumber(value, { min = -Infinity, max = MAX_MONEY_VALUE, fieldName = 'value' } = {}) {
   const num = Number(value);
@@ -126,6 +158,10 @@ export function validateNumber(value, { min = -Infinity, max = MAX_MONEY_VALUE, 
  * value from reaching a VARCHAR(n) column and surfacing as a raw 22001 500 —
  * most importantly mid-operation, after an earlier NOT-NULL insert already
  * succeeded (e.g. manual_raw_transactions.bank_account VARCHAR(100)).
+ * @param {unknown} value
+ * @param {number} maxLength
+ * @param {string} [fieldName]
+ * @returns {unknown}
  */
 export function assertMaxLength(value, maxLength, fieldName = 'value') {
   if (value == null) return value;
@@ -141,6 +177,9 @@ export function assertMaxLength(value, maxLength, fieldName = 'value') {
  * (so the column/repository default applies) and the normalised uppercase code
  * otherwise. Without it, free-typed "euro"/"€"/4-10 char values reached the
  * 0046 currency CHECK / VARCHAR(3) column as a raw 400/500.
+ * @param {unknown} value
+ * @param {string} [fieldName]
+ * @returns {string|undefined}
  */
 export function assertCurrency(value, fieldName = 'currency') {
   if (value == null || value === '') return undefined;
@@ -153,24 +192,33 @@ export function assertCurrency(value, fieldName = 'currency') {
 
 /**
  * Validate date string format (YYYY-MM-DD).
+ * @param {unknown} value
+ * @param {string} [fieldName]
+ * @returns {{ valid: boolean, value?: string|null, error?: string }} Flat
+ *   shape, not a discriminated union — see FieldValidationResult's comment
+ *   above for why.
  */
 export function validateDateString(value, fieldName = 'date') {
   if (!value) return { valid: true, value: null };
+  const str = /** @type {string} */ (value);
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(value)) {
+  if (!dateRegex.test(str)) {
     return { valid: false, error: `${fieldName} must be in YYYY-MM-DD format` };
   }
-  const parsed = new Date(value);
+  const parsed = new Date(str);
   if (isNaN(parsed.getTime())) {
     return { valid: false, error: `${fieldName} is not a valid date` };
   }
-  return { valid: true, value };
+  return { valid: true, value: str };
 }
 
 /**
  * Throwing variant of validateDateString for route input: returns the value
  * (or null when empty) and raises ValidationError on malformed input, so a
  * `?start_date=banana` becomes a 400 instead of a Postgres cast error → 500.
+ * @param {unknown} value
+ * @param {string} [fieldName]
+ * @returns {string|null}
  */
 export function assertYmd(value, fieldName = 'date') {
   const result = validateDateString(value, fieldName);
@@ -180,6 +228,9 @@ export function assertYmd(value, fieldName = 'date') {
 
 /**
  * Express middleware to validate :id route params.
+ * @param {import('../types/express.js').ExpressRequest} req
+ * @param {import('../types/express.js').ExpressResponse} res
+ * @param {import('../types/express.js').ExpressNextFunction} next
  */
 export function validateIdParam(req, res, next) {
   if (req.params.id) {
@@ -187,19 +238,31 @@ export function validateIdParam(req, res, next) {
     if (!result.valid) {
       return next(new ValidationError(result.error));
     }
-    req.params.id = result.value;
+    // Deliberately re-stamps req.params.id with the PARSED number, not its
+    // string form — Express's own typing convention (and this file's
+    // ExpressRequest.params: Record<string, string>) says route params are
+    // always strings; downstream handlers happen to tolerate a number here
+    // (Number(...)/parseInt(...) on it are no-ops), but this is a real,
+    // pre-existing type-contract deviation, not something this annotation
+    // pass fixes. See orchestrator report.
+    req.params.id = /** @type {string} */ (/** @type {unknown} */ (result.value));
   }
   next();
 }
 
 /**
  * Validate an array of integer IDs (e.g., excluded_category_ids).
+ * @param {unknown} values
+ * @param {string} [fieldName]
+ * @returns {FieldValidationResult}
  */
 export function validateIntArray(values, fieldName = 'ids') {
-  if (!Array.isArray(values)) values = [values];
+  /** @type {unknown[]} */
+  const list = Array.isArray(values) ? values : [values];
+  /** @type {number[]} */
   const result = [];
-  for (const v of values) {
-    const num = parseInt(v, 10);
+  for (const v of list) {
+    const num = parseInt(/** @type {string} */ (v), 10);
     if (isNaN(num) || num < 1 || num > 2147483647) {
       return { valid: false, error: `${fieldName} contains invalid value: ${v}` };
     }

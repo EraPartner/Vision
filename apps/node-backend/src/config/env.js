@@ -18,12 +18,14 @@ import { logger } from './logger.js';
 // connect with a guessable password — see enforceDatabaseUrlPolicy().
 const DEFAULT_DATABASE_URL = 'postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions';
 
+/** @param {boolean} defaultValue */
 const booleanEnv = (defaultValue) =>
   z.string().optional().transform((value) => {
     if (value === undefined || value === '') return defaultValue;
     return value.trim().toLowerCase() === 'true';
   });
 
+/** @param {number} defaultValue */
 const intEnv = (defaultValue) =>
   z.string().optional().transform((value, ctx) => {
     if (value === undefined || value === '') return defaultValue;
@@ -35,6 +37,7 @@ const intEnv = (defaultValue) =>
     return parsed;
   });
 
+/** @param {string} defaultValue */
 const stringEnv = (defaultValue) =>
   z.string().optional().transform((value) => {
     if (value === undefined) return defaultValue;
@@ -48,10 +51,11 @@ const optionalStringEnv = z.string().optional().transform((value) => {
   return trimmed === '' ? undefined : trimmed;
 });
 
+/** @param {string} defaultValue */
 const csvEnv = (defaultValue) =>
   z.string().optional().transform((value) => {
     const raw = value && value.trim() ? value : defaultValue;
-    return raw.split(',').map((entry) => entry.trim()).filter(Boolean);
+    return raw.split(',').map((/** @type {string} */ entry) => entry.trim()).filter(Boolean);
   });
 
 const envSchema = z.object({
@@ -151,6 +155,9 @@ function parseEnv() {
  * fast instead of silently connecting with guessable credentials. An
  * explicitly set value is always honoured (the operator made a choice); the
  * development fallback stays, but with a visible warning.
+ */
+/**
+ * @param {import('zod').infer<typeof envSchema>} data
  */
 function enforceDatabaseUrlPolicy(data) {
   const explicitlySet = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim());

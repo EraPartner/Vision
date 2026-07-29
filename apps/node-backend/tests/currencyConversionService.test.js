@@ -261,6 +261,34 @@ describe('Currency Conversion Service', () => {
     expect(nearestLookups).toHaveLength(1);
   });
 
+  it('probes a currency with no stored rates ONCE per request, not once per distinct day', async () => {
+    // A daily series (balance history) hands this function up to 366 distinct
+    // days. The historical index is empty only when `exchange_rates` holds no
+    // row for the currency at all — and then the per-date point lookup misses
+    // on every single day and goes to the network, which offline means
+    // hundreds of sequential multi-second timeouts. One attempt per currency
+    // per request is enough; it saves what it fetches for next time.
+    query.mockResolvedValue({ rows: [] });
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503, text: async () => '' });
+
+    const rows = Array.from({ length: 60 }, (_, i) => ({
+      amount: 1,
+      currency: 'ZZZ',
+      day: new Date(Date.UTC(2020, 0, 1 + i)).toISOString().slice(0, 10),
+    }));
+
+    const converted = await convertRowsToEur(rows, 'EUR', { useHistoricalRatesByDate: true, dateField: 'day' });
+    expect(converted).toHaveLength(60);
+
+    const sqlCalls = query.mock.calls.map(([sql]) => String(sql));
+    const exactLookups = sqlCalls.filter(sql => sql.includes('WHERE currency_code = $1 AND rate_date = $2::date'));
+    const nearestLookups = sqlCalls.filter(sql => sql.includes('ORDER BY ABS(rate_date - $2::date) ASC'));
+    expect(exactLookups).toHaveLength(1);
+    expect(nearestLookups).toHaveLength(1);
+    // 60 distinct days must not become 60 provider round-trips either.
+    expect(global.fetch.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
   /**
    * Route the mocked DB by SQL shape — the backfill flow now spans the pairs
    * scan, the repair flag in user_settings, rate lookups/saves and the

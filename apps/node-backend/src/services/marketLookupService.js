@@ -36,10 +36,19 @@ const inFlightQuotes = new Map();
 // whatever data came back instead of failing the whole request.
 const NO_VALIDATE = /** @type {{ validateResult: false }} */ ({ validateResult: false });
 
+/**
+ * @param {string} message
+ * @param {unknown} [cause]
+ * @returns {AppError}
+ */
 function upstreamError(message, cause) {
   return new AppError(message, { status: 502, code: ApiErrorCode.BAD_GATEWAY, cause });
 }
 
+/**
+ * @param {unknown} url
+ * @returns {string|null}
+ */
 function normalizeThumbnailUrl(url) {
   if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
@@ -50,6 +59,10 @@ function normalizeThumbnailUrl(url) {
   return null;
 }
 
+/**
+ * @param {any} thumbnail raw Yahoo `news[].thumbnail` — shape is upstream-controlled (NO_VALIDATE).
+ * @returns {string|null}
+ */
 function pickBestThumbnail(thumbnail) {
   const resolutions = Array.isArray(thumbnail?.resolutions) ? thumbnail.resolutions : [];
   for (let i = resolutions.length - 1; i >= 0; i -= 1) {
@@ -61,6 +74,8 @@ function pickBestThumbnail(thumbnail) {
 
 /**
  * Convert a range string (e.g. '1mo', '5y') to a Date for period1.
+ * @param {string} range
+ * @returns {Date}
  */
 function rangeToDate(range) {
   const now = new Date();
@@ -114,6 +129,9 @@ function mapQuoteCore(q) {
  * only (one quote() call); the default (full) additionally fetches quoteSummary
  * for fundamentals/analyst data — roughly 2× the outbound calls. Returns null
  * when the upstream quote is unavailable.
+ * @param {string} sym
+ * @param {boolean} [basic]
+ * @returns {Promise<object|null>}
  */
 async function buildQuote(sym, basic) {
   const yahooFinance = await getYahooClient();
@@ -157,7 +175,7 @@ async function buildQuote(sym, basic) {
   const priceToBook = ks.priceToBook ?? q.priceToBook;
 
   const trendBuckets = s?.recommendationTrend?.trend || [];
-  const currentTrend = trendBuckets.find((t) => t.period === '0m') || trendBuckets[0] || null;
+  const currentTrend = trendBuckets.find((/** @type {any} */ t) => t.period === '0m') || trendBuckets[0] || null;
   const analystConsensus = currentTrend
     ? {
       strongBuy: currentTrend.strongBuy ?? 0,
@@ -170,7 +188,7 @@ async function buildQuote(sym, basic) {
 
   const recentAnalystActions = (s?.upgradeDowngradeHistory?.history || [])
     .slice(0, 10)
-    .map((h) => ({
+    .map((/** @type {any} */ h) => ({
       date: h.epochGradeDate,
       firm: h.firm,
       toGrade: h.toGrade,
@@ -198,10 +216,13 @@ async function buildQuote(sym, basic) {
  * outbound call; concurrent identical fetches share one in-flight promise. Only
  * successful (non-null) quotes are cached. Never throws — returns null so one bad
  * symbol can't fail a multi-symbol request.
+ * @param {string} sym
+ * @param {boolean} [basic]
+ * @returns {Promise<object|null>}
  */
 async function getCachedQuote(sym, basic) {
   const key = `${basic ? 'basic' : 'full'}:${sym}`;
-  const cached = quoteCache.get(key);
+  const cached = /** @type {object|null|undefined} */ (quoteCache.get(key));
   if (cached !== undefined) return cached;
 
   const existing = inFlightQuotes.get(key);
@@ -245,8 +266,8 @@ export async function searchSymbols(q) {
   }
 
   const items = (results.quotes || [])
-    .filter((r) => r.symbol)
-    .map((r) => ({
+    .filter((/** @type {any} */ r) => r.symbol)
+    .map((/** @type {any} */ r) => ({
       symbol: r.symbol,
       name: r.shortname || r.longname || r.symbol,
       type: r.quoteType || 'UNKNOWN',
@@ -313,8 +334,8 @@ export async function getChart(symbol, { range = '1mo', interval = '1d' } = {}) 
   if (!result) return { items: [], total: 0 };
 
   const points = (result.quotes || [])
-    .filter((p) => p.close != null)
-    .map((p) => ({
+    .filter((/** @type {any} */ p) => p.close != null)
+    .map((/** @type {any} */ p) => ({
       time: new Date(p.date).getTime(),
       close: p.close,
       high: p.high,
@@ -351,7 +372,7 @@ export async function getNews(symbols, count) {
           quotesCount: 0,
           newsCount,
         }, NO_VALIDATE);
-        return ((/** @type {any} */ (results)).news || []).map((n) => ({
+        return ((/** @type {any} */ (results)).news || []).map((/** @type {any} */ n) => ({
           title: n.title,
           link: n.link,
           publisher: n.publisher,

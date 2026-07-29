@@ -87,6 +87,11 @@ setInterval(() => {
  * @param {string} [options.keyPrefix] - Prefix for rate limit key (default: 'global')
  */
 export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 'global' } = {}) {
+  /**
+   * @param {import('../types/express.js').ExpressRequest} req
+   * @param {import('../types/express.js').ExpressResponse} res
+   * @param {import('../types/express.js').ExpressNextFunction} next
+   */
   return (req, res, next) => {
     // Dev bypass: skip throttling entirely so hot-reload doesn't trip limits.
     // Gated on an explicit VISION_DEV opt-in (not merely ENVIRONMENT) so an
@@ -96,8 +101,12 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
     }
 
     const remoteAddr = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+    // x-forwarded-for is a single comma-joined header in practice (Node/Express
+    // fold repeated headers into one string, except set-cookie); typed
+    // string|string[] only because that's the general header-value shape.
+    const xff = /** @type {string} */ (req.headers?.['x-forwarded-for'] ?? '');
     const forwarded = isTrustedProxyAddr(remoteAddr)
-      ? (req.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim()
+      ? xff.split(',')[0].trim()
       : '';
     const ip = forwarded || remoteAddr || 'unknown';
     const key = `${keyPrefix}:${ip}`;

@@ -46,9 +46,17 @@ const MAX_FORWARD_HOLDINGS = 25;
 /** Sanity band on a holding's blended annual expected return (ADR-081: ±50%). */
 const RETURN_CLAMP = 0.5;
 
+/** @param {number} v */
 const round2 = (v) => Math.round(v * 100) / 100;
+/** @param {number} v */
 const round4 = (v) => Math.round(v * 10000) / 10000;
 
+/**
+ * @param {unknown} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} fallback
+ */
 function clampInt(value, min, max, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
@@ -60,6 +68,10 @@ function clampInt(value, min, max, fallback) {
  * one step within a block and jumping to a fresh random index with probability
  * 1/meanBlockLength. Summing `n` daily residuals yields one period (e.g. month)
  * residual that preserves short-run autocorrelation and fat tails.
+ * @param {number[]} residuals
+ * @param {number} n
+ * @param {number} meanBlockLength
+ * @param {() => number} rng
  */
 function sumBootstrapResiduals(residuals, n, meanBlockLength, rng) {
   const L = residuals.length;
@@ -80,6 +92,16 @@ function sumBootstrapResiduals(residuals, n, meanBlockLength, rng) {
  * price growth; fundamentals dividend yield adds the income leg. Returns
  * undefined when no usable forward signal exists (so the caller falls back to
  * the historical drift for that holding).
+ * @param {Awaited<ReturnType<typeof getPortfolioSummary>>['summaries'][number]} holding
+ * @param {typeof researchAggregator} aggregator
+ * @returns {Promise<{
+ *   symbol: string,
+ *   expectedAnnual: number,
+ *   growth: number,
+ *   dividendYield: number | undefined,
+ *   price: number,
+ *   targetMean: number,
+ * } | undefined>}
  */
 async function forwardExpectedReturn(holding, aggregator) {
   const assetClass = String(holding.asset_class || holding.assetClass || '').toLowerCase();
@@ -91,6 +113,11 @@ async function forwardExpectedReturn(holding, aggregator) {
     aggregator.fetch('fundamentals', { symbol: holding.symbol, assetClass: 'stock' }),
   ]);
 
+  /**
+   * @param {PromiseSettledResult<Awaited<ReturnType<typeof researchAggregator.fetch>>>} r
+   * @returns {any} the provider payload — shape depends on `dataType`
+   *   (quote/analyst/fundamentals) and is provider-defined; see the adapters.
+   */
   const data = (r) => (r.status === 'fulfilled' && r.value?.source !== 'unavailable' ? r.value.data : undefined);
   const quote = data(quoteR);
   const analyst = data(analystR);
@@ -174,6 +201,7 @@ export async function runPortfolioForecast(input = {}, deps = defaultDeps) {
 
   // ── Drift: per-holding weighted blend of historical and forward expectations ──
   let blendedDailyDrift = histDailyDrift;
+  /** @type {Array<Awaited<ReturnType<typeof forwardExpectedReturn>>>} */
   let forwardHoldings = [];
   if (forwardBlend > 0) {
     const holdings = (summary.summaries || []).filter((h) => Number(h.currentValue) > 0);

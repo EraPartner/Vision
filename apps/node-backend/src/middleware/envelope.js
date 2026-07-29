@@ -13,9 +13,9 @@
  * Express middleware. Idempotent — safe to mount more than once, but typical
  * usage is a single mount right before routers.
  *
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
+ * @param {import('../types/express.js').ExpressRequest} req
+ * @param {import('../types/express.js').ExpressResponse} res
+ * @param {import('../types/express.js').ExpressNextFunction} next
  */
 export function wrapResponse(req, res, next) {
   /**
@@ -24,9 +24,10 @@ export function wrapResponse(req, res, next) {
    * @template T
    * @param {T} data
    * @param {import('@vision/types/api').ResponseMeta} [meta]
-   * @returns {import('express').Response}
+   * @returns {import('../types/express.js').ExpressResponse}
    */
   res.ok = function sendOk(data, meta) {
+    /** @type {{ ok: true, data: T, meta?: import('@vision/types/api').ResponseMeta }} */
     const body = { ok: true, data };
     const mergedMeta = req.id ? { requestId: req.id, ...(meta ?? {}) } : meta;
     if (mergedMeta) body.meta = mergedMeta;

@@ -6,14 +6,21 @@
  * Armistice (11 Nov), Christmas (25 Dec).
  */
 
+/** @param {number} n */
 function pad(n) {
   return String(n).padStart(2, '0');
 }
 
+/**
+ * @param {number} y
+ * @param {number} m
+ * @param {number} d
+ */
 function isoDate(y, m, d) {
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
+/** @param {number} year */
 function easterSunday(year) {
   // Anonymous Gregorian Computus.
   const a = year % 19;
@@ -33,12 +40,17 @@ function easterSunday(year) {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
+/**
+ * @param {Date} date
+ * @param {number} days
+ */
 function addDays(date, days) {
   const d = new Date(date.getTime());
   d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
+/** @param {number} year */
 export function belgianHolidays(year) {
   const easter = easterSunday(year);
   const easterMonday = addDays(easter, 1);
@@ -59,6 +71,7 @@ export function belgianHolidays(year) {
   ]);
 }
 
+/** @param {string} isoDateStr */
 export function isBelgianHoliday(isoDateStr) {
   const year = Number(isoDateStr.slice(0, 4));
   if (!Number.isFinite(year)) return false;

@@ -6,6 +6,7 @@
 
 import { escapeHtml, fmtCurrency, fmtPct, signClass, svgGenericGroupedBarChart } from '../sectionHelpers.js';
 
+/** @type {Record<string, string>} */
 const ASSET_CLASS_LABELS = {
   stock:       'Stocks',
   etf:         'ETFs',
@@ -18,7 +19,7 @@ const ASSET_CLASS_LABELS = {
 };
 
 /**
- * @param {object | null} data  fetchPortfolioData result
+ * @param {import('../dataFetcherPortfolio.js').PortfolioReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */
@@ -37,9 +38,16 @@ export function renderAssetClassDetail(data, { currency }) {
   }
 
   // Build asset-class rows
+  /** @type {Map<string, { label: string; value: number; invested: number }>} */
   const classMap = new Map();
 
   if (latest) {
+    /**
+     * @param {string} key
+     * @param {string} label
+     * @param {string} value
+     * @param {string} invested
+     */
     const add = (key, label, value, invested) => {
       const v = Number(value ?? 0);
       const i = Number(invested ?? 0);

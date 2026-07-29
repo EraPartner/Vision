@@ -18,8 +18,30 @@ import { UNIT_BASED_ASSET_CLASSES } from '../../repositories/portfolioTxRepo.com
 import { normalizeType } from './portfolioTypeNormalizer.js';
 import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
 
+/**
+ * @typedef {import('../../types/rows.js').PortfolioImportStagingRow} PortfolioImportStagingRow
+ * @typedef {import('./index.js').PortfolioImportBatchId} PortfolioImportBatchId
+ * @typedef {import('./index.js').PortfolioImportProgressCallback} PortfolioImportProgressCallback
+ */
+
+/**
+ * The projection validate.js reads. `tx_date` is selected RAW here (unlike the
+ * transaction pipeline), so it really is a pg local-midnight `Date` —
+ * `resolveAndCheck` formats it with LOCAL getters (`toYmd`) on purpose.
+ *
+ * @typedef {Pick<PortfolioImportStagingRow,
+ *   'id'|'row_index'|'tx_date'|'type_raw'|'units'|'price_per_unit'|'amount'|'raw_data'>} PendingPortfolioStagingRow
+ */
+
 const VALIDATE_CHUNK = 500;
 
+/**
+ * Run the validate phase: normalize each pending row's type, pre-check its
+ * numeric fields, hash it, and mark it validated / duplicate / error.
+ *
+ * @param {{ batchId: PortfolioImportBatchId, onProgress?: PortfolioImportProgressCallback }} args
+ * @returns {Promise<{ validated: number, duplicates: number, errors: number }>}
+ */
 export async function validateBatch({ batchId, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'validating' WHERE id = $1`, [batchId]);
 
@@ -53,20 +75,27 @@ export async function validateBatch({ batchId, onProgress }) {
   let seen = 0;
   let errors = 0;
   let duplicates = 0;
+  /** @type {Set<string>} */
   const seenHashes = new Set();
 
   if (onProgress) onProgress({ phase: 'validating', current: 0, total });
 
   for (let start = 0; start < total; start += VALIDATE_CHUNK) {
     const chunk = pending.slice(start, start + VALIDATE_CHUNK);
+    /** @type {string[]} */
     const ids = [];
+    /** @type {string[]} */
     const statuses = [];
+    /** @type {(string|null|undefined)[]} */
     const types = [];
+    /** @type {(string|null|undefined)[]} */
     const routes = [];
+    /** @type {(string|null)[]} */
     const txHashes = [];
+    /** @type {(string|null)[]} */
     const errorMessages = [];
 
-    for (const row of chunk) {
+    for (const row of /** @type {PendingPortfolioStagingRow[]} */ (chunk)) {
       ids.push(row.id);
       const { type, route, error } = resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage, today });
       if (error) {
@@ -131,6 +160,14 @@ export async function validateBatch({ batchId, onProgress }) {
   return { validated, duplicates, errors };
 }
 
+/**
+ * Resolve one staging row's canonical type and brokerage route, or report why
+ * it cannot be committed.
+ *
+ * @param {PendingPortfolioStagingRow} row
+ * @param {{ typeMapping: Record<string, string>, defaultType: string|undefined, unitBased: boolean, isBrokerage: boolean, today: string }} options
+ * @returns {{ type?: string, route?: string, error?: string }} exactly one of `type`/`error` is meaningful
+ */
 function resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage, today }) {
   if (!row.tx_date) return { error: 'missing date' };
 
@@ -176,6 +213,15 @@ function resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage
   return { type, route: isBrokerage ? 'portfolio' : undefined };
 }
 
+/**
+ * sha256 of route|type|raw record, falling back to the parsed fields when the
+ * adapter kept no raw record.
+ *
+ * @param {PendingPortfolioStagingRow} row
+ * @param {string|undefined} type
+ * @param {string|undefined} route
+ * @returns {string} lowercase hex digest
+ */
 function computeRowHash(row, type, route) {
   let raw;
   if (row.raw_data) {

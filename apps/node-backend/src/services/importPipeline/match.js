@@ -24,8 +24,22 @@ import {
 } from '../calculations/normalization.js';
 import { loadActivePatterns, applyPatterns } from '../recipientPatternService.js';
 
+/**
+ * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('./index.js').ImportBatchId} ImportBatchId
+ * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
+ */
+
 const MATCH_UPDATE_CHUNK = 500;
 
+/**
+ * Run the match phase: resolve every validated row's `recipient_raw` to a
+ * recipient id via patterns → exact/fuzzy → new-recipient upsert, and stamp
+ * the provenance columns the review UI reads.
+ *
+ * @param {{ batchId: ImportBatchId, onProgress?: ImportProgressCallback }} args
+ * @returns {Promise<{ matched: number, unresolved: number, matchSourceCounts: Record<string, number> }>}
+ */
 export async function matchBatch({ batchId, onProgress }) {
   await query(`UPDATE import_batches SET status = 'matching' WHERE id = $1`, [batchId]);
 
@@ -40,8 +54,13 @@ export async function matchBatch({ batchId, onProgress }) {
   const total = staged.length;
   if (onProgress) onProgress({ phase: 'matching', current: 0, total });
 
+  /** @type {string[]} */
   const distinctRaw = [
-    ...new Set(staged.map((r) => r.recipient_raw).filter((n) => n && String(n).trim().length)),
+    ...new Set(
+      /** @type {Pick<ImportStagingRow, 'id'|'recipient_raw'>[]} */ (staged)
+        .map((r) => r.recipient_raw)
+        .filter((n) => n && String(n).trim().length),
+    ),
   ];
 
   // --- Phase 1: pattern match ---
@@ -92,7 +111,9 @@ export async function matchBatch({ batchId, onProgress }) {
        RETURNING id, normalized_name`,
       [upperNames, normalizedNames],
     );
-    const insertedByNorm = new Map(inserted.rows.map((r) => [r.normalized_name, r.id]));
+    const insertedByNorm = new Map(
+      /** @type {{ id: number, normalized_name: string }[]} */ (inserted.rows).map((r) => [r.normalized_name, r.id]),
+    );
 
     // Fetch ids for names that already existed (conflict — not returned above).
     const conflicted = normalizedNames.filter((n) => !insertedByNorm.has(n));
@@ -101,7 +122,9 @@ export async function matchBatch({ batchId, onProgress }) {
         `SELECT id, normalized_name FROM recipients WHERE normalized_name = ANY($1::text[])`,
         [conflicted],
       );
-      for (const r of existing.rows) insertedByNorm.set(r.normalized_name, r.id);
+      for (const r of /** @type {{ id: number, normalized_name: string }[]} */ (existing.rows)) {
+        insertedByNorm.set(r.normalized_name, r.id);
+      }
     }
 
     for (const { raw, normalized } of toUpsert) {
@@ -156,6 +179,7 @@ export async function matchBatch({ batchId, onProgress }) {
     if (onProgress) onProgress({ phase: 'matching', current: seen, total });
   }
 
+  /** @type {Record<string, number>} */
   const matchSourceCounts = { pattern: 0, exact: 0, fuzzy: 0, new: 0 };
   for (const info of resolved.values()) matchSourceCounts[info.matchSource] = (matchSourceCounts[info.matchSource] || 0) + 1;
 

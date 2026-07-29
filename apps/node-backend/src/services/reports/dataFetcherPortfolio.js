@@ -21,6 +21,57 @@ import { logger } from '../../config/logger.js';
  */
 
 /**
+ * A row of `getSnapshots`' resolved array (portfolioPerformanceSnapshotService.js).
+ * @typedef {Awaited<ReturnType<typeof getSnapshots>>[number]} SnapshotRow
+ */
+
+/**
+ * A row of `getBreakdownSummary`'s resolved array
+ * (services/portfolio/portfolioSummaryService.js, re-exported here).
+ *
+ * Several section renderers (assetClassDetail, portfolioAllocation,
+ * portfolioExecutiveSummary, topHoldings) defensively read EITHER a camelCase
+ * or a snake_case field name for the same value (`assetClass ?? asset_class`,
+ * `currentValue ?? current_value`, `totalInvested ?? total_invested`,
+ * `gainLoss ?? gain_loss`, `gainLossPercent ?? gain_loss_pct`) — apparent
+ * defense against an older/alternate row shape. `getBreakdownSummary` only
+ * ever emits the camelCase fields (see portfolioSummaryService.js), so every
+ * snake_case branch is dead code today; kept as always-`undefined` optional
+ * fields here (rather than removed) to stay behavior-preserving — flagged for
+ * the orchestrator as a probable-dead-code finding.
+ * @typedef {Awaited<ReturnType<typeof getBreakdownSummary>>[number] & {
+ *   asset_class?: undefined,
+ *   current_value?: undefined,
+ *   total_invested?: undefined,
+ *   gain_loss?: undefined,
+ *   gain_loss_pct?: undefined,
+ * }} BreakdownRow
+ */
+
+/** @typedef {{ year: number; month: number; amount: number }} DividendMonthRow */
+
+/**
+ * @typedef {{
+ *   investmentId: number, name: string, symbol: string|null, assetClass: string,
+ *   total: number,
+ * }} DividendInvestmentRow
+ */
+
+/** @typedef {{ byMonth: DividendMonthRow[]; byInvestment: DividendInvestmentRow[] }} DividendData */
+
+/**
+ * Full result of {@link fetchPortfolioData} — the data payload portfolio
+ * report section renderers consume.
+ * @typedef {{
+ *   snapshots: SnapshotRow[] | null;
+ *   breakdown: BreakdownRow[] | null;
+ *   dividends: DividendData | null;
+ *   period: Period;
+ *   currency: string;
+ * }} PortfolioReportData
+ */
+
+/**
  * Unwrap a settled Promise result; log and return null on rejection.
  *
  * @template T
@@ -68,7 +119,7 @@ export function periodToDateRange(period) {
  * @param {string} targetCurrency
  * @param {string} startDate
  * @param {string} endDate
- * @returns {Promise<{ byMonth: object[]; byInvestment: object[] }>}
+ * @returns {Promise<DividendData>}
  */
 async function fetchDividends(targetCurrency, startDate, endDate) {
   const result = await query(`
@@ -133,13 +184,7 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
  *
  * @param {string} currency  Target currency (e.g. "EUR")
  * @param {Period} period
- * @returns {Promise<{
- *   snapshots: object[] | null;
- *   breakdown: object[] | null;
- *   dividends: { byMonth: object[]; byInvestment: object[] } | null;
- *   period: Period;
- *   currency: string;
- * }>}
+ * @returns {Promise<PortfolioReportData>}
  */
 export async function fetchPortfolioData(currency, period) {
   const { startDate, endDate } = periodToDateRange(period);

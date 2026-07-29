@@ -80,7 +80,7 @@ export const REBALANCE_TARGET_ALIASES = Object.freeze({
 export function foldTargetSleeves(weights) {
   const out = /** @type {Record<string, number>} */ ({});
   for (const [k, v] of Object.entries(weights ?? {})) {
-    const key = REBALANCE_TARGET_ALIASES[k] ?? k;
+    const key = REBALANCE_TARGET_ALIASES[/** @type {keyof typeof REBALANCE_TARGET_ALIASES} */ (k)] ?? k;
     out[key] = (Number(out[key]) || 0) + (Number(v) || 0);
   }
   return out;

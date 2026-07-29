@@ -10,6 +10,7 @@
  * pre-zod hand-rolled parsing (String()/parseInt fallbacks, trims, defaults).
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 import { logger } from '../config/logger.js';
@@ -36,10 +37,16 @@ import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
 import { registerParserRoutes } from '../lib/parserConfigRoutes.js';
 import { parsePagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 const PARSER_KIND = 'portfolio';
 
+/** @param {unknown} raw */
 function parseTypeMapping(raw) {
   if (!raw) return {};
   if (typeof raw === 'object') return raw;
@@ -55,6 +62,12 @@ function parseTypeMapping(raw) {
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
 // Messages here already name their field, so issues join without path prefixes.
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} input
+ * @returns {T}
+ */
 function parseImportInput(schema, input) {
   const result = schema.safeParse(input);
   if (!result.success) {
@@ -86,6 +99,7 @@ const brokerageParamsSchema = z.looseObject({
   }
 }).transform((data) => ({ isBrokerage: data.is_brokerage, accountId: data.account_id }));
 
+/** @param {unknown} data */
 function parseBrokerageParams(data) {
   return parseImportInput(brokerageParamsSchema, data);
 }
@@ -95,6 +109,7 @@ const trimOrEmptyField = z.unknown().optional().transform((value) =>
   (typeof value === 'string' ? value.trim() : ''));
 
 // Text field with a default: `(value && String(value).trim()) || fallback`.
+/** @param {string} fallback */
 const defaultedTextField = (fallback) => z.unknown().optional().transform((value) =>
   (value && String(value).trim()) || fallback);
 
@@ -187,12 +202,13 @@ const portfolioImportConfigSchema = z.looseObject({
 }));
 
 // Build the backend customConfig + batch defaults from flattened request fields.
+/** @param {unknown} data */
 function buildPortfolioConfig(data) {
   return parseImportInput(portfolioImportConfigSchema, data);
 }
 
 // POST /api/portfolio/import/csv/custom — one-shot (202 if review needed)
-router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
+router.post('/csv/custom', csvUpload.single('file'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.file) throw new ValidationError('No file uploaded.');
   let built;
   try {
@@ -237,7 +253,7 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
 });
 
 // POST /api/portfolio/import/csv/stream — SSE progress
-router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
+router.post('/csv/stream', csvUpload.single('file'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.file) throw new ValidationError('No file uploaded.');
   let built;
   try {
@@ -259,7 +275,11 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
     throw err;
   }
 
-  await streamImport(req, res, {
+  // streamImport is typed via node:http's base classes (lib/importProgress.js)
+  // — ExpressRequest/ExpressResponse are a narrower structural stand-in that
+  // doesn't model IncomingMessage/ServerResponse, so forward via an any cast,
+  // same as routes/ai.js's createSseWriter call.
+  await streamImport(/** @type {any} */ (req), /** @type {any} */ (res), {
     filePath: req.file.path,
     errorLogMessage: 'Streaming portfolio import error',
     run: (onProgress) => runPortfolioImportPipeline({
@@ -310,6 +330,7 @@ const portfolioParserConfigSchema = z.looseObject({
 
 // Loose pass-through: every key (known and unknown) is stored untouched, as
 // before — only presence/validity is checked.
+/** @param {unknown} config */
 function normalizePortfolioParserConfig(config) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new ValidationError('Missing or invalid "config"');
@@ -328,20 +349,20 @@ registerParserRoutes(router, {
 
 // Canonical collection shape `{items, total, limit, offset}` — the service
 // keeps its `batches` key internally, only the wire key is normalised.
-router.get('/batches', async (req, res) => {
+router.get('/batches', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
   const { batches, total } = await listBatches({ limit, offset });
   res.ok({ items: batches, total, limit, offset });
 });
 
-router.get('/batches/:id', async (req, res) => {
+router.get('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseBatchIdParam(req);
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   res.ok(batch);
 });
 
-router.delete('/batches/:id', async (req, res) => {
+router.delete('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseBatchIdParam(req);
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
@@ -359,7 +380,7 @@ router.delete('/batches/:id', async (req, res) => {
 
 // --- Review -------------------------------------------------------------------
 
-router.get('/batches/:id/preview', async (req, res) => {
+router.get('/batches/:id/preview', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const batchId = parseBatchIdParam(req);
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
@@ -369,6 +390,7 @@ router.get('/batches/:id/preview', async (req, res) => {
   // Group by effective investment. Unresolved rows (no investment yet) group by
   // their raw symbol/name so each distinct unmatched instrument is its own group
   // — never lump different unmatched instruments together.
+  /** @type {Map<string, any>} */
   const groupMap = new Map();
   for (const row of rows) {
     // Brokerage cash rows (ADR-095) carry no instrument — collect them in one
@@ -416,6 +438,7 @@ router.get('/batches/:id/preview', async (req, res) => {
 
   const groups = [...groupMap.values()].map((g) => ({ ...g, row_count: g.rows.length }));
 
+  /** @type {Record<string, number>} */
   const totals = { symbol: 0, name_exact: 0, unresolved: 0, error: 0 };
   for (const row of rows) {
     if (row.status === 'error') { totals.error += 1; continue; }
@@ -428,7 +451,7 @@ router.get('/batches/:id/preview', async (req, res) => {
 
 // POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override
 // Body: { investment_id } to point at an existing holding, or { create_new: true }.
-router.post('/batches/:id/rows/:rowId/investment-override', async (req, res) => {
+router.post('/batches/:id/rows/:rowId/investment-override', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
   if (req.body.create_new === true) {
@@ -463,7 +486,7 @@ router.post('/batches/:id/rows/:rowId/investment-override', async (req, res) => 
 });
 
 // POST /api/portfolio/import/batches/:id/commit
-router.post('/batches/:id/commit', async (req, res) => {
+router.post('/batches/:id/commit', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const batchId = parseBatchIdParam(req);
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);

@@ -9,6 +9,13 @@
 import * as simpleAverage from './methods/simpleAverage.js';
 
 /**
+ * @typedef {{ date: string, category_id: number|null, general: string, detail: string, net: number }} CategoryHistoryRow
+ * @typedef {{ key: string, category_id: number|null, general: string, detail: string }} CategoryKey
+ * @typedef {{ date: string, value: number }} SeriesPoint
+ * @typedef {{ date: string, net: number|null, cumulative: number|null }} ActualPoint
+ */
+
+/**
  * @param {{
  *   historyByCategory:       Array<{ date: string, category_id: number|null, general: string, detail: string, net: number }>,
  *   currentActualByCategory: Array<{ date: string, category_id: number|null, general: string, detail: string, net: number }>,
@@ -85,11 +92,18 @@ export function buildCategoryBreakdown({
 
 // --- helpers ---
 
+/** @param {CategoryHistoryRow} r */
 function catKey(r) {
   return `${r.category_id ?? 'null'}|${r.general}|${r.detail}`;
 }
 
+/**
+ * @param {CategoryHistoryRow[]} historyRows
+ * @param {CategoryHistoryRow[]} actualRows
+ * @returns {CategoryKey[]}
+ */
 function extractCategories(historyRows, actualRows) {
+  /** @type {Map<string, CategoryKey>} */
   const seen = new Map();
   for (const r of [...historyRows, ...actualRows]) {
     const k = catKey(r);
@@ -105,8 +119,16 @@ function extractCategories(historyRows, actualRows) {
   return [...seen.values()].sort((a, b) => a.general.localeCompare(b.general) || a.detail.localeCompare(b.detail));
 }
 
+/**
+ * @param {Array<{ cat: CategoryKey, series: SeriesPoint[] }>} categoryForecasts
+ * @param {string[]} future
+ * @param {Map<string, number>} refByDate
+ * @returns {Array<{ cat: CategoryKey, series: SeriesPoint[] }>}
+ */
 export function reconcileCategoryForecasts(categoryForecasts, future, refByDate) {
+  /** @type {Map<string, number>} */
   const sumByDate = new Map();
+  /** @type {Map<string, number>} */
   const totalAbsByDate = new Map();
   for (const date of future) {
     let s = 0;
@@ -149,9 +171,17 @@ export function reconcileCategoryForecasts(categoryForecasts, future, refByDate)
   }));
 }
 
+/**
+ * @param {CategoryHistoryRow[]} rows
+ * @param {string[]} allDates
+ * @param {number} todayDay
+ * @returns {ActualPoint[]}
+ */
 function buildActualByDate(rows, allDates, todayDay) {
+  /** @type {Map<string, number>} */
   const byDate = new Map();
   for (const r of rows) byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.net);
+  /** @type {ActualPoint[]} */
   const out = [];
   let cum = 0;
   for (let i = 0; i < allDates.length; i++) {
@@ -167,9 +197,20 @@ function buildActualByDate(rows, allDates, todayDay) {
   return out;
 }
 
+/**
+ * @param {SeriesPoint[]} forecastSeries
+ * @param {ActualPoint[]} actualByDate
+ * @param {string[]} allDates
+ * @param {number} todayDay
+ * @param {number} lastActualCum
+ * @returns {SeriesPoint[]}
+ */
 function buildCumulative(forecastSeries, actualByDate, allDates, todayDay, lastActualCum) {
+  /** @type {Map<string, number>} */
   const actualCumByDate = new Map(
-    actualByDate.filter((r) => r.cumulative !== null).map((r) => [r.date, r.cumulative]),
+    actualByDate
+      .filter((r) => r.cumulative !== null)
+      .map((r) => [r.date, /** @type {number} */ (r.cumulative)]),
   );
   const forecastByDate = new Map(forecastSeries.map((p) => [p.date, p.value]));
   let cum = lastActualCum;

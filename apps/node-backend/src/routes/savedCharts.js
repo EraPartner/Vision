@@ -12,6 +12,11 @@ import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 const VALID_CHART_TYPES = ['line', 'bar', 'area'];
@@ -28,18 +33,28 @@ const INVALID_COMBINATIONS = new Set([
 
 /* ── Zod schemas ───────────────────────────────────────────────────────────── */
 
+/**
+ * @param {string} field
+ * @param {[string, ...string[]]} values
+ */
 const enumField = (field, values) =>
   z.enum(values, { error: `"${field}" must be one of: ${values.join(', ')}` });
 
-const chartTypeField = enumField('chartType', VALID_CHART_TYPES);
-const chartVariantField = enumField('chartVariant', VALID_CHART_VARIANTS);
-const timeBucketField = enumField('timeBucket', VALID_TIME_BUCKETS);
+// z.enum wants a non-empty tuple type; the arrays above are plain `string[]`
+// (they're also `.join(', ')`'d into error messages above, so keeping them as
+// ordinary arrays there reads better than threading `as const` through call
+// sites) — narrow just at this call boundary, each is a literal non-empty array.
+const chartTypeField = enumField('chartType', /** @type {[string, ...string[]]} */ (VALID_CHART_TYPES));
+const chartVariantField = enumField('chartVariant', /** @type {[string, ...string[]]} */ (VALID_CHART_VARIANTS));
+const timeBucketField = enumField('timeBucket', /** @type {[string, ...string[]]} */ (VALID_TIME_BUCKETS));
 
+/** @param {string} field */
 const boolField = (field) => z.boolean({ error: `"${field}" must be a boolean` });
 
 // Shares validateIntArray with the query-param routes so accepted shapes stay
 // identical (scalar wrapped to array, parseInt coercion, 1..2^31-1 bounds); the
 // coerced ints replace the raw input in the value handed to the repository.
+/** @param {string} field */
 const intArrayField = (field) => z.unknown().transform((value, ctx) => {
   const result = validateIntArray(value, field);
   if (!result.valid) {
@@ -53,15 +68,21 @@ const intArrayField = (field) => z.unknown().transform((value, ctx) => {
 // NULL). The edit modal sends null to clear a chart's date range; older code
 // mapped null/'' to undefined, which the repository skips, so a cleared range
 // silently kept its old value.
+/** @param {string} field */
 const dateField = (field) => z.unknown().transform((value, ctx) => {
   if (value === null || value === '') return null;
   if (Number.isNaN(new Date(/** @type {string|number|Date} */ (value)).getTime())) {
     ctx.addIssue({ code: 'custom', message: `Invalid date for "${field}"` });
     return z.NEVER;
   }
-  return value;
+  // savedChartsRepository's SavedChartInput declares dateRangeStart/End as
+  // `string|null` ('YYYY-MM-DD'); the Date parse above only validates the
+  // input, it does not reshape it — the raw value (whatever shape the caller
+  // sent) is what the repository has always received.
+  return /** @type {string} */ (value);
 }).optional();
 
+/** @param {string} message */
 const nameField = (message) => z.string({ error: message })
   .refine((s) => s.trim().length > 0, message)
   .transform((s) => s.trim());
@@ -69,6 +90,10 @@ const nameField = (message) => z.string({ error: message })
 // Cross-field rule: runs after per-field parsing (and after create defaults),
 // so on POST the resolved defaults participate in the combination check, while
 // on PATCH it only fires when both fields are present in the body.
+/**
+ * @param {{ chartType?: string, chartVariant?: string }} data
+ * @param {z.RefinementCtx} ctx
+ */
 const assertValidCombination = (data, ctx) => {
   const { chartType, chartVariant } = data;
   if (!chartType || !chartVariant) return;
@@ -110,6 +135,12 @@ const updateChartSchema = z.object({
   dateRangeEnd: dateField('dateRangeEnd'),
 }).superRefine(assertValidCombination);
 
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} body
+ * @returns {T}
+ */
 function parseChartBody(schema, body) {
   const result = schema.safeParse(body);
   if (!result.success) {
@@ -121,6 +152,7 @@ function parseChartBody(schema, body) {
   return result.data;
 }
 
+/** @param {ExpressRequest} req */
 function parseChartId(req) {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid chart id');
@@ -130,21 +162,21 @@ function parseChartId(req) {
 // Canonical collection shape `{items, total}`. Pagination is opt-in: without
 // limit/offset this still answers every saved chart (the chart picker lists them
 // all), and `total` is the row count — no COUNT round-trip needed.
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const charts = await savedChartsRepository.getAll(page ?? {});
   const total = page ? await savedChartsRepository.getCount() : charts.length;
   res.ok(listBody(charts, total, page));
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const data = parseChartBody(createChartSchema, req.body);
   const chart = await savedChartsRepository.create(data);
   res.status(201);
   res.ok(chart);
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseChartId(req);
   // Only fields present in the body reach the repository — buildSetClauses
   // skips absent/undefined fields, so partial updates stay partial.
@@ -154,7 +186,7 @@ router.patch('/:id', async (req, res) => {
   res.ok(updated);
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseChartId(req);
   const deleted = await savedChartsRepository.delete(id);
   if (!deleted) throw new NotFoundError('Saved chart not found');

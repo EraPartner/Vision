@@ -23,11 +23,16 @@ import { validateIdParam } from '../middleware/validation.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 // Pagination is opt-in: without limit/offset this still answers the complete
 // list (the accounts hub renders all of them), so no client is truncated.
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { active = 'true' } = req.query;
   const activeFilter = active === 'all' ? null : active !== 'false';
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
@@ -35,13 +40,13 @@ router.get('/', async (req, res) => {
   res.ok({ ...listBody(items, total, page), links: [] });
 });
 
-router.get('/:id', validateIdParam, async (req, res) => {
+router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const account = await accountService.get(id);
   res.ok({ ...account, links: [] });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const account = await accountService.create(req.body);
   // A new account can enter the net-worth aggregate; drop the cached response
   // so the next read recomputes (invalidatePortfolioCaches also clears the
@@ -51,7 +56,7 @@ router.post('/', async (req, res) => {
   res.ok({ ...account, links: [] });
 });
 
-router.patch('/:id', validateIdParam, async (req, res) => {
+router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const updated = await accountService.update(id, req.body);
   // rename / in_net_worth / is_active / statement_balance all shift the
@@ -60,7 +65,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   res.ok({ ...updated, links: [] });
 });
 
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   await accountService.remove(id);
   invalidatePortfolioCaches();
@@ -74,7 +79,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
 // survivor's native currency), and whether the merge would interleave stamped
 // balance histories (§1 F2 — the guard that clears the survivor's statement
 // anchor). No mutation, so no cache invalidation.
-router.get('/:id/merge-preview', validateIdParam, async (req, res) => {
+router.get('/:id/merge-preview', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const sourceId = parseInt(req.params.id, 10);
   // previewMerge validates the coerced value (positive integer, ≠ :id → 400).
   const targetId = Number(req.query.into);
@@ -90,12 +95,13 @@ router.get('/:id/merge-preview', validateIdParam, async (req, res) => {
 // irreversible write the client never asked for), so the whole request is now
 // rejected with a 400 naming the offending entries. Accepted values still go
 // through parseInt, so a valid body merges exactly what it did before.
-router.post('/:id/merge', validateIdParam, async (req, res) => {
+router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
   const rawSourceIds = Array.isArray(req.body?.source_ids) ? req.body.source_ids : [];
-  const sourceIds = rawSourceIds.map((x) => parseInt(x, 10));
+  const sourceIds = rawSourceIds.map((/** @type {any} */ x) => parseInt(x, 10));
+  /** @type {string[]} */
   const rejected = [];
-  sourceIds.forEach((id, index) => {
+  sourceIds.forEach((/** @type {number} */ id, /** @type {number} */ index) => {
     if (!Number.isInteger(id)) rejected.push(`source_ids[${index}] (${JSON.stringify(rawSourceIds[index])})`);
   });
   if (rejected.length > 0) {
@@ -112,7 +118,7 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
 // account (ADR-094 second addendum, D4). Body: { balance, date, currency? }.
 // The single sanctioned exception to the balance write-protection: it stamps one
 // system anchor row (amount=0, transfer_source='opening') per account+currency.
-router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
+router.post('/:id/opening-balance', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await setOpeningBalance(id, req.body);
   // The anchor row feeds the aggregation MVs + the forecast MC caches; refresh
@@ -130,7 +136,7 @@ router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
 // 'accept' rewrites the stored statement figures to the computed balance;
 // 'adjustment' stamps one server-side 'adjustment' ledger row so the computed
 // balance rises to meet the statement (balance-free — descriptive-only preserved).
-router.post('/:id/reconcile', validateIdParam, async (req, res) => {
+router.post('/:id/reconcile', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await reconcileAccount(id, req.body);
   // 'accept' rewrites the statement figure and 'adjustment' inserts a ledger row;

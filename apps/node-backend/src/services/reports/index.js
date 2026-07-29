@@ -63,26 +63,45 @@ import investmentRepository from '../../repositories/investmentRepository.js';
  *   mode?: 'light' | 'dark';
  * }} ThemeTokens
  *
+ * @typedef {import('./dataFetcherTax.js').TaxProfile} TaxProfile
+ * @typedef {import('./dataFetcherTax.js').PrecomputedPIT} PrecomputedPIT
+ */
+
+/**
+ * The slice of an Express `Response` this module actually calls. Structural,
+ * not `import('express').Response` — express ships no type declarations and
+ * `@types/express` is not a workspace dependency, so referencing its types
+ * resolves to an implicit `any` (TS7016) under `noImplicitAny` (same
+ * reasoning as `ExpressResponse` in transactionExport.js and `ExpressApp` in
+ * routeManifest.js).
+ * @typedef {object} ExpressResponse
+ * @property {(name: string, value: string | number) => void} setHeader
+ * @property {(chunk: Buffer) => void} end
+ */
+
+/**
  * @typedef {{
  *   type: 'financial' | 'portfolio' | 'tax';
  *   currency: string;
  *   period: Period;
  *   sections: string[];
  *   theme: ThemeTokens;
- *   res: import('express').Response;
+ *   res: ExpressResponse;
  *   excludedCategoryIds?: number[];
  *   excludedRecipientIds?: number[];
- *   taxProfile?: object;
- *   precomputedPIT?: object;
+ *   taxProfile?: TaxProfile;
+ *   precomputedPIT?: PrecomputedPIT;
  * }} GenerateReportOpts
  */
 
+/** @type {Record<string, string>} */
 const REPORT_TITLES = {
   financial: 'Financial Report',
   portfolio: 'Portfolio Report',
   tax: 'Tax Report',
 };
 
+/** @type {Record<string, string>} */
 const REPORT_SUBTITLES = {
   financial: 'Transactions, cashflow, categories & recipients',
   portfolio: 'Holdings, allocation & performance',
@@ -102,6 +121,7 @@ function formatPeriod(period) {
     case 'rolling':
       return `Last ${period.months} month${period.months === 1 ? '' : 's'}`;
     case 'custom': {
+      /** @param {string} d */
       const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: APP_TIMEZONE });
       return `${fmt(period.from)} – ${fmt(period.to)}`;
     }
@@ -343,7 +363,7 @@ function buildFooterTemplate(theme) {
 /**
  * Build the cover page HTML for any report type.
  *
- * @param {{ type: string; currency: string; period: Period; generatedAt: string; excludedCategoryIds?: number[]; excludedRecipientIds?: number[]; pricesAsOf?: string|null }} opts
+ * @param {{ type: string; currency: string; period: Period; generatedAt: string; excludedCategoryIds?: number[]; excludedRecipientIds?: number[]; pricesAsOf?: Date|string|null }} opts
  */
 function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds = [], excludedRecipientIds = [], pricesAsOf = null }) {
   const title = REPORT_TITLES[type] ?? 'Report';
@@ -553,7 +573,7 @@ function buildPortfolioBody({ currency, period, sections }) {
 }
 
 /**
- * @param {{ currency: string; period: Period; sections: string[]; taxProfile?: object; precomputedPIT?: object }} opts
+ * @param {{ currency: string; period: Period; sections: string[]; taxProfile?: TaxProfile; precomputedPIT?: PrecomputedPIT }} opts
  * @returns {Promise<string>}
  */
 function buildTaxBody({ currency, period, sections, taxProfile, precomputedPIT }) {
@@ -570,6 +590,9 @@ function buildTaxBody({ currency, period, sections, taxProfile, precomputedPIT }
 
 /**
  * Assemble a complete HTML document for PDF rendering.
+ *
+ * @param {{ themeCss: string; baseCss: string; body: string; mode: 'light' | 'dark' }} opts
+ * @returns {string}
  */
 function buildDocument({ themeCss, baseCss, body, mode }) {
   return `<!DOCTYPE html>
@@ -600,7 +623,7 @@ export async function generateReport({ type, currency, period, sections, theme, 
   const themeCss = buildThemeCss(theme);
   const baseCss = buildBaseCss();
   const pricesAsOf = (type === 'portfolio' || type === 'tax')
-    ? await investmentRepository.getLatestPriceUpdatedAt().catch(() => null)
+    ? await investmentRepository.getLatestPriceUpdatedAt().catch(() => /** @type {Date|null} */ (null))
     : null;
   const coverHtml = buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds, excludedRecipientIds, pricesAsOf });
 

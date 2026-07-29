@@ -1,18 +1,15 @@
 /**
  * POST /bulk-export — id-mode + filter-mode streaming, format gate.
+ *
+ * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * streamed body and the download headers are read off a real response instead
+ * of `res.write`/`res.setHeader` spies.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockConnection } from '../helpers/repoMocks.js';
 import { mockTransactionRepository, mockDeduplication, mockMaterializedViews, mockCurrencyConversion } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
@@ -28,24 +25,12 @@ vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCu
 
 vi.mock('../../src/database/connection.js', () => mockConnection({ getClient: vi.fn() }));
 
-await import('../../src/routes/transactions.js');
+const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
 
 import { query as dbQuery } from '../../src/database/connection.js';
 
-const handler = routeHandlers['post:/bulk-export'];
-
-function mockResponse() {
-  return createMockResponse({ setHeader: vi.fn(), write: vi.fn(), end: vi.fn(), headersSent: false });
-}
-
-async function callHandler(req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    res.status(status).json({ ok: false, error: { code: err.code ?? 'INTERNAL_SERVER_ERROR', message: err.message } });
-  }
-}
+const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
+const bulkExport = (body) => api.post('/api/transactions/bulk-export').send(body);
 
 const SAMPLE_ROW = {
   id: 1,
@@ -65,15 +50,11 @@ describe('POST /bulk-export — validation', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('rejects unknown format', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], format: 'xml' } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkExport({ ids: [1], format: 'xml' }).expect(400);
   });
 
   it('rejects when neither ids nor filter is given', async () => {
-    const res = mockResponse();
-    await callHandler({ body: { format: 'csv' } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkExport({ format: 'csv' }).expect(400);
   });
 });
 
@@ -85,18 +66,14 @@ describe('POST /bulk-export — CSV success', () => {
       .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // probe
       .mockResolvedValueOnce({ rows: [SAMPLE_ROW] });        // chunk
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], format: 'csv' } }, res);
+    const res = await bulkExport({ ids: [1], format: 'csv' }).expect(200);
 
-    const headers = res.setHeader.mock.calls;
-    expect(headers.find(([k]) => k === 'Content-Type')[1]).toBe('text/csv');
-    expect(headers.find(([k]) => k === 'Content-Disposition')[1]).toMatch(/transactions_export_/);
+    expect(res.headers['content-type']).toBe('text/csv');
+    expect(res.headers['content-disposition']).toMatch(/transactions_export_/);
 
-    const writes = res.write.mock.calls.map(([s]) => s);
-    expect(writes[0]).toMatch(/^Date,Bank Account,Recipient/);
-    expect(writes.join('')).toContain('Trader Joe');
-    expect(writes.join('')).toContain('weekly');
-    expect(res.end).toHaveBeenCalledTimes(1);
+    expect(res.text).toMatch(/^Date,Bank Account,Recipient/);
+    expect(res.text).toContain('Trader Joe');
+    expect(res.text).toContain('weekly');
   });
 });
 
@@ -108,14 +85,11 @@ describe('POST /bulk-export — NDJSON success', () => {
       .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // probe
       .mockResolvedValueOnce({ rows: [SAMPLE_ROW] });        // chunk
 
-    const res = mockResponse();
-    await callHandler({ body: { ids: [1], format: 'json' } }, res);
+    const res = await bulkExport({ ids: [1], format: 'json' }).expect(200);
 
-    const ctype = res.setHeader.mock.calls.find(([k]) => k === 'Content-Type')[1];
-    expect(ctype).toBe('application/x-ndjson');
+    expect(res.headers['content-type']).toBe('application/x-ndjson');
 
-    const body = res.write.mock.calls.map(([s]) => s).join('');
-    const firstLine = body.split('\n').filter(Boolean)[0];
+    const firstLine = res.text.split('\n').filter(Boolean)[0];
     const parsed = JSON.parse(firstLine);
     expect(parsed.id).toBe(1);
     expect(parsed.recipient).toBe('Trader Joe');
@@ -129,8 +103,6 @@ describe('POST /bulk-export — filter-mode resolves through bulk selection', ()
   it('rejects filter requests over the cap', async () => {
     dbQuery.mockResolvedValueOnce({ rows: [{ n: 7000 }] });
 
-    const res = mockResponse();
-    await callHandler({ body: { filter: { search: 'big' }, format: 'csv' } }, res);
-    expect(res.status).toHaveBeenCalledWith(400);
+    await bulkExport({ filter: { search: 'big' }, format: 'csv' }).expect(400);
   });
 });

@@ -18,6 +18,11 @@
  * the original `let i = 1`.
  */
 
+/**
+ * @param {string[]|Set<string>|undefined} allowed
+ * @param {string} key
+ * @returns {boolean}
+ */
 function isAllowed(allowed, key) {
   if (!allowed) return true;
   if (allowed instanceof Set) return allowed.has(key);

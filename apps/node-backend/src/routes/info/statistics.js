@@ -22,6 +22,11 @@ import { getTargetCurrency } from './_queryParams.js';
 import { assertOptionalId } from '../../middleware/validation.js';
 import { ValidationError } from '../../middleware/errorHandler.js';
 
+/**
+ * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 // (Removed legacy GET /api/info and GET /api/info/transaction-summary — Phase 9
@@ -31,12 +36,12 @@ const router = Router();
 // Both metadata lists use the canonical `{items, total}` collection shape
 // (unpaginated — `total` is the row count, present so pagination could land
 // without breaking the shape).
-router.get('/banks', async (req, res) => {
+router.get('/banks', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const banks = await infoRepository.getBanks();
   res.ok({ items: banks, total: banks.length });
 });
 
-router.get('/supported-adapters', async (req, res) => {
+router.get('/supported-adapters', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   // Derived from the adapter registry (single source of truth) so a newly
   // registered adapter appears in the import card + onboarding wizard without a
   // second hardcoded list to update. (The old list also referenced
@@ -45,20 +50,20 @@ router.get('/supported-adapters', async (req, res) => {
   res.ok({ items: adapters, total: adapters.length });
 });
 
-router.get('/transaction-count', async (req, res) => {
+router.get('/transaction-count', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const accountId = assertOptionalId(req.query.account_id, 'account_id');
   const count = await infoRepository.getTransactionCount({ accountId });
   res.ok({ total_transactions: count });
 });
 
-router.get('/planned-expenses-next-month', async (req, res) => {
+router.get('/planned-expenses-next-month', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const targetCurrency = getTargetCurrency(req);
   const data = await infoRepository.getPlannedExpensesNextMonth(targetCurrency);
   res.ok({ ...data, links: [] });
 });
 
 // Intentional graceful degradation: on failure emit empty envelope rather than 500.
-router.get('/recurring-patterns', async (req, res) => {
+router.get('/recurring-patterns', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   try {
     const data = await detectRecurringPatterns();
     res.ok(data);
@@ -70,7 +75,7 @@ router.get('/recurring-patterns', async (req, res) => {
 
 // Pre-computed insight findings for the Statistics-page panel (no LLM) — same
 // graceful degradation as /recurring-patterns: empty digest instead of a 500.
-router.get('/insights-digest', async (req, res) => {
+router.get('/insights-digest', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   try {
     const digest = await getInsightsDigest();
     res.ok(digest);
@@ -88,6 +93,8 @@ router.get('/insights-digest', async (req, res) => {
  * Optional `year` query param → validated integer, or null when absent.
  * Bounds match the AI-chat tax tools; malformed input (including trailing
  * garbage parseInt would swallow, e.g. `2025abc`) is a 400, not a silent guess.
+ * @param {any} value
+ * @returns {number|null}
  */
 function assertOptionalYear(value) {
   if (value == null || value === '') return null;
@@ -102,7 +109,7 @@ function assertOptionalYear(value) {
 // review card. `year` defaults to the current calendar year. Same graceful
 // degradation as the siblings above — an empty candidate list instead of a 500
 // (a malformed `year` still 400s: it is validated before the try).
-router.get('/deduction-candidates', async (req, res) => {
+router.get('/deduction-candidates', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const year = assertOptionalYear(req.query.year) ?? new Date().getFullYear();
   try {
     const data = await computeDeductionCandidates({ year });

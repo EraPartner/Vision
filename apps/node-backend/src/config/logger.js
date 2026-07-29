@@ -12,7 +12,7 @@ const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
 function getLogLevel() {
   if (process.env.ENABLE_LOGGING?.toLowerCase() === 'false') return LOG_LEVELS.silent;
   const level = (process.env.LOG_LEVEL || '').toLowerCase();
-  if (level in LOG_LEVELS) return LOG_LEVELS[level];
+  if (level in LOG_LEVELS) return LOG_LEVELS[/** @type {keyof typeof LOG_LEVELS} */ (level)];
   // Default: debug in development, info in production
   const env = (process.env.ENVIRONMENT || process.env.NODE_ENV || 'development').toLowerCase();
   return env === 'production' ? LOG_LEVELS.info : LOG_LEVELS.debug;
@@ -23,9 +23,17 @@ function getLogLevel() {
 // for a process lifetime; env changes require a restart anyway.
 const CURRENT_LOG_LEVEL = getLogLevel();
 
+/**
+ * @param {string} level
+ * @param {...unknown} args
+ * @returns {string}
+ */
 function formatMessage(level, ...args) {
   const timestamp = new Date().toISOString();
-  let message, extra;
+  /** @type {unknown} */
+  let message;
+  /** @type {object} */
+  let extra;
   if (typeof args[0] === 'object' && args[0] !== null && typeof args[1] === 'string') {
     // pino-style: logger.info({ key: val }, 'message')
     extra = args[0];
@@ -45,15 +53,19 @@ function formatMessage(level, ...args) {
 }
 
 export const logger = {
+  /** @param {...unknown} args */
   debug(...args) {
     if (CURRENT_LOG_LEVEL <= LOG_LEVELS.debug) console.debug(formatMessage('DEBUG', ...args));
   },
+  /** @param {...unknown} args */
   info(...args) {
     if (CURRENT_LOG_LEVEL <= LOG_LEVELS.info) console.log(formatMessage('INFO', ...args));
   },
+  /** @param {...unknown} args */
   warn(...args) {
     if (CURRENT_LOG_LEVEL <= LOG_LEVELS.warn) console.warn(formatMessage('WARN', ...args));
   },
+  /** @param {...unknown} args */
   error(...args) {
     if (CURRENT_LOG_LEVEL <= LOG_LEVELS.error) console.error(formatMessage('ERROR', ...args));
   },

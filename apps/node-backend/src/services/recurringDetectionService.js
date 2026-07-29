@@ -14,6 +14,55 @@ import { logger } from '../config/logger.js';
 import { addAll, divide, roundMoney, toDecimal } from '../lib/money.js';
 import { median } from '../lib/math.js';
 
+/**
+ * The bespoke projection `detectRecurringPatterns`' query selects — not a
+ * plain `SELECT t.*`, so distinct from `TransactionRow` in types/rows.js.
+ * @typedef {object} RecurringCandidateRow
+ * @property {number} id
+ * @property {Date} date DATE
+ * @property {string} amount NUMERIC
+ * @property {string|null} currency
+ * @property {string|null} memo
+ * @property {string|null} bank_account
+ * @property {number|null} recipient_id
+ * @property {string|null} recipient_name
+ * @property {number|null} effective_category_id
+ * @property {string|null} category_name
+ */
+
+/**
+ * @typedef {object} RecurringGroup
+ * @property {number|null} recipientId
+ * @property {string} recipientName
+ * @property {'income'|'expense'} direction
+ * @property {RecurringCandidateRow[]} transactions
+ */
+
+/**
+ * One entry of `detectRecurringPatterns`'s result — a detected recurring
+ * pattern for one (recipient, direction) group.
+ * @typedef {object} RecurringPattern
+ * @property {number|null} recipientId
+ * @property {string} recipientName
+ * @property {'income'|'expense'} direction
+ * @property {string} detectedPattern
+ * @property {number} intervalDays
+ * @property {number} consistency
+ * @property {number} occurrences
+ * @property {number} averageAmount
+ * @property {number} latestAmount
+ * @property {string} currency
+ * @property {number|null} categoryId
+ * @property {string|null} categoryName
+ * @property {string|null} bankAccount
+ * @property {string|null} firstSeen 'YYYY-MM-DD'
+ * @property {string|null} lastSeen 'YYYY-MM-DD'
+ * @property {string} predictedNext 'YYYY-MM-DD'
+ * @property {Array<{ date: Date, previousAmount: number, newAmount: number, percentChange: number, direction: 'increased'|'decreased' }>} amountChanges
+ * @property {boolean} isAlreadyPlanned
+ * @property {number} confidence
+ */
+
 const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
 
@@ -26,7 +75,7 @@ const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
 // short TTL is used: results are eventually consistent within RECURRING_CACHE_TTL_MS
 // of a transaction change, which is acceptable for a suggestion feature.
 const RECURRING_CACHE_TTL_MS = 3 * 60_000; // 3 minutes
-/** @type {{ value: { patterns: any[], total: number }, expiresAt: number } | null} */
+/** @type {{ value: { patterns: RecurringPattern[], total: number }, expiresAt: number } | null} */
 let recurringCache = null;
 
 /** Test-only: drop the cached recurring-patterns result. */
@@ -45,6 +94,8 @@ const INTERVAL_PATTERNS = [
 
 /**
  * Detect the most likely recurrence pattern from a series of intervals.
+ * @param {number[]} intervals
+ * @returns {{ pattern: string, avgDays: number, medianDays: number, consistency: number, customIntervalDays?: number }|null}
  */
 function detectInterval(intervals) {
   if (intervals.length === 0) return null;
@@ -92,10 +143,13 @@ function detectInterval(intervals) {
 
 /**
  * Detect amount changes in a recurring pattern.
+ * @param {RecurringCandidateRow[]} transactions
+ * @returns {Array<{ date: Date, previousAmount: number, newAmount: number, percentChange: number, direction: 'increased'|'decreased' }>}
  */
 function detectAmountChanges(transactions) {
   if (transactions.length < 2) return [];
 
+  /** @type {Array<{ date: Date, previousAmount: number, newAmount: number, percentChange: number, direction: 'increased'|'decreased' }>} */
   const changes = [];
   const sorted = [...transactions].sort((a, b) => {
     const aTime = new Date(a?.date).getTime();
@@ -147,14 +201,20 @@ export async function detectRecurringPatterns() {
     // history adds scan cost without changing the result. Without the bound
     // this was a full-table scan on every call (including via the aiChat
     // getRecurringDetected tool).
+    // Effective category is the canonical 3-level resolution (own → recipient
+    // default → PRIMARY recipient's default), matching transactionRepository —
+    // a row recorded under an alias whose PRIMARY carries the default category
+    // must not report a null category_name here while the transactions list
+    // shows it categorised.
     const result = await query(`
       SELECT t.id, t.date, t.amount, t.currency, t.memo, t.bank_account,
              t.recipient_id, r.name AS recipient_name,
-             t.category_id,
+             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              COALESCE(c.general || ':' || c.detail, NULL) AS category_name
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       WHERE t.is_active = true
         AND t.recipient_id IS NOT NULL
         AND t.date >= CURRENT_DATE - INTERVAL '3 years'
@@ -162,6 +222,7 @@ export async function detectRecurringPatterns() {
     `);
 
     if (result.rows.length === 0) {
+      /** @type {{ patterns: RecurringPattern[], total: number }} */
       const empty = { patterns: [], total: 0 };
       recurringCache = { value: empty, expiresAt: Date.now() + RECURRING_CACHE_TTL_MS };
       return empty;
@@ -178,8 +239,9 @@ export async function detectRecurringPatterns() {
     // that is also occasionally reimbursed) into one averaged "pattern" that
     // matched neither real flow — amounts go through .abs() below, so the
     // sign distinction would otherwise be lost entirely.
+    /** @type {Record<string, RecurringGroup>} */
     const byRecipient = {};
-    for (const row of result.rows) {
+    for (const row of /** @type {RecurringCandidateRow[]} */ (result.rows)) {
       const direction = Number(row.amount) < 0 ? 'expense' : 'income';
       const key = `${row.recipient_id}:${direction}`;
       if (!byRecipient[key]) {
@@ -209,6 +271,7 @@ export async function detectRecurringPatterns() {
       for (const row of plannedResult.rows) plannedRecipientIds.add(row.recipient_id);
     }
 
+    /** @type {RecurringPattern[]} */
     const patterns = [];
 
     for (const group of Object.values(byRecipient)) {
@@ -272,7 +335,7 @@ export async function detectRecurringPatterns() {
         averageAmount: roundMoney(avgAmount),
         latestAmount: roundMoney(latestAmount),
         currency,
-        categoryId: txns[txns.length - 1].category_id,
+        categoryId: txns[txns.length - 1].effective_category_id,
         categoryName: txns[txns.length - 1].category_name,
         bankAccount: txns[txns.length - 1].bank_account,
         // DATE columns: calendar-day strings, not raw pg Dates (which

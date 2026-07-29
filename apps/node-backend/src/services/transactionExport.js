@@ -12,6 +12,40 @@ import { toDecimal } from '../lib/money.js';
 import { toYmd } from '../utils/portfolioMath.js';
 import { escapeCsvValue } from '../lib/csv.js';
 
+/**
+ * The slice of an Express `Response` this module actually calls. Deliberately
+ * structural rather than `import('express').Response`: express ships no type
+ * declarations and `@types/express` is not a dependency, so referencing its
+ * types resolves to an implicit `any` (TS7016) under `noImplicitAny` — same
+ * reasoning as `ExpressApp` in services/routeManifest.js and `QueryRunner` in
+ * types/rows.js for `pg`.
+ * @typedef {object} ExpressResponse
+ * @property {(name: string, value: string) => void} setHeader
+ * @property {(chunk: string) => boolean} write
+ * @property {(event: string, cb: () => void) => void} [once]
+ * @property {boolean} [headersSent]
+ * @property {() => void} end
+ */
+
+/**
+ * A row as selected by `buildExportChunkSql` — a projection of
+ * `EnrichedTransactionRow`, not the full row (no `is_active`, `recipient_id`,
+ * etc. — only the columns the export needs).
+ * @typedef {object} ExportTransactionRow
+ * @property {number} id
+ * @property {Date} date DATE — local-midnight `Date`; read via `toYmd`, never `String()`/`toISOString()`.
+ * @property {string|null} bank_account
+ * @property {number|null} [account_id]
+ * @property {string|null} recipient_name
+ * @property {string|null} memo
+ * @property {string} amount NUMERIC(18,4) — pg emits NUMERIC as a string.
+ * @property {string|null} currency
+ * @property {string|null} balance NUMERIC(15,2) — pg emits NUMERIC as a string; null on manual rows.
+ * @property {string} category_name '' when the transaction has no resolved category.
+ * @property {string|null} comment
+ * @property {string[]} tags tag slugs, `{}` (empty array) when none.
+ */
+
 export const EXPORT_CHUNK_SIZE = 1000;
 export const EXPORT_MAX_LIST_SIZE = 50;
 
@@ -39,6 +73,10 @@ export function buildNdjsonFilename() {
   return `transactions_export_${buildExportTimestamp()}.ndjson`;
 }
 
+/**
+ * @param {string} whereSql
+ * @returns {string}
+ */
 function buildExportProbeSql(whereSql) {
   return `SELECT 1 ${EXPORT_JOINS_SQL} WHERE ${whereSql} LIMIT 1`;
 }
@@ -48,7 +86,7 @@ function buildExportProbeSql(whereSql) {
  * buffer is full `res.write` returns false — without this a slow client lets
  * rows buffer unboundedly in memory on a large export.
  *
- * @param {import('express').Response} res
+ * @param {ExpressResponse} res
  * @param {string} chunk
  * @returns {Promise<void>}
  */
@@ -59,6 +97,13 @@ function writeWithBackpressure(res, chunk) {
   return new Promise((resolve) => res.once('drain', resolve));
 }
 
+/**
+ * @param {string} whereSql
+ * @param {number} limitParamIdx
+ * @param {number} [cursorDateParamIdx]
+ * @param {number} [cursorIdParamIdx]
+ * @returns {string}
+ */
 function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursorIdParamIdx) {
   // Keyset pagination: each chunk continues strictly after the previous chunk's
   // last (date, id) instead of OFFSET. OFFSET across separate pool queries (new
@@ -72,10 +117,17 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
     SELECT t.id, t.date, t.bank_account, t.account_id,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
            t.amount, t.currency, t.balance,
+           -- Same branch order as transactionRepository's CATEGORY_NAME_SQL:
+           -- own (c) → recipient default (rc) → primary-recipient default (pc),
+           -- mirroring COALESCE(t.category_id, r.default_category_id,
+           -- pr.default_category_id). It used to test pc before rc, so an
+           -- ALIAS recipient with its own default under a differently-defaulted
+           -- PRIMARY exported the primary's category name while the
+           -- transactions list showed the alias's.
            CASE
              WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-             WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
              WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+             WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
              ELSE ''
            END AS category_name,
            t.comment,
@@ -95,6 +147,11 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
   `;
 }
 
+/**
+ * @param {ExportTransactionRow & { running_balance?: number }} row
+ * @param {{ includeBalance?: boolean }} [opts]
+ * @returns {string}
+ */
 function buildCsvRow(row, { includeBalance = false } = {}) {
   const cols = [
     // toYmd, not the raw pg Date: String() of it is "Wed Jul 01 2026 …" —
@@ -114,6 +171,10 @@ function buildCsvRow(row, { includeBalance = false } = {}) {
   return cols.join(',');
 }
 
+/**
+ * @param {ExportTransactionRow} row
+ * @returns {string}
+ */
 function buildNdjsonRow(row) {
   return JSON.stringify({
     id: row.id,
@@ -136,17 +197,18 @@ function buildNdjsonRow(row) {
  * Build a probe + iterate-in-chunks pipeline that streams export rows to `res`.
  * Returns `{ rowCount }` when the stream completes cleanly.
  *
- * @param {import('express').Response} res
+ * @param {ExpressResponse} res
  * @param {{
  *   whereSql: string,
  *   params: any[],
  *   nextParamIdx: number,
  *   contentType: string,
  *   filename: string,
- *   writeHeader?: (res: import('express').Response) => void,
- *   formatRow: (row: any, rowIndex: number) => string,
+ *   writeHeader?: (res: ExpressResponse) => void,
+ *   formatRow: (row: ExportTransactionRow, rowIndex: number) => string,
  *   label: string,
  * }} opts
+ * @returns {Promise<{ rowCount: number }>}
  */
 async function streamExport(res, { whereSql, params, nextParamIdx, contentType, filename, writeHeader, formatRow, label }) {
   const probe = await dbQuery(buildExportProbeSql(whereSql), params);
@@ -160,11 +222,14 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
   if (writeHeader) writeHeader(res);
 
   // Keyset cursor (last streamed (date, id)). First chunk has no cursor.
+  /** @type {string|null} */
   let cursorDate = null;
+  /** @type {number|null} */
   let cursorId = null;
   let rowCount = 0;
   try {
     while (true) {
+      /** @type {{ rows: ExportTransactionRow[] }} */
       const chunk = cursorDate == null
         ? await dbQuery(buildExportChunkSql(whereSql, nextParamIdx), [...params, EXPORT_CHUNK_SIZE])
         : await dbQuery(
@@ -195,12 +260,18 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
   }
 }
 
+/**
+ * @param {ExpressResponse} res
+ * @param {{ whereSql: string, params: any[], nextParamIdx: number, includeBalance?: boolean }} args
+ * @returns {Promise<{ rowCount: number }>}
+ */
 export async function streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance = false }) {
   // Partitioned by account_id (ADR-088): the list endpoint's window partitions
   // by account because a stream spanning multiple accounts otherwise sums them
   // into one meaningless cross-account total. Kept as Decimals across the whole
   // stream — collapsing to a JS number each row re-ingested a drifted float
   // into the next step's running balance.
+  /** @type {Map<number|null, import('decimal.js').Decimal>} */
   const runningBalances = new Map();
   return streamExport(res, {
     whereSql,
@@ -227,6 +298,11 @@ export async function streamCsvExport(res, { whereSql, params, nextParamIdx, inc
   });
 }
 
+/**
+ * @param {ExpressResponse} res
+ * @param {{ whereSql: string, params: any[], nextParamIdx: number }} args
+ * @returns {Promise<{ rowCount: number }>}
+ */
 export async function streamNdjsonExport(res, { whereSql, params, nextParamIdx }) {
   return streamExport(res, {
     whereSql,
@@ -245,6 +321,9 @@ export async function streamNdjsonExport(res, { whereSql, params, nextParamIdx }
  * Helper used by the POST /bulk-export route: builds a WHERE clause that
  * targets a fixed list of ids while leaving the param numbering compatible
  * with the chunk-SQL builder (which appends LIMIT/OFFSET).
+ *
+ * @param {number[]} ids
+ * @returns {{ whereSql: string, params: [number[]], nextParamIdx: number }}
  */
 export function buildIdListWhere(ids) {
   return {

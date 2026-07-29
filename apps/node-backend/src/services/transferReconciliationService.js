@@ -89,6 +89,10 @@ export async function getTransferSuggestions({ windowDays = DEFAULT_WINDOW_DAYS 
  *   - the two legs sit on different accounts (a transfer moves money between
  *     accounts; same-account is meaningless)
  *   - opposite signs (one outflow, one inflow)
+ *
+ * @param {number} aId
+ * @param {number} bId
+ * @returns {Promise<{ok: boolean}>}
  */
 export async function markTransfer(aId, bId) {
   await withTransaction(async () => {
@@ -133,6 +137,9 @@ export async function markTransfer(aId, bId) {
  * auto-pair with its true counterpart C. Excluding just the pair gives both: A↔B
  * never comes back on its own, A↔C still can. A manual markTransfer of a
  * dismissed pair still works — dismissals only gate auto-detection.
+ *
+ * @param {number} id
+ * @returns {Promise<{ok: boolean}>}
  */
 export async function unmarkTransfer(id) {
   await withTransaction(async () => {
@@ -175,7 +182,9 @@ export async function unmarkTransfer(id) {
 export const RECONCILE_DEBOUNCE_MS = 5000;
 export const RECONCILE_MAX_WAIT_MS = 10000;
 
+/** @type {ReturnType<typeof setTimeout>|undefined} */
 let reconcileTimer;
+/** @type {number|null} */
 let reconcileDeadline = null; // epoch ms the current burst must flush by
 
 export function scheduleReconcile() {

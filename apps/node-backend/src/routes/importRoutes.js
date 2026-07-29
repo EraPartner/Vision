@@ -8,6 +8,7 @@
  * pre-zod hand-rolled parsing (String()/parseInt fallbacks, trims, defaults).
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
@@ -30,18 +31,46 @@ import { refreshAggregations } from '../services/aggregationRefresh.js';
 import { registerParserRoutes } from '../lib/parserConfigRoutes.js';
 import { parsePagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
+/**
+ * The shape `runImportPipeline` resolves with (services/importPipeline/index.js).
+ * @typedef {object} ImportPipelineResult
+ * @property {import('../services/importPipeline/index.js').ImportBatchId} batchId
+ * @property {number} total
+ * @property {boolean} requiresReview
+ * @property {number} [imported]
+ * @property {number} [duplicates]
+ * @property {number} [errors]
+ * @property {object} [matchSourceCounts]
+ * @property {number} [autoLinkedCount]
+ */
+
 const router = Router();
 
+// Shared response-shaping tail for both the pipeline-driven imports
+// (buildPipelineResult's output) and the review-commit endpoint (its own
+// inline object below) — the two callers' input shapes genuinely differ
+// (auto_linked_count present vs. absent, etc.), so this stays a loose record.
+/** @param {Record<string, any>} result */
 function buildImportResult(result) {
   return {
     ...result,
     status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
     error_message: result.error_message || null,
+    /** @type {any[]} */
     links: [],
   };
 }
 
 // Shared 202 "review required" response for the transaction CSV import endpoints.
+/**
+ * @param {ExpressResponse} res
+ * @param {ImportPipelineResult} pipelineResult
+ */
 function respondReviewRequired(res, pipelineResult) {
   res.status(202);
   res.ok({
@@ -52,6 +81,7 @@ function respondReviewRequired(res, pipelineResult) {
 }
 
 // Shared completed-import result object for the transaction CSV import endpoints.
+/** @param {ImportPipelineResult} pipelineResult */
 function buildPipelineResult(pipelineResult) {
   return {
     total: pipelineResult.total,
@@ -67,6 +97,12 @@ function buildPipelineResult(pipelineResult) {
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
 // Messages here already name their field, so issues join without path prefixes.
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} input
+ * @returns {T}
+ */
 function parseImportInput(schema, input) {
   const result = schema.safeParse(input);
   if (!result.success) {
@@ -91,6 +127,7 @@ const csvImportOptionsSchema = z.object({
 
 // Parse + validate the CSV separator/encoding options shared by the
 // recipients/categories import endpoints. Cleans up the upload on rejection.
+/** @param {ExpressRequest} req */
 function parseCsvImportOptions(req) {
   const result = csvImportOptionsSchema.safeParse({
     separator: req.query.separator || req.body.separator,
@@ -106,6 +143,7 @@ function parseCsvImportOptions(req) {
 // Free-text multipart field: falsy passes through (the required-set check in
 // superRefine owns the rejection message); a truthy non-string is a clean 400
 // where it previously crashed on `.trim()`.
+/** @param {string} field */
 const multipartTextField = (field) => z.unknown().optional().transform((value, ctx) => {
   if (!value) return value;
   if (typeof value !== 'string') {
@@ -157,7 +195,7 @@ const customCsvImportSchema = z.looseObject({
   // strings; the casts inform tsc of what zod's unknown bridges cannot.
   const required = /** @type {Record<'bank_name'|'date_format'|'date_column'|'recipient_column'|'amount_column', string>} */ (data);
   return {
-    adapterName: data.bank_name,
+    adapterName: required.bank_name,
     customConfig: {
       bank_name: required.bank_name.trim(),
       date_format: required.date_format.trim(),
@@ -175,7 +213,7 @@ const customCsvImportSchema = z.looseObject({
 });
 
 // POST /api/import/csv
-router.post('/csv', csvUpload.single('file'), async (req, res) => {
+router.post('/csv', csvUpload.single('file'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -214,7 +252,7 @@ router.post('/csv', csvUpload.single('file'), async (req, res) => {
 });
 
 // POST /api/import/csv/custom
-router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
+router.post('/csv/custom', csvUpload.single('file'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -255,6 +293,7 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
 // unknown keys, exactly like the old hand-built return object. NOTE: unlike
 // the live import endpoints, separator deliberately has no single-char rule
 // here (pre-zod parity — any non-empty string sticks).
+/** @param {string} key */
 const requiredConfigColumn = (key) => z.unknown().optional().transform((value, ctx) => {
   if (!value || typeof value !== 'string' || value.trim().length === 0) {
     ctx.addIssue({ code: 'custom', message: `config.${key} is required` });
@@ -282,6 +321,7 @@ const parserConfigSchema = z.object({
 
 // Validates and normalizes the column-mapping config to the frontend's
 // CustomConfig shape. Required: dateColumn, recipientColumn, amountColumn.
+/** @param {unknown} config */
 function normalizeParserConfig(config) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new ValidationError('Missing or invalid "config"');
@@ -293,7 +333,7 @@ function normalizeParserConfig(config) {
 registerParserRoutes(router, { kind: 'transaction', normalizeConfig: normalizeParserConfig });
 
 // POST /api/import/csv/stream — SSE, preserves raw event protocol
-router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
+router.post('/csv/stream', csvUpload.single('file'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded.');
   }
@@ -304,7 +344,11 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
     throw new ValidationError('Missing required parameter: bank_name');
   }
 
-  await streamImport(req, res, {
+  // streamImport is typed via node:http's base classes (lib/importProgress.js)
+  // — ExpressRequest/ExpressResponse are a narrower structural stand-in that
+  // doesn't model IncomingMessage/ServerResponse, so forward via an any cast,
+  // same as routes/ai.js's createSseWriter call.
+  await streamImport(/** @type {any} */ (req), /** @type {any} */ (res), {
     filePath: req.file.path,
     errorLogMessage: 'Streaming CSV import error',
     run: (onProgress) => runImportPipeline({
@@ -331,7 +375,7 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
 // the registry, which is the single source of truth.)
 
 // POST /api/import/recipients
-router.post('/recipients', csvUpload.single('file'), async (req, res) => {
+router.post('/recipients', csvUpload.single('file'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -349,7 +393,7 @@ router.post('/recipients', csvUpload.single('file'), async (req, res) => {
 });
 
 // POST /api/import/categories
-router.post('/categories', csvUpload.single('file'), async (req, res) => {
+router.post('/categories', csvUpload.single('file'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -372,14 +416,14 @@ router.post('/categories', csvUpload.single('file'), async (req, res) => {
 //
 // Collection GETs use the canonical `{items, total, limit, offset}` body (the
 // service still speaks `batches` internally; only the wire key is normalised).
-router.get('/batches', async (req, res) => {
+router.get('/batches', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
   const { batches, total } = await listBatches({ limit, offset });
   res.ok({ items: batches, total, limit, offset });
 });
 
 // GET /api/import/batches/:id
-router.get('/batches/:id', async (req, res) => {
+router.get('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseBatchIdParam(req);
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
@@ -387,7 +431,7 @@ router.get('/batches/:id', async (req, res) => {
 });
 
 // DELETE /api/import/batches/:id — rollback: deletes transactions, marks batch aborted
-router.delete('/batches/:id', async (req, res) => {
+router.delete('/batches/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseBatchIdParam(req);
 
   const batch = await getBatch(id);
@@ -418,7 +462,7 @@ router.delete('/batches/:id', async (req, res) => {
 
 // GET /api/import/batches/:id/preview
 // Returns staging rows grouped by resolved recipient with match-source badges.
-router.get('/batches/:id/preview', async (req, res) => {
+router.get('/batches/:id/preview', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const batchId = parseBatchIdParam(req);
 
   const batch = await getBatch(batchId);
@@ -426,12 +470,15 @@ router.get('/batches/:id/preview', async (req, res) => {
 
   const rows = await getPreviewRows(batchId);
 
+  /** @param {string|null} [general]
+   * @param {string|null} [detail] */
   const formatCategoryLabel = (general, detail) => {
     if (!general && !detail) return null;
     return [general, detail].filter(Boolean).join(': ');
   };
 
   // Group rows by effective_recipient_id (null = unresolved).
+  /** @type {Map<string|number, any>} */
   const groupMap = new Map();
   for (const row of rows) {
     const key = row.effective_recipient_id ?? '__unresolved__';
@@ -487,6 +534,7 @@ router.get('/batches/:id/preview', async (req, res) => {
   }));
 
   // Summary counts across all groups.
+  /** @type {Record<string, number>} */
   const totals = { exact: 0, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 };
   for (const row of rows) {
     const src = row.match_source ?? 'unresolved';
@@ -498,7 +546,7 @@ router.get('/batches/:id/preview', async (req, res) => {
 
 // POST /api/import/batches/:id/rows/:rowId/override
 // Set (or clear) user_override_recipient_id on a single staging row.
-router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
+router.post('/batches/:id/rows/:rowId/override', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
   const { recipient_id } = req.body;
@@ -525,7 +573,7 @@ router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
 // Set (or clear) override_category_id on a single staging row. Symmetrical to
 // the recipient override above. The category landing on the committed
 // transaction is COALESCE(staging.override_category_id, recipient.default_category_id).
-router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
+router.post('/batches/:id/rows/:rowId/category-override', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
   const { category_id } = req.body;
@@ -554,7 +602,7 @@ router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
 
 // POST /api/import/batches/:id/commit
 // Commit a reviewed batch, honouring any user overrides set above.
-router.post('/batches/:id/commit', async (req, res) => {
+router.post('/batches/:id/commit', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const batchId = parseBatchIdParam(req);
 
   const batch = await getBatch(batchId);

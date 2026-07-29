@@ -32,7 +32,14 @@ import {
 } from './rateFetcher.js';
 import { settingsRepository } from '../../repositories/settingsRepository.js';
 
+/**
+ * @typedef {import('../../types/rows.js').ExchangeRateRow} ExchangeRateRow
+ * @typedef {import('../../types/rows.js').HistoricalRateIndex} HistoricalRateIndex
+ * @typedef {import('../../types/rows.js').RateTable} RateTable
+ */
+
 // In-memory cache: { rates: {...}, timestamp: number } | null
+/** @type {{ rates: RateTable, timestamp: number } | null} */
 let memoryCache = null;
 
 // Process-level cache of the built historical-rate index. Historical-FX row
@@ -43,7 +50,7 @@ let memoryCache = null;
 // refreshed (warmCache), the memory cache is cleared, or a backfill runs, and
 // expires after CACHE_LIFETIME_MS as a backstop. Cache misses still resolve
 // correctly via the per-date fallback paths, so conversion results are unchanged.
-/** @type {{ index: Map<string, Array<{date: string, rate: number}>>, currencies: string[], builtAt: number } | null} */
+/** @type {{ index: HistoricalRateIndex, currencies: string[], builtAt: number } | null} */
 let historicalIndexCache = null;
 
 // Static hardcoded fallback rates. Never mutated.
@@ -105,6 +112,8 @@ let liveFallbackRates = FALLBACK_RATES;
  *   1. In-memory cache (24-hour TTL)
  *   2. Database (latest rows)
  *   3. Hardcoded fallback
+ *
+ * @returns {Promise<RateTable>}
  */
 async function getRates() {
   if (memoryCache && Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS) {
@@ -245,6 +254,10 @@ export async function warmCache() {
 
 /**
  * Convert an amount from `fromCurrency` to EUR.
+ *
+ * @param {number} amount
+ * @param {string|null|undefined} fromCurrency falsy is treated as "already EUR"
+ * @returns {Promise<number>}
  */
 export async function convertToEur(amount, fromCurrency) {
   return convertToCurrency(amount, fromCurrency, 'EUR');
@@ -267,13 +280,34 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
   const toCur = (targetCurrency || 'EUR').toUpperCase().trim();
   const rates = await getRates();
 
+  /** @type {Map<string, number|undefined>} */
   const historicalRateCache = new Map();
 
+  // Per-request memo for currencies the historical index knows NOTHING about.
+  // The index is empty for a currency only when `exchange_rates` holds no row
+  // for it at all, and then the per-date point lookup below misses on EVERY
+  // date and goes to the network. A daily series (balance history: up to 366
+  // distinct days per request) turned that into hundreds of sequential
+  // round-trips, each of which is a multi-second timeout when offline. One
+  // attempt per currency per request is enough: it saves what it fetches, so
+  // the index has a row to interpolate from next time.
+  /** @type {Map<string, number|undefined>} */
+  const unindexedCurrencyRate = new Map();
+
+  /**
+   * @param {Record<string, any>} row
+   * @returns {string|null} 'YYYY-MM-DD', or null when the row carries no usable date
+   */
   function resolveDateFromRow(row) {
     if (dateField && row[dateField]) return normalizeDateInput(row[dateField]);
     return normalizeDateInput(row.date || row.day || row.transaction_date || row.planned_date || row.rate_date);
   }
 
+  /**
+   * @param {string} currencyCode
+   * @param {string|null} rowDate
+   * @returns {Promise<number|undefined>}
+   */
   async function getRate(currencyCode, rowDate) {
     if (!useHistoricalRatesByDate || !rowDate) return rates[currencyCode];
     const key = `${currencyCode}:${rowDate}`;
@@ -287,6 +321,11 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
   // boolean flagging whether we fell back to current rates because the
   // requested historical rate was missing. Callers surface this so the
   // frontend can label affected rows.
+  /**
+   * @param {string} code
+   * @param {string|null} rowDate
+   * @returns {Promise<{ rate: number|undefined, fellBack: boolean }>}
+   */
   async function resolveRateWithFallback(code, rowDate) {
     if (code === 'EUR') return { rate: 1, fellBack: false };
 
@@ -299,7 +338,16 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
       : undefined;
     if (historical !== undefined) return { rate: historical, fellBack: false };
 
-    const fetched = await getRate(code, rowDate);
+    // Index built but empty for this currency (findNearestRateInIndex only
+    // misses when the currency has no entries at all): one network attempt per
+    // request, not one per date. See unindexedCurrencyRate above.
+    let fetched;
+    if (historicalIndex && unindexedCurrencyRate.has(code)) {
+      fetched = unindexedCurrencyRate.get(code);
+    } else {
+      fetched = await getRate(code, rowDate);
+      if (historicalIndex) unindexedCurrencyRate.set(code, fetched);
+    }
     if (fetched !== undefined) return { rate: fetched, fellBack: false };
 
     const fallback = rates[code];
@@ -311,6 +359,7 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
     return { rate: undefined, fellBack: true };
   }
 
+  /** @type {HistoricalRateIndex|null} */
   let historicalIndex = null;
   if (useHistoricalRatesByDate) {
     const relevantCurrencies = [...new Set([
@@ -362,6 +411,11 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
 
 /**
  * Generic converter from any currency to any currency.
+ *
+ * @param {number} amount
+ * @param {string|null|undefined} fromCurrency falsy short-circuits to `amount`
+ * @param {string|null|undefined} toCurrency defaults to EUR when falsy
+ * @returns {Promise<number>}
  */
 export async function convertToCurrency(amount, fromCurrency, toCurrency) {
   if (!fromCurrency || fromCurrency.toUpperCase().trim() === (toCurrency || 'EUR').toUpperCase().trim()) {
@@ -375,6 +429,8 @@ export async function convertToCurrency(amount, fromCurrency, toCurrency) {
  * Fetch the current rate table once. Callers that convert many rows in a loop
  * should call this once and pass the result to {@link convertWithRates},
  * avoiding a per-row `await` on the (already memory-cached) rate lookup.
+ *
+ * @returns {Promise<RateTable>}
  */
 export async function loadCurrentRates() {
   return getRates();
@@ -383,6 +439,12 @@ export async function loadCurrentRates() {
 /**
  * Synchronous conversion against a pre-fetched rate table. Mirrors the logic of
  * {@link convertToCurrency} exactly — only the rate acquisition is hoisted out.
+ *
+ * @param {number} amount
+ * @param {string|null|undefined} fromCurrency falsy short-circuits to `amount`
+ * @param {string|null|undefined} toCurrency defaults to EUR when falsy
+ * @param {RateTable} rates
+ * @returns {number}
  */
 export function convertWithRates(amount, fromCurrency, toCurrency, rates) {
   if (!fromCurrency || fromCurrency.toUpperCase().trim() === (toCurrency || 'EUR').toUpperCase().trim()) {
@@ -448,7 +510,8 @@ async function repairHistoricalRatesFromFullHistory(pairs) {
     [currencies]
   );
   const storedByKey = new Map(
-    storedResult.rows.map((r) => [`${r.currency_code}:${r.rate_date}`, toNumber(toDecimal(r.rate_to_eur))])
+    /** @type {Array<Pick<ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: string }>} */
+    (storedResult.rows).map((r) => [`${r.currency_code}:${r.rate_date}`, toNumber(toDecimal(r.rate_to_eur))])
   );
 
   let repaired = 0;
@@ -563,7 +626,8 @@ export async function backfillPortfolioHistoricalRates() {
       [codes, dates]
     );
     const present = new Set(
-      existsResult.rows.map((r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`)
+      /** @type {Array<Pick<ExchangeRateRow, 'currency_code'> & { rate_date: string }>} */
+      (existsResult.rows).map((r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`)
     );
     for (const p of resolvedPairs) {
       if (present.has(`${p.currencyCode}|${p.rateDate}`)) inserted += 1;

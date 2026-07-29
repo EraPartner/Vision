@@ -29,6 +29,13 @@ export {
  * Create a new investment from a staging row's symbol/name and the batch's
  * default asset class, then point the row at it. Used by the review "create
  * new holding" action.
+ *
+ * @param {{ batchId: number, rowId: number }} args
+ * @returns {Promise<import('../types/rows.js').InvestmentRow|null|undefined>} the
+ *          created investment row, `undefined` when the staging row does not
+ *          exist, or (in principle) `null` per investmentRepository.create's
+ *          own return type — never actually null here since the insert above
+ *          always finds the row it just created.
  */
 export async function createInvestmentForRow({ batchId, rowId }) {
   const row = await getRowForInvestmentCreation({ batchId, rowId });
@@ -70,6 +77,9 @@ export async function createInvestmentForRow({ batchId, rowId }) {
  * transaction id — the sequences are independent, so deleting every id
  * through the portfolio repo removed UNRELATED trades that happened to share
  * a cash row's number (and left the imported cash row in the ledger).
+ *
+ * @param {number} batchId
+ * @returns {Promise<{ deleted: number }>}
  */
 export async function rollbackBatch(batchId) {
   const rows = await getCommittedRows(batchId);

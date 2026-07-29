@@ -7,12 +7,40 @@ import { logger } from '../../../config/logger.js';
 import { normalizeToUppercase } from '../../../lib/textNormalization.js';
 import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat, normalizeIsoCurrency } from './_shared.js';
 
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
+/**
+ * The custom-parser definition a `generic` import runs on.
+ *
+ * It arrives either from POST /api/import/csv (which builds it from form
+ * fields, so only bank_name/date_format and the date/recipient/amount column
+ * names are guaranteed) or from a saved `custom_parser_configs.config_json`
+ * row, which is free-form JSONB. Nothing re-validates it here, so every field
+ * beyond `column_mapping` is optional.
+ *
+ * @typedef {object} CustomTransactionParserConfig
+ * @property {string} [bank_name] defaults to 'CUSTOM'
+ * @property {string} [account_type] appended to the bank name to form the ADR-088 account label
+ * @property {string} [date_format] must be one of SUPPORTED_DATE_FORMATS
+ * @property {string} [separator] CSV delimiter; defaults to ','
+ * @property {number} [skip_rows] leading rows to drop before the header
+ * @property {BufferEncoding} [encoding] defaults to 'utf-8'
+ * @property {{ date: string, recipient: string, amount: string, memo?: string, currency?: string, balance?: string }} column_mapping source column NAMES, not indices
+ */
+
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
 
 // Normalize to UPPER+trim so the custom/generic adapter matches every built-in adapter and the
 // manual-entry path (transactionRepository.create uppercases bank_account) — otherwise the same
 // bank reached two ways resolves to two different accounts (ADR-088 account identity).
+/**
+ * @param {CustomTransactionParserConfig} config
+ * @returns {string}
+ */
 function buildBankAccount(config) {
   const bankName = config.bank_name || 'CUSTOM';
   const accountType = config.account_type;
@@ -20,6 +48,11 @@ function buildBankAccount(config) {
   return normalizeToUppercase(label);
 }
 
+/**
+ * @param {Record<string, string>} row a `columns: true` csv-parse record
+ * @param {CustomTransactionParserConfig} config
+ * @returns {ParsedBankTransaction|null} null when the mapped date or amount is unusable
+ */
 function rowToTransaction(row, config) {
   const colMap = config.column_mapping;
   const dateStr = String(row[colMap.date] || '').trim();
@@ -61,6 +94,12 @@ function rowToTransaction(row, config) {
   };
 }
 
+/**
+ * @param {string} filePath
+ * @param {CustomTransactionParserConfig} config
+ * @returns {Promise<ParsedBankTransactions>}
+ * @throws {Error} when `date_format` is not one of SUPPORTED_DATE_FORMATS
+ */
 export async function parseWithConfig(filePath, config) {
   const dateFormat = config.date_format || '';
   if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
@@ -84,7 +123,7 @@ export async function parseWithConfig(filePath, config) {
     config.encoding || 'utf-8',
   );
 
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
   for (const row of records) {
     try {
@@ -103,11 +142,19 @@ export async function parseWithConfig(filePath, config) {
   return transactions;
 }
 
+/**
+ * @returns {boolean} always false — the generic adapter is the explicit fallback
+ */
 export function detect() {
   // Generic adapter is the fallback; never auto-detected.
   return false;
 }
 
+/**
+ * @param {string} filePath
+ * @param {CustomTransactionParserConfig} [config] required — the generic adapter has no built-in mapping
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath, config) {
   if (!config) {
     throw new Error('Generic adapter requires a customConfig');

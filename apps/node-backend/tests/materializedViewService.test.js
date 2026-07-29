@@ -170,6 +170,29 @@ describe('materializedViewService', () => {
     expect(logger.info).toHaveBeenCalledWith('Materialized views ready');
   });
 
+  // Guard for the canonical 3-level effective-category resolution (own →
+  // recipient default → PRIMARY recipient's default). Both category-bearing MVs
+  // used to resolve only two levels, so a row recorded under an alias whose
+  // PRIMARY carries the default category was counted as UNCATEGORISED here
+  // while the transactions list showed it categorised. Changing either
+  // definition needs a DROP migration (0084 / 0085) — see the DB-backed
+  // assertion in tests/aliasCategoryResolution.db.test.js.
+  it('resolves the effective category over three levels in both category-bearing views', async () => {
+    const { createMaterializedViews, query } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await createMaterializedViews();
+
+    const sqlCalls = query.mock.calls.map(([sql]) => sql);
+    for (const view of ['mv_monthly_summary', 'mv_category_totals']) {
+      const ddl = sqlCalls.find((sql) => sql.includes(`CREATE MATERIALIZED VIEW IF NOT EXISTS ${view}`));
+      expect(ddl, `${view} DDL`).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+      expect(ddl, `${view} category join`).toContain(
+        'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id',
+      );
+    }
+  });
+
   it('no longer creates the dead mv_bank_balances view (dropped — zero readers)', async () => {
     const { createMaterializedViews, query } = await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });

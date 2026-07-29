@@ -47,6 +47,10 @@ export function sanitizeIsolatedValueSpikes(rows, field = 'value', { extraFields
   const neighborTolerance = Math.log(1.12);
   const localNeedleRatio = 1.8;
 
+  /**
+   * @param {unknown} a
+   * @param {unknown} b
+   */
   const smoothedMean = (a, b) => {
     const va = Number(a) || 0;
     const vb = Number(b) || 0;
@@ -188,6 +192,7 @@ export function computeMetrics(snapshots) {
     ? ((currentValue / inflationAdjustedValue) - 1) * 100
     : 0;
 
+  /** @param {number} v */
   const round2 = (v) => Math.round(v * 100) / 100;
 
   return {
@@ -285,7 +290,11 @@ export function computeHeatmap(snapshots) {
  * differently depending on the code path.
  *
  * @param {Array<{value: number|string, stocks_etfs_value?: number|string, crypto_value?: number|string, metals_value?: number|string}>} snapshots
- * @returns {Array} Sanitized copy (no mutation of input)
+ * @returns {Array<any>} Sanitized copy (no mutation of input) — same element
+ *   shape as `snapshots` plus the extra fields sanitizeIsolatedValueSpikes
+ *   smooths (`value_fx_neutral`, …). Untyped so callers (e.g.
+ *   services/portfolio/snapshotBuilder.js) can annotate their own
+ *   caller-specific row type over the result, as they already do.
  */
 export function sanitizeSnapshotSpikes(snapshots) {
   return sanitizeIsolatedValueSpikes(snapshots, 'value', {

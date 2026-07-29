@@ -24,10 +24,19 @@ import { cleanRecipientName, normalizeToUppercase } from '../../../lib/textNorma
 import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
 const NAME = 'bnp';
 const BANK_LABEL = 'BNP Paribas Fortis';
 const MIN_FIELDS = 9;
 
+/**
+ * @param {string} line
+ * @returns {boolean}
+ */
 function isHeaderLine(line) {
   return line.includes('Volgnummer') && line.includes('Uitvoeringsdatum');
 }
@@ -39,11 +48,20 @@ function isHeaderLine(line) {
 // silently drop a real transaction). NL/FR/EN refusal + cancellation stems.
 const NON_EXECUTED_STATUS_RE = /geweiger|geannuleer|annulering|refus|annul|reject|cancel/i;
 
+/**
+ * @param {string} status the export's status column
+ * @param {string} rejectionReason non-empty means the payment was refused
+ * @returns {boolean}
+ */
 function isNonExecutedRow(status, rejectionReason) {
   if (rejectionReason) return true;
   return NON_EXECUTED_STATUS_RE.test(status);
 }
 
+/**
+ * @param {string} line one ';'-delimited statement record
+ * @returns {ParsedBankTransaction|null} null when too short, non-executed, or unparseable
+ */
 function parseLine(line) {
   const parts = splitDelimitedRecord(line);
   if (!parts || parts.length < MIN_FIELDS) return null;
@@ -96,6 +114,10 @@ function parseLine(line) {
   };
 }
 
+/**
+ * @param {string|null|undefined} csvSample raw head of the uploaded file
+ * @returns {boolean}
+ */
 export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 3);
@@ -106,10 +128,14 @@ export function detect(csvSample) {
   );
 }
 
+/**
+ * @param {string} filePath
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath) {
   const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
   let headerSeen = false;
 

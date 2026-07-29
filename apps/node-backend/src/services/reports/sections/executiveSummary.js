@@ -16,7 +16,7 @@ import {
 import { filterMonthsByPeriod } from '../dataFetcher.js';
 
 /**
- * @param {{ monthly: object | null; filteredMonthly: object | null; exclusions?: { categoryIds: number[]; recipientIds: number[] } }} data
+ * @param {Pick<import('../dataFetcher.js').FinancialReportData, 'monthly' | 'filteredMonthly' | 'exclusions'>} data
  * @param {{ currency: string; period: import('../dataFetcher.js').Period }} opts
  * @returns {string}  HTML string for this section
  */
@@ -84,6 +84,10 @@ export function renderExecutiveSummary(data, { currency, period }) {
     const diffNet      = fNet - netAmount;
     const diffTx       = fTxCount - txCount;
 
+    /**
+     * @param {number} val
+     * @param {boolean} [isCount]
+     */
     const diffCell = (val, isCount = false) => {
       if (val === 0) return `<span class="badge badge-neutral">—</span>`;
       const cls = val > 0 ? 'badge-pos' : 'badge-neg';

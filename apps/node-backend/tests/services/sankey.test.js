@@ -4,14 +4,21 @@ vi.mock('../../src/database/connection.js', () => ({ query: vi.fn() }));
 vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
   convertRowsToEur: vi.fn(),
 }));
+vi.mock('../../src/repositories/infoRepositoryHelpers.js', async () => {
+  const actual = await vi.importActual('../../src/repositories/infoRepositoryHelpers.js');
+  return { ...actual, getIncludeTransfers: vi.fn() };
+});
 
 import { query } from '../../src/database/connection.js';
 import { convertRowsToEur } from '../../src/services/currency/currencyConversionService.js';
+import { getIncludeTransfers } from '../../src/repositories/infoRepositoryHelpers.js';
 import { computeSankeyFlow } from '../../src/services/calculations/aggregation/sankey.js';
 
 beforeEach(() => {
   query.mockReset();
   convertRowsToEur.mockReset();
+  getIncludeTransfers.mockReset();
+  getIncludeTransfers.mockResolvedValue(false);
 });
 
 describe('computeSankeyFlow (SQL-grouped rows)', () => {
@@ -47,5 +54,52 @@ describe('computeSankeyFlow (SQL-grouped rows)', () => {
     // GROUP BY pushed into SQL (no per-transaction streaming).
     expect(query.mock.calls[0][0]).toContain('GROUP BY 1, 2, 3');
     expect(query.mock.calls[0][0]).toContain('SUM(ABS(t.amount))');
+  });
+
+  // The emitted SQL must resolve the effective category over all THREE levels
+  // (own → recipient default → PRIMARY recipient's default), in the category
+  // JOIN *and* in the exclusion clause. With the former 2-level resolution a
+  // row recorded under an alias whose PRIMARY carries the default category
+  // landed in "Uncategorised" and survived an exclusion of that same category.
+  //
+  // The exclusion clauses are the canonical ones from
+  // lib/filterBuilder.buildExclusionClauses — the `-1` NULL sentinel and the
+  // alias-aware recipient form are the load-bearing halves (see the DB pins in
+  // tests/aliasCategoryResolution.db.test.js for the behaviour). Numbering
+  // starts at $3 because the year range owns $1/$2.
+  it('emits the canonical exclusion clauses, numbered after the date range', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await computeSankeyFlow({ year: 2025, excludedCategoryIds: [7], excludedRecipientIds: [9] });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(sql).toContain(
+      'LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id',
+    );
+    // NULL sentinel: without the trailing -1 a NULL effective category makes
+    // the predicate NULL, dropping every uncategorised row.
+    expect(sql).toContain(
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($3)',
+    );
+    // Alias-aware: excluding a PRIMARY must also exclude rows booked on its aliases.
+    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($4)');
+    expect(query.mock.calls[0][1]).toEqual(['2025-01-01', '2025-12-31', 7, 9]);
+  });
+
+  // ADR-083: transfers are excluded from income/spending by default, governed
+  // by the runtime `includeTransfers` setting — same conditional predicate as
+  // every sibling aggregation. Without it a savings transfer's two legs
+  // inflated BOTH the income and the spending side of the flow graph.
+  it('filters internal transfers by default and honours the includeTransfers setting', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await computeSankeyFlow({ year: 2025 });
+    expect(query.mock.calls[0][0]).toContain('AND t.is_transfer = false');
+
+    query.mockReset();
+    getIncludeTransfers.mockResolvedValue(true);
+    query.mockResolvedValueOnce({ rows: [] });
+    await computeSankeyFlow({ year: 2025 });
+    expect(query.mock.calls[0][0]).not.toContain('is_transfer');
   });
 });

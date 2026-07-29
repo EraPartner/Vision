@@ -15,6 +15,15 @@ import { buildSetClauses } from '../lib/sqlClauses.js';
 import { logger } from '../config/logger.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
+/** @typedef {import('../types/rows.js').RecipientMatchPatternRow} RecipientMatchPatternRow */
+
+/**
+ * `RecipientMatchPatternRow` as `loadActivePatterns` projects it: `updated_at`
+ * is explicitly cast to text in that query (used verbatim in the compile-cache
+ * key), so it is `string` here rather than the raw row's `Date`.
+ * @typedef {Omit<RecipientMatchPatternRow, 'updated_at'|'created_at'> & { updated_at: string }} ActivePatternRow
+ */
+
 const MIN_LCP_LENGTH = 8;
 
 const STOP_PATTERNS = new Set([
@@ -24,20 +33,31 @@ const STOP_PATTERNS = new Set([
   'FROM', 'TO',
 ]);
 
-/** Simple fixed-size LRU cache keyed by string. */
+/**
+ * Simple fixed-size LRU cache keyed by string. Only ever holds compiled
+ * `RegExp`s (the pattern cache below) — typed to that instead of a generic
+ * `<K,V>` cache since there is exactly one caller.
+ * @param {number} maxSize
+ */
 function makeLruCache(maxSize) {
+  /** @type {Map<string, RegExp>} */
   const map = new Map();
   return {
+    /** @param {string} k */
     get(k) {
       if (!map.has(k)) return undefined;
       const v = map.get(k);
       map.delete(k);
-      map.set(k, v);
+      map.set(k, /** @type {RegExp} */ (v));
       return v;
     },
+    /**
+     * @param {string} k
+     * @param {RegExp} v
+     */
     set(k, v) {
       if (map.has(k)) map.delete(k);
-      else if (map.size >= maxSize) map.delete(map.keys().next().value);
+      else if (map.size >= maxSize) map.delete(/** @type {string} */ (map.keys().next().value));
       map.set(k, v);
     },
   };
@@ -96,6 +116,8 @@ export function compilePattern(row) {
  *
  * This is a conservative static heuristic — not exhaustive, but catches the
  * patterns that cause catastrophic backtracking in practice.
+ * @param {string} pattern
+ * @returns {boolean}
  */
 function hasRedosRisk(pattern) {
   // Remove character classes so [...+*] doesn't confuse the group scanner.
@@ -138,7 +160,7 @@ export function validatePattern(row) {
  * Load all active patterns from DB, ordered by (priority ASC, id ASC).
  * Returns raw rows — callers compile as needed.
  *
- * @returns {Promise<Array<{id: number, recipient_id: number, pattern: string, pattern_kind: string, case_sensitive: boolean, priority: number, source: string, updated_at: string}>>}
+ * @returns {Promise<ActivePatternRow[]>}
  */
 export async function loadActivePatterns() {
   const { rows } = await query(
@@ -159,7 +181,7 @@ export async function loadActivePatterns() {
  * are left for findBestRecipientMatches.
  *
  * @param {string[]} distinctRaw
- * @param {Array} [preloadedPatterns]  optional: pass already-loaded patterns to avoid a DB round-trip
+ * @param {ActivePatternRow[]} [preloadedPatterns]  optional: pass already-loaded patterns to avoid a DB round-trip
  * @returns {Promise<Map<string, { recipientId: number, patternId: number }>>}
  */
 export async function applyPatterns(distinctRaw, preloadedPatterns) {
@@ -256,6 +278,10 @@ function buildSqlRegexPattern({ pattern, pattern_kind }) {
   }
 }
 
+// Cap the regex-preview scan: it pulls recipient rows into memory and filters
+// in JS, so an unbounded SELECT could load the whole table for one preview.
+const PREVIEW_REGEX_SCAN_CAP = 10_000;
+
 /**
  * Preview how many recipients in the DB have a normalized_name or name
  * that the given pattern would match.
@@ -264,12 +290,8 @@ function buildSqlRegexPattern({ pattern, pattern_kind }) {
  * outside the intended merge set.
  *
  * @param {{ pattern: string, pattern_kind: string, case_sensitive: boolean }} patternRow
- * @returns {Promise<{ matchCount: number, recipientIds: number[] }>}
+ * @returns {Promise<{ matchCount: number, recipientIds: number[], truncated?: boolean }>}
  */
-// Cap the regex-preview scan: it pulls recipient rows into memory and filters
-// in JS, so an unbounded SELECT could load the whole table for one preview.
-const PREVIEW_REGEX_SCAN_CAP = 10_000;
-
 export async function previewPatternMatches(patternRow) {
   const validation = validatePattern(patternRow);
   if (!validation.valid) {
@@ -294,8 +316,8 @@ export async function previewPatternMatches(patternRow) {
     );
     const truncated = rows.length > PREVIEW_REGEX_SCAN_CAP;
     const scanned = truncated ? rows.slice(0, PREVIEW_REGEX_SCAN_CAP) : rows;
-    const matched = scanned.filter((r) => re.test(String(r.name ?? '').toUpperCase()));
-    return { matchCount: matched.length, recipientIds: matched.map((r) => r.id), truncated };
+    const matched = scanned.filter((/** @type {{ id: number, name: string|null }} */ r) => re.test(String(r.name ?? '').toUpperCase()));
+    return { matchCount: matched.length, recipientIds: matched.map((/** @type {{ id: number }} */ r) => r.id), truncated };
   }
 
   const sqlPattern = buildSqlRegexPattern(patternRow);
@@ -308,7 +330,7 @@ export async function previewPatternMatches(patternRow) {
 
   return {
     matchCount: rows.length,
-    recipientIds: rows.map((r) => r.id),
+    recipientIds: rows.map((/** @type {{ id: number }} */ r) => r.id),
   };
 }
 
@@ -395,7 +417,7 @@ export async function deletePattern(patternId) {
  * List all patterns for a recipient.
  *
  * @param {number} recipientId
- * @returns {Promise<Array>}
+ * @returns {Promise<RecipientMatchPatternRow[]>}
  */
 export async function listPatternsForRecipient(recipientId) {
   const { rows } = await query(

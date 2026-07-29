@@ -19,6 +19,7 @@
 
 export { clearMvCache } from './infoRepositoryHelpers.js';
 
+import { getIncludeTransfers } from './infoRepositoryHelpers.js';
 import { statisticsRepository } from './infoRepositoryStatistics.js';
 import { getMonthlyFinancialSummary } from './infoRepositoryMonthly.js';
 import { getAverageVsCurrentSpending } from './infoRepositoryAverageVsCurrent.js';
@@ -35,6 +36,10 @@ import { recipientInsightsRepository } from './infoRepositoryRecipients.js';
 
 export const infoRepository = {
   ...statisticsRepository,
+  // ADR-083 toggle read. Exposed on the facade because the forecast cache key
+  // (services/calculations/forecast/index.js) needs it before it decides
+  // whether to call any of the repositories below.
+  getIncludeTransfers,
   getMonthlyFinancialSummary,
   getAverageVsCurrentSpending,
   getCashflowComparison,

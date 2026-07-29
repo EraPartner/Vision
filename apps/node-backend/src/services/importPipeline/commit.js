@@ -22,8 +22,21 @@ import { formatDateToYmd } from '../../lib/dateFormat.js';
 import { refreshAggregations } from '../aggregationRefresh.js';
 import { autoLinkTransactions } from '../plannedMatchService.js';
 
+/**
+ * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('./index.js').ImportBatchId} ImportBatchId
+ * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
+ */
+
 const COMMIT_CHUNK = 1000;
 
+/**
+ * Run the commit phase: drain 'matched' staging rows into `transactions` with
+ * per-row dedup and per-row SAVEPOINTs, then auto-link planned payments.
+ *
+ * @param {{ batchId: ImportBatchId, onProgress?: ImportProgressCallback }} args
+ * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
+ */
 export async function commitBatch({ batchId, onProgress }) {
   await query(`UPDATE import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
 
@@ -60,9 +73,11 @@ export async function commitBatch({ batchId, onProgress }) {
   // tx_hashes already written to `transactions` by this run — guards against
   // two identical rows inside the same CSV both passing the field-based dup
   // check (neither is in `transactions` yet when the first is processed).
+  /** @type {Set<string>} */
   const committedHashes = new Set();
   // Inserted rows fed to planned-payment auto-link after the whole batch
   // commits (so matching sees the full import — both ambiguity directions).
+  /** @type {Array<{ id: number, recipient_id: number|null, amount: string|null, transaction_date: string }>} */
   const insertedRows = [];
 
   if (onProgress) onProgress({ phase: 'committing', current: 0, total });
@@ -76,6 +91,7 @@ export async function commitBatch({ batchId, onProgress }) {
     let chunkImported = 0;
     let chunkDuplicates = 0;
     let chunkErrors = 0;
+    /** @type {typeof insertedRows} */
     let chunkInserted = [];
     await withTransaction(async (client) => {
       // Reset inside the callback so a withTransaction retry recounts cleanly.

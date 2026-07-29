@@ -7,9 +7,19 @@ import { logger } from '../../../config/logger.js';
 import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 
 const NAME = 'kbc';
+/**
+ * @typedef {import('./_shared.js').ParsedBankTransaction} ParsedBankTransaction
+ * @typedef {import('./_shared.js').ParsedBankTransactions} ParsedBankTransactions
+ */
+
 const BANK_LABEL = 'KBC';
 const MIN_FIELDS = 15;
 
+/**
+ * @param {string|undefined} creditStr
+ * @param {string|undefined} debitStr
+ * @returns {'CREDIT'|'DEBIT'|null} null when neither column holds a non-zero amount
+ */
 function classifyTransactionType(creditStr, debitStr) {
   if (creditStr && creditStr.trim()) {
     const cv = parseCommaDecimal(creditStr);
@@ -22,6 +32,10 @@ function classifyTransactionType(creditStr, debitStr) {
   return null;
 }
 
+/**
+ * @param {string} line one ','-delimited statement record
+ * @returns {ParsedBankTransaction|null} null when too short or unparseable
+ */
 function parseLine(line) {
   const parts = splitDelimitedRecord(line);
   if (!parts || parts.length < MIN_FIELDS) return null;
@@ -80,12 +94,20 @@ function parseLine(line) {
   };
 }
 
+/**
+ * @param {string} line
+ * @returns {boolean}
+ */
 function isNonDataLine(line) {
   return line.startsWith('Rekeningnummer')
     || line.includes('Vrije Mededeling')
     || line.startsWith(',,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,');
 }
 
+/**
+ * @param {string|null|undefined} csvSample raw head of the uploaded file
+ * @returns {boolean}
+ */
 export function detect(csvSample) {
   if (!csvSample) return false;
   const lines = splitCsvLines(csvSample).slice(0, 5);
@@ -93,10 +115,14 @@ export function detect(csvSample) {
     || lines.some((line) => line.includes('Vrije Mededeling'));
 }
 
+/**
+ * @param {string} filePath
+ * @returns {Promise<ParsedBankTransactions>}
+ */
 export async function parse(filePath) {
   const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
-  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  const transactions = /** @type {ParsedBankTransactions} */ ([]);
   let skipped = 0;
 
   for (const rawLine of lines) {

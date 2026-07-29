@@ -23,6 +23,65 @@ import {
   saveHistoricalPointsToDatabase,
 } from './priceProviderService.js';
 
+/**
+ * Provider-config subset of `InvestmentRow` (types/rows.js) this module reads
+ * off `HOLDING_WINDOW_SELECT` — a bespoke projection, not `SELECT i.*`, so it
+ * only lists the columns actually selected there. Matches
+ * `fetchHistoricalPrices`'s own `investment` param shape (priceProviderService.js).
+ * @typedef {object} HoldingWindowInvestment
+ * @property {number} id
+ * @property {string} asset_class
+ * @property {string} currency
+ * @property {string} price_provider
+ * @property {string|null} price_provider_id
+ * @property {string|null} symbol
+ * @property {string|null} price_provider_url
+ * @property {string|null} price_provider_latest_url
+ * @property {string|null} price_provider_latest_path
+ * @property {string|null} price_provider_history_url
+ * @property {string|null} price_provider_history_path
+ * @property {string|null} price_provider_history_ts_path
+ * @property {string|null} price_provider_history_price_path
+ */
+
+/**
+ * One buy/gift/sell leg, as `HOLDING_WINDOW_SELECT` projects it for
+ * `computeHoldingWindows`.
+ * @typedef {object} HoldingWindowTx
+ * @property {number} id
+ * @property {string} type `portfolio_txn_type` enum, filtered to 'buy'|'gift'|'sell'.
+ * @property {string} date 'YYYY-MM-DD' — `to_char`-formatted in the query.
+ * @property {number} units
+ */
+
+/**
+ * A raw `HOLDING_WINDOW_SELECT` row: `HoldingWindowInvestment`'s columns
+ * (unconverted — pg-raw) plus the `tx_*`-prefixed transaction columns.
+ * @typedef {object} HoldingWindowRow
+ * @property {number} id
+ * @property {string} asset_class
+ * @property {string} currency
+ * @property {string} price_provider
+ * @property {string|null} price_provider_id
+ * @property {string|null} symbol
+ * @property {string|null} price_provider_url
+ * @property {string|null} price_provider_latest_url
+ * @property {string|null} price_provider_latest_path
+ * @property {string|null} price_provider_history_url
+ * @property {string|null} price_provider_history_path
+ * @property {string|null} price_provider_history_ts_path
+ * @property {string|null} price_provider_history_price_path
+ * @property {number} tx_id
+ * @property {string} tx_type
+ * @property {string} tx_date 'YYYY-MM-DD'
+ * @property {string} tx_units NUMERIC — coerced with `Number()` by `mapRowToHoldingTx`.
+ */
+
+/**
+ * A holding window: a continuous period where net units > 0.
+ * @typedef {{ fromDate: string, toDate: string|null }} HoldingWindow
+ */
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const SPIKE_RATIO_THRESHOLD = 3; // 3× single-day jump = spike
@@ -191,7 +250,11 @@ const HOLDING_WINDOW_SELECT = `
 // Priceable asset classes — the only ones with a provider quote series to backfill.
 const HOLDING_ASSET_CLASS_FILTER = `i.asset_class IN ('stock', 'etf', 'crypto', 'metals')`;
 
-/** Map a HOLDING_WINDOW_SELECT row's investment columns to the provider-config object. */
+/**
+ * Map a HOLDING_WINDOW_SELECT row's investment columns to the provider-config object.
+ * @param {HoldingWindowRow} row
+ * @returns {HoldingWindowInvestment}
+ */
 function mapRowToInvestment(row) {
   return {
     id: Number(row.id),
@@ -210,7 +273,11 @@ function mapRowToInvestment(row) {
   };
 }
 
-/** Map a HOLDING_WINDOW_SELECT row's transaction columns to a holding-window tx. */
+/**
+ * Map a HOLDING_WINDOW_SELECT row's transaction columns to a holding-window tx.
+ * @param {HoldingWindowRow} row
+ * @returns {HoldingWindowTx}
+ */
 function mapRowToHoldingTx(row) {
   return {
     id: Number(row.tx_id),
@@ -226,7 +293,7 @@ function mapRowToHoldingTx(row) {
  *
  * Includes ALL investments with transactions, regardless of is_active flag.
  *
- * @returns {Promise<Map<number, { investment: object, holdingWindows: Array }>>}
+ * @returns {Promise<Map<number, { investment: HoldingWindowInvestment, holdingWindows: HoldingWindow[] }>>}
  */
 export async function getInvestmentsWithHoldingWindows() {
   const result = await query(
@@ -236,7 +303,9 @@ export async function getInvestmentsWithHoldingWindows() {
     []
   );
 
+  /** @type {HoldingWindowRow[]} */
   const rows = result.rows || [];
+  /** @type {Map<number, { investment: HoldingWindowInvestment, transactions: HoldingWindowTx[] }>} */
   const investmentMap = new Map();
 
   for (const row of rows) {
@@ -253,6 +322,7 @@ export async function getInvestmentsWithHoldingWindows() {
   }
 
   // Compute holding windows per investment
+  /** @type {Map<number, { investment: HoldingWindowInvestment, holdingWindows: HoldingWindow[] }>} */
   const resultMap = new Map();
   for (const [invId, { investment, transactions }] of investmentMap) {
     const holdingWindows = computeHoldingWindows(transactions);
@@ -268,7 +338,7 @@ export async function getInvestmentsWithHoldingWindows() {
  * Fetch holding windows for a single investment by ID.
  *
  * @param {number} investmentId
- * @returns {Promise<{ investment: object, holdingWindows: Array } | null>}
+ * @returns {Promise<{ investment: HoldingWindowInvestment, holdingWindows: HoldingWindow[] } | null>}
  */
 async function getInvestmentWithHoldingWindows(investmentId) {
   const result = await query(
@@ -279,6 +349,7 @@ async function getInvestmentWithHoldingWindows(investmentId) {
     [Number(investmentId)]
   );
 
+  /** @type {HoldingWindowRow[]} */
   const rows = result.rows || [];
   if (rows.length === 0) return null;
 
@@ -305,9 +376,14 @@ async function getStoredPriceDates(investmentId) {
       ORDER BY price_date`,
     [Number(investmentId)]
   );
-  return (result.rows || []).map((row) => row.d);
+  return (result.rows || []).map((/** @type {{ d: string }} */ row) => row.d);
 }
 
+/**
+ * @param {string} aYmd 'YYYY-MM-DD'
+ * @param {string} bYmd 'YYYY-MM-DD'
+ * @returns {number}
+ */
 function _daysBetween(aYmd, bYmd) {
   const a = Date.parse(`${aYmd}T00:00:00.000Z`);
   const b = Date.parse(`${bYmd}T00:00:00.000Z`);
@@ -354,8 +430,8 @@ export function holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresh
  * Backfill quotes for a single investment across all its holding windows.
  * Fetches historical prices, sanitizes spikes, and persists cleaned data.
  *
- * @param {object} investment - Investment object with provider config
- * @param {Array<{ fromDate: string, toDate: string | null }>} holdingWindows
+ * @param {HoldingWindowInvestment} investment - Investment object with provider config
+ * @param {HoldingWindow[]} holdingWindows
  * @param {{ force?: boolean }} [opts] - force re-queries the provider even when the stored
  *   series already spans the window endpoints (needed to repopulate interior gaps).
  * @returns {Promise<{ hasHistory: boolean, windowCount: number }>}
@@ -594,7 +670,7 @@ export async function refreshQuotesForInvestment(investmentId) {
  * Delete asset_price_history rows that fall outside any holding window
  * for the given investments.
  *
- * @param {Map<number, { investment: object, holdingWindows: Array }>} investmentWindows
+ * @param {Map<number, { investment: HoldingWindowInvestment, holdingWindows: HoldingWindow[] }>} investmentWindows
  * @returns {Promise<number>} Total rows deleted
  */
 export async function cleanupStaleQuotes(investmentWindows) {
@@ -651,6 +727,7 @@ export async function cleanupStaleQuotes(investmentWindows) {
 
 // ─── Private Helpers ────────────────────────────────────────────────────────
 
+/** @param {number|null|undefined} value */
 function _isPositive(value) {
   return Number.isFinite(value) && value > 0;
 }

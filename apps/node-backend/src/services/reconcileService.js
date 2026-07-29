@@ -119,7 +119,7 @@ export async function reconcileAccount(accountId, body) {
         drift: 0,
         statement_balance: Number(upd.rows[0].statement_balance),
         computed_balance: computed,
-        transaction: null,
+        transaction: /** @type {object|null} */ (null),
       };
     }
 

@@ -18,6 +18,11 @@ import { generateReport } from '../services/reports/index.js';
 import { HSL_COMPONENT_RE } from '../services/reports/themeCss.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
@@ -91,6 +96,7 @@ const reportBodySchema = z.object({
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
+/** @param {unknown} body */
 function parseReportBody(body) {
   const result = reportBodySchema.safeParse(body);
   if (!result.success) {
@@ -102,17 +108,17 @@ function parseReportBody(body) {
 
 /* ── POST endpoints ──────────────────────────────────────────────────────── */
 
-router.post('/financial', async (req, res) => {
+router.post('/financial', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
   await generateReport({ type: 'financial', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
 });
 
-router.post('/portfolio', async (req, res) => {
+router.post('/portfolio', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
   await generateReport({ type: 'portfolio', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
 });
 
-router.post('/tax', async (req, res) => {
+router.post('/tax', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds, taxProfile, precomputedPIT } = parseReportBody(req.body);
   await generateReport({ type: 'tax', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds, taxProfile, precomputedPIT });
 });

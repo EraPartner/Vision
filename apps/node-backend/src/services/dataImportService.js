@@ -62,6 +62,10 @@ async function safeReadCsv(filePath, encoding) {
 export async function importRecipientsCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
     const content = await safeReadCsv(filePath, encoding);
 
+    // csv-parse's `columns: true` overload is generic (`T = unknown`) and infers
+    // `{}` with no column list supplied — annotate to the actual shape
+    // (header name -> cell string) so downstream property/index access typechecks.
+    /** @type {Record<string, string>[]} */
     let records;
     try {
         records = parse(content, {
@@ -80,6 +84,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
 
     for (const record of records) {
         const rowKeys = Object.keys(record);
+        /** @param {string} name */
         const col = (name) => {
             const key = rowKeys.find(k => k.toLowerCase().trim() === name);
             return key ? (record[key] ?? '').trim() : '';
@@ -167,6 +172,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
 export async function importCategoriesCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
     const content = await safeReadCsv(filePath, encoding);
 
+    /** @type {Record<string, string>[]} */
     let records;
     try {
         records = parse(content, {

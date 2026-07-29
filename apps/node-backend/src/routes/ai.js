@@ -26,6 +26,7 @@
  * error can fire, so errors ride the `error` SSE frame instead.
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 
@@ -49,6 +50,12 @@ import {
   ValidationError,
 } from '../middleware/errorHandler.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.js').ExpressNextFunction} ExpressNextFunction
+ */
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 200;
@@ -62,8 +69,10 @@ const MAX_TITLE_LENGTH = 200;
 // Case-insensitive UUID; any-case input is forwarded unchanged.
 const conversationIdSchema = z.string().regex(UUID_RE);
 
+/** @param {string} message */
 const uuidField = (message) => z.string({ error: message }).regex(UUID_RE, message);
 
+/** @param {string} message */
 const nonBlankString = (message) => z.string({ error: message })
   .refine((s) => s.trim().length > 0, message);
 
@@ -98,6 +107,12 @@ const renameConversationSchema = z.object({
     .refine((s) => s.length <= MAX_TITLE_LENGTH, `"title" must be <= ${MAX_TITLE_LENGTH} chars`),
 });
 
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} body
+ * @returns {T}
+ */
 function parseAiBody(schema, body) {
   const result = schema.safeParse(body || {});
   if (!result.success) {
@@ -109,12 +124,18 @@ function parseAiBody(schema, body) {
   return result.data;
 }
 
+/** @param {ExpressRequest} req */
 function requireConversationId(req) {
   const result = conversationIdSchema.safeParse(req.params.id);
   if (!result.success) throw new ValidationError('Invalid conversation id');
   return result.data;
 }
 
+/**
+ * @param {ExpressRequest} req
+ * @param {ExpressResponse} res
+ * @param {ExpressNextFunction} next
+ */
 function enforceAiChatEnabled(req, res, next) {
   if (!settings.aiChat.enabled) {
     return next(new AppError('AI chat is disabled', {
@@ -128,6 +149,10 @@ function enforceAiChatEnabled(req, res, next) {
 /**
  * Convert a service-layer error into a typed AppError. Preserves the
  * AiChatServiceError status + code so the envelope surfaces them unchanged.
+ *
+ * @param {any} err Upstream error of unknown provenance (service layer, zod, Ollama client).
+ * @param {string} fallbackMessage
+ * @returns {never}
  */
 function rethrowAsAppError(err, fallbackMessage) {
   if (err instanceof AiChatServiceError) {
@@ -157,11 +182,23 @@ router.use(enforceAiChatEnabled);
 //
 // The health probe never throws — it returns `{reachable: false, error, code}`
 // on failure — so this endpoint always emits a success envelope.
+
+/**
+ * @typedef {object} OllamaHealth
+ * @property {boolean} reachable
+ * @property {string} baseUrl
+ * @property {number} [modelCount]
+ * @property {string} [error]
+ * @property {string} [code]
+ */
+
+/** @param {string} [baseUrl] */
 function toDisplayUrl(baseUrl) {
   if (!baseUrl) return baseUrl;
   return baseUrl.replace('host.docker.internal', 'localhost');
 }
 
+/** @param {OllamaHealth} health */
 function buildConnectionHint(health) {
   if (health.reachable) return null;
   const usesContainerGateway = typeof health.baseUrl === 'string'
@@ -180,7 +217,7 @@ function buildConnectionHint(health) {
   return null;
 }
 
-router.get('/status', async (req, res) => {
+router.get('/status', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const client = getOllamaClient();
   const health = await client.healthCheck();
   res.ok({
@@ -200,7 +237,7 @@ router.get('/status', async (req, res) => {
 //
 // Canonical collection shape `{items, total}`; unpaginated, so `total` is the
 // row count (present so pagination can land without breaking the shape).
-router.get('/models', async (req, res) => {
+router.get('/models', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const client = getOllamaClient();
   try {
     const models = await client.listModels();
@@ -222,13 +259,13 @@ router.get('/models', async (req, res) => {
 //
 // Canonical collection shape `{items, total}`; unpaginated, so `total` is the
 // row count (present so pagination can land without breaking the shape).
-router.get('/conversations', async (req, res) => {
+router.get('/conversations', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const rows = await listConversations();
   res.ok({ items: rows, total: rows.length });
 });
 
 // POST /api/ai/conversations
-router.post('/conversations', async (req, res) => {
+router.post('/conversations', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { title, model } = parseAiBody(createConversationSchema, req.body);
 
   try {
@@ -241,7 +278,7 @@ router.post('/conversations', async (req, res) => {
 });
 
 // GET /api/ai/conversations/:id
-router.get('/conversations/:id', async (req, res) => {
+router.get('/conversations/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = requireConversationId(req);
   const convo = await getConversationWithMessages(id);
   if (!convo) throw new NotFoundError('Conversation not found');
@@ -249,7 +286,7 @@ router.get('/conversations/:id', async (req, res) => {
 });
 
 // PATCH /api/ai/conversations/:id
-router.patch('/conversations/:id', async (req, res) => {
+router.patch('/conversations/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = requireConversationId(req);
   const { title } = parseAiBody(renameConversationSchema, req.body);
 
@@ -259,7 +296,7 @@ router.patch('/conversations/:id', async (req, res) => {
 });
 
 // DELETE /api/ai/conversations/:id
-router.delete('/conversations/:id', async (req, res) => {
+router.delete('/conversations/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = requireConversationId(req);
   const deleted = await deleteConversation(id);
   if (!deleted) throw new NotFoundError('Conversation not found');
@@ -267,7 +304,7 @@ router.delete('/conversations/:id', async (req, res) => {
 });
 
 // POST /api/ai/chat
-router.post('/chat', async (req, res) => {
+router.post('/chat', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const parsed = parseAiBody(chatBodySchema, req.body);
 
   const abortController = new AbortController();
@@ -302,7 +339,7 @@ router.post('/chat', async (req, res) => {
 // Validation throws happen before headers are written, so they travel
 // through the global error handler as envelope responses. After headers
 // commit, errors ride the SSE `error` frame.
-router.post('/chat/stream', async (req, res) => {
+router.post('/chat/stream', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const parsed = parseAiBody(chatBodySchema, req.body);
   logger.info('[ai] chat/stream start', {
     requestId: req.id,
@@ -312,7 +349,11 @@ router.post('/chat/stream', async (req, res) => {
     messageLen: parsed.message.length,
   });
 
-  const writer = createSseWriter(req, res);
+  // createSseWriter is typed via node:http's base classes (lib/sse.js) —
+  // ExpressRequest/ExpressResponse are a narrower structural stand-in that
+  // doesn't model IncomingMessage/ServerResponse, so forward via an any cast,
+  // same as lib/importProgress.js's streamImport call sites.
+  const writer = createSseWriter(/** @type {any} */ (req), /** @type {any} */ (res));
   const abortController = new AbortController();
   res.on('close', () => {
     if (!res.writableEnded) abortController.abort();

@@ -25,6 +25,7 @@ const RECURRENCE_TO_MONTHLY = Object.freeze({
   yearly: 1 / 12,
 });
 
+/** @param {unknown} value */
 function toIsoDate(value) {
   if (!value) return null;
   // pg-read DATE values are local midnight — UTC extraction (toISOString)
@@ -57,6 +58,10 @@ export const getUpcomingPlanned = {
       },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const horizonDays = parsePositiveInt(args.horizonDays, 'horizonDays', { min: 1, max: 365, defaultValue: 30 });
 
@@ -127,6 +132,10 @@ export const getSubscriptionTotal = {
       },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const period = parseEnum(args.period, 'period', ['monthly', 'yearly'], { defaultValue: 'monthly' });
 
@@ -144,7 +153,7 @@ export const getSubscriptionTotal = {
       const amount = toDecimal(row.amount ?? 0);
       if (amount.gte(0)) continue;
 
-      const multiplier = RECURRENCE_TO_MONTHLY[row.recurrence_pattern];
+      const multiplier = RECURRENCE_TO_MONTHLY[/** @type {keyof typeof RECURRENCE_TO_MONTHLY} */ (row.recurrence_pattern)];
       if (multiplier == null) continue;
 
       let normalized = amount.abs().times(multiplier);
@@ -199,6 +208,10 @@ export const getLoanSchedule = {
     },
     required: ['plannedId'],
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [context]
+   */
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const plannedId = parsePositiveInt(args.plannedId, 'plannedId', { min: 1, max: Number.MAX_SAFE_INTEGER });
 
@@ -207,7 +220,7 @@ export const getLoanSchedule = {
       return {
         ok: false,
         error: `Planned transaction ${plannedId} not found`,
-        data: [],
+        data: /** @type {never[]} */ ([]),
         meta: {},
       };
     }
@@ -215,7 +228,7 @@ export const getLoanSchedule = {
       return {
         ok: false,
         error: `Planned transaction ${plannedId} is not a loan`,
-        data: [],
+        data: /** @type {never[]} */ ([]),
         meta: {},
       };
     }
@@ -264,6 +277,10 @@ export const getProjectedBalance = {
       },
     },
   },
+  /**
+   * @param {Record<string, unknown>} args
+   * @param {import('./_validate.js').ToolContext} [_context]
+   */
   async run(args, _context = {}) {
     const horizonDays = parsePositiveInt(args.horizonDays, 'horizonDays', { min: 1, max: 365, defaultValue: 30 });
 

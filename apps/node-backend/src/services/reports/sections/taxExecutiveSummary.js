@@ -7,12 +7,12 @@
 import { fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
 
 /**
- * @param {object | null} data  fetchTaxData result
+ * @param {import('../dataFetcherTax.js').TaxReportData | null} data
  * @param {{ currency: string }} ctx
  * @returns {string}
  */
 export function renderTaxExecutiveSummary(data, { currency }) {
-  const totals       = data?.totals       ?? {};
+  const totals       = data?.totals       ?? /** @type {import('../dataFetcherTax.js').LegacyTaxTotalsFallback} */ ({});
   const taxYear      = data?.taxYear      ?? '—';
   const periodNote   = data?.periodNote   ?? null;
   const taxProfile   = data?.taxProfile   ?? null;

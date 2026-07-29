@@ -9,6 +9,7 @@
  * stays imperative, running on the parsed body exactly as before.
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
@@ -25,15 +26,38 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { parsePagination } from '../lib/pagination.js';
 
+/**
+ * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/rows.js').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow
+ * @typedef {import('../types/rows.js').PlannedTransactionListRow} PlannedTransactionListRow
+ */
+
+/**
+ * formatPlannedTransaction's actual input across its call sites: the fully
+ * hydrated row from getAll/getById/create/update/updateWithLoanSchedule, OR
+ * the un-hydrated `getDueSoon` projection which lacks the join/sub-collection
+ * fields — formatPlannedTransaction's own `row.x || fallback` reads below are
+ * written defensively for exactly that gap. Modeled as one flat type with the
+ * hydration-only fields optional (see the noImplicitAny discriminated-union
+ * narrowing quirk noted in middleware/validation.js) rather than a union of
+ * the two row typedefs.
+ * @typedef {PlannedTransactionListRow & Partial<Pick<HydratedPlannedTransactionRow,
+ *   'executions'|'execution_count'|'executed_transaction_id'|'loan_schedule'|'tags'
+ * >>} FormattablePlannedTransactionRow
+ */
+
 const router = Router();
 
 // Matches the 12-integer-digit ceiling of the money columns (NUMERIC).
 const MAX_PLANNED_AMOUNT = 1e12;
 
+/** @param {ExpressRequest} req */
 function parseRouteId(req) {
   return parseInt(req.params.id, 10);
 }
 
+/** @param {any} fields */
 function withoutPatchOnlyReadOnlyFields(fields) {
   const {
     links: _links,
@@ -53,11 +77,13 @@ function withoutPatchOnlyReadOnlyFields(fields) {
 // ValidationError on an unmatched name — this route used to silently drop the
 // field instead (a typo'd category_name saved with no category and no error),
 // diverging from the live-transaction route's behavior.
+/** @param {any} fields */
 async function resolveRecipientIdFromName(fields) {
   if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
   return resolveRecipientIdByName(fields.recipient_name);
 }
 
+/** @param {any} fields */
 async function resolveCategoryIdFromName(fields) {
   if (!fields.category_name || fields.category_id) return fields.category_id;
   return resolveCategoryIdByName(fields.category_name);
@@ -231,6 +257,12 @@ const patchPlannedSchema = z.looseObject({
 });
 
 // schema → safeParse → joined issues → ValidationError (settings.js idiom).
+/**
+ * @template T
+ * @param {z.ZodType<T>} schema
+ * @param {unknown} body
+ * @returns {T}
+ */
 function parsePlannedBody(schema, body) {
   const result = schema.safeParse(body);
   if (!result.success) {
@@ -242,6 +274,7 @@ function parsePlannedBody(schema, body) {
   return result.data;
 }
 
+/** @param {import('../services/calculations/loanSchedule.js').LoanConfig} input */
 function generateLoanScheduleOrThrow(input) {
   try {
     return generateLoanRepaymentSchedule(input);
@@ -250,6 +283,13 @@ function generateLoanScheduleOrThrow(input) {
   }
 }
 
+/**
+ * Mutates `fields` (the in-flight PATCH payload) in place with loan-derived
+ * defaults — `fields` is typed `any` because it is a loose, dynamically-keyed
+ * write target (zod-parsed body + resolver-applied ids), not a fixed row shape.
+ * @param {any} fields
+ * @param {HydratedPlannedTransactionRow} existing
+ */
 function applyLoanPatchDefaults(fields, existing) {
   let generatedLoanSchedule;
 
@@ -305,6 +345,9 @@ function applyLoanPatchDefaults(fields, existing) {
  * Decide whether this PATCH must rewrite the loan schedule, and to what.
  * Returns the installment array to write, [] to clear it, or undefined to leave
  * the existing schedule untouched.
+ * @param {ReturnType<typeof generateLoanRepaymentSchedule>|undefined} generatedLoanSchedule
+ * @param {any} fields Loose PATCH payload — see applyLoanPatchDefaults.
+ * @param {HydratedPlannedTransactionRow} existing
  */
 function resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing) {
   if (generatedLoanSchedule) return generatedLoanSchedule.schedule;
@@ -312,7 +355,7 @@ function resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing) {
   return undefined;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const {
     start_date, end_date, bank_account,
     category_id, recipient_id,
@@ -344,11 +387,15 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const data = parsePlannedBody(createPlannedSchema, req.body);
 
   if (data.is_loan) {
-    const generated = generateLoanScheduleOrThrow(data);
+    // createPlannedSchema is `z.looseObject({})` — raw values are forwarded
+    // unchanged (see module doc), so zod's inferred type carries no loan_*
+    // fields; LoanConfig's own fields are all `unknown` too (validateLoanConfig
+    // coerces), so this cast changes nothing about what's actually validated.
+    const generated = generateLoanScheduleOrThrow(/** @type {import('../services/calculations/loanSchedule.js').LoanConfig} */ (data));
     data.loan_regular_payment_amount = generated.regular_payment_amount;
     data.loan_first_payment_date = generated.first_due_date;
     data.loan_schedule = generated.schedule;
@@ -368,7 +415,13 @@ router.post('/', async (req, res) => {
     if (data.max_occurrences) delete data.max_occurrences;
   }
 
-  const created = await plannedTransactionRepository.create(data);
+  // Same loose-schema-vs-typed-repository gap as generateLoanScheduleOrThrow
+  // above: the superRefine checks above this block (and, for the non-loan
+  // path, the schema's own superRefine at its definition) already enforce
+  // planned_date/amount are present by the time this line runs.
+  const created = await plannedTransactionRepository.create(
+    /** @type {Record<string, any> & { planned_date: string, amount: number|string, is_loan?: boolean, loan_schedule?: Array<Record<string, any>>, tags?: string[]|null }} */ (data),
+  );
   res.status(201);
   res.ok(formatPlannedTransaction(created));
 });
@@ -379,7 +432,7 @@ router.post('/', async (req, res) => {
  * Returns active, unexecuted planned transactions whose planned_date falls
  * within the next N days (default 7, max 365).  Used by bill-reminder widgets.
  */
-router.get('/due-soon', async (req, res) => {
+router.get('/due-soon', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const raw = parseInt(req.query.days, 10);
   const days = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 365) : 7;
   const rows = await plannedTransactionRepository.getDueSoon(days);
@@ -398,13 +451,13 @@ router.get('/due-soon', async (req, res) => {
  * transactions for the user to confirm. Registered before /:id so the literal
  * segment is not captured by the id param.
  */
-router.get('/match-suggestions', async (req, res) => {
+router.get('/match-suggestions', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const suggestions = await getMatchSuggestions();
   // Canonical collection shape `{items, total}` in the data body.
   res.ok({ items: suggestions, total: suggestions.length });
 });
 
-router.get('/:id', validateIdParam, async (req, res) => {
+router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseRouteId(req);
   const pt = await plannedTransactionRepository.getById(id);
   if (!pt) throw new NotFoundError(`Planned transaction ${req.params.id} not found`);
@@ -415,7 +468,7 @@ router.patch(
   '/:id',
   validateIdParam,
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'planned-transactions-patch' }),
-  async (req, res) => {
+  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const id = parseRouteId(req);
     const existing = await plannedTransactionRepository.getById(id);
     if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
@@ -454,9 +507,14 @@ router.patch(
     // When the loan schedule must change, the field update and the schedule
     // rewrite MUST happen in one transaction — otherwise a crash between them
     // leaves the planned row's loan params disagreeing with the installment rows.
+    // patchPlannedSchema's tagsField only validates "is an array" (item type
+    // unchecked, matching pre-zod behavior); the repository types `tags` as
+    // `string[]` since that's what it writes to the junction table — same
+    // "loose zod passthrough vs. typed repository param" gap as transactions.js.
+    const typedFields = /** @type {Record<string, any> & { tags?: string[] }} */ (fields);
     const updated = loanScheduleDirective !== undefined
-      ? await plannedTransactionRepository.updateWithLoanSchedule(id, fields, loanScheduleDirective)
-      : await plannedTransactionRepository.update(id, fields);
+      ? await plannedTransactionRepository.updateWithLoanSchedule(id, typedFields, loanScheduleDirective)
+      : await plannedTransactionRepository.update(id, typedFields);
 
     if (!updated) throw new NotFoundError(`Planned transaction ${id} not found`);
 
@@ -464,7 +522,7 @@ router.patch(
   },
 );
 
-router.post('/:id/execute', validateIdParam, async (req, res) => {
+router.post('/:id/execute', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseRouteId(req);
   const { executed_transaction_id, execution_date } = req.body;
 
@@ -484,10 +542,13 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
   });
 
   if (duplicate) res.set('Idempotent-Replay', 'true');
-  res.ok(formatPlannedTransaction(current));
+  // executePlanned's own @returns widens `current` to `object` at the service
+  // seam, but it's a pass-through of plannedTransactionRepository.getById()'s
+  // HydratedPlannedTransactionRow|null.
+  res.ok(formatPlannedTransaction(/** @type {HydratedPlannedTransactionRow|null} */ (current)));
 });
 
-router.delete('/:id', validateIdParam, async (req, res) => {
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseRouteId(req);
   const deleted = await plannedTransactionRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Planned transaction ${id} not found`);
@@ -499,8 +560,10 @@ router.delete('/:id', validateIdParam, async (req, res) => {
 // raw they become an ISO timestamp of the PREVIOUS day east of UTC, which the
 // frontend T-splits and writes back on the next save (date-1 per edit).
 // Emit calendar-day strings; timestamps (created_at/updated_at) stay ISO.
+/** @param {Date|string|null|undefined} v */
 const ymd = (v) => (v instanceof Date ? formatDateToYmd(v) : v);
 
+/** @param {FormattablePlannedTransactionRow|null} row */
 function formatPlannedTransaction(row) {
   if (!row) return null;
   return {
@@ -519,21 +582,21 @@ function formatPlannedTransaction(row) {
     is_recurring: row.is_recurring,
     recurrence_pattern: row.recurrence_pattern,
     recurrence_end_date: ymd(row.recurrence_end_date),
-    max_occurrences: row.max_occurrences != null ? parseInt(row.max_occurrences, 10) : null,
-    reminder_days_before: row.reminder_days_before != null ? parseInt(row.reminder_days_before, 10) : null,
+    max_occurrences: row.max_occurrences != null ? parseInt(String(row.max_occurrences), 10) : null,
+    reminder_days_before: row.reminder_days_before != null ? parseInt(String(row.reminder_days_before), 10) : null,
     is_executed: row.is_executed,
     last_executed_date: ymd(row.last_executed_date),
     is_loan: row.is_loan || false,
     loan_type: row.loan_type || null,
     loan_principal: row.loan_principal != null ? toNumber(toDecimal(row.loan_principal)) : null,
     loan_annual_interest_rate: row.loan_annual_interest_rate != null ? toNumber(toDecimal(row.loan_annual_interest_rate)) : null,
-    loan_term_months: row.loan_term_months != null ? parseInt(row.loan_term_months, 10) : null,
+    loan_term_months: row.loan_term_months != null ? parseInt(String(row.loan_term_months), 10) : null,
     loan_start_date: ymd(row.loan_start_date) || null,
-    loan_payment_day: row.loan_payment_day != null ? parseInt(row.loan_payment_day, 10) : null,
+    loan_payment_day: row.loan_payment_day != null ? parseInt(String(row.loan_payment_day), 10) : null,
     loan_regular_payment_amount: row.loan_regular_payment_amount != null ? toNumber(toDecimal(row.loan_regular_payment_amount)) : null,
     loan_first_payment_date: ymd(row.loan_first_payment_date) || null,
-    loan_schedule: (row.loan_schedule || []).map((entry) => ({
-      installment_number: parseInt(entry.installment_number, 10),
+    loan_schedule: (row.loan_schedule || []).map((/** @type {import('../types/rows.js').LoanScheduleRow} */ entry) => ({
+      installment_number: parseInt(String(entry.installment_number), 10),
       due_date: ymd(entry.due_date),
       payment_amount: toNumber(toDecimal(entry.payment_amount)),
       principal_amount: toNumber(toDecimal(entry.principal_amount)),
@@ -542,7 +605,7 @@ function formatPlannedTransaction(row) {
     })),
     executed_transaction_id: row.executed_transaction_id || null,
     execution_count: row.execution_count || 0,
-    executions: (row.executions || []).map(e => ({
+    executions: (row.executions || []).map((/** @type {import('../types/rows.js').PlannedExecutionRow} */ e) => ({
       id: e.id,
       executed_transaction_id: e.executed_transaction_id,
       execution_date: ymd(e.execution_date),
@@ -552,6 +615,7 @@ function formatPlannedTransaction(row) {
     is_active: row.is_active,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    /** @type {any[]} */
     links: [],
   };
 }

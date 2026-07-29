@@ -10,12 +10,18 @@
  * Multer uses memoryStorage so the service controls the final path.
  */
 
+/// <reference path="../types/thirdPartyModules.d.ts" />
 import { mkdirSync, promises as fsPromises } from 'fs';
 import { join, extname, resolve, sep } from 'path';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
 import { env } from '../config/env.js';
 import { sniffMime, extensionMime } from '../lib/fileSniff.js';
+
+/**
+ * The slice of a multer memoryStorage upload this service reads.
+ * @typedef {{ originalname: string, buffer: Buffer, mimetype: string }} MulterFile
+ */
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'application/pdf'];
 const MAX_SIZE_BYTES = env.ATTACHMENT_MAX_SIZE_MB * 1024 * 1024;
@@ -25,11 +31,15 @@ export function getAttachmentsRoot() {
   return resolve(env.ATTACHMENTS_DIR);
 }
 
-/** Absolute path to the per-transaction directory. */
+/**
+ * Absolute path to the per-transaction directory.
+ * @param {number|string} transactionId
+ */
 export function getTransactionDir(transactionId) {
   return join(getAttachmentsRoot(), String(transactionId));
 }
 
+/** @param {string} mimeType */
 function isAllowedMime(mimeType) {
   return ALLOWED_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix));
 }
@@ -40,6 +50,8 @@ function isAllowedMime(mimeType) {
  * Returns the canonical sniffed MIME type when valid; throws otherwise.
  * The sniffed value should be persisted to the DB instead of the
  * client-supplied req.file.mimetype.
+ * @param {MulterFile} file
+ * @returns {string} canonical sniffed MIME type
  */
 export function verifyAttachmentContent(file) {
   const sniffed = sniffMime(file.buffer);
@@ -67,7 +79,11 @@ export function verifyAttachmentContent(file) {
 export const attachmentUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE_BYTES },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (
+    /** @type {unknown} */ _req,
+    /** @type {MulterFile} */ file,
+    /** @type {(error: Error|null, acceptFile?: boolean) => void} */ cb,
+  ) => {
     if (!isAllowedMime(file.mimetype)) {
       cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed: images and PDF.`));
     } else {
@@ -82,6 +98,9 @@ export const attachmentUpload = multer({
  * Returns the stored_path (relative to ATTACHMENTS_DIR root, forward
  * slashes) for persistence in the DB. Callers store this path and pass
  * it back to resolveAbsolutePath() to serve the file later.
+ * @param {number|string} transactionId
+ * @param {MulterFile} file
+ * @returns {Promise<string>} stored_path relative to the attachments root
  */
 export async function storeAttachment(transactionId, file) {
   const ext = extname(file.originalname).toLowerCase() || '';
@@ -102,6 +121,8 @@ export async function storeAttachment(transactionId, file) {
  * Resolve a DB-stored relative path back to an absolute filesystem path.
  * Throws if the resolved path escapes the attachments root (path traversal guard).
  * Uses realpath to resolve symlinks so a symlinked path cannot escape the root.
+ * @param {string} storedPath
+ * @returns {Promise<string>}
  */
 export async function resolveAbsolutePath(storedPath) {
   const root = getAttachmentsRoot();
@@ -123,6 +144,7 @@ export async function resolveAbsolutePath(storedPath) {
 
 /**
  * Delete a file from disk. Silently ignores ENOENT (already gone).
+ * @param {string} storedPath
  */
 export async function removeAttachmentFile(storedPath) {
   const absPath = await resolveAbsolutePath(storedPath);

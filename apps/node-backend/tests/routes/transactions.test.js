@@ -1,19 +1,18 @@
 /**
  * Transaction route tests.
  * Mirrors: apps/backend/tests/test_transactions.py
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js) — so the per-route middleware chain
+ * (validateIdParam, the export rate limiters), Express query/body parsing, the
+ * ADR-026 envelope middleware and the centralized error handler are all on the
+ * tested path. Repositories/services are still mocked.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockConnection } from '../helpers/repoMocks.js';
 import { mockTransactionRepository, mockDeduplication, mockMaterializedViews, mockCurrencyConversion, mockAttachmentRecordService, mockAttachmentService } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
@@ -35,7 +34,7 @@ vi.mock('../../src/services/attachmentService.js', () => mockAttachmentService()
 
 vi.mock('../../src/services/transferReconciliationService.js', () => ({
   scheduleReconcile: vi.fn(),
-  getTransferSuggestions: vi.fn(),
+  getTransferSuggestions: vi.fn(async () => []),
   markTransfer: vi.fn(),
   unmarkTransfer: vi.fn(),
 }));
@@ -47,22 +46,38 @@ import { isManualDuplicate } from '../../src/services/deduplication.js';
 import { convertRowsToEur } from '../../src/services/currency/currencyConversionService.js';
 import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
 import { removeAttachmentFile } from '../../src/services/attachmentService.js';
-await import('../../src/routes/transactions.js');
+
+const { default: transactionsRouter } = await import('../../src/routes/transactions.js');
+
+const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
+// Same router behind an error handler in production mode (main.js:401 passes
+// `settings.isProduction`), so the 5xx message-sanitization branch
+// (errorHandler.js:234-235) is actually exercised rather than assumed.
+const apiProd = routeAgent(transactionsRouter, {
+  mountPath: '/api/transactions',
+  isProduction: () => true,
+});
+
+const PROD_5XX_MESSAGE = 'An internal server error occurred. Please try again later.';
 
 describe('Transaction Routes', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Re-arm the factory defaults that clearAllMocks wipes.
+    isManualDuplicate.mockResolvedValue({ isDuplicate: false });
+    convertRowsToEur.mockImplementation(async (rows) => rows);
+    attachmentRepository.listPathsByTransactionIds.mockResolvedValue([]);
+  });
 
   describe('GET /', () => {
     it('should return empty list', async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get('/api/transactions/').expect(200);
 
-      const result = res.json.mock.calls[0][0];
-      expect(result.data.items).toEqual([]);
-      expect(result.data.total).toBe(0);
+      expect(res.body).toEqual(okEnvelope({
+        items: [], total: 0, limit: expect.any(Number), offset: 0, links: [],
+      }));
     });
 
     it('should return transactions with data', async () => {
@@ -71,31 +86,24 @@ describe('Transaction Routes', () => {
         total: 1,
       });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get('/api/transactions/').expect(200);
 
-      expect(res.json.mock.calls[0][0].data.total).toBe(1);
+      expect(res.body.data.total).toBe(1);
     });
 
     it('should respect pagination', async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 10 });
 
-      const req = { query: { limit: '2', offset: '3' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get('/api/transactions/?limit=2&offset=3').expect(200);
 
-      const result = res.json.mock.calls[0][0];
-      expect(result.data.limit).toBe(2);
-      expect(result.data.offset).toBe(3);
+      expect(res.body.data.limit).toBe(2);
+      expect(res.body.data.offset).toBe(3);
     });
 
     it('should handle uncategorised filter', async () => {
       transactionRepository.getUncategorisedWithCount.mockResolvedValue({ rows: [], total: 0 });
 
-      const req = { query: { uncategorised: 'true' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      await api.get('/api/transactions/?uncategorised=true').expect(200);
 
       expect(transactionRepository.getUncategorisedWithCount).toHaveBeenCalled();
     });
@@ -106,12 +114,10 @@ describe('Transaction Routes', () => {
         total: 1,
       });
 
-      const req = { query: { transaction_id: '42' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get('/api/transactions/?transaction_id=42').expect(200);
 
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
-      expect(res.json.mock.calls[0][0].data.items).toHaveLength(1);
+      expect(res.body.data.items).toHaveLength(1);
     });
 
     it('should normalize rows when normalize_to_eur is true', async () => {
@@ -123,15 +129,15 @@ describe('Transaction Routes', () => {
         { id: 1, date: '2026-01-15', amount: '10', currency: 'USD', amount_eur: 9 },
       ]);
 
-      const req = { query: { normalize_to_eur: 'true', target_currency: 'GBP' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api
+        .get('/api/transactions/?normalize_to_eur=true&target_currency=GBP')
+        .expect(200);
 
       expect(convertRowsToEur).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({ id: 1 })]),
         'GBP'
       );
-      expect(res.json).toHaveBeenCalled();
+      expect(res.body.data.items[0].amount_eur).toBe(9);
     });
 
     it('should thread include_balance to the repository and expose running_balance on rows (WP-B4)', async () => {
@@ -143,14 +149,14 @@ describe('Transaction Routes', () => {
         total: 1,
       });
 
-      const req = { query: { include_balance: 'true', account_id: '3' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api
+        .get('/api/transactions/?include_balance=true&account_id=3')
+        .expect(200);
 
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
         expect.objectContaining({ includeBalance: true, accountId: 3 }),
       );
-      expect(res.json.mock.calls[0][0].data.items[0].running_balance).toBe(974.5);
+      expect(res.body.data.items[0].running_balance).toBe(974.5);
     });
 
     it('should omit the running_balance key entirely when include_balance is not set', async () => {
@@ -159,14 +165,22 @@ describe('Transaction Routes', () => {
         total: 1,
       });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      const res = await api.get('/api/transactions/').expect(200);
 
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
         expect.objectContaining({ includeBalance: false }),
       );
-      expect('running_balance' in res.json.mock.calls[0][0].data.items[0]).toBe(false);
+      expect('running_balance' in res.body.data.items[0]).toBe(false);
+    });
+
+    it('rejects a malformed account_id through the real validation guard (400 envelope)', async () => {
+      const res = await api.get('/api/transactions/?account_id=abc').expect(400);
+
+      expect(res.body).toEqual(errEnvelope({
+        code: 'VALIDATION_ERROR',
+        message: 'account_id must be a positive integer',
+      }));
+      expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
     });
   });
 
@@ -176,21 +190,31 @@ describe('Transaction Routes', () => {
         id: 1, date: '2026-01-15', amount: '50.00', bank_account: 'Chase',
       });
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
+      const res = await api.get('/api/transactions/1').expect(200);
 
-      expect(res.json).toHaveBeenCalled();
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.id).toBe(1);
     });
 
     it('should return 404 for non-existent', async () => {
       transactionRepository.getById.mockResolvedValue(null);
 
-      const req = { params: { id: '99999' } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/:id'], req, res);
+      const res = await api.get('/api/transactions/99999').expect(404);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.body).toEqual(errEnvelope({
+        code: 'NOT_FOUND',
+        message: 'Transaction with ID 99999 not found',
+      }));
+    });
+
+    it('rejects a non-integer :id via validateIdParam before the handler runs', async () => {
+      // validateIdParam is registered BEFORE the handler on this route
+      // (routes/transactions.js:523). The old mock-router harness kept only the
+      // last handler, so this guard was never on the tested path.
+      const res = await api.get('/api/transactions/abc').expect(400);
+
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(transactionRepository.getById).not.toHaveBeenCalled();
     });
   });
 
@@ -212,13 +236,9 @@ describe('Transaction Routes', () => {
         ],
       });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      const res = await api.get('/api/transactions/export/csv').expect(200);
 
-      expect(res.write).toHaveBeenCalled();
-      expect(res.end).toHaveBeenCalledTimes(1);
-      const csv = res.write.mock.calls.map(([chunk]) => chunk).join('');
+      const csv = res.text;
       // Text columns are still guarded against spreadsheet formula injection.
       expect(csv).toContain(`'=HYPERLINK(""http://evil"")`);
       expect(csv).toContain("'+cmd");
@@ -233,14 +253,13 @@ describe('Transaction Routes', () => {
     it('should sanitize server error detail when export fails', async () => {
       dbQuery.mockRejectedValue(new Error('sensitive db failure'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/export/csv'], req, res);
+      const res = await apiProd.get('/api/transactions/export/csv').expect(500);
 
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
-      );
+      expect(res.body).toEqual(errEnvelope({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: PROD_5XX_MESSAGE,
+      }));
+      expect(res.text).not.toContain('sensitive db failure');
     });
 
     it('should apply transaction_type=expense filter to export query', async () => {
@@ -248,9 +267,7 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [] });
 
-      const req = { query: { transaction_type: 'expense' } };
-      const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      await api.get('/api/transactions/export/csv?transaction_type=expense').expect(200);
 
       const probeSql = dbQuery.mock.calls[0][0];
       expect(probeSql).toContain('t.amount < 0');
@@ -261,9 +278,7 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [] });
 
-      const req = { query: { transaction_type: 'income' } };
-      const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      await api.get('/api/transactions/export/csv?transaction_type=income').expect(200);
 
       const probeSql = dbQuery.mock.calls[0][0];
       expect(probeSql).toContain('t.amount > 0');
@@ -274,9 +289,7 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [] });
 
-      const req = { query: { recipient_id: '42' } };
-      const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      await api.get('/api/transactions/export/csv?recipient_id=42').expect(200);
 
       const probeParams = dbQuery.mock.calls[0][1];
       expect(probeParams).toContain(42);
@@ -287,9 +300,7 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [] });
 
-      const req = { query: { search: 'netflix' } };
-      const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      await api.get('/api/transactions/export/csv?search=netflix').expect(200);
 
       const [probeSql, probeParams] = dbQuery.mock.calls[0];
       expect(probeSql).toMatch(/t\.memo ILIKE/);
@@ -301,9 +312,7 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [] });
 
-      const req = { query: { transaction_id: '7' } };
-      const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      await api.get('/api/transactions/export/csv?transaction_id=7').expect(200);
 
       const [probeSql, probeParams] = dbQuery.mock.calls[0];
       expect(probeSql).toMatch(/t\.id = \$/);
@@ -315,13 +324,22 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [] });
 
-      const req = { query: { search: 'foo' } };
-      const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      await api.get('/api/transactions/export/csv?search=foo').expect(200);
 
       const probeSql = dbQuery.mock.calls[0][0];
       expect(probeSql).toContain('LEFT JOIN recipients r');
       expect(probeSql).toContain('LEFT JOIN categories c');
+    });
+
+    it('sets the streamed CSV download headers', async () => {
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const res = await api.get('/api/transactions/export/csv').expect(200);
+
+      expect(res.headers['content-type']).toMatch(/text\/csv/);
+      expect(res.headers['content-disposition']).toMatch(/filename=transactions_export.*\.csv/);
     });
   });
 
@@ -345,16 +363,10 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })       // probe
         .mockResolvedValueOnce({ rows: [sampleRow] }); // chunk (1 row < 1000 → break)
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/export/json'](req, res);
+      const res = await api.get('/api/transactions/export/json').expect(200);
 
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/x-ndjson');
-      expect(res.setHeader).toHaveBeenCalledWith(
-        'Content-Disposition',
-        expect.stringMatching(/filename=transactions_export.*\.ndjson/),
-      );
-      expect(res.end).toHaveBeenCalledTimes(1);
+      expect(res.headers['content-type']).toMatch(/application\/x-ndjson/);
+      expect(res.headers['content-disposition']).toMatch(/filename=transactions_export.*\.ndjson/);
     });
 
     it('should emit one JSON object per transaction line', async () => {
@@ -363,12 +375,9 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [sampleRow, { ...sampleRow, id: 2, amount: '-5.00' }] });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/export/json'](req, res);
+      const res = await api.get('/api/transactions/export/json').expect(200);
 
-      const written = res.write.mock.calls.map(([chunk]) => chunk).join('');
-      const lines = written.trim().split('\n').filter(Boolean);
+      const lines = res.text.trim().split('\n').filter(Boolean);
       expect(lines).toHaveLength(2);
       const parsed = lines.map((l) => JSON.parse(l));
       expect(parsed[0]).toMatchObject({
@@ -381,21 +390,19 @@ describe('Transaction Routes', () => {
     it('should return 404 when no transactions match filters', async () => {
       dbQuery.mockResolvedValueOnce({ rows: [] }); // probe
 
-      const req = { query: { start_date: '2099-01-01' } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/export/json'], req, res);
+      const res = await api
+        .get('/api/transactions/export/json?start_date=2099-01-01')
+        .expect(404);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
     });
 
     it('should return 500 on unexpected error before headers sent', async () => {
       dbQuery.mockRejectedValueOnce(new Error('db error'));
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/export/json'], req, res);
+      const res = await api.get('/api/transactions/export/json').expect(500);
 
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.body.ok).toBe(false);
     });
 
     it('should include all expected fields in output', async () => {
@@ -404,12 +411,9 @@ describe('Transaction Routes', () => {
         .mockResolvedValueOnce({ rows: [{}] })
         .mockResolvedValueOnce({ rows: [sampleRow] });
 
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/export/json'](req, res);
+      const res = await api.get('/api/transactions/export/json').expect(200);
 
-      const written = res.write.mock.calls.map(([chunk]) => chunk).join('');
-      const obj = JSON.parse(written.trim().split('\n')[0]);
+      const obj = JSON.parse(res.text.trim().split('\n')[0]);
       expect(Object.keys(obj).sort()).toEqual(
         ['amount', 'balance', 'bank_account', 'category', 'comment', 'currency', 'date', 'id', 'memo', 'recipient', 'tags'].sort()
       );
@@ -422,78 +426,129 @@ describe('Transaction Routes', () => {
         id: 1, date: '2026-01-15', amount: '-50.00', bank_account: 'Chase', recipient_id: 1,
       });
 
-      const req = {
-        body: {
+      const res = await api
+        .post('/api/transactions/')
+        .send({
           transaction_date: '2026-01-15', bank_account: 'Chase',
           recipient_id: 1, amount: -50.00, memo: 'Test',
-        },
-      };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
+        })
+        .expect(201);
 
-      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.id).toBe(1);
     });
 
     it('should return 400 for missing fields', async () => {
-      const req = { body: { bank_account: 'Chase', amount: -50.00 } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/'], req, res);
+      const res = await api
+        .post('/api/transactions/')
+        .send({ bank_account: 'Chase', amount: -50.00 })
+        .expect(400);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
     it('should return 400 for a zero amount', async () => {
-      const req = {
-        body: {
+      await api
+        .post('/api/transactions/')
+        .send({
           transaction_date: '2026-01-15', bank_account: 'Chase',
           recipient_id: 1, amount: 0,
-        },
-      };
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/'], req, res);
+        })
+        .expect(400);
 
-      expect(res.status).toHaveBeenCalledWith(400);
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
 
     it('should return 400 for a non-numeric amount', async () => {
-      const req = {
-        body: {
+      await api
+        .post('/api/transactions/')
+        .send({
           transaction_date: '2026-01-15', bank_account: 'Chase',
           recipient_id: 1, amount: 'abc',
-        },
-      };
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/'], req, res);
+        })
+        .expect(400);
 
-      expect(res.status).toHaveBeenCalledWith(400);
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
 
     it('should return 409 when manual duplicate is detected', async () => {
       isManualDuplicate.mockResolvedValue({ isDuplicate: true, existingTransactionId: 99 });
 
-      const req = {
-        body: {
+      const res = await api
+        .post('/api/transactions/')
+        .send({
           transaction_date: '2026-01-15',
           bank_account: 'Chase',
           recipient_id: 1,
           amount: -50,
-        },
-      };
-      const res = mockResponse();
-      await callHandler(routeHandlers['post:/'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(409);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          ok: false,
-          error: expect.objectContaining({
-            message: 'Duplicate transaction detected',
-            details: { existing_transaction_id: 99 },
-          }),
         })
-      );
+        .expect(409);
+
+      expect(res.body).toEqual(errEnvelope({
+        code: 'CONFLICT',
+        message: 'Duplicate transaction detected',
+        details: { existing_transaction_id: 99 },
+      }));
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('a malformed JSON body yields a 400 with the parser reason, in both modes', async () => {
+      // body-parser raises a SyntaxError carrying `status = 400` and
+      // `type = 'entity.parse.failed'`. It is not an AppError, so it used to
+      // collapse to a 500 INTERNAL_SERVER_ERROR — a client typo reported as a
+      // server fault. errorHandler.js now forwards the 4xx and echoes the
+      // trusted body-parser message (THE RULE, errorHandler.js:91-110).
+      const res = await api
+        .post('/api/transactions/')
+        .set('Content-Type', 'application/json')
+        .send('{"amount": ');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toMatch(/JSON/i);
+
+      // Production must not sanitize it away: the 4xx never reaches the 5xx branch.
+      const prod = await apiProd
+        .post('/api/transactions/')
+        .set('Content-Type', 'application/json')
+        .send('{"amount": ');
+      expect(prod.status).toBe(400);
+      expect(prod.body.error.message).toBe(res.body.error.message);
+      expect(prod.body.error.message).not.toBe(PROD_5XX_MESSAGE);
+
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('an over-limit body yields a 413 whose reason survives production', async () => {
+      // body-parser's PayloadTooLargeError carries `status = 413` and
+      // `type = 'entity.too.large'`. It used to become a 500, and the 5xx
+      // sanitizer then replaced "request entity too large" with the generic
+      // message — a client posting an oversized bulk/import payload could not
+      // tell why it failed, and the typo counted against server-error monitoring.
+      const oversize = { memo: 'x'.repeat(1024 * 1024 + 100) };
+
+      const dev = await api.post('/api/transactions/').send(oversize);
+      expect(dev.status).toBe(413);
+      expect(dev.body.error.code).toBe('VALIDATION_ERROR');
+      expect(dev.body.error.message).toBe('request entity too large');
+
+      const prod = await apiProd.post('/api/transactions/').send(oversize);
+      expect(prod.status).toBe(413);
+      expect(prod.body.error.message).toBe('request entity too large');
+      expect(prod.body.error.message).not.toBe(PROD_5XX_MESSAGE);
+    });
+
+    it('the CSRF guard blocks a cross-site POST before the router runs', async () => {
+      const res = await api
+        .post('/api/transactions/')
+        .set('Sec-Fetch-Site', 'cross-site')
+        .send({ transaction_date: '2026-01-15', bank_account: 'Chase', recipient_id: 1, amount: -1 })
+        .expect(403);
+
+      expect(res.body).toEqual(errEnvelope({
+        code: 'FORBIDDEN',
+        message: 'Cross-site request blocked',
+      }));
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
   });
@@ -504,59 +559,50 @@ describe('Transaction Routes', () => {
         id: 1, date: '2026-01-15', amount: '-75.00', bank_account: 'Chase',
       });
 
-      const req = { params: { id: '1' }, body: { amount: -75.00 } };
-      const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      const res = await api
+        .patch('/api/transactions/1')
+        .send({ amount: -75.00 })
+        .expect(200);
 
-      expect(res.json).toHaveBeenCalled();
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.amount).toBe(-75);
     });
 
     it('should return 404 for non-existent', async () => {
       transactionRepository.update.mockResolvedValue(null);
 
-      const req = { params: { id: '99999' }, body: { amount: -75.00 } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['patch:/:id'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await api.patch('/api/transactions/99999').send({ amount: -75.00 }).expect(404);
     });
 
     it('should sanitize server error detail when patch fails', async () => {
       transactionRepository.update.mockRejectedValue(new Error('constraint: internal detail'));
 
-      const req = { params: { id: '1' }, body: { amount: -75.00 } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['patch:/:id'], req, res);
+      const res = await apiProd.patch('/api/transactions/1').send({ amount: -75.00 }).expect(500);
 
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
-      );
+      expect(res.body).toEqual(errEnvelope({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: PROD_5XX_MESSAGE,
+      }));
+      expect(res.text).not.toContain('internal detail');
     });
 
     it('should return 400 when recipient_name cannot be resolved', async () => {
       dbQuery.mockResolvedValueOnce({ rows: [] });
 
-      const req = {
-        params: { id: '1' },
-        body: { recipient_name: 'Missing Name' },
-      };
-      const res = mockResponse();
-      await callHandler(routeHandlers['patch:/:id'], req, res);
+      await api
+        .patch('/api/transactions/1')
+        .send({ recipient_name: 'Missing Name' })
+        .expect(400);
 
-      expect(res.status).toHaveBeenCalledWith(400);
       expect(transactionRepository.update).not.toHaveBeenCalled();
     });
 
     it('should return 400 for invalid category_name format', async () => {
-      const req = {
-        params: { id: '1' },
-        body: { category_name: 'INVALID' },
-      };
-      const res = mockResponse();
-      await callHandler(routeHandlers['patch:/:id'], req, res);
+      await api
+        .patch('/api/transactions/1')
+        .send({ category_name: 'INVALID' })
+        .expect(400);
 
-      expect(res.status).toHaveBeenCalledWith(400);
       expect(transactionRepository.update).not.toHaveBeenCalled();
     });
 
@@ -564,17 +610,20 @@ describe('Transaction Routes', () => {
       dbQuery.mockResolvedValueOnce({ rows: [{ id: 11 }] });
       dbQuery.mockResolvedValueOnce({ rows: [] });
 
-      const req = {
-        params: { id: '1' },
-        body: {
+      await api
+        .patch('/api/transactions/1')
+        .send({
           recipient_name: 'Known Recipient',
           category_name: 'FOOD:UNKNOWN',
-        },
-      };
-      const res = mockResponse();
-      await callHandler(routeHandlers['patch:/:id'], req, res);
+        })
+        .expect(400);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-integer :id via validateIdParam before the rate limiter and handler', async () => {
+      await api.patch('/api/transactions/abc').send({ amount: -75 }).expect(400);
+
       expect(transactionRepository.update).not.toHaveBeenCalled();
     });
   });
@@ -583,23 +632,15 @@ describe('Transaction Routes', () => {
     it('should delete and return 204 with no body', async () => {
       transactionRepository.hardDelete.mockResolvedValue(true);
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
+      const res = await api.delete('/api/transactions/1').expect(204);
 
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
+      expect(res.text).toBe('');
     });
 
     it('should return 404 for non-existent', async () => {
       transactionRepository.hardDelete.mockResolvedValue(false);
 
-      const req = { params: { id: '99999' } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['delete:/:id'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await api.delete('/api/transactions/99999').expect(404);
     });
 
     it('removes attachment files from disk after the delete', async () => {
@@ -611,9 +652,7 @@ describe('Transaction Routes', () => {
         'attachments/1/receipt-b.pdf',
       ]);
 
-      const req = { params: { id: '1' } };
-      const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
+      await api.delete('/api/transactions/1').expect(204);
 
       expect(attachmentRepository.listPathsByTransactionIds).toHaveBeenCalledWith([1]);
       expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt-a.png');
@@ -624,9 +663,7 @@ describe('Transaction Routes', () => {
       transactionRepository.hardDelete.mockResolvedValue(false);
       attachmentRepository.listPathsByTransactionIds.mockResolvedValue(['attachments/9/x.png']);
 
-      const req = { params: { id: '99999' } };
-      const res = mockResponse();
-      await callHandler(routeHandlers['delete:/:id'], req, res);
+      await api.delete('/api/transactions/99999').expect(404);
 
       expect(removeAttachmentFile).not.toHaveBeenCalled();
     });
@@ -634,38 +671,19 @@ describe('Transaction Routes', () => {
 
   describe('DELETE /transfers/:id', () => {
     it('clears the transfer mark and returns 204 with no body', async () => {
-      const req = { params: { id: '10' } };
-      const res = mockResponse();
-      await routeHandlers['delete:/transfers/:id'](req, res);
+      const res = await api.delete('/api/transactions/transfers/10').expect(204);
 
       expect(unmarkTransfer).toHaveBeenCalledWith(10);
       expect(scheduleReconcile).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
+      expect(res.text).toBe('');
+    });
+  });
+
+  describe('unmatched paths', () => {
+    it('falls through to the 404 error envelope', async () => {
+      const res = await api.get('/api/transactions/1/nope/nope').expect(404);
+
+      expect(res.body.error.code).toBe('NOT_FOUND');
     });
   });
 });
-
-function mockResponse() {
-  return createMockResponse({ setHeader: vi.fn(), write: vi.fn(), end: vi.fn(), headersSent: false });
-}
-
-/**
- * Simulates Express error-handler middleware for routes that throw typed errors.
- * Routes use `throw new NotFoundError / ValidationError / ConflictError` which
- * propagates to the centralized error handler in production. In unit tests we
- * catch the error here and replicate the handler's response shape.
- */
-async function callHandler(handler, req, res) {
-  try {
-    await handler(req, res);
-  } catch (err) {
-    const status = err.status ?? 500;
-    const code = err.code ?? 'INTERNAL_SERVER_ERROR';
-    const message = err.message ?? 'Internal server error';
-    const error = { code, message };
-    if (err.details !== undefined) error.details = err.details;
-    res.status(status).json({ ok: false, error });
-  }
-}

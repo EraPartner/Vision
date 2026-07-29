@@ -1,17 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from './helpers/mockLogger.js';
 import { mockConnection } from './helpers/repoMocks.js';
-import { createMockRouter, createMockResponse as mockResponse } from './helpers/routeHarness.js';
+import { routeAgent, okEnvelope } from './helpers/routeApp.js';
 
 // Mock the DB layer used by the settings repository
 vi.mock('../src/database/connection.js', () => mockConnection());
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
 
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
@@ -19,7 +12,10 @@ vi.mock('../src/config/logger.js', () => ({
 
 import { query } from '../src/database/connection.js';
 import settingsRepository from '../src/repositories/settingsRepository.js';
-await import('../src/routes/settings.js');
+const { default: settingsRouter } = await import('../src/routes/settings.js');
+
+const api = routeAgent(settingsRouter, { mountPath: '/api/settings' });
+const BASE = '/api/settings';
 
 describe('Settings storage and retrieval', () => {
   beforeEach(() => {
@@ -73,12 +69,10 @@ describe('Settings storage and retrieval', () => {
     query.mockResolvedValue({});
 
     const payload = { value: { excludedCategoryIds: [7], excludedRecipientIds: [8] } };
-    const req = { params: { key: 'dashboard_settings' }, body: payload };
-    const res = mockResponse();
 
-    await routeHandlers['put:/:key'](req, res);
+    const res = await api.put(`${BASE}/dashboard_settings`).send(payload).expect(200);
 
-    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'dashboard_settings', value: payload.value } });
+    expect(res.body).toEqual(okEnvelope({ key: 'dashboard_settings', value: payload.value }));
   });
 
   it('settingsRepository.getAll should parse JSON string values and preserve invalid JSON strings', async () => {
@@ -172,58 +166,60 @@ describe('rebalance_plans setting (ADR-098 custom rebalancing plans)', () => {
 
   it('accepts a valid list of plans and upserts it', async () => {
     query.mockResolvedValue({});
-    const req = { params: { key: 'rebalance_plans' }, body: { value: [validPlan] } };
-    const res = mockResponse();
 
-    await routeHandlers['put:/:key'](req, res);
+    const res = await api.put(`${BASE}/rebalance_plans`).send({ value: [validPlan] }).expect(200);
 
-    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'rebalance_plans', value: [validPlan] } });
+    expect(res.body).toEqual(okEnvelope({ key: 'rebalance_plans', value: [validPlan] }));
   });
 
   it('accepts a plan without a cashCap', async () => {
     query.mockResolvedValue({});
     const { cashCap: _cashCap, ...noCap } = validPlan;
-    const req = { params: { key: 'rebalance_plans' }, body: { value: [noCap] } };
-    const res = mockResponse();
 
-    await routeHandlers['put:/:key'](req, res);
+    const res = await api.put(`${BASE}/rebalance_plans`).send({ value: [noCap] }).expect(200);
 
-    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'rebalance_plans', value: [noCap] } });
+    expect(res.body).toEqual(okEnvelope({ key: 'rebalance_plans', value: [noCap] }));
   });
 
   it('rejects a non-array value', async () => {
-    const req = { params: { key: 'rebalance_plans' }, body: { value: { not: 'an array' } } };
-    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/expected array/);
+    const res = await api.put(`${BASE}/rebalance_plans`).send({ value: { not: 'an array' } }).expect(400);
+    expect(res.body.error.message).toMatch(/expected array/);
   });
 
   it('rejects a plan with a blank name', async () => {
-    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, name: '   ' }] } };
-    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/name must not be blank/);
+    const res = await api.put(`${BASE}/rebalance_plans`)
+      .send({ value: [{ ...validPlan, name: '   ' }] })
+      .expect(400);
+    expect(res.body.error.message).toMatch(/name must not be blank/);
   });
 
   it('rejects a plan with empty targetWeights', async () => {
-    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, targetWeights: {} }] } };
-    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/at least one sleeve/);
+    const res = await api.put(`${BASE}/rebalance_plans`)
+      .send({ value: [{ ...validPlan, targetWeights: {} }] })
+      .expect(400);
+    expect(res.body.error.message).toMatch(/at least one sleeve/);
   });
 
   it('rejects a negative target weight', async () => {
-    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, targetWeights: { stocks: -0.1 } }] } };
-    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/non-negative number/);
+    const res = await api.put(`${BASE}/rebalance_plans`)
+      .send({ value: [{ ...validPlan, targetWeights: { stocks: -0.1 } }] })
+      .expect(400);
+    expect(res.body.error.message).toMatch(/non-negative number/);
   });
 
   it('rejects a negative cashCap', async () => {
-    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, cashCap: -1 }] } };
-    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/cashCap must be a non-negative number/);
+    const res = await api.put(`${BASE}/rebalance_plans`)
+      .send({ value: [{ ...validPlan, cashCap: -1 }] })
+      .expect(400);
+    expect(res.body.error.message).toMatch(/cashCap must be a non-negative number/);
   });
 
   it('returns an empty list as the default when unset', async () => {
     query.mockResolvedValue({ rows: [] });
-    const req = { params: { key: 'rebalance_plans' } };
-    const res = mockResponse();
 
-    await routeHandlers['get:/:key'](req, res);
+    const res = await api.get(`${BASE}/rebalance_plans`).expect(200);
 
-    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'rebalance_plans', value: [] } });
+    expect(res.body).toEqual(okEnvelope({ key: 'rebalance_plans', value: [] }));
   });
 });
 
@@ -234,10 +230,7 @@ describe('belgian_tax_profile setting validation (TODO E6)', () => {
 
   const put = async (key, value) => {
     query.mockResolvedValue({});
-    const req = { params: { key }, body: { value } };
-    const res = mockResponse();
-    await routeHandlers['put:/:key'](req, res);
-    return res;
+    return api.put(`${BASE}/${key}`).send({ value });
   };
 
   const validProfile = {
@@ -252,70 +245,90 @@ describe('belgian_tax_profile setting validation (TODO E6)', () => {
 
   it('accepts a well-formed profile', async () => {
     const res = await put('belgian_tax_profile', validProfile);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ ok: true }),
-    );
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 
   it('rejects a negative communal surcharge (would become a tax credit)', async () => {
-    await expect(put('belgian_tax_profile', { ...validProfile, communalSurchargePercent: -7 }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
+    const res = await put('belgian_tax_profile', { ...validProfile, communalSurchargePercent: -7 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('rejects a fat-fingered 70% surcharge (10x the real 7.0)', async () => {
-    await expect(put('belgian_tax_profile', { ...validProfile, communalSurchargePercent: 70 }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
+    const res = await put('belgian_tax_profile', { ...validProfile, communalSurchargePercent: 70 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('rejects negative and absurd money fields', async () => {
-    await expect(put('belgian_tax_profile', { ...validProfile, grossAnnualIncome: -50000 }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
-    await expect(put('belgian_tax_profile', { ...validProfile, medicalExpenses: 1e15 }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
-    await expect(put('belgian_tax_profile', { ...validProfile, unionDues: 'lots' }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
+    let res = await put('belgian_tax_profile', { ...validProfile, grossAnnualIncome: -50000 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+
+    res = await put('belgian_tax_profile', { ...validProfile, medicalExpenses: 1e15 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+
+    res = await put('belgian_tax_profile', { ...validProfile, unionDues: 'lots' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('rejects negative childcareEligibleDays and non-integer counts', async () => {
-    await expect(put('belgian_tax_profile', { ...validProfile, childcareEligibleDays: -5 }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
-    await expect(put('belgian_tax_profile', { ...validProfile, dependentChildren: 1.5 }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
+    let res = await put('belgian_tax_profile', { ...validProfile, childcareEligibleDays: -5 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+
+    res = await put('belgian_tax_profile', { ...validProfile, dependentChildren: 1.5 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('rejects bad additional residences and non-object profiles', async () => {
-    await expect(put('belgian_tax_profile', {
+    let res = await put('belgian_tax_profile', {
       ...validProfile,
       additionalResidences: [{ cadastralIncome: -1 }],
-    })).rejects.toMatchObject({ name: 'ValidationError' });
-    await expect(put('belgian_tax_profile', [validProfile]))
-      .rejects.toMatchObject({ name: 'ValidationError' });
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+
+    res = await put('belgian_tax_profile', [validProfile]);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('validates each snapshot in the year-keyed snapshots map', async () => {
-    const res = await put('belgian_tax_profile_snapshots_v1', { 2025: validProfile });
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    let res = await put('belgian_tax_profile_snapshots_v1', { 2025: validProfile });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
 
-    await expect(put('belgian_tax_profile_snapshots_v1', {
+    res = await put('belgian_tax_profile_snapshots_v1', {
       2025: { ...validProfile, communalSurchargePercent: -3 },
-    })).rejects.toMatchObject({ name: 'ValidationError' });
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('requires snapshot meta to be a year-keyed object map', async () => {
-    const res = await put('belgian_tax_profile_snapshot_meta_v1', { 2025: { history: [] } });
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    let res = await put('belgian_tax_profile_snapshot_meta_v1', { 2025: { history: [] } });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
 
-    await expect(put('belgian_tax_profile_snapshot_meta_v1', { 2025: 'filed' }))
-      .rejects.toMatchObject({ name: 'ValidationError' });
-    await expect(put('belgian_tax_profile_snapshot_meta_v1', 'nope'))
-      .rejects.toMatchObject({ name: 'ValidationError' });
+    res = await put('belgian_tax_profile_snapshot_meta_v1', { 2025: 'filed' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+
+    res = await put('belgian_tax_profile_snapshot_meta_v1', 'nope');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('bulk PUT enforces the same profile rules', async () => {
     query.mockResolvedValue({});
-    const req = { body: { belgian_tax_profile: { ...validProfile, communalSurchargePercent: -1 } } };
-    const res = mockResponse();
-    await expect(routeHandlers['put:/'](req, res))
-      .rejects.toMatchObject({ name: 'ValidationError' });
+    const res = await api.put(BASE)
+      .send({ belgian_tax_profile: { ...validProfile, communalSurchargePercent: -1 } })
+      .expect(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 });

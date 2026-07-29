@@ -14,9 +14,14 @@ import {
 } from '../../services/info/cache.js';
 import { buildPortfolioPerformancePayload } from '../../services/info/performanceHelpers.js';
 
+/**
+ * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ */
+
 const router = Router();
 
-router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'portfolio-performance' }), async (req, res) => {
+router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'portfolio-performance' }), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const targetCurrency = getTargetCurrency(req);
   const period = req.query.period || 'all';
   const startDate = '2000-01-01';

@@ -1,13 +1,16 @@
+/**
+ * Split route tests.
+ *
+ * Runs against the REAL router mounted on a throwaway Express app (see
+ * tests/helpers/routeApp.js). Mount is /api/splits (main.js:332, no
+ * per-mount `before` middleware). validateIdParam
+ * (routes/splits.js:168,178,193,247,263,271,285,299) now runs for real on
+ * every id-bearing route — every test here already used a valid numeric id,
+ * so nothing was fake-passing under the old bypass.
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
-import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
-
-const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
-
-vi.mock('express', () => ({
-  default: { Router: () => mockRouter },
-  Router: () => mockRouter,
-}));
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/splitRepository.js', () => ({
   default: {
@@ -39,7 +42,11 @@ vi.mock('../../src/config/logger.js', () => ({
 
 import splitRepository from '../../src/repositories/splitRepository.js';
 import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/splits.js');
+
+const { default: splitsRouter } = await import('../../src/routes/splits.js');
+
+const BASE = '/api/splits';
+const api = routeAgent(splitsRouter, { mountPath: BASE });
 
 describe('Splits Routes', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -48,14 +55,9 @@ describe('Splits Routes', () => {
     it('returns owed summary items', async () => {
       splitRepository.getOwedSummary.mockResolvedValue([{ recipient_id: 2, amount: 12.5 }]);
 
-      const req = { params: {}, query: {}, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/owed'](req, res);
+      const res = await api.get(`${BASE}/owed`).expect(200);
 
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ recipient_id: 2, amount: 12.5 }], total: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ recipient_id: 2, amount: 12.5 }], total: 1 }));
     });
 
     // The summary is derived in JS, so the route slices the computed array —
@@ -65,22 +67,16 @@ describe('Splits Routes', () => {
         { recipient_id: 1 }, { recipient_id: 2 }, { recipient_id: 3 },
       ]);
 
-      const req = { params: {}, query: { limit: '1', offset: '1' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/owed'](req, res);
+      const res = await api.get(`${BASE}/owed`).query({ limit: '1', offset: '1' }).expect(200);
 
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ recipient_id: 2 }], total: 3, limit: 1, offset: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ recipient_id: 2 }], total: 3, limit: 1, offset: 1 }));
     });
 
     it('propagates error when owed summary fails', async () => {
       splitRepository.getOwedSummary.mockRejectedValue(new Error('boom'));
 
-      const req = { params: {}, query: {}, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/owed'](req, res)).rejects.toThrow('boom');
+      const res = await api.get(`${BASE}/owed`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 
@@ -88,38 +84,27 @@ describe('Splits Routes', () => {
     it('returns owed items by recipient', async () => {
       splitRepository.getOwedByRecipient.mockResolvedValue([{ id: 1, split_id: 4 }]);
 
-      const req = { params: { id: '7' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/owed/:id'](req, res);
+      const res = await api.get(`${BASE}/owed/7`).expect(200);
 
       expect(splitRepository.getOwedByRecipient).toHaveBeenCalledWith(7, {});
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 1, split_id: 4 }], total: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 1, split_id: 4 }], total: 1 }));
     });
 
     it('pages owed detail when limit/offset are supplied', async () => {
       splitRepository.getOwedByRecipient.mockResolvedValue([{ id: 2, split_id: 5 }]);
       splitRepository.countOwedByRecipient.mockResolvedValue(31);
 
-      const req = { params: { id: '7' }, query: { limit: '1', offset: '10' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/owed/:id'](req, res);
+      const res = await api.get(`${BASE}/owed/7`).query({ limit: '1', offset: '10' }).expect(200);
 
       expect(splitRepository.getOwedByRecipient).toHaveBeenCalledWith(7, { limit: 1, offset: 10 });
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 2, split_id: 5 }], total: 31, limit: 1, offset: 10 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 2, split_id: 5 }], total: 31, limit: 1, offset: 10 }));
     });
 
     it('propagates error when owed by recipient fails', async () => {
       splitRepository.getOwedByRecipient.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '7' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/owed/:id'](req, res)).rejects.toThrow('boom');
+      const res = await api.get(`${BASE}/owed/7`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 
@@ -127,20 +112,16 @@ describe('Splits Routes', () => {
     it('throws ValidationError when split exceeds transaction total', async () => {
       splitRepository.createSplitAtomic.mockRejectedValue(new ValidationError('Split would exceed transaction total'));
 
-      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 15 }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/`).send({ transaction_id: 1, recipient_id: 2, amount: 15 }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('creates split when amount fits remaining total', async () => {
       splitRepository.createSplitAtomic.mockResolvedValue({ id: 7, transaction_id: 1, recipient_id: 2, amount: 20 });
       splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 20 }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
+      await api.post(`${BASE}/`).send({ transaction_id: 1, recipient_id: 2, amount: 20 }).expect(201);
 
-      expect(res.status).toHaveBeenCalledWith(201);
       expect(splitRepository.createSplitAtomic).toHaveBeenCalledWith(expect.objectContaining({ amount: 20 }));
     });
 
@@ -151,15 +132,15 @@ describe('Splits Routes', () => {
         { transaction_id: 'abc', recipient_id: 2, amount: 5 },
         { transaction_id: 1, recipient_id: 'abc', amount: 5 },
       ]) {
-        await expect(routeHandlers['post:/']({ body, get: () => null }, mockResponse()))
-          .rejects.toBeInstanceOf(ValidationError);
+        const res = await api.post(`${BASE}/`).send(body).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       }
       expect(splitRepository.createSplitAtomic).not.toHaveBeenCalled();
     });
 
     it('throws ValidationError for a non-finite amount', async () => {
-      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 'abc' }, get: () => null };
-      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/`).send({ transaction_id: 1, recipient_id: 2, amount: 'abc' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       expect(splitRepository.createSplitAtomic).not.toHaveBeenCalled();
     });
 
@@ -167,8 +148,7 @@ describe('Splits Routes', () => {
       splitRepository.createSplitAtomic.mockResolvedValue({ id: 7, transaction_id: 1, recipient_id: 2, amount: 20 });
       splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { body: { transaction_id: 1, recipient_id: 2, amount: '20' }, get: () => null };
-      await routeHandlers['post:/'](req, mockResponse());
+      await api.post(`${BASE}/`).send({ transaction_id: 1, recipient_id: 2, amount: '20' }).expect(201);
 
       expect(splitRepository.createSplitAtomic).toHaveBeenCalledWith(expect.objectContaining({ amount: '20' }));
       expect(splitRepository.writeAudit).toHaveBeenCalledWith(
@@ -177,8 +157,8 @@ describe('Splits Routes', () => {
     });
 
     it('throws ValidationError when a falsy recipient_id hits the required check', async () => {
-      const req = { body: { transaction_id: 1, recipient_id: 0, amount: 5 }, get: () => null };
-      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/`).send({ transaction_id: 1, recipient_id: 0, amount: 5 }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
   });
 
@@ -186,62 +166,46 @@ describe('Splits Routes', () => {
     it('throws NotFoundError when transaction does not exist', async () => {
       splitRepository.createSplitsBatchAtomic.mockRejectedValue(new NotFoundError('Transaction not found'));
 
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [{ recipient_id: 2, amount: 10 }],
-        },
-        get: () => null,
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [{ recipient_id: 2, amount: 10 }],
+      }).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('throws ValidationError when cumulative amount exceeds transaction total', async () => {
       splitRepository.createSplitsBatchAtomic.mockRejectedValue(new ValidationError('Split would exceed transaction total'));
 
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [
-            { recipient_id: 2, amount: 20 },
-            { recipient_id: 3, amount: 15 },
-          ],
-        },
-        get: () => null,
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: 2, amount: 20 },
+          { recipient_id: 3, amount: 15 },
+        ],
+      }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('throws ValidationError for non-positive split amounts in batch', async () => {
       splitRepository.createSplitsBatchAtomic.mockRejectedValue(new ValidationError('Split amount must be a positive number'));
 
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [{ recipient_id: 2, amount: 0 }],
-        },
-        get: () => null,
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [{ recipient_id: 2, amount: 0 }],
+      }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
     it('rejects a non-empty batch whose rows are all invalid with 400, not a 201 empty envelope', async () => {
-      const req = {
-        body: {
-          transaction_id: 1,
-          // Both rows fail row validation (missing recipient_id / amount).
-          splits: [
-            { amount: 10 },
-            { recipient_id: 3 },
-          ],
-        },
-        get: () => null,
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        // Both rows fail row validation (missing recipient_id / amount).
+        splits: [
+          { amount: 10 },
+          { recipient_id: 3 },
+        ],
+      }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
 
@@ -249,18 +213,13 @@ describe('Splits Routes', () => {
       splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
       splitRepository.writeAudit.mockResolvedValue();
 
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [
-            { recipient_id: 2, amount: 20, note: 'x' },
-            { recipient_id: 4, amount: 5, note: 'y' },
-          ],
-        },
-        get: () => null,
-      };
-      const res = mockResponse();
-      await routeHandlers['post:/batch'](req, res);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: 2, amount: 20, note: 'x' },
+          { recipient_id: 4, amount: 5, note: 'y' },
+        ],
+      }).expect(201);
 
       expect(splitRepository.createSplitsBatchAtomic).toHaveBeenCalledWith({
         transaction_id: 1,
@@ -269,60 +228,49 @@ describe('Splits Routes', () => {
           { recipient_id: 4, amount: 5, note: 'y' },
         ],
       });
-      expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 1 }], total: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 1 }], total: 1 }));
     });
 
     // All-or-nothing (bulk-operation semantics): a batch mixing valid and
     // malformed rows used to commit the valid subset silently. It must now be
     // rejected wholesale, with the 400 naming each offending index.
     it('rejects the whole batch when one row of several is malformed, writing nothing', async () => {
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [
-            { recipient_id: 2, amount: 20, note: 'x' },
-            { recipient_id: null, amount: 20, note: 'dropped before this fix' },
-            { recipient_id: 3, amount: 5 },
-          ],
-        },
-        get: () => null,
-      };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/batch'](req, res)).rejects.toThrow(/splits\[1\]/);
-      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: 2, amount: 20, note: 'x' },
+          { recipient_id: null, amount: 20, note: 'dropped before this fix' },
+          { recipient_id: 3, amount: 5 },
+        ],
+      }).expect(400);
+
+      expect(res.body.error.message).toMatch(/splits\[1\]/);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
       expect(splitRepository.writeAudit).not.toHaveBeenCalled();
     });
 
     it('names every offending index when several rows are malformed', async () => {
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [
-            { recipient_id: 2, amount: 20 },
-            { recipient_id: 'abc', amount: 5 },
-            { recipient_id: 3, amount: 'not-a-number' },
-          ],
-        },
-        get: () => null,
-      };
-      await expect(routeHandlers['post:/batch'](req, mockResponse()))
-        .rejects.toThrow(/splits\[1\].*recipient_id.*splits\[2\].*amount/s);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: 2, amount: 20 },
+          { recipient_id: 'abc', amount: 5 },
+          { recipient_id: 3, amount: 'not-a-number' },
+        ],
+      }).expect(400);
+
+      expect(res.body.error.message).toMatch(/splits\[1\].*recipient_id.*splits\[2\].*amount/s);
       expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
 
     // Pins for the zod swap (ZOD-08): normalization keeps parseInt-style id
     // coercion ('12abc' → 12) and finite (even non-positive) amounts.
     it('throws ValidationError for a non-integer batch transaction_id', async () => {
-      const req = {
-        body: { transaction_id: 'abc', splits: [{ recipient_id: 2, amount: 10 }] },
-        get: () => null,
-      };
-      await expect(routeHandlers['post:/batch'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 'abc', splits: [{ recipient_id: 2, amount: 10 }],
+      }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
 
@@ -330,17 +278,13 @@ describe('Splits Routes', () => {
       splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
       splitRepository.writeAudit.mockResolvedValue();
 
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [
-            { recipient_id: '12abc', amount: '5', note: 'n' },
-            { recipient_id: 3, amount: 0 }, // finite non-positive amounts survive normalization
-          ],
-        },
-        get: () => null,
-      };
-      await routeHandlers['post:/batch'](req, mockResponse());
+      await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: '12abc', amount: '5', note: 'n' },
+          { recipient_id: 3, amount: 0 }, // finite non-positive amounts survive normalization
+        ],
+      }).expect(201);
 
       expect(splitRepository.createSplitsBatchAtomic).toHaveBeenCalledWith({
         transaction_id: 1,
@@ -352,15 +296,11 @@ describe('Splits Routes', () => {
     });
 
     it('rejects the batch on null and non-object rows instead of dropping them', async () => {
-      const req = {
-        body: {
-          transaction_id: 1,
-          splits: [null, 'junk', { recipient_id: 2, amount: 10 }],
-        },
-        get: () => null,
-      };
-      await expect(routeHandlers['post:/batch'](req, mockResponse()))
-        .rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [null, 'junk', { recipient_id: 2, amount: 10 }],
+      }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
   });
@@ -381,23 +321,19 @@ describe('Splits Routes', () => {
         },
       ]);
 
-      const req = { params: { id: '7' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/owed/:id/export/csv'](req, res);
+      const res = await api.get(`${BASE}/owed/7/export/csv`).expect(200);
 
       expect(splitRepository.getOwedExportRowsByRecipient).toHaveBeenCalledWith(7);
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-      const body = res.send.mock.calls[0][0];
-      expect(body).toContain('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment');
-      expect(body).toContain('2026-03-20,Main,Coffee Shop,Lunch,5,EUR,100,FOOD:LUNCH,shared');
+      expect(res.headers['content-type']).toMatch(/text\/csv/);
+      expect(res.text).toContain('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment');
+      expect(res.text).toContain('2026-03-20,Main,Coffee Shop,Lunch,5,EUR,100,FOOD:LUNCH,shared');
     });
 
     it('throws NotFoundError when recipient has no unsettled owed transactions', async () => {
       splitRepository.getOwedExportRowsByRecipient.mockResolvedValue([]);
 
-      const req = { params: { id: '7' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/owed/:id/export/csv'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.get(`${BASE}/owed/7/export/csv`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
   });
 
@@ -405,40 +341,29 @@ describe('Splits Routes', () => {
     it('returns splits for transaction', async () => {
       splitRepository.getSplitsByTransaction.mockResolvedValue([{ id: 8, transaction_id: 2 }]);
 
-      const req = { params: { id: '2' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/transaction/:id'](req, res);
+      const res = await api.get(`${BASE}/transaction/2`).expect(200);
 
       // No limit/offset on the request → the repository is left unbounded and
       // the response carries no limit/offset (the body IS the whole list).
       expect(splitRepository.getSplitsByTransaction).toHaveBeenCalledWith(2, {});
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 8, transaction_id: 2 }], total: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 8, transaction_id: 2 }], total: 1 }));
     });
 
     it('slices and reports the full total when limit/offset are supplied', async () => {
       splitRepository.getSplitsByTransaction.mockResolvedValue([{ id: 9, transaction_id: 2 }]);
       splitRepository.countSplitsByTransaction.mockResolvedValue(7);
 
-      const req = { params: { id: '2' }, query: { limit: '1', offset: '3' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/transaction/:id'](req, res);
+      const res = await api.get(`${BASE}/transaction/2`).query({ limit: '1', offset: '3' }).expect(200);
 
       expect(splitRepository.getSplitsByTransaction).toHaveBeenCalledWith(2, { limit: 1, offset: 3 });
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 9, transaction_id: 2 }], total: 7, limit: 1, offset: 3 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 9, transaction_id: 2 }], total: 7, limit: 1, offset: 3 }));
     });
 
     it('propagates error when transaction splits lookup fails', async () => {
       splitRepository.getSplitsByTransaction.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '2' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/transaction/:id'](req, res)).rejects.toThrow('boom');
+      const res = await api.get(`${BASE}/transaction/2`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 
@@ -446,9 +371,8 @@ describe('Splits Routes', () => {
     it('throws NotFoundError when split does not exist', async () => {
       splitRepository.addPayment.mockRejectedValue(new NotFoundError('Split not found'));
 
-      const req = { params: { id: '5' }, body: { amount: 5 }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/pay'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.post(`${BASE}/5/pay`).send({ amount: 5 }).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
       expect(splitRepository.addPayment).toHaveBeenCalled();
     });
 
@@ -456,9 +380,8 @@ describe('Splits Routes', () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 5, amount: 100 });
       splitRepository.getAlreadyPaid.mockResolvedValue(0);
 
-      const req = { params: { id: '5' }, body: { amount: 0 }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/pay'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      const res = await api.post(`${BASE}/5/pay`).send({ amount: 0 }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       expect(splitRepository.addPayment).not.toHaveBeenCalled();
     });
 
@@ -467,9 +390,7 @@ describe('Splits Routes', () => {
       splitRepository.getAlreadyPaid.mockResolvedValue(0);
       splitRepository.addPayment.mockResolvedValue({ id: 5, split_id: 7, amount: 12 });
 
-      const req = { params: { id: '7' }, body: { amount: 12, note: 'partial', paid_at: '2026-03-20' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['post:/:id/pay'](req, res);
+      const res = await api.post(`${BASE}/7/pay`).send({ amount: 12, note: 'partial', paid_at: '2026-03-20' }).expect(201);
 
       expect(splitRepository.addPayment).toHaveBeenCalledWith({
         split_id: 7,
@@ -478,15 +399,14 @@ describe('Splits Routes', () => {
         paid_at: '2026-03-20',
         actor: null,
       });
-      expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 5, split_id: 7, amount: 12 } });
+      expect(res.body).toEqual(okEnvelope({ id: 5, split_id: 7, amount: 12 }));
     });
 
     // Pins for the zod swap (ZOD-08): positive-finite check, raw forwarding.
     it('throws ValidationError for non-numeric or negative payment amounts', async () => {
       for (const amount of ['abc', -5, undefined]) {
-        const req = { params: { id: '5' }, body: { amount }, get: () => null };
-        await expect(routeHandlers['post:/:id/pay'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+        const res = await api.post(`${BASE}/5/pay`).send({ amount }).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
       }
       expect(splitRepository.addPayment).not.toHaveBeenCalled();
     });
@@ -494,8 +414,7 @@ describe('Splits Routes', () => {
     it('forwards a numeric-string payment amount raw to the repo', async () => {
       splitRepository.addPayment.mockResolvedValue({ id: 5, split_id: 7, amount: 12 });
 
-      const req = { params: { id: '7' }, body: { amount: '12' }, get: () => null };
-      await routeHandlers['post:/:id/pay'](req, mockResponse());
+      await api.post(`${BASE}/7/pay`).send({ amount: '12' }).expect(201);
 
       expect(splitRepository.addPayment).toHaveBeenCalledWith(
         expect.objectContaining({ amount: '12' }),
@@ -507,9 +426,8 @@ describe('Splits Routes', () => {
       splitRepository.getAlreadyPaid.mockResolvedValue(0);
       splitRepository.addPayment.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '7' }, body: { amount: 12 }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/pay'](req, res)).rejects.toThrow('boom');
+      const res = await api.post(`${BASE}/7/pay`).send({ amount: 12 }).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 
@@ -517,38 +435,27 @@ describe('Splits Routes', () => {
     it('returns split payments', async () => {
       splitRepository.getPayments.mockResolvedValue([{ id: 3, split_id: 7, amount: 6 }]);
 
-      const req = { params: { id: '7' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/:id/payments'](req, res);
+      const res = await api.get(`${BASE}/7/payments`).expect(200);
 
       expect(splitRepository.getPayments).toHaveBeenCalledWith(7, {});
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 3, split_id: 7, amount: 6 }], total: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 3, split_id: 7, amount: 6 }], total: 1 }));
     });
 
     it('pages payments when limit/offset are supplied', async () => {
       splitRepository.getPayments.mockResolvedValue([{ id: 4, split_id: 7, amount: 2 }]);
       splitRepository.countPayments.mockResolvedValue(12);
 
-      const req = { params: { id: '7' }, query: { limit: '1', offset: '1' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['get:/:id/payments'](req, res);
+      const res = await api.get(`${BASE}/7/payments`).query({ limit: '1', offset: '1' }).expect(200);
 
       expect(splitRepository.getPayments).toHaveBeenCalledWith(7, { limit: 1, offset: 1 });
-      expect(res.json).toHaveBeenCalledWith({
-        ok: true,
-        data: { items: [{ id: 4, split_id: 7, amount: 2 }], total: 12, limit: 1, offset: 1 },
-      });
+      expect(res.body).toEqual(okEnvelope({ items: [{ id: 4, split_id: 7, amount: 2 }], total: 12, limit: 1, offset: 1 }));
     });
 
     it('propagates error when payments lookup fails', async () => {
       splitRepository.getPayments.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '7' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/:id/payments'](req, res)).rejects.toThrow('boom');
+      const res = await api.get(`${BASE}/7/payments`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 
@@ -556,28 +463,24 @@ describe('Splits Routes', () => {
     it('throws NotFoundError when split is not found', async () => {
       splitRepository.settleSplit.mockResolvedValue(null);
 
-      const req = { params: { id: '9' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/settle'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.post(`${BASE}/9/settle`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('returns settled split when found', async () => {
       splitRepository.settleSplit.mockResolvedValue({ id: 9, settled: true });
       splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { params: { id: '9' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['post:/:id/settle'](req, res);
+      const res = await api.post(`${BASE}/9/settle`).expect(200);
 
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 9, settled: true } });
+      expect(res.body).toEqual(okEnvelope({ id: 9, settled: true }));
     });
 
     it('propagates error when settle fails', async () => {
       splitRepository.settleSplit.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '9' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/:id/settle'](req, res)).rejects.toThrow('boom');
+      const res = await api.post(`${BASE}/9/settle`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 
@@ -586,20 +489,17 @@ describe('Splits Routes', () => {
       splitRepository.settleAllByRecipient.mockResolvedValue({ settled_count: 2 });
       splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { params: { id: '12' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['post:/owed/:id/settle-all'](req, res);
+      const res = await api.post(`${BASE}/owed/12/settle-all`).expect(200);
 
       expect(splitRepository.settleAllByRecipient).toHaveBeenCalledWith(12);
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { settled_count: 2 } });
+      expect(res.body).toEqual(okEnvelope({ settled_count: 2 }));
     });
 
     it('propagates error when settle-all fails', async () => {
       splitRepository.settleAllByRecipient.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '12' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['post:/owed/:id/settle-all'](req, res)).rejects.toThrow('boom');
+      const res = await api.post(`${BASE}/owed/12/settle-all`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 
@@ -607,9 +507,8 @@ describe('Splits Routes', () => {
     it('throws NotFoundError when split does not exist', async () => {
       splitRepository.getSplitById.mockResolvedValue(null);
 
-      const req = { params: { id: '1' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.delete(`${BASE}/1`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
       expect(splitRepository.deleteSplit).not.toHaveBeenCalled();
     });
 
@@ -617,9 +516,8 @@ describe('Splits Routes', () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 1, transaction_id: 2, recipient_id: 3, amount: 10 });
       splitRepository.deleteSplit.mockResolvedValue(false);
 
-      const req = { params: { id: '1' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      const res = await api.delete(`${BASE}/1`).expect(404);
+      expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('returns 204 with no body when split is deleted', async () => {
@@ -627,26 +525,16 @@ describe('Splits Routes', () => {
       splitRepository.deleteSplit.mockResolvedValue(true);
       splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { params: { id: '1' }, get: () => null };
-      const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(204);
-      expect(res.send).toHaveBeenCalledWith();
-      expect(res.json).not.toHaveBeenCalled();
+      const res = await api.delete(`${BASE}/1`).expect(204);
+      expect(res.body).toEqual({});
     });
 
     it('propagates error when deleting split fails', async () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 1, transaction_id: 2, recipient_id: 3, amount: 10 });
       splitRepository.deleteSplit.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '1' }, get: () => null };
-      const res = mockResponse();
-      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toThrow('boom');
+      const res = await api.delete(`${BASE}/1`).expect(500);
+      expect(res.body).toEqual(errEnvelope({ code: 'INTERNAL_SERVER_ERROR', message: 'boom' }));
     });
   });
 });
-
-function mockResponse() {
-  return createMockResponse({ setHeader: vi.fn() });
-}

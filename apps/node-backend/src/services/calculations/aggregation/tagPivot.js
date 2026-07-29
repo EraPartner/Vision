@@ -10,6 +10,9 @@ import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
 import { withStatisticsCache, statsKeyPart } from './_statisticsCache.js';
 
+/**
+ * @param {{ targetCurrency?: string, bucket?: string, startDate?: string|null, endDate?: string|null, tagIds?: number[]|null, allTags?: boolean }} [opts]
+ */
 export async function computeTagPivot({
   targetCurrency = 'EUR',
   bucket = 'monthly',

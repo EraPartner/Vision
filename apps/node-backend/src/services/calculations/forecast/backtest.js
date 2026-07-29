@@ -10,17 +10,29 @@ import { epochMsToUtcYmd } from '../../../lib/dateFormat.js';
 
 const DEFAULT_BACKTEST_MONTHS = 12;
 
+/**
+ * @typedef {{date: string, net: number}} DailyNetPoint
+ * @typedef {{date: string, value: number}} ForecastPoint
+ * @typedef {{id: string, label: string, forecast: (ctx: {history: DailyNetPoint[], forecastDates: string[]}) => (ForecastPoint[] | {series: ForecastPoint[]})}} BacktestMethod
+ */
+
+/**
+ * @param {string} iso
+ * @param {number} delta
+ */
 function addMonths(iso, delta) {
   const [y, m] = iso.split('-').map(Number);
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/** @param {string} yyyymm */
 function daysInMonth(yyyymm) {
   const [y, m] = yyyymm.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
+/** @param {string} yyyymm */
 function monthDates(yyyymm) {
   const n = daysInMonth(yyyymm);
   const out = [];
@@ -28,11 +40,21 @@ function monthDates(yyyymm) {
   return out;
 }
 
+/**
+ * @param {DailyNetPoint[]} history
+ * @param {string} yyyymm
+ */
 function filterHistoryBefore(history, yyyymm) {
   return history.filter((r) => r.date.slice(0, 7) < yyyymm);
 }
 
+/**
+ * @param {DailyNetPoint[]} history
+ * @param {string} yyyymm
+ * @returns {DailyNetPoint[]}
+ */
 function actualForMonth(history, yyyymm) {
+  /** @type {Map<string, number>} */
   const byDate = new Map();
   for (const r of history) {
     if (r.date.slice(0, 7) === yyyymm) {
@@ -42,6 +64,10 @@ function actualForMonth(history, yyyymm) {
   return monthDates(yyyymm).map((date) => ({ date, net: byDate.get(date) ?? 0 }));
 }
 
+/**
+ * @param {ForecastPoint[]} predictedSeries
+ * @param {DailyNetPoint[]} actualSeries
+ */
 function stats(predictedSeries, actualSeries) {
   const n = actualSeries.length;
   let sumAbs = 0;
@@ -67,8 +93,8 @@ function stats(predictedSeries, actualSeries) {
 
 /**
  * @param {{
- *   history: Array<{date: string, net: number}>,
- *   methods: Array<{id: string, label: string, forecast: Function}>,
+ *   history: DailyNetPoint[],
+ *   methods: BacktestMethod[],
  *   asOfMonth: string,
  *   windowMonths?: number,
  * }} ctx
@@ -138,8 +164,8 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
  * each method's daysForward-day forecast against confirmed actuals.
  *
  * @param {{
- *   history: Array<{date: string, net: number}>,
- *   methods: Array<{id: string, label: string, forecast: Function}>,
+ *   history: DailyNetPoint[],
+ *   methods: BacktestMethod[],
  *   daysBack: number,
  *   daysForward: number,
  *   windowCount?: number,
@@ -148,6 +174,7 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
 export function walkForwardBacktestRolling({ history, methods, daysBack: _daysBack, daysForward, windowCount = 8 }) {
   const now = new Date();
   const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  /** @param {number} offset */
   const isoAt = (offset) => epochMsToUtcYmd(todayMs + offset * 86_400_000);
 
   const perMethod = new Map();

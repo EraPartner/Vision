@@ -65,8 +65,13 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
   /** @type {Map<string, number>} mirror keyed `${provider}:${dayKey}` */
   const dayMirror = new Map();
 
+  /** @param {string} provider */
   const limitFor = (provider) => limits[provider] ?? {};
 
+  /**
+   * @param {string} provider
+   * @param {number} t
+   */
   function minuteBucket(provider, t) {
     let bucket = minuteBuckets.get(provider);
     if (!bucket || t - bucket.startMs >= ONE_MINUTE_MS) {
@@ -76,6 +81,10 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
     return bucket;
   }
 
+  /**
+   * @param {string} provider
+   * @param {string} dk
+   */
   async function dayCount(provider, dk) {
     const key = `${provider}:${dk}`;
     // Evict mirror entries for days other than dk. Without this the map grows one
@@ -101,6 +110,7 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
     return stored;
   }
 
+  /** @param {string} provider */
   async function canSpend(provider) {
     const lim = limitFor(provider);
     if (lim.perMinute == null && lim.perDay == null) return true; // unmetered
@@ -114,6 +124,10 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
     return true;
   }
 
+  /**
+   * @param {string} provider
+   * @param {number} [n]
+   */
   async function spend(provider, n = 1) {
     const lim = limitFor(provider);
     if (lim.perMinute == null && lim.perDay == null) return; // unmetered: don't track
@@ -134,8 +148,10 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
   }
 
   function snapshot() {
+    /** @type {Record<string, number>} */
     const minute = {};
     for (const [provider, b] of minuteBuckets) minute[provider] = b.count;
+    /** @type {Record<string, number>} */
     const day = {};
     for (const [key, count] of dayMirror) day[key] = count;
     return { minute, day };
