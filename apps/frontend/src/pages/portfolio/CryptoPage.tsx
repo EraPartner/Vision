@@ -6,6 +6,7 @@ export default function CryptoPage() {
     <StocksPage
       assetClasses={["crypto"]}
       titleKey="crypto.title"
+      errorTitleKey="crypto.pageErrorTitle"
       emptyTitleKey="crypto.noCrypto"
       emptyDescriptionKey="crypto.noCryptoDesc"
       allowedAddAssetClasses={["crypto"]}

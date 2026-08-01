@@ -136,7 +136,7 @@ describe("AddInvestmentFromMarketDialog", () => {
         const nameInput = await screen.findByLabelText(/name/i);
         // Name is pre-populated from quote; just submit
         expect(nameInput).toHaveValue("Apple Inc.");
-        await user.click(await screen.findByRole("button", { name: /create/i }));
+        await user.click(await screen.findByRole("button", { name: /^add$/i }));
 
         // Assert — POST was called and dialog closed
         await waitFor(() => expect(posted).toBe(true));
@@ -338,7 +338,7 @@ describe("AddInvestmentFromMarketDialog", () => {
         const nameInput = await screen.findByLabelText(/name/i);
         await user.clear(nameInput);
 
-        await user.click(await screen.findByRole("button", { name: /create/i }));
+        await user.click(await screen.findByRole("button", { name: /^add$/i }));
 
         await new Promise((r) => setTimeout(r, 200));
         expect(posted).toBe(false);

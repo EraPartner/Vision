@@ -210,7 +210,7 @@ describe("ImportPage (integration)", () => {
 
         await waitFor(() =>
             expect(toastSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/transactions exported successfully/i),
+                expect.stringMatching(/transactions exported/i),
                 expect.anything(),
             ),
         );

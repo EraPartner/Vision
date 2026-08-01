@@ -144,7 +144,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
       handleClose();
     } catch (err) {
       logger.error("Failed to link/execute planned payment:", err);
-      toast.error(t('plannedPage.link.executeFailed'));
+      toast.error(t('plannedPage.link.executeFailed', { msg: (err as Error).message }));
     } finally {
       setActionLoading(false);
     }

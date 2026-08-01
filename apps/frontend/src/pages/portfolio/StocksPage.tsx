@@ -36,6 +36,8 @@ import { fmtPct } from "@/utils/percent";
 interface StocksPageProps {
   assetClasses?: AssetClass[];
   titleKey?: string;
+  /** i18n key for the PageError heading shown when the portfolio fails to load. */
+  errorTitleKey?: string;
   emptyTitleKey?: string;
   emptyDescriptionKey?: string;
   allowedAddAssetClasses?: AssetClass[];
@@ -86,6 +88,7 @@ const DEFAULT_STOCKS_ALLOWED_ADD_ASSET_CLASSES: AssetClass[] = ['stock', 'etf'];
 export default function StocksPage({
   assetClasses = DEFAULT_STOCKS_ASSET_CLASSES,
   titleKey = 'stocks.title',
+  errorTitleKey = 'stocks.pageErrorTitle',
   emptyTitleKey = 'stocks.noStocks',
   emptyDescriptionKey = 'stocks.noStocksDesc',
   allowedAddAssetClasses = DEFAULT_STOCKS_ALLOWED_ADD_ASSET_CLASSES,
@@ -220,7 +223,7 @@ export default function StocksPage({
     return (
       <div className="space-y-6">
         <PageHeader title={t(titleKey)} icon={PageIcon} />
-        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+        <PageError title={t(errorTitleKey)} message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
       </div>
     );
   }

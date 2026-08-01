@@ -110,7 +110,7 @@ describe("AddInvestmentDialog", () => {
             await user.click(initialPurchaseSwitch);
         }
 
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add$/i }));
 
         // Assert — dialog closes after success
         await waitFor(() =>
@@ -139,7 +139,7 @@ describe("AddInvestmentDialog", () => {
             await user.click(initialPurchaseSwitch);
         }
 
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add$/i }));
 
         // Assert — dialog stays open because the request errored
         await waitFor(() =>

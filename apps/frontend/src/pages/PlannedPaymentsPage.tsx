@@ -388,7 +388,7 @@ export default function PlannedPaymentsPage() {
       setFormOpen(false);
     } catch (err) {
       logger.error("Failed to save payment:", err);
-      toast.error(t('plannedPage.saveFailed'));
+      toast.error(t('plannedPage.saveFailed', { msg: (err as Error).message }));
     } finally {
       setActionLoading(false);
     }
