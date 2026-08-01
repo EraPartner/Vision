@@ -20,7 +20,7 @@
  * the past-month averages are exact regardless of when the suite runs.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   acquireDbSuiteLock,
   closeTestPool,
@@ -36,6 +36,7 @@ import {
 } from '../src/repositories/infoRepositoryForecast.js';
 import { getAverageVsCurrentSpending } from '../src/repositories/infoRepositoryAverageVsCurrent.js';
 import { clearMvCache } from '../src/repositories/infoRepositoryHelpers.js';
+import { appDateStringToUtc, todayAppDateString } from '../src/lib/timezone.js';
 import { clearMemoryCache } from '../src/services/currency/currencyConversionService.js';
 import { closePool } from '../src/database/connection.js';
 
@@ -555,6 +556,135 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryForecast (real D
 
       const r = await getCashflowComparison([], [], 'EUR');
       expect(r.without_planned.find((d) => d.day === 5).average).toBe(15); // 30 / 2
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ONE CLOCK across a month rollover (was a PIN: APP_TIMEZONE month math
+  // against Postgres CURRENT_DATE window predicates)
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // The module's JS side (`days_in_month`, `current_day`, the last-complete-month
+  // index feeding the historical-average divisor) has always run on
+  // `todayAppDateString()` — the APP_TIMEZONE calendar day, ADR-009. Every
+  // window predicate ran on Postgres `CURRENT_DATE`, which follows the DB
+  // session's zone (UTC here, as in every deployment). For ~22 hours out of 24
+  // the two name the same day, which is why a green suite proved nothing; in the
+  // ~2h before midnight they differ, and on a month's last day they differ by a
+  // whole month of arithmetic.
+  //
+  // These cases pin the process clock to 00:30 APP_TIMEZONE on the first of the
+  // month AFTER the one Postgres is in. Brussels is UTC+1/+2 year-round, so that
+  // instant is 22:30/23:30 UTC on the previous day — the drift window itself,
+  // reproduced whatever hour (and whatever day of the month) the suite runs at.
+  // The DB keeps its own real, unfaked clock, exactly as in production; what is
+  // reproduced faithfully is the relationship that breaks, namely "the app is a
+  // month ahead of CURRENT_DATE".
+  //
+  // Every expectation below is stated in APP_TIMEZONE terms. If any window edge
+  // fell back to CURRENT_DATE, the last-complete month's rows would vanish from
+  // the numerator while its month stayed in the divisor, and the app month's
+  // rows would vanish from the current-month series — which is precisely what
+  // each case asserts does NOT happen.
+  describe('one clock: APP_TIMEZONE anchor across a month rollover', () => {
+    // Day 5 of the month Postgres is in — the app clock's LAST COMPLETE month.
+    const lastCompleteMonthDay5 = "date_trunc('month', CURRENT_DATE) + interval '4 days'";
+    // Day 5 of the month before that — the ledger start, so the divisor is 2.
+    const monthBeforeDay5 = "date_trunc('month', CURRENT_DATE) - interval '1 month' + interval '4 days'";
+    // Day 1 of the month the app clock is in — its "today".
+    const appToday = "date_trunc('month', CURRENT_DATE) + interval '1 month'";
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /**
+     * Freeze the process clock inside the rollover window and return the
+     * APP_TIMEZONE calendar facts the assertions are written against.
+     *
+     * Only `Date` is faked: pg's connection/statement timers must keep running
+     * or the pool stalls.
+     */
+    async function pinClockToRollover() {
+      const { rows } = await getTestPool().query(`
+        SELECT to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM-DD') AS app_today,
+               to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM')                          AS db_month,
+               EXTRACT(YEAR  FROM (date_trunc('month', CURRENT_DATE) + interval '1 month'))::int AS app_year,
+               EXTRACT(MONTH FROM (date_trunc('month', CURRENT_DATE) + interval '1 month'))::int AS app_month,
+               EXTRACT(DAY FROM (date_trunc('month', CURRENT_DATE) + interval '2 months' - interval '1 day'))::int AS app_days_in_month
+      `);
+      const facts = rows[0];
+      // 00:30 of that app-timezone day == 22:30/23:30 UTC on the day before.
+      const instant = new Date(appDateStringToUtc(facts.app_today).getTime() + 30 * 60_000);
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(instant);
+
+      // Guard the premise: the app clock reads the 1st of the next month while
+      // the UTC calendar day — the one CURRENT_DATE would report — is still in
+      // the month before it.
+      expect(todayAppDateString()).toBe(facts.app_today);
+      expect(instant.toISOString().slice(0, 7)).toBe(facts.db_month);
+      return facts;
+    }
+
+    it('keeps the last complete month in BOTH the numerator and the divisor', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: lastCompleteMonthDay5, amount: '100.00' });
+      await insertTxn({ dateExpr: monthBeforeDay5, amount: '60.00' });
+      await insertTxn({ dateExpr: appToday, amount: '-10.00' });
+      await insertPlanned({ dateExpr: appToday, amount: '-20.00' });
+
+      const facts = await pinClockToRollover();
+      const r = await getCashflowComparison([], [], 'EUR');
+
+      // The response describes the APP_TIMEZONE month, on its day 1.
+      expect(r.year).toBe(facts.app_year);
+      expect(r.month).toBe(facts.app_month);
+      expect(r.current_day).toBe(1);
+      expect(r.days_in_month).toBe(facts.app_days_in_month);
+
+      // Two elapsed months of history, both inside the window: (100 + 60) / 2.
+      // With the window still anchored on CURRENT_DATE the 100 would be outside
+      // it while its month stayed in the divisor — 60 / 2 = 30.
+      expect(r.without_planned.find((d) => d.day === 5).average).toBe(80);
+
+      // The current-month series and the planned overlay are on the app month
+      // too; anchored on CURRENT_DATE both rows would be out of window (0).
+      expect(r.without_planned.find((d) => d.day === 1).current).toBe(-10);
+      expect(r.with_planned.find((d) => d.day === 1).current).toBe(-30);
+    });
+
+    it('splits history from currentActual on the app month boundary', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: lastCompleteMonthDay5, amount: '100.00' });
+      await insertTxn({ dateExpr: appToday, amount: '-10.00' });
+
+      await pinClockToRollover();
+      const r = await getCashflowForecastData(3, [], [], 'EUR');
+
+      expect(r.history).toEqual([{ date: await ymd(lastCompleteMonthDay5), net: 100 }]);
+      expect(r.currentActual).toEqual([{ date: await ymd(appToday), net: -10 }]);
+    });
+
+    // The sibling card on the same dashboard had the identical split, so it
+    // gets the identical pin — the two must agree on one fixture.
+    it('gives getAverageVsCurrentSpending the same clock', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: lastCompleteMonthDay5, amount: '-100.00' });
+      await insertTxn({ dateExpr: monthBeforeDay5, amount: '-100.00' });
+      await insertTxn({ dateExpr: appToday, amount: '-7.00' });
+
+      const facts = await pinClockToRollover();
+      const r = await getAverageVsCurrentSpending('EUR');
+
+      // 200 spent over the 2 observed months. Anchored on CURRENT_DATE the
+      // −100 in the last complete month drops out of the window while that
+      // month stays in the divisor: 100 / 2 = 50.
+      expect(r.past_6_months.months_counted).toBe(2);
+      expect(r.past_6_months.avg_monthly_spending).toBe(100);
+      expect(r.current_month.total_spending).toBe(7);
+      expect(r.current_month.days_elapsed).toBe(1);
+      expect(r.current_month.days_in_month).toBe(facts.app_days_in_month);
     });
   });
 });

@@ -1,5 +1,16 @@
 /**
  * Rolling statistics: 6-month average vs current-month daily spending.
+ *
+ * ONE CLOCK, same rule as infoRepositoryForecast.js: every window edge and
+ * every piece of month/day arithmetic here is anchored on
+ * `todayAppDateString()` — the APP_TIMEZONE calendar day (ADR-009) — read once
+ * per call and bound into the SQL as `$1::date`. Postgres `CURRENT_DATE` is not
+ * used: it follows the DB session's zone (UTC), so with the default
+ * APP_TIMEZONE=Europe/Brussels the two disagree on the calendar day for the
+ * couple of hours before midnight, and on a month's last day that is a whole
+ * month of arithmetic — the divisor counted a month whose rows the window had
+ * already excluded. `WINDOW_MONTHS` is bound too ($2), so no value is
+ * template-interpolated into the SQL text.
  */
 
 import { query } from '../database/connection.js';
@@ -12,7 +23,7 @@ import {
   mapRowsForAmountConversion,
   getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
-import { toAppTz } from '../lib/timezone.js';
+import { todayAppDateString } from '../lib/timezone.js';
 
 /** Lookback length: N complete, already-elapsed calendar months. */
 const WINDOW_MONTHS = 6;
@@ -68,14 +79,22 @@ function countObservedMonths(ledgerStartMonth, lastCompleteMonthIdx) {
   if (!ledgerStartMonth) return 1;
   const startIdx = Number(ledgerStartMonth.slice(0, 4)) * 12 + (Number(ledgerStartMonth.slice(5, 7)) - 1);
   const span = lastCompleteMonthIdx - startIdx + 1;
-  // Clamp only guarantees the divisor lands in [1, WINDOW_MONTHS]; it does not
-  // reconcile the Postgres CURRENT_DATE clock feeding `ledgerStartMonth` with
-  // the app-timezone clock feeding `lastCompleteMonthIdx` (same drift noted in
-  // infoRepositoryForecast.js). It is here so the span can never be 0.
+  // Both inputs come off the same APP_TIMEZONE clock now (see the file header):
+  // `ledgerStartMonth` is probed from a window anchored on the bound app date,
+  // `lastCompleteMonthIdx` is derived from that same date. The clamp is here
+  // for its own job — keeping the span out of 0 and off the far end.
   return Math.min(WINDOW_MONTHS, Math.max(1, span));
 }
 
 export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
+  // The single clock for this call (ADR-009). Read ONCE, bound into all three
+  // queries as $1 and reused for the month/day arithmetic further down, so the
+  // window edges and the divisor can never straddle a month rollover.
+  const todayYmd = todayAppDateString();
+  const nowYear = Number(todayYmd.slice(0, 4));
+  const nowMonth = Number(todayYmd.slice(5, 7));
+  const nowDay = Number(todayYmd.slice(8, 10));
+
   // Exclude internal transfers (ADR-083) from spending aggregates unless the
   // user has explicitly opted in. Without this, a checking->savings transfer's
   // outflow leg inflates avg/daily/projected spending — the exact thing ADR-083
@@ -94,8 +113,8 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
-      AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${WINDOW_MONTHS} months'
-      AND t.date < date_trunc('month', CURRENT_DATE)
+      AND t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
+      AND t.date < date_trunc('month', $1::date)
     GROUP BY t.date, t.currency, (t.amount < 0)
   `;
   const sqlCurrent = `
@@ -103,8 +122,8 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
-      AND t.date >= date_trunc('month', CURRENT_DATE)
-      AND t.date <= CURRENT_DATE
+      AND t.date >= date_trunc('month', $1::date)
+      AND t.date <= $1::date
     GROUP BY t.date, t.currency, (t.amount < 0)
   `;
 
@@ -112,17 +131,19 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // Deliberately UNFILTERED — no transfer predicate — and kept LAST in the
   // Promise.all so the two data queries keep their call order. "When did this
   // ledger start having history" is a property of the ledger, not of this view.
+  // "Unfiltered" means no predicates; the two bound values are the window
+  // itself, anchored on the same app date as everything else.
   const sqlLedgerStart = `
     SELECT MIN(t.date) AS first_date
     FROM transactions t
     WHERE t.is_active = true
-      AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${WINDOW_MONTHS} months'
+      AND t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
   `;
 
   const [past6Result, currentResult, ledgerStartResult] = await Promise.all([
-    query(sql6m),
-    query(sqlCurrent),
-    query(sqlLedgerStart),
+    query(sql6m, [todayYmd, WINDOW_MONTHS]),
+    query(sqlCurrent, [todayYmd]),
+    query(sqlLedgerStart, [todayYmd, WINDOW_MONTHS]),
   ]);
 
   const past6Converted = await convertRowsToEur(
@@ -161,10 +182,9 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // WINDOW_MONTHS. Empty months inside it are real zeros; months before the
   // ledger existed are not charged as zeros.
   //
-  // "Today" is resolved in APP_TIMEZONE (ADR-009), not the server process's
-  // local time, so this agrees with the CURRENT_DATE-based SQL above near
-  // midnight regardless of host TZ.
-  const { year: nowYear, month: nowMonth, day: nowDay } = toAppTz(new Date());
+  // "Today" is resolved in APP_TIMEZONE (ADR-009) at the top of this function
+  // and bound into the SQL above, so the window edges and this month index are
+  // two readings of one clock — not the host's, and not the DB session's.
   const lastCompleteMonthIdx = nowYear * 12 + (nowMonth - 1) - 1;
   const monthsCount = countObservedMonths(
     monthKeyFromDbDate(ledgerStartResult.rows[0]?.first_date),

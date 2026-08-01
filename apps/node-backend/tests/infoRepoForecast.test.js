@@ -29,6 +29,7 @@ import {
   getCashflowForecastDataByCategory,
 } from '../src/repositories/infoRepositoryForecast.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
+import { todayAppDateString } from '../src/lib/timezone.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,9 +64,13 @@ describe('getCashflowComparison', () => {
     setupEmpty();
     await getCashflowComparison([], [], 'EUR');
     expect(query).toHaveBeenCalledTimes(5);
-    expect(query.mock.calls[0][0]).toContain("date >= date_trunc('month', CURRENT_DATE) - interval '24 months'");
-    expect(query.mock.calls[0][0]).toContain("date < date_trunc('month', CURRENT_DATE)");
-    expect(query.mock.calls[1][0]).toContain('CURRENT_DATE');
+    // Windows are anchored on the bound APP_TIMEZONE date ($1 here — no
+    // exclusion params to allocate around), never on Postgres CURRENT_DATE.
+    expect(query.mock.calls[0][0]).toContain("date >= date_trunc('month', $1::date) - make_interval(months => $2::int)");
+    expect(query.mock.calls[0][0]).toContain("date < date_trunc('month', $1::date)");
+    expect(query.mock.calls[0][1]).toEqual(['2025-04-15', 24]);
+    expect(query.mock.calls[1][0]).toContain('date <= $1::date');
+    expect(query.mock.calls[1][1]).toEqual(['2025-04-15']);
     expect(query.mock.calls[2][0]).toContain('FROM planned_transactions');
     expect(query.mock.calls[3][0]).toContain('month_key');
     // Executed planned transactions must be excluded from the overlays, or an
@@ -135,7 +140,15 @@ describe('getCashflowComparison', () => {
     const [pastSql, params] = query.mock.calls[0];
     expect(pastSql).toContain('NOT IN ($1, $2)');
     expect(pastSql).toContain('NOT IN ($3)');
-    expect(params).toEqual([1, 2, 9]);
+    // The exclusion params keep $1..$k; the module's own bound values (anchor
+    // date, then the window length) are allocated after them.
+    expect(pastSql).toContain("date_trunc('month', $4::date)");
+    expect(pastSql).toContain('make_interval(months => $5::int)');
+    expect(params).toEqual([1, 2, 9, '2025-04-15', 24]);
+    // The current-month query references $1..$4 only, so it is passed exactly
+    // that contiguous prefix — Postgres counts parameters by the highest $n in
+    // the text, so a gap or an unreferenced trailing slot is an error.
+    expect(query.mock.calls[1][1]).toEqual([1, 2, 9, '2025-04-15']);
   });
 
   it('skips JOIN when there are no exclusions', async () => {
@@ -153,7 +166,10 @@ describe('getCashflowForecastData', () => {
 
     const r = await getCashflowForecastData(12, [], [], 'EUR');
     expect(query).toHaveBeenCalledTimes(4);
-    expect(query.mock.calls[0][0]).toContain("interval '12 months'");
+    // historyMonths is bound, not interpolated (and 12 never appears in the text).
+    expect(query.mock.calls[0][0]).toContain('make_interval(months => $2::int)');
+    expect(query.mock.calls[0][0]).not.toContain("interval '12 months'");
+    expect(query.mock.calls[0][1]).toEqual(['2025-04-15', 12]);
     expect(r).toMatchObject({ historyMonths: 12 });
   });
 
@@ -224,8 +240,14 @@ describe('getCashflowForecastDataRolling', () => {
 
     await getCashflowForecastDataRolling(12, 30, 60);
     expect(query).toHaveBeenCalledTimes(3);
-    expect(query.mock.calls[0][0]).toContain("interval '30 days'");
-    expect(query.mock.calls[2][0]).toContain('planned_date > CURRENT_DATE');
+    // daysBack / historyMonths / daysForward are all bound.
+    expect(query.mock.calls[0][0]).toContain('make_interval(days => $2::int)');
+    expect(query.mock.calls[0][0]).toContain('make_interval(months => $3::int)');
+    expect(query.mock.calls[0][1]).toEqual(['2025-04-15', 30, 12]);
+    expect(query.mock.calls[1][1]).toEqual(['2025-04-15', 30]);
+    expect(query.mock.calls[2][0]).toContain('planned_date > $1::date');
+    expect(query.mock.calls[2][0]).toContain('make_interval(days => $2::int)');
+    expect(query.mock.calls[2][1]).toEqual(['2025-04-15', 60]);
   });
 
   it('returns ascending-date series for all three buckets', async () => {
@@ -250,7 +272,8 @@ describe('getCashflowForecastDataByCategory', () => {
     await getCashflowForecastDataByCategory(6);
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toContain('LEFT JOIN categories cat');
-    expect(query.mock.calls[0][0]).toContain("interval '6 months'");
+    expect(query.mock.calls[0][0]).toContain('make_interval(months => $2::int)');
+    expect(query.mock.calls[0][1]).toEqual(['2025-04-15', 6]);
   });
 
   it('aggregates by date AND category, preserving labels', async () => {
@@ -291,7 +314,8 @@ describe('getCashflowForecastDataByCategory', () => {
 
     await getCashflowForecastDataByCategory(3, [10, 11], [22]);
     const [, params] = query.mock.calls[0];
-    expect(params).toEqual([10, 11, 22]);
+    expect(params).toEqual([10, 11, 22, '2025-04-15', 3]);
+    expect(query.mock.calls[1][1]).toEqual([10, 11, 22, '2025-04-15']);
   });
 });
 
@@ -373,8 +397,94 @@ describe('ADR-083 transfer exclusion', () => {
     expect(probeSql).not.toContain('NOT IN');
     expect(probeSql).not.toContain('LEFT JOIN');
     expect(probeSql).not.toContain('planned_transactions');
-    expect(probeParams).toBeUndefined();
+    // "Unfiltered" is about predicates, not parameters: the only two values it
+    // binds are its own window (the anchor date and the lookback length).
+    expect(probeParams).toEqual(['2025-04-15', 24]);
     // Still window-clamped: a row older than the lookback cannot lengthen it.
-    expect(probeSql).toContain("interval '24 months'");
+    expect(probeSql).toContain('make_interval(months => $2::int)');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ONE CLOCK (was a PIN: APP_TIMEZONE month math against CURRENT_DATE windows)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// This module used to run on two clocks: `daysInMonth` / `currentDay` /
+// `lastCompleteMonthIdx` came from `todayAppDateString()` (APP_TIMEZONE, ADR-009)
+// while every window predicate came from Postgres `CURRENT_DATE` (the DB
+// session's zone, UTC). They name the same calendar day for ~22 hours out of 24
+// — which is why a suite that runs at a random hour never saw it — and a
+// different one in between. On a month's last day that gap is a whole month of
+// arithmetic: the JS side had already rolled into month M+1 and counted M as
+// the last complete month in the historical-average divisor, while the SQL
+// window still ended at the start of M, so M's rows never reached the
+// numerator. The average line was divided by one month too many.
+//
+// The clock here is pinned to that exact instant, so these cases exercise the
+// drift window whatever hour the suite runs at.
+describe('one clock: APP_TIMEZONE anchor across a month rollover', () => {
+  // 22:30 UTC on 31 March is 00:30 on 1 April in Europe/Brussels (CEST, UTC+2).
+  const ROLLOVER = new Date('2025-03-31T22:30:00Z');
+
+  beforeEach(() => {
+    vi.setSystemTime(ROLLOVER);
+  });
+
+  it('really is the drift window (UTC says March, the app says April)', () => {
+    expect(ROLLOVER.toISOString().slice(0, 10)).toBe('2025-03-31');
+    expect(todayAppDateString()).toBe('2025-04-01');
+  });
+
+  const entryPoints = [
+    ['getCashflowComparison', () => getCashflowComparison([], [], 'EUR'), 4],
+    ['getCashflowForecastData', () => getCashflowForecastData(12, [], [], 'EUR'), 4],
+    ['getCashflowForecastDataRolling', () => getCashflowForecastDataRolling(12, 30, 60), 3],
+    ['getCashflowForecastDataByCategory', () => getCashflowForecastDataByCategory(6), 2],
+  ];
+
+  for (const [name, call, groups] of entryPoints) {
+    it(`${name} anchors every query on the app date, never on CURRENT_DATE`, async () => {
+      stubQueries('2025-02-05');
+      batchConvertGroupsWithHistoricalRateFallback.mockResolvedValue(
+        Array.from({ length: groups }, () => []),
+      );
+
+      await call();
+
+      expect(query.mock.calls.length).toBeGreaterThan(0);
+      for (const [sql, params] of query.mock.calls) {
+        expect(sql).not.toContain('CURRENT_DATE');
+        // No exclusions here, so the anchor is $1 in every query.
+        expect(params[0]).toBe('2025-04-01');
+      }
+    });
+  }
+
+  it('reports the app-timezone month and divides by the months that window can reach', async () => {
+    // Ledger starts 2025-02; "today" is 2025-04-01, so the last complete month
+    // is 2025-03 and the divisor is Feb + Mar = 2.
+    stubQueries('2025-02-05');
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
+      [
+        { day_of_month: 5, month_key: '2025-02', amount_eur: 100 },
+        { day_of_month: 5, month_key: '2025-03', amount_eur: 200 },
+      ],
+      [],
+      [],
+      [],
+    ]);
+
+    const r = await getCashflowComparison([], [], 'EUR');
+
+    // The response describes April — the app-timezone month — on day 1 of 30.
+    expect(r.year).toBe(2025);
+    expect(r.month).toBe(4);
+    expect(r.current_day).toBe(1);
+    expect(r.days_in_month).toBe(30);
+    // …and March is BOTH inside the history window (its rows are in the
+    // numerator, because the window ends at date_trunc('month', '2025-04-01'))
+    // and inside the divisor. Under the old two-clock split the SQL window
+    // ended at 1 March while the divisor still counted March: 100 / 2 = 50.
+    expect(r.without_planned.find((d) => d.day === 5).average).toBe(150);
   });
 });
