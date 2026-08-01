@@ -291,6 +291,79 @@ describeDb('importPipeline commit (real Postgres)', () => {
     expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual(['duplicate']);
   });
 
+  // ── constraint checks happen BEFORE conflict resolution ───────────────────
+  //
+  // Postgres forms and validates the tuple (NOT NULL, CHECK, numeric overflow)
+  // before it looks for an ON CONFLICT arbiter, but foreign keys are AFTER
+  // triggers that never fire for a row DO NOTHING skipped. So a row that both
+  // conflicts on tx_hash AND violates a constraint is an ERROR for the first
+  // class and a DUPLICATE for the second. A commit path that decides "this
+  // hash already exists, skip the insert" in JS collapses the first class into
+  // 'duplicate' and the user silently loses the failure signal.
+
+  it('reports a hash-conflicting row that also violates a CHECK as an error, not a duplicate', async () => {
+    // Live vector: a bank adapter that hands through an unnormalized currency
+    // ('eur') trips chk_transactions_currency_iso.
+    await insertTxn({ tx_hash: 'clash', memo: 'ALREADY IMPORTED' });
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { tx_hash: 'clash', currency: 'eur', memo: 'INCOMING' });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 0, duplicates: 0, errors: 1, autoLinkedCount: 0,
+    });
+    const staging = await stagingStatuses(batchId);
+    expect(staging.map((r) => r.status)).toEqual(['error']);
+    expect(staging[0].error_message).toMatch(/chk_transactions_currency_iso/);
+    expect((await batchCounters(batchId)).rows_error).toBe(1);
+  });
+
+  it('reports a hash-conflicting row that overflows NUMERIC(15,2) balance as an error', async () => {
+    await insertTxn({ tx_hash: 'clash-2', memo: 'ALREADY IMPORTED' });
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, {
+      tx_hash: 'clash-2', memo: 'INCOMING', balance: '99999999999999.0000',
+    });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 0, duplicates: 0, errors: 1, autoLinkedCount: 0,
+    });
+    expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual(['error']);
+  });
+
+  it('keeps the rest of the chunk when a constraint-violating conflict row sits among clean rows', async () => {
+    await insertTxn({ tx_hash: 'clash-3', memo: 'ALREADY IMPORTED' });
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { memo: 'GOOD ONE' });
+    await stageRow(batchId, 1, { tx_hash: 'clash-3', currency: 'eur', memo: 'BAD' });
+    await stageRow(batchId, 2, { memo: 'GOOD TWO' });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 2, duplicates: 0, errors: 1, autoLinkedCount: 0,
+    });
+    expect((await committedTxns(batchId)).map((t) => t.memo).sort()).toEqual(['GOOD ONE', 'GOOD TWO']);
+    expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual(['committed', 'error', 'committed']);
+  });
+
+  it('reports a hash-conflicting row with a bad FK as a duplicate, because RI never fires', async () => {
+    // The other side of the same ordering rule: transactions_recipient_id_fkey
+    // is an AFTER trigger, and DO NOTHING means no row was inserted, so no
+    // trigger runs and the conflict — not the FK — is what the user sees.
+    await insertTxn({ tx_hash: 'clash-4', memo: 'ALREADY IMPORTED' });
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, {
+      tx_hash: 'clash-4', memo: 'INCOMING', resolved_recipient_id: 987654321,
+    });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0,
+    });
+    expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual(['duplicate']);
+  });
+
   it('applies the hash exemption only when the STORED row also carries a hash', async () => {
     // The exemption needs a hash on BOTH sides (`t.tx_hash IS NOT NULL AND
     // $6 IS NOT NULL AND t.tx_hash <> $6`). A same-batch row committed without

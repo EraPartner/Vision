@@ -223,13 +223,37 @@ describe('commitBatch', () => {
   })
 
   it('marks a duplicate row and skips aggregation refresh', async () => {
+    // Drives the BATCHED path to the duplicate verdict: the chunk pre-load
+    // hands back a matching candidate, so the row never reaches an INSERT and
+    // the per-row `SELECT t.id` dup check is never issued. (Keying this
+    // fixture on the per-row SQL would only ever exercise the fallback — the
+    // batched planner does not issue that statement at all.)
     setupCommit(matchedRow)
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes('SELECT t.id')) return { rows: [{ id: 999 }] }
+      if (sql.includes('FROM transactions t') && sql.includes('t.date = ANY')) {
+        return {
+          rows: [{
+            date_key: '2024-01-15',
+            amount_key: '-5.0000',
+            recipient_id: 42,
+            memo_key: 'coffee',
+            bank_account: 'BE12',
+            tx_hash: null,
+            import_batch_id: '2',
+          }],
+        }
+      }
       return { rows: [] }
     })
     expect(await commitBatch({ batchId: 2 })).toEqual({ imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0 })
     expect(refreshAggregations).not.toHaveBeenCalled()
+
+    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
+    // Batched path only: no per-row dup check, no INSERT, no savepoint.
+    expect(statements.some((s) => s.includes('SELECT t.id'))).toBe(false)
+    expect(statements.some((s) => s.includes('INSERT INTO transactions'))).toBe(false)
+    expect(statements.some((s) => s.startsWith('SAVEPOINT'))).toBe(false)
+    expect(statements.filter((s) => s.includes("status = 'duplicate'"))).toHaveLength(1)
   })
 
   it('field-dedup is scoped to the same account and never matches a differing-hash row', async () => {
@@ -312,10 +336,13 @@ describe('commitBatch', () => {
     expect(refreshAggregations).not.toHaveBeenCalled()
   })
 
-  it('marks a row whose tx_hash already exists as a duplicate without inserting', async () => {
-    // Stands in for the per-row `ON CONFLICT (tx_hash) DO NOTHING` returning
-    // no id. The pre-load is deliberately unfiltered by is_active — the unique
-    // index has no is_active predicate.
+  it('still submits a hash-conflicting row to the INSERT so Postgres checks its tuple', async () => {
+    // Predicted conflicts are counted as duplicates but are NOT withheld from
+    // the INSERT: Postgres validates NOT NULL / CHECK / numeric overflow before
+    // it resolves the conflict, so a row that both conflicts AND violates one
+    // of those must still raise. Withholding it downgrades a real failure to
+    // 'duplicate'. ON CONFLICT DO NOTHING is what drops it — hence the empty
+    // RETURNING, which is the EXPECTED result here, not a plan mismatch.
     setupCommit({ ...matchedRow, tx_hash: 'h2' })
     let hashSql
     let insertIssued = false
@@ -328,8 +355,33 @@ describe('commitBatch', () => {
       return { rows: [] }
     })
     expect(await commitBatch({ batchId: 9 })).toEqual({ imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0 })
-    expect(insertIssued).toBe(false)
+    expect(insertIssued).toBe(true)
+    // The pre-load is deliberately unfiltered by is_active — the unique index
+    // has no is_active predicate, so a soft-deleted row still conflicts.
     expect(hashSql).not.toContain('is_active')
+    // Dropped by ON CONFLICT ⇒ 'duplicate' staging only, never 'committed',
+    // and no fallback (the empty RETURNING matched the prediction exactly).
+    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
+    expect(statements.filter((s) => s.includes("status = 'duplicate'"))).toHaveLength(1)
+    expect(statements.some((s) => s.includes("status = 'committed'"))).toBe(false)
+    expect(statements.some((s) => s.startsWith('ROLLBACK TO SAVEPOINT'))).toBe(false)
+  })
+
+  it('replays the chunk per row when the bulk INSERT drops an unpredicted row', async () => {
+    // A concurrent import won a tx_hash race: the plan predicted no conflict,
+    // so a short RETURNING invalidates every verdict downstream of the missing
+    // row. The chunk must roll back to its savepoint and go row by row.
+    setupCommit({ ...matchedRow, tx_hash: 'h2' })
+    mockClient.query.mockImplementation(async (sql) => {
+      // Pre-load says the hash is free; the INSERT then returns nothing.
+      if (sql.includes('INSERT INTO transactions')) return { rows: [] }
+      if (sql.includes('SELECT t.id')) return { rows: [{ id: 999 }] } // per-row dup check
+      return { rows: [] }
+    })
+    expect(await commitBatch({ batchId: 9 })).toEqual({ imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0 })
+    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
+    expect(statements).toContain('ROLLBACK TO SAVEPOINT sp_commit_chunk')
+    expect(statements.some((s) => s.includes('SELECT t.id'))).toBe(true)
   })
 
   it('issues one INSERT and one staging UPDATE per chunk, not per row', async () => {
@@ -363,12 +415,25 @@ describe('commitBatch', () => {
   })
 
   it('records an insert error via SAVEPOINT rollback', async () => {
+    // Deliberately a FALLBACK test, and the only one that covers the whole
+    // degradation chain end to end: the chunk INSERT throws, the chunk rolls
+    // back to its savepoint, the per-row replay re-issues the insert under a
+    // per-row savepoint, that throws too, and the row is recorded as an error.
+    // The batched failure path on its own is covered by the plan-mismatch test
+    // above; this one pins that a throwing insert still ends in errors: 1 with
+    // the staging row marked, exactly as the per-row loop always did.
     setupCommit(matchedRow)
     mockClient.query.mockImplementation(async (sql) => {
       if (sql.includes('INSERT INTO transactions')) throw new Error('constraint violation')
       return { rows: [] }
     })
     expect(await commitBatch({ batchId: 3 })).toEqual({ imported: 0, duplicates: 0, errors: 1, autoLinkedCount: 0 })
+
+    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
+    expect(statements).toContain('ROLLBACK TO SAVEPOINT sp_commit_chunk')
+    expect(statements.some((s) => /^SAVEPOINT sp_row_\d+$/.test(s))).toBe(true)
+    expect(statements.some((s) => /^ROLLBACK TO SAVEPOINT sp_row_\d+$/.test(s))).toBe(true)
+    expect(statements.some((s) => s.includes("status = 'error'"))).toBe(true)
   })
 
   it('rejects a non-integer staging row.id before issuing SAVEPOINT', async () => {

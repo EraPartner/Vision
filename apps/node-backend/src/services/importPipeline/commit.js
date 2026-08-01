@@ -27,7 +27,12 @@
  *    JS `.trim()` (all whitespace) on the incoming memo;
  *  - the ordering effect: an earlier row of the same chunk, once inserted, is
  *    visible to a later row's dup check. The planner feeds each planned insert
- *    back into its in-memory candidate index as it goes.
+ *    back into its in-memory candidate index as it goes;
+ *  - constraint-before-conflict ordering: a row whose tx_hash is already in
+ *    `transactions` is still submitted to the INSERT, because Postgres
+ *    validates the tuple before resolving the conflict. The planner only
+ *    PREDICTS the conflict (for counting and staging status) and verifies
+ *    afterwards that exactly the predicted set was dropped.
  *
  * Because the planner speculates that every planned insert lands, ANY failure
  * of the bulk INSERT (a poison row, or a `RETURNING` count that does not match
@@ -82,7 +87,12 @@ const CHUNK_SAVEPOINT = 'sp_commit_chunk';
  * ('-5.00' and '-5.0000' are the same number).
  *
  * A value that is not a plain decimal literal is returned verbatim so it can
- * still only ever compare equal to an identical string.
+ * still only ever compare equal to an identical string. The only such form
+ * worth naming is exponent notation ('1e3'), and it is unreachable on both
+ * sides of the comparison: `numeric_out` never emits an exponent, and the
+ * staging side is read back out of a NUMERIC(20,4) column by the same code
+ * path. Returning it verbatim is therefore a dead-safe default, not a
+ * comparison that silently mis-sorts real amounts.
  *
  * @param {unknown} v
  * @returns {string|null}
@@ -151,6 +161,7 @@ function dupKey(k) {
  *   row: any, dateStr: string, recipientId: number|null, memoNorm: string,
  *   bankAccount: string|null, amountKey: string|null, txHash: string|null,
  *   idStr: string, idValid: boolean, categoryId: number|null, patternId: number|null,
+ *   conflictPredicted: boolean,
  * }}
  */
 function deriveRow(row) {
@@ -187,6 +198,10 @@ function deriveRow(row) {
     categoryId: row.override_category_id ?? row.recipient_default_category_id ?? null,
     // When overridden, clear matched_pattern_id — the link is now manual.
     patternId: row.user_override_recipient_id ? null : (row.matched_pattern_id ?? null),
+    // Set by planChunk when the row's tx_hash is already in `transactions`:
+    // it is still submitted to the bulk INSERT (so Postgres evaluates its
+    // tuple constraints) but ON CONFLICT is expected to drop it.
+    conflictPredicted: false,
   };
 }
 
@@ -481,9 +496,27 @@ async function planChunk({ chunk, batchId, committedHashes }) {
       continue;
     }
 
-    // 4. ON CONFLICT (tx_hash) equivalent.
+    // 4. ON CONFLICT (tx_hash) equivalent — PREDICTED, not applied.
+    //
+    // The row still goes into the bulk INSERT. PostgreSQL forms and validates
+    // the tuple (NOT NULL, CHECK, numeric overflow) BEFORE it looks for a
+    // conflict arbiter, so a row that both conflicts on tx_hash and violates
+    // one of those raises an error under the per-row loop and must keep doing
+    // so here — short-circuiting in JS would silently downgrade a real failure
+    // to 'duplicate' and rob the user of the signal. (Foreign keys are the
+    // other way round: RI is an AFTER trigger that never fires for a row
+    // DO NOTHING skipped, so a bad FK on a conflicting row IS a duplicate.
+    // Letting Postgres adjudicate reproduces both, at no extra round trip.)
+    //
+    // What is decided here is only the row's *bookkeeping*: it is counted and
+    // marked 'duplicate', and — because the insert will not land — it is NOT
+    // fed back into the candidate index or the hash set, so later rows of the
+    // chunk cannot see it. `bulkInsertPlanned` verifies that Postgres dropped
+    // exactly this predicted set and nothing else.
     if (d.txHash && existingHashes.has(d.txHash)) {
+      d.conflictPredicted = true;
       duplicateIds.push(d.row.id);
+      toInsert.push(d);
       continue;
     }
 
@@ -512,7 +545,9 @@ async function planChunk({ chunk, batchId, committedHashes }) {
 
   return {
     toInsert,
-    committedIds: toInsert.map((d) => d.idStr),
+    // Only rows Postgres is expected to actually write become 'committed';
+    // the predicted conflicts are already in `duplicateIds`.
+    committedIds: toInsert.filter((d) => !d.conflictPredicted).map((d) => d.idStr),
     duplicateIds,
     duplicates: duplicateIds.length,
     errors,
@@ -566,24 +601,36 @@ async function bulkInsertPlanned(toInsert, batchId) {
     ],
   );
 
-  // The plan already excluded every tx_hash present in `transactions`, so a
-  // short RETURNING means a concurrent import won the race and ON CONFLICT
-  // swallowed a row — the plan's later verdicts may then be wrong. Replay.
-  if (rows.length !== toInsert.length) {
+  // `ON CONFLICT DO NOTHING` is expected to drop EXACTLY the rows the plan
+  // predicted would conflict, and nothing else. Any other shortfall means a
+  // concurrent import won a tx_hash race, in which case the plan's later
+  // verdicts may be wrong (a row ruled a duplicate of a row that never
+  // landed), so the chunk is replayed row by row.
+  //
+  // Note this stays a complete check for a chunk in which NO row carries a
+  // hash: `expected` is then the whole plan (a NULL hash can never conflict),
+  // so any shortfall at all trips this. The per-row hash comparison below is
+  // vacuous for such a chunk — null vs null — and the count is what carries it.
+  const expected = toInsert.filter((d) => !d.conflictPredicted);
+  if (rows.length !== expected.length) {
     throw new ChunkPlanInvalid(
-      `bulk insert returned ${rows.length} of ${toInsert.length} planned rows`,
+      `bulk insert returned ${rows.length} rows, expected ${expected.length} `
+      + `(${toInsert.length} planned, ${toInsert.length - expected.length} predicted conflicts)`,
     );
   }
 
   // `INSERT ... SELECT ... RETURNING` emits one output row per inserted row in
-  // source order, so position maps the ids back. Verify that against the
-  // returned tx_hash rather than trusting it, when the driver gave us one.
+  // source order, and the skipped rows emit nothing, so `expected` and `rows`
+  // line up index for index. Verify that against the returned tx_hash rather
+  // than trusting it, when the driver gave us one: if a predicted conflict
+  // actually inserted while a non-predicted row conflicted, the counts cancel
+  // out and only this positional check catches the swap.
   const hashesReturned = rows.every((/** @type {any} */ r) => Object.hasOwn(r, 'tx_hash'));
 
   /** @type {InsertedRow[]} */
   const inserted = [];
-  for (let i = 0; i < toInsert.length; i++) {
-    const d = toInsert[i];
+  for (let i = 0; i < expected.length; i++) {
+    const d = expected[i];
     if (hashesReturned && (rows[i].tx_hash ?? null) !== d.txHash) {
       throw new ChunkPlanInvalid('bulk insert RETURNING order did not match source order');
     }
