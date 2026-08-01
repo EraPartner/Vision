@@ -211,8 +211,10 @@ describe('commitBatch', () => {
     let insertedDate
     mockClient.query.mockImplementation(async (sql, params) => {
       if (sql.includes('INSERT INTO transactions')) {
-        insertedDate = params[0]
-        return { rows: [{ id: 100 }] }
+        // The chunk INSERT is multi-row (SELECT UNNEST(...)), so the date
+        // parameter is the column array — this chunk holds the one row.
+        insertedDate = params[0][0]
+        return { rows: [{ id: 100, tx_hash: null }] }
       }
       return { rows: [] }
     })
@@ -235,18 +237,129 @@ describe('commitBatch', () => {
     // stamps the identical "CARD_PAYMENT - CURRENT") but differ by tx_hash
     // (running balance differs) — the second must NOT collapse into the first.
     // Likewise an identical purchase on a DIFFERENT account is distinct.
+    //
+    // The dup check is now a per-chunk pre-load plus a JS verdict, so the
+    // fixture is the candidate row Postgres hands back rather than a bare id:
+    // the first card payment, already written by THIS batch under hash 'h1'.
     setupCommit({ ...matchedRow, tx_hash: 'h2' })
     let dupSql, dupParams
     mockClient.query.mockImplementation(async (sql, params) => {
-      if (sql.includes('SELECT t.id')) { dupSql = sql; dupParams = params; return { rows: [] } }
-      if (sql.includes('INSERT INTO transactions')) return { rows: [{ id: 100 }] }
+      if (sql.includes('FROM transactions t') && sql.includes('t.date = ANY')) {
+        dupSql = sql
+        dupParams = params
+        return {
+          rows: [
+            // Same field tuple, same account, same batch, DIFFERENT hash.
+            {
+              date_key: '2024-01-15',
+              amount_key: '-5.0000',
+              recipient_id: 42,
+              memo_key: 'coffee',
+              bank_account: 'BE12',
+              tx_hash: 'h1',
+              import_batch_id: '9',
+            },
+            // Identical purchase on a DIFFERENT account — never a duplicate.
+            {
+              date_key: '2024-01-15',
+              amount_key: '-5.0000',
+              recipient_id: 42,
+              memo_key: 'coffee',
+              bank_account: 'BE99',
+              tx_hash: null,
+              import_batch_id: null,
+            },
+          ],
+        }
+      }
+      if (sql.includes('INSERT INTO transactions')) return { rows: [{ id: 100, tx_hash: 'h2' }] }
       return { rows: [] }
     })
     expect(await commitBatch({ batchId: 9 })).toEqual({ imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0 })
-    expect(dupSql).toContain('t.bank_account IS NOT DISTINCT FROM $5')
-    expect(dupSql).toContain('t.tx_hash <> $6')
-    expect(dupParams[4]).toBe('BE12')
-    expect(dupParams[5]).toBe('h2')
+    // Pre-load scope must stay a strict superset of the old per-row WHERE:
+    // active rows on the chunk's dates, with every discriminating column read
+    // back so the JS verdict can apply the rest of the predicate.
+    expect(dupSql).toContain('t.is_active = true')
+    expect(dupSql).toContain('t.date = ANY($1::date[])')
+    expect(dupSql).toContain('t.bank_account')
+    expect(dupSql).toContain('t.tx_hash')
+    expect(dupSql).toContain('t.import_batch_id')
+    expect(dupParams[0]).toEqual(['2024-01-15'])
+  })
+
+  it('collapses a same-account same-hash-less field duplicate found by the pre-load', async () => {
+    // Same field tuple from a DIFFERENT batch: the hash exemption does not
+    // apply, so this is the ordinary "re-import is a no-op" duplicate.
+    setupCommit({ ...matchedRow, tx_hash: 'h2' })
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('FROM transactions t') && sql.includes('t.date = ANY')) {
+        return {
+          rows: [{
+            date_key: '2024-01-15',
+            amount_key: '-5.0000',
+            recipient_id: 42,
+            memo_key: 'coffee',
+            bank_account: 'BE12',
+            tx_hash: 'other-hash',
+            import_batch_id: '4',
+          }],
+        }
+      }
+      if (sql.includes('INSERT INTO transactions')) return { rows: [{ id: 100, tx_hash: 'h2' }] }
+      return { rows: [] }
+    })
+    expect(await commitBatch({ batchId: 9 })).toEqual({ imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0 })
+    expect(refreshAggregations).not.toHaveBeenCalled()
+  })
+
+  it('marks a row whose tx_hash already exists as a duplicate without inserting', async () => {
+    // Stands in for the per-row `ON CONFLICT (tx_hash) DO NOTHING` returning
+    // no id. The pre-load is deliberately unfiltered by is_active — the unique
+    // index has no is_active predicate.
+    setupCommit({ ...matchedRow, tx_hash: 'h2' })
+    let hashSql
+    let insertIssued = false
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('SELECT tx_hash FROM transactions')) {
+        hashSql = sql
+        return { rows: [{ tx_hash: 'h2' }] }
+      }
+      if (sql.includes('INSERT INTO transactions')) { insertIssued = true; return { rows: [] } }
+      return { rows: [] }
+    })
+    expect(await commitBatch({ batchId: 9 })).toEqual({ imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0 })
+    expect(insertIssued).toBe(false)
+    expect(hashSql).not.toContain('is_active')
+  })
+
+  it('issues one INSERT and one staging UPDATE per chunk, not per row', async () => {
+    // The finding this rewrite closes: five sequential statements per row.
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      ...matchedRow,
+      id: i + 1,
+      row_index: i,
+      memo: `coffee ${i}`,
+      tx_hash: `h${i}`,
+    }))
+    poolQuery
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE status='committing'
+      .mockResolvedValueOnce({ rows }) // SELECT matched
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE counters
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO transactions')) {
+        return { rows: rows.map((r, i) => ({ id: 1000 + i, tx_hash: r.tx_hash })) }
+      }
+      return { rows: [] }
+    })
+    expect(await commitBatch({ batchId: 11 })).toEqual({ imported: 25, duplicates: 0, errors: 0, autoLinkedCount: 0 })
+
+    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
+    const count = (needle) => statements.filter((s) => s.includes(needle)).length
+    expect(count('INSERT INTO transactions')).toBe(1)
+    expect(count('UPDATE import_staging_rows')).toBe(1)
+    expect(statements.filter((s) => s.startsWith('SAVEPOINT'))).toHaveLength(1)
+    // Two pre-loads + SAVEPOINT + INSERT + RELEASE + one staging UPDATE.
+    expect(statements).toHaveLength(6)
   })
 
   it('records an insert error via SAVEPOINT rollback', async () => {
