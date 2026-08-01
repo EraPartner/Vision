@@ -384,13 +384,17 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryForecast (real D
       await seedBase();
       await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-100.00', recipientId: rec.misc, categoryId: cat.Food });
       await insertTxn({ dateExpr: 'CURRENT_DATE', amount: '-900.00', recipientId: rec.misc, categoryId: cat.Food, isTransfer: true });
-      // History side of both windows.
-      await insertTxn({ dateExpr: monthDay(1, 5), amount: '50.00' });
-      await insertTxn({ dateExpr: monthDay(1, 5), amount: '-700.00', isTransfer: true });
+      // History side of both windows: 45 days back is always before this
+      // month's start (byCat's boundary) AND before CURRENT_DATE - 30 days
+      // (rolling's boundary) — monthDay(1, 5) is not on the first days of a
+      // month, where it falls inside the trailing 30-day current window.
+      const histDate = "CURRENT_DATE - interval '45 days'";
+      await insertTxn({ dateExpr: histDate, amount: '50.00' });
+      await insertTxn({ dateExpr: histDate, amount: '-700.00', isTransfer: true });
 
       const rolling = await getCashflowForecastDataRolling(12, 30, 60, [], [], 'EUR');
       expect(rolling.currentActual).toEqual([{ date: await ymd('CURRENT_DATE'), net: -100 }]);
-      expect(rolling.history).toEqual([{ date: await ymd(monthDay(1, 5)), net: 50 }]);
+      expect(rolling.history).toEqual([{ date: await ymd(histDate), net: 50 }]);
 
       const byCat = await getCashflowForecastDataByCategory(3, [], [], 'EUR');
       expect(byCat.currentActualByCategory).toEqual([
@@ -398,7 +402,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryForecast (real D
       ]);
       // The transfer leg would otherwise invent −900 of "Food" spending.
       expect(byCat.historyByCategory).toEqual([
-        { date: await ymd(monthDay(1, 5)), category_id: null, general: 'Uncategorized', detail: 'Uncategorized', net: 50 },
+        { date: await ymd(histDate), category_id: null, general: 'Uncategorized', detail: 'Uncategorized', net: 50 },
       ]);
     });
 
