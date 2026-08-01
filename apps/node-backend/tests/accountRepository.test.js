@@ -110,6 +110,25 @@ describe('accountRepository', () => {
       expect(row.drift).toBe((row.statement_balance ?? 0) - row.reconcilable_balance);
     });
 
+    it('holds drift = statement − reconcilable_balance even on a sub-cent partition tail', async () => {
+      query.mockResolvedValueOnce({
+        rows: [{
+          id: 1, name: 'Wise', currency: 'EUR', statement_balance: '100.01',
+          balance_parts: [
+            // NUMERIC(18,4) sums can carry a 4-dp tail; the wire rounds the
+            // base to cents, and drift must be differenced against the SAME
+            // rounded figure or the on-screen identity breaks by a cent.
+            { currency: 'EUR', balance: '100.0150' },
+            { currency: 'USD', balance: '50.0000' },
+          ],
+        }],
+      });
+      const [row] = await accountRepository.getAll();
+      expect(row.reconcilable_balance).toBe(100.02);
+      expect(row.drift).toBe(-0.01);
+      expect(row.drift).toBeCloseTo((row.statement_balance ?? 0) - row.reconcilable_balance, 10);
+    });
+
     // Every consumer of the three native figures relies on this identity.
     it('emits reconcilable_balance == computed_balance on a single-currency account', async () => {
       query.mockResolvedValueOnce({

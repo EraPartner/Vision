@@ -145,10 +145,13 @@ export const accountRepository = {
         computed_balance: toNumber(roundToCents(total)),
         reconcilable_balance: baseBalance,
         reconcilable_currency: base.currency,
+        // Subtract the ROUNDED base: `drift = statement − reconcilable_balance`
+        // must hold exactly on the wire, and a 4-dp partition tail would
+        // otherwise skew the identity by up to a cent.
         drift: row.statement_balance == null
           ? null
           : toNumber(roundToCents(
-            toDecimal(row.statement_balance).minus(toDecimal(base.balance)),
+            toDecimal(row.statement_balance).minus(toDecimal(baseBalance)),
           )),
         anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
         post_anchor_count: row.post_anchor_count == null

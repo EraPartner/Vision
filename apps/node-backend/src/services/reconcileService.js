@@ -36,7 +36,7 @@ import {
 } from '../repositories/accountBalanceSql.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { todayAppDateString } from '../lib/timezone.js';
-import { toDecimal, toNumber } from '../lib/money.js';
+import { roundToCents, toDecimal, toNumber } from '../lib/money.js';
 
 const ADJUSTMENT_MEMO = 'BALANCE ADJUSTMENT';
 const VALID_MODES = new Set(['accept', 'adjustment']);
@@ -115,7 +115,10 @@ export async function reconcileAccount(accountId, body) {
     // statement figure to reconcile against.
     const base = statementPartition(row.balance_parts, row.currency);
     const statement = Number(row.statement_balance);
-    const computed = toNumber(toDecimal(base.balance));
+    // Round the base to cents BEFORE differencing, mirroring the hub's
+    // `reconcilable_balance` — the drift resolved here must equal the drift
+    // the dialog displayed, even when the partition sum carries a 4-dp tail.
+    const computed = toNumber(roundToCents(toDecimal(base.balance)));
     const drift = toNumber(toDecimal(statement).minus(toDecimal(computed)));
 
     if (Math.abs(drift) < DRIFT_EPSILON) {
