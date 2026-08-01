@@ -318,6 +318,12 @@ jobs:
       - name: Build frontend
         run: CI=1 bun run build
 
+      # Bundle-size regression guard — see apps/frontend/scripts/check-bundle-size.mjs
+      # for what this measures and why (post-mortem: recharts leaking into the
+      # boot-preload graph via a shared module, undetected until reported).
+      - name: Check bundle size (boot-preload graph + total)
+        run: cd apps/frontend && bun run size:check
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Test — frontend (Vitest + coverage gate) + backend (Bun test)
   # ─────────────────────────────────────────────────────────────────────────────
