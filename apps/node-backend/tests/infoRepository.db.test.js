@@ -481,7 +481,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
   describe('getAverageVsCurrentSpending', () => {
     /** Day N of the month `monthsBack` months before the current one. */
     const monthDay = (monthsBack, day) =>
-      `date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months' + interval '${day - 1} days'`;
+      // App-clock anchored (ecd7f78): the repo's windows no longer read CURRENT_DATE.
+      `date_trunc('month', '${TODAY()}'::date) - interval '${monthsBack} months' + interval '${day - 1} days'`;
 
     async function insertTxnAt(dateExpr, amount, opts = {}) {
       const { rows } = await getTestPool().query(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
@@ -502,8 +503,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       // months -2 and -1 — in months for the monthly figure, in calendar days
       // for the daily one.
       const { rows } = await getTestPool().query(`
-        SELECT (date_trunc('month', CURRENT_DATE)::date
-                - (date_trunc('month', CURRENT_DATE) - interval '2 months')::date) AS n
+        SELECT (date_trunc('month', '${TODAY()}'::date)::date
+                - (date_trunc('month', '${TODAY()}'::date) - interval '2 months')::date) AS n
       `);
       const calendarDays = Number(rows[0].n);
 
@@ -550,7 +551,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
   // ───────────────────────────────────────────────────────────────────────────
   describe('pinned discrepancies (current real behaviour)', () => {
     const monthDay = (monthsBack, day) =>
-      `date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months' + interval '${day - 1} days'`;
+      // App-clock anchored (ecd7f78): the repo's windows no longer read CURRENT_DATE.
+      `date_trunc('month', '${TODAY()}'::date) - interval '${monthsBack} months' + interval '${day - 1} days'`;
 
     async function insertTxnAt(dateExpr, amount, opts = {}) {
       const { rows } = await getTestPool().query(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
@@ -609,8 +611,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       await insertTxnAt(monthDay(2, 10), '-240.00');
 
       const { rows } = await getTestPool().query(`
-        SELECT (date_trunc('month', CURRENT_DATE)::date
-                - (date_trunc('month', CURRENT_DATE) - interval '2 months')::date) AS n
+        SELECT (date_trunc('month', '${TODAY()}'::date)::date
+                - (date_trunc('month', '${TODAY()}'::date) - interval '2 months')::date) AS n
       `);
       const observedDays = Number(rows[0].n);
 

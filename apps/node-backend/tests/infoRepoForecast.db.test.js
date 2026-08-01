@@ -13,11 +13,17 @@
  * overlays and their `is_executed` gate, the 3-level effective-category JOIN,
  * and per-date FX off seeded `exchange_rates` rows.
  *
- * Determinism: every window is anchored on `CURRENT_DATE`, so no fixture uses a
- * literal calendar date — dates are SQL expressions relative to the same anchors
- * the queries use, and day-of-month expectations are derived from the response's
- * own `current_day` / `days_in_month`. Day 5 and day 10 exist in every month, so
- * the past-month averages are exact regardless of when the suite runs.
+ * Determinism: since ecd7f78 the queries anchor every window on the
+ * APP_TIMEZONE calendar day (ADR-009), not Postgres `CURRENT_DATE` — and for
+ * the last hours of a UTC day the two disagree by one day (nightly, not just
+ * at month ends: a rolling `daysBack` boundary shifts every evening). So the
+ * fixture helpers below substitute the literal token `CURRENT_DATE` in every
+ * date expression with the app-clock date at call time, keeping fixtures and
+ * queries on ONE clock whatever hour the suite runs. Day-of-month expectations
+ * derive from the response's own `current_day` / `days_in_month`; day 5 and
+ * day 10 exist in every month, so past-month averages stay exact. The rollover
+ * describe at the bottom deliberately seeds on the DB clock via `now()`, which
+ * the substitution leaves alone.
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -47,9 +53,19 @@ const rec = {};
 const monthDay = (monthsBack, day) =>
   `date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months' + interval '${day - 1} days'`;
 
-/** 'YYYY-MM-DD' for an arbitrary date expression. */
+/**
+ * Anchor a fixture date expression on the SAME clock the queries use: the
+ * literal token `CURRENT_DATE` becomes the APP_TIMEZONE calendar day, resolved
+ * at call time (so the fake-timer rollover cases see the frozen clock). `now()`
+ * is deliberately NOT substituted — the rollover describe uses it to seed on
+ * the real DB clock.
+ */
+const anchored = (dateExpr) =>
+  dateExpr.replaceAll('CURRENT_DATE', `('${todayAppDateString()}'::date)`);
+
+/** 'YYYY-MM-DD' for an arbitrary date expression (app-clock anchored). */
 async function ymd(dateExpr) {
-  const { rows } = await getTestPool().query(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
+  const { rows } = await getTestPool().query(`SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`);
   return rows[0].d;
 }
 
@@ -109,7 +125,7 @@ async function insertTxn({
   if (bank) await ensureAccount(bank);
   const { rows } = await getTestPool().query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, bank_account, is_active, is_transfer)
-     VALUES ((${dateExpr})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+     VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
     [amount, currency, recipientId ?? rec.misc, categoryId, bank, isActive, isTransfer],
   );
   return rows[0].id;
@@ -124,7 +140,7 @@ async function insertPlanned({
 }) {
   await getTestPool().query(
     `INSERT INTO planned_transactions (planned_date, amount, currency, is_active, is_executed)
-     VALUES ((${dateExpr})::date, $1, $2, $3, $4)`,
+     VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4)`,
     [amount, currency, isActive, isExecuted],
   );
 }
@@ -133,7 +149,7 @@ async function insertPlanned({
 async function insertRate(code, dateExpr, rate, isLatest = true) {
   await getTestPool().query(
     `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-     VALUES ($1, (${dateExpr})::date, $2, $3)`,
+     VALUES ($1, (${anchored(dateExpr)})::date, $2, $3)`,
     [code, rate, isLatest],
   );
 }
@@ -587,12 +603,16 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryForecast (real D
   // rows would vanish from the current-month series — which is precisely what
   // each case asserts does NOT happen.
   describe('one clock: APP_TIMEZONE anchor across a month rollover', () => {
+    // These fixtures deliberately anchor on the REAL DB clock (`now()`, which
+    // the anchored() substitution leaves alone — `CURRENT_DATE` would be
+    // rewritten to the app date): the whole premise here is "app clock one
+    // month ahead of the DB's month".
     // Day 5 of the month Postgres is in — the app clock's LAST COMPLETE month.
-    const lastCompleteMonthDay5 = "date_trunc('month', CURRENT_DATE) + interval '4 days'";
+    const lastCompleteMonthDay5 = "date_trunc('month', now()) + interval '4 days'";
     // Day 5 of the month before that — the ledger start, so the divisor is 2.
-    const monthBeforeDay5 = "date_trunc('month', CURRENT_DATE) - interval '1 month' + interval '4 days'";
+    const monthBeforeDay5 = "date_trunc('month', now()) - interval '1 month' + interval '4 days'";
     // Day 1 of the month the app clock is in — its "today".
-    const appToday = "date_trunc('month', CURRENT_DATE) + interval '1 month'";
+    const appToday = "date_trunc('month', now()) + interval '1 month'";
 
     afterEach(() => {
       vi.useRealTimers();
