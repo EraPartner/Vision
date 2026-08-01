@@ -274,9 +274,9 @@ export async function getMonthlyFinancialSummary(
     const key = formatYearMonthKey(row.year, row.month);
     const incomeEur = incomeConverted[i].amount_eur;
     const spendingEur = spendingConverted[i].amount_eur;
-    monthMap[key].total_income += incomeEur;
-    monthMap[key].total_spending += spendingEur;
-    monthMap[key].net_amount += incomeEur + spendingEur;
+    monthMap[key].total_income = toNumber(toDecimal(monthMap[key].total_income).plus(toDecimal(incomeEur)));
+    monthMap[key].total_spending = toNumber(toDecimal(monthMap[key].total_spending).plus(toDecimal(spendingEur)));
+    monthMap[key].net_amount = toNumber(toDecimal(monthMap[key].total_income).plus(toDecimal(monthMap[key].total_spending)));
     monthMap[key].transaction_count += Number(row.cnt);
   }
 

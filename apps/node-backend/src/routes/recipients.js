@@ -17,10 +17,11 @@ import { findRecipientClusters } from '../services/recipientClusterService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
-// The MVs attribute transactions to categories via the recipient's
-// default_category_id (COALESCE(t.category_id, r.default_category_id)), so
-// recipient edits/merges/deletes must schedule a refresh — otherwise the
-// dashboard serves the old grouping until an unrelated transaction mutation.
+// The MVs attribute transactions to categories via a 3-level resolution
+// (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
+// where pr is the recipient's PRIMARY recipient), so recipient edits/merges/
+// deletes must schedule a refresh — otherwise the dashboard serves the old
+// grouping until an unrelated transaction mutation.
 import { scheduleRefresh } from '../services/materializedViewService.js';
 
 /**

@@ -172,7 +172,7 @@ export async function getHistoricalRateIndex(currencies) {
     ? [...new Set([...historicalIndexCache.currencies, ...wanted])]
     : wanted;
   const result = await query(
-    `SELECT currency_code, rate_date, rate_to_eur
+    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
      FROM exchange_rates
      WHERE currency_code = ANY($1::text[])
      ORDER BY currency_code ASC, rate_date ASC`,
