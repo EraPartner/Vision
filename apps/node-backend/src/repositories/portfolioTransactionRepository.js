@@ -22,6 +22,7 @@ import {
   create,
   update,
   hardDelete,
+  hardDeleteByImportBatch,
   repointAccount,
 } from './portfolioTxRepo.writes.js';
 
@@ -35,6 +36,7 @@ export const portfolioTransactionRepository = {
   create,
   update,
   hardDelete,
+  hardDeleteByImportBatch,
   repointAccount,
   getAccountIdRelation,
   getSummary,

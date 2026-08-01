@@ -320,6 +320,7 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 | `amount` | NUMERIC(18,4) | NOT NULL | Total amount |
 | `currency` | VARCHAR(10) | DEFAULT 'EUR' | Currency |
 | `fx_rate_to_eur` | NUMERIC(20,10) | NULLABLE | FX rate to EUR |
+| `import_batch_id` | BIGINT | FK → portfolio_import_batches ON DELETE SET NULL, NULLABLE | **New (migration 0086 — authored, not applied).** Portfolio import batch that created this lot; NULL for manual entries and for lots committed before 0086 applied. Lets rollback delete a batch in one statement, mirroring `transactions.import_batch_id` (migration 0003). Partial index `WHERE import_batch_id IS NOT NULL`. On legacy inheritance installs the column lives here on the base and is inherited by every child table. |
 
 **Child Tables** (inherit units field):
 - `stock_transactions` — units NUMERIC(18,8)
@@ -881,6 +882,13 @@ All of them share these anchor columns; the remaining columns are the source's n
 ### PortfolioImportStagingRow (June 2026, ADR-078, migration 0040)
 
 **Purpose:** Holds one CSV row during the portfolio import pipeline (staging through commit). After commit, rows remain for audit; rolling back the batch deletes the committed `portfolio_transactions` but retains staging rows marked `aborted`.
+
+> [!info] How rollback finds the rows to delete
+> Trades are deleted in one `DELETE … WHERE import_batch_id = $1` against the lot table
+> (migration 0086). `committed_txn_id` remains load-bearing for two cases: brokerage **cash**
+> rows, whose `committed_txn_id` is a `transactions.id` (a different table with an independent
+> sequence — it must never be fed to the portfolio delete, see ADR-095), and lots committed
+> **before** 0086 applied, which carry `import_batch_id = NULL` and are still rolled back per id.
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|

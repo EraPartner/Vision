@@ -236,6 +236,11 @@ export async function commitBatch({ batchId, onProgress }) {
             note: row.note || undefined,
             fx_rate_to_eur: fxRate,
             account_id: batchAccountId,
+            // Import provenance (migration 0086) — the stamp rollback bulk-deletes
+            // on. Trades only: a brokerage CASH row goes to `transactions`, whose
+            // own import_batch_id FKs to the BANK `import_batches` table, so a
+            // portfolio batch id must never be written there.
+            import_batch_id: batchId,
             preloaded_asset_class: row.asset_class,
           }));
 

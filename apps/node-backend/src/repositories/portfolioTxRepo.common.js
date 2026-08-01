@@ -35,6 +35,9 @@ import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision
  * @property {string|null} [recurrence_end_date]
  * @property {number|string|null} [fx_rate_to_eur]
  * @property {number|null} [account_id]
+ * @property {number|string|null} [import_batch_id] The portfolio import batch that
+ *           created this lot (migration 0086) — set only by the import commit path,
+ *           NULL for manual entry. Rollback bulk-deletes on it.
  * @property {string} [preloaded_asset_class]
  */
 
@@ -77,6 +80,45 @@ export async function getAccountIdRelation() {
   return result.rows[0]?.r ? 'portfolio_transactions_base' : 'portfolio_transactions';
 }
 
+/** @type {boolean|undefined} */
+let _hasPortfolioTransactionImportBatchIdColumn;
+
+/**
+ * Whether the portfolio lot table carries `import_batch_id` (migration 0086).
+ *
+ * Migrations are applied at app boot, not by the code that needs them, so there
+ * is a window on an un-migrated database where the column does not exist yet.
+ * Probing (once per process, like the inheritance probe above) lets the import
+ * commit path omit the column from its INSERT instead of 500-ing every row with
+ * 42703, and lets rollback fall back to its per-id path — see 0086's docstring.
+ *
+ * Resolved against the WRITE relation: the inheritance base when present (the
+ * column is inherited by every child, which is where the insert goes), else the
+ * flat table. `portfolio_transactions` is a VIEW on inheritance installs, so
+ * probing it directly would answer for the wrong relation.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function hasPortfolioTransactionImportBatchIdColumn() {
+  if (_hasPortfolioTransactionImportBatchIdColumn !== undefined) {
+    return _hasPortfolioTransactionImportBatchIdColumn;
+  }
+
+  const result = await query(
+    `SELECT EXISTS (
+       SELECT 1 FROM pg_attribute
+        WHERE attrelid = COALESCE(
+                to_regclass('public.portfolio_transactions_base'),
+                to_regclass('public.portfolio_transactions'))
+          AND attname = 'import_batch_id'
+          AND attnum > 0
+          AND NOT attisdropped
+     ) AS present`
+  );
+  _hasPortfolioTransactionImportBatchIdColumn = Boolean(result.rows[0]?.present);
+  return _hasPortfolioTransactionImportBatchIdColumn;
+}
+
 export function markInheritanceSchemaPresent() {
   _hasPortfolioTransactionInheritanceSchema = true;
 }
@@ -87,6 +129,7 @@ export function markInheritanceSchemaAbsent() {
 
 export function __resetPortfolioTransactionSchemaCache() {
   _hasPortfolioTransactionInheritanceSchema = undefined;
+  _hasPortfolioTransactionImportBatchIdColumn = undefined;
 }
 
 /**
@@ -491,6 +534,15 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     fx_rate_to_eur ?? null,
     account_id ?? null,
   ];
+
+  // Import provenance (0086): stamped only when the caller is the import commit
+  // path AND the column exists (an un-migrated database omits it rather than
+  // failing every row — see hasPortfolioTransactionImportBatchIdColumn). The
+  // column lives on the base table and is inherited by this child table.
+  if (fields.import_batch_id != null && await hasPortfolioTransactionImportBatchIdColumn()) {
+    baseColumns.push('import_batch_id');
+    baseValues.push(fields.import_batch_id);
+  }
 
   /** @type {string[]} */
   const childColumns = [];
