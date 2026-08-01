@@ -166,6 +166,61 @@ describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader
 
       expect(row.computed_balance).toBe(150);
       expect(row.drift).toBe(20);
+      // The base behind that subtraction ships with it, so the reconcile dialog
+      // previews against the figure the server resolves against rather than
+      // against the converted computed_balance (which would preview −30 for a
+      // reading of 120 the server would stamp as +20).
+      expect(row.reconcilable_balance).toBe(100);
+      expect(row.reconcilable_currency).toBe('EUR');
+      expect(row.statement_balance - row.reconcilable_balance).toBe(row.drift);
+    });
+
+    // The zero-sum-partition discontinuity: an offsetting foreign transfer pair
+    // is invisible in every balance, so it must be invisible in the drift too.
+    it('is not knocked off its reconciliation base by an offsetting foreign transfer pair', async () => {
+      await seedRecipient();
+      // Declared GBP, ledger is USD — one funded partition, so it reconciles
+      // against that (single-currency parity). Statement matches it exactly.
+      await addAccount('NOISY', { currency: 'GBP', statementBalance: '100.00' });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '100.00', currency: 'USD', bank: 'NOISY' });
+
+      const before = (await accountRepository.getAll())[0];
+      expect(before.reconcilable_balance).toBe(100);
+      expect(before.drift).toBe(0);
+
+      // Now a cancelled EUR transfer pair: two real rows that net to zero.
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '250.00', currency: 'EUR', bank: 'NOISY' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '-250.00', currency: 'EUR', bank: 'NOISY' });
+
+      const after = (await accountRepository.getAll())[0];
+      // Nothing about the account's money changed, so nothing about its
+      // reconciliation may change. Before the zero-sum drop this flipped the
+      // base to 0 and the drift to the whole 100.
+      expect(after.reconcilable_balance).toBe(100);
+      expect(after.reconcilable_currency).toBe('USD');
+      expect(after.drift).toBe(0);
+    });
+
+    // D3/D4: the statement names a currency the account holds nothing in. The
+    // base is 0, and 'accept' below writes exactly that — visible in the dialog
+    // rather than arriving unannounced.
+    it('exposes a zero base when no partition matches the declared currency', async () => {
+      await seedRecipient();
+      await addAccount('GBP SHELL', { currency: 'GBP', statementBalance: '50.00' });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertRate('GBP', 'CURRENT_DATE', '2');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: 'GBP SHELL' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'GBP SHELL' });
+
+      const [row] = await accountRepository.getAll();
+
+      expect(row.reconcilable_balance).toBe(0);
+      expect(row.reconcilable_currency).toBe('GBP');
+      expect(row.drift).toBe(50); // 50 − 0, all in GBP
+      // …while computed_balance is the whole account converted into GBP: it is a
+      // different question, which is why the dialog shows both.
+      expect(row.computed_balance).toBe(75); // (100 EUR + 50 EUR) ÷ 2
     });
 
     it('anchors each currency on its own stamp — a EUR statement never absorbs USD activity', async () => {
@@ -197,6 +252,10 @@ describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader
       // so nothing is converted and the drift is the same native figure as before.
       expect(row.computed_balance).toBe(900);
       expect(row.drift).toBe(0);
+      // The base and the computed balance coincide here — which is what lets the
+      // dialog stay visually unchanged for the common single-currency account.
+      expect(row.reconcilable_balance).toBe(900);
+      expect(row.reconcilable_currency).toBe('USD');
       expect(row.anchor_date).toBeDefined();
       expect(row.post_anchor_count).toBe(1);
     });
@@ -238,6 +297,27 @@ describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader
     // separately; the drift SIZING for 'adjustment' is asserted in the mock
     // suite (tests/reconcileService.test.js). The two cases below exercise the
     // same per-currency drift read end-to-end against Postgres.
+
+    it("'accept' adopts exactly the base the hub displays when no partition matches", async () => {
+      // D4: GBP account, EUR + USD rows, statement £50. The base is 0 (nothing
+      // is held in GBP) and accept writes 0 — the same 0 the hub payload carries
+      // as reconcilable_balance, so the dialog showed it before the click.
+      await seedRecipient();
+      const id = await addAccount('GBP SHELL', { currency: 'GBP', statementBalance: '50.00' });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertRate('GBP', 'CURRENT_DATE', '2');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: 'GBP SHELL' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'GBP SHELL' });
+
+      const shown = (await accountRepository.getAll())[0].reconcilable_balance;
+      const result = await reconcileAccount(id, { mode: 'accept' });
+
+      expect(result.statement_balance).toBe(shown);
+      expect(result).toMatchObject({ mode: 'accept', drift: 0, computed_balance: 0 });
+      const [after] = await accountRepository.getAll();
+      expect(after.drift).toBe(0);
+      expect(Number(after.statement_balance)).toBe(0);
+    });
 
     it("'accept' adopts the own-currency partition as the statement of record", async () => {
       const id = await seedMultiCurrencyAccount('WISE MULTI', { statementBalance: '120.00' });
@@ -384,5 +464,11 @@ describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader
     // held the dashboard on the cross-currency sum.
     expect(hub.drift).toBe(20);
     expect(widget.accounts[0].drift).toBe(20);
+    // …and the dialog's three native figures are arithmetically consistent with
+    // each other, which is what stops it previewing a number the server would
+    // contradict: drift = statement − base, all in reconcilable_currency.
+    expect(hub.reconcilable_balance).toBe(100);
+    expect(hub.reconcilable_currency).toBe('EUR');
+    expect(Number(hub.statement_balance) - hub.reconcilable_balance).toBe(hub.drift);
   });
 });

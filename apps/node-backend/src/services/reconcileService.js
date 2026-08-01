@@ -32,7 +32,7 @@
 import { query, withTransaction } from '../database/connection.js';
 import {
   computedBalanceByCurrencyAggLateral,
-  statementPartitionBalance,
+  statementPartition,
 } from '../repositories/accountBalanceSql.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { todayAppDateString } from '../lib/timezone.js';
@@ -102,21 +102,20 @@ export async function reconcileAccount(accountId, body) {
       throw new ValidationError('Account has no statement balance to reconcile against');
     }
 
-    // Multi-currency: reconcile ONE partition — the account's own currency's.
-    // `statement_balance` is a single figure sitting next to `accounts.currency`
-    // and carrying a single date, so that is the only currency it can be a
-    // statement for; and both outcomes below are denominated in that currency
-    // (`accept` writes it back into `statement_balance`, `adjustment` inserts a
-    // ledger row stamped `a.currency`), so measuring the drift against anything
+    // Multi-currency: reconcile ONE partition — the reconciliation base, which
+    // is the shared definition the hub badge and the reconcile dialog's
+    // `reconcilable_balance` also read, so the figure resolved here is the one
+    // the user was shown. `statement_balance` is a single figure sitting next to
+    // `accounts.currency` and carrying a single date, so that is the only
+    // currency it can be a statement for; measuring the drift against anything
     // else — a cross-currency Σ of bare amounts, or an FX-converted total that
     // moves with the daily rate — would not actually clear the badge. Every
     // single-currency account keeps its previous figure exactly (see
-    // statementPartitionBalance). The other partitions are untouched: they have
-    // no statement figure to reconcile against.
+    // statementPartition). The other partitions are untouched: they have no
+    // statement figure to reconcile against.
+    const base = statementPartition(row.balance_parts, row.currency);
     const statement = Number(row.statement_balance);
-    const computed = toNumber(toDecimal(
-      statementPartitionBalance(row.balance_parts, row.currency),
-    ));
+    const computed = toNumber(toDecimal(base.balance));
     const drift = toNumber(toDecimal(statement).minus(toDecimal(computed)));
 
     if (Math.abs(drift) < DRIFT_EPSILON) {
@@ -128,7 +127,12 @@ export async function reconcileAccount(accountId, body) {
     const today = todayAppDateString();
 
     if (mode === 'accept') {
-      // Adopt the computed balance as the statement of record; drift → 0.
+      // Adopt the reconciliation base — exactly the figure the dialog displayed
+      // — as the statement of record; drift → 0. On an account whose declared
+      // currency holds nothing the base is 0, and writing 0 is the honest
+      // outcome: there is no balance in the statement's currency to adopt.
+      // (The dialog shows that 0 as the base, so this is no longer a figure the
+      // user never saw.)
       const upd = await query(
         `UPDATE accounts
             SET statement_balance = $2, statement_balance_date = $3, updated_at = NOW()
@@ -146,13 +150,18 @@ export async function reconcileAccount(accountId, body) {
     }
 
     // mode === 'adjustment': stamp a descriptive delta row (no `balance`) so the
-    // computed balance rises to meet the statement.
+    // computed balance rises to meet the statement. The row is stamped in the
+    // BASE's currency, not blindly in `accounts.currency`: on a mislabelled
+    // single-currency account (USD rows under an account still declared EUR)
+    // those differ, and a EUR adjustment would open a second partition instead
+    // of moving the USD one the drift was measured against — leaving the badge
+    // exactly where it was. They are the same code for every other account.
     const ins = await query(
       `INSERT INTO transactions
          (date, amount, currency, memo, account_id, is_transfer, transfer_source, is_active)
        VALUES ($1, $2, $3, $4, $5, true, 'adjustment', true)
        RETURNING id, amount, transfer_source`,
-      [today, drift, row.currency, ADJUSTMENT_MEMO, accountId],
+      [today, drift, base.currency, ADJUSTMENT_MEMO, accountId],
     );
     return {
       mode,

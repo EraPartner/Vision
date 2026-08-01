@@ -138,6 +138,8 @@ const en: Record<string, string> = {
   'accounts.reconcile.readingNeedsDate': 'Add the as-of date for this reading before resolving the difference.',
   'accounts.reconcile.readingSaved': 'Statement reading saved',
   'accounts.reconcile.readingSubmit': 'Save reading',
+  'accounts.reconcile.reconcilableHint': 'This account holds more than one currency. Its statement figure is compared against the {currency} balance only, so the difference stays in {currency} and does not move with exchange rates. The computed balance above is the whole account, converted.',
+  'accounts.reconcile.reconcilableLabel': 'Reconciles against ({currency})',
   'accounts.reconcile.showSince': 'Show transactions since {date}',
   'accounts.reconcile.statementLabel': 'Statement balance',
   'accounts.reconcile.title': 'Reconcile balance',

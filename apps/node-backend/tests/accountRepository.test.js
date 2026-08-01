@@ -31,6 +31,8 @@ describe('accountRepository', () => {
         id: 1,
         name: 'Checking',
         computed_balance: 0,
+        reconcilable_balance: 0,
+        reconcilable_currency: 'EUR',
         drift: null,
         anchor_date: undefined,
         post_anchor_count: undefined,
@@ -100,6 +102,46 @@ describe('accountRepository', () => {
       const [row] = await accountRepository.getAll();
       expect(row.computed_balance).toBe(150);
       expect(row.drift).toBe(20); // 120 − the EUR partition's 100, NOT 120 − 150
+      // …and the base behind that subtraction is emitted, so the reconcile
+      // dialog can preview an entered reading against the SAME figure the
+      // server will resolve against instead of against computed_balance.
+      expect(row.reconcilable_balance).toBe(100);
+      expect(row.reconcilable_currency).toBe('EUR');
+      expect(row.drift).toBe((row.statement_balance ?? 0) - row.reconcilable_balance);
+    });
+
+    // Every consumer of the three native figures relies on this identity.
+    it('emits reconcilable_balance == computed_balance on a single-currency account', async () => {
+      query.mockResolvedValueOnce({
+        rows: [{
+          id: 1, name: 'KBC', currency: 'EUR', statement_balance: '90.00',
+          balance_parts: [{ currency: 'EUR', balance: '100.0000' }],
+        }],
+      });
+      const [row] = await accountRepository.getAll();
+      expect(row.computed_balance).toBe(100);
+      expect(row.reconcilable_balance).toBe(100);
+      expect(row.reconcilable_currency).toBe('EUR');
+      expect(row.drift).toBe(-10);
+    });
+
+    // D4: the statement names a currency the account holds nothing in. The base
+    // is 0 and 'accept' will write 0 — surfacing the base is what makes that
+    // outcome visible in the dialog instead of arriving unannounced.
+    it('emits a zero base when no partition matches the account currency', async () => {
+      query.mockResolvedValueOnce({
+        rows: [{
+          id: 1, name: 'GBP shell', currency: 'GBP', statement_balance: '50.00',
+          balance_parts: [
+            { currency: 'EUR', balance: '100.0000' },
+            { currency: 'USD', balance: '100.0000' },
+          ],
+        }],
+      });
+      const [row] = await accountRepository.getAll();
+      expect(row.reconcilable_balance).toBe(0);
+      expect(row.reconcilable_currency).toBe('GBP');
+      expect(row.drift).toBe(50);
     });
 
     // The mislabelled single-currency account: one partition reconciles against
@@ -114,6 +156,29 @@ describe('accountRepository', () => {
       const [row] = await accountRepository.getAll();
       expect(row.computed_balance).toBe(50); // 100 USD × 0.5, into the account's EUR
       expect(row.drift).toBe(-10); // native: 90 − the sole partition's 100
+      // D3: the base carries the partition's OWN code, so the dialog can label
+      // the statement/base/difference triple honestly (all USD) beside the
+      // converted computed_balance instead of printing a USD drift as EUR.
+      expect(row.reconcilable_balance).toBe(100);
+      expect(row.reconcilable_currency).toBe('USD');
+    });
+
+    // D2: a cancelled/offsetting foreign transfer pair nets to zero but still
+    // creates a partition. It must not move the reconciliation base.
+    it('ignores a zero-sum partition when resolving the base', async () => {
+      query.mockResolvedValueOnce({
+        rows: [{
+          id: 1, name: 'Noisy', currency: 'EUR', statement_balance: '100.00',
+          balance_parts: [
+            { currency: 'GBP', balance: '0.0000' }, // offsetting pair, net 0
+            { currency: 'USD', balance: '100.0000' },
+          ],
+        }],
+      });
+      const [row] = await accountRepository.getAll();
+      expect(row.reconcilable_balance).toBe(100); // the USD partition, as if the noise were absent
+      expect(row.reconcilable_currency).toBe('USD');
+      expect(row.drift).toBe(0); // was 100 — the whole balance — before the noise was dropped
     });
 
     it('shapes provenance: NULL anchor_date → undefined, bigint-string count → number', async () => {

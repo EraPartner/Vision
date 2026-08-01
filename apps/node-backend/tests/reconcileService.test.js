@@ -162,4 +162,69 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
 
     await expect(reconcileAccount(5, { mode: 'adjustment' })).rejects.toThrow(/already reconciled/i);
   });
+
+  // The base carries its own currency, and the adjustment row must be stamped in
+  // it: on a mislabelled single-currency account (USD ledger, EUR declared) an
+  // adjustment in a.currency would open a SECOND partition and leave the USD one
+  // — the partition the drift was measured against — exactly where it was.
+  it('stamps the adjustment in the base partition currency, not blindly in a.currency', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
+      .mockResolvedValueOnce({
+        rows: [{
+          currency: 'EUR',
+          statement_balance: 120,
+          balance_parts: [{ currency: 'USD', balance: '100' }],
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 80, amount: 20, transfer_source: 'adjustment' }] });
+
+    await reconcileAccount(5, { mode: 'adjustment' });
+
+    const [, params] = query.mock.calls[2];
+    expect(params[1]).toBe(20); // 120 − the sole (USD) partition's 100
+    expect(params[2]).toBe('USD');
+  });
+
+  // A zero-sum partition (a cancelled/offsetting transfer pair) must not move
+  // the base — otherwise reconcile mints an adjustment for the whole balance.
+  it('ignores a zero-sum partition when resolving what to reconcile', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
+      .mockResolvedValueOnce({
+        rows: [{
+          currency: 'EUR',
+          statement_balance: 100,
+          balance_parts: [
+            { currency: 'GBP', balance: '0' },
+            { currency: 'USD', balance: '100' },
+          ],
+        }],
+      });
+
+    await expect(reconcileAccount(5, { mode: 'adjustment' })).rejects.toThrow(/already reconciled/i);
+  });
+
+  // D4: the statement names a currency the account holds nothing in. 'accept'
+  // adopts the base — 0 — which is exactly the figure the dialog now displays.
+  it("'accept' adopts the displayed base when no partition matches the account currency", async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
+      .mockResolvedValueOnce({
+        rows: [{
+          currency: 'GBP',
+          statement_balance: 50,
+          balance_parts: [
+            { currency: 'EUR', balance: '100' },
+            { currency: 'USD', balance: '100' },
+          ],
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ statement_balance: 0 }] });
+
+    const result = await reconcileAccount(5, { mode: 'accept' });
+
+    expect(result).toMatchObject({ mode: 'accept', drift: 0, statement_balance: 0, computed_balance: 0 });
+    expect(query.mock.calls[2][1][1]).toBe(0);
+  });
 });

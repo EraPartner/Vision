@@ -136,6 +136,8 @@
   "accounts.reconcile.readingNeedsDate": "Vul de datum van dit saldo in voordat je het verschil oplost.",
   "accounts.reconcile.readingSaved": "Afschriftsaldo opgeslagen",
   "accounts.reconcile.readingSubmit": "Saldo opslaan",
+  "accounts.reconcile.reconcilableHint": "Deze rekening houdt meerdere valuta aan. Het afschriftsaldo wordt alleen vergeleken met het {currency}-saldo, dus het verschil blijft in {currency} en beweegt niet mee met wisselkoersen. Het berekende saldo hierboven is de hele rekening, omgerekend.",
+  "accounts.reconcile.reconcilableLabel": "Afgestemd op ({currency})",
   "accounts.reconcile.showSince": "Toon transacties sinds {date}",
   "accounts.reconcile.statementLabel": "Afschriftsaldo",
   "accounts.reconcile.title": "Saldo verrekenen",

@@ -187,8 +187,13 @@ export function computedBalanceByCurrencyAggLateral({
 }
 
 /**
- * The partition a **statement figure** belongs to, given an account's
+ * The partition a **statement figure** reconciles against, given an account's
  * `balance_parts` (see {@link computedBalanceByCurrencyAggLateral}).
+ *
+ * This is the single definition of the **reconciliation base**: the drift badge
+ * (hub + dashboard), the `reconcilable_balance` the reconcile dialog previews
+ * against, and what `reconcileService` actually stamps all read it, so the
+ * number a user sees is by construction the number the server will write.
  *
  * `accounts.statement_balance` is one number carrying one date, and the column
  * next to it is `accounts.currency` — so it can only be read as the bank's
@@ -198,24 +203,48 @@ export function computedBalanceByCurrencyAggLateral({
  * total (which would make a reconciliation figure move with the daily rate,
  * and would size the reconcile 'adjustment' row by today's rate).
  *
- * One deliberate exception: an account holding exactly ONE currency reconciles
- * against that partition whatever its code, even when it disagrees with
- * `accounts.currency` — a ledger of USD rows under an account still declared
- * EUR is a mislabelled single-currency account, not an account with an empty
- * USD statement. This keeps every single-currency account byte-identical to the
- * pre-partition behaviour.
+ * Resolution order:
+ *   1. The partition in the account's own currency, **even when it is zero** —
+ *      a EUR account spent down to zero alongside some USD holdings has a EUR
+ *      statement of 0, and must not silently start reconciling against the USD.
+ *   2. Failing that, the ONE remaining partition once zero-sum partitions are
+ *      dropped: a ledger of USD rows under an account still declared EUR is a
+ *      mislabelled single-currency account, not an account with an empty EUR
+ *      statement. Zero-sum partitions are dropped FIRST because they carry no
+ *      reconciliation information and would otherwise make this rule
+ *      discontinuous on noise — one cancelled/offsetting foreign transfer pair
+ *      (net 0) used to flip the base from that lone partition to 0, and the
+ *      drift from 0 to the whole balance.
+ *   3. Otherwise zero, in the account's own currency: the statement figure
+ *      names a currency this account holds nothing in.
+ *
+ * The returned `currency` is what the figure is denominated in — normally
+ * `accounts.currency`, but the mislabelled-account case (2) returns the
+ * partition's own code. Callers must label the base, the statement and the
+ * drift with it (they are one native triple, `drift = statement − balance`),
+ * and `reconcileService` stamps its adjustment row in it — an adjustment in any
+ * other currency would land in a different partition and never clear the drift
+ * it was sized against.
  *
  * @param {Array<{ currency: string, balance: string }>|null|undefined} parts
  * @param {string|null|undefined} accountCurrency `accounts.currency`.
- * @returns {string} the partition's balance as a numeric string ('0' when the
- *   account holds no partition in its own currency).
+ * @returns {{ currency: string, balance: string }} `balance` is a numeric
+ *   string (pass it through `toDecimal`, like a NUMERIC column).
  */
-export function statementPartitionBalance(parts, accountCurrency) {
-  if (!parts || parts.length === 0) return '0';
-  if (parts.length === 1) return String(parts[0].balance);
+export function statementPartition(parts, accountCurrency) {
   const want = (accountCurrency || 'EUR').toUpperCase();
-  const match = parts.find((p) => (p.currency || 'EUR').toUpperCase() === want);
-  return match ? String(match.balance) : '0';
+  const list = (parts ?? []).map((p) => ({
+    currency: (p.currency || 'EUR').toUpperCase(),
+    balance: String(p.balance),
+  }));
+
+  const own = list.find((p) => p.currency === want);
+  if (own) return own;
+
+  const funded = list.filter((p) => Number(p.balance) !== 0);
+  if (funded.length === 1) return funded[0];
+
+  return { currency: want, balance: '0' };
 }
 
 /**
@@ -416,6 +445,6 @@ export default {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyLateral,
   computedBalanceByCurrencyAggLateral,
-  statementPartitionBalance,
+  statementPartition,
   computedBalanceSeriesCtes,
 };

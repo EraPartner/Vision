@@ -14,7 +14,7 @@ import { query, withTransaction } from '../database/connection.js';
 import {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyAggLateral,
-  statementPartitionBalance,
+  statementPartition,
 } from './accountBalanceSql.js';
 import { buildInsert, buildSetClauses, buildLimitOffset } from '../lib/sqlClauses.js';
 import { loadCurrentRates, convertWithRates } from '../services/currency/currencyConversionService.js';
@@ -60,15 +60,24 @@ export const accountRepository = {
    * bare numbers (100 EUR + 100 USD at 0.5 → 100 instead of 150). A
    * single-currency account has exactly one partition and is unaffected.
    *
-   * `drift` is the statement figure minus that account's OWN-currency partition
-   * (`statementPartitionBalance`) — never minus the FX-converted total, which
-   * would make the badge move with the daily rate. It stays a native-currency
-   * figure, the same one `reconcileService` acts on, so the badge and the
-   * reconcile dialog can never disagree.
+   * `drift` is the statement figure minus the RECONCILIATION BASE — the balance
+   * of the partition the statement figure is a statement for (`statementPartition`)
+   * — never minus the FX-converted total, which would make the badge move with
+   * the daily rate. It stays a native-currency figure, the same one
+   * `reconcileService` acts on, so the badge and the reconcile dialog can never
+   * disagree.
    *
-   * `computed_balance` / `drift` are therefore computed in JS and emitted as
-   * NUMBERS (previously raw pg NUMERIC strings — the OpenAPI schema and the
-   * frontend `Account` type have always declared `number`).
+   * That base is emitted alongside it as `reconcilable_balance` /
+   * `reconcilable_currency`, because on a multi-currency account it is NOT
+   * `computed_balance` (which is the converted all-currency total) and the
+   * reconcile dialog must preview `typed reading − base`, not
+   * `typed reading − computed_balance`. The three native figures on that dialog
+   * satisfy `drift = statement_balance − reconcilable_balance` by construction,
+   * all denominated in `reconcilable_currency`.
+   *
+   * `computed_balance` / `drift` / `reconcilable_balance` are therefore computed
+   * in JS and emitted as NUMBERS (previously raw pg NUMERIC strings — the
+   * OpenAPI schema and the frontend `Account` type have always declared `number`).
    *
    * `limit` is optional and defaults to unbounded — the accounts list has always
    * served every row and the hub UI has no paging, so only an explicit
@@ -125,14 +134,21 @@ export const accountRepository = {
           rates,
         )));
       }
+      // The reconciliation base: what the statement figure is measured against
+      // and what `reconcileService` will stamp. Emitted so the dialog previews
+      // `typed reading − base` rather than `typed reading − computed_balance`
+      // (those differ on every multi-currency account).
+      const base = statementPartition(partitions, row.currency);
+      const baseBalance = toNumber(roundToCents(toDecimal(base.balance)));
       return {
         ...rest,
         computed_balance: toNumber(roundToCents(total)),
+        reconcilable_balance: baseBalance,
+        reconcilable_currency: base.currency,
         drift: row.statement_balance == null
           ? null
           : toNumber(roundToCents(
-            toDecimal(row.statement_balance)
-              .minus(toDecimal(statementPartitionBalance(partitions, row.currency))),
+            toDecimal(row.statement_balance).minus(toDecimal(base.balance)),
           )),
         anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
         post_anchor_count: row.post_anchor_count == null

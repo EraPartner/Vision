@@ -375,12 +375,17 @@
  * `post_anchor_count` is re-emitted as a `number` (the raw `COUNT(*)` bigint
  * string is parsed) and both provenance fields become `undefined` rather than
  * `null` when nothing is stamped. `computed_balance` (Σ of the account's
- * currency partitions, converted into `currency`) and `drift` (statement figure
- * − the own-currency partition) are summed in JS from the partitions, so they
- * are `number`s — matching the OpenAPI schema — rather than pg NUMERIC strings.
+ * currency partitions, converted into `currency`), `reconcilable_balance` (the
+ * reconciliation base — `statementPartition`, in `reconcilable_currency`) and
+ * `drift` (statement figure − that base) are derived in JS from the partitions,
+ * so they are `number`s — matching the OpenAPI schema — rather than pg NUMERIC
+ * strings. The three native figures satisfy
+ * `drift = statement_balance − reconcilable_balance`.
  *
  * @typedef {AccountRow & {
  *   computed_balance: number,
+ *   reconcilable_balance: number,
+ *   reconcilable_currency: string,
  *   drift: number|null,
  *   has_transactions: boolean,
  *   anchor_date?: string,

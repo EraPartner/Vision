@@ -16,7 +16,7 @@ import {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyLateral,
   computedBalanceByCurrencyAggLateral,
-  statementPartitionBalance,
+  statementPartition,
   computedBalanceSeriesCtes,
 } from '../src/repositories/accountBalanceSql.js';
 
@@ -121,38 +121,66 @@ describe('computedBalanceByCurrencyAggLateral', () => {
   });
 });
 
-describe('statementPartitionBalance', () => {
-  // The shared rule behind the drift badge (hub + dashboard) and reconcile —
-  // they must agree by construction, so all three read this one helper.
+describe('statementPartition', () => {
+  // The shared rule behind the drift badge (hub + dashboard), the
+  // `reconcilable_balance` the dialog previews against, and what reconcile
+  // stamps — they agree by construction because all three read this one helper.
   it('picks the partition matching the account currency', () => {
     const parts = [{ currency: 'EUR', balance: '100' }, { currency: 'USD', balance: '100' }];
-    expect(statementPartitionBalance(parts, 'EUR')).toBe('100');
-    expect(statementPartitionBalance([
+    expect(statementPartition(parts, 'EUR')).toEqual({ currency: 'EUR', balance: '100' });
+    expect(statementPartition([
       { currency: 'EUR', balance: '100' },
       { currency: 'USD', balance: '250' },
-    ], 'USD')).toBe('250');
+    ], 'USD')).toEqual({ currency: 'USD', balance: '250' });
   });
 
-  it('reconciles a LONE partition whatever its currency (single-currency parity)', () => {
+  it('keeps the own-currency partition even when it is ZERO', () => {
+    // A EUR account spent down to zero that also holds USD has a EUR statement
+    // of 0. Falling through to the USD partition here would reconcile a EUR
+    // statement against a USD balance.
+    expect(statementPartition([
+      { currency: 'EUR', balance: '0' },
+      { currency: 'USD', balance: '100' },
+    ], 'EUR')).toEqual({ currency: 'EUR', balance: '0' });
+  });
+
+  it('reconciles a LONE funded partition whatever its currency (single-currency parity)', () => {
     // A mislabelled single-currency account (USD rows, EUR declared) is not an
     // account with an empty EUR statement — this is what keeps every
     // single-currency account byte-identical to the pre-partition behaviour.
-    expect(statementPartitionBalance([{ currency: 'USD', balance: '100' }], 'EUR')).toBe('100');
+    // The currency comes back so callers can label the figure (and so the
+    // adjustment row lands in the partition the drift was measured against).
+    expect(statementPartition([{ currency: 'USD', balance: '100' }], 'EUR'))
+      .toEqual({ currency: 'USD', balance: '100' });
   });
 
-  it('returns 0 when the account holds no partition in its own currency', () => {
-    expect(statementPartitionBalance([], 'EUR')).toBe('0');
-    expect(statementPartitionBalance(null, 'EUR')).toBe('0');
-    expect(statementPartitionBalance([
+  it('is not knocked off that partition by a zero-sum foreign one', () => {
+    // The discontinuity this rule had: a cancelled/offsetting transfer pair nets
+    // to 0 but still creates a partition, which flipped the base off the real
+    // ledger and onto 0 — turning a reconciled account into one drifting by its
+    // entire balance. A partition summing to 0 carries no reconciliation
+    // information, so it is dropped before the lone-partition rule applies.
+    const withNoise = [{ currency: 'GBP', balance: '0' }, { currency: 'USD', balance: '100' }];
+    expect(statementPartition(withNoise, 'EUR')).toEqual({ currency: 'USD', balance: '100' });
+    // …i.e. exactly what it resolves to without the noise partition.
+    expect(statementPartition([{ currency: 'USD', balance: '100' }], 'EUR'))
+      .toEqual(statementPartition(withNoise, 'EUR'));
+  });
+
+  it('returns 0 in the account currency when it holds no partition in it', () => {
+    expect(statementPartition([], 'EUR')).toEqual({ currency: 'EUR', balance: '0' });
+    expect(statementPartition(null, 'GBP')).toEqual({ currency: 'GBP', balance: '0' });
+    // Two funded foreign partitions: no single one can claim the statement.
+    expect(statementPartition([
       { currency: 'USD', balance: '100' },
       { currency: 'GBP', balance: '50' },
-    ], 'EUR')).toBe('0');
+    ], 'EUR')).toEqual({ currency: 'EUR', balance: '0' });
   });
 
   it('defaults a missing account currency to EUR and compares case-insensitively', () => {
-    const parts = [{ currency: 'EUR', balance: '7' }, { currency: 'USD', balance: '9' }];
-    expect(statementPartitionBalance(parts, null)).toBe('7');
-    expect(statementPartitionBalance(parts, 'usd')).toBe('9');
+    const parts = [{ currency: 'EUR', balance: '7' }, { currency: 'usd', balance: '9' }];
+    expect(statementPartition(parts, null)).toEqual({ currency: 'EUR', balance: '7' });
+    expect(statementPartition(parts, 'usd')).toEqual({ currency: 'USD', balance: '9' });
   });
 });
 

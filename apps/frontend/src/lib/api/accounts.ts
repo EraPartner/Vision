@@ -2,15 +2,20 @@ import type { Account, AccountCreate, AccountUpdate, AccountsListResponse } from
 import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
 
-// PostgreSQL NUMERIC columns arrive over the wire as strings (computed_balance,
-// statement_balance, and the derived drift). The Account type declares them as
-// numbers, so coerce here — at the single fetch boundary — to keep the runtime
-// shape honest for every consumer (e.g. AccountsPage's drift.toFixed()).
+// Money fields the Account type declares as numbers. `statement_balance` is a
+// raw PostgreSQL NUMERIC column and still arrives as a string; the derived
+// balance figures (computed_balance / reconcilable_balance / drift) are summed
+// server-side in JS and already arrive as JSON numbers. Coercing all of them
+// here — at the single fetch boundary — keeps the runtime shape honest for every
+// consumer (e.g. AccountsPage's drift.toFixed()) regardless of which side of
+// that boundary a given field is produced on. `null` becomes `undefined`: the
+// backend's convention is that absent means absent.
 function normalizeAccount(a: Account): Account {
     return {
         ...a,
         statement_balance: a.statement_balance == null ? undefined : Number(a.statement_balance),
         computed_balance: a.computed_balance == null ? undefined : Number(a.computed_balance),
+        reconcilable_balance: a.reconcilable_balance == null ? undefined : Number(a.reconcilable_balance),
         drift: a.drift == null ? undefined : Number(a.drift),
     };
 }
@@ -110,16 +115,24 @@ export interface ReconcileResult {
     /** Drift after the operation — always 0 on success. */
     drift: number;
     statement_balance: number;
+    /**
+     * The reconciliation base after the operation — the balance of the ONE
+     * currency partition the statement figure is a statement for (the account's
+     * `reconcilable_balance`), NOT the FX-converted `computed_balance`.
+     */
     computed_balance: number;
     /** The server-created adjustment row (mode 'adjustment'), else null. */
     transaction: { id: number; amount: number; transfer_source: string } | null;
 }
 
 /**
- * Reconcile an account's drift (ADR-094, Phase C). `mode: 'accept'` rewrites the
- * stored statement figures to the computed balance; `mode: 'adjustment'` stamps a
- * server-side 'adjustment' ledger row so the computed balance rises to meet the
- * statement (balance-free — ADR-094 descriptive-only default preserved).
+ * Reconcile an account's drift (ADR-094, Phase C). Both modes act on the
+ * reconciliation base (`reconcilable_balance`), so a multi-currency account
+ * resolves in its own currency and its other partitions are untouched.
+ * `mode: 'accept'` rewrites the stored statement figures to that base;
+ * `mode: 'adjustment'` stamps a server-side 'adjustment' ledger row in
+ * `reconcilable_currency` so the base rises to meet the statement (balance-free
+ * — ADR-094 descriptive-only default preserved).
  */
 export function reconcileAccount(id: number, mode: ReconcileMode): Promise<ReconcileResult> {
     return apiRequest<ReconcileResult>(`/api/accounts/${id}/reconcile`, {

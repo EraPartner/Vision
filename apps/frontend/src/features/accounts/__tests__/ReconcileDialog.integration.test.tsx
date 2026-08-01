@@ -64,6 +64,69 @@ const LIABILITY = {
     post_anchor_count: 1,
 } as unknown as Account;
 
+// The multi-currency account the per-currency balance work exists for: 100 EUR
+// + 100 USD with USD at 0,5. `computed_balance` is the whole account converted
+// into its own currency (150 €) and moves with FX; the server reconciles against
+// the EUR partition alone (100 €) and ships it as `reconcilable_balance`. The
+// stored drift is 120 − 100 = +20 — NOT 120 − 150.
+const MULTI_CURRENCY = {
+    ...ACCOUNT_STUB,
+    id: 9,
+    name: "Wise",
+    display_name: "Wise",
+    type: "checking",
+    currency: "EUR",
+    computed_balance: 150,
+    reconcilable_balance: 100,
+    reconcilable_currency: "EUR",
+    statement_balance: 120,
+    statement_balance_date: "2026-06-03",
+    drift: 20,
+    anchor_date: "2026-06-03",
+    post_anchor_count: 2,
+} as unknown as Account;
+
+// A mislabelled single-currency account: the ledger is USD, the account is still
+// declared EUR. It has one partition, so it reconciles against that partition in
+// ITS code — statement, base and difference are all US$, while computed_balance
+// is the same money converted into the declared EUR.
+const MISLABELLED = {
+    ...ACCOUNT_STUB,
+    id: 10,
+    name: "Wise USD",
+    display_name: "Wise USD",
+    type: "checking",
+    currency: "EUR",
+    computed_balance: 500,
+    reconcilable_balance: 1000,
+    reconcilable_currency: "USD",
+    statement_balance: 1000,
+    statement_balance_date: "2026-06-03",
+    drift: 0,
+    anchor_date: "2026-06-03",
+    post_anchor_count: 1,
+} as unknown as Account;
+
+// The statement names a currency the account holds nothing in: the base is 0,
+// which is exactly what 'accept' would write. Showing that 0 is what stops the
+// resolution writing a figure the user was never shown.
+const EMPTY_BASE = {
+    ...ACCOUNT_STUB,
+    id: 11,
+    name: "GBP shell",
+    display_name: "GBP shell",
+    type: "checking",
+    currency: "GBP",
+    computed_balance: 75,
+    reconcilable_balance: 0,
+    reconcilable_currency: "GBP",
+    statement_balance: 50,
+    statement_balance_date: "2026-06-03",
+    drift: 50,
+    anchor_date: "2026-06-03",
+    post_anchor_count: 2,
+} as unknown as Account;
+
 function mockAccountApi({ reconcileFails = false } = {}) {
     const calls: {
         patch: Array<{ id: string; body: Record<string, unknown> }>;
@@ -117,6 +180,11 @@ async function renderDialog(account: Account, queryClient?: QueryClient) {
 /** The live difference figure (stored drift, or the preview once typed into). */
 function deltaText() {
     return screen.getByTestId("reconcile-delta").textContent ?? "";
+}
+
+/** The reconciliation-base row, rendered only when it differs from computed. */
+function baseText() {
+    return screen.queryByTestId("reconcile-base")?.textContent ?? null;
 }
 
 beforeEach(() => {
@@ -429,5 +497,107 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         expect(invalidate).toHaveBeenCalled();
         const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
         expect(keys.some((k) => k?.includes("accounts"))).toBe(true);
+    });
+
+    // ── Multi-currency: preview against the base the SERVER resolves against ──
+    //
+    // The defect: the dialog previewed `entered − computed_balance` while the
+    // server stamps `entered − reconcilable_balance`. On this fixture that made
+    // typing the true statement figure (120) promise −30 while the server would
+    // stamp +20, and typing the partition figure (100) promise −50 before the
+    // server rejected it as already reconciled.
+    it("previews an entered reading against the reconciliation base, not the converted balance", async () => {
+        mockAccountApi();
+        const user = userEvent.setup();
+        await renderDialog(MULTI_CURRENCY);
+
+        // Stored: 120 − 100 = +20 (the figure the badge and the server agree on).
+        expect(deltaText()).toMatch(/\+.*20,00/);
+
+        // Retyping the SAME statement figure must reproduce it, not −30.
+        const reading = screen.getByLabelText(/new statement reading/i);
+        await user.type(reading, "120");
+        await waitFor(() => expect(deltaText()).toMatch(/\+.*20,00/));
+        expect(deltaText()).not.toMatch(/30,00/);
+
+        // Typing the base itself is a reconciled account — the server's
+        // "already reconciled" case — so the preview must read zero, not −50.
+        await user.clear(reading);
+        await user.type(reading, "100");
+        await waitFor(() => expect(deltaText()).toMatch(/0,00/));
+        expect(deltaText()).not.toMatch(/50,00/);
+    });
+
+    it("shows the base as its own labelled row, and the three figures agree on screen", async () => {
+        mockAccountApi();
+        await renderDialog(MULTI_CURRENCY);
+
+        // statement (120) − base (100) = difference (+20), all in euro; the
+        // converted whole-account figure is shown separately as the computed
+        // balance so neither number is mistaken for the other.
+        expect(baseText()).toMatch(/100,00/);
+        expect(screen.getByText(/reconciles against \(EUR\)/i)).toBeInTheDocument();
+        expect(screen.getByText(/does not move with exchange rates/i)).toBeInTheDocument();
+        expect(deltaText()).toMatch(/\+.*20,00/);
+    });
+
+    // The overwhelmingly common case must look exactly as it did before.
+    it("hides the base row entirely on a single-currency account", async () => {
+        mockAccountApi();
+        await renderDialog(DRIFTING);
+
+        expect(baseText()).toBeNull();
+        expect(screen.queryByText(/reconciles against/i)).not.toBeInTheDocument();
+    });
+
+    // A payload without the field (older server, or the account-detail endpoint,
+    // which does not return it) must behave exactly as it did before.
+    it("falls back to the computed balance when the payload carries no base", async () => {
+        mockAccountApi();
+        const user = userEvent.setup();
+        const { reconcilable_balance: _b, reconcilable_currency: _c, ...legacy } =
+            MULTI_CURRENCY as Account & { reconcilable_balance?: number; reconcilable_currency?: string };
+        await renderDialog(legacy as Account);
+
+        expect(baseText()).toBeNull();
+        await user.type(screen.getByLabelText(/new statement reading/i), "120");
+        await waitFor(() => expect(deltaText()).toMatch(/-30,00/)); // 120 − 150
+    });
+
+    // D3: the base's currency is the ledger's, not the (wrong) declared one, so
+    // every native figure on screen is labelled with the money it actually is.
+    it("labels the native triple in the base currency on a mislabelled account", async () => {
+        mockAccountApi();
+        const user = userEvent.setup();
+        await renderDialog(MISLABELLED);
+
+        // Base and difference in US$; the computed balance stays in the
+        // account's declared EUR, since that is what it was converted into.
+        expect(baseText()).toMatch(/1\.000,00/);
+        expect(baseText()).toContain('$');
+        expect(screen.getByText(/reconciles against \(USD\)/i)).toBeInTheDocument();
+        expect(deltaText()).toContain('$');
+        // …while the computed balance stays the converted, euro-denominated one.
+        expect(screen.getByText(/500,00/).textContent).toContain('€');
+
+        // …and the preview stays in that same currency and base.
+        await user.type(screen.getByLabelText(/new statement reading/i), "1100");
+        await waitFor(() => expect(deltaText()).toMatch(/\+.*100,00/));
+        expect(deltaText()).toContain('$');
+    });
+
+    // D4: 'accept' writes the base. Rendering it means the user sees the 0 it
+    // will adopt before clicking, instead of a figure that appears from nowhere.
+    it("shows the zero base that 'accept' would adopt when nothing is held in the statement currency", async () => {
+        const calls = mockAccountApi();
+        const user = userEvent.setup();
+        await renderDialog(EMPTY_BASE);
+
+        expect(baseText()).toMatch(/0,00/);
+        expect(deltaText()).toMatch(/\+.*50,00/); // 50 − 0
+        await user.click(screen.getByRole("button", { name: /accept computed balance/i }));
+
+        await waitFor(() => expect(calls.reconcile).toHaveLength(1));
+        expect(calls.reconcile[0].body).toEqual({ mode: "accept" });
     });
 });

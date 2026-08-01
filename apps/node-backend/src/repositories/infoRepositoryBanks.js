@@ -9,7 +9,7 @@ import {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyLateral,
   computedBalanceSeriesCtes,
-  statementPartitionBalance,
+  statementPartition,
 } from './accountBalanceSql.js';
 import {
   roundToCents,
@@ -34,11 +34,12 @@ export const banksRepository = {
    * Each account row additionally carries (WP-A1, additive — existing fields
    * are untouched):
    *   - `display_name`      — friendly label (falls back to `name`).
-   *   - `drift`             — statement_balance − the computed balance of the
-   *                           account's OWN-currency partition, in that native
-   *                           currency (same figure as the hub's drift badge —
-   *                           both go through `statementPartitionBalance`);
-   *                           absent when no statement balance is stored.
+   *   - `drift`             — statement_balance − the reconciliation base (the
+   *                           computed balance of the partition the statement is
+   *                           a statement for), in that native currency — the
+   *                           same figure as the hub's drift badge, since both
+   *                           go through `statementPartition`; absent when no
+   *                           statement balance is stored.
    *   - `anchor_date` / `post_anchor_count` — balance provenance from the
    *     shared lateral ("as of {date} statement + {n} entries since" vs
    *     "sum of {n} entries" when anchor_date is absent).
@@ -73,7 +74,7 @@ export const banksRepository = {
                bal.currency,
                bal.balance,
                -- Drift inputs, resolved in JS by the SAME shared helper the hub
-               -- badge uses (statementPartitionBalance) so the two surfaces
+               -- badge uses (statementPartition) so the two surfaces
                -- cannot disagree: the statement figure minus the partition it is
                -- a statement FOR — the account's own currency's, since
                -- a.statement_balance is one number carrying one date and sitting
@@ -269,7 +270,7 @@ export const banksRepository = {
         ? undefined
         : roundToCents(toNumber(
           toDecimal(entry.statementBalance)
-            .minus(toDecimal(statementPartitionBalance(entry.parts, entry.accountCurrency))),
+            .minus(toDecimal(statementPartition(entry.parts, entry.accountCurrency).balance)),
         ));
       totalNetPositionDec = totalNetPositionDec.plus(toDecimal(entry.account.balance));
     }
