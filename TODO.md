@@ -911,15 +911,49 @@ look-changing one.
   - `apps/node-backend/src/repositories/infoRepositoryForecast.js:194,205,300,314,466,477` (+ the new ledger-start probe, which follows the module convention for the `HISTORY_MONTHS` constant) — `historyMonths`/`daysBack`/`daysForward` are `Number.isInteger`+range-validated then template-interpolated. The validation is the only thing between a future caller and injection; the module is the last one with un-parameterised interpolation.
   - Fix: bind them as parameters (`interval '1 month' * $n` or `make_interval`), or leave the validation as the documented invariant if binding fights the interval syntax — decide once, comment it.
 
-- [ ] **Cross-currency `SUM(t2.amount)` still converts at one rate on four other surfaces — the fixed getBankBalances defect lives on in the hub, reconcile, cross-workspace, and net-worth current point** 🔼
+- [x] **Cross-currency `SUM(t2.amount)` still converts at one rate on four other surfaces — the fixed getBankBalances defect lives on in the hub, reconcile, cross-workspace, and net-worth current point** 🔼 ✅ 2026-08-01 · a96aff1 (+8b2ce35 coherence follow-up, d1ab798 sub-cent rounding; adversarially verified live-DB, base-vs-changed: all four surfaces now partition per currency via new `computedBalanceByCurrencyAggLateral` and convert each partition at its own rate — hub 200→150 on the 100EUR+100USD@0.5 fixture, net-worth current point AND history walk (flipped to byCurrency to kill the overnight step), cross-workspace per-partition, reconcile fully native via shared `statementPartition`; single-currency accounts byte-identical (6-shape sweep + 20k-row series sha-equal); 19 discriminating DB tests in multiCurrencyBalances.db.test.js. A FIFTH site was found in accountMergeService.previewMerge — filed as its own finding below)
   - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (out of that finding's scope, which named getBankBalances; all four call sites read by the verifier)_
   - `apps/node-backend/src/repositories/accountRepository.js:67` (hub `computed_balance` + drift), `services/reconcileService.js:85` (drift vs statement), `services/crossWorkspaceDataService.js:61` (converts the raw cross-currency total at `a.currency`), `repositories/infoRepositoryNetWorth.js:159` (current point) — all still use `COMPUTED_BALANCE_LATERAL`'s single cross-currency sum. For a multi-currency account each reports the 100+100@0.5→100 wrong number. The per-currency builder (`computedBalanceByCurrencyLateral`) now exists — adopting it per surface needs each surface's conversion point audited (the hub emits native currency; reconcile compares against a single-currency statement figure — decide what a multi-currency drift even means there).
   - Fix: migrate each surface deliberately onto the per-currency builder (or document why a surface is single-currency by contract); keep hub/drift parity in mind.
 
-- [ ] **Account drift badge mixes conventions on multi-currency accounts: native-currency drift beside a per-currency converted balance** 🔽
+- [x] **Account drift badge mixes conventions on multi-currency accounts: native-currency drift beside a per-currency converted balance** 🔽 ✅ 2026-08-01 · 8b2ce35 (with a96aff1 base + d1ab798 rounding; adversarially verified: hub and badge drift resolve through one shared `statementPartition` helper (own-currency partition incl. zero → single non-zero-sum partition → 0), the hub ships that base as `reconcilable_balance`/`reconcilable_currency`, drift = statement − reconcilable_balance holds exactly on the wire and on screen (13/13 live probes), ReconcileDialog previews typed readings against the same base the server stamps, accept adopts exactly the displayed base, adjustment rows stamp in the base currency so every scenario converges to drift 0 in one step. Residual asymmetry (zero-sum noise in the DECLARED currency still swings the base) filed as its own finding below)
   - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (noticed; verifier reproduced balance 150 / drift −50 where statement−balance=0)_
   - `apps/node-backend/src/repositories/infoRepositoryBanks.js:71-73` — `drift` deliberately still reads the cross-currency `lb.balance` for hub-badge parity, while `balance` on the same row is per-currency. Inconsistent at HEAD too (different numbers, same contradiction), but the fix makes the two figures on one badge visibly disagree in a new way. Depends on the hub finding above — resolve together.
   - Fix: once the hub goes per-currency, re-derive drift per-currency (statement figure vs its own currency's partition) and the contradiction dissolves.
+
+- [ ] **`accountMergeService.previewMerge` is the last surface summing cross-currency at one rate — merge previews report the wrong projected balance for multi-currency accounts** 🔼
+  - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (implementer noticed, verifier confirmed as the last instance of the class)_
+  - `apps/node-backend/src/services/accountMergeService.js:170-197` — `projectedBalance` hand-inlines `COALESCE(SUM(t2.amount),0)` over the union of the two accounts' rows; its comment (`:129-133`) claims it mirrors "how the hub reports computed_balance", which is no longer true post-a96aff1.
+  - Fix: adopt the per-currency aggregated builder + conversion the hub now uses (`computedBalanceByCurrencyAggLateral` / `loadCurrentRates`), and correct the comment.
+
+- [ ] **Reconcile 'adjustment' mode and opening-balance backfill are production-fatal: their INSERTs omit `recipient_id` (NOT NULL since migration 0001) → 23502 on every call** 🔼
+  - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (implementer noticed; verifier reproduced `23502 null value in column "recipient_id"` live; pre-existing, identical on base)_
+  - `apps/node-backend/src/services/reconcileService.js:150-159` and `services/openingBalanceService.js:153` — both insert into `transactions` without `recipient_id`. The mock suite (`tests/reconcileService.test.js`) asserts the mode "works", which is how this survived; `tests/multiCurrencyBalances.db.test.js:232-239` documents it in a comment but does not pin it.
+  - Fix: decide the recipient for system-generated adjustment/opening rows (dedicated system recipient?), wire it in both services, and pin with a real-DB test. Note the adjustment currency logic itself is correct post-8b2ce35 (stamps in the base partition currency; verifier showed all six scenarios converge to drift 0 once the NOT NULL is fixed).
+
+- [ ] **`statementPartition` drops zero-sum partitions only in step 2 — cancelling noise in the DECLARED currency still swings the reconciliation base (−€10 → +€90 on a mislabelled account)** 🔽
+  - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (verifier probe on 8b2ce35)_
+  - `apps/node-backend/src/repositories/accountBalanceSql.js:236-249` — step 1 elects the own-currency partition even when its sum is 0 (deliberate: a EUR account spent to zero must keep a EUR base), but that means two cancelling €50 rows on a mislabelled USD-only "EUR" account flip the base from `{USD,100}` to `{EUR,0}` and the badge from −10 to +90. Related: `Number(p.balance) !== 0` treats a sub-cent residue (0.0001) as a funded partition.
+  - Fix: needs a product decision on which rationale wins for the mislabelled case (the two step rationales are in tension — documented in the helper JSDoc); at minimum treat sub-cent residues as zero-sum when dropping.
+
+- [ ] **`BankBalancesWidget` formats `computed_balance` with `defaultCurrency`, never converting from `a.currency` — contradicts the hub contract every other consumer honours** 🔽
+  - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (verifier noticed; pre-existing)_
+  - `apps/frontend/src/components/BankBalancesWidget.tsx:265` — `groupAccounts.ts:86` and `AccountsPage.tsx:171` re-convert correctly; this widget labels a native-currency figure with the default currency symbol.
+  - Fix: convert (or label) like the other two consumers.
+
+- [ ] **`OpeningBalanceDialog` prefills its amount from `computed_balance` — on a multi-currency account that offers the FX-converted total as a native opening anchor** 🔽
+  - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (implementer noticed; same class as the fixed ReconcileDialog defect, different dialog)_
+  - `apps/frontend/src/features/accounts/OpeningBalanceDialog.tsx:42-43` — the reconcile dialog's backfill now requests `baseCurrency`; this dialog's prefill still reads the converted total.
+  - Fix: prefill from `reconcilable_balance`/`reconcilable_currency` like the reconcile backfill.
+
+- [ ] **`crossWorkspaceDataService.cashAccounts[].currency` labels the account's currency while `balance` is in the target currency** ⏬
+  - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (implementer noticed, documented in a code comment rather than changed)_
+  - `apps/node-backend/src/services/crossWorkspaceDataService.js` (comment at the mapping site) — mildly misleading payload shape, pre-existing.
+  - Fix: either rename the field, emit both currencies, or convert-and-label consistently; audit consumers first.
+
+- [ ] **Minor residues of the per-currency balance migration (grouped)** ⏬
+  - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (verifier D8)_
+  - `computedBalanceByCurrencyAggLateral` hardcodes its inner alias `bal` (`accountBalanceSql.js:184`) while parameterising the outer one — cannot compose with `computedBalanceByCurrencyLateral` in one query. `getAll` now runs both laterals: ~3.4× (7→24ms at 100 accounts/20k rows) — acceptable, noted for the next perf pass.
 
 - [ ] **Future-dated rows: banks headline counts them now, the chart only from their date — and an all-future account is 123 in banks but 0 in net worth** ⏬
   - ↪ _from: Orchestration session 2026-07-28 · balances fix pass (pre-existing, pinned as an explicit known-divergence test in tests/infoRepoBanks.db.test.js rather than silently changed — bounding the headline would break hub agreement)_
