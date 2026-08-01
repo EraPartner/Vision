@@ -19,15 +19,24 @@
  *                         (migration 0075). computed rises to meet statement; drift
  *                         collapses to 0.
  *
+ * On a multi-currency account only the account's OWN currency partition is
+ * reconciled — that is the only currency `accounts.statement_balance` can be a
+ * statement for, and it is the currency both outcomes are denominated in. See
+ * the comment at the drift read below.
+ *
  * Both are opt-in: the caller must name the mode. 'adjustment' follows the
  * 'opening' (0073) / 'trade' (0053) precedent so the row stays out of
  * income/spending aggregations and out of the ADR-083 transfer reconciler.
  */
 
 import { query, withTransaction } from '../database/connection.js';
-import { COMPUTED_BALANCE_LATERAL } from '../repositories/accountBalanceSql.js';
+import {
+  computedBalanceByCurrencyAggLateral,
+  statementPartitionBalance,
+} from '../repositories/accountBalanceSql.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { todayAppDateString } from '../lib/timezone.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 
 const ADJUSTMENT_MEMO = 'BALANCE ADJUSTMENT';
 const VALID_MODES = new Set(['accept', 'adjustment']);
@@ -74,15 +83,15 @@ export async function reconcileAccount(accountId, body) {
     );
     if (!lockRes.rows[0]) throw new NotFoundError(`Account ${accountId} not found`);
 
-    // Statement figure + the live computed balance (same lateral the hub/drift
-    // use). The FOR UPDATE cannot ride on this SELECT — the lateral aggregates,
-    // so the lock is taken separately above.
+    // Statement figure + the live computed balance, per currency partition (the
+    // same lateral the hub badge reads). The FOR UPDATE cannot ride on this
+    // SELECT — the lateral aggregates, so the lock is taken separately above.
     const res = await query(
       `SELECT a.currency,
               a.statement_balance,
-              COALESCE(lb.balance, 0) AS computed_balance
+              bp.balance_parts
          FROM accounts a
-         ${COMPUTED_BALANCE_LATERAL}
+         ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
         WHERE a.id = $1`,
       [accountId],
     );
@@ -93,9 +102,22 @@ export async function reconcileAccount(accountId, body) {
       throw new ValidationError('Account has no statement balance to reconcile against');
     }
 
+    // Multi-currency: reconcile ONE partition — the account's own currency's.
+    // `statement_balance` is a single figure sitting next to `accounts.currency`
+    // and carrying a single date, so that is the only currency it can be a
+    // statement for; and both outcomes below are denominated in that currency
+    // (`accept` writes it back into `statement_balance`, `adjustment` inserts a
+    // ledger row stamped `a.currency`), so measuring the drift against anything
+    // else — a cross-currency Σ of bare amounts, or an FX-converted total that
+    // moves with the daily rate — would not actually clear the badge. Every
+    // single-currency account keeps its previous figure exactly (see
+    // statementPartitionBalance). The other partitions are untouched: they have
+    // no statement figure to reconcile against.
     const statement = Number(row.statement_balance);
-    const computed = Number(row.computed_balance);
-    const drift = statement - computed;
+    const computed = toNumber(toDecimal(
+      statementPartitionBalance(row.balance_parts, row.currency),
+    ));
+    const drift = toNumber(toDecimal(statement).minus(toDecimal(computed)));
 
     if (Math.abs(drift) < DRIFT_EPSILON) {
       throw new ValidationError('Account is already reconciled (no drift to resolve)');

@@ -371,13 +371,17 @@
 
 /**
  * `AccountRow` plus the balance/provenance columns `getAll` adds via
- * `COMPUTED_BALANCE_LATERAL`. `post_anchor_count` is re-emitted as a `number`
- * (the raw `COUNT(*)` bigint string is parsed) and both provenance fields become
- * `undefined` rather than `null` when nothing is stamped.
+ * `COMPUTED_BALANCE_LATERAL` + `computedBalanceByCurrencyAggLateral`.
+ * `post_anchor_count` is re-emitted as a `number` (the raw `COUNT(*)` bigint
+ * string is parsed) and both provenance fields become `undefined` rather than
+ * `null` when nothing is stamped. `computed_balance` (Σ of the account's
+ * currency partitions, converted into `currency`) and `drift` (statement figure
+ * − the own-currency partition) are summed in JS from the partitions, so they
+ * are `number`s — matching the OpenAPI schema — rather than pg NUMERIC strings.
  *
  * @typedef {AccountRow & {
- *   computed_balance: string|null,
- *   drift: string|null,
+ *   computed_balance: number,
+ *   drift: number|null,
  *   has_transactions: boolean,
  *   anchor_date?: string,
  *   post_anchor_count?: number,

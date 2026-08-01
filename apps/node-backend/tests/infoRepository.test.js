@@ -26,7 +26,7 @@ import { query, queryPrepared } from '../src/database/connection.js';
 import { convertRowsToEur } from '../src/services/currency/currencyConversionService.js';
 import infoRepository from '../src/repositories/infoRepository.js';
 import { clearMvCache } from '../src/repositories/infoRepository.js';
-import { COMPUTED_BALANCE_LATERAL } from '../src/repositories/accountBalanceSql.js';
+import { computedBalanceByCurrencyAggLateral } from '../src/repositories/accountBalanceSql.js';
 
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
@@ -301,15 +301,17 @@ describe('InfoRepository', () => {
 
     // ── WP-A1: current point uses the unified computed-balance definition ──
     //
-    // The unified current-balance query is discriminated by 'WITH anchor'
-    // (the shared lateral's CTE) — the daily history walk ends in a
-    // 'balance_series' CTE instead, so the two mocks can't cross-match. The
-    // 'WITH anchor' branch MUST come before the generic 'SELECT 1 FROM'
-    // branch: the lateral's no-stamp fallback contains
-    // `NOT EXISTS (SELECT 1 FROM anchor)`.
+    // The unified current-balance query is discriminated by 'balance_parts'
+    // (the per-currency aggregated lateral's one column) — the daily history
+    // walk ends in a 'balance_series' CTE instead, so the two mocks can't
+    // cross-match. It MUST come before the generic 'SELECT 1 FROM' branch.
+    //
+    // `currentRows` are shaped like the real result set: one row per account
+    // carrying its currency partitions as a JSON array (NULL when the account
+    // holds no active rows at all).
     const mockUnifiedNetWorth = ({ firstDataDate, investmentsRows, walkRows, currentRows }) => {
       query.mockImplementation(async (sql) => {
-        if (sql.includes('WITH anchor')) return { rows: currentRows };
+        if (sql.includes('balance_parts')) return { rows: currentRows };
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: firstDataDate }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
@@ -340,9 +342,9 @@ describe('InfoRepository', () => {
         //  (b) stamped + manual rows after the anchor → 5000 + 150 = 5150
         //  (c) liability (in_net_worth, negative balance) → -300
         currentRows: [
-          { bank_account: 'Cash', is_liability: false, balance: '200', currency: 'EUR' },
-          { bank_account: 'KBC', is_liability: false, balance: '5150', currency: 'EUR' },
-          { bank_account: 'Mortgage', is_liability: true, balance: '-300', currency: 'EUR' },
+          { bank_account: 'Cash', is_liability: false, account_currency: 'EUR', balance_parts: [{ currency: 'EUR', balance: '200' }] },
+          { bank_account: 'KBC', is_liability: false, account_currency: 'EUR', balance_parts: [{ currency: 'EUR', balance: '5150' }] },
+          { bank_account: 'Mortgage', is_liability: true, account_currency: 'EUR', balance_parts: [{ currency: 'EUR', balance: '-300' }] },
         ],
       });
 
@@ -374,8 +376,8 @@ describe('InfoRepository', () => {
         investmentsRows: [{ day: todayKey, investments: '1000' }],
         walkRows: [{ day: todayKey, bank_account: 'KBC', is_liability: false, balance: '5000', currency: 'EUR' }],
         currentRows: [
-          { bank_account: 'KBC', is_liability: false, balance: '5150', currency: 'EUR' },
-          { bank_account: 'Mortgage', is_liability: true, balance: '-300', currency: 'EUR' },
+          { bank_account: 'KBC', is_liability: false, account_currency: 'EUR', balance_parts: [{ currency: 'EUR', balance: '5150' }] },
+          { bank_account: 'Mortgage', is_liability: true, account_currency: 'EUR', balance_parts: [{ currency: 'EUR', balance: '-300' }] },
         ],
       });
 
@@ -402,7 +404,7 @@ describe('InfoRepository', () => {
       expect(result.current.netWorth).toBe(5000);
     });
 
-    it('sources the current point from the shared COMPUTED_BALANCE_LATERAL with no stamped-population gate', async () => {
+    it('sources the current point from the shared per-currency lateral with no stamped-population gate', async () => {
       const todayKey = todayAppDateString();
       mockUnifiedNetWorth({
         firstDataDate: todayKey,
@@ -414,17 +416,70 @@ describe('InfoRepository', () => {
       await infoRepository.getNetWorthFromSnapshots();
 
       const calls = query.mock.calls.map((c) => c[0]);
-      const currentSql = calls.find((sql) => typeof sql === 'string' && sql.includes('WITH anchor'));
+      const currentSql = calls.find((sql) => typeof sql === 'string' && sql.includes('balance_parts'));
       expect(currentSql).toBeDefined();
       // One SQL definition of "current balance" project-wide: the headline
-      // embeds the exact shared lateral the hub/widget/reconcile use…
-      expect(currentSql).toContain(COMPUTED_BALANCE_LATERAL.trim());
+      // embeds the exact shared per-currency lateral the hub/widget/reconcile
+      // use — a multi-currency account is summed per partition, never as one
+      // cross-currency Σ converted at a single rate.
+      expect(currentSql).toContain(
+        computedBalanceByCurrencyAggLateral({ account: 'a.id' }).trim(),
+      );
       // …respects the net-worth population rule…
       expect(currentSql).toContain('a.in_net_worth = true');
       // …and carries NO `lb.balance IS NOT NULL` gate (that predicate exists
-      // only inside the lateral's anchor CTE and, deliberately, in the
+      // only inside the lateral's anchor subquery and, deliberately, in the
       // stamp-based HISTORY walk — not on the current point's population).
       expect(currentSql).not.toContain('WHERE lb.balance IS NOT NULL');
+    });
+
+    // The defect this replaced: one cross-currency Σ of bare amounts tagged
+    // with the most recent row's currency — 100 EUR + 100 USD entered net worth
+    // as 200 × the USD rate (100) instead of 150.
+    it('converts each currency partition of a multi-currency account on its own', async () => {
+      const todayKey = todayAppDateString();
+      mockUnifiedNetWorth({
+        firstDataDate: todayKey,
+        investmentsRows: [],
+        walkRows: [{ day: todayKey, bank_account: 'Wise', is_liability: false, balance: '100', currency: 'EUR' }],
+        currentRows: [{
+          bank_account: 'Wise',
+          is_liability: false,
+          account_currency: 'EUR',
+          balance_parts: [
+            { currency: 'EUR', balance: '100' },
+            { currency: 'USD', balance: '100' },
+          ],
+        }],
+      });
+
+      // Currency-aware conversion for this case: USD is worth half a EUR.
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((r) => ({
+        ...r,
+        amount_eur: Number(r.amount || 0) * (r.currency === 'USD' ? 0.5 : 1),
+      })));
+
+      const result = await infoRepository.getNetWorthFromSnapshots();
+
+      expect(result.current.liquid).toBe(150); // 100 EUR + 100 USD × 0.5
+      expect(result.current.netWorth).toBe(150);
+    });
+
+    // An in-net-worth account with no ledger rows at all still yields a row
+    // (NULL parts), so the `.length > 0` guard that decides whether to override
+    // the walk-derived point keeps its pre-partition meaning.
+    it('counts an account with no active rows as a zero contribution, not a missing row', async () => {
+      const todayKey = todayAppDateString();
+      mockUnifiedNetWorth({
+        firstDataDate: todayKey,
+        investmentsRows: [],
+        walkRows: [{ day: todayKey, bank_account: 'Ghost', is_liability: false, balance: '5000', currency: 'EUR' }],
+        currentRows: [{ bank_account: 'Fresh', is_liability: false, account_currency: 'EUR', balance_parts: null }],
+      });
+
+      const result = await infoRepository.getNetWorthFromSnapshots();
+
+      expect(result.current.liquid).toBe(0);
     });
 
     it('should emit debug log with summary metrics', async () => {

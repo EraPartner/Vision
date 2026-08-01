@@ -462,6 +462,65 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
       expect(r.total_history[r.total_history.length - 1].balance).toBe(r.total_net_position);
     });
 
+    // Was the drift-badge finding: `balance` was per-currency (converted) while
+    // `drift` still read the cross-currency lb.balance, so one badge showed two
+    // figures computed two different ways — reproduced as balance 150 beside
+    // drift −50 on an account whose statement matched its balance exactly.
+    it('derives drift from the account-currency partition, not the cross-currency sum', async () => {
+      await seedRecipient();
+      await addAccount('MULTI DRIFT', {
+        currency: 'EUR',
+        statementBalance: '120.00',
+        statementBalanceDate: await ymdFromToday(),
+      });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: 'MULTI DRIFT' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'MULTI DRIFT' });
+
+      const r = await banksRepository.getBankBalances();
+
+      expect(r.accounts[0].balance).toBe(150); // 100 EUR + 100 USD × 0.5
+      // 120 − the EUR partition's 100. The cross-currency Σ gave 120 − 200 = −80.
+      expect(r.accounts[0].drift).toBe(20);
+    });
+
+    it('reports no drift when the statement matches its own currency partition', async () => {
+      // The exact contradiction the finding named: a statement figure equal to
+      // the account's own-currency balance must read as reconciled, whatever the
+      // other partitions hold — previously it showed a non-zero drift beside a
+      // balance the user had just matched.
+      await seedRecipient();
+      await addAccount('MULTI RECONCILED', {
+        currency: 'EUR',
+        statementBalance: '100.00',
+        statementBalanceDate: await ymdFromToday(),
+      });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'EUR', bank: 'MULTI RECONCILED' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'MULTI RECONCILED' });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.accounts[0].drift).toBe(0);
+    });
+
+    it('reconciles a lone partition even when its currency differs from the account', async () => {
+      // A mislabelled single-currency account (USD rows under a EUR-declared
+      // account) is still one partition, so it keeps reconciling against it —
+      // this is what makes every single-currency account unchanged.
+      await seedRecipient();
+      await addAccount('MISLABELLED', {
+        currency: 'EUR',
+        statementBalance: '90.00',
+        statementBalanceDate: await ymdFromToday(),
+      });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '100.00', currency: 'USD', bank: 'MISLABELLED' });
+
+      const r = await banksRepository.getBankBalances();
+      expect(r.accounts[0].balance).toBe(50); // 100 USD × 0.5, in the EUR target
+      expect(r.accounts[0].drift).toBe(-10); // native: 90 − the sole partition's 100
+    });
+
     it('leaves a single-currency account byte-identical to the unpartitioned computation', async () => {
       // The overwhelmingly common case: one partition, whose anchor is the
       // account's latest stamped row and whose delta is every row after it.

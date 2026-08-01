@@ -15,6 +15,8 @@ import { describe, expect, it } from 'vitest';
 import {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyLateral,
+  computedBalanceByCurrencyAggLateral,
+  statementPartitionBalance,
   computedBalanceSeriesCtes,
 } from '../src/repositories/accountBalanceSql.js';
 
@@ -89,6 +91,68 @@ describe('computedBalanceByCurrencyLateral', () => {
     // at the partition's last activity.
     expect(sql).not.toContain('last_activity');
     expect(computedBalanceByCurrencyLateral({ account: 'a.id', alias: 'x' })).toContain(') x ON true');
+  });
+});
+
+describe('computedBalanceByCurrencyAggLateral', () => {
+  const sql = computedBalanceByCurrencyAggLateral({ account: 'a.id' });
+
+  it('wraps the per-currency lateral without altering it', () => {
+    // The whole point is that there is ONE partitioned definition: the
+    // aggregated form must embed it verbatim, not restate it.
+    expect(sql).toContain(computedBalanceByCurrencyLateral({ account: 'a.id', alias: 'bal' }).trim());
+  });
+
+  it('emits one row per account, LEFT-joined so a row-less account survives', () => {
+    // Callers whose rows ARE accounts (paging, one entry per account, a
+    // population-size guard) break if an account fans out or disappears.
+    expect(sql.trim().startsWith('LEFT JOIN LATERAL')).toBe(true);
+    expect(sql).toContain(') bp ON true');
+    expect(sql).toContain('jsonb_agg(');
+    expect(sql).toContain('AS balance_parts');
+    expect(computedBalanceByCurrencyAggLateral({ account: 'a.id', alias: 'x', column: 'parts' }))
+      .toContain('AS parts');
+  });
+
+  it('carries each partition balance as TEXT, never a JSON number', () => {
+    // jsonb numbers deserialize to IEEE doubles, so a NUMERIC would lose
+    // precision before toDecimal ever saw it.
+    expect(sql).toContain('bal.balance::text');
+  });
+});
+
+describe('statementPartitionBalance', () => {
+  // The shared rule behind the drift badge (hub + dashboard) and reconcile —
+  // they must agree by construction, so all three read this one helper.
+  it('picks the partition matching the account currency', () => {
+    const parts = [{ currency: 'EUR', balance: '100' }, { currency: 'USD', balance: '100' }];
+    expect(statementPartitionBalance(parts, 'EUR')).toBe('100');
+    expect(statementPartitionBalance([
+      { currency: 'EUR', balance: '100' },
+      { currency: 'USD', balance: '250' },
+    ], 'USD')).toBe('250');
+  });
+
+  it('reconciles a LONE partition whatever its currency (single-currency parity)', () => {
+    // A mislabelled single-currency account (USD rows, EUR declared) is not an
+    // account with an empty EUR statement — this is what keeps every
+    // single-currency account byte-identical to the pre-partition behaviour.
+    expect(statementPartitionBalance([{ currency: 'USD', balance: '100' }], 'EUR')).toBe('100');
+  });
+
+  it('returns 0 when the account holds no partition in its own currency', () => {
+    expect(statementPartitionBalance([], 'EUR')).toBe('0');
+    expect(statementPartitionBalance(null, 'EUR')).toBe('0');
+    expect(statementPartitionBalance([
+      { currency: 'USD', balance: '100' },
+      { currency: 'GBP', balance: '50' },
+    ], 'EUR')).toBe('0');
+  });
+
+  it('defaults a missing account currency to EUR and compares case-insensitively', () => {
+    const parts = [{ currency: 'EUR', balance: '7' }, { currency: 'USD', balance: '9' }];
+    expect(statementPartitionBalance(parts, null)).toBe('7');
+    expect(statementPartitionBalance(parts, 'usd')).toBe('9');
   });
 });
 

@@ -5,6 +5,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/database/connection.js', () => ({ query: vi.fn() }));
+// getAll folds the per-currency partitions into `accounts.currency` itself, so
+// it needs a rate table. Stub it: this suite is about SQL + row shaping, and the
+// real loader would otherwise reach for the DB (mocked away) and then the ECB.
+vi.mock('../src/services/currency/currencyConversionService.js', () => ({
+  loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
+  // rate_to_eur semantics, mirroring the real convertWithRates.
+  convertWithRates: vi.fn((amount, from, to, rates) =>
+    (from === to ? amount : (amount * rates[from]) / rates[to])),
+}));
 
 import { query } from '../src/database/connection.js';
 import accountRepository from '../src/repositories/accountRepository.js';
@@ -16,7 +25,16 @@ describe('accountRepository', () => {
     it('lists all accounts without an active filter', async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 1, name: 'Checking' }] });
       const rows = await accountRepository.getAll();
-      expect(rows).toEqual([{ id: 1, name: 'Checking' }]);
+      // No partitions at all (an account with no active rows) → a 0 balance and
+      // no drift, with the provenance fields absent rather than null.
+      expect(rows).toEqual([{
+        id: 1,
+        name: 'Checking',
+        computed_balance: 0,
+        drift: null,
+        anchor_date: undefined,
+        post_anchor_count: undefined,
+      }]);
       const sql = query.mock.calls[0][0];
       expect(sql).not.toContain('a.is_active = true');
       expect(sql).not.toContain('a.is_active = false');
@@ -41,7 +59,61 @@ describe('accountRepository', () => {
       const sql = query.mock.calls[0][0];
       expect(sql).toContain('lb.anchor_date');
       expect(sql).toContain('lb.post_anchor_count');
-      expect(sql).toContain('lb.balance AS computed_balance');
+      // The balance no longer comes off the cross-currency lateral: it is summed
+      // in JS from the per-currency partitions, which arrive as one JSON column.
+      expect(sql).not.toContain('lb.balance AS computed_balance');
+      expect(sql).toContain('bp.balance_parts');
+    });
+
+    // The defect this replaced: SUM(t2.amount) added a EUR amount to a USD
+    // amount as bare numbers, and the caller converted that total at the single
+    // rate of the most recent row's currency — 100 EUR + 100 USD at 0.5 came out
+    // as 100 instead of 150.
+    it('sums the currency partitions into the account currency, not across them', async () => {
+      query.mockResolvedValueOnce({
+        rows: [{
+          id: 1, name: 'Wise', currency: 'EUR', statement_balance: null,
+          balance_parts: [
+            { currency: 'EUR', balance: '100.0000' },
+            { currency: 'USD', balance: '100.0000' },
+          ],
+        }],
+      });
+      const [row] = await accountRepository.getAll();
+      expect(row.computed_balance).toBe(150); // 100 EUR + 100 USD × 0.5
+      expect(row.balance_parts).toBeUndefined(); // internal, not part of the payload
+    });
+
+    // Drift is the statement figure against the partition it is a statement FOR
+    // (the account's own currency), never against the FX-converted total — which
+    // would make a reconciliation figure move with the daily rate.
+    it('derives drift from the account-currency partition on a multi-currency account', async () => {
+      query.mockResolvedValueOnce({
+        rows: [{
+          id: 1, name: 'Wise', currency: 'EUR', statement_balance: '120.00',
+          balance_parts: [
+            { currency: 'EUR', balance: '100.0000' },
+            { currency: 'USD', balance: '100.0000' },
+          ],
+        }],
+      });
+      const [row] = await accountRepository.getAll();
+      expect(row.computed_balance).toBe(150);
+      expect(row.drift).toBe(20); // 120 − the EUR partition's 100, NOT 120 − 150
+    });
+
+    // The mislabelled single-currency account: one partition reconciles against
+    // the statement whatever its code, so nothing regresses for the common case.
+    it('reconciles a lone partition even when its currency differs from the account', async () => {
+      query.mockResolvedValueOnce({
+        rows: [{
+          id: 1, name: 'Wise USD', currency: 'EUR', statement_balance: '90.00',
+          balance_parts: [{ currency: 'USD', balance: '100.0000' }],
+        }],
+      });
+      const [row] = await accountRepository.getAll();
+      expect(row.computed_balance).toBe(50); // 100 USD × 0.5, into the account's EUR
+      expect(row.drift).toBe(-10); // native: 90 − the sole partition's 100
     });
 
     it('shapes provenance: NULL anchor_date → undefined, bigint-string count → number', async () => {

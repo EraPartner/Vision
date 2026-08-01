@@ -135,6 +135,90 @@ export function computedBalanceByCurrencyLateral({ account, alias = 'bal' }) {
 }
 
 /**
+ * {@link computedBalanceByCurrencyLateral} folded to **one row per account**:
+ * the partitions arrive as a single JSON array instead of one SQL row apiece.
+ *
+ * Why it exists: the row-per-partition form fans an account out across several
+ * rows, which is fine for a caller that immediately re-folds them
+ * (`getBankBalances`) but wrong for callers whose rows ARE accounts —
+ * `accountRepository.getAll` pages with LIMIT/OFFSET (partition-grained rows
+ * would slice an account in half), `assembleRebalanceInputs` emits one
+ * `cashAccounts` entry per account, and net worth's `.length > 0` guard means
+ * "there are in-net-worth accounts". It is also a LEFT join, so an account with
+ * no active rows at all keeps its row (with a NULL array) rather than vanishing
+ * — every one of those callers lists accounts that legitimately hold no ledger
+ * activity (a fresh account, a portfolio account whose activity lives in
+ * `portfolio_transactions`).
+ *
+ * Exposes ONE column under `alias`:
+ *   - `balance_parts` — `[{ currency, balance }, …]` ordered by currency, or
+ *     SQL NULL when the account has no active rows. `balance` is emitted as a
+ *     **string** (`::text`): a JSON number would round-trip a NUMERIC through
+ *     an IEEE double before `toDecimal` ever sees it. Feed each entry through
+ *     `toDecimal(part.balance)` exactly as you would a NUMERIC column.
+ *
+ * Conversion is the caller's job and must happen per partition, at today's
+ * rate (these are *current* balances) — see
+ * {@link computedBalanceByCurrencyLateral} for why summing first is wrong.
+ *
+ * @param {{ account: string, alias?: string, column?: string }} opts
+ *   `account` is interpolated raw: pass a LITERAL SQL expression from the call
+ *   site (`a.id`), never user input.
+ * @returns {string}
+ */
+export function computedBalanceByCurrencyAggLateral({
+  account,
+  alias = 'bp',
+  column = 'balance_parts',
+}) {
+  return `
+  LEFT JOIN LATERAL (
+    SELECT jsonb_agg(
+             jsonb_build_object('currency', bal.currency, 'balance', bal.balance::text)
+             ORDER BY bal.currency
+           ) AS ${column}
+    -- A one-row driver so the shared per-currency lateral (which is written as
+    -- a JOIN onto a preceding FROM item) can be spliced in unchanged; the
+    -- correlation to ${account} reaches through both nesting levels.
+    FROM (SELECT 1) ${alias}_drv
+    ${computedBalanceByCurrencyLateral({ account, alias: 'bal' })}
+  ) ${alias} ON true
+`;
+}
+
+/**
+ * The partition a **statement figure** belongs to, given an account's
+ * `balance_parts` (see {@link computedBalanceByCurrencyAggLateral}).
+ *
+ * `accounts.statement_balance` is one number carrying one date, and the column
+ * next to it is `accounts.currency` — so it can only be read as the bank's
+ * figure for the account's OWN currency. Drift is therefore that figure minus
+ * that currency's partition, never minus a cross-currency sum (which added a
+ * EUR amount to a USD amount as bare numbers) and never minus the FX-converted
+ * total (which would make a reconciliation figure move with the daily rate,
+ * and would size the reconcile 'adjustment' row by today's rate).
+ *
+ * One deliberate exception: an account holding exactly ONE currency reconciles
+ * against that partition whatever its code, even when it disagrees with
+ * `accounts.currency` — a ledger of USD rows under an account still declared
+ * EUR is a mislabelled single-currency account, not an account with an empty
+ * USD statement. This keeps every single-currency account byte-identical to the
+ * pre-partition behaviour.
+ *
+ * @param {Array<{ currency: string, balance: string }>|null|undefined} parts
+ * @param {string|null|undefined} accountCurrency `accounts.currency`.
+ * @returns {string} the partition's balance as a numeric string ('0' when the
+ *   account holds no partition in its own currency).
+ */
+export function statementPartitionBalance(parts, accountCurrency) {
+  if (!parts || parts.length === 0) return '0';
+  if (parts.length === 1) return String(parts[0].balance);
+  const want = (accountCurrency || 'EUR').toUpperCase();
+  const match = parts.find((p) => (p.currency || 'EUR').toUpperCase() === want);
+  return match ? String(match.balance) : '0';
+}
+
+/**
  * The same anchor+delta balance as a **daily series**: one row per
  * (account[, currency], day) over a caller-supplied day grid.
  *
@@ -331,5 +415,7 @@ export function computedBalanceSeriesCtes({
 export default {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyLateral,
+  computedBalanceByCurrencyAggLateral,
+  statementPartitionBalance,
   computedBalanceSeriesCtes,
 };

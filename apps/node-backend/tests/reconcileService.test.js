@@ -36,21 +36,21 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   it('rejects when the account has no statement balance', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: null, computed_balance: 100 }] });
+      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: null, balance_parts: [{ currency: 'EUR', balance: '100' }] }] });
     await expect(reconcileAccount(5, { mode: 'accept' })).rejects.toThrow(/no statement balance/i);
   });
 
   it('rejects a no-op reconcile when drift is within epsilon', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 100, computed_balance: 100 }] });
+      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 100, balance_parts: [{ currency: 'EUR', balance: '100' }] }] });
     await expect(reconcileAccount(5, { mode: 'accept' })).rejects.toThrow(/already reconciled/i);
   });
 
   it('runs the whole reconcile inside a transaction and locks the account row first', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, computed_balance: 100 }] })
+      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ id: 77, amount: 20, transfer_source: 'adjustment' }] });
 
     await reconcileAccount(5, { mode: 'adjustment' });
@@ -65,7 +65,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   it("accept mode rewrites the statement balance to the computed figure (drift → 0)", async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, computed_balance: 100 }] })
+      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ statement_balance: 100 }] });
 
     const result = await reconcileAccount(5, { mode: 'accept' });
@@ -84,7 +84,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   it("adjustment mode stamps a balance-free 'adjustment' delta row equal to the drift", async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, computed_balance: 100 }] })
+      .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ id: 77, amount: 20, transfer_source: 'adjustment' }] });
 
     const result = await reconcileAccount(5, { mode: 'adjustment' });
@@ -106,12 +106,60 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   it('handles a negative drift (statement below computed) with a negative adjustment', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ currency: 'USD', statement_balance: 80, computed_balance: 100 }] })
+      .mockResolvedValueOnce({ rows: [{ currency: 'USD', statement_balance: 80, balance_parts: [{ currency: 'USD', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ id: 78, amount: -20, transfer_source: 'adjustment' }] });
 
     const result = await reconcileAccount(5, { mode: 'adjustment' });
     expect(result.computed_balance).toBe(80);
     const [, params] = query.mock.calls[2];
     expect(params[1]).toBe(-20);
+  });
+
+  // Multi-currency: `statement_balance` is one number carrying one date next to
+  // `accounts.currency`, so it can only be a statement for that currency — and
+  // both outcomes (the rewritten statement figure, the adjustment row's amount)
+  // are denominated in it. Measuring the drift against the cross-currency Σ of
+  // bare amounts (100 + 100 = 200) would size the adjustment by an amount that
+  // never clears the badge.
+  it('reconciles only the account-currency partition on a multi-currency account', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
+      .mockResolvedValueOnce({
+        rows: [{
+          currency: 'EUR',
+          statement_balance: 120,
+          balance_parts: [
+            { currency: 'EUR', balance: '100' },
+            { currency: 'USD', balance: '100' },
+          ],
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 79, amount: 20, transfer_source: 'adjustment' }] });
+
+    const result = await reconcileAccount(5, { mode: 'adjustment' });
+
+    expect(result).toMatchObject({ drift: 0, statement_balance: 120, computed_balance: 120 });
+    const [, params] = query.mock.calls[2];
+    expect(params[1]).toBe(20); // 120 − the EUR partition's 100 (not 120 − 200)
+    expect(params[2]).toBe('EUR');
+  });
+
+  // A multi-currency account whose EUR side already matches the statement has
+  // nothing to reconcile, even though the cross-currency Σ is 100 away from it.
+  it('treats a matching own-currency partition as already reconciled', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
+      .mockResolvedValueOnce({
+        rows: [{
+          currency: 'EUR',
+          statement_balance: 100,
+          balance_parts: [
+            { currency: 'EUR', balance: '100' },
+            { currency: 'USD', balance: '100' },
+          ],
+        }],
+      });
+
+    await expect(reconcileAccount(5, { mode: 'adjustment' })).rejects.toThrow(/already reconciled/i);
   });
 });

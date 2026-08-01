@@ -5,7 +5,7 @@
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 import {
-  COMPUTED_BALANCE_LATERAL,
+  computedBalanceByCurrencyAggLateral,
   computedBalanceSeriesCtes,
 } from './accountBalanceSql.js';
 import { toNumber, toDecimal } from '../lib/money.js';
@@ -29,11 +29,14 @@ export const netWorthRepository = {
    * No network calls — all data from the database.
    *
    * The **current** point — headline, last chart point, latest table row — is
-   * the unified anchor+delta computed balance (`COMPUTED_BALANCE_LATERAL`,
-   * ADR-094 / WP-A1), the same single definition the accounts hub and dashboard
-   * widget consume. The naive stamped read it replaced silently dropped
-   * manual-only (never-stamped) in-net-worth accounts from the headline and
-   * froze stamped accounts at their last imported statement figure.
+   * the unified anchor+delta computed balance, partitioned by currency
+   * (`computedBalanceByCurrencyAggLateral`, ADR-094 / WP-A1), the same single
+   * definition the accounts hub and dashboard widget consume. The naive stamped
+   * read it replaced silently dropped manual-only (never-stamped) in-net-worth
+   * accounts from the headline and froze stamped accounts at their last imported
+   * statement figure; the unpartitioned form that followed then summed a
+   * multi-currency account's amounts as bare numbers and converted the total at
+   * one rate.
    *
    * The liquid/liability *history* series applies that same definition to every
    * earlier day (`computedBalanceSeriesCtes`). It used to be stamp-based, so a
@@ -127,12 +130,17 @@ export const netWorthRepository = {
       -- NULL gate) hid never-stamped accounts from EVERY point except the last
       -- one — the current-point override below then added them back in one go,
       -- so the chart stepped up overnight and reported it as a monthly gain.
-      -- Cross-currency Σ (not per-currency) on purpose: it must mirror the
-      -- current-point lateral below exactly, or the step returns for
-      -- multi-currency accounts.
-      ${computedBalanceSeriesCtes()}
-      -- The currency mirrors the current-point query: the latest active row's
-      -- (as of the day), falling back to the account's own.
+      -- Per-currency (byCurrency), mirroring the current-point lateral below
+      -- exactly — the two must agree or a step returns at the last point for
+      -- multi-currency accounts. Both sides therefore partition the anchor+delta
+      -- computation by transactions.currency and convert each partition on its
+      -- own (the history at the rate of the day it represents, the current point
+      -- at today's). The cross-currency Σ they both used before added a EUR
+      -- amount to a USD amount as bare numbers and converted the total at one
+      -- rate; it agreed with itself, but at the wrong number.
+      ${computedBalanceSeriesCtes({ byCurrency: true })}
+      -- The currency mirrors the current-point query: the partition's own,
+      -- falling back to the account's when a row carries none.
       SELECT
         to_char(s.day, 'YYYY-MM-DD') AS day,
         a.bank_account,
@@ -147,23 +155,22 @@ export const netWorthRepository = {
       // anchor+delta lateral, with NO `balance IS NOT NULL` population gate —
       // a manual-only account (nothing stamped) falls back to Σ(amount) inside
       // the lateral instead of vanishing from the headline. An account with no
-      // active rows contributes a harmless 0. The currency mirrors the
-      // bank-balances query: the most recent active row's, falling back to the
-      // account's own currency.
+      // active rows contributes a harmless 0.
+      //
+      // Partitioned by currency, like the walk above: each partition carries its
+      // OWN currency and is converted separately below. The single-partition
+      // form this replaced emitted one cross-currency Σ of bare amounts tagged
+      // with the most recent active row's currency, so a 100 EUR + 100 USD
+      // account entered net worth as 200 × the USD rate. The aggregated (one row
+      // per account) form is used so this result set still has exactly one row
+      // per in-net-worth account — what the `.length > 0` guard below tests.
       query(`
       SELECT a.name AS bank_account,
              (a.type = 'liability') AS is_liability,
-             COALESCE(lb.balance, 0) AS balance,
-             COALESCE(cur.currency, a.currency, 'EUR') AS currency
+             COALESCE(a.currency, 'EUR') AS account_currency,
+             bp.balance_parts
       FROM accounts a
-      ${COMPUTED_BALANCE_LATERAL}
-      LEFT JOIN LATERAL (
-        SELECT t.currency
-        FROM transactions t
-        WHERE t.account_id = a.id AND t.is_active = true
-        ORDER BY t.date DESC, t.id DESC
-        LIMIT 1
-      ) cur ON true
+      ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
       WHERE a.in_net_worth = true
     `),
     ]);
@@ -178,9 +185,17 @@ export const netWorthRepository = {
       ),
       convertRowsWithHistoricalRateFallback(
         mapRowsForAmountConversion(
-          currentBalancesResult.rows.map(
-            (/** @type {{ bank_account: string, is_liability: boolean, balance: string, currency: string }} */ r) =>
-              ({ ...r, day: todayYmd }),
+          // One conversion row per (account, currency partition). An account
+          // with no active rows has no partition at all and still contributes
+          // its one 0 row, so the population (and the `.length > 0` guard) is
+          // unchanged from the pre-partition query.
+          currentBalancesResult.rows.flatMap(
+            (/** @type {{ bank_account: string, is_liability: boolean, account_currency: string, balance_parts: Array<{ currency: string, balance: string }>|null }} */ r) => {
+              const base = { bank_account: r.bank_account, is_liability: r.is_liability, day: todayYmd };
+              const parts = r.balance_parts ?? [];
+              if (parts.length === 0) return [{ ...base, balance: '0', currency: r.account_currency }];
+              return parts.map((p) => ({ ...base, balance: p.balance, currency: p.currency || 'EUR' }));
+            },
           ),
           'balance'
         ),

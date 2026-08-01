@@ -34,8 +34,8 @@ describe('assembleRebalanceInputs (ADR-098)', () => {
     });
     query.mockResolvedValue({
       rows: [
-        { id: 10, name: 'Checking', currency: 'EUR', balance: 800 },
-        { id: 11, name: 'Savings', currency: 'EUR', balance: 1200 },
+        { id: 10, name: 'Checking', currency: 'EUR', balance_parts: [{ currency: 'EUR', balance: '800' }] },
+        { id: 11, name: 'Savings', currency: 'EUR', balance_parts: [{ currency: 'EUR', balance: '1200' }] },
       ],
     });
 
@@ -51,10 +51,54 @@ describe('assembleRebalanceInputs (ADR-098)', () => {
 
   it('converts non-target account currencies to the target', async () => {
     getPortfolioSummary.mockResolvedValue({ summaries: [] });
-    query.mockResolvedValue({ rows: [{ id: 10, name: 'USD cash', currency: 'USD', balance: 100 }] });
+    query.mockResolvedValue({
+      rows: [{ id: 10, name: 'USD cash', currency: 'USD', balance_parts: [{ currency: 'USD', balance: '100' }] }],
+    });
 
     await assembleRebalanceInputs({ currency: 'EUR' });
 
     expect(convertToCurrency).toHaveBeenCalledWith(100, 'USD', 'EUR');
+  });
+
+  // The defect: the cross-currency lateral summed 100 EUR + 100 USD as bare
+  // numbers and this service converted the 200 at the single rate of
+  // `a.currency`. Each partition must be converted on its own instead.
+  it('converts each currency partition of a multi-currency account separately', async () => {
+    getPortfolioSummary.mockResolvedValue({ summaries: [] });
+    // Rate-shaped stub for this case only (Once, so the suite-wide identity
+    // conversion is restored afterwards): USD is worth half a EUR.
+    convertToCurrency.mockImplementationOnce(async (amount) => amount * 0.5);
+    query.mockResolvedValue({
+      rows: [{
+        id: 10,
+        name: 'Wise',
+        currency: 'EUR',
+        balance_parts: [
+          { currency: 'EUR', balance: '100' },
+          { currency: 'USD', balance: '100' },
+        ],
+      }],
+    });
+
+    const out = await assembleRebalanceInputs({ currency: 'EUR' });
+
+    expect(out.availableCash).toBe(150); // NOT (100 + 100) at one rate
+    expect(out.cashAccounts).toEqual([{ id: 10, name: 'Wise', currency: 'EUR', balance: 150 }]);
+    // The EUR partition is already in the target and must not hit FX at all.
+    expect(convertToCurrency).toHaveBeenCalledTimes(1);
+    expect(convertToCurrency).toHaveBeenCalledWith(100, 'USD', 'EUR');
+  });
+
+  // A spendable account with no ledger rows keeps its (zero) entry: the
+  // aggregated per-currency lateral is a LEFT join, so it yields a NULL parts
+  // array rather than dropping the account.
+  it('keeps a spendable account with no ledger activity as a zero entry', async () => {
+    getPortfolioSummary.mockResolvedValue({ summaries: [] });
+    query.mockResolvedValue({ rows: [{ id: 12, name: 'Fresh', currency: 'EUR', balance_parts: null }] });
+
+    const out = await assembleRebalanceInputs({ currency: 'EUR' });
+
+    expect(out.availableCash).toBe(0);
+    expect(out.cashAccounts).toEqual([{ id: 12, name: 'Fresh', currency: 'EUR', balance: 0 }]);
   });
 });

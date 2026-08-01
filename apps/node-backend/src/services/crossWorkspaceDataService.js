@@ -13,7 +13,7 @@ import { query } from '../database/connection.js';
 import { convertToCurrency } from './currency/currencyConversionService.js';
 import { getPortfolioSummary } from './portfolio/portfolioSummaryService.js';
 import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
-import { COMPUTED_BALANCE_LATERAL } from '../repositories/accountBalanceSql.js';
+import { computedBalanceByCurrencyAggLateral } from '../repositories/accountBalanceSql.js';
 
 // Roll the fine-grained `asset_class` taxonomy up into the coarse allocation
 // sleeves the classic-portfolio presets target (CLASSIC_PORTFOLIOS uses
@@ -57,12 +57,21 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
   // account's computed balance (ADR-094) — the same anchored running balance the
   // accounts hub and dashboard show (latest stamped statement balance, which
   // embeds the opening balance, advanced by subsequent unstamped activity) —
-  // via the shared COMPUTED_BALANCE_LATERAL helper.
+  // via the shared per-currency helper.
+  //
+  // Per CURRENCY PARTITION, not per account: the unpartitioned lateral summed a
+  // EUR amount and a USD amount as bare numbers and this loop then converted the
+  // total at the single rate of `a.currency` (100 EUR + 100 USD at 0.5 → 100
+  // deployable instead of 150). Each partition is converted on its own and the
+  // per-account converted total is what lands in `cashAccounts` / availableCash.
+  // Single-currency accounts have exactly one partition and are unaffected; the
+  // aggregated (one row per account) form keeps `cashAccounts` one entry per
+  // account, including a spendable account with no ledger rows at all (NULL
+  // parts → a 0 entry, as before).
   const { rows } = await query(
-    `SELECT a.id, a.name, a.currency,
-            COALESCE(lb.balance, 0) AS balance
+    `SELECT a.id, a.name, a.currency, bp.balance_parts
        FROM accounts a
-       ${COMPUTED_BALANCE_LATERAL}
+       ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
       WHERE a.spendable = true AND a.is_active = true
       ORDER BY a.name`,
   );
@@ -71,10 +80,21 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
   let availableCash = toDecimal(0);
   for (const r of rows) {
     const acctCurrency = (r.currency || 'EUR').toUpperCase();
-    const native = Number(r.balance) || 0;
-    const converted = acctCurrency === target ? native : await convertToCurrency(native, acctCurrency, target);
-    availableCash = availableCash.plus(toDecimal(converted));
-    cashAccounts.push({ id: Number(r.id), name: r.name, currency: acctCurrency, balance: toNumber(roundToCents(toDecimal(converted))) });
+    /** @type {Array<{ currency: string, balance: string }>} */
+    const partitions = r.balance_parts ?? [];
+    let accountTotal = toDecimal(0);
+    for (const part of partitions) {
+      const partCurrency = (part.currency || 'EUR').toUpperCase();
+      const native = toNumber(toDecimal(part.balance));
+      const converted = partCurrency === target
+        ? native
+        : await convertToCurrency(native, partCurrency, target);
+      accountTotal = accountTotal.plus(toDecimal(converted));
+    }
+    availableCash = availableCash.plus(accountTotal);
+    // `currency` labels the ACCOUNT (its declared currency), while `balance` is
+    // in the target currency — the pre-existing shape of this payload.
+    cashAccounts.push({ id: Number(r.id), name: r.name, currency: acctCurrency, balance: toNumber(roundToCents(accountTotal)) });
   }
 
   return {
