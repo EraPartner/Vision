@@ -1551,6 +1551,43 @@ ipcMain.handle('backup:load-settings', async () => {
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
+// ── Services (keep-running-on-quit) settings ─────────────────────────────────
+// Opt-in toggle: when enabled, quit leaves the Docker containers running so the
+// next launch takes the hot path (S1-measured 0.6-1.1s) instead of a warm
+// restart (~2-2.5s). Same dual DB + settings.json mirror as backup settings
+// above — the will-quit handler needs a value even if the backend already
+// stopped responding.
+registerHandler('services:save-settings', async (event, { keepServicesOnQuit } = {}) => {
+  const payload = { keepServicesOnQuit: !!keepServicesOnQuit };
+  await updateSettings((cur) => {
+    cur.keepServicesOnQuit = payload.keepServicesOnQuit;
+  });
+  try {
+    await httpPut(`http://localhost:${appPort}/api/settings/services_settings`, { value: payload });
+  } catch (err) {
+    console.warn('services:save-settings: could not persist to DB, kept in local settings.json', err.message);
+  }
+  return { success: true };
+}, { requireMainSender: true });
+
+ipcMain.handle('services:load-settings', async () => {
+  try {
+    // The API wraps responses as { ok, data: { key, value } } (ADR-026).
+    const body = await httpGet(`http://localhost:${appPort}/api/settings/services_settings`);
+    const stored = body && body.data ? body.data.value : undefined;
+    if (stored && typeof stored === 'object') {
+      const keepServicesOnQuit = stored.keepServicesOnQuit === true;
+      // Mirror back to settings.json so the will-quit fallback matches the DB.
+      await updateSettings((cur) => { cur.keepServicesOnQuit = keepServicesOnQuit; });
+      return { keepServicesOnQuit };
+    }
+  } catch (err) {
+    console.warn('services:load-settings: could not read from DB, falling back to settings.json', err.message);
+  }
+  const s = await loadSettings();
+  return { keepServicesOnQuit: s.keepServicesOnQuit === true };
+});
+
 // ── Recovery (error page) ────────────────────────────────────────────────────
 ipcMain.handle('recovery:retry', () => {
   pollAndLoad();
@@ -2316,6 +2353,24 @@ app.on('will-quit', (e) => {
     return loadSettings();
   }
 
+  // Opt-in "keep services running on quit": leave the containers up so the
+  // next launch takes the hot path instead of a warm restart. Same dual
+  // DB + settings.json read as resolveBackupSettings above (the backend may
+  // already be shutting down by the time this runs). compose's
+  // `restart: unless-stopped` policy governs reboot behaviour.
+  async function resolveKeepServicesOnQuit() {
+    try {
+      const body = await httpGet(`http://localhost:${appPort}/api/settings/services_settings`);
+      const stored = body && body.data ? body.data.value : undefined;
+      if (stored && typeof stored === 'object') return stored.keepServicesOnQuit === true;
+    } catch { /* backend may already be down, use local mirror */ }
+    try {
+      return (await loadSettings()).keepServicesOnQuit === true;
+    } catch {
+      return false;
+    }
+  }
+
   resolveBackupSettings().then((s) => {
     const effective = resolveBackupSettingsWithDefaults(s);
     const backupOnQuit = effective.backupOnQuit === true;
@@ -2339,6 +2394,8 @@ app.on('will-quit', (e) => {
         // graceful shutdown isn't held open waiting on it.
         stopHealthWatchdog();
         try { healthAgent.destroy(); } catch { /* already gone */ }
+        const keepServices = await resolveKeepServicesOnQuit();
+        if (keepServices) return;
         return stopContainers(workDir, overrideFiles);
       })
       .catch((err) => console.error('docker compose down failed:', err))

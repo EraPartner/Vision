@@ -2277,6 +2277,8 @@ const en: Record<string, string> = {
   'settings.general.currencyHint': 'Used as default for new transactions and display',
   'settings.general.dateFormat': 'Date Format',
   'settings.general.decimalPlaces': 'Decimal Places',
+  'settings.general.keepServicesOnQuit': 'Keep services running on quit',
+  'settings.general.keepServicesOnQuitHint': 'Leave the database and backend running when you quit instead of shutting them down. The next launch starts in about a second instead of two to three, at the cost of the idle services\' memory use while the app is closed.',
   'settings.general.lang.en': 'English',
   'settings.general.lang.nl': 'Nederlands',
   'settings.general.language': 'Language',

@@ -2277,6 +2277,8 @@ const nl: Record<string, string> = {
   'settings.general.currencyHint': 'Gebruikt als standaard voor nieuwe transacties en weergave',
   'settings.general.dateFormat': 'Datumnotatie',
   'settings.general.decimalPlaces': 'Decimalen',
+  'settings.general.keepServicesOnQuit': 'Diensten actief houden bij afsluiten',
+  'settings.general.keepServicesOnQuitHint': 'Laat de database en backend actief bij het afsluiten in plaats van ze te stoppen. De volgende start duurt ongeveer een seconde in plaats van twee tot drie, ten koste van het geheugengebruik van de inactieve diensten terwijl de app gesloten is.',
   'settings.general.lang.en': 'Engels',
   'settings.general.lang.nl': 'Nederlands',
   'settings.general.language': 'Taal',
