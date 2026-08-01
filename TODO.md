@@ -2295,11 +2295,11 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-27 · error-humanizer follow-up_
   - `ErrorBoundary.tsx:31`, `AdminErrorState.tsx:46`, `NetWorthPage.tsx:132`, `ImportReviewPage.tsx:336` render `.message` in page error states — the same "Failed to fetch" leak on a page instead of a toast. Route through `apiErrorToMessage` (they render inside components, so `t` is in scope). Also: `PortfolioImportPage.tsx:141-142` detects user-cancel by `message === "Import cancelled"` — brittle sentinel wanting a real cancellation signal.
 
-- [ ] **Required-field errors are mouse-unreachable in both money forms — submit buttons are disabled on exactly the empty-required predicates, so users hit a dead button instead of learning which field is missing** 🔼
+- [x] **Required-field errors are mouse-unreachable in both money forms — submit buttons are disabled on exactly the empty-required predicates, so users hit a dead button instead of learning which field is missing** 🔼 ✅ 2026-08-01 · 8c41dfc (both predicates reduced to the in-flight guard; blocked submit reveals inline errors + focuses first invalid field; AddTransactionDialog's form gains noValidate so native constraint validation doesn't swallow the click — required/pattern attributes kept for AT, no :invalid CSS exists so nothing visual changed; pinned by mouse-click tests in both integration suites. NOTE filed below: PlannedPaymentForm's `loading` is hard-coded false, making its in-flight guard inert)
   - ↪ _from: Orchestration session 2026-07-27 · form-a11y implementation (3016c83) follow-up_
   - Both submit buttons disable on the empty-required conditions, so the new inline required-errors can only fire via Enter (AddTransactionDialog) or not at all (PlannedPaymentForm has no `<form>` — submit is a button onClick). Same as before 3016c83 (the alert was equally unreachable), but now the better fix is obvious: enable the buttons and let the blocked submit reveal the errors + focus the first invalid field. Changing the disabled predicates was deliberately out of 3016c83's scope.
 
-- [ ] **PlannedPaymentForm comboboxes have no accessible name — dangling Labels without htmlFor** 🔼 🔧
+- [x] **PlannedPaymentForm comboboxes have no accessible name — dangling Labels without htmlFor** 🔼 🔧 ✅ 2026-08-01 · 8c41dfc (frequency/loan-type get id+htmlFor, end date the DatePicker id pass-through, tags aria-labelledby — TagInput's combobox is a div, not labelable, matching the in-file ToggleGroup precedent; ALSO fixed same-class adjacents: pp-recipient/pp-category labels pointed at nonexistent ids — Recipient/CategoryCombobox gained the id pass-through; accessible names pinned via getByRole name queries)
   - ↪ _from: Orchestration session 2026-07-27 · form-a11y implementation follow-up_
   - Frequency (~:314), loan type, end date, and tags render a `<Label>` with no `htmlFor` and controls with no `id`; a combobox doesn't take its name from content, so these have no accessible name at all. Same wiring fix as 3016c83's DatePicker/AccountCombobox pass-through.
 
@@ -2311,9 +2311,19 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-27 · form-a11y implementation follow-up_
   - `mutations-parity.spec.ts:85` does `page.getByLabel(/^bank account \*/i).fill(...)` against AccountCombobox, which renders a `<button>` — `.fill()` on a button looks broken independent of any recent change; e2e isn't in the default verification gates, so this may have been failing silently.
 
-- [ ] **Dialogs nested inside InvestmentDetailDialog still lose drafts — the outer dialog unmounts them on its own dismissal** 🔼
+- [x] **Dialogs nested inside InvestmentDetailDialog still lose drafts — the outer dialog unmounts them on its own dismissal** 🔼 ✅ 2026-08-01 · 8c41dfc (lift option chosen over dirty-gated confirm — restores the e0df996 stay-mounted premise instead of warning before destroying: the three dialogs gained an optional controlled mode (ControlledDialogProps/useControlledOpen/returnFocusOnClose in useDialogFormState.ts) and render as siblings of the outer Dialog; openers reproduce the old trigger markup incl. aria-haspopup/expanded; close-focus returns to the opener via onCloseAutoFocus; mounting gated on first open. Draft-survives-dismiss pinned and shown to fail against the old structure)
   - ↪ _from: Orchestration session 2026-07-27 · dialog-guard implementation (e0df996) follow-up_
   - `InvestmentDetailDialog.tsx:127,192,549` renders AddPortfolioTxnDialog / EditInvestmentDialog / EditPortfolioTxnDialog inside its own DialogContent, so dismissing the OUTER dialog unmounts the inner one and the preserved-state mechanism from e0df996 cannot help (the parent controls mounting). The inline usages on Stocks/Savings/RealEstate/Overview pages are unaffected. Fix: the finding's fuller option — dirty-gated `event.preventDefault()` in onInteractOutside/onEscapeKeyDown + useConfirmDialog on the outer dialog — or lift the nested dialogs' state/mounting out of the outer dialog.
+
+- [ ] **PlannedPaymentForm's in-flight guard is inert: `loading` is hard-coded `const loading = false`** 🔽
+  - ↪ _from: Orchestration session 2026-08-01 · form-UX fix pass (noticed; now the ONLY thing disabling the submit button after 8c41dfc, so a slow save allows double-submit)_
+  - `apps/frontend/src/components/planned/PlannedPaymentForm.tsx` — the submit button's `disabled={loading}` never engages because no pending state is wired. Before 8c41dfc the empty-required predicates masked this; now it's the sole guard.
+  - Fix: thread the caller's mutation pending state into the form (or own it internally) so the in-flight disable actually fires.
+
+- [ ] **AddPortfolioTxnDialog/EditPortfolioTxnDialog still validate via transient `toast.error` — the pattern 3016c83 replaced in the money forms** 🔽
+  - ↪ _from: Orchestration session 2026-08-01 · form-UX fix pass (noticed; same defect class as the fixed finding, different dialogs)_
+  - Transaction type/amount/units/FX validation fires detached toasts instead of inline field errors + focus. These are money-entry dialogs.
+  - Fix: adopt 3016c83's inline required-error + focus-first-invalid pattern.
 
 - [ ] **ChartBuilderPage uses a shimmer Skeleton as a permanent empty state** ⏬
   - ↪ _from: Orchestration session 2026-07-27 · loading-a11y implementation follow-up_
