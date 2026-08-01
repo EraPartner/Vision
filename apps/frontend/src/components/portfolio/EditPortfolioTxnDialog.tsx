@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
 import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -14,7 +13,13 @@ import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
 import type { PortfolioTransaction, PortfolioTransactionCreate } from '@/types/api';
 import { getTxnTypeLabel } from '@/types/portfolio';
-import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
+import {
+  useDialogFormState,
+  useReseedOnIdentityChange,
+  useControlledOpen,
+  returnFocusOnClose,
+  type ControlledDialogProps,
+} from '@/hooks/useDialogFormState';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
 
@@ -41,16 +46,16 @@ function normalizeYmdInput(value?: string): string {
   return toYmd(parsed);
 }
 
-interface Props {
+interface Props extends ControlledDialogProps {
   investment: InvestmentSummary;
   transaction: PortfolioTransaction;
   trigger?: React.ReactNode;
 }
 
-export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Props) {
+export function EditPortfolioTxnDialog({ investment, transaction, trigger, open: openProp, onOpenChange, returnFocusRef }: Props) {
   const { t } = useLanguage();
   const { updateTransaction, isUpdatingTransaction } = usePortfolio();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, controlled } = useControlledOpen({ open: openProp, onOpenChange });
 
   const unitBased = isUnitBased(investment.assetClass);
 
@@ -169,10 +174,12 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? <Button variant="outline">{t('common.edit')}</Button>}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      {!controlled && (
+        <DialogTrigger asChild>
+          {trigger ?? <Button variant="outline">{t('common.edit')}</Button>}
+        </DialogTrigger>
+      )}
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={returnFocusOnClose(returnFocusRef)}>
         <DialogHeader>
           <DialogTitle>{t('txnEdit.title')}</DialogTitle>
           <DialogDescription className="sr-only">{t('txnEdit.title')}</DialogDescription>

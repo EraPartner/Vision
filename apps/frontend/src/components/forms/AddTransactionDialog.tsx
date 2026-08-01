@@ -137,7 +137,15 @@ export function AddTransactionDialog() {
                     <DialogTitle>{t('form.addTransaction.title')}</DialogTitle>
                     <DialogDescription className="sr-only">{t('form.addTransaction.title')}</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                {/* noValidate: this form's validation is `fieldErrors` above, and
+                    it has to be the only one. The browser's own constraint check
+                    runs BEFORE the submit event, so a native `required`/`pattern`
+                    failure would swallow the submit, focus whichever control the
+                    browser picked, and show a transient bubble — never the inline
+                    messages, and never the first field in FIELD_ORDER. The
+                    attributes stay on the inputs (they still carry the semantics
+                    to assistive tech); only the browser's UI is turned off. */}
+                <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="tx_date">{t('form.addTransaction.date')}</Label>
@@ -220,7 +228,12 @@ export function AddTransactionDialog() {
 
                     <DialogFooter className="pt-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-                        <Button type="submit" disabled={createMutation.isPending || !form.transaction_date || !form.bank_account.trim() || !form.recipient_id || !form.amount}>
+                        {/* Only the in-flight guard disables this button. Disabling
+                            it on the empty-required fields made the inline errors
+                            mouse-unreachable — the pointer hit a dead control and
+                            nothing ever said which field was missing. A blocked
+                            submit is the thing that reveals them. */}
+                        <Button type="submit" disabled={createMutation.isPending}>
                             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                             {t('common.create')}
                         </Button>

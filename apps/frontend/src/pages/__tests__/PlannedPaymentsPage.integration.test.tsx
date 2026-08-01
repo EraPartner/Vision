@@ -386,6 +386,64 @@ describe("PlannedPaymentForm (inline validation)", () => {
 
     const submitBtn = () => screen.getByRole("button", { name: /create payment/i });
 
+    /** Empty form, waited out to real English (the dictionary loads lazily). */
+    async function renderEmptyForm() {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        renderWithApp(
+            <PlannedPaymentForm open onOpenChange={() => {}} onSubmit={onSubmit} />,
+        );
+        await screen.findByText("New Planned Payment");
+        return { user, onSubmit };
+    }
+
+    it("reveals the required-field errors on a plain mouse click of the submit button", async () => {
+        const { user, onSubmit } = await renderEmptyForm();
+
+        // The button used to be disabled on exactly the empty required fields.
+        // This form has no <form> element, so its onClick is the *only* path
+        // into the blocked-submit branch — with the button dead, the inline
+        // errors could not be reached at all, by mouse or by keyboard.
+        const submit = submitBtn();
+        expect(submit).toBeEnabled();
+        await user.click(submit);
+
+        const name = screen.getByLabelText("Name *");
+        await waitFor(() => expect(name).toHaveFocus());
+        expect(describedError(name)).toHaveTextContent(/name is required/i);
+
+        // The rest are flagged as well, not just the focused one. (Due date
+        // defaults to today, so it is not among them.)
+        const amount = screen.getByLabelText("Amount *");
+        expect(amount).toHaveAttribute("aria-invalid", "true");
+        expect(describedError(amount)).toHaveTextContent(/valid amount is required/i);
+        const bank = screen.getByLabelText(/bank account/i);
+        expect(bank).toHaveAttribute("aria-invalid", "true");
+        expect(describedError(bank)).toHaveTextContent(/select account/i);
+
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("gives every combobox in the form an accessible name", async () => {
+        const { user } = await renderEmptyForm();
+
+        // A combobox takes no name from its own content, so a <Label> with no
+        // htmlFor (or one pointing at a control with no id) left these nameless.
+        for (const name of [/^recipient$/i, /^category$/i, /^tags$/i, /bank account/i]) {
+            expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
+        }
+
+        // Loan section.
+        await user.click(screen.getByLabelText(/loan repayment/i));
+        expect(screen.getByRole("combobox", { name: /loan type/i })).toBeInTheDocument();
+        await user.click(screen.getByLabelText(/loan repayment/i));
+
+        // Recurrence section — the end-date picker is a button, not a combobox.
+        await user.click(screen.getByLabelText("Recurring"));
+        expect(screen.getByRole("combobox", { name: /frequency/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /end date/i })).toBeInTheDocument();
+    });
+
     it("flags every missing loan field, focuses the first, and blocks submit", async () => {
         const { user, onSubmit } = await renderSubmittableForm();
 
@@ -433,11 +491,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
         const { user, onSubmit } = await renderSubmittableForm();
 
         await user.click(screen.getByLabelText("Recurring"));
-        // The frequency <Label> has no htmlFor and the trigger no id, so this
-        // combobox has no accessible name to query by — match its value instead.
-        const frequency = screen
-            .getAllByRole("combobox")
-            .find((c) => c.textContent === "Monthly")!;
+        const frequency = screen.getByRole("combobox", { name: /frequency/i });
         await user.click(frequency);
         await user.click(await screen.findByRole("option", { name: /custom interval/i }));
 

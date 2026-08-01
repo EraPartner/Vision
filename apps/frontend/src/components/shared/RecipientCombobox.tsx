@@ -9,6 +9,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 
 interface RecipientComboboxProps {
+    /** Put on the trigger, so a <Label htmlFor> can reach it. */
+    id?: string;
     value?: number | null;
     onSelect: (recipientId: number | null, recipientName: string | null) => void;
     disabled?: boolean;
@@ -16,7 +18,7 @@ interface RecipientComboboxProps {
     portalContainer?: HTMLElement | null;
 }
 
-export function RecipientCombobox({ value, onSelect, disabled, className, portalContainer }: RecipientComboboxProps) {
+export function RecipientCombobox({ id, value, onSelect, disabled, className, portalContainer }: RecipientComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -38,6 +40,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button
+                    id={id}
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}

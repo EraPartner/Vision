@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
 import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -13,17 +12,23 @@ import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/
 import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { toYmd } from '@/components/shared/dateUtils';
-import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
+import {
+  useDialogFormState,
+  useReseedOnIdentityChange,
+  useControlledOpen,
+  returnFocusOnClose,
+  type ControlledDialogProps,
+} from '@/hooks/useDialogFormState';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
-interface Props {
+interface Props extends ControlledDialogProps {
   investment: InvestmentSummary;
   trigger?: React.ReactNode;
 }
 
 
-export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
-  const [open, setOpen] = useState(false);
+export function AddPortfolioTxnDialog({ investment, trigger, open: openProp, onOpenChange, returnFocusRef }: Props) {
+  const { open, setOpen, controlled } = useControlledOpen({ open: openProp, onOpenChange });
   const { t } = useLanguage();
   const { addTransaction, isAddingTransaction } = usePortfolio();
 
@@ -142,14 +147,16 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <Plus className="h-4 w-4" /> {t('form.addTransaction.title')}
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      {!controlled && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <Plus className="h-4 w-4" /> {t('form.addTransaction.title')}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={returnFocusOnClose(returnFocusRef)}>
         <DialogHeader>
           <DialogTitle>{t('addPortTxn.title', { symbol: investment.symbol || investment.name })}</DialogTitle>
           <DialogDescription className="sr-only">{t('addPortTxn.title', { symbol: investment.symbol || investment.name })}</DialogDescription>

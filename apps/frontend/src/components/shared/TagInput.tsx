@@ -88,6 +88,13 @@ export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
 }
 
 interface TagInputProps {
+    /**
+     * Id of the element naming this control. The combobox is a <div>, which is
+     * not labelable, so a `<Label htmlFor>` would associate with nothing —
+     * aria-labelledby is the only wiring that names it (same reason the planned
+     * form's Direction ToggleGroup is labelled this way).
+     */
+    'aria-labelledby'?: string;
     value: string[];
     onChange: (slugs: string[]) => void;
     disabled?: boolean;
@@ -95,7 +102,7 @@ interface TagInputProps {
     maxTags?: number;
 }
 
-export function TagInput({ value, onChange, disabled, className, maxTags = 20 }: TagInputProps) {
+export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, disabled, className, maxTags = 20 }: TagInputProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [inputValue, setInputValue] = useState('');
@@ -173,6 +180,7 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
             <PopoverTrigger asChild>
                 <div
                     role="combobox"
+                    aria-labelledby={ariaLabelledBy}
                     aria-expanded={open}
                     tabIndex={disabled ? -1 : 0}
                     className={cn(

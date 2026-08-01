@@ -295,6 +295,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             <div className="grid gap-1.5">
               <Label htmlFor="pp-recipient">{t('plannedForm.recipient')}</Label>
               <RecipientCombobox
+                id="pp-recipient"
                 value={recipientId ?? null}
                 onSelect={(id) => setRecipientId(id ?? undefined)}
                 className="w-full"
@@ -307,6 +308,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             <div className="grid gap-1.5">
               <Label htmlFor="pp-category">{t('plannedForm.category')}</Label>
               <CategoryCombobox
+                id="pp-category"
                 value={categoryId ?? null}
                 onSelect={(id) => setCategoryId(id ?? undefined)}
                 className="w-full"
@@ -317,8 +319,10 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
             {/* Tags */}
             <div className="grid gap-1.5">
-              <Label>{t('txPage.field.tags')}</Label>
-              <TagInput value={tags} onChange={setTags} />
+              {/* Labelled via aria-labelledby, not htmlFor: the tag control is a
+                  role="combobox" <div>, which a <label for> cannot associate with. */}
+              <Label id="pp-tags-label">{t('txPage.field.tags')}</Label>
+              <TagInput aria-labelledby="pp-tags-label" value={tags} onChange={setTags} />
             </div>
 
             {/* Bank account */}
@@ -346,9 +350,9 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             {isLoan && (
               <div className="grid gap-3 rounded-lg border p-3 bg-muted/30">
                 <div className="grid gap-1.5">
-                  <Label>{t('plannedForm.loanType')}</Label>
+                  <Label htmlFor="pp-loan-type">{t('plannedForm.loanType')}</Label>
                   <Select value={loanType} onValueChange={(v) => setLoanType(v as LoanType)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="pp-loan-type"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="amortizing">{t('plannedForm.loanType.amortizing')}</SelectItem>
                       <SelectItem value="fixed_principal">{t('plannedForm.loanType.fixedPrincipal')}</SelectItem>
@@ -394,9 +398,9 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             {!isLoan && isRecurring && (
               <div className="grid gap-3 rounded-lg border p-3 bg-muted/30">
                 <div className="grid gap-1.5">
-                  <Label>{t('plannedForm.frequency')}</Label>
+                  <Label htmlFor="pp-frequency">{t('plannedForm.frequency')}</Label>
                   <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="pp-frequency"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="daily">{t('plannedForm.freq.daily')}</SelectItem>
                       <SelectItem value="weekly">{t('plannedForm.freq.weekly')}</SelectItem>
@@ -419,8 +423,9 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5">
-                    <Label>{t('plannedForm.endDate')}</Label>
+                    <Label htmlFor="pp-end-date">{t('plannedForm.endDate')}</Label>
                     <DatePicker
+                      id="pp-end-date"
                       value={endDate}
                       onChange={setEndDate}
                       placeholder={t('plannedForm.freq.none')}
@@ -454,7 +459,11 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
         <DialogFooter>
           <Button variant="outline" onClick={() => { resetErrors(); onOpenChange(false); }}>{t('plannedForm.cancel')}</Button>
-          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !dueDate || (!isLoan && !amount) || !bankAccount.trim()}>
+          {/* Only the in-flight guard disables this button. Disabling it on the
+              empty-required fields made the inline errors unreachable entirely —
+              there is no <form> here, so the blocked-submit path is this onClick
+              and nothing else could ever reveal them. */}
+          <Button onClick={handleSubmit} disabled={loading}>
             {initial ? t('plannedForm.saveChanges') : t('plannedForm.createPayment')}
           </Button>
         </DialogFooter>

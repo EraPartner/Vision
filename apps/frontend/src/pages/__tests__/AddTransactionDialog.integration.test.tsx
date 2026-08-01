@@ -427,6 +427,49 @@ describe("AddTransactionDialog (integration)", () => {
         expect(recipient).toHaveAttribute("aria-invalid", "true");
     });
 
+    it("reveals the required-field errors on a plain mouse click of the submit button", async () => {
+        const user = userEvent.setup();
+        let postCalled = false;
+
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () => ok(testRecipientsList)),
+            http.post(`${API_BASE}/api/transactions`, () => {
+                postCalled = true;
+                return ok({});
+            }),
+        );
+
+        renderWithApp(<AddTransactionDialog />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        // The button used to be disabled on exactly the empty required fields,
+        // so a mouse user hit a dead control and was never told what was
+        // missing — the inline errors could only be reached by pressing Enter.
+        const submit = screen.getByRole("button", { name: /^create$/i });
+        expect(submit).toBeEnabled();
+        await user.click(submit);
+
+        // Date defaults to today, so amount is the first field in FIELD_ORDER
+        // that is actually empty.
+        const amount = screen.getByLabelText(/amount/i);
+        await waitFor(() => expect(amount).toHaveFocus());
+        expect(describedError(amount)).toHaveTextContent(/required/i);
+
+        // Every other empty required field is flagged too, not just the focused one.
+        const bank = screen.getByLabelText(/bank account/i);
+        expect(bank).toHaveAttribute("aria-invalid", "true");
+        expect(describedError(bank)).toHaveTextContent(/select account/i);
+        const recipient = screen.getByRole("combobox", { name: /recipient/i });
+        expect(recipient).toHaveAttribute("aria-invalid", "true");
+        expect(describedError(recipient)).toHaveTextContent(/required/i);
+
+        // Still blocked, and the dialog stays open.
+        expect(postCalled).toBe(false);
+        expect(screen.queryByRole("dialog")).toBeInTheDocument();
+    });
+
     it("sends an unchanged request body on a valid submit", async () => {
         const user = userEvent.setup();
         let rawBody = "";
