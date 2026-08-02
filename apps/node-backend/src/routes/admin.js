@@ -241,6 +241,37 @@ router.get('/database/stats', /** @param {ExpressRequest} _req @param {ExpressRe
   });
 });
 
+/**
+ * Public-schema relations that a `VACUUM` issued by the CURRENT database role
+ * would silently skip — it neither owns them nor (PostgreSQL 17+) holds
+ * MAINTAIN on them. Empty for a superuser, i.e. for every single-role install.
+ *
+ * @param {string} [table] restrict the check to one already-validated table
+ * @returns {Promise<string[]>} relation names, sorted
+ */
+async function findUnmaintainableTables(table) {
+  // MAINTAIN does not exist before PostgreSQL 17, where naming it in
+  // has_table_privilege() is an error rather than a false — so the term is
+  // compiled in only when the server understands it.
+  const versionRes = await query('SELECT current_setting($1)::int AS v', ['server_version_num']);
+  const maintain = (versionRes.rows[0]?.v ?? 0) >= 170000
+    ? `has_table_privilege(c.oid, 'MAINTAIN')`
+    : 'false';
+  const res = await query(
+    `SELECT c.relname
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind IN ('r', 'p', 'm')
+        AND ($1::text IS NULL OR c.relname = $1)
+        AND NOT pg_has_role(current_user, c.relowner, 'USAGE')
+        AND NOT (${maintain})
+      ORDER BY c.relname`,
+    [table ?? null],
+  );
+  return res.rows.map((/** @type {{ relname: string }} */ r) => r.relname);
+}
+
 // codeql[js/missing-rate-limiting]: adminMutateLimiter is applied as middleware
 // on this exact route (30 req/min). Scanner does not see middleware bound at
 // the route level.
@@ -256,6 +287,21 @@ router.post('/database/vacuum', adminMutateLimiter, /** @param {ExpressRequest} 
 
   if (table !== undefined && table !== null && !allowedNames.has(table)) {
     throw new ValidationError(`Unknown table: ${table}`);
+  }
+
+  // Privilege PRE-check. Postgres does not fail a VACUUM the caller may not
+  // perform: it emits a WARNING ("permission denied to vacuum \"x\", skipping
+  // it", SQLSTATE 01000 — a warning, not an error) and SKIPS the relation, so
+  // the statement returns success having done nothing. Under the
+  // least-privilege runtime role (database/appRoleBootstrap.js) that turned
+  // this route into a silent no-op reporting 200/ok. Ask the catalog instead
+  // of waiting for an error that never arrives — and do it in SQL rather than
+  // by parsing the warning text, which is localised by lc_messages.
+  const skipped = await findUnmaintainableTables(table);
+  if (table && skipped.length > 0) {
+    throw new ForbiddenError(
+      `Insufficient database privileges to VACUUM ${table} — the current database role neither owns it nor holds MAINTAIN`,
+    );
   }
 
   // VACUUM cannot run inside a transaction block — use raw client
@@ -279,7 +325,12 @@ router.post('/database/vacuum', adminMutateLimiter, /** @param {ExpressRequest} 
     client.release();
   }
 
-  res.ok({ vacuumed: table ?? 'all' });
+  if (skipped.length > 0) {
+    // Whole-database run: some relations were vacuumed, some silently skipped.
+    // Report them rather than claiming a clean sweep.
+    logger.warn({ skipped }, 'VACUUM skipped relations the database role cannot maintain');
+  }
+  res.ok({ vacuumed: table ?? 'all', skipped });
 });
 
 // ── Data Editor (JetBrains-style table browser/editor) ─────────────────────────

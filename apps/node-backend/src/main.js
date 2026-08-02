@@ -12,7 +12,8 @@ import { dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
-import { checkConnection, closePool, getPoolStats, query } from './database/connection.js';
+import { checkConnection, closePool, getPoolStats, getRuntimeConnectionString, query } from './database/connection.js';
+import { ensureAppRole } from './database/appRoleBootstrap.js';
 import { runMigrations } from './database/migrate.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
@@ -496,6 +497,17 @@ async function start() {
   }
 
   try {
+    // Least-privilege runtime role (security backlog). MUST run before the
+    // first pool query: it decides which role the runtime pool connects as —
+    // the non-superuser role in DATABASE_URL_APP once the bootstrap has
+    // created and verified it, otherwise DATABASE_URL's privileged role
+    // exactly as before (fail open, logged at error). Never throws; a no-op
+    // when DATABASE_URL_APP is unset, which is every install that has not
+    // opted in, plus CI and the test harness.
+    const endRoleBootstrap = bootMark('app_role_bootstrap');
+    await ensureAppRole();
+    endRoleBootstrap();
+
     // Wait for PostgreSQL to be fully ready.
     // With depends_on removed from docker-compose, both containers start in
     // parallel. On a cold first-ever start postgres can take up to ~30s to
@@ -530,6 +542,12 @@ async function start() {
         // table on every boot. On a boot that just migrated, the two big tables
         // are simply re-sampled here — harmless (ANALYZE is idempotent), and the
         // whole-DB sample is cheap on this dataset.
+        // Least-privilege note: a database-wide ANALYZE run by a non-superuser
+        // SKIPS the relations it may not analyze (server-side WARNING) rather
+        // than erroring, so on PostgreSQL < 17 (no MAINTAIN privilege) this
+        // degrades to "planner stats for the app-owned relations only". On the
+        // shipped postgres:18 image the bootstrap grants MAINTAIN and it covers
+        // everything, as in the single-role setup.
         query('ANALYZE').catch((err) =>
           logger.warn({ err: err.message }, 'boot-time ANALYZE failed; non-fatal'),
         );
@@ -553,7 +571,10 @@ async function start() {
 
     if (!dbReady) {
       logger.error('Database connection failed after multiple attempts');
-      logger.info(`DATABASE_URL: ${settings.database.url.replace(/:[^:@]+@/, ':***@')}`);
+      // The URL the POOL uses — not settings.database.url. After an app-role
+      // bootstrap (or a fail-open back to the privileged role) those differ,
+      // and printing the configured value would point at the wrong role.
+      logger.info(`pool connection: ${getRuntimeConnectionString().replace(/:[^:@]+@/, ':***@')}`);
       throw new Error('Failed to connect to database');
     }
 

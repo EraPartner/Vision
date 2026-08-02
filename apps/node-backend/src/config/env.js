@@ -65,7 +65,37 @@ const envSchema = z.object({
   ENVIRONMENT: optionalStringEnv,
   NODE_ENV: optionalStringEnv,
 
+  // The PRIVILEGED connection string, and the only one an image predating the
+  // least-privilege bootstrap understands. It must keep naming a role that can
+  // do DDL — see DATABASE_URL_APP below for why the split is this way round.
   DATABASE_URL: stringEnv(DEFAULT_DATABASE_URL),
+  // Opt-in least-privilege runtime role (database/appRoleBootstrap.js). When
+  // set to a DIFFERENT role than the privileged URL, the backend runs
+  // two-role: DDL/migrations stay on DATABASE_URL, and the runtime connection
+  // pool moves to THIS url once the bootstrap has created and verified the
+  // role.
+  //
+  // Why a third variable instead of repointing DATABASE_URL: the desktop shell
+  // and the backend image update independently (the packaged compose pins
+  // `vision:latest` with `pull_policy: missing`, and a cached image is not
+  // re-pulled), so a new shell can run against an OLD backend. An old backend
+  // has no bootstrap, so a repointed DATABASE_URL would name a role that does
+  // not exist and boot would die in the readiness loop with the UI — and the
+  // in-app image-update button — never reachable. An unknown extra variable is
+  // simply ignored by an old image, which makes the rollout structurally
+  // skew-proof instead of dependent on version coordination.
+  DATABASE_URL_APP: optionalStringEnv,
+  // Back-compat alias for the privileged URL: the first half of this change
+  // documented `DATABASE_URL=ftm_app` + `DATABASE_URL_MIGRATIONS=ftm_user`, and
+  // alembic/env.py prefers it. When set it wins over DATABASE_URL as the DDL
+  // connection. Not written by the desktop app anymore — DATABASE_URL is the
+  // privileged role there.
+  DATABASE_URL_MIGRATIONS: optionalStringEnv,
+  // Operator escape hatch: force the runtime pool back onto the privileged
+  // DATABASE_URL_MIGRATIONS role even when two-role is configured. Exists so a
+  // user whose install somehow wedges on the app role can boot again by
+  // editing one line of .env.
+  VISION_DISABLE_APP_ROLE_BOOTSTRAP: booleanEnv(false),
   DB_ECHO: booleanEnv(false),
   DB_POOL_SIZE: intEnv(5),
   DB_MAX_OVERFLOW: intEnv(10),

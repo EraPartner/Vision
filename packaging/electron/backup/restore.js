@@ -56,10 +56,22 @@ function validateIdentifier(name, label) {
   }
 }
 
-// Parse DATABASE_URL from .env file contents and validate extracted identifiers.
+// Parse the PRIVILEGED database connection string from .env file contents and
+// validate the extracted identifiers.
 // Returns { dbUser, dbPass, dbName } or throws on invalid/missing URL.
+//
+// Every consumer of this function runs a cluster-level admin operation —
+// `pg_dump`, `DROP DATABASE`, `CREATE DATABASE ... OWNER`,
+// `pg_terminate_backend` — none of which a non-superuser can perform. Under
+// the least-privilege split DATABASE_URL deliberately keeps naming the
+// privileged role (the low-privilege runtime role lives in DATABASE_URL_APP,
+// which this function must NEVER read), so this stays correct for both
+// single-role and two-role installs, and for an older app build reading the
+// same file. DATABASE_URL_MIGRATIONS still wins when present — that is the
+// hand-rolled layout where DATABASE_URL itself was repointed at `ftm_app`.
 function parseDatabaseUrlFromEnv(envContents) {
-  const lineMatch = envContents.match(/^DATABASE_URL=(.+)$/m);
+  const privileged = envContents.match(/^DATABASE_URL_MIGRATIONS=(.+)$/m);
+  const lineMatch = privileged || envContents.match(/^DATABASE_URL=(.+)$/m);
   const rawUrl = lineMatch ? lineMatch[1].trim() : null;
 
   let dbUser = 'ftm_user';
@@ -457,7 +469,12 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
 
   } finally {
     cleanup();
-    // 5. Always restart app container (runs alembic upgrade head on startup)
+    // 5. Always restart app container (runs alembic upgrade head on startup).
+    // The DROP/CREATE DATABASE above also wiped every grant held by the
+    // least-privilege `ftm_app` role (the ROLE itself is cluster-level and
+    // survives). The backend's boot-time role bootstrap re-applies them on
+    // this restart; if it cannot, it falls open to the privileged role and
+    // the app still comes up. See apps/node-backend/src/database/appRoleBootstrap.js.
     const env = { ...dockerEnv, PORT: String(ctx.appPort()) };
     await run('docker', [
       'compose', ...composeFileArgs, 'start', 'app',

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { logger } from '../config/logger.js'
 import { query } from './connection.js'
+import { withDdlRunner } from './appRoleBootstrap.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -145,15 +146,30 @@ const LEGACY_REVISIONS = new Set([
  * insert does not blow up with a string-truncation error.
  */
 export async function stampBaselineIfLegacy() {
+  // Runs on the PRIVILEGED role when one is configured (two-role installs).
+  // Everything below is migration-scoped DDL on `alembic_version` — CREATE
+  // TABLE, and an ALTER TABLE that requires OWNERSHIP of a table Alembic
+  // created. On a least-privilege runtime pool that ALTER is a hard 42501 and
+  // this function rethrows, i.e. it would BRICK boot on exactly the installs
+  // this hardening targets. withDdlRunner falls back to the runtime pool when
+  // no privileged URL is configured, so single-role installs are byte-for-byte
+  // unchanged.
+  return withDdlRunner((run) => stampBaselineWith(run), query)
+}
+
+/**
+ * @param {(text: string, params?: any[]) => Promise<any>} run
+ */
+async function stampBaselineWith(run) {
   try {
-    const tableExists = await query(
+    const tableExists = await run(
       `SELECT EXISTS (
          SELECT 1 FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name = 'alembic_version'
        ) AS present`
     )
     if (!tableExists.rows[0]?.present) {
-      await query(
+      await run(
         `CREATE TABLE alembic_version (
            version_num VARCHAR(64) NOT NULL,
            CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
@@ -166,7 +182,7 @@ export async function stampBaselineIfLegacy() {
     // Expand version_num to VARCHAR(64) if narrower — older DBs created by
     // alembic at a time when revision IDs were short still have VARCHAR(32),
     // which truncates the longer named revisions we use today.
-    const colRes = await query(
+    const colRes = await run(
       `SELECT character_maximum_length AS len
        FROM information_schema.columns
        WHERE table_name = 'alembic_version' AND column_name = 'version_num'`
@@ -174,10 +190,10 @@ export async function stampBaselineIfLegacy() {
     const colLen = colRes.rows[0]?.len
     if (typeof colLen === 'number' && colLen < 64) {
       logger.warn({ from: colLen, to: 64 }, 'expanding alembic_version.version_num')
-      await query('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)')
+      await run('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)')
     }
 
-    const versionRes = await query('SELECT version_num FROM alembic_version LIMIT 1')
+    const versionRes = await run('SELECT version_num FROM alembic_version LIMIT 1')
     const current = versionRes.rows[0]?.version_num
     if (!current) {
       return { skipped: true, reason: 'alembic_version table empty' }
@@ -189,7 +205,7 @@ export async function stampBaselineIfLegacy() {
       return { skipped: true, reason: `unknown revision ${current}; leaving untouched` }
     }
 
-    await query('UPDATE alembic_version SET version_num = $1', [BASELINE_REVISION])
+    await run('UPDATE alembic_version SET version_num = $1', [BASELINE_REVISION])
     logger.warn(
       { from: current, to: BASELINE_REVISION },
       'alembic_version stamped to new baseline (ADR-027 squash)'
@@ -209,13 +225,23 @@ export async function stampBaselineIfLegacy() {
  * statistics degrade plans but must never fail application boot.
  */
 async function analyzeAfterMigrations() {
-  for (const table of ['transactions', 'asset_price_history']) {
-    try {
-      await query(`ANALYZE ${table}`)
-    } catch (err) {
-      logger.warn({ err: err.message, table }, 'post-migration ANALYZE failed; non-fatal')
+  // On the privileged role when one is configured. ANALYZE requires table
+  // OWNERSHIP (or, from PostgreSQL 17, the MAINTAIN privilege) and these
+  // tables are owned by the migration role — but note the failure mode is
+  // SILENT: a non-owner ANALYZE emits a WARNING ("permission denied to analyze
+  // …, skipping it", SQLSTATE 01000) and returns success without sampling
+  // anything, so the try/catch below would never have noticed. Running it on
+  // the privileged connection is what actually keeps the stats fresh. Still
+  // best-effort either way — stale stats degrade plans, never boot.
+  await withDdlRunner(async (run) => {
+    for (const table of ['transactions', 'asset_price_history']) {
+      try {
+        await run(`ANALYZE ${table}`)
+      } catch (err) {
+        logger.warn({ err: err.message, table }, 'post-migration ANALYZE failed; non-fatal')
+      }
     }
-  }
+  }, query)
 }
 
 /**

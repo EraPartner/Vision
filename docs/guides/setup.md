@@ -56,6 +56,8 @@ cp apps/frontend/.env.local.example apps/frontend/.env.local
 
 **Running Alembic migrations outside Docker:** `alembic/env.py` loads `config/.env.local` (if present) and reads `DATABASE_URL` (or `DATABASE_URL_MIGRATIONS`). Put the migration connection string there, or export it in the shell before `bun run db:upgrade`.
 
+**Least-privilege database role (optional for manual compose, default in the desktop app):** adding `DATABASE_URL_APP` (pointing at the non-superuser `ftm_app` role) makes the backend run its *connection pool* without instance-level rights. `DATABASE_URL` stays on the bootstrap superuser and remains the privileged/DDL connection — that split is deliberate, so an app image predating this feature reads the same `DATABASE_URL` it always did and boots unchanged. The role and its grants (including `ALTER DEFAULT PRIVILEGES`, so future migrations' tables are covered, and ownership of the materialized views the app must `REFRESH`) are created on **every boot** by `apps/node-backend/src/database/appRoleBootstrap.js` — so existing databases are upgraded in place, not only freshly initialised ones. It fails open to the privileged role, loudly, if anything does not verify. See `.env.example` for the exact variables.
+
 ### 3. Database Setup
 
 #### Option A: Using Docker (Recommended)

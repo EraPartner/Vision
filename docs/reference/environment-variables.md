@@ -44,6 +44,9 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | Variable | Default | Required | Description | Code |
 |----------|---------|----------|-------------|------|
 | `DATABASE_URL` | `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions` | Yes | PostgreSQL connection string | [[apps/node-backend/src/config/config.js\|config.js]] |
+| `DATABASE_URL_APP` | _(unset — single-role)_ | No | Least-privilege **runtime pool** connection string. When it names a different role than the privileged URL, the boot-time bootstrap creates/repairs that role and moves the pool to it; `DATABASE_URL` stays the DDL connection (so an older app image, which does not read this variable, boots unchanged). Fails open to the privileged URL. | [[apps/node-backend/src/database/appRoleBootstrap.js\|appRoleBootstrap.js]] |
+| `DATABASE_URL_MIGRATIONS` | _(unset — `DATABASE_URL` is privileged)_ | No | Overrides which URL counts as privileged/DDL. Only needed for the hand-rolled layout where `DATABASE_URL` itself was repointed at `ftm_app`; `alembic/env.py` prefers it when set. | [[alembic/env.py\|env.py]] |
+| `VISION_DISABLE_APP_ROLE_BOOTSTRAP` | `false` | No | Escape hatch: force the runtime pool back onto `DATABASE_URL_MIGRATIONS` even when two-role is configured. | [[apps/node-backend/src/database/appRoleBootstrap.js\|appRoleBootstrap.js]] |
 | `PORT` | `3002` | No | Backend server port | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `SERVER_HOST` | `localhost` | No | Backend server host | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `HOSTNAME` | _(fallback for SERVER_HOST)_ | No | Alternative host variable | [[apps/node-backend/src/config/config.js\|config.js]] |
@@ -167,6 +170,8 @@ Cross-surface vars — must agree across layers:
 | Variable | Surfaces |
 |----------|----------|
 | `DATABASE_URL` | backend, docker-compose (`.env`) |
+| `DATABASE_URL_APP` | backend runtime pool only — never read by Alembic or the desktop backup/restore tooling (`.env`) |
+| `DATABASE_URL_MIGRATIONS` | backend (Alembic + role bootstrap), desktop backup/restore (`.env`) |
 | `POSTGRES_PASSWORD` | `.env` file, substituted into `DATABASE_URL` |
 | `PORT` | backend, docker-compose (`${PORT:-3002}`) |
 | `CORS_ORIGINS` | backend, docker-compose (`http://localhost:${PORT:-3002}`) |

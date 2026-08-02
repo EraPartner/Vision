@@ -68,23 +68,74 @@ const poolMax = Math.max(settings.database.poolSize, settings.database.maxOverfl
   || settings.database.poolSize
   || 10;
 
-const pool = new pg.Pool({
-  connectionString: settings.database.url,
-  max: poolMax,
-  idleTimeoutMillis: 60_000,      // close idle connections after 60s
-  connectionTimeoutMillis: 5_000,  // fail fast if can't connect in 5s
-  statement_timeout: 30_000,       // kill queries running > 30s
-  // statement_timeout does NOT fire while a session is idle *inside* a
-  // transaction — if a withTransaction() callback stalls on a non-DB await
-  // (hung network/stream) the lock + pool slot are held until restart, and
-  // autovacuum's xmin horizon stalls (table bloat). node-postgres passes this
-  // per-connection; kill any transaction left idle > 60s.
-  idle_in_transaction_session_timeout: 60_000,
-});
+// ── Runtime connection string / lazy pool ───────────────────────────────────
+// The pool is created on FIRST USE, not at import. The least-privilege role
+// bootstrap (database/appRoleBootstrap.js) runs before the first query and
+// decides which role the runtime pool connects as: forward to the
+// non-superuser `ftm_app`, or — when anything about that bootstrap fails —
+// BACK to the privileged DATABASE_URL_MIGRATIONS role (fail open). Building
+// the pool at import would freeze that choice before it is made.
+//
+// pg.Pool never dials at construction, so laziness costs nothing: the first
+// query() still opens the first connection.
+let runtimeConnectionString = settings.database.url;
 
-pool.on('error', (/** @type {unknown} */ err) => {
-  logger.error('Unexpected error on idle database client', err);
-});
+/** @type {any} */
+let pool = null;
+
+/** @param {string} connectionString */
+function createPool(connectionString) {
+  const created = new pg.Pool({
+    connectionString,
+    max: poolMax,
+    idleTimeoutMillis: 60_000,      // close idle connections after 60s
+    connectionTimeoutMillis: 5_000,  // fail fast if can't connect in 5s
+    statement_timeout: 30_000,       // kill queries running > 30s
+    // statement_timeout does NOT fire while a session is idle *inside* a
+    // transaction — if a withTransaction() callback stalls on a non-DB await
+    // (hung network/stream) the lock + pool slot are held until restart, and
+    // autovacuum's xmin horizon stalls (table bloat). node-postgres passes this
+    // per-connection; kill any transaction left idle > 60s.
+    idle_in_transaction_session_timeout: 60_000,
+  });
+  created.on('error', (/** @type {unknown} */ err) => {
+    logger.error('Unexpected error on idle database client', err);
+  });
+  return created;
+}
+
+/** The live pool, created on demand. @returns {any} */
+function getPool() {
+  if (!pool) pool = createPool(runtimeConnectionString);
+  return pool;
+}
+
+/**
+ * Repoint the runtime pool at `url`. Called exactly once, from the app-role
+ * bootstrap, BEFORE the first query of the process. If a pool already exists
+ * it is replaced and the old one drained in the background — callers that
+ * already hold a checked-out client keep the old connection until they
+ * release it, which is why this must not be used as a live "switch roles"
+ * knob mid-flight.
+ *
+ * @param {string|undefined|null} url
+ */
+export function setRuntimeConnectionString(url) {
+  if (!url || url === runtimeConnectionString) return;
+  runtimeConnectionString = url;
+  if (pool) {
+    const stale = pool;
+    pool = null;
+    stale.end().catch((/** @type {any} */ err) => {
+      logger.warn({ err: err?.message }, 'draining superseded pool failed; non-fatal');
+    });
+  }
+}
+
+/** The connection string the runtime pool uses. @returns {string} */
+export function getRuntimeConnectionString() {
+  return runtimeConnectionString;
+}
 
 
 /**
@@ -125,7 +176,7 @@ export async function query(text, params, opts = {}) {
   while (true) {
     const start = Date.now();
     try {
-      const result = await pool.query(text, params);
+      const result = await getPool().query(text, params);
       const duration = Date.now() - start;
       // A >1s query is a production-relevant signal; keep it visible at the
       // default (info/warn) level instead of debug, where it was invisible in
@@ -180,7 +231,7 @@ export async function queryPrepared(name, text, values) {
   if (ambient) {
     return ambient.query({ name, text, values });
   }
-  return pool.query({ name, text, values });
+  return getPool().query({ name, text, values });
 }
 
 /**
@@ -189,7 +240,7 @@ export async function queryPrepared(name, text, values) {
  * @returns {Promise<PgPoolClient>}
  */
 export async function getClient() {
-  return pool.connect();
+  return getPool().connect();
 }
 
 /**
@@ -276,7 +327,7 @@ export async function withSavepointIfInTransaction(name, fn) {
  */
 export async function checkConnection() {
   try {
-    await pool.query('SELECT 1');
+    await getPool().query('SELECT 1');
     return true;
   } catch {
     return false;
@@ -288,7 +339,7 @@ export async function checkConnection() {
  * @returns {Promise<number>}
  */
 export async function getTableCount() {
-  const result = await pool.query(
+  const result = await getPool().query(
     "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
   );
   return parseInt(result.rows[0].count, 10);
@@ -298,16 +349,24 @@ export async function getTableCount() {
  * Get pool statistics for monitoring.
  */
 export function getPoolStats() {
+  // Before the first query the pool does not exist yet (see getPool) — report
+  // zeros rather than throwing, so /health/detailed answers during boot.
   return {
-    totalCount: pool.totalCount,
-    idleCount: pool.idleCount,
-    waitingCount: pool.waitingCount,
+    totalCount: pool ? pool.totalCount : 0,
+    idleCount: pool ? pool.idleCount : 0,
+    waitingCount: pool ? pool.waitingCount : 0,
     maxConnections: poolMax,
   };
 }
 
 export async function closePool() {
-  await pool.end();
+  if (!pool) return;
+  const open = pool;
+  pool = null;
+  await open.end();
 }
 
-export default pool;
+// NOTE: there is deliberately no `export default pool`. The pool is created
+// lazily and can be replaced by setRuntimeConnectionString(), so a default
+// export captured at import time would be a stale (or null) handle. Use the
+// named query/queryPrepared/getClient/withTransaction exports.

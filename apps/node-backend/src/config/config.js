@@ -63,7 +63,15 @@ const settings = deepFreeze({
   },
 
   database: {
+    // The privileged/DDL connection string (unless overridden by
+    // migrationsUrl). Also the runtime pool's URL until — and unless — the
+    // app-role bootstrap successfully moves the pool to appUrl.
     url: env.DATABASE_URL,
+    // Opt-in least-privilege runtime role. Undefined = single-role, unchanged.
+    appUrl: env.DATABASE_URL_APP,
+    // Back-compat override for the privileged/DDL role (see env.js).
+    migrationsUrl: env.DATABASE_URL_MIGRATIONS,
+    disableAppRoleBootstrap: env.VISION_DISABLE_APP_ROLE_BOOTSTRAP,
     echo: env.DB_ECHO,
     poolSize: env.DB_POOL_SIZE,
     maxOverflow: env.DB_MAX_OVERFLOW,

@@ -58,8 +58,60 @@ describe('database connection module', () => {
     vi.resetModules();
   });
 
+  // The pool is created on FIRST USE, not at import: the least-privilege role
+  // bootstrap (database/appRoleBootstrap.js) runs before the first query and
+  // may repoint the runtime pool at a different role, so freezing the
+  // connection string at import time would defeat it.
+  it('does not construct a pool until the first query', async () => {
+    const { module, poolCtor, pool } = await loadConnectionModule();
+    expect(poolCtor).not.toHaveBeenCalled();
+
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    await module.query('SELECT 1');
+
+    expect(poolCtor).toHaveBeenCalledTimes(1);
+    expect(poolCtor.mock.calls[0][0]).toMatchObject({ connectionString: 'postgresql://test' });
+  });
+
+  it('setRuntimeConnectionString repoints the pool before it exists', async () => {
+    const { module, poolCtor, pool } = await loadConnectionModule();
+    module.setRuntimeConnectionString('postgresql://app-role');
+    expect(module.getRuntimeConnectionString()).toBe('postgresql://app-role');
+
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    await module.query('SELECT 1');
+
+    expect(poolCtor).toHaveBeenCalledTimes(1);
+    expect(poolCtor.mock.calls[0][0]).toMatchObject({ connectionString: 'postgresql://app-role' });
+  });
+
+  it('setRuntimeConnectionString drains a pool that already exists', async () => {
+    const { module, poolCtor, pool } = await loadConnectionModule();
+    pool.query.mockResolvedValue({ rows: [] });
+    await module.query('SELECT 1');
+    pool.end.mockResolvedValueOnce(undefined);
+
+    module.setRuntimeConnectionString('postgresql://fallback-role');
+    await module.query('SELECT 1');
+
+    expect(pool.end).toHaveBeenCalledTimes(1);
+    expect(poolCtor).toHaveBeenCalledTimes(2);
+    expect(poolCtor.mock.calls[1][0]).toMatchObject({ connectionString: 'postgresql://fallback-role' });
+  });
+
+  it('setRuntimeConnectionString ignores an unchanged or empty url', async () => {
+    const { module, poolCtor } = await loadConnectionModule();
+    module.setRuntimeConnectionString('postgresql://test');
+    module.setRuntimeConnectionString('');
+    module.setRuntimeConnectionString(undefined);
+    expect(module.getRuntimeConnectionString()).toBe('postgresql://test');
+    expect(poolCtor).not.toHaveBeenCalled();
+  });
+
   it('logs idle client pool errors through logger.error', async () => {
-    const { pool, logger } = await loadConnectionModule();
+    const { module, pool, logger } = await loadConnectionModule();
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    await module.query('SELECT 1');
 
     const onErrorCall = pool.on.mock.calls.find(([event]) => event === 'error');
     expect(onErrorCall).toBeDefined();
@@ -133,7 +185,7 @@ describe('database connection module', () => {
   });
 
   it('getPoolStats exposes pool counters and configured maxConnections', async () => {
-    const { module } = await loadConnectionModule({
+    const { module, pool } = await loadConnectionModule({
       settings: {
         database: {
           url: 'postgresql://test',
@@ -143,6 +195,8 @@ describe('database connection module', () => {
         },
       },
     });
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    await module.query('SELECT 1');
 
     expect(module.getPoolStats()).toEqual({
       totalCount: 3,
@@ -152,13 +206,31 @@ describe('database connection module', () => {
     });
   });
 
+  it('getPoolStats reports zeros before the pool exists (boot-time /health/detailed)', async () => {
+    const { module } = await loadConnectionModule();
+    expect(module.getPoolStats()).toEqual({
+      totalCount: 0,
+      idleCount: 0,
+      waitingCount: 0,
+      maxConnections: 10,
+    });
+  });
+
   it('closePool calls pool.end', async () => {
     const { module, pool } = await loadConnectionModule();
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    await module.query('SELECT 1');
     pool.end.mockResolvedValueOnce(undefined);
 
     await module.closePool();
 
     expect(pool.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('closePool is a no-op when no pool was ever created', async () => {
+    const { module, pool } = await loadConnectionModule();
+    await expect(module.closePool()).resolves.toBeUndefined();
+    expect(pool.end).not.toHaveBeenCalled();
   });
 
   it('queryPrepared sends named prepared statement object to pool.query', async () => {
