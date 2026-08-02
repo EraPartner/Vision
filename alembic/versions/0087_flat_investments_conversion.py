@@ -518,6 +518,30 @@ def upgrade() -> None:
     # …and the flat copies take the canonical names.
     op.execute("ALTER TABLE investments_flat RENAME TO investments")
     op.execute("ALTER TABLE portfolio_transactions_flat RENAME TO portfolio_transactions")
+    # PostgreSQL 18+ catalogues per-column NOT NULL constraints in pg_constraint
+    # with auto-generated names taken from the table's CREATE-time name — which
+    # here is the transient *_flat name, surviving the rename above. Rename them
+    # to what a fresh install gets, so converted and fresh schemas stay
+    # name-identical. No-op on PG <= 17, where NOT NULLs are not catalogued.
+    op.execute(
+        """
+        DO $$
+        DECLARE con record;
+        BEGIN
+            FOR con IN
+                SELECT conrelid::regclass AS rel, conname
+                  FROM pg_constraint
+                 WHERE conrelid IN ('investments'::regclass, 'portfolio_transactions'::regclass)
+                   AND conname LIKE '%\\_flat\\_%'
+            LOOP
+                EXECUTE format(
+                    'ALTER TABLE %s RENAME CONSTRAINT %I TO %I',
+                    con.rel, con.conname, replace(con.conname, '_flat_', '_')
+                );
+            END LOOP;
+        END $$;
+        """
+    )
 
     # ------------------------------------------------------------------
     # 6. Canonical constraints, indexes and triggers (0001/0026/0040/0052/

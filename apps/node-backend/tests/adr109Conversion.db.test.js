@@ -411,8 +411,10 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     await q('DELETE FROM investments WHERE id = 501');
 
     // The FKs the view shape could never hold are real now — and enforced.
+    // contype 'n' (per-column NOT NULL) exists only on PG >= 18; exclude it so
+    // the exact list is portable across the PG 16 (local) / 18 (CI) split.
     const cons = (await q(
-      "SELECT conname FROM pg_constraint WHERE conrelid = 'portfolio_transactions'::regclass ORDER BY conname",
+      "SELECT conname FROM pg_constraint WHERE conrelid = 'portfolio_transactions'::regclass AND contype <> 'n' ORDER BY conname",
     )).rows.map((r) => r.conname);
     expect(cons).toEqual([
       'portfolio_transactions_account_id_fkey',
@@ -420,6 +422,13 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
       'portfolio_transactions_investment_id_fkey',
       'portfolio_transactions_pkey',
     ]);
+    // On PG >= 18 the catalogued NOT NULL constraints are minted with the
+    // transient *_flat table name; 0087 renames them to the fresh-install
+    // names. No constraint on either canonical table may keep a _flat_ name.
+    const flatNamed = await scalar(
+      "SELECT count(*)::int FROM pg_constraint WHERE conrelid IN ('investments'::regclass, 'portfolio_transactions'::regclass) AND conname LIKE '%\\_flat\\_%'",
+    );
+    expect(flatNamed).toBe(0);
     await expect(
       q("INSERT INTO portfolio_transactions (investment_id, type, date, amount) VALUES (4242, 'buy', '2026-01-01', 1)"),
     ).rejects.toThrow(/portfolio_transactions_investment_id_fkey/);
