@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import {motion, useReducedMotion} from "framer-motion";
+import {m, useReducedMotion} from "framer-motion";
 
 import {cn} from "@/lib/utils";
 import {springs} from "@/lib/motion";
@@ -75,7 +75,7 @@ const TabsTrigger = React.forwardRef<
             {...props}
         >
             {isActive && (
-                <motion.span
+                <m.span
                     layoutId={`${layoutId}-pill`}
                     aria-hidden="true"
                     transition={reducedMotion ? {duration: 0} : springs.snappy}

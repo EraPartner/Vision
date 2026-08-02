@@ -14,7 +14,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { PanelLeftClose, Wallet } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
@@ -44,7 +44,7 @@ import { InsightsNavBadge } from "@/components/layout/InsightsNavBadge";
 function ActiveRail() {
   const reducedMotion = useReducedMotion();
   return (
-    <motion.span
+    <m.span
       layoutId="sidebar-active-rail"
       aria-hidden="true"
       className="absolute inset-y-0 left-0 w-[2px] bg-primary"

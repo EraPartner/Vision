@@ -5,7 +5,7 @@ import { Group } from "@visx/group";
 import { summarizeProportionChart } from "./chartAria";
 import { Pie } from "@visx/shape";
 import { ParentSize } from "@visx/responsive";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { useCallback, useState, type ReactNode } from "react";
 
 import { getChartColor } from "./palette";
@@ -74,7 +74,7 @@ function Inner({
                                 const color = arc.data.color ?? getChartColor(i);
                                 const d = pie.path(arc) ?? "";
                                 return (
-                                    <motion.path
+                                    <m.path
                                         key={`arc-${i}`}
                                         d={d}
                                         fill={color}
@@ -119,7 +119,7 @@ function Inner({
                 }}
             >
                 <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
+                    <m.div
                         key={hover ? `h-${hover.name}` : "default"}
                         initial={reduce ? { opacity: 1 } : { opacity: 0, scale: 0.96 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -144,7 +144,7 @@ function Inner({
                         ) : (
                             center ?? null
                         )}
-                    </motion.div>
+                    </m.div>
                 </AnimatePresence>
             </div>
         </div>

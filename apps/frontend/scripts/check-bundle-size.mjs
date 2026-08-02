@@ -52,13 +52,27 @@ const DIST_DIR = path.resolve(FRONTEND_ROOT, '../../dist');
  * absorb routine dependency-lockfile churn without false alarms — tight
  * enough that a single mis-scoped import still trips it.
  *
- * Last measured (2026-08-01, clean build off this branch):
- *   boot-preload graph: 306.76 KB gz (14 files: entry + 13 modulepreloads)
- *   total (all routes): 894.83 KB gz (141 JS/CSS assets)
+ * Last measured (2026-08-02, clean build off this branch):
+ *   boot-preload graph: 282.14 KB gz (14 files: entry + 13 modulepreloads)
+ *   total (all routes): 897.23 KB gz (143 JS/CSS assets)
+ *
+ * The 2026-08-02 drop (306.76 -> 282.14 KB gz, -24.62) is the Framer Motion
+ * engine leaving the entry chunk: every `motion.*` call site now uses the
+ * tree-shaken `m` API under one <LazyMotion> provider (App.tsx) whose features
+ * are fetched asynchronously from src/lib/motionFeatureBundle.ts. That chunk
+ * (27.67 KB gz) must never appear in the list above — if it does, something
+ * imported `motion`, `domMax` or the bundle module from non-lazy code and the
+ * split has been defeated. Total went UP 2.40 KB because the engine is now its
+ * own chunk instead of being inlined; that is the intended trade.
  */
 const BUDGETS_KB = {
-    preload: 323, // 306.76 * 1.05 = 322.10, rounded up
-    total: 940, // 894.83 * 1.05 = 939.57, rounded up
+    // 282.14 * 1.05 = 296.25, rounded up. Tightened from 323 on 2026-08-02 to
+    // lock in the LazyMotion split described above.
+    preload: 297,
+    // 897.23 * 1.05 = 942.09 — deliberately left at 940 rather than raised, so
+    // the guard is not loosened by a change that shrank the thing it protects.
+    // Effective headroom 4.77%.
+    total: 940,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

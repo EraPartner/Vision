@@ -6,7 +6,7 @@ import { summarizeSparkline } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear } from "@visx/scale";
 import { Area, LinePath } from "@visx/shape";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
 
 import { CHART_NEUTRAL } from "./palette";
@@ -68,7 +68,7 @@ function Inner({
     return (
         <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSparkline(t, data)}>
             {fillArea ? (
-                <motion.g
+                <m.g
                     initial={reduce ? { opacity: 1 } : { opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{
@@ -85,9 +85,9 @@ function Inner({
                         fill={color}
                         fillOpacity={0.15}
                     />
-                </motion.g>
+                </m.g>
             ) : null}
-            <motion.g
+            <m.g
                 initial={reduce ? { opacity: 1 } : { opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{
@@ -104,7 +104,7 @@ function Inner({
                     strokeWidth={strokeWidth}
                     fill="none"
                 />
-            </motion.g>
+            </m.g>
             {activeIndex !== undefined && activeIndex >= 0 && activeIndex < data.length && (
                 <g aria-hidden="true">
                     <line

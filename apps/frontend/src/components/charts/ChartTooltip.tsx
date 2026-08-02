@@ -9,7 +9,7 @@
  *  - Always clamps to the viewport so no content is ever hidden behind
  *    `overflow:hidden` ancestors.
  */
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -217,7 +217,7 @@ export function ChartTooltip({
         <div ref={setPositionerEl} style={POSITIONER_STYLE}>
             <AnimatePresence>
                 {open ? (
-                    <motion.div
+                    <m.div
                         key="chart-tooltip"
                         initial={reduce ? { opacity: 1 } : { opacity: 0, y: 4, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -261,7 +261,7 @@ export function ChartTooltip({
                             </ul>
                         ) : null}
                         {children}
-                    </motion.div>
+                    </m.div>
                 ) : null}
             </AnimatePresence>
         </div>

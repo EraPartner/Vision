@@ -5,7 +5,7 @@ import { Group } from "@visx/group";
 import { summarizeProportionChart } from "./chartAria";
 import { Pie } from "@visx/shape";
 import { ParentSize } from "@visx/responsive";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { useCallback, useMemo, useState } from "react";
 
 import { ChartTooltip } from "./ChartTooltip";
@@ -83,7 +83,7 @@ function Inner({
                                 const showLabel = showLabels && pct > 0.04;
                                 return (
                                     <g key={`arc-${i}`}>
-                                        <motion.path
+                                        <m.path
                                             d={d}
                                             fill={color}
                                             stroke="hsl(var(--background))"
