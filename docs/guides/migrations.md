@@ -3,11 +3,11 @@ title: Database Migration Guide
 type: guide
 status: active
 date: 2026-04-21
-updated: 2026-07-27
-tags: [guide, database, migrations, alembic, postgresql, phase-1, destructive-ddl, ci]
+updated: 2026-08-02
+tags: [guide, database, migrations, alembic, postgresql, phase-1, destructive-ddl, ci, performance]
 description: How to create, run, and manage database migrations using Alembic
 aliases: [migration-guide, alembic-guide, database-schema, schema-changes]
-related_code: ["alembic/", "alembic/env.py", "alembic/manual/", "alembic/script.py.mako", "config/alembic.ini", "docker-entrypoint.sh", "scripts/check-destructive-migrations.py"]
+related_code: ["alembic/", "alembic/env.py", "alembic/manual/", "alembic/script.py.mako", "config/alembic.ini", "docker-entrypoint.sh", "scripts/check-destructive-migrations.py", "apps/node-backend/src/database/migrate.js"]
 ---
 
 # Database Migration Guide
@@ -77,6 +77,7 @@ This creates a new file in `alembic/versions/` with an auto-incrementing number 
 4. **Use idempotent operations** — Where possible, check if changes already exist before applying
 5. **Handle dependencies** — For view/trigger changes, drop dependencies before altering types, then recreate
 6. **Mark destructive DDL** — Anything that drops or retypes needs a `destructive-ok:` marker, or it belongs out-of-band; see [[#destructive-ddl-and-the-destructive-ok-marker|below]]
+7. **Bound the cost** — The upgrade runs inside the boot window, before the backend listens. Anything O(table) on `transactions` or `asset_price_history` needs the shapes in [[#cost-migrations-run-inside-the-boot-window|Cost]] below
 
 ## Destructive DDL and the `destructive-ok` marker
 
@@ -132,6 +133,72 @@ Type changes are flagged unconditionally because static analysis cannot tell `NU
 Migrations that shipped before this gate existed carry retroactive markers recording *why they were safe at the time* — they are annotations, not new permissions. The marker binds to a statement, not to a file, so adding a new drop to an old migration is still caught.
 
 Self-test the checker with `python3 scripts/check-destructive-migrations.py --self-test`; list current findings without failing with `--list`.
+
+## Cost: migrations run inside the boot window
+
+There is no checker for this one — the cost of a statement is not visible to static analysis, and a full-table rewrite that is instant on the demo corpus is minutes on a real install. It is on the author.
+
+> [!warning] The upgrade is on the critical path to a usable app
+> `main.js` awaits `runMigrations()` **before** `app.listen()`, so nothing answers `/health` until the whole pending chain has applied. The packaged Electron shell polls that endpoint with a 60 s budget and shows an error page when it runs out ([[packaging/electron/main.js|main.js]] `pollReady`). A cold or big-jump upgrade stacks every pending migration into that one window.
+
+The costs are paid **once**, on the first boot after an update (`migrate.js` caches "already at head" keyed on revision + a fingerprint of `alembic/versions/`, and skips the alembic invocation entirely on every later boot). That is not a reason to ignore them: the one boot that pays is the one the user is watching.
+
+### What the runner already gives you
+
+- **Per-migration transactions.** `alembic/env.py` passes `transaction_per_migration=True` on PostgreSQL, so each migration commits on its own. A kill mid-chain loses only the in-flight migration; the next boot resumes from the last committed revision instead of re-running everything.
+- **A 10-minute execFile budget, overridable.** `migrate.js` defaults to `600_000` ms and honours `VISION_MIGRATE_TIMEOUT_MS` (`0` disables it). Because progress is durable per-migration, a timeout mid-chain is a pause, not a rollback.
+- **`autocommit_block()`.** Since each migration owns its transaction, `op.get_context().autocommit_block()` can suspend it for statements PostgreSQL refuses to run transactionally — `CREATE INDEX CONCURRENTLY` above all. Everything inside such a block must be individually idempotent: it is already committed if a later statement fails.
+- **A post-migration `ANALYZE`.** After a real (non-cached) upgrade, `migrate.js` ANALYZEs `transactions` and `asset_price_history`, so a migration that rewrote either one does not hand the planner stale statistics. Any *other* table you rewrite in full is yours to `ANALYZE`.
+
+### The expensive shapes, and what to write instead
+
+**Adding a CHECK or FK constraint.** `ADD CONSTRAINT ... CHECK (...)` validates against every existing row under `ACCESS EXCLUSIVE` — a full scan that blocks all access, paid even when the constraint only widens an allowed-value list. Add it `NOT VALID` (new and updated rows are enforced immediately, existing rows are not scanned), then `VALIDATE CONSTRAINT` separately: validation takes only `SHARE UPDATE EXCLUSIVE`, so writers keep running.
+
+```python
+op.execute("""
+    ALTER TABLE transactions
+        ADD CONSTRAINT chk_transactions_currency_iso
+        CHECK (currency ~ '^[A-Z]{3}$') NOT VALID
+""")
+# …later, ideally in a follow-up migration:
+op.execute("ALTER TABLE transactions VALIDATE CONSTRAINT chk_transactions_currency_iso")
+```
+
+`0046_currency_integrity` + `0049_validate_currency_checks` is the worked pair. Note what 0049 also does: it wraps the `VALIDATE` in a `DO` block that catches `check_violation`, because a bare failure would abort boot and strand an end user at the Electron error page with psql-only recovery. A validation that can legitimately fail on real data belongs inside that guard.
+
+**`SET NOT NULL`.** On its own this is a full verification scan under `ACCESS EXCLUSIVE`. PostgreSQL will skip that scan if an *already-validated* `CHECK (col IS NOT NULL)` exists on the table, so on a big table the cheap route is: add `CHECK (col IS NOT NULL) NOT VALID` → `VALIDATE CONSTRAINT` (non-blocking) → `SET NOT NULL` (instant) → drop the now-redundant CHECK. `0022_updated_at_not_null_defaults` is the counter-example: nine tables, a full-row `UPDATE` backfill followed by a bare `SET NOT NULL`, and it is the single heaviest touch of `asset_price_history` in the chain.
+
+**Backfilling a column.** A single `UPDATE` over a large table rewrites every row into a new tuple version, writes the whole table to WAL, maintains every index on it, and holds one long transaction the whole time. Batch it over id ranges inside an `autocommit_block()`, with a guard that makes each batch idempotent so an interrupted run resumes:
+
+```python
+with op.get_context().autocommit_block():
+    bind = op.get_bind()
+    bounds = bind.execute(sa.text("SELECT min(id) AS lo, max(id) AS hi FROM transactions")).one()
+    if bounds.lo is not None:
+        lo = bounds.lo
+        while lo <= bounds.hi:
+            hi = lo + BACKFILL_BATCH_SIZE - 1
+            bind.execute(sa.text("""
+                UPDATE transactions t SET account_id = ...
+                 WHERE t.id BETWEEN :lo AND :hi
+                   AND t.account_id IS NULL     -- resume guard
+            """), {"lo": lo, "hi": hi})
+            lo = hi + 1
+```
+
+`0050_add_accounts_entity` is the worked example (50 000-row id ranges; the `IS NULL` guard makes an interrupted backfill resume where it stopped on the next boot, and the range keying keeps every batch a cheap PK range scan however sparse the id space is).
+
+**Building an index.** A plain `CREATE INDEX` scans the heap under a `SHARE` lock that blocks writes for the duration — true even for a tiny partial index, because the *heap* scan is what costs (`0036`, `0044`, `0053` all pay this). Use `CREATE INDEX CONCURRENTLY` inside an `autocommit_block()`. Note the caveat `IF NOT EXISTS` does not cover: an interrupted concurrent build leaves an **INVALID** index behind that `IF NOT EXISTS` would happily keep forever. Copy `_create_index_concurrently()` from `0050_add_accounts_entity`, which checks `pg_index.indisvalid`, keeps a valid index, drops an invalid one, and only then rebuilds. Also: build indexes *after* a backfill, never before — otherwise every batch pays index maintenance.
+
+**Changing a column type.** `ALTER COLUMN ... TYPE` rewrites the table *and* every index on it under `ACCESS EXCLUSIVE`, and drops dependent views first (`0025_fix_numeric_precision` retypes `transactions.amount` and has to drop and recreate the materialized views around it). There is no cheap in-place variant. If the change is avoidable, avoid it; if it is not, expect the rewrite and `ANALYZE` afterwards.
+
+**Materialized views.** Do not rebuild them from a migration. `DROP MATERIALIZED VIEW` alone is metadata-only; the runtime service (`materializedViewService.js`) recreates and populates any missing view from the **post-listen** warmup, off the boot critical path, and reads fall back to live queries in the meantime. `0084` and `0085` are the pattern: drop only, let the app rebuild. A migration that recreates a view instead puts a full aggregation scan of `transactions` back in front of `/health`.
+
+**Anti-join deletes.** `DELETE ... WHERE x NOT IN (SELECT ...)` before adding an FK (as `0026_asset_price_history_fk` does) is O(table) on both sides. Fine when the migration is guarded to fresh-baseline installs where the table is small — say so in the docstring when it is, so the next reader does not have to re-derive it.
+
+### Nothing to do for migrations already in the chain
+
+`alembic/versions/` is append-only history: an applied migration must never be edited, and the costs above have already been paid by every install past them. This section is for the next migration.
 
 ## Running Migrations
 
@@ -241,7 +308,7 @@ The `0001_initial_database_schema` baseline includes the complete foundational s
 
 ### Migration Fails Mid-Way
 
-Alembic runs migrations in a transaction by default (PostgreSQL). If a migration fails, the transaction is rolled back automatically. Fix the issue and re-run.
+On PostgreSQL each migration runs in its **own** transaction (`env.py` sets `transaction_per_migration=True`), so a failure rolls back only the migration that failed — everything before it stays committed and `alembic_version` records the last good revision. Fix the issue and re-run; the chain resumes from there rather than restarting. The exception is anything inside an `autocommit_block()`, which has already committed by definition — that is why every statement in such a block must be idempotent.
 
 ### "Target database is not up to date"
 

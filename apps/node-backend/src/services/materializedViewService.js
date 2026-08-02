@@ -4,6 +4,10 @@
  * Creates and refreshes materialized views that pre-compute expensive
  * dashboard aggregations (monthly summaries, category totals, cashflow).
  * Views are refreshed CONCURRENTLY so reads remain unblocked.
+ *
+ * The whole lifecycle runs post-`listen` from startup/warmup.js — none of it is
+ * on the critical path to `/health`, because both creation and refresh are full
+ * aggregation scans of `transactions` whenever the views are missing or stale.
  */
 
 import { query, getClient } from '../database/connection.js';
@@ -12,12 +16,13 @@ import { invalidateStatisticsCaches } from './info/cache.js';
 
 /**
  * Run one maintenance statement with the pool-wide 30s statement_timeout
- * lifted. REFRESH MATERIALIZED VIEW on a large transactions table can
- * legitimately exceed 30s; under the shared pool's timeout every refresh past
- * that threshold failed and the views went permanently stale. CONCURRENTLY
- * cannot run inside a transaction block, so SET LOCAL is not an option — use a
- * session-level SET on a dedicated client and restore the pool default before
- * the client is reused.
+ * lifted. Building or refreshing these views on a large transactions table can
+ * legitimately exceed 30s — CREATE MATERIALIZED VIEW and REFRESH both run the
+ * full aggregation — and under the shared pool's timeout every such statement
+ * failed, leaving the views permanently stale (or, on a fresh install, never
+ * built at all). CONCURRENTLY cannot run inside a transaction block, so SET
+ * LOCAL is not an option — use a session-level SET on a dedicated client and
+ * restore the pool default before the client is reused.
  */
 /**
  * @param {string} sql
@@ -50,10 +55,16 @@ const MATERIALIZED_VIEWS = [
 
 /**
  * Create all materialized views (idempotent).
- * Call during schema initialisation.
+ *
+ * Called from the post-listen warmup (startup/warmup.js), never before
+ * `app.listen()`: `IF NOT EXISTS` makes this a metadata no-op once the views
+ * are there, but on a first-ever boot — or after a migration that drops a view
+ * to redefine it (0084/0085) — each statement is a full aggregation scan of
+ * `transactions`.
  */
 export async function createMaterializedViews() {
   logger.info('Creating materialized views (if not exist)…');
+  const start = Date.now();
 
   // 1. Monthly income / spending / net per month (last 12 months).
   //    Effective category resolves 3 levels (own → recipient default → PRIMARY
@@ -62,7 +73,7 @@ export async function createMaterializedViews() {
   //    requires a migration that DROPs the MV (see 0085): IF NOT EXISTS never
   //    redefines an existing view, so already-migrated installs keep the old SQL
   //    otherwise.
-  await query(`
+  await runMaintenanceStatement(`
     CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS
     SELECT
       date_trunc('month', t.date)::date AS month_start,
@@ -87,7 +98,7 @@ export async function createMaterializedViews() {
   `);
 
   // Unique index on plain columns — no expressions, so CONCURRENT refresh works
-  await query(`
+  await runMaintenanceStatement(`
     CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx
     ON mv_monthly_summary (month_start, currency, category_id_key)
   `);
@@ -101,7 +112,7 @@ export async function createMaterializedViews() {
     //    transactions surfaces. Changing this definition requires a migration
     //    that DROPs the MV (see 0084): IF NOT EXISTS never redefines an
     //    existing view, so already-migrated installs keep the old SQL otherwise.
-    query(`
+    runMaintenanceStatement(`
       CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals AS
       SELECT
         COALESCE(c.id, -1) AS category_id,
@@ -119,13 +130,13 @@ export async function createMaterializedViews() {
         COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
         t.currency
       ORDER BY count DESC
-    `).then(() => query(`
+    `).then(() => runMaintenanceStatement(`
       CREATE UNIQUE INDEX IF NOT EXISTS mv_category_totals_idx
       ON mv_category_totals (category_id, currency)
     `)),
 
     // 3. Daily cashflow (last 7 months – 6 complete + current)
-    query(`
+    runMaintenanceStatement(`
       CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily AS
       SELECT
         t.date,
@@ -138,13 +149,26 @@ export async function createMaterializedViews() {
         AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
       GROUP BY t.date, day_of_month, month_start, t.currency
       ORDER BY t.date
-    `).then(() => query(`
+    `).then(() => runMaintenanceStatement(`
       CREATE UNIQUE INDEX IF NOT EXISTS mv_cashflow_daily_idx
       ON mv_cashflow_daily (date, currency)
     `)),
   ]);
 
-  logger.info('Materialized views ready');
+  // The boot-wide `ANALYZE` in main.js runs pre-listen and so no longer covers
+  // views created after it; without this a freshly created view carries no
+  // planner statistics (matviews are never auto-analyzed, and REFRESH does not
+  // sample them either). Same best-effort shape as the post-migration ANALYZE
+  // in migrate.js — the views are tiny, and stale stats must not fail warmup.
+  await Promise.all(
+    MATERIALIZED_VIEWS.map(view =>
+      query(`ANALYZE ${view}`).catch(err => {
+        logger.warn(`Could not ANALYZE ${view}`, { error: err.message });
+      })
+    )
+  );
+
+  logger.info(`Materialized views ready in ${Date.now() - start}ms`);
 }
 
 /**
@@ -174,7 +198,7 @@ export async function ensureMaterializedViewIndexes() {
   // All indexes are on independent views — create them in parallel
   await Promise.all(
     indexes.map(({ name, view, columns }) =>
-      query(`CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`).catch(err => {
+      runMaintenanceStatement(`CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`).catch(err => {
         logger.warn(`Could not create index ${name} on ${view}`, { error: err.message });
       })
     )

@@ -14,10 +14,6 @@ import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool, getPoolStats, query } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
-import {
-  createMaterializedViews,
-  ensureMaterializedViewIndexes,
-} from './services/materializedViewService.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
 import { createCsrfGuard } from './middleware/csrfGuard.js';
@@ -523,14 +519,6 @@ async function start() {
         const endMig = bootMark('run_migrations');
         await runMigrations();
         endMig();
-        // Materialized views are runtime artifacts, not schema — create/index/refresh
-        // after the underlying tables exist.
-        const endCreateMv = bootMark('create_mat_views');
-        await createMaterializedViews();
-        endCreateMv();
-        const endIdxMv = bootMark('ensure_mv_indexes');
-        await ensureMaterializedViewIndexes();
-        endIdxMv();
         // One database-wide ANALYZE at boot so small, rarely-mutated tables
         // (which no migration or trigger ever ANALYZEs) still hand the planner
         // fresh statistics. Fire-and-forget: ANALYZE only refreshes planner
@@ -545,9 +533,15 @@ async function start() {
         query('ANALYZE').catch((err) =>
           logger.warn({ err: err.message }, 'boot-time ANALYZE failed; non-fatal'),
         );
-        // refreshMaterializedViews moved to post-listen warmup so /health
-        // goes green sooner. Stale MV data is acceptable for the first few
-        // seconds of warm boot.
+        // Materialized views are runtime artifacts, not schema (ADR-027), so the
+        // whole create/index/refresh lifecycle lives in the post-listen warmup
+        // (startup/warmup.js) rather than here. Creation is not a no-op on the
+        // boots that matter: on a first-ever boot, or after a migration that
+        // drops a view to redefine it (0084/0085), `CREATE MATERIALIZED VIEW`
+        // runs a full aggregation scan of `transactions` per view — pre-listen
+        // that sat inside the window the Electron 60s poll budget is racing.
+        // The Electron first-navigation gate reads `caches.materializedViews`,
+        // which still only flips once that whole chain settles.
       } else {
         attemptCount++;
         // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms
