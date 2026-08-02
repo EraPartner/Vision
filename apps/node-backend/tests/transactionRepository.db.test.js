@@ -283,6 +283,74 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
   // ───────────────────────────────────────────────────────────────────────────
   // Pagination — the tiebreaker behaviour the ordering suite pins as SQL text
   // ───────────────────────────────────────────────────────────────────────────
+  describe('ADR-088 string decouple (reads bind to account_id, never the string)', () => {
+    // Falsification setup: desynchronize one row's stale string from its FK.
+    // A raw-SQL UPDATE to a label with no matching account leaves account_id
+    // untouched (the 0062 lookup-only trigger never creates on UPDATE), so
+    // the row ends with bank_account='STALE LABEL' while still pointing at
+    // KBC CURRENT. Every read below must follow the FK, not the string.
+    async function desyncT1() {
+      await getTestPool().query(
+        `UPDATE transactions SET bank_account = 'STALE LABEL' WHERE id = $1`, [T.t1],
+      );
+      const { rows } = await getTestPool().query(
+        'SELECT account_id, bank_account FROM transactions WHERE id = $1', [T.t1],
+      );
+      expect(rows[0].account_id).toBe(acc['KBC CURRENT']);
+      expect(rows[0].bank_account).toBe('STALE LABEL');
+    }
+
+    it('bankAccount filter matches via accounts.name, not the row string', async () => {
+      await desyncT1();
+      const kbc = await transactionRepository.getAll({ bankAccount: 'kbc' });
+      expect(kbc.map((r) => r.id)).toContain(T.t1); // FK still points at KBC
+      const stale = await transactionRepository.getAll({ bankAccount: 'stale' });
+      expect(stale).toHaveLength(0); // no account is named that
+    });
+
+    it('projects bank_account from accounts.name across getAll/getById/getAllWithCount/getUncategorised', async () => {
+      await desyncT1();
+      const all = await transactionRepository.getAll({});
+      expect(all.find((r) => r.id === T.t1).bank_account).toBe('KBC CURRENT');
+      expect((await transactionRepository.getById(T.t1)).bank_account).toBe('KBC CURRENT');
+      const { rows } = await transactionRepository.getAllWithCount({});
+      expect(rows.find((r) => r.id === T.t1).bank_account).toBe('KBC CURRENT');
+      const unc = await transactionRepository.getUncategorised({});
+      expect(unc.find((r) => r.id === T.t1).bank_account).toBe('KBC CURRENT');
+    });
+
+    it('free-text search matches the account name, not the stale string', async () => {
+      await desyncT1();
+      const byName = await transactionRepository.getAll({ search: 'kbc curr' });
+      expect(byName.map((r) => r.id)).toContain(T.t1);
+      const byStale = await transactionRepository.getAll({ search: 'stale lab' });
+      expect(byStale).toHaveLength(0);
+    });
+
+    it('sorts by the canonical account name', async () => {
+      // 'KBC CURRENT' < 'WISE USD'; the stale string ('STALE LABEL') would
+      // order t1 between them and betray a string-backed sort.
+      await desyncT1();
+      const rows = await transactionRepository.getAll({ sortBy: 'bank', sortDir: 'asc' });
+      const banks = rows.map((r) => r.bank_account);
+      expect(banks).toEqual([...banks].sort());
+      expect(rows[rows.length - 1].bank_account).toBe('WISE USD');
+      expect(banks).toContain('KBC CURRENT');
+      expect(banks).not.toContain('STALE LABEL');
+    });
+
+    it('projects null for rows with no account', async () => {
+      const { rows } = await getTestPool().query(
+        `INSERT INTO transactions (date, amount, currency, recipient_id)
+         VALUES ('2024-03-03', -1.00, 'EUR', $1) RETURNING id`,
+        [rec.delhaize],
+      );
+      const row = await transactionRepository.getById(rows[0].id);
+      expect(row.bank_account).toBeNull();
+      expect(row.account_id).toBeNull();
+    });
+  });
+
   describe('pagination tiebreaker', () => {
     it('never duplicates or skips same-date rows across pages', async () => {
       // Five more rows all on one date: only the id tiebreaker orders them.
@@ -435,7 +503,12 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
         comment: 'espresso',
       });
       expect(row).toMatchObject({
-        bank_account: 'REVOLUT MAIN',
+        // ADR-088 contract phase: the returned label is the CANONICAL
+        // accounts.name over the FK ('Revolut Main', first-seen casing), not
+        // the row's raw uppercased string — reads no longer touch the retired
+        // bank_account column, so a case-variant write surfaces the account's
+        // stored display casing.
+        bank_account: 'Revolut Main',
         memo: 'COFFEE',
         currency: 'USD',
         amount: '-3.2000',
@@ -450,6 +523,13 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
         `SELECT count(*)::int AS n FROM accounts WHERE lower(name) = 'revolut main'`,
       );
       expect(rows[0].n).toBe(1);
+      // The dual-write string itself (pre-drop) still carries the uppercased
+      // input — the trigger keeps deriving the FK from it until the manual
+      // contract drop removes the column.
+      const { rows: stored } = await getTestPool().query(
+        'SELECT bank_account FROM transactions WHERE id = $1', [row.id],
+      );
+      expect(stored[0].bank_account).toBe('REVOLUT MAIN');
     });
 
     // Regression coverage for the (fixed) 0076 ON CONFLICT arbiter finding:

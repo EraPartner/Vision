@@ -30,6 +30,7 @@ import {
   releaseDbSuiteLock,
 } from './setup/db.js';
 import { commitBatch } from '../src/services/importPipeline/commit.js';
+import { transactionRepository } from '../src/repositories/transactionRepository.js';
 import { closePool } from '../src/database/connection.js';
 
 // The post-commit fan-out (MV refresh, planned-payment auto-link) is not what
@@ -262,6 +263,147 @@ describeDb('importPipeline commit (real Postgres)', () => {
     expect(await commitBatch({ batchId })).toEqual({
       imported: 2, duplicates: 0, errors: 0, autoLinkedCount: 0,
     });
+
+    // Two labels → two accounts, and BOTH halves of the dual-write landed:
+    // the raw label string (feeds the sync trigger until the contract drop)
+    // and the explicitly-resolved account_id (the decoupled half).
+    const { rows } = await pool.query(
+      `SELECT t.bank_account, t.account_id, a.name
+         FROM transactions t JOIN accounts a ON a.id = t.account_id
+        WHERE t.import_batch_id = $1 ORDER BY t.id`,
+      [batchId],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0].account_id).not.toBe(rows[1].account_id);
+    for (const r of rows) expect(r.name).toBe(r.bank_account);
+  });
+
+  it('dedups two casings of the SAME account label (FK identity, ADR-088)', async () => {
+    // The dup check now compares resolved account_id, not the raw string, so
+    // 'be68…' and 'BE68…' are ONE account (0066 normalized identity) and the
+    // second row is the same transaction re-imported, not a distinct one. The
+    // old `bank_account IS NOT DISTINCT FROM` string compare missed this.
+    await insertTxn({ bank_account: 'BE68 5390 0754 7034' });
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { bank_account: 'be68 5390 0754 7034' });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0,
+    });
+    expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual(['duplicate']);
+    // No twin account minted for the re-cased label.
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM accounts
+        WHERE lower(btrim(name)) = lower(btrim('BE68 5390 0754 7034'))`,
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
+  it('a label-less staging row only dedups against label-less rows', async () => {
+    // account_id null ↔ bank_account NULL: the FK compare keeps the old
+    // NULL-tuple semantics (IS NOT DISTINCT FROM) — a row with no label
+    // matches an existing no-label row, and never a labelled one.
+    await insertTxn({ bank_account: null });
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { bank_account: null });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0,
+    });
+  });
+
+  it('dedups against a row whose label was set by an API edit (ghost-row regression, direction A)', async () => {
+    // Ghost scenario the UPDATE-path fix closes: a PATCH renames a stored
+    // row's bank_account to a FIRST-SEEN label. The 0062 trigger is
+    // lookup-only on UPDATE (never creates), so pre-fix the row kept its
+    // STALE account_id while the import minted a fresh account — the FK
+    // probe compared fresh-id vs stale-id and MISSED the duplicate, double
+    // counting money the old string compare caught. Post-fix the PATCH
+    // itself resolves-or-creates and stamps the FK, so both sides land on
+    // the same account and the re-import is a no-op again.
+    const txnId = await insertTxn({ bank_account: 'BE68 5390 0754 7034' });
+    await transactionRepository.update(txnId, { bank_account: 'Fresh Edited Account' });
+
+    const { rows: edited } = await pool.query(
+      `SELECT t.account_id, a.name FROM transactions t JOIN accounts a ON a.id = t.account_id WHERE t.id = $1`,
+      [txnId],
+    );
+    expect(edited[0].name).toBe('Fresh Edited Account'); // FK moved WITH the edit
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { bank_account: 'Fresh Edited Account' });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0,
+    });
+    // Exactly one account for the label — the import resolved onto the one
+    // the PATCH created, no twin.
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = 'fresh edited account'`,
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
+  it('an API label edit cannot create a NULL-FK ghost that false-dups a label-less row (direction B)', async () => {
+    // Pre-fix, editing a label onto a previously label-less row left
+    // account_id NULL (lookup-only trigger, no account to find) — and a
+    // label-less incoming row then matched it NULL-to-NULL, silently
+    // discarding a GENUINE transaction. Post-fix the edit stamps the FK, so
+    // the label-less incoming row shares no account identity with it.
+    const txnId = await insertTxn({ bank_account: null });
+    await transactionRepository.update(txnId, { bank_account: 'Another Fresh Account' });
+
+    const { rows: edited } = await pool.query(
+      'SELECT account_id FROM transactions WHERE id = $1', [txnId],
+    );
+    expect(edited[0].account_id).not.toBeNull();
+
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { bank_account: null });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0,
+    });
+  });
+
+  it('a label padded with non-ASCII whitespace resolves to ONE account and re-imports as a duplicate', async () => {
+    // btrim-parity regression: SQL btrim strips U+0020 only, JS String#trim
+    // strips all Unicode whitespace. With a trailing NBSP the JS resolver
+    // used to normalize to 'NBSP Bank' while the trigger kept 'NBSP Bank\u00A0'
+    // — two accounts minted, the trigger overwrote the explicitly-written
+    // account_id, and the re-import missed the dup. The resolver now
+    // pre-trims with btrim semantics, so both identities are the same row.
+    const label = 'NBSP Bank\u00A0'; // trailing U+00A0 (NBSP), not an ASCII space
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { bank_account: label });
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0,
+    });
+
+    // One account, name keeps the NBSP (btrim does not strip it), and the
+    // committed row's FK agrees with the trigger's own resolution.
+    const { rows: accounts } = await pool.query(
+      `SELECT id, name FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`, [label],
+    );
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].name).toBe(label);
+    const { rows: committed } = await pool.query(
+      `SELECT account_id FROM transactions WHERE import_batch_id = $1`, [batchId],
+    );
+    expect(committed[0].account_id).toBe(accounts[0].id);
+
+    // Re-import of the same file is a no-op.
+    const batch2 = await newBatch();
+    await stageRow(batch2, 0, { bank_account: label });
+    expect(await commitBatch({ batchId: batch2 })).toEqual({
+      imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0,
+    });
+    const { rows: after } = await pool.query(
+      `SELECT count(*)::int AS n FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`, [label],
+    );
+    expect(after[0].n).toBe(1);
   });
 
   it('deduplicates a repeated tx_hash inside the same chunk before the field check', async () => {

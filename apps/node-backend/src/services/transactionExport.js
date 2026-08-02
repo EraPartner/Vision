@@ -59,7 +59,8 @@ export const EXPORT_JOINS_SQL = `
     LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
     LEFT JOIN categories c ON t.category_id = c.id
     LEFT JOIN categories rc ON r.default_category_id = rc.id
-    LEFT JOIN categories pc ON pr.default_category_id = pc.id`;
+    LEFT JOIN categories pc ON pr.default_category_id = pc.id
+    LEFT JOIN accounts acct ON t.account_id = acct.id`;
 
 function buildExportTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -114,7 +115,7 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
     ? `AND (t.date, t.id) > ($${cursorDateParamIdx}::date, $${cursorIdParamIdx}::bigint)`
     : '';
   return `
-    SELECT t.id, t.date, t.bank_account, t.account_id,
+    SELECT t.id, t.date, acct.name AS bank_account, t.account_id,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
            t.amount, t.currency, t.balance,
            -- Same branch order as transactionRepository's CATEGORY_NAME_SQL:

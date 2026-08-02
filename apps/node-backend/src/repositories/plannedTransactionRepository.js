@@ -7,6 +7,7 @@ import { query, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
+import { stampAccountIdForUpdate } from './transactionRepository.js';
 
 /** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
 /** @typedef {import('../types/rows.js').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow */
@@ -53,7 +54,13 @@ const PLANNED_CATEGORY_NAME_SQL = `CASE
                 ELSE NULL
               END`;
 
+// `acct.name AS bank_account` is selected AFTER `pt.*` so the projected
+// `bank_account` key resolves to the canonical accounts.name over the FK
+// (node-postgres keeps the LAST duplicate field) — ADR-088 contract phase:
+// reads must survive the out-of-band drop of the string column, and stay
+// byte-identical pre-drop under the dual-write parity invariant.
 const PLANNED_SELECT_FIELDS = `pt.*,
+             acct.name AS bank_account,
              r.name AS recipient_name,
              ${PLANNED_CATEGORY_NAME_SQL} AS category_name`;
 
@@ -61,7 +68,8 @@ const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON pt.category_id = c.id
       LEFT JOIN categories rc ON r.default_category_id = rc.id
-      LEFT JOIN categories pc ON pr.default_category_id = pc.id`;
+      LEFT JOIN categories pc ON pr.default_category_id = pc.id
+      LEFT JOIN accounts acct ON pt.account_id = acct.id`;
 
 /**
  * Attach the executions, loan_schedule and tags sub-collections to a hydrated
@@ -129,7 +137,9 @@ function buildPlannedTransactionWhereClause({
   if (active) whereClause += ` AND pt.is_active = true`;
   if (startDate) { whereClause += ` AND pt.planned_date >= $${paramIdx++}`; params.push(startDate); }
   if (endDate) { whereClause += ` AND pt.planned_date <= $${paramIdx++}`; params.push(endDate); }
-  if (bankAccount) { whereClause += ` AND pt.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
+  // Bank filter via the FK (ADR-088) — matches the account's canonical name,
+  // never the retired bank_account string.
+  if (bankAccount) { whereClause += ` AND pt.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`; params.push(`%${bankAccount}%`); }
   if (categoryId != null) { whereClause += ` AND pt.category_id = $${paramIdx++}`; params.push(categoryId); }
   if (recipientId != null) { whereClause += ` AND pt.recipient_id = $${paramIdx++}`; params.push(recipientId); }
   if (isRecurring != null) { whereClause += ` AND pt.is_recurring = $${paramIdx++}`; params.push(isRecurring); }
@@ -139,7 +149,7 @@ function buildPlannedTransactionWhereClause({
     whereClause += ` AND (
       pt.memo ILIKE $${paramIdx} OR
       pt.comment ILIKE $${paramIdx} OR
-      pt.bank_account ILIKE $${paramIdx} OR
+      acct.name ILIKE $${paramIdx} OR
       r.name ILIKE $${paramIdx} OR
       -- Match the RESOLVED label the row displays, not each candidate level in
       -- turn. ORing c/rc separately both missed rows categorised through the
@@ -521,6 +531,11 @@ export const plannedTransactionRepository = {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
+    // A bank_account edit also writes the resolved FK (ADR-088): the 0062
+    // sync trigger is lookup-only on UPDATE, so without this a first-seen
+    // label would leave a ghost string with a stale/NULL account_id. See
+    // stampAccountIdForUpdate (transactionRepository) for the full contract.
+    await stampAccountIdForUpdate(sanitized);
 
     if (tags !== undefined) {
       const found = await withTransaction(async (client) => {
@@ -571,6 +586,8 @@ export const plannedTransactionRepository = {
   async updateWithLoanSchedule(id, fields, scheduleEntries = []) {
     const { tags, ...txFields } = fields;
     const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
+    // Same ADR-088 UPDATE-path resolution as update() — see stampAccountIdForUpdate.
+    await stampAccountIdForUpdate(sanitized);
 
     const found = await withTransaction(async (client) => {
       if (!(await applyPlannedFieldUpdate(client, id, sanitized))) return false;

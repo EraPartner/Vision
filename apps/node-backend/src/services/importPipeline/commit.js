@@ -2,7 +2,7 @@
  * Import pipeline — COMMIT
  *
  * Drains 'matched' staging rows into canonical `transactions`. Performs
- * field-based dedup (date+amount+recipient+memo+bank_account+currency, with
+ * field-based dedup (date+amount+recipient+memo+account_id+currency, with
  * the differing-tx_hash exemption) against `transactions`. Uses chunked
  * BEGIN/COMMIT so partial failures roll back cleanly on a chunk boundary
  * without losing prior committed chunks.
@@ -46,6 +46,7 @@
 
 import { query, withTransaction } from '../../database/connection.js';
 import { transactionRepository } from '../../repositories/transactionRepository.js';
+import { accountRepository } from '../../repositories/accountRepository.js';
 import {
   markStagingRowCommitted,
   markStagingRowDuplicate,
@@ -142,15 +143,21 @@ function bigintEq(a, b) {
 
 /**
  * Composite key for the field-based dup check: date + amount + recipient +
- * memo + bank_account + currency. Both sides must be normalized by their own
+ * memo + account + currency. Both sides must be normalized by their own
  * side's rules before being handed here (see `sqlTrimSpaces` and
  * `currencyKeyOf`).
  *
- * @param {{ date: string, amountKey: string|null, recipientId: number|null, memoKey: string, bankAccount: string|null, currencyKey: string }} k
+ * The account component is the resolved `account_id` (ADR-088), NOT the
+ * retired bank_account string: the stored side reads `t.account_id`, the
+ * incoming side resolves its staging label through the same lower(btrim)
+ * identity the sync trigger uses (`resolveChunkAccounts`). Rows with no label
+ * key on null, exactly as the old `IS NOT DISTINCT FROM` string compare did.
+ *
+ * @param {{ date: string, amountKey: string|null, recipientId: number|null, memoKey: string, accountId: number|null, currencyKey: string }} k
  * @returns {string}
  */
 function dupKey(k) {
-  return JSON.stringify([k.date, k.amountKey, k.recipientId, k.memoKey, k.bankAccount, k.currencyKey]);
+  return JSON.stringify([k.date, k.amountKey, k.recipientId, k.memoKey, k.accountId, k.currencyKey]);
 }
 
 /**
@@ -187,7 +194,8 @@ function currencyKeyOf(currency) {
  * @param {any} row
  * @returns {{
  *   row: any, dateStr: string, recipientId: number|null, memoNorm: string,
- *   bankAccount: string|null, amountKey: string|null, currencyKey: string,
+ *   bankAccount: string|null, accountId: number|null,
+ *   amountKey: string|null, currencyKey: string,
  *   txHash: string|null,
  *   idStr: string, idValid: boolean, categoryId: number|null, patternId: number|null,
  *   conflictPredicted: boolean,
@@ -217,6 +225,10 @@ function deriveRow(row) {
     recipientId,
     memoNorm: (row.memo ?? '').trim(),
     bankAccount: row.bank_account || null,
+    // Stamped onto the row by resolveChunkAccounts (commitChunk, inside the
+    // chunk transaction) before any planning: the label resolved to its
+    // account id (ADR-088). null when the row carries no usable label.
+    accountId: row.resolved_account_id ?? null,
     amountKey: normalizeAmountKey(row.amount),
     currencyKey: currencyKeyOf(row.currency),
     txHash: row.tx_hash || null,
@@ -299,11 +311,12 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
     // purchases (e.g. two coffees) are not falsely deduped — but memo does
     // NOT discriminate card payments (Revolut stamps the identical
     // "CARD_PAYMENT - CURRENT" on every one), so three more guards:
-    //  - same account only (bank_account): an identical purchase on a
-    //    DIFFERENT account is a distinct transaction, not a duplicate;
+    //  - same account only (account_id, resolved from the staging label —
+    //    ADR-088): an identical purchase on a DIFFERENT account is a distinct
+    //    transaction, not a duplicate;
     //  - same currency: one account may hold several (ADR-089 addendum —
     //    Revolut books its EUR and USD rows into ONE account rather than
-    //    splitting per currency the way Wise does), so bank_account stopped
+    //    splitting per currency the way Wise does), so the account stopped
     //    discriminating them. The tx_hash guard below does NOT cover this: it
     //    is scoped to the current batch, and the case that bites is a −25.00
     //    USD row field-matching the −25.00 EUR row that an EARLIER import of
@@ -328,7 +341,7 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
       amount: row.amount,
       recipientId: d.recipientId,
       memo: d.memoNorm,
-      bankAccount: d.bankAccount,
+      accountId: d.accountId,
       currency: d.currencyKey,
       txHash: d.txHash,
       batchId,
@@ -356,7 +369,10 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
       // field-based check above can't double-insert.
       const insertedId = await transactionRepository.insertImportedRow({
         date: d.dateStr,
+        // Dual-write (ADR-088 pre-drop): the string keeps feeding the sync
+        // trigger; the resolved FK is written explicitly (decoupled half).
         bankAccount: d.bankAccount,
+        accountId: d.accountId,
         recipientId: d.recipientId,
         categoryId: d.categoryId,
         amount: row.amount,
@@ -406,12 +422,60 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
 class ChunkPlanInvalid extends Error {}
 
 /**
+ * Resolve every distinct staging label of this chunk to its `accounts.id` and
+ * stamp it onto the rows as `resolved_account_id` (read by deriveRow).
+ *
+ * Resolve-OR-CREATE, matching the sync trigger's INSERT behaviour exactly
+ * (ADR-088 addendum D1 — implicit minting stays, on the normalized
+ * lower(btrim) identity; `accountRepository.resolveOrCreateByName` targets the
+ * same 0066 unique expression index the trigger uses, and pre-trims with SQL
+ * btrim semantics — U+0020 only — so a label padded with non-ASCII whitespace
+ * cannot fork into one account here and a different one in the trigger). This
+ * is what lets the dedup key and probe compare `account_id` instead of the
+ * retired bank_account string.
+ *
+ * Called INSIDE the chunk's transaction (commitChunk), before its SAVEPOINT:
+ * the module-level query routes onto the transaction's client, so a chunk
+ * that ultimately rolls back also rolls back any accounts it minted — the
+ * same lifecycle the BEFORE-INSERT trigger's minting always had — while a
+ * bulk-insert failure that only rolls back to the savepoint keeps them for
+ * the per-row replay.
+ *
+ * Blank-path parity: a label that is null or btrims to '' resolves to null
+ * (the trigger leaves account_id NULL for those rows too).
+ *
+ * @param {any[]} rows staging rows (mutated: `resolved_account_id` added)
+ * @returns {Promise<void>}
+ */
+async function resolveChunkAccounts(rows) {
+  // Cache key = the btrimmed label VERBATIM (no JS lowercasing): Postgres
+  // lower() is the case authority for the identity, and JS toLowerCase() can
+  // disagree with it on edge-case code points. Case variants of one label
+  // therefore each hit the DB once — and converge on the same id via the
+  // ON CONFLICT arbiter — rather than sharing a possibly-wrong cache slot.
+  /** @type {Map<string, number|null>} */
+  const idByLabel = new Map();
+  for (const row of rows) {
+    const label = row.bank_account == null ? '' : String(row.bank_account);
+    const key = label.replace(/^ +| +$/g, ''); // SQL btrim — U+0020 only
+    if (key === '') {
+      row.resolved_account_id = null;
+      continue;
+    }
+    if (!idByLabel.has(key)) {
+      idByLabel.set(key, (await accountRepository.resolveOrCreateByName(label)) ?? null);
+    }
+    row.resolved_account_id = idByLabel.get(key);
+  }
+}
+
+/**
  * Load every `transactions` row that could satisfy the field-based dup check
  * for any row of this chunk, keyed by the composite dup key.
  *
  * Scope matches the per-row WHERE exactly: `t.is_active = true` plus the
  * chunk's dates. Everything else in that WHERE (amount, recipient, memo,
- * bank_account, currency, hash exemption) is decided in JS from the returned
+ * account_id, currency, hash exemption) is decided in JS from the returned
  * columns — so the candidate set is a strict superset, never a narrower one.
  *
  * @param {string[]} dates distinct 'YYYY-MM-DD' of the chunk
@@ -427,7 +491,7 @@ async function loadDupCandidates(dates) {
             t.amount::text                    AS amount_key,
             t.recipient_id,
             COALESCE(TRIM(t.memo), '')        AS memo_key,
-            t.bank_account,
+            t.account_id,
             t.currency,
             t.tx_hash,
             t.import_batch_id
@@ -443,7 +507,7 @@ async function loadDupCandidates(dates) {
       amountKey: normalizeAmountKey(r.amount_key),
       recipientId: r.recipient_id === null || r.recipient_id === undefined ? null : Number(r.recipient_id),
       memoKey: r.memo_key ?? '',
-      bankAccount: r.bank_account ?? null,
+      accountId: r.account_id === null || r.account_id === undefined ? null : Number(r.account_id),
       // NOT NULL in the schema; `currencyKeyOf` is the same default the
       // incoming side applies, so the two keys agree on a legacy blank.
       currencyKey: currencyKeyOf(r.currency),
@@ -523,7 +587,7 @@ async function planChunk({ chunk, batchId, committedHashes }) {
       amountKey: d.amountKey,
       recipientId: d.recipientId === null ? null : Number(d.recipientId),
       memoKey: d.memoNorm,
-      bankAccount: d.bankAccount,
+      accountId: d.accountId,
       currencyKey: d.currencyKey,
     });
     const bucket = index.get(key);
@@ -575,7 +639,11 @@ async function planChunk({ chunk, batchId, committedHashes }) {
       // The stored memo is `row.memo || ''`; the dup check reads it back
       // through SQL TRIM(), which strips spaces only.
       memoKey: sqlTrimSpaces(d.row.memo || ''),
-      bankAccount: d.bankAccount,
+      // The INSERT writes both the label string and this resolved account_id;
+      // the sync trigger re-resolves the string to the SAME id (the account
+      // row already exists — resolveChunkAccounts created it), so this is
+      // exactly what a later row of the chunk reads back via t.account_id.
+      accountId: d.accountId,
       // The stored currency is `d.currencyKey` — that is what the INSERT below
       // writes, so that is what a later row of this chunk must match against.
       currencyKey: d.currencyKey,
@@ -613,12 +681,16 @@ async function planChunk({ chunk, batchId, committedHashes }) {
  * @throws {ChunkPlanInvalid} when the write did not land exactly as planned
  */
 async function bulkInsertPlanned(toInsert, batchId) {
+  // Dual-write (ADR-088 pre-drop): bank_account keeps feeding the sync
+  // trigger, account_id is written explicitly as the decoupled half (the
+  // trigger re-resolves the string to the same id).
   const { rows } = await query(
     `INSERT INTO transactions
-              (date, bank_account, recipient_id, category_id, amount, memo, currency, balance,
+              (date, bank_account, account_id, recipient_id, category_id, amount, memo, currency, balance,
                comment, import_batch_id, matched_pattern_id, tx_hash, is_active)
           SELECT UNNEST($1::date[]),
                  UNNEST($2::text[]),
+                 UNNEST($13::integer[]),
                  UNNEST($3::integer[]),
                  UNNEST($4::integer[]),
                  UNNEST($5::numeric[]),
@@ -645,6 +717,7 @@ async function bulkInsertPlanned(toInsert, batchId) {
       batchId,
       toInsert.map((d) => d.patternId),
       toInsert.map((d) => d.txHash),
+      toInsert.map((d) => d.accountId),
     ],
   );
 
@@ -699,6 +772,10 @@ async function bulkInsertPlanned(toInsert, batchId) {
  * @returns {Promise<ChunkResult>}
  */
 async function commitChunk({ client, chunk, batchId, committedHashes }) {
+  // Inside the chunk transaction, before the SAVEPOINT: minted accounts roll
+  // back with a failed chunk but survive the savepoint rollback that hands a
+  // chunk to the per-row replay (see resolveChunkAccounts).
+  await resolveChunkAccounts(chunk);
   const plan = await planChunk({ chunk, batchId, committedHashes });
 
   /** @type {InsertedRow[]} */

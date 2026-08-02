@@ -39,6 +39,21 @@ const WRITABLE = new Set([
   'is_active', 'closed_at',
 ]);
 
+/**
+ * SQL `btrim(x)` — strips ASCII space (U+0020) ONLY, exactly like the sync
+ * trigger's `btrim(NEW.bank_account)`. Deliberately NOT `String#trim()`, which
+ * strips all Unicode whitespace: a label ending in e.g. U+00A0 (NBSP) must
+ * resolve to the SAME identity the trigger computes, or explicit resolution
+ * and the trigger fork — two accounts minted for one label, and the trigger
+ * overwrites the explicitly-written account_id with the other one.
+ *
+ * @param {unknown} s
+ * @returns {string}
+ */
+function sqlBtrim(s) {
+  return String(s).replace(/^ +| +$/g, '');
+}
+
 export const accountRepository = {
   /**
    * List accounts (optionally filtered by active status), each with its computed
@@ -345,16 +360,20 @@ export const accountRepository = {
 
   /**
    * Resolve an account id by name, creating the row if absent. Mirrors the
-   * dual-write trigger's normalization — identity is lower(btrim(name)), D1 —
-   * so explicit creation and trigger-driven creation converge on the same row.
-   * On conflict the existing row keeps its stored casing (no-op update purely
-   * to RETURNING the id in one round-trip).
+   * dual-write trigger's normalization EXACTLY — identity is
+   * lower(btrim(name)), D1, and the JS-side pre-trim is `sqlBtrim` (U+0020
+   * only), never `String#trim()` — so explicit creation and trigger-driven
+   * creation converge on the same row for every label, including ones padded
+   * with non-ASCII whitespace. On conflict the existing row keeps its stored
+   * casing (no-op update purely to RETURNING the id in one round-trip).
    *
-   * @param {string} name
-   * @returns {Promise<number|undefined>} undefined when `name` trims to empty
+   * @param {string|null|undefined} name
+   * @returns {Promise<number|undefined>} undefined when `name` is null or
+   *   btrims to empty (the trigger's blank path — no account)
    */
   async resolveOrCreateByName(name) {
-    const trimmed = String(name).trim();
+    if (name == null) return undefined;
+    const trimmed = sqlBtrim(name);
     if (!trimmed) return undefined;
     const result = await query(
       `INSERT INTO accounts (name, display_name) VALUES ($1, $1)

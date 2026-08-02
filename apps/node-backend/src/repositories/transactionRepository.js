@@ -16,6 +16,38 @@ import { query, queryPrepared, withTransaction } from '../database/connection.js
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { buildTransactionWhere } from '../lib/filterBuilder.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
+import { accountRepository } from './accountRepository.js';
+
+/**
+ * ADR-088 UPDATE-path decouple, shared by this repo and
+ * plannedTransactionRepository: when an update writes `bank_account`, resolve
+ * the label to an account and stamp `account_id` into the same SET.
+ *
+ * Without this, an API edit to a first-seen label leaves a GHOST row — string
+ * set, FK NULL/stale — because the 0062 sync trigger is deliberately
+ * lookup-only on UPDATE (it never creates). Every flipped read then surfaces
+ * the OLD account's name (the edit silently "reverts"), and the import dedup
+ * probe, now keyed on account_id, mis-verdicts against the ghost in both
+ * directions. Resolution uses the trigger's own lower(btrim) identity
+ * (resolveOrCreateByName), so the trigger's UPDATE-time lookup lands on the
+ * very account created here — the two writes cannot disagree. An accepted
+ * blank/null label resolves to NULL, matching the trigger's blank-detach.
+ * The string itself keeps being written too (pre-drop dual-write contract);
+ * raw-SQL/DB-editor updates intentionally keep the 0062 lookup-only guard.
+ *
+ * Mutates and returns `sanitized`. Called AFTER sanitizeUpdateFields, so a
+ * request body can never set account_id directly (it is not whitelisted).
+ *
+ * @param {Record<string, any>} sanitized output of sanitizeUpdateFields
+ * @returns {Promise<Record<string, any>>}
+ */
+export async function stampAccountIdForUpdate(sanitized) {
+  if (Object.hasOwn(sanitized, 'bank_account')) {
+    sanitized.account_id =
+      (await accountRepository.resolveOrCreateByName(sanitized.bank_account)) ?? null;
+  }
+  return sanitized;
+}
 
 /** @typedef {import('../types/rows.js').TransactionRow} TransactionRow */
 /** @typedef {import('../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow */
@@ -50,14 +82,26 @@ import { buildSetClauses } from '../lib/sqlClauses.js';
  * @property {string[]|null} [tagSlugs]
  */
 
-// Shared JOIN fragment used by every multi-join query
+// Shared JOIN fragment used by every multi-join query.
+// `acct` carries the canonical account label (ADR-088): read paths derive
+// `bank_account` from accounts.name over the FK — see ACCOUNT_LABEL_SQL —
+// so nothing here breaks when the retired string column is dropped
+// (alembic/manual/contract_drop_bank_account).
 const TRANSACTION_JOINS = `
   LEFT JOIN recipients r ON t.recipient_id = r.id
   LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
   LEFT JOIN categories c ON t.category_id = c.id
   LEFT JOIN categories rc ON r.default_category_id = rc.id
   LEFT JOIN categories pc ON pr.default_category_id = pc.id
+  LEFT JOIN accounts acct ON t.account_id = acct.id
 `;
+
+// Wire-compat account label (ADR-088 contract phase). Selected AFTER `t.*` so
+// the projected `bank_account` key resolves to accounts.name (node-postgres
+// keeps the LAST duplicate field), which both survives the out-of-band column
+// drop and stays byte-identical pre-drop under the dual-write parity
+// invariant (sync trigger + rename propagation keep string == accounts.name).
+const ACCOUNT_LABEL_SQL = 'acct.name AS bank_account';
 
 // Effective category = own → recipient default → primary-recipient default
 // (3-level, alias-aware). Requires TRANSACTION_JOINS. Shared so the single-row
@@ -125,7 +169,7 @@ const TRANSACTION_SORT_COLUMNS = {
                WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                ELSE NULL
              END`,
-  bank: 't.bank_account',
+  bank: 'acct.name',
   currency: 't.currency',
 };
 
@@ -233,6 +277,7 @@ export const transactionRepository = {
 
     const sql = `
       SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              CASE
@@ -299,11 +344,13 @@ export const transactionRepository = {
     // primary carries a category from wrongly appearing in the queue.
     let sql = `
       SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
              r.name AS recipient_name,
              NULL AS category_name
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN accounts acct ON t.account_id = acct.id
       WHERE t.is_active = true
         AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
     `;
@@ -313,7 +360,9 @@ export const transactionRepository = {
     if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
     if (endDate) { sql += ` AND t.date <= $${paramIdx++}`; params.push(endDate); }
     if (accountId != null) { sql += ` AND t.account_id = $${paramIdx++}`; params.push(accountId); }
-    if (bankAccount) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
+    // Bank filter via the FK (ADR-088) — matches the account's canonical name,
+    // never the retired string column.
+    if (bankAccount) { sql += ` AND t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`; params.push(`%${bankAccount}%`); }
     if (recipientId != null) { sql += ` AND t.recipient_id = $${paramIdx++}`; params.push(recipientId); }
     if (recipientName) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${recipientName}%`); }
 
@@ -389,7 +438,8 @@ export const transactionRepository = {
       params.push(accountId);
     }
     if (bankAccount) {
-      uncategorisedWhere += ` AND t.bank_account ILIKE $${paramIdx++}`;
+      // Bank filter via the FK (ADR-088) — see getUncategorised.
+      uncategorisedWhere += ` AND t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`;
       params.push(`%${bankAccount}%`);
     }
     if (recipientId != null) {
@@ -414,11 +464,13 @@ export const transactionRepository = {
       ),
       uncategorised_rows AS (
         SELECT t.*,
+               ${ACCOUNT_LABEL_SQL},
                r.name AS recipient_name,
                NULL AS category_name
         FROM transactions t
         LEFT JOIN recipients r ON t.recipient_id = r.id
         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+        LEFT JOIN accounts acct ON t.account_id = acct.id
         WHERE ${uncategorisedWhere}
         ORDER BY t.date DESC, t.id DESC
         LIMIT $${limitParam} OFFSET $${offsetParam}
@@ -448,6 +500,7 @@ export const transactionRepository = {
   async getById(id) {
     const sql = `
       SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
              ${RECIPIENT_NAME_SQL} AS recipient_name,
              ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
              ${CATEGORY_NAME_SQL} AS category_name
@@ -491,6 +544,7 @@ export const transactionRepository = {
         RETURNING *
       )
       SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
              ${RECIPIENT_NAME_SQL} AS recipient_name,
              ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
              ${CATEGORY_NAME_SQL} AS category_name
@@ -587,6 +641,7 @@ export const transactionRepository = {
     // byte-identical to the old window count — same WHERE, same joins.
     const dataSql = `
       SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              CASE
@@ -624,6 +679,11 @@ export const transactionRepository = {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields('transactions', txFields);
+    // A bank_account edit also writes the resolved FK (ADR-088 — see
+    // stampAccountIdForUpdate). Resolution happens before the row UPDATE, so
+    // an edit against a missing id can mint the account without applying the
+    // field change — harmless (same account the retried PATCH will then use).
+    await stampAccountIdForUpdate(sanitized);
     // Map frontend field names to DB columns (transaction_date → date)
     const { clauses: setClauses, params: updateParams, nextIdx: paramIdx } = buildSetClauses(sanitized, {
       quote: true,
@@ -635,6 +695,7 @@ export const transactionRepository = {
     // alias-recipient rows categorised via their primary's default.
     const fetchSql = `
       SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
              ${RECIPIENT_NAME_SQL} AS recipient_name,
              ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
              ${CATEGORY_NAME_SQL} AS category_name
@@ -686,6 +747,7 @@ export const transactionRepository = {
         RETURNING *
       )
       SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
              ${RECIPIENT_NAME_SQL} AS recipient_name,
              ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
              ${CATEGORY_NAME_SQL} AS category_name
@@ -910,9 +972,13 @@ export const transactionRepository = {
    * @returns {Promise<Pick<TransactionRow, 'id'|'date'|'amount'|'currency'|'bank_account'|'memo'|'recipient_id'>[]>}
    */
   async listTransferSuggestionRows(ids) {
+    // bank_account is derived from accounts.name over the FK (ADR-088) so the
+    // display label survives the out-of-band drop of the string column.
     const { rows } = await query(
-      `SELECT id, date, amount, currency, bank_account, memo, recipient_id
-       FROM transactions WHERE id = ANY($1)`,
+      `SELECT t.id, t.date, t.amount, t.currency, acct.name AS bank_account, t.memo, t.recipient_id
+       FROM transactions t
+       LEFT JOIN accounts acct ON t.account_id = acct.id
+       WHERE t.id = ANY($1)`,
       [ids],
     );
     return rows;
@@ -1046,16 +1112,21 @@ export const transactionRepository = {
    *
    * Currency is part of the identity because an account may hold several
    * currencies (ADR-089 addendum: Revolut keeps ONE account whose rows carry
-   * their own currency), so `bank_account` no longer discriminates them the way
+   * their own currency), so the account no longer discriminates them the way
    * it does for the one-account-per-currency banks. −25.00 EUR and −25.00 USD at
    * the same merchant on the same day are two transactions, not one.
+   *
+   * The "same account" guard compares `t.account_id` (ADR-088): the caller
+   * resolves the staging label to an account id (commit.js, the same
+   * lower(btrim) mapping the sync trigger uses) and the probe never touches
+   * the retired bank_account string.
    *
    * @param {object} probe
    * @param {string} probe.date 'YYYY-MM-DD'
    * @param {number|string} probe.amount
    * @param {number|null} probe.recipientId
    * @param {string} probe.memo Already TRIM'd by the caller (compared to `COALESCE(TRIM(t.memo), '')`).
-   * @param {string|null} probe.bankAccount
+   * @param {number|null} probe.accountId Resolved account id of the staging row's label (null when the row carries no label).
    * @param {string} probe.currency Already trimmed and defaulted by the caller
    *   (commit.js `currencyKeyOf`) to the same value the insert will store —
    *   trimmed because VARCHAR(3) silently drops trailing spaces on write, so an
@@ -1065,7 +1136,7 @@ export const transactionRepository = {
    * @param {number|string} probe.batchId
    * @returns {Promise<number|undefined>} the duplicate's id, or undefined
    */
-  async findImportDuplicate({ date, amount, recipientId, memo, bankAccount, currency, txHash, batchId }) {
+  async findImportDuplicate({ date, amount, recipientId, memo, accountId, currency, txHash, batchId }) {
     const result = await query(
       `SELECT t.id
              FROM transactions t
@@ -1076,12 +1147,12 @@ export const transactionRepository = {
                 OR ($3::integer IS NULL AND t.recipient_id IS NULL)
               )
               AND COALESCE(TRIM(t.memo), '') = $4
-              AND t.bank_account IS NOT DISTINCT FROM $5
+              AND t.account_id IS NOT DISTINCT FROM $5::integer
               AND t.currency = $8
               AND NOT (t.import_batch_id = $7 AND t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
               AND t.is_active = true
             LIMIT 1`,
-      [date, amount, recipientId, memo, bankAccount, txHash, batchId, currency],
+      [date, amount, recipientId, memo, accountId, txHash, batchId, currency],
     );
     return result.rows[0]?.id ?? undefined;
   },
@@ -1093,9 +1164,17 @@ export const transactionRepository = {
    * partial unique index on tx_hash to stay race-safe against a concurrent
    * import. A conflict yields no row.
    *
+   * Dual-write contract (ADR-088, pre-drop): BOTH the label string and the
+   * resolved `account_id` are written. The 0051/0083 sync trigger derives
+   * account_id FROM bank_account on INSERT, so the string must keep flowing
+   * until the out-of-band contract drop; the explicit account_id write is the
+   * decoupled half (the trigger re-resolves to the same id — commit.js
+   * resolves with the trigger's own lower(btrim) mapping).
+   *
    * @param {object} row
    * @param {string} row.date 'YYYY-MM-DD'
    * @param {string|null} row.bankAccount
+   * @param {number|null} row.accountId Resolved account id for the label (commit.js).
    * @param {number|null} row.recipientId
    * @param {number|null} row.categoryId
    * @param {number|string} row.amount
@@ -1108,15 +1187,15 @@ export const transactionRepository = {
    * @param {string|null} row.txHash
    * @returns {Promise<number|undefined>} inserted id, or undefined on conflict
    */
-  async insertImportedRow({ date, bankAccount, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash }) {
+  async insertImportedRow({ date, bankAccount, accountId, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash }) {
     const result = await query(
       `INSERT INTO transactions
-                (date, bank_account, recipient_id, category_id, amount, memo, currency, balance, comment,
+                (date, bank_account, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
                  import_batch_id, matched_pattern_id, tx_hash, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
              ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
              RETURNING id`,
-      [date, bankAccount, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash],
+      [date, bankAccount, accountId ?? null, recipientId, categoryId, amount, memo, currency, balance, comment, importBatchId, matchedPatternId, txHash],
     );
     return result.rows[0]?.id ?? undefined;
   },

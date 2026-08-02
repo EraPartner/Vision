@@ -181,6 +181,15 @@ describe('commitBatch', () => {
     recipient_default_category_id: 3,
   }
 
+  // The account id the run's one distinct staging label ('BE12') resolves to
+  // (ADR-088: dedup and the INSERT key on the FK, not the retired string).
+  // The resolver runs INSIDE the chunk transaction (so failed chunks roll the
+  // minting back), i.e. on `mockClient` via the ambient context — tests that
+  // need the id prime an `INSERT INTO accounts` branch on mockClient; with the
+  // default `{ rows: [] }` the label resolves to null, which is fine wherever
+  // the dedup candidates carry no account.
+  const BE12_ACCOUNT_ID = 77
+
   // Primes the POOL sink, not the exported spy: commitBatch's per-row work now
   // runs through repositories inside the chunk transaction, and the ambient
   // context routes those onto `mockClient`. Priming the pool keeps this ordered
@@ -230,6 +239,7 @@ describe('commitBatch', () => {
     // batched planner does not issue that statement at all.)
     setupCommit(matchedRow)
     mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO accounts')) return { rows: [{ id: BE12_ACCOUNT_ID }] }
       if (sql.includes('FROM transactions t') && sql.includes('t.date = ANY')) {
         return {
           rows: [{
@@ -237,7 +247,7 @@ describe('commitBatch', () => {
             amount_key: '-5.0000',
             recipient_id: 42,
             memo_key: 'coffee',
-            bank_account: 'BE12',
+            account_id: BE12_ACCOUNT_ID,
             tx_hash: null,
             import_batch_id: '2',
           }],
@@ -268,6 +278,7 @@ describe('commitBatch', () => {
     setupCommit({ ...matchedRow, tx_hash: 'h2' })
     let dupSql, dupParams
     mockClient.query.mockImplementation(async (sql, params) => {
+      if (sql.includes('INSERT INTO accounts')) return { rows: [{ id: BE12_ACCOUNT_ID }] }
       if (sql.includes('FROM transactions t') && sql.includes('t.date = ANY')) {
         dupSql = sql
         dupParams = params
@@ -279,7 +290,7 @@ describe('commitBatch', () => {
               amount_key: '-5.0000',
               recipient_id: 42,
               memo_key: 'coffee',
-              bank_account: 'BE12',
+              account_id: BE12_ACCOUNT_ID,
               tx_hash: 'h1',
               import_batch_id: '9',
             },
@@ -289,7 +300,7 @@ describe('commitBatch', () => {
               amount_key: '-5.0000',
               recipient_id: 42,
               memo_key: 'coffee',
-              bank_account: 'BE99',
+              account_id: 88,
               tx_hash: null,
               import_batch_id: null,
             },
@@ -305,7 +316,9 @@ describe('commitBatch', () => {
     // back so the JS verdict can apply the rest of the predicate.
     expect(dupSql).toContain('t.is_active = true')
     expect(dupSql).toContain('t.date = ANY($1::date[])')
-    expect(dupSql).toContain('t.bank_account')
+    // ADR-088: the account guard reads the FK, never the retired string.
+    expect(dupSql).toContain('t.account_id')
+    expect(dupSql).not.toContain('t.bank_account')
     expect(dupSql).toContain('t.tx_hash')
     expect(dupSql).toContain('t.import_batch_id')
     expect(dupParams[0]).toEqual(['2024-01-15'])
@@ -316,6 +329,7 @@ describe('commitBatch', () => {
     // apply, so this is the ordinary "re-import is a no-op" duplicate.
     setupCommit({ ...matchedRow, tx_hash: 'h2' })
     mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO accounts')) return { rows: [{ id: BE12_ACCOUNT_ID }] }
       if (sql.includes('FROM transactions t') && sql.includes('t.date = ANY')) {
         return {
           rows: [{
@@ -323,7 +337,7 @@ describe('commitBatch', () => {
             amount_key: '-5.0000',
             recipient_id: 42,
             memo_key: 'coffee',
-            bank_account: 'BE12',
+            account_id: BE12_ACCOUNT_ID,
             tx_hash: 'other-hash',
             import_batch_id: '4',
           }],
@@ -409,9 +423,13 @@ describe('commitBatch', () => {
     const count = (needle) => statements.filter((s) => s.includes(needle)).length
     expect(count('INSERT INTO transactions')).toBe(1)
     expect(count('UPDATE import_staging_rows')).toBe(1)
+    // One account resolution for the chunk's single distinct label (inside
+    // the chunk transaction — ADR-088), regardless of row count.
+    expect(count('INSERT INTO accounts')).toBe(1)
     expect(statements.filter((s) => s.startsWith('SAVEPOINT'))).toHaveLength(1)
-    // Two pre-loads + SAVEPOINT + INSERT + RELEASE + one staging UPDATE.
-    expect(statements).toHaveLength(6)
+    // Account resolve + two pre-loads + SAVEPOINT + INSERT + RELEASE + one
+    // staging UPDATE.
+    expect(statements).toHaveLength(7)
   })
 
   it('records an insert error via SAVEPOINT rollback', async () => {

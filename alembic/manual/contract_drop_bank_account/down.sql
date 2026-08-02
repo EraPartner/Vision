@@ -4,8 +4,9 @@
 -- of the string column, so bringing it back would only re-create an orphan.
 --
 -- Lossless: accounts.name was backfilled from these same strings, so the values
--- re-derive exactly. Mirrors alembic/versions/0056 + the pre-contract MV. Run
--- this only to undo a premature up.sql, BEFORE reverting the coupled code is not
+-- re-derive exactly. Column/index shape mirrors alembic/versions/0056; the
+-- trigger function body mirrors the HEAD variant (migration 0083). Run this
+-- only to undo a premature up.sql. Reverting the coupled code first is not
 -- required (it is safe to run with either code version: it restores the string).
 
 BEGIN;
@@ -24,21 +25,57 @@ CREATE INDEX IF NOT EXISTS idx_transactions_bank_date ON transactions (bank_acco
 CREATE INDEX IF NOT EXISTS idx_transactions_bank_date_active
     ON transactions (bank_account, date DESC) WHERE is_active = true;
 
--- 2. Recreate the ADR-088 dual-write trigger + function (the 0056 fixed variant
---    that never nulls an explicitly-set account_id).
+-- 2. Recreate the ADR-088 dual-write trigger + function — the HEAD variant
+--    (migration 0083: 0076's blank-on-UPDATE detach + case-insensitive
+--    resolve, with the ON CONFLICT arbiter on the 0066 unique expression
+--    index lower(btrim(name))). An earlier revision of this file restored the
+--    0056 body instead, whose `ON CONFLICT (name)` arbiter matches NO unique
+--    index at head since 0066 dropped uq_accounts_name → 42P10 on every
+--    first-seen label (the exact regression 0083 exists to fix). Keep this
+--    body in lockstep with the latest sync-trigger migration.
 CREATE OR REPLACE FUNCTION sync_account_id_from_bank_account()
 RETURNS trigger AS $$
 DECLARE acct_name text;
+        resolved_id integer;
 BEGIN
     acct_name := btrim(NEW.bank_account);
-    IF acct_name IS NOT NULL AND acct_name <> '' THEN
-        IF TG_OP = 'INSERT'
-           OR NEW.bank_account IS DISTINCT FROM OLD.bank_account
-           OR NEW.account_id IS NULL THEN
+    IF acct_name IS NULL OR acct_name = '' THEN
+        -- Blanking the label on UPDATE detaches the account: keeping the
+        -- stale account_id made the row keep counting toward an account
+        -- whose label was removed. Leave INSERTs and already-blank UPDATEs
+        -- alone (account-first writers set account_id directly with no
+        -- bank_account string).
+        IF TG_OP = 'UPDATE' AND NEW.bank_account IS DISTINCT FROM OLD.bank_account THEN
+            NEW.account_id := NULL;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN
+        -- Case-insensitive resolve first: "Kbc" must reuse "KBC", not create
+        -- a duplicate account. Only a label with no casing variant onboards
+        -- a brand-new account.
+        SELECT id INTO resolved_id FROM accounts
+         WHERE lower(btrim(name)) = lower(acct_name)
+         ORDER BY id LIMIT 1;
+        IF resolved_id IS NULL THEN
             INSERT INTO accounts (name, display_name)
                 VALUES (acct_name, acct_name)
-                ON CONFLICT (name) DO NOTHING;
-            SELECT id INTO NEW.account_id FROM accounts WHERE name = acct_name;
+                ON CONFLICT (lower(btrim(name))) DO NOTHING;
+            SELECT id INTO resolved_id FROM accounts
+             WHERE lower(btrim(name)) = lower(acct_name)
+             ORDER BY id LIMIT 1;
+        END IF;
+        NEW.account_id := resolved_id;
+    ELSIF NEW.bank_account IS DISTINCT FROM OLD.bank_account
+          OR NEW.account_id IS NULL THEN
+        -- UPDATE: resolve ONLY against existing accounts (0062 semantics —
+        -- never create); case-insensitively.
+        SELECT id INTO resolved_id FROM accounts
+         WHERE lower(btrim(name)) = lower(acct_name)
+         ORDER BY id LIMIT 1;
+        IF resolved_id IS NOT NULL THEN
+            NEW.account_id := resolved_id;
         END IF;
     END IF;
     RETURN NEW;

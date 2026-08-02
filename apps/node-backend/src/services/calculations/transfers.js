@@ -59,7 +59,10 @@ export function resolveTransferMatches(candidatePairs) {
  * pairs in SQL for scale and calls {@link resolveTransferMatches} directly.
  *
  * Only "open" rows participate: active, not already a transfer, not manually
- * decided, non-zero amount, with a bank account.
+ * decided, non-zero amount, attributed to an account. Account identity is the
+ * `account_id` FK (ADR-088 — the reconciliation service's SQL sibling,
+ * `listTransferCandidatePairs`, keys on the same column), never the retired
+ * `bank_account` string.
  * @param {Array<import('../../types/rows.js').TransactionRow>} transactions
  * @param {{windowDays?:number}} [opts]
  */
@@ -70,8 +73,7 @@ export function findTransferMatches(transactions, { windowDays = 3 } = {}) {
       !t.is_transfer &&
       t.transfer_source == null &&
       Number(t.amount) !== 0 &&
-      t.bank_account != null &&
-      t.bank_account !== '',
+      t.account_id != null,
   );
   const outs = open.filter((t) => Number(t.amount) < 0);
   const ins = open.filter((t) => Number(t.amount) > 0);
@@ -82,7 +84,7 @@ export function findTransferMatches(transactions, { windowDays = 3 } = {}) {
     for (const i of ins) {
       if (Number(i.amount) !== -Number(o.amount)) continue;
       if (ccyOf(i) !== ccyOf(o)) continue;
-      if (i.bank_account === o.bank_account) continue;
+      if (i.account_id === o.account_id) continue;
       if (Math.abs(toMs(i.date) - toMs(o.date)) > win) continue;
       candidatePairs.push({ outId: o.id, inId: i.id });
     }

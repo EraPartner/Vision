@@ -287,6 +287,26 @@ an undefined "soak":
 Until all four hold, **no new code may bind to the `bank_account` string** — new consumers read
 via `account_id`/join.
 
+> [!update] 2026-08-02 — status of the four preconditions
+> 1. Holds by construction (sync trigger + rename propagation); the up.sql soak gate enforces
+>    the string-without-FK half, and the DB suites pin it.
+> 2. **Done.** All backend readers (list/count filters, free-text search, sort-by-bank,
+>    uncategorised, splits owed views, CSV/NDJSON export, recurring detection, transfer
+>    suggestions, import dedup) bind to `account_id`/`accounts.name`. `mv_bank_balances` was
+>    NOT re-grained — it turned out to be a dead view (zero readers) and was dropped outright by
+>    migration 0082, which satisfies this precondition vacuously.
+> 3. **Done** (dual-write): the commit path resolves each staging label with the trigger's own
+>    normalized identity (`accountRepository.resolveOrCreateByName`) and writes `account_id`
+>    explicitly next to the string; the string keeps flowing until the drop because the sync
+>    trigger derives the FK from it. Raw labels stay in `import_staging_rows` /
+>    `manual_raw_transactions` (raw mirrors, untouched by the contract).
+> 4. The drop remains authored OUT-OF-BAND in `alembic/manual/contract_drop_bank_account/`
+>    (up.sql + down.sql + runbook) rather than as a chain revision — a chain migration
+>    auto-applies on boot, which is exactly how the premature 0055 drop broke startup. Dry-run
+>    verified on a throwaway DB 2026-08-02 (apply → readers green on dropped schema → rollback
+>    restores byte-identically); see the runbook's dry-run record, including the down.sql
+>    trigger-body fix (it restored the stale 0056 variant; now restores head 0083).
+
 ### Consequences
 
 **Positive**

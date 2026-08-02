@@ -295,13 +295,14 @@ export const splitRepository = {
              t.memo AS transaction_memo,
              t.amount AS transaction_amount,
              t.currency AS transaction_currency,
-             t.bank_account,
+             acct.name AS bank_account,
              COALESCE(pr.name, r.name) AS transaction_recipient_name,
              COALESCE(sp_agg.paid, 0) AS amount_paid
       FROM transaction_splits ts
       JOIN transactions t ON ts.transaction_id = t.id
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN accounts acct ON t.account_id = acct.id
       LEFT JOIN LATERAL (
         SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ts.id
       ) sp_agg ON true
@@ -365,7 +366,7 @@ export const splitRepository = {
       ${RECIPIENT_GROUP_CTE}
       SELECT
         t.date,
-        t.bank_account,
+        acct.name AS bank_account,
         COALESCE(pr.name, tr.name) AS recipient_name,
         t.memo,
         (ts.amount - COALESCE(sp_agg.paid, 0)) AS amount,
@@ -387,6 +388,7 @@ export const splitRepository = {
         t.comment
       FROM transaction_splits ts
       JOIN transactions t ON ts.transaction_id = t.id
+      LEFT JOIN accounts acct ON t.account_id = acct.id
       LEFT JOIN recipients tr ON t.recipient_id = tr.id
       LEFT JOIN recipients pr ON tr.primary_recipient_id = pr.id
       LEFT JOIN categories c ON t.category_id = c.id

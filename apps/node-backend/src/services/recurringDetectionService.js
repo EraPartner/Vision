@@ -207,11 +207,12 @@ export async function detectRecurringPatterns() {
     // must not report a null category_name here while the transactions list
     // shows it categorised.
     const result = await query(`
-      SELECT t.id, t.date, t.amount, t.currency, t.memo, t.bank_account,
+      SELECT t.id, t.date, t.amount, t.currency, t.memo, acct.name AS bank_account,
              t.recipient_id, r.name AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              COALESCE(c.general || ':' || c.detail, NULL) AS category_name
       FROM transactions t
+      LEFT JOIN accounts acct ON t.account_id = acct.id
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
