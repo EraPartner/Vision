@@ -145,7 +145,14 @@ export function useFilteredDashboardStats() {
 
   return {
     data,
-    isLoading: summaryQuery.isLoading || countQuery.isLoading,
+    // `!isReady` counts as loading. While the summary query is disabled React
+    // Query reports it as pending-but-idle (isLoading false), so once the cheap
+    // count query settles the caller would see `isLoading: false, data:
+    // undefined` and paint its `?? 0` fallbacks — zeros for income, spending and
+    // net, indistinguishable from a genuinely empty month, replaced a moment
+    // later by the real totals. The skeleton has to stay up until the exclusion
+    // set is settled and the numbers are real.
+    isLoading: !isReady || summaryQuery.isLoading || countQuery.isLoading,
     error: summaryQuery.error ?? countQuery.error,
   };
 }

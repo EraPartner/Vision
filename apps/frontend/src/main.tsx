@@ -15,14 +15,18 @@ import "@fontsource/inter/latin-600.css";
 // Apply the visual skin (skin-v2) class before first paint to avoid a flash.
 import { applySkinV2Class } from "./lib/skin";
 import { startSettingsPreload } from "./lib/settingsPreload";
+import { startCategoriesPreload } from "./lib/categoriesPreload";
 import App from "./App";
 import "./index.css";
 
 applySkinV2Class();
-// Kick off the settings fetch before React mounts so the round trip overlaps
-// the remaining JS execution + mount instead of waiting behind them; the
-// SettingsPreloadProvider awaits this same shared promise.
+// Kick off the two fetches that gate the first dashboard numbers before React
+// mounts, so both round trips overlap the remaining JS execution + mount instead
+// of queueing after them. They are independent of each other and run in
+// parallel; SettingsPreloadProvider and useExcludedIds await these same shared
+// promises, so neither request is duplicated.
 startSettingsPreload();
+startCategoriesPreload();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -17,7 +17,7 @@
  * lazy-loaded AIChatPage) leaked into the initial preload graph via a shared
  * module and added ~114 kB gz to every cold load. See the `manualChunks`
  * comment in vite.config.ts and the flash-prevention comment in index.html
- * ("~300 KB boot graph") for the post-mortem. Nothing short of measuring the
+ * ("~282 KB gz boot graph") for the post-mortem. Nothing short of measuring the
  * actual preload graph on every build would have caught that before users did.
  *
  * We parse dist/index.html directly rather than the Vite/Rollup manifest

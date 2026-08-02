@@ -12,7 +12,7 @@
     <!-- Prevent flash-of-light before first paint. This MUST be a plain inline
          script: a `type="module"` script (even /src/theme-flash.ts) is folded into
          the deferred main bundle in a production build, so it runs only after the
-         ~300 KB boot graph executes — too late to stop the flash. Keep this in sync
+         ~282 KB gz boot graph executes — too late to stop the flash. Keep this in sync
          with theme-flash.ts's class toggle (localStorage key `vision_theme`). -->
     <script>
       (function () {
@@ -28,10 +28,106 @@
     <!-- Palette VARIANT (accent colors only — does not affect the light/dark base
          that causes the flash) is applied here; deferred bundling is acceptable. -->
     <script src="/src/theme-flash.ts" type="module"></script>
+
+    <!-- Boot placeholder — see the `#boot-splash` markup in <body>.
+         Inline (not in index.css) because it must paint with the very first
+         frame of this document, before any bundled asset is fetched.
+
+         Geometry, spacing, spinner, type scale and the radial "shine" are a
+         1:1 port of the Electron boot splash (packaging/electron/main.js,
+         splashDataUrl()). Colors come from the app's own tokens so the
+         placeholder and the shell that replaces it are the same surface; the
+         literal fallbacks match tokens.css (:root / .dark) for the dev server,
+         where the stylesheet is injected by JS and is not present at first
+         paint. The light/dark class is already on <html> (inline script above),
+         so both themes are correct with no flash. -->
+    <style>
+        #boot-splash {
+            --boot-bg: var(--background, 40 36% 96%);
+            --boot-fg: var(--foreground, 200 20% 9%);
+            --boot-glow: var(--primary, 164 78% 26%);
+
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            background: hsl(var(--boot-bg));
+            color: hsl(var(--boot-fg) / 0.82);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            user-select: none;
+            cursor: default;
+        }
+
+        /* The splash's "pretty much black with a light emerald shine". Dark only:
+           the splash paints its flat fill in light mode too. */
+        .dark #boot-splash {
+            --boot-bg: var(--background, 200 20% 7%);
+            --boot-fg: var(--foreground, 42 25% 96%);
+            --boot-glow: var(--primary, 160 74% 52%);
+            background:
+                radial-gradient(85% 60% at 50% 38%, hsl(var(--boot-glow) / 0.16), transparent 70%),
+                hsl(var(--boot-bg));
+        }
+
+        #boot-splash .boot-splash__spinner {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 2.5px solid currentColor;
+            border-top-color: transparent;
+            opacity: 0.55;
+            animation: boot-splash-spin 0.9s linear infinite;
+        }
+
+        @keyframes boot-splash-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #boot-splash .boot-splash__spinner {
+                display: none;
+            }
+        }
+
+        #boot-splash .boot-splash__name {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            color: hsl(var(--boot-fg));
+        }
+
+        /* The splash's status line ("Starting Vision…") is localized in the main
+           process; nothing here can pick the user's language without JS, so the
+           line is reserved (&nbsp;) rather than written in the wrong one. Same
+           font metrics ⇒ the spinner and wordmark keep the splash's exact
+           vertical position across the handoff. */
+        #boot-splash .boot-splash__status {
+            font-size: 13px;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
 </head>
 
 <body>
-    <div id="root"></div>
+    <!-- The window is NOT blank between the Electron splash and React's first
+         commit: the splash navigates here, and this static mirror of it holds
+         the frame for the whole boot-graph parse/execute window.
+         `createRoot(#root).render()` clears the container on its first commit,
+         so the handoff is atomic and needs no teardown code. Keep it inert:
+         no script, no imports, nothing that grows the boot graph. -->
+    <div id="root">
+        <div id="boot-splash" aria-hidden="true">
+            <div class="boot-splash__spinner"></div>
+            <div class="boot-splash__name">Vision</div>
+            <div class="boot-splash__status">&nbsp;</div>
+        </div>
+    </div>
     <script src="/src/main.tsx" type="module"></script>
 </body>
 
