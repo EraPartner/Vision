@@ -44,6 +44,15 @@ const APP_PASSWORD = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
 const OTHER_PASSWORD = 'ffffffffffffffffffffffffffffffff';
 const MANAGED_VIEWS = ['mv_monthly_summary', 'mv_category_totals', 'mv_cashflow_daily'];
 
+/**
+ * Quote a catalog-derived identifier for interpolation into test DDL.
+ * @param {string} name
+ * @returns {string}
+ */
+function quoteIdent(name) {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
 function scratchDbName() {
   const base = new URL(process.env.TEST_DATABASE_URL ?? 'postgres://x/x').pathname.replace(/^\//, '');
   return `${base}_approle`;
@@ -487,13 +496,23 @@ describe.skipIf(!CAN_PROVISION)('least-privilege app-role bootstrap', () => {
   it('revokes superuser membership granted to the app role (rolsuper stays false)', async () => {
     await runBootstrap({ databaseUrl: privilegedUrl(), appDbUrl: appUrl() });
 
-    // `GRANT postgres TO ftm_app` leaves rolsuper = false, so a naive check
+    // The superuser to grant is resolved from the catalog, not hardcoded: the
+    // bootstrap superuser is `postgres` on a stock local install but takes the
+    // POSTGRES_USER name in CI's image, and a missing role would fail this test
+    // with 42704 rather than exercising the escalation it is about.
+    const { rows: supers } = await scratch.query(
+      `SELECT rolname FROM pg_roles WHERE rolsuper AND rolcanlogin ORDER BY rolname LIMIT 1`,
+    );
+    const superRole = supers[0]?.rolname;
+    expect(superRole, 'no superuser role to grant — cannot exercise the escalation').toBeTruthy();
+
+    // `GRANT <superuser> TO ftm_app` leaves rolsuper = false, so a naive check
     // passes while the pool is one SET ROLE from superuser — and with the
     // default INHERIT, not even that.
-    await scratch.query(`GRANT postgres TO ${APP_ROLE}`);
+    await scratch.query(`GRANT ${quoteIdent(superRole)} TO ${APP_ROLE}`);
     const before = await scratch.query(
-      `SELECT rolsuper, pg_has_role($1, 'postgres', 'MEMBER') AS member FROM pg_roles WHERE rolname = $1`,
-      [APP_ROLE],
+      `SELECT rolsuper, pg_has_role($1, $2, 'MEMBER') AS member FROM pg_roles WHERE rolname = $1`,
+      [APP_ROLE, superRole],
     );
     expect(before.rows[0]).toMatchObject({ rolsuper: false, member: true });
 
@@ -502,8 +521,8 @@ describe.skipIf(!CAN_PROVISION)('least-privilege app-role bootstrap', () => {
     expect(runtimeUrl).toBe(appUrl());
 
     const after = await scratch.query(
-      `SELECT pg_has_role($1, 'postgres', 'MEMBER') AS member FROM pg_roles WHERE rolname = $1`,
-      [APP_ROLE],
+      `SELECT pg_has_role($1, $2, 'MEMBER') AS member FROM pg_roles WHERE rolname = $1`,
+      [APP_ROLE, superRole],
     );
     expect(after.rows[0].member).toBe(false);
 
@@ -511,7 +530,7 @@ describe.skipIf(!CAN_PROVISION)('least-privilege app-role bootstrap', () => {
     const asApp = new pg.Client({ connectionString: appUrl() });
     await asApp.connect();
     try {
-      await expect(asApp.query('SET ROLE postgres')).rejects.toThrow();
+      await expect(asApp.query(`SET ROLE ${quoteIdent(superRole)}`)).rejects.toThrow();
     } finally {
       await asApp.end();
     }
