@@ -52,6 +52,43 @@ export function hasTestDatabase() {
   return Boolean(process.env.TEST_DATABASE_URL);
 }
 
+/**
+ * Whether the TEST_DATABASE_URL role may CREATE ROLE and CREATE DATABASE — i.e.
+ * whether a suite can stand up its own throwaway role and scratch database.
+ *
+ * Not the same question as {@link hasTestDatabase}: a local run typically
+ * connects as the `postgres` superuser, while CI provisions an ordinary owner
+ * role (no SUPERUSER, no CREATEROLE). Role-bootstrap suites need the stronger
+ * capability, and a suite that silently fails to create its fixture role reads
+ * in CI exactly like the product being broken — so probe and skip explicitly.
+ *
+ * Skipping costs no coverage of shipped behaviour there: the runtime bootstrap
+ * is gated on DATABASE_URL_APP, which CI never sets, so CI exercises the
+ * single-role path either way (and that path IS covered, by the suites
+ * asserting zero statements are issued).
+ *
+ * Uses a one-shot client rather than the shared pool so callers need no
+ * teardown — this runs at module scope, before any suite's lifecycle hooks.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function canProvisionRolesAndDatabases() {
+  if (!hasTestDatabase()) return false;
+  const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+  try {
+    await client.connect();
+    const { rows } = await client.query(
+      `SELECT rolsuper OR (rolcreaterole AND rolcreatedb) AS ok
+         FROM pg_roles WHERE rolname = current_user`,
+    );
+    return Boolean(rows[0]?.ok);
+  } catch {
+    return false;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 // ── Cross-suite serialization ───────────────────────────────────────────────
 // Vitest runs test FILES in parallel workers, but every DB-backed suite shares
 // the one TEST_DATABASE_URL database and wipes whole tables between tests —

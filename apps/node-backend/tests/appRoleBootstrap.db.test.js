@@ -34,7 +34,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import { hasTestDatabase } from './setup/db.js';
+import { canProvisionRolesAndDatabases } from './setup/db.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const DB_MIGRATE_JS = path.join(REPO_ROOT, 'apps/node-backend/scripts/db-migrate.js');
@@ -118,7 +118,14 @@ async function runBootstrap({ databaseUrl, appDbUrl, migrationsUrl, disable }) {
   }
 }
 
-describe.skipIf(!hasTestDatabase())('least-privilege app-role bootstrap', () => {
+// CI's database role owns the schema but is neither SUPERUSER nor CREATEROLE,
+// so it cannot stand up this suite's throwaway role + scratch database. Probe
+// rather than assume the local superuser: a failure to create the fixture role
+// would otherwise read exactly like the bootstrap itself being broken. CI still
+// covers the shipped single-role path (it never sets DATABASE_URL_APP).
+const CAN_PROVISION = await canProvisionRolesAndDatabases();
+
+describe.skipIf(!CAN_PROVISION)('least-privilege app-role bootstrap', () => {
   /** @type {pg.Client} */
   let admin;      // superuser on TEST_DATABASE_URL — creates/drops the scratch DB
   /** @type {pg.Pool} */

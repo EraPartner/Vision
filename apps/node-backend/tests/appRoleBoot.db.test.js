@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import { hasTestDatabase } from './setup/db.js';
+import { canProvisionRolesAndDatabases } from './setup/db.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const MAIN_JS = path.join(REPO_ROOT, 'apps/node-backend/src/main.js');
@@ -94,7 +94,14 @@ async function waitFor(fn, budgetMs) {
   }
 }
 
-describe.skipIf(!hasTestDatabase())('backend boots two-role on a previously single-role database', () => {
+// CI's database role owns the schema but is neither SUPERUSER nor CREATEROLE,
+// so it cannot stand up this suite's throwaway role + scratch database. Probe
+// rather than assume the local superuser: a failure to create the fixture role
+// would otherwise read exactly like the bootstrap itself being broken. CI still
+// covers the shipped single-role path (it never sets DATABASE_URL_APP).
+const CAN_PROVISION = await canProvisionRolesAndDatabases();
+
+describe.skipIf(!CAN_PROVISION)('backend boots two-role on a previously single-role database', () => {
   /** @type {pg.Client} */
   let admin;
   /** @type {pg.Pool} */
