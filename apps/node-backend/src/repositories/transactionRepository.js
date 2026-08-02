@@ -1039,10 +1039,16 @@ export const transactionRepository = {
 
   /**
    * Field-based duplicate probe for the import commit path: date + amount +
-   * recipient + memo, scoped to the same account, and skipped when both rows
-   * carry a tx_hash and the hashes DIFFER within this batch (the hash is the
-   * identity then). See commit.js for the full rationale — the predicate is
-   * load-bearing for import idempotency and is moved here verbatim.
+   * recipient + memo + currency, scoped to the same account, and skipped when
+   * both rows carry a tx_hash and the hashes DIFFER within this batch (the hash
+   * is the identity then). See commit.js for the full rationale — the predicate
+   * is load-bearing for import idempotency and is moved here verbatim.
+   *
+   * Currency is part of the identity because an account may hold several
+   * currencies (ADR-089 addendum: Revolut keeps ONE account whose rows carry
+   * their own currency), so `bank_account` no longer discriminates them the way
+   * it does for the one-account-per-currency banks. −25.00 EUR and −25.00 USD at
+   * the same merchant on the same day are two transactions, not one.
    *
    * @param {object} probe
    * @param {string} probe.date 'YYYY-MM-DD'
@@ -1050,11 +1056,16 @@ export const transactionRepository = {
    * @param {number|null} probe.recipientId
    * @param {string} probe.memo Already TRIM'd by the caller (compared to `COALESCE(TRIM(t.memo), '')`).
    * @param {string|null} probe.bankAccount
+   * @param {string} probe.currency Already trimmed and defaulted by the caller
+   *   (commit.js `currencyKeyOf`) to the same value the insert will store —
+   *   trimmed because VARCHAR(3) silently drops trailing spaces on write, so an
+   *   untrimmed probe would miss the stored row. `transactions.currency` is
+   *   NOT NULL, so plain `=` is safe.
    * @param {string|null} probe.txHash
    * @param {number|string} probe.batchId
    * @returns {Promise<number|undefined>} the duplicate's id, or undefined
    */
-  async findImportDuplicate({ date, amount, recipientId, memo, bankAccount, txHash, batchId }) {
+  async findImportDuplicate({ date, amount, recipientId, memo, bankAccount, currency, txHash, batchId }) {
     const result = await query(
       `SELECT t.id
              FROM transactions t
@@ -1066,10 +1077,11 @@ export const transactionRepository = {
               )
               AND COALESCE(TRIM(t.memo), '') = $4
               AND t.bank_account IS NOT DISTINCT FROM $5
+              AND t.currency = $8
               AND NOT (t.import_batch_id = $7 AND t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
               AND t.is_active = true
             LIMIT 1`,
-      [date, amount, recipientId, memo, bankAccount, txHash, batchId],
+      [date, amount, recipientId, memo, bankAccount, txHash, batchId, currency],
     );
     return result.rows[0]?.id ?? undefined;
   },

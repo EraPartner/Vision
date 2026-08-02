@@ -2,8 +2,8 @@
  * Import pipeline — COMMIT
  *
  * Drains 'matched' staging rows into canonical `transactions`. Performs
- * field-based dedup (date+amount+recipient+memo+bank_account, with the
- * differing-tx_hash exemption) against `transactions`. Uses chunked
+ * field-based dedup (date+amount+recipient+memo+bank_account+currency, with
+ * the differing-tx_hash exemption) against `transactions`. Uses chunked
  * BEGIN/COMMIT so partial failures roll back cleanly on a chunk boundary
  * without losing prior committed chunks.
  *
@@ -142,14 +142,42 @@ function bigintEq(a, b) {
 
 /**
  * Composite key for the field-based dup check: date + amount + recipient +
- * memo + bank_account. Both sides must be normalized by their own side's
- * rules before being handed here (see `sqlTrimSpaces`).
+ * memo + bank_account + currency. Both sides must be normalized by their own
+ * side's rules before being handed here (see `sqlTrimSpaces` and
+ * `currencyKeyOf`).
  *
- * @param {{ date: string, amountKey: string|null, recipientId: number|null, memoKey: string, bankAccount: string|null }} k
+ * @param {{ date: string, amountKey: string|null, recipientId: number|null, memoKey: string, bankAccount: string|null, currencyKey: string }} k
  * @returns {string}
  */
 function dupKey(k) {
-  return JSON.stringify([k.date, k.amountKey, k.recipientId, k.memoKey, k.bankAccount]);
+  return JSON.stringify([k.date, k.amountKey, k.recipientId, k.memoKey, k.bankAccount, k.currencyKey]);
+}
+
+/**
+ * The currency this pipeline will actually STORE for a row — and therefore the
+ * only value the dup check may compare against, on both sides.
+ *
+ * `transactions.currency` is NOT NULL (migration 0046), so both insert sites
+ * default a missing import currency to EUR; keying on the raw staging value
+ * instead would make a currency-less row (KBC with a blank cell) never match
+ * the 'EUR' row its own first import wrote, and re-importing the same file
+ * would duplicate the whole ledger. This is that default, in one place, used
+ * by the probe and by both writes.
+ *
+ * TRIMMED before defaulting: the column is VARCHAR(3), and Postgres silently
+ * drops trailing spaces on assignment to varchar(n) — so an untrimmed
+ * 'EUR ' would key as 'EUR ' while storing as 'EUR', and every re-import
+ * would miss the dup check and duplicate the row. Every shipped adapter
+ * already trims its currency cell; the trim here is what makes probe == write
+ * hold by construction rather than by adapter convention. Case is NOT
+ * normalized: a lowercase or malformed cell should keep failing the 0046
+ * CHECK loudly, not be silently rewritten.
+ *
+ * @param {string|null|undefined} currency `import_staging_rows.currency`
+ * @returns {string}
+ */
+function currencyKeyOf(currency) {
+  return (currency ?? '').trim() || 'EUR';
 }
 
 /**
@@ -159,7 +187,8 @@ function dupKey(k) {
  * @param {any} row
  * @returns {{
  *   row: any, dateStr: string, recipientId: number|null, memoNorm: string,
- *   bankAccount: string|null, amountKey: string|null, txHash: string|null,
+ *   bankAccount: string|null, amountKey: string|null, currencyKey: string,
+ *   txHash: string|null,
  *   idStr: string, idValid: boolean, categoryId: number|null, patternId: number|null,
  *   conflictPredicted: boolean,
  * }}
@@ -189,6 +218,7 @@ function deriveRow(row) {
     memoNorm: (row.memo ?? '').trim(),
     bankAccount: row.bank_account || null,
     amountKey: normalizeAmountKey(row.amount),
+    currencyKey: currencyKeyOf(row.currency),
     txHash: row.tx_hash || null,
     idStr,
     idValid: /^\d+$/.test(idStr),
@@ -268,9 +298,17 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
     // Includes memo so two legitimate same-day same-amount same-recipient
     // purchases (e.g. two coffees) are not falsely deduped — but memo does
     // NOT discriminate card payments (Revolut stamps the identical
-    // "CARD_PAYMENT - CURRENT" on every one), so two more guards:
+    // "CARD_PAYMENT - CURRENT" on every one), so three more guards:
     //  - same account only (bank_account): an identical purchase on a
     //    DIFFERENT account is a distinct transaction, not a duplicate;
+    //  - same currency: one account may hold several (ADR-089 addendum —
+    //    Revolut books its EUR and USD rows into ONE account rather than
+    //    splitting per currency the way Wise does), so bank_account stopped
+    //    discriminating them. The tx_hash guard below does NOT cover this: it
+    //    is scoped to the current batch, and the case that bites is a −25.00
+    //    USD row field-matching the −25.00 EUR row that an EARLIER import of
+    //    the same rolling export already committed — silently dropping a real
+    //    transaction into another currency's identity;
     //  - when both rows carry a tx_hash and the hashes DIFFER, the hash is
     //    the identity and the rows are distinct (two same-day card
     //    payments differ by running balance → different hash). Equal
@@ -291,6 +329,7 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
       recipientId: d.recipientId,
       memo: d.memoNorm,
       bankAccount: d.bankAccount,
+      currency: d.currencyKey,
       txHash: d.txHash,
       batchId,
     });
@@ -322,9 +361,9 @@ async function commitChunkPerRow({ client, chunk, batchId, committedHashes }) {
         categoryId: d.categoryId,
         amount: row.amount,
         memo: row.memo || '',
-        // currency is NOT NULL at the DB level (migration 0046); default
-        // a missing import currency to EUR rather than writing NULL.
-        currency: row.currency || 'EUR',
+        // The SAME value the dup probe above was keyed on — currency is part
+        // of the row's identity, so the probe and the write must not drift.
+        currency: d.currencyKey,
         balance: row.balance != null ? row.balance : null,
         comment: row.comment || null,
         importBatchId: batchId,
@@ -372,8 +411,8 @@ class ChunkPlanInvalid extends Error {}
  *
  * Scope matches the per-row WHERE exactly: `t.is_active = true` plus the
  * chunk's dates. Everything else in that WHERE (amount, recipient, memo,
- * bank_account, hash exemption) is decided in JS from the returned columns —
- * so the candidate set is a strict superset, never a narrower one.
+ * bank_account, currency, hash exemption) is decided in JS from the returned
+ * columns — so the candidate set is a strict superset, never a narrower one.
  *
  * @param {string[]} dates distinct 'YYYY-MM-DD' of the chunk
  * @returns {Promise<Map<string, Array<{ txHash: string|null, importBatchId: unknown }>>>}
@@ -389,6 +428,7 @@ async function loadDupCandidates(dates) {
             t.recipient_id,
             COALESCE(TRIM(t.memo), '')        AS memo_key,
             t.bank_account,
+            t.currency,
             t.tx_hash,
             t.import_batch_id
        FROM transactions t
@@ -404,6 +444,9 @@ async function loadDupCandidates(dates) {
       recipientId: r.recipient_id === null || r.recipient_id === undefined ? null : Number(r.recipient_id),
       memoKey: r.memo_key ?? '',
       bankAccount: r.bank_account ?? null,
+      // NOT NULL in the schema; `currencyKeyOf` is the same default the
+      // incoming side applies, so the two keys agree on a legacy blank.
+      currencyKey: currencyKeyOf(r.currency),
     });
     const bucket = index.get(key);
     const cand = { txHash: r.tx_hash ?? null, importBatchId: r.import_batch_id ?? null };
@@ -481,6 +524,7 @@ async function planChunk({ chunk, batchId, committedHashes }) {
       recipientId: d.recipientId === null ? null : Number(d.recipientId),
       memoKey: d.memoNorm,
       bankAccount: d.bankAccount,
+      currencyKey: d.currencyKey,
     });
     const bucket = index.get(key);
     if (bucket && bucket.some((c) => candidateVisible(c, d.txHash, batchId))) {
@@ -532,6 +576,9 @@ async function planChunk({ chunk, batchId, committedHashes }) {
       // through SQL TRIM(), which strips spaces only.
       memoKey: sqlTrimSpaces(d.row.memo || ''),
       bankAccount: d.bankAccount,
+      // The stored currency is `d.currencyKey` — that is what the INSERT below
+      // writes, so that is what a later row of this chunk must match against.
+      currencyKey: d.currencyKey,
     });
     const selfCand = { txHash: d.txHash, importBatchId: batchId };
     const selfBucket = index.get(selfKey);
@@ -592,7 +639,7 @@ async function bulkInsertPlanned(toInsert, batchId) {
       toInsert.map((d) => d.categoryId),
       toInsert.map((d) => d.row.amount),
       toInsert.map((d) => d.row.memo || ''),
-      toInsert.map((d) => d.row.currency || 'EUR'),
+      toInsert.map((d) => d.currencyKey),
       toInsert.map((d) => (d.row.balance != null ? d.row.balance : null)),
       toInsert.map((d) => d.row.comment || null),
       batchId,
