@@ -321,7 +321,6 @@ describe('Currency Conversion Service', () => {
       ['SELECT rate_to_eur\n     FROM exchange_rates\n     WHERE currency_code = $1 AND rate_date = $2::date', { rows: [] }],
       ['ORDER BY ABS(rate_date - $2::date)', { rows: [{ rate_to_eur: 0.91 }] }], // nearest — must NOT be saved
       ['SELECT 1 FROM exchange_rates', { rows: [] }],
-      ['to_regclass', { rows: [{ base_table: null }] }],
       ['SET fx_rate_to_eur', { rows: [], rowCount: 0 }],
     ]);
 
@@ -352,7 +351,6 @@ describe('Currency Conversion Service', () => {
       // Batched existence check (replaces the former per-row SELECT 1): returns
       // the now-present pair once the rate has been saved.
       ['JOIN UNNEST', () => ({ rows: savedRate ? [{ currency_code: 'USD', rate_date: '2026-02-01' }] : [] })],
-      ['to_regclass', { rows: [{ base_table: null }] }],
       ['SET fx_rate_to_eur', { rows: [], rowCount: 1 }],
     ]);
 
@@ -391,7 +389,6 @@ describe('Currency Conversion Service', () => {
       ['GROUP BY pt.currency', { rows: [{ currency_code: 'USD', rate_date: '2020-03-07' }] }],
       ['WHERE currency_code = ANY', { rows: [{ currency_code: 'USD', rate_date: '2020-03-07', rate_to_eur: 0.91 }] }],
       ['INSERT INTO exchange_rates', (params) => { savedRates.push(params); return { rows: [] }; }],
-      ['to_regclass', { rows: [{ base_table: null }] }],
       ['SET fx_rate_to_eur', { rows: [], rowCount: 1 }],
     ]);
 

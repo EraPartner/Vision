@@ -1,25 +1,18 @@
 /**
  * Portfolio transaction repo — write operations (create, update, hardDelete).
- * Polymorphic on assetClass; delegates unit-math + inheritance-table paths to common helpers.
+ * Delegates unit-math validation to the common helpers. Writes target the flat
+ * `portfolio_transactions` table — the only shape after migration 0087 (ADR-109).
  */
 
-import { query, withSavepointIfInTransaction } from '../database/connection.js';
+import { query } from '../database/connection.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 import { getById, mapPortfolioTxRow } from './portfolioTxRepo.reads.js';
 import {
-  hasPortfolioTransactionInheritanceSchema,
   hasPortfolioTransactionImportBatchIdColumn,
-  getAccountIdRelation,
-  markInheritanceSchemaPresent,
-  isNonUpdatablePortfolioTransactionsViewError,
-  isMissingInheritanceRelationError,
   UNIT_BASED_ASSET_CLASSES,
   makeValidationError,
   normalizeTransactionPayload,
   validateSellUnitsAvailability,
-  createThroughInheritanceTables,
-  updateThroughInheritanceTables,
-  hardDeleteThroughInheritanceTables,
 } from './portfolioTxRepo.common.js';
 
 /** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
@@ -77,19 +70,6 @@ export async function create({ investment_id, type, date, amount, units, price_p
     units: payload.units,
   });
 
-  // The schema-shape fallbacks below CATCH a failed statement and try another
-  // route. On a pool connection that's fine; inside an ambient withTransaction
-  // a failed statement poisons the whole tx, so each attempt that can be
-  // recovered from runs under a savepoint.
-  if (await hasPortfolioTransactionInheritanceSchema()) {
-    try {
-      return await withSavepointIfInTransaction('ptx_create_inherit', () =>
-        createThroughInheritanceTables(payload, getById, assetClass));
-    } catch (err) {
-      if (!isMissingInheritanceRelationError(err)) throw err;
-    }
-  }
-
   const columns = [
     'investment_id', 'type', 'date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes',
     'currency', 'note', 'is_recurring', 'recurrence_interval', 'recurrence_end_date',
@@ -122,22 +102,14 @@ export async function create({ investment_id, type, date, amount, units, price_p
     values.push(payload.import_batch_id);
   }
 
-  try {
-    return await withSavepointIfInTransaction('ptx_create_flat', async () => {
-      const result = await query(
-        `INSERT INTO portfolio_transactions
-           (${columns.join(', ')})
-           VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})
-           RETURNING *`,
-        values
-      );
-      return mapPortfolioTxRow(result.rows[0]);
-    });
-  } catch (err) {
-    if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
-    markInheritanceSchemaPresent();
-    return createThroughInheritanceTables(payload, getById, assetClass);
-  }
+  const result = await query(
+    `INSERT INTO portfolio_transactions
+       (${columns.join(', ')})
+       VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})
+       RETURNING *`,
+    values
+  );
+  return mapPortfolioTxRow(result.rows[0]);
 }
 
 /**
@@ -231,20 +203,10 @@ export async function update(id, fields) {
 
   if (normalizedSetClauses.length === 0) return existing;
 
-  if (await hasPortfolioTransactionInheritanceSchema()) {
-    return updateThroughInheritanceTables(id, normalizedFields, getById);
-  }
-
   normalizedParams.push(id);
   const sql = `UPDATE portfolio_transactions SET ${normalizedSetClauses.join(', ')} WHERE id = $${normalizedIdx} RETURNING *`;
-  try {
-    const result = await query(sql, normalizedParams);
-    return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
-  } catch (err) {
-    if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
-    markInheritanceSchemaPresent();
-    return updateThroughInheritanceTables(id, normalizedFields, getById);
-  }
+  const result = await query(sql, normalizedParams);
+  return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
 }
 
 /**
@@ -252,22 +214,8 @@ export async function update(id, fields) {
  * @returns {Promise<boolean>}
  */
 export async function hardDelete(id) {
-  if (await hasPortfolioTransactionInheritanceSchema()) {
-    try {
-      return await hardDeleteThroughInheritanceTables(id);
-    } catch (err) {
-      if (!isMissingInheritanceRelationError(err)) throw err;
-    }
-  }
-
-  try {
-    const result = await query('DELETE FROM portfolio_transactions WHERE id = $1', [id]);
-    return result.rowCount > 0;
-  } catch (err) {
-    if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
-    markInheritanceSchemaPresent();
-    return hardDeleteThroughInheritanceTables(id);
-  }
+  const result = await query('DELETE FROM portfolio_transactions WHERE id = $1', [id]);
+  return result.rowCount > 0;
 }
 
 /**
@@ -293,47 +241,24 @@ export async function hardDelete(id) {
 export async function hardDeleteByImportBatch(batchId) {
   if (!await hasPortfolioTransactionImportBatchIdColumn()) return [];
 
-  // Inheritance installs: DELETE on the base cascades to the child rows (and
-  // `portfolio_transactions` is a non-updatable VIEW there). Flat installs:
-  // the table itself. Same routing hardDelete() uses, same fallbacks.
-  const runOn = async (/** @type {string} */ relation) => {
-    const result = await query(
-      `DELETE FROM ${relation} WHERE import_batch_id = $1 RETURNING id`,
-      [batchId],
-    );
-    return result.rows.map((/** @type {{id: number|string}} */ r) => r.id);
-  };
-
-  if (await hasPortfolioTransactionInheritanceSchema()) {
-    try {
-      return await runOn('portfolio_transactions_base');
-    } catch (err) {
-      if (!isMissingInheritanceRelationError(err)) throw err;
-    }
-  }
-
-  try {
-    return await runOn('portfolio_transactions');
-  } catch (err) {
-    if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
-    markInheritanceSchemaPresent();
-    return runOn('portfolio_transactions_base');
-  }
+  const result = await query(
+    'DELETE FROM portfolio_transactions WHERE import_batch_id = $1 RETURNING id',
+    [batchId],
+  );
+  return result.rows.map((/** @type {{id: number|string}} */ r) => r.id);
 }
 
 /**
  * Repoint portfolio lots from merged-away source accounts onto the survivor
- * (ADR-088 account merge). Writes through the inheritance base when present —
- * the UPDATE cascades to the child tables — and the flat table otherwise.
+ * (ADR-088 account merge).
  *
  * @param {number} targetId
  * @param {number[]} sourceIds
  * @returns {Promise<number>} rows repointed
  */
 export async function repointAccount(targetId, sourceIds) {
-  const relation = await getAccountIdRelation();
   const result = await query(
-    `UPDATE ${relation} SET account_id = $1 WHERE account_id = ANY($2::int[])`,
+    'UPDATE portfolio_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])',
     [targetId, sourceIds],
   );
   return result.rowCount ?? 0;

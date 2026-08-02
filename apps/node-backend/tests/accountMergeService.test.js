@@ -32,8 +32,7 @@ function happyPath({ stampRanges = [], openingAnchors = [] } = {}) {
     if (sql.includes('GROUP BY account_id')) return { rows: stampRanges };
     if (sql.includes('UPDATE transactions')) return { rowCount: 3 };
     if (sql.includes('UPDATE planned_transactions')) return { rowCount: 1 };
-    if (sql.includes('to_regclass')) return { rows: [{ r: 'public.portfolio_transactions_base' }] };
-    if (sql.includes('UPDATE portfolio_transactions_base')) return { rowCount: 2 };
+    if (sql.includes('UPDATE portfolio_transactions')) return { rowCount: 2 };
     if (sql.includes('UPDATE accounts SET funding_account_id')) return { rowCount: 0 };
     if (sql.includes('DELETE FROM accounts')) return { rowCount: 1 };
     return { rows: [], rowCount: 0 };
@@ -80,27 +79,13 @@ describe('mergeAccounts (ADR-088)', () => {
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
     expect(calls.some((s) => s.includes('UPDATE transactions') && s.includes('bank_account'))).toBe(true);
     expect(calls.some((s) => s.includes('UPDATE planned_transactions'))).toBe(true);
-    expect(calls.some((s) => s.includes('UPDATE portfolio_transactions_base'))).toBe(true);
+    expect(calls.some((s) => s.includes('UPDATE portfolio_transactions'))).toBe(true);
     expect(calls.some((s) => s.includes('UPDATE accounts SET funding_account_id'))).toBe(true);
     expect(calls.some((s) => s.includes('DELETE FROM accounts'))).toBe(true);
 
     // transactions repoint carries the survivor's name (so the dual-write trigger keeps it merged)
     const txCall = mockClient.query.mock.calls.find(([sql]) => sql.includes('UPDATE transactions'));
     expect(txCall[1]).toEqual([2, 'TARGET', [1]]);
-  });
-
-  it('falls back to the flat portfolio_transactions table when there is no inheritance base', async () => {
-    mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes('FOR UPDATE') && sql.includes('WHERE id = $1')) return { rows: [{ id: 2, name: 'T' }] };
-      if (sql.includes('FOR UPDATE') && sql.includes('ANY')) return { rows: [{ id: 1 }] };
-      if (sql.includes('to_regclass')) return { rows: [{ r: null }] }; // flat schema
-      if (sql.includes('UPDATE portfolio_transactions ')) return { rowCount: 5 };
-      return { rows: [], rowCount: 0 };
-    });
-    const result = await mergeAccounts(2, [1]);
-    expect(result.reassigned.portfolio).toBe(5);
-    const calls = mockClient.query.mock.calls.map(([sql]) => sql);
-    expect(calls.some((s) => s.includes('UPDATE portfolio_transactions ') && !s.includes('_base'))).toBe(true);
   });
 
   // §1 F2 regression: two concurrently-imported accounts (survivor KBC stamped
@@ -282,12 +267,10 @@ describe('previewMerge (GET /api/accounts/:id/merge-preview)', () => {
     parts = [{ currency: 'EUR', balance: '1234.505' }],
     stampRanges = [],
     openingAnchors = [],
-    baseTable = 'public.portfolio_transactions_base',
   } = {}) {
     query.mockImplementation(async (sql) => {
       if (sql.includes("transfer_source = 'opening'")) return { rows: openingAnchors };
       if (sql.includes('SELECT id, currency FROM accounts')) return { rows: accounts };
-      if (sql.includes('to_regclass')) return { rows: [{ r: baseTable }] };
       if (sql.includes('balance_parts')) return { rows: [{ balance_parts: parts }] };
       if (sql.includes('FROM transactions WHERE account_id')) return { rows: [{ n: counts.transactions }] };
       if (sql.includes('FROM planned_transactions')) return { rows: [{ n: counts.planned }] };
@@ -421,13 +404,13 @@ describe('previewMerge (GET /api/accounts/:id/merge-preview)', () => {
     expect(result.projectedBalance).toBe(0);
   });
 
-  it('counts against the flat portfolio table when there is no inheritance base', async () => {
-    primePreview({ baseTable: null, counts: { transactions: '0', planned: '0', portfolio: '7', funding: '0' } });
+  it('counts source lots against the flat portfolio_transactions table', async () => {
+    primePreview({ counts: { transactions: '0', planned: '0', portfolio: '7', funding: '0' } });
     const result = await previewMerge(1, 2);
     expect(result.reassigned.portfolio).toBe(7);
     const portfolioSql = query.mock.calls
       .map(([sql]) => sql)
       .find((s) => s.includes('portfolio_transactions') && s.includes('COUNT'));
-    expect(portfolioSql).not.toContain('_base');
+    expect(portfolioSql).toContain('FROM portfolio_transactions WHERE account_id = $1');
   });
 });

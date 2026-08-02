@@ -489,9 +489,8 @@
  * `INVESTMENT_NUMERIC_FIELDS` are coerced to numbers and `maturity_date` is
  * rendered as a calendar-day string. Every other column is raw.
  *
- * Note `investments` is a plain table on fresh installs but a VIEW over
- * `investments_base` + child tables on legacy inheritance installs (ADR-109);
- * the projected shape is the same either way.
+ * `investments` is a plain flat table on every install (ADR-109; legacy
+ * inheritance installs were converted by migration 0087).
  *
  * @typedef {object} InvestmentRow
  * @property {number} id

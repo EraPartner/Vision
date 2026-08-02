@@ -480,17 +480,6 @@ export function convertWithRates(amount, fromCurrency, toCurrency, rates) {
 const FX_FULL_HISTORY_REPAIR_FLAG = 'fx_full_history_repair_done';
 
 /**
- * Bulk writes must target the inheritance base table when the legacy layout is
- * present — `portfolio_transactions` is a non-updatable view there.
- */
-async function portfolioTxTableForBulkWrites() {
-  const result = await query(
-    "SELECT to_regclass('public.portfolio_transactions_base') AS base_table"
-  );
-  return result.rows[0]?.base_table ? 'portfolio_transactions_base' : 'portfolio_transactions';
-}
-
-/**
  * Overwrite stored txn-date rates with true ECB full-history values (one-time).
  *
  * @param {Array<{currency_code: string, rate_date: string|Date}>} pairs distinct non-EUR (currency, date) pairs
@@ -541,9 +530,8 @@ async function repairHistoricalRatesFromFullHistory(pairs) {
  * rows stay NULL and read paths keep resolving them per-date with a fallback flag.
  */
 async function stampTransactionFxRates() {
-  const table = await portfolioTxTableForBulkWrites();
   const result = await query(
-    `UPDATE ${table} pt
+    `UPDATE portfolio_transactions pt
      SET fx_rate_to_eur = sub.rate
      FROM (
        SELECT pt2.id,
@@ -554,7 +542,7 @@ async function stampTransactionFxRates() {
                  AND er.rate_date >= pt2.date::date - INTERVAL '7 days'
                ORDER BY er.rate_date DESC
                LIMIT 1) AS rate
-       FROM ${table} pt2
+       FROM portfolio_transactions pt2
        WHERE pt2.fx_rate_to_eur IS NULL
          AND pt2.currency IS NOT NULL
          AND UPPER(pt2.currency::text) <> 'EUR'

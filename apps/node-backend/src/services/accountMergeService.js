@@ -146,9 +146,8 @@ export async function mergeAccounts(targetId, sourceIds) {
     const txCount = await transactionRepository.repointAccount(targetId, targetName, ids);
     const plannedCount = await plannedTransactionRepository.repointAccount(targetId, targetName, ids);
 
-    // Portfolio lots: account_id lives on the inheritance base (an UPDATE cascades to the child
-    // tables) or, in the flat schema, on the table itself. (portfolio_transactions is a view in the
-    // inheritance schema and is not updatable.)
+    // Portfolio lots: account_id lives on the flat portfolio_transactions table
+    // (the only shape after migration 0087, ADR-109).
     const portfolioCount = await portfolioTransactionRepository.repointAccount(targetId, ids);
 
     // Accounts that used a merged source as their funding/settlement account.
@@ -229,16 +228,12 @@ export async function previewMerge(sourceId, targetId) {
   if (!byId.has(targetId)) throw new NotFoundError(`Account ${targetId} not found`);
   if (!byId.has(sourceId)) throw new NotFoundError(`Account ${sourceId} not found`);
 
-  // Same table set mergeAccounts repoints, as COUNTs. The relation probe is the
-  // same repo helper the merge write path uses, so preview and merge can never
-  // disagree about which table carries account_id.
-  const portfolioTable = await portfolioTransactionRepository.getAccountIdRelation();
-
+  // Same table set mergeAccounts repoints, as COUNTs.
   const unionIds = [targetId, sourceId];
   const [txCount, plannedCount, portfolioCount, fundingCount, projected, rates, stampRanges, anchors] = await Promise.all([
     query('SELECT COUNT(*) AS n FROM transactions WHERE account_id = $1', [sourceId]),
     query('SELECT COUNT(*) AS n FROM planned_transactions WHERE account_id = $1', [sourceId]),
-    query(`SELECT COUNT(*) AS n FROM ${portfolioTable} WHERE account_id = $1`, [sourceId]),
+    query('SELECT COUNT(*) AS n FROM portfolio_transactions WHERE account_id = $1', [sourceId]),
     query('SELECT COUNT(*) AS n FROM accounts WHERE funding_account_id = $1', [sourceId]),
     // Per-currency anchor+delta over the union set, via the shared hub builder:
     // within each currency the most recent stamped row across BOTH accounts

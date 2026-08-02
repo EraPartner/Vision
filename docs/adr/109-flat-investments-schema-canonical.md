@@ -11,9 +11,16 @@ aliases: [flat investments schema, inheritance conversion, adr-109]
 # ADR-109: Flat investments schema is canonical — one-time legacy-install conversion
 
 ## Status
-Accepted — 2026-07-10 (decision only; conversion migration authored in a follow-up step, applied
-manually by the user per project convention). Supersedes the schema-shape portion of
+Accepted — 2026-07-10. Supersedes the schema-shape portion of
 [[docs/adr/004-postgresql-table-inheritance|ADR-004]].
+
+**Implemented 2026-08-02:** the conversion migration is `0087_flat_investments_conversion`
+(in-chain, so it applies on the next boot like every revision — `docker-entrypoint.sh` /
+`main.js` run `alembic upgrade head` before the backend listens). Because conversion is
+therefore guaranteed before any newer code serves requests, the runtime `to_regclass`
+shape-probing and inheritance-aware branching were removed from the backend in the same
+change. The renamed `legacy_inh_*` relations remain as the rollback until a later
+housekeeping revision drops them.
 
 ## Context
 
@@ -76,10 +83,15 @@ After conversion ships and soaks:
   root instead of being revalidated per feature.
 
 **Negative / cost**
-- A data-copying migration on legacy installs — the heaviest migration this project has shipped;
-  mitigated by the transaction + parity check + rename-based rollback, and by the project
-  convention that migrations are applied manually by the user (with a backup, per the restore
-  tooling).
+- A data-copying migration on legacy installs — the heaviest migration this project has shipped.
+  It lives in the auto-applied chain, so it runs **unattended at boot** (docker-entrypoint /
+  main.js run `alembic upgrade head` before the backend listens) — there is no operator in the
+  loop. The real mitigations are therefore in the migration itself: shape + data pre-flights and
+  the parity check abort the whole transaction on anything unexpected, leaving the database
+  untouched at 0086 with the legacy view still working; the renamed `legacy_inh_*` relations are
+  the rollback (`downgrade()` reverses the renames). The deliberate trade: an aborted conversion
+  means the app **does not boot** until the pre-flight's listed rows are fixed (each error names
+  the offending rows and the fix) — refusing loudly beats guessing or truncating portfolio data.
 - Disk briefly doubles for the copied tables until the legacy renames are dropped.
 
 **Neutral**
