@@ -4153,12 +4153,14 @@ export interface operations {
                                 portfolio?: number;
                                 funding?: number;
                             };
-                            /** @description Post-merge computed balance (anchor+delta over the union of both accounts' active rows) */
+                            /** @description Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at its own current rate into the survivor's currency */
                             projectedBalance?: number;
                             /** @description The survivor's native currency (ISO-4217) */
                             projectedBalanceCurrency?: string;
                             /** @description Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor) */
                             stampsInterleaved?: boolean;
+                            /** @description Whether both accounts hold an opening balance in the same currency (only one is allowed per account and currency, so POST /merge would refuse with a 400 until one is removed) */
+                            openingAnchorCollision?: boolean;
                         };
                     };
                 };

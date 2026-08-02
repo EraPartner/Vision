@@ -51,6 +51,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 77, amount: 20, transfer_source: 'adjustment' }] });
 
     await reconcileAccount(5, { mode: 'adjustment' });
@@ -85,6 +86,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 77, amount: 20, transfer_source: 'adjustment' }] });
 
     const result = await reconcileAccount(5, { mode: 'adjustment' });
@@ -92,26 +94,33 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
     expect(result).toMatchObject({ mode: 'adjustment', drift: 0, statement_balance: 120, computed_balance: 120 });
     expect(result.transaction).toMatchObject({ id: 77, transfer_source: 'adjustment' });
 
-    // Third call is the INSERT; amount is the drift, no `balance` column is written.
-    const [sql, params] = query.mock.calls[2];
+    // Fourth call is the INSERT (lock, drift read, system-recipient upsert,
+    // INSERT); amount is the drift, no `balance` column is written.
+    const [sql, params] = query.mock.calls[3];
     expect(sql).toMatch(/INSERT INTO transactions/);
     expect(sql).toMatch(/transfer_source/);
     expect(sql).not.toMatch(/\bbalance\b/);
-    // params: [today, amount, currency, memo, accountId]
+    // params: [today, amount, currency, memo, accountId, recipientId]
     expect(params[1]).toBe(20);
     expect(params[2]).toBe('EUR');
     expect(params[4]).toBe(5);
+    // recipient_id is NOT NULL: the row must carry the system recipient, and the
+    // column must actually be in the statement (omitting it raised 23502 live).
+    expect(sql).toMatch(/recipient_id/);
+    expect(params[5]).toBe(900);
+    expect(query.mock.calls[2][0]).toMatch(/SELECT id FROM recipients WHERE normalized_name/);
   });
 
   it('handles a negative drift (statement below computed) with a negative adjustment', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'USD', statement_balance: 80, balance_parts: [{ currency: 'USD', balance: '100' }] }] })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 78, amount: -20, transfer_source: 'adjustment' }] });
 
     const result = await reconcileAccount(5, { mode: 'adjustment' });
     expect(result.computed_balance).toBe(80);
-    const [, params] = query.mock.calls[2];
+    const [, params] = query.mock.calls[3];
     expect(params[1]).toBe(-20);
   });
 
@@ -134,12 +143,13 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
           ],
         }],
       })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 79, amount: 20, transfer_source: 'adjustment' }] });
 
     const result = await reconcileAccount(5, { mode: 'adjustment' });
 
     expect(result).toMatchObject({ drift: 0, statement_balance: 120, computed_balance: 120 });
-    const [, params] = query.mock.calls[2];
+    const [, params] = query.mock.calls[3];
     expect(params[1]).toBe(20); // 120 − the EUR partition's 100 (not 120 − 200)
     expect(params[2]).toBe('EUR');
   });
@@ -177,11 +187,12 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
           balance_parts: [{ currency: 'USD', balance: '100' }],
         }],
       })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 80, amount: 20, transfer_source: 'adjustment' }] });
 
     await reconcileAccount(5, { mode: 'adjustment' });
 
-    const [, params] = query.mock.calls[2];
+    const [, params] = query.mock.calls[3];
     expect(params[1]).toBe(20); // 120 − the sole (USD) partition's 100
     expect(params[2]).toBe('USD');
   });

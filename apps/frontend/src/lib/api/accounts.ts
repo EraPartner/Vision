@@ -64,12 +64,14 @@ export interface AccountMergePreview {
     source: number;
     /** Row counts that WOULD move (same categories POST /merge repoints). */
     reassigned: { transactions: number; planned: number; portfolio: number; funding: number };
-    /** Post-merge computed balance over the union of both accounts' active rows. */
+    /** Post-merge computed balance: per-currency over the union of both accounts' active rows, converted into the survivor's currency. */
     projectedBalance: number;
     /** The survivor's native currency (ISO-4217). */
     projectedBalanceCurrency: string;
     /** Both accounts carry stamped balance histories with overlapping date ranges — the merge clears the survivor's statement anchor. */
     stampsInterleaved: boolean;
+    /** Both accounts hold an opening balance in the same currency — POST /merge refuses (400) until one is removed. */
+    openingAnchorCollision: boolean;
 }
 
 /**

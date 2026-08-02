@@ -91,6 +91,16 @@ const STAMP_RANGES_SQL = `
   WHERE account_id = ANY($1::int[]) AND is_active = true AND balance IS NOT NULL
   GROUP BY account_id`;
 
+// Opening-balance anchors per account, keyed on the ORIGINAL account_id — the
+// account-merge collision guard must read this before the repoint. Not filtered
+// on is_active: `ux_transactions_opening_anchor` is
+// (account_id, currency) WHERE transfer_source = 'opening' with no is_active
+// predicate, so a deactivated anchor still collides.
+const OPENING_ANCHORS_SQL = `
+  SELECT account_id, currency
+  FROM transactions
+  WHERE account_id = ANY($1::int[]) AND transfer_source = 'opening'`;
+
 // Mark one leg of a transfer pair (SIMP-50). The `auto` variant guards against
 // clobbering a concurrent manual mark or already-paired row; the `manual`
 // variant is unconditional (the caller has already released prior peers).
@@ -753,6 +763,21 @@ export const transactionRepository = {
    */
   async getStampedDateRangesByAccount(accountIds) {
     const result = await query(STAMP_RANGES_SQL, [accountIds]);
+    return result.rows;
+  },
+
+  /**
+   * Opening-balance anchors (`transfer_source = 'opening'`) per account. Run
+   * BEFORE an account-merge repoint, for the same reason as
+   * {@link getStampedDateRangesByAccount}: the repoint erases the provenance
+   * this guard needs — and, since the repoint moves every anchor onto the
+   * survivor, it is also what would violate `ux_transactions_opening_anchor`.
+   *
+   * @param {number[]} accountIds
+   * @returns {Promise<{account_id:number,currency:string}[]>}
+   */
+  async getOpeningAnchorsByAccount(accountIds) {
+    const result = await query(OPENING_ANCHORS_SQL, [accountIds]);
     return result.rows;
   },
 

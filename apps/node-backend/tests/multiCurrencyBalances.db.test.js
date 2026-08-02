@@ -1,13 +1,15 @@
 /**
- * Real-Postgres tests for the four surfaces that read the shared computed
- * balance and had to be migrated off its single cross-currency `SUM(t2.amount)`:
+ * Real-Postgres tests for the surfaces that read the shared computed balance and
+ * had to be migrated off its single cross-currency `SUM(t2.amount)`:
  *
  *   - the accounts hub          — `accountRepository.getAll` (computed_balance + drift)
  *   - drift reconciliation      — `reconcileService.reconcileAccount`
  *   - the rebalance cash input  — `crossWorkspaceDataService.assembleRebalanceInputs`
  *   - the net-worth current point — `infoRepositoryNetWorth.getNetWorthFromSnapshots`
+ *   - the account merge preview — `accountMergeService.previewMerge` (the last
+ *     surface that still summed the union cross-currency at one rate)
  *
- * (`getBankBalances`, the fifth reader, has its own DB suite in
+ * (`getBankBalances`, the remaining reader, has its own DB suite in
  * infoRepoBanks.db.test.js — including the drift badge, which now derives from
  * the same per-currency helper these surfaces use.)
  *
@@ -38,6 +40,7 @@ import {
 } from './setup/db.js';
 import accountRepository from '../src/repositories/accountRepository.js';
 import { reconcileAccount } from '../src/services/reconcileService.js';
+import { mergeAccounts, previewMerge } from '../src/services/accountMergeService.js';
 import { assembleRebalanceInputs } from '../src/services/crossWorkspaceDataService.js';
 import { netWorthRepository } from '../src/repositories/infoRepositoryNetWorth.js';
 import { banksRepository } from '../src/repositories/infoRepositoryBanks.js';
@@ -289,14 +292,9 @@ describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader
   // Surface 2 — reconcile (reconcileService)
   // ───────────────────────────────────────────────────────────────────────────
   describe('reconcile', () => {
-    // NOTE on the missing 'adjustment' case: that mode's INSERT omits
-    // `transactions.recipient_id`, which is NOT NULL from migration 0001 and was
-    // never relaxed — so the whole mode raises 23502 against the real schema,
-    // before it ever reaches the drift this change alters. That defect is
-    // unrelated to (and predates) the per-currency migration and is reported
-    // separately; the drift SIZING for 'adjustment' is asserted in the mock
-    // suite (tests/reconcileService.test.js). The two cases below exercise the
-    // same per-currency drift read end-to-end against Postgres.
+    // 'adjustment' end-to-end lives in systemRecipientRows.db.test.js together
+    // with the rest of the recipient_id fix; the per-currency SIZING of that
+    // row is asserted there against the real schema too.
 
     it("'accept' adopts exactly the base the hub displays when no partition matches", async () => {
       // D4: GBP account, EUR + USD rows, statement £50. The base is 0 (nothing
@@ -441,6 +439,83 @@ describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader
       const nw = await netWorthRepository.getNetWorthFromSnapshots('EUR');
 
       expect(nw.current.liquid).toBe(150);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Surface 5 — account merge preview (accountMergeService.previewMerge)
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('merge preview', () => {
+    /**
+     * Survivor EUR account holding 100 EUR + 100 USD, source USD account
+     * holding 200 USD. Per currency over the union: EUR 100, USD 300.
+     *   correct   → 100 + (300 × 0.5) = 250 EUR
+     *   old (bad) → Σ of bare amounts over the union = 400
+     * @returns {Promise<{ survivor:number, source:number }>}
+     */
+    async function seedMergePair() {
+      await seedRecipient();
+      const survivor = await addAccount('SURVIVOR', { currency: 'EUR' });
+      const source = await addAccount('SOURCE', { currency: 'USD' });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '100.00', currency: 'EUR', bank: 'SURVIVOR' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '2 days'", amount: '100.00', currency: 'USD', bank: 'SURVIVOR' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '1 day'", amount: '200.00', currency: 'USD', bank: 'SOURCE' });
+      return { survivor, source };
+    }
+
+    it('converts each currency partition of the union at its own rate', async () => {
+      const { survivor, source } = await seedMergePair();
+
+      const preview = await previewMerge(source, survivor);
+
+      expect(preview.projectedBalance).toBe(250); // NOT 400
+      expect(preview.projectedBalanceCurrency).toBe('EUR'); // the survivor's
+      expect(preview.reassigned.transactions).toBe(1);
+    });
+
+    // The contract the dialog rests on: the number previewed is the number the
+    // hub prints once the merge lands. Nothing else pins preview to the hub —
+    // they were separate SQL, which is how they drifted apart.
+    it('previews exactly the computed balance the hub reports after the merge', async () => {
+      const { survivor, source } = await seedMergePair();
+
+      const preview = await previewMerge(source, survivor);
+      await mergeAccounts(survivor, [source]);
+
+      const rows = await accountRepository.getAll();
+      expect(rows.map((r) => r.name)).toEqual(['SURVIVOR']);
+      expect(rows[0].computed_balance).toBe(preview.projectedBalance);
+      expect(rows[0].computed_balance).toBe(250);
+    });
+
+    it('anchors each currency of the union on that currency\'s own latest stamp', async () => {
+      // Survivor EUR: stamped 1000 (day-10), then −25 → 975 EUR.
+      // Source USD:   unstamped 100 USD → 50 EUR.
+      // The unpartitioned union anchored on whichever stamp was newest and then
+      // added every later row of ANY currency: 1000 − 25 + 100 = 1075.
+      await seedRecipient();
+      const survivor = await addAccount('SURVIVOR', { currency: 'EUR' });
+      const source = await addAccount('SOURCE', { currency: 'USD' });
+      await insertRate('USD', 'CURRENT_DATE', '0.5');
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '10 days'", amount: '-50.00', currency: 'EUR', bank: 'SURVIVOR', balance: '1000.00' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '3 days'", amount: '-25.00', currency: 'EUR', bank: 'SURVIVOR' });
+      await insertTxn({ dateExpr: "CURRENT_DATE - interval '5 days'", amount: '100.00', currency: 'USD', bank: 'SOURCE' });
+
+      const preview = await previewMerge(source, survivor);
+
+      expect(preview.projectedBalance).toBe(1025); // NOT 1075
+    });
+
+    it('keeps reporting 0 for a pair of accounts with no ledger rows at all', async () => {
+      const survivor = await addAccount('SURVIVOR', { currency: 'EUR' });
+      const source = await addAccount('SOURCE', { currency: 'EUR' });
+
+      const preview = await previewMerge(source, survivor);
+
+      expect(preview.projectedBalance).toBe(0);
+      expect(preview.reassigned).toEqual({ transactions: 0, planned: 0, portfolio: 0, funding: 0 });
+      expect(preview.stampsInterleaved).toBe(false);
     });
   });
 

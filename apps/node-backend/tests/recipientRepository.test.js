@@ -121,6 +121,36 @@ describe('recipientRepository', () => {
     });
   });
 
+  describe('getOrCreateSystemId', () => {
+    // The hit path is every call but the first one ever. It must not write: an
+    // ON CONFLICT DO UPDATE no-op fires the updated_at trigger, leaves a dead
+    // tuple, advances xmin (breaking the DB editor's optimistic-concurrency
+    // check on an adopted user recipient) and holds the row exclusively locked
+    // for the rest of the caller's transaction.
+    it('resolves an existing row with a single SELECT and no write', async () => {
+      query.mockResolvedValueOnce({ rows: [{ id: 900 }] });
+      expect(await recipientRepository.getOrCreateSystemId()).toBe(900);
+      expect(query).toHaveBeenCalledTimes(1);
+      const [sql, params] = query.mock.calls[0];
+      expect(sql).toMatch(/^\s*SELECT id FROM recipients WHERE normalized_name/);
+      expect(params).toEqual(['norm:system']);
+    });
+
+    it('falls through to a conflict-safe INSERT only when the row is missing', async () => {
+      query
+        .mockResolvedValueOnce({ rows: [] }) // miss
+        .mockResolvedValueOnce({ rows: [{ id: 901 }] });
+      expect(await recipientRepository.getOrCreateSystemId()).toBe(901);
+      const [sql, params] = query.mock.calls[1];
+      expect(sql).toMatch(/INSERT INTO recipients/);
+      // Created inactive, and DO UPDATE (not DO NOTHING) so a concurrent
+      // uncommitted insert blocks and still returns an id.
+      expect(sql).toMatch(/VALUES \(\$1, \$2, false\)/);
+      expect(sql).toMatch(/ON CONFLICT \(normalized_name\) DO UPDATE/);
+      expect(params).toEqual(['SYSTEM', 'norm:system']);
+    });
+  });
+
   describe('update', () => {
     it('builds SET clauses for name (upper + normalized) and other fields', async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 1, name: 'NEW' }] });

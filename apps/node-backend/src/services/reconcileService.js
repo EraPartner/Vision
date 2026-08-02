@@ -16,8 +16,9 @@
  *                         so the ADR-094 anchor+delta computed balance stays honest
  *                         — the descriptive-only default is preserved),
  *                         is_transfer=true and transfer_source='adjustment'
- *                         (migration 0075). computed rises to meet statement; drift
- *                         collapses to 0.
+ *                         (migration 0075), owned by the shared system recipient
+ *                         (`recipient_id` is NOT NULL and the row has no payee).
+ *                         computed rises to meet statement; drift collapses to 0.
  *
  * On a multi-currency account only the account's OWN currency partition is
  * reconciled — that is the only currency `accounts.statement_balance` can be a
@@ -34,6 +35,7 @@ import {
   computedBalanceByCurrencyAggLateral,
   statementPartition,
 } from '../repositories/accountBalanceSql.js';
+import { recipientRepository } from '../repositories/recipientRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import { roundToCents, toDecimal, toNumber } from '../lib/money.js';
@@ -159,12 +161,17 @@ export async function reconcileAccount(accountId, body) {
     // those differ, and a EUR adjustment would open a second partition instead
     // of moving the USD one the drift was measured against — leaving the badge
     // exactly where it was. They are the same code for every other account.
+    //
+    // `recipient_id` is NOT NULL (migration 0001) and this row has no payee, so
+    // it is owned by the shared system recipient — resolved inside this
+    // transaction, so a rolled-back reconcile leaves no trace of it either.
+    const systemRecipientId = await recipientRepository.getOrCreateSystemId();
     const ins = await query(
       `INSERT INTO transactions
-         (date, amount, currency, memo, account_id, is_transfer, transfer_source, is_active)
-       VALUES ($1, $2, $3, $4, $5, true, 'adjustment', true)
+         (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, true, 'adjustment', true)
        RETURNING id, amount, transfer_source`,
-      [today, drift, base.currency, ADJUSTMENT_MEMO, accountId],
+      [today, drift, base.currency, ADJUSTMENT_MEMO, accountId, systemRecipientId],
     );
     return {
       mode,
