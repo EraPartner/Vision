@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool, getPoolStats, query } from './database/connection.js';
+import { ensureAppRole } from './database/roleBootstrap.js';
 import { runMigrations } from './database/migrate.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
@@ -496,6 +497,20 @@ async function start() {
   }
 
   try {
+    // Least-privilege role bootstrap — MUST run before the pool poll below:
+    // in the three-variable setup DATABASE_URL points at the non-superuser app
+    // role, which does not exist yet on an already-initialised database (the
+    // docker/postgres-init script only runs on first volume init). Connects
+    // once as the privileged DATABASE_URL_MIGRATIONS role, creates the app
+    // role if missing and (re)applies the shared grant set. No-op in the
+    // classic single-role setup; warn-not-crash on every failure path.
+    const endRoleBootstrap = bootMark('role_bootstrap');
+    await ensureAppRole({
+      databaseUrl: settings.database.url,
+      migrationsUrl: settings.database.migrationsUrl,
+    });
+    endRoleBootstrap();
+
     // Wait for PostgreSQL to be fully ready.
     // With depends_on removed from docker-compose, both containers start in
     // parallel. On a cold first-ever start postgres can take up to ~30s to

@@ -56,11 +56,19 @@ function validateIdentifier(name, label) {
   }
 }
 
-// Parse DATABASE_URL from .env file contents and validate extracted identifiers.
+// Parse the PRIVILEGED database connection out of .env contents and validate
+// extracted identifiers. Prefers DATABASE_URL_MIGRATIONS (the least-privilege
+// setup generated for new installs, where DATABASE_URL points at the
+// non-superuser ftm_app role) and falls back to DATABASE_URL (single-role
+// installs). Backup/restore must run as the privileged role: restore drops and
+// recreates the database, which the app role can never do — and after a
+// restore, the backend's boot-time role bootstrap re-applies the app role's
+// grants when the app container restarts.
 // Returns { dbUser, dbPass, dbName } or throws on invalid/missing URL.
 function parseDatabaseUrlFromEnv(envContents) {
+  const migMatch = envContents.match(/^DATABASE_URL_MIGRATIONS=(.+)$/m);
   const lineMatch = envContents.match(/^DATABASE_URL=(.+)$/m);
-  const rawUrl = lineMatch ? lineMatch[1].trim() : null;
+  const rawUrl = migMatch ? migMatch[1].trim() : (lineMatch ? lineMatch[1].trim() : null);
 
   let dbUser = 'ftm_user';
   let dbPass = '';
