@@ -208,5 +208,14 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     // The broker recipient row itself survives — recipients are shared state.
     const { rows: rec } = await pool.query(`SELECT 1 FROM recipients WHERE normalized_name = 'DEGIRO'`);
     expect(rec).toHaveLength(1);
+
+    // Rollback also resets the staging rows to their pre-commit state: no
+    // committed_txn_id left dangling at the deleted ledger rows.
+    const { rows: staged } = await pool.query(
+      `SELECT status, committed_txn_id FROM portfolio_import_staging_rows WHERE batch_id = $1 ORDER BY row_index`,
+      [batchId],
+    );
+    expect(staged.map((s) => s.status)).toEqual(['matched', 'matched']);
+    for (const s of staged) expect(s.committed_txn_id).toBeNull();
   });
 });

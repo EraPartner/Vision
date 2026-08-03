@@ -193,6 +193,32 @@ export async function getCommittedRows(batchId) {
 }
 
 /**
+ * Reset a rolled-back batch's staging rows from 'committed' back to 'matched'
+ * and clear their committed_txn_id (which, post-rollback, would dangle at
+ * deleted ledger/portfolio rows). Called by rollbackBatch inside its
+ * transaction, right before markBatchAborted.
+ *
+ * 'matched' is the exact pre-commit state (both routes drain from it), it is in
+ * the status CHECK (0040: pending/validated/matched/committed/duplicate/error —
+ * there is no 'rolled_back'), and no reader depends on 'committed' persisting
+ * after an abort: the commit route refuses aborted batches, the preview totals
+ * count by match_source/error, and the batch-level counters live on
+ * portfolio_import_batches. It also makes any future "re-commit after rollback"
+ * feature import-once instead of double-importing.
+ *
+ * @param {number} batchId
+ * @returns {Promise<void>}
+ */
+export async function resetCommittedRowsToMatched(batchId) {
+  await query(
+    `UPDATE portfolio_import_staging_rows
+        SET status = 'matched', committed_txn_id = NULL
+      WHERE batch_id = $1 AND status = 'committed'`,
+    [batchId],
+  );
+}
+
+/**
  * @param {number} batchId
  * @returns {Promise<void>}
  */

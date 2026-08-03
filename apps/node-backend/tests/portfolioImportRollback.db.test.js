@@ -376,4 +376,143 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     // paid only by pre-migration rows.
     expect(statementsMatching(/DELETE FROM portfolio_transactions(_base)?\b/)).toHaveLength(6);
   });
+
+  // ── Atomicity ───────────────────────────────────────────────────────────
+
+  it('is atomic: a failure between the trade pass and the cash pass deletes NOTHING, and a retry completes', async () => {
+    const batchId = await newBatch({ brokerage: true });
+    for (let i = 1; i <= 3; i++) await stageTrade(batchId, i, { amount: 300 + i, units: 3, price_per_unit: (300 + i) / 3 });
+    expect((await commitBatch({ batchId })).imported).toBe(3);
+    const cashId = await commitCashRow(batchId, 0);
+    const lots = await lotIdsOfBatch(batchId);
+    expect(lots).toHaveLength(3);
+
+    // Inject a failure into the CASH pass — by the time it runs, the trade
+    // bulk DELETE has already executed inside the transaction.
+    const passthrough = query.getMockImplementation();
+    query.mockImplementation((/** @type {any[]} */ ...args) => {
+      if (/DELETE FROM transactions\b/.test(String(args[0]))) {
+        return Promise.reject(new Error('injected cash-pass failure'));
+      }
+      return passthrough(...args);
+    });
+    vi.clearAllMocks();
+    try {
+      await expect(rollbackBatch(batchId)).rejects.toThrow('injected cash-pass failure');
+    } finally {
+      query.mockImplementation(passthrough);
+    }
+    // The trade DELETE really was issued before the failure — what follows is
+    // the transaction rolling it back, not the pass never running.
+    expect(statementsMatching(/DELETE FROM portfolio_transactions(_base)?\b/)).toHaveLength(1);
+
+    // No partial rollback escaped: lots, ledger row, staging rows and batch
+    // status are all exactly as they were before the attempt.
+    expect(await lotIdsOfBatch(batchId)).toEqual(lots);
+    expect(await allLedgerIds()).toEqual([cashId]);
+    const { rows: staged } = await pool.query(
+      `SELECT status FROM portfolio_import_staging_rows WHERE batch_id = $1`, [batchId],
+    );
+    expect(staged.map((s) => s.status)).toEqual(['committed', 'committed', 'committed', 'committed']);
+    const { rows: b } = await pool.query(`SELECT status FROM portfolio_import_batches WHERE id = $1`, [batchId]);
+    expect(b[0].status).not.toBe('aborted');
+
+    // …which makes the failure retryable: the same call now completes in full.
+    const res = await rollbackBatch(batchId);
+    expect(res).toEqual({ deleted: 4 });
+    expect(await allLotIds()).toEqual([]);
+    expect(await allLedgerIds()).toEqual([]);
+  });
+
+  // ── route='cash' guard on non-brokerage batches ─────────────────────────
+
+  it("never runs the ledger pass for a NON-brokerage batch, even if a staging row claims route='cash'", async () => {
+    const batchId = await newBatch(); // brokerage: false
+    await stageTrade(batchId, 1);
+    expect((await commitBatch({ batchId })).imported).toBe(1);
+    const [lotId] = await lotIdsOfBatch(batchId);
+
+    // An innocent ledger row FORCED to share the lot's id — the collision that
+    // made an unguarded cash pass destructive.
+    await pool.query(`SELECT setval(pg_get_serial_sequence('transactions', 'id'), $1, false)`, [lotId]);
+    const { rows: tx } = await pool.query(
+      `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
+       VALUES ('2026-01-10', 55, 'EUR', 'innocent bystander', $1, $2, true) RETURNING id`,
+      [fx.accountId, fx.recipientId],
+    );
+    expect(Number(tx[0].id)).toBe(lotId);
+
+    // Hypothetical corruption (unreachable through the app — resolveAndCheck
+    // only writes route='cash' when is_brokerage): flip the committed row's
+    // route by hand. The commit above still wrote it as a TRADE.
+    await pool.query(
+      `UPDATE portfolio_import_staging_rows SET route = 'cash' WHERE batch_id = $1`,
+      [batchId],
+    );
+
+    vi.clearAllMocks();
+    const res = await rollbackBatch(batchId);
+
+    expect(res).toEqual({ deleted: 1 });                            // the lot, once
+    expect(await allLotIds()).toEqual([]);
+    expect(await allLedgerIds()).toEqual([lotId]);                  // bystander survives
+    expect(statementsMatching(/DELETE FROM transactions\b/)).toHaveLength(0);
+  });
+
+  it("rolls a non-brokerage route='cash' row back through the PORTFOLIO fallback when its lot predates 0086", async () => {
+    const batchId = await newBatch();
+    await stageTrade(batchId, 1);
+    expect((await commitBatch({ batchId })).imported).toBe(1);
+    const [lotId] = await lotIdsOfBatch(batchId);
+
+    // Pre-0086 vintage + the hypothetical route corruption together: the bulk
+    // pass can't reach the lot, so only the guarded fallback can delete it.
+    await pool.query(`UPDATE portfolio_transactions SET import_batch_id = NULL WHERE id = $1`, [lotId]);
+    await pool.query(`UPDATE portfolio_import_staging_rows SET route = 'cash' WHERE batch_id = $1`, [batchId]);
+    await pool.query(`SELECT setval(pg_get_serial_sequence('transactions', 'id'), $1, false)`, [lotId]);
+    const { rows: tx } = await pool.query(
+      `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
+       VALUES ('2026-01-11', 66, 'EUR', 'innocent bystander 2', $1, $2, true) RETURNING id`,
+      [fx.accountId, fx.recipientId],
+    );
+    expect(Number(tx[0].id)).toBe(lotId);
+
+    vi.clearAllMocks();
+    const res = await rollbackBatch(batchId);
+
+    expect(res).toEqual({ deleted: 1 });
+    expect(await allLotIds()).toEqual([]);
+    expect(await allLedgerIds()).toEqual([lotId]);
+    expect(statementsMatching(/DELETE FROM transactions\b/)).toHaveLength(0);
+  });
+
+  // ── Staging-row state after rollback ────────────────────────────────────
+
+  it('resets rolled-back staging rows to matched with committed_txn_id cleared; other statuses untouched', async () => {
+    const batchId = await newBatch({ brokerage: true });
+    for (let i = 1; i <= 2; i++) await stageTrade(batchId, i, { amount: 100 + i, units: 1, price_per_unit: 100 + i });
+    expect((await commitBatch({ batchId })).imported).toBe(2);
+    await commitCashRow(batchId, 0);
+    // A row the commit marked 'error' — it created nothing, so rollback must
+    // leave it alone.
+    await pool.query(
+      `INSERT INTO portfolio_import_staging_rows (batch_id, row_index, status, error_message)
+       VALUES ($1, 99, 'error', 'unresolved instrument')`,
+      [batchId],
+    );
+
+    const res = await rollbackBatch(batchId);
+    expect(res).toEqual({ deleted: 3 });
+
+    const { rows: staged } = await pool.query(
+      `SELECT row_index, status, route, committed_txn_id FROM portfolio_import_staging_rows
+        WHERE batch_id = $1 ORDER BY row_index`,
+      [batchId],
+    );
+    expect(staged.map((s) => s.status)).toEqual(['matched', 'matched', 'matched', 'error']);
+    // No dangling pointers at deleted ledger/portfolio rows — for EITHER route.
+    for (const s of staged) expect(s.committed_txn_id).toBeNull();
+    const { rows: b } = await pool.query(`SELECT status FROM portfolio_import_batches WHERE id = $1`, [batchId]);
+    expect(b[0].status).toBe('aborted');
+  });
 });
