@@ -40,7 +40,7 @@ import { escapeCsvValue } from '../lib/csv.js';
  * @property {string|null} memo
  * @property {string} amount NUMERIC(18,4) — pg emits NUMERIC as a string.
  * @property {string|null} currency
- * @property {string|null} balance NUMERIC(15,2) — pg emits NUMERIC as a string; null on manual rows.
+ * @property {string|null} balance NUMERIC(18,4) since migration 0088 — pg emits NUMERIC as a string; null on manual rows.
  * @property {string} category_name '' when the transaction has no resolved category.
  * @property {string|null} comment
  * @property {string[]} tags tag slugs, `{}` (empty array) when none.

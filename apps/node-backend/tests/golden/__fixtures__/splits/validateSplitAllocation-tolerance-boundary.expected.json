@@ -1,4 +1,4 @@
 {
-  "ok": true,
-  "error": null
+  "ok": false,
+  "error": "Split amount exceeds transaction total"
 }

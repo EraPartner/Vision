@@ -200,8 +200,9 @@ describeDb('Revolut multi-currency import (real DB)', () => {
       '2026-03-03 -40.0000 USD',
       '2026-03-04 -5.0000 EUR',
     ]);
-    // The Balance column rides along per row, including the blank one.
-    expect(rows.map((r) => r.balance)).toEqual(['175.00', '225.00', '260.00', null]);
+    // The Balance column rides along per row, including the blank one —
+    // transactions.balance emits at 4 dp since migration 0088 (NUMERIC(18,4)).
+    expect(rows.map((r) => r.balance)).toEqual(['175.0000', '225.0000', '260.0000', null]);
   });
 
   it('anchors each currency on its own stamps — a USD statement figure never anchors EUR', async () => {

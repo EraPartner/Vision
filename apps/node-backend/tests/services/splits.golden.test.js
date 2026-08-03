@@ -53,7 +53,11 @@ describe('splits.validateSplitAllocation golden', () => {
     await runGolden('splits/validateSplitAllocation-non-positive', validateSplitAllocation);
   });
 
-  it('accepts within cent tolerance', async () => {
+  it('rejects a sub-cent over-allocation (storage-precision comparison since 0088)', async () => {
+    // Pre-0088 this 0.004 overshoot was ACCEPTED: the cap compared at cents
+    // while NUMERIC(15,2) storage rounded the overshoot away. Storage is
+    // (18,4) now, so the overshoot would be stored verbatim — the validator
+    // compares at the same 4-dp scale and refuses.
     await runGolden(
       'splits/validateSplitAllocation-tolerance-boundary',
       validateSplitAllocation,

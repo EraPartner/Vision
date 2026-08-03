@@ -4,10 +4,12 @@
  * `*_raw_transactions` table where rounding-sensitive arithmetic happens on
  * the amount columns.
  *
- * Today both sides are NUMERIC(15,2), so this should print nothing. The
- * detector exists so we can revisit "widen raw bank tables to NUMERIC(18,4)"
- * with evidence if/when monetary precision drift surfaces. Widening only one
- * side blindly would introduce a new mismatch — wait for a real signal.
+ * The signal this detector waited for arrived: migration 0088 (ADR-060 D7)
+ * widened the raw bank tables AND every sibling money column to NUMERIC(18,4)
+ * in one revision, so both sides of the join are symmetric again — at 4 dp
+ * now, not 2. The detector stays: it would catch a future change that makes
+ * the arithmetic asymmetric again (e.g. a new money column added at a
+ * different scale, or cent-rounding reintroduced on one side of a join).
  *
  * Usage: bun run db:precision-drift
  */
@@ -58,7 +60,7 @@ walk(SRC_ROOT);
 
 if (findings.length === 0) {
   console.log('No precision-sensitive arithmetic detected on raw_transactions ↔ transactions joins.');
-  console.log('NUMERIC(15,2) on both sides remains symmetric — no action needed.');
+  console.log('NUMERIC(18,4) on both sides (migration 0088) remains symmetric — no action needed.');
   process.exit(0);
 }
 
@@ -70,5 +72,6 @@ for (const f of findings) {
 }
 console.log('');
 console.log('Review whether these multiply/divide amounts across the join boundary.');
-console.log('If so, the follow-up is to widen both sides (raw + transactions) to NUMERIC(18,4)');
-console.log('in a single migration. Do not widen one side in isolation.');
+console.log('Both sides are NUMERIC(18,4) since migration 0088 (ADR-060 D7); if a finding');
+console.log('involves a column at any other scale, align it to (18,4) in a single migration.');
+console.log('Do not change the scale of one side in isolation.');

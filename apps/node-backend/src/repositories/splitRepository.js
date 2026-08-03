@@ -13,9 +13,10 @@ import {
   computeOwedSummary,
   validateSplitAllocation,
   validateBatchSplitAllocation,
-  roundToCents as roundToCentsCalc,
+  normalizeMoneyAmount,
+  roundToMoneyPrecision,
 } from '../lib/calculations/splits.js';
-import { toDecimal, subtract, toNumber, roundToCents } from '../lib/money.js';
+import { toDecimal, subtract, toNumber } from '../lib/money.js';
 import { toAppDateString } from '../lib/timezone.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
@@ -121,8 +122,12 @@ export const splitRepository = {
   async createSplitAtomic({ transaction_id, recipient_id, amount, note }) {
     return withTransaction(async (client) => {
       const totals = await lockAndGetTotals(client, transaction_id);
+      // Normalize to the NUMERIC(18,4) storage precision BEFORE validating, so
+      // the value checked against the cap is byte-for-byte the value stored —
+      // an un-normalized float here let the batch path and this path disagree.
+      const normalizedAmount = normalizeMoneyAmount(Number(amount));
       const check = validateSplitAllocation({
-        newSplitAmount: Number(amount),
+        newSplitAmount: normalizedAmount,
         transactionTotal: totals.transaction_total,
         currentSplitTotal: totals.current_split_total,
       });
@@ -141,7 +146,7 @@ export const splitRepository = {
          SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
          FROM created
          LEFT JOIN recipients r ON r.id = created.recipient_id`,
-        [transaction_id, recipient_id, amount, note || null]
+        [transaction_id, recipient_id, normalizedAmount, note || null]
       );
       return formatSplit(result.rows[0]);
     });
@@ -161,7 +166,9 @@ export const splitRepository = {
       const totals = await lockAndGetTotals(client, transaction_id);
       const preparedSplits = splits.map((s) => ({
         recipient_id: s.recipient_id,
-        amount: roundToCentsCalc(Number(s.amount)),
+        // Domain precision (NUMERIC 18,4 — migration 0088), NOT cents: rounding
+        // stored splits to cents is what made a 4-dp parent unsplittable.
+        amount: normalizeMoneyAmount(Number(s.amount)),
         note: s.note || null,
       }));
       const check = validateBatchSplitAllocation({
@@ -420,11 +427,16 @@ export const splitRepository = {
    * audits — all in one transaction. The lock serializes concurrent /pay
    * requests so the validate→insert window cannot interleave (without it,
    * five parallel payments could each pass the precheck and collectively
-   * overpay). DB-level trigger fn_split_payment_overpayment_guard remains
-   * as defense-in-depth.
+   * overpay). There is NO DB-level overpayment trigger (an earlier comment
+   * cited an aspirational fn_split_payment_overpayment_guard that was never
+   * shipped) — this lock + validation IS the guard.
+   *
+   * Amount handling: the payment is normalized to the NUMERIC(18,4) storage
+   * precision and the cap is compared at that same scale (migration 0088);
+   * a cent-level cap with 4-dp storage admitted sub-cent over-payments.
    *
    * Throws NotFoundError if the split does not exist; ValidationError if
-   * the payment would overpay.
+   * the split is already settled or the payment would overpay.
    *
    * @param {{
    *   split_id: number,
@@ -438,11 +450,16 @@ export const splitRepository = {
   async addPayment({ split_id, amount, note, paid_at, actor = null }) {
     return withTransaction(async (client) => {
       const lockResult = await client.query(
-        `SELECT id, amount FROM transaction_splits WHERE id = $1 FOR UPDATE`,
+        `SELECT id, amount, is_settled FROM transaction_splits WHERE id = $1 FOR UPDATE`,
         [split_id]
       );
       if (lockResult.rows.length === 0) {
         throw new NotFoundError('Split not found');
+      }
+      if (lockResult.rows[0].is_settled) {
+        // A settled split is closed — further payments would push it past its
+        // amount (or resurrect settled dust) with nothing left to settle.
+        throw new ValidationError('Split is already settled');
       }
       const splitAmount = lockResult.rows[0].amount;
 
@@ -453,8 +470,11 @@ export const splitRepository = {
       );
       const alreadyPaid = paidResult.rows[0].paid;
 
-      const projected = roundToCents(toDecimal(alreadyPaid).plus(amount));
-      const limit = roundToCents(splitAmount);
+      // Validate at the NUMERIC(18,4) storage precision with the normalized
+      // amount that will actually be inserted (see the method docstring).
+      const normalizedAmount = normalizeMoneyAmount(amount);
+      const projected = roundToMoneyPrecision(toDecimal(alreadyPaid).plus(normalizedAmount));
+      const limit = roundToMoneyPrecision(splitAmount);
       if (projected.gt(limit)) {
         throw new ValidationError('Payment would exceed split outstanding balance');
       }
@@ -466,7 +486,7 @@ export const splitRepository = {
       `;
       const result = await client.query(insertSql, [
         split_id,
-        amount,
+        normalizedAmount,
         note || null,
         // Default to today's calendar date in APP_TIMEZONE — server-local
         // getFullYear/getMonth/getDate logged the wrong day near midnight on
@@ -474,16 +494,21 @@ export const splitRepository = {
         paid_at || toAppDateString(new Date()),
       ]);
 
+      // Auto-settle only when the payments cover the split EXACTLY at storage
+      // precision (both sides NUMERIC(18,4) — migration 0088). The old
+      // ROUND(…, 2) comparison settled a 4-dp split at a cent-rounded match,
+      // freezing sub-cent residue as "settled". `>=` (not `=`) so pre-0088
+      // rows that were historically over-paid can still close out.
       const settledResult = await client.query(
         `UPDATE transaction_splits ts
          SET is_settled = true
          WHERE ts.id = $1
            AND ts.is_settled = false
-           AND ROUND((
+           AND (
              SELECT COALESCE(SUM(sp.amount), 0)
              FROM split_payments sp
              WHERE sp.split_id = ts.id
-           ), 2) >= ROUND(ts.amount, 2)
+           ) >= ts.amount
          RETURNING id`,
         [split_id]
       );
@@ -497,7 +522,7 @@ export const splitRepository = {
           actor,
           JSON.stringify({
             payment_id: result.rows[0].id,
-            amount: Number(amount),
+            amount: normalizedAmount,
             paid_at: toWireDate(result.rows[0].paid_at),
             note: note || null,
             auto_settled: settledResult.rowCount > 0,
@@ -604,8 +629,10 @@ export const splitRepository = {
 
   /**
    * Sum of existing payments against a split. Used by route-layer
-   * overpayment validation before INSERT. DB-level trigger
-   * (fn_split_payment_overpayment_guard) is the second line of defense.
+   * overpayment validation before INSERT. The authoritative guard is
+   * addPayment's row lock + storage-precision validation (there is no
+   * DB-level overpayment trigger — an earlier comment cited an aspirational
+   * fn_split_payment_overpayment_guard that was never shipped).
    *
    * @param {number} splitId
    * @returns {Promise<number>}

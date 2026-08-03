@@ -446,7 +446,10 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     expect(await scalar('SELECT show_in_ticker FROM investment_ticker_prefs WHERE investment_id = 3')).toBe(false);
 
     // ---------------------------------------------------------------- downgrade
-    await alembic('downgrade', '-1');
+    // Back to the revision BEFORE the conversion (not `-1`: head has moved past
+    // 0087 — e.g. 0088's money-precision alignment — and those later downgrades
+    // must also unwind for the legacy shape to be restorable).
+    await alembic('downgrade', REV_BEFORE_CONVERSION);
 
     expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('v');
     expect(await scalar("SELECT to_regclass('public.investments_base') IS NOT NULL")).toBe(true);

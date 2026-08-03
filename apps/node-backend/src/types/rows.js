@@ -68,7 +68,7 @@
  * @property {Date} date DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string.
  * @property {string} amount NUMERIC(18,4) — pg emits NUMERIC as a string.
  * @property {string|null} currency VARCHAR(3); NOT NULL + DEFAULT 'EUR' from migration 0046, nullable on older rows.
- * @property {string|null} balance NUMERIC(15,2); NULL on manually-created rows (import pipeline only — ADR-094).
+ * @property {string|null} balance NUMERIC(18,4) since migration 0088 (ADR-060 D7); NULL on manually-created rows (import pipeline only — ADR-094).
  * @property {string|null} memo
  * @property {string|null} comment
  * @property {string|null} bank_account Denormalised account label; being retired in favour of `account_id` (ADR-088).
@@ -136,7 +136,7 @@
  * @typedef {object} PlannedTransactionRow
  * @property {number} id
  * @property {Date} planned_date DATE
- * @property {string} amount NUMERIC(15,2)
+ * @property {string} amount NUMERIC(18,4) since migration 0088 (ADR-060 D7)
  * @property {string|null} currency
  * @property {string|null} memo
  * @property {string|null} comment
@@ -361,7 +361,7 @@
  * @property {boolean} multi_currency_cash
  * @property {boolean} has_cash_sleeve
  * @property {number|null} funding_account_id
- * @property {string|null} statement_balance NUMERIC(15,2).
+ * @property {string|null} statement_balance NUMERIC(18,4) since migration 0088 (ADR-060 D7).
  * @property {string|null} statement_balance_date 'YYYY-MM-DD' — `to_char`-formatted in the projection.
  * @property {boolean} is_active
  * @property {Date|null} closed_at
@@ -405,7 +405,7 @@
  * @property {number} id
  * @property {number} transaction_id
  * @property {number} recipient_id
- * @property {string} amount NUMERIC(15,2)
+ * @property {string} amount NUMERIC(18,4) since migration 0088 (ADR-060 D7)
  * @property {string|null} note
  * @property {boolean} is_settled
  * @property {Date} created_at
@@ -452,7 +452,7 @@
  * @typedef {object} SplitPaymentRow
  * @property {number} id
  * @property {number} split_id
- * @property {string} amount NUMERIC(15,2)
+ * @property {string} amount NUMERIC(18,4) since migration 0088 (ADR-060 D7)
  * @property {Date} paid_at DATE
  * @property {string|null} note
  * @property {Date} created_at

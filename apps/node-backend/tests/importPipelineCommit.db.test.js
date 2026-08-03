@@ -460,12 +460,15 @@ describeDb('importPipeline commit (real Postgres)', () => {
     expect((await batchCounters(batchId)).rows_error).toBe(1);
   });
 
-  it('reports a hash-conflicting row that overflows NUMERIC(15,2) balance as an error', async () => {
+  it('reports a hash-conflicting row that overflows NUMERIC(18,4) balance as an error', async () => {
     await insertTxn({ tx_hash: 'clash-2', memo: 'ALREADY IMPORTED' });
 
+    // import_staging_rows.balance is NUMERIC(20,4) — deliberately wider than its
+    // commit target, transactions.balance at NUMERIC(18,4) since migration 0088
+    // (ADR-060 D7; 15 integer digits fit staging but overflow the target).
     const batchId = await newBatch();
     await stageRow(batchId, 0, {
-      tx_hash: 'clash-2', memo: 'INCOMING', balance: '99999999999999.0000',
+      tx_hash: 'clash-2', memo: 'INCOMING', balance: '999999999999999.0000',
     });
 
     expect(await commitBatch({ batchId })).toEqual({
@@ -684,7 +687,7 @@ describeDb('importPipeline commit (real Postgres)', () => {
       // ADR-046: no per-row override → the recipient's default category.
       category_id: fx.categoryId,
       currency: 'EUR',
-      balance: '1234.56',
+      balance: '1234.5600', // transactions.balance NUMERIC(18,4) since migration 0088
       tx_hash: 'h-cols',
     });
   });

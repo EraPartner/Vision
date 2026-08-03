@@ -87,11 +87,13 @@ const READING_SHAPE_RE = /^-?\d+([.,]\d+)?$/;
 const DRIFT_EPSILON = 0.005;
 
 /**
- * Round to cents, half away from zero — the rule PostgreSQL NUMERIC(15,2) uses
- * when it stores the figure. The preview, the epsilon short-circuit and the
- * PATCH body must all agree with what will actually be stored: previewing
- * 900.005 as "no drift" while the server stores a 0.01 drift would pop a
- * success toast over an unresolved difference.
+ * Round to cents, half away from zero. Storage is NUMERIC(18,4) since
+ * migration 0088 (ADR-060 D7), so this is deliberate INPUT policy rather than
+ * a storage constraint: bank statements quote cents, and the dialog keeps
+ * capturing readings at cent precision. What matters is that the preview, the
+ * epsilon short-circuit and the PATCH body all agree on the same rounded
+ * figure: previewing 900.005 as "no drift" while the server stores a 0.01
+ * drift would pop a success toast over an unresolved difference.
  */
 function roundToCents(value: number): number {
   const sign = value < 0 ? -1 : 1;

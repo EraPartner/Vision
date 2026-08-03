@@ -418,7 +418,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         expect(calls.patch).toHaveLength(0);
     });
 
-    it("rounds the reading to cents so the preview matches what NUMERIC(15,2) will store", async () => {
+    it("rounds the reading to cents so the preview matches the PATCHed figure (input policy — storage is NUMERIC(18,4) since 0088)", async () => {
         const calls = mockAccountApi();
         const user = userEvent.setup();
         await renderDialog(DRIFTING);
