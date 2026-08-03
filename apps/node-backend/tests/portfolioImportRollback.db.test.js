@@ -130,13 +130,13 @@ async function stageTrade(batchId, rowIndex, over = {}) {
  * `transactions` row on the sleeve plus a `committed` staging row whose
  * `route='cash'` and whose `committed_txn_id` is that TRANSACTIONS id.
  *
- * Seeded rather than driven through `commitBatch` on purpose: the brokerage
- * cash INSERT in portfolioImportPipeline/commit.js omits `recipient_id`, which
- * has been NOT NULL on `transactions` since migration 0001, so that path errors
- * every cash row and can never produce this state itself (reported separately —
- * out of scope here). Rollback must still handle the state correctly: real
- * databases can hold it from any future fix, and the routing invariant under
- * test is about the ID SHAPE, not about who wrote it.
+ * Seeded rather than driven through `commitBatch` on purpose: these fixtures
+ * FORCE the ledger id (setval) to collide with a portfolio lot id, which the
+ * real commit path can never do, and the routing invariant under test is about
+ * the ID SHAPE, not about who wrote it. The commit path itself (which now
+ * supplies `recipient_id` — NOT NULL since migration 0001) is exercised
+ * end-to-end in portfolioImportBrokerageCash.db.test.js, including rollback of
+ * rows it actually committed.
  *
  * @param {number} batchId
  * @param {number} rowIndex

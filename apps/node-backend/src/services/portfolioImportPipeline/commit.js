@@ -15,6 +15,7 @@
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
+import recipientRepository from '../../repositories/recipientRepository.js';
 import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
 import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
 
@@ -73,8 +74,15 @@ export async function commitBatch({ batchId, onProgress }) {
   // Batch-level brokerage account (ADR-095): every lot from this batch lands on it,
   // giving imported holdings a real per-account position (ADR-091). NULL = unassigned.
   // In brokerage mode the batch ALSO routes external cash rows into the ledger.
+  // The account's institution/name ride along as the broker label for the cash
+  // rows' recipient (see cashRecipientId below).
   const { rows: batchRows } = await query(
-    `SELECT account_id, is_brokerage FROM portfolio_import_batches WHERE id = $1`,
+    `SELECT b.account_id, b.is_brokerage,
+            a.institution AS account_institution,
+            a.name AS account_name
+       FROM portfolio_import_batches b
+       LEFT JOIN accounts a ON a.id = b.account_id
+      WHERE b.id = $1`,
     [batchId],
   );
   const batchAccountId = batchRows[0]?.account_id ?? undefined;
@@ -112,6 +120,37 @@ export async function commitBatch({ batchId, onProgress }) {
   let errors = 0;
   /** @type {Set<string>} */
   const committedHashes = new Set();
+
+  // ── Cash-row recipient, hoisted to once per commit ──
+  // `transactions.recipient_id` has been NOT NULL since migration 0001, with no
+  // default and no supplying trigger, so every brokerage cash INSERT must carry
+  // a real id. The payee of an imported brokerage cash movement is the batch's
+  // BROKER: the sleeve account's `institution`, or failing that its `name`,
+  // resolved through recipientRepository.createOrGet — the same
+  // trimmed/uppercased display name + normalized_name unique-key path every
+  // other recipient takes, so re-imports and casing/whitespace variants
+  // ("DEGIRO " vs "degiro") land on ONE identity instead of forking
+  // near-duplicates. A batch whose account carries no usable label falls back
+  // to the shared 'SYSTEM' recipient (recipientRepository.getOrCreateSystemId),
+  // like the other server-generated ledger rows.
+  //
+  // Resolved here, OUTSIDE the chunk transactions: the recipient is shared
+  // state, not batch state — a chunk rollback must not undo it, and the unique
+  // key makes the write idempotent anyway.
+  /** @type {number|null} */
+  let cashRecipientId = null;
+  if (isBrokerage && batchAccountId && matched.some((r) => r.route === 'cash')) {
+    const brokerName = [batchRows[0]?.account_institution, batchRows[0]?.account_name]
+      .map((v) => (typeof v === 'string' ? v.trim() : ''))
+      .find((v) => v.length > 0);
+    if (brokerName) {
+      const { recipient } = await recipientRepository.createOrGet({ name: brokerName });
+      cashRecipientId = recipient?.id ?? null;
+    }
+    if (cashRecipientId == null) {
+      cashRecipientId = await recipientRepository.getOrCreateSystemId();
+    }
+  }
 
   // Per-batch FX cache: the on-or-before stored-rate lookup is deterministic for
   // a given (currency, tx_date), so resolve each pair once instead of issuing a
@@ -175,9 +214,9 @@ export async function commitBatch({ batchId, onProgress }) {
           try {
             const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
             const r = await query(
-              `INSERT INTO transactions (date, amount, currency, memo, account_id, is_active)
-               VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
-              [row.tx_date, signedCashAmount(row), row.currency || 'EUR', memo, batchAccountId],
+              `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
+               VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id`,
+              [row.tx_date, signedCashAmount(row), row.currency || 'EUR', memo, batchAccountId, cashRecipientId],
             );
             await query(
               `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
