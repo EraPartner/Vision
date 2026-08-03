@@ -61,6 +61,10 @@ services:
     cpus: 4.0
     environment:
       SERVER_HOST: "0.0.0.0"
+      # The container binds 0.0.0.0 but the port is published on host loopback
+      # only (see ports: above) — acknowledge that so a tokenless start is not
+      # refused. Remove this (and set ADMIN_AUTH_TOKEN) if you widen ports:.
+      ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "true"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
       APP_VERSION: ${APP_IMAGE_TAG:-latest}
     volumes:
