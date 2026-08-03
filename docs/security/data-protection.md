@@ -133,17 +133,34 @@ Combining wildcard origin with `Allow-Credentials: true` allows any web page to 
 
 ### Frontend (Zod)
 
-All form inputs are validated with Zod schemas before submission:
+The financial forms — transactions (add + inline edit), portfolio transactions
+(add/edit), accounts (create/edit), and the tax profile — validate on submit
+with Zod schemas built from the shared field builders in
+[[apps/frontend/src/lib/forms/schemas.ts]] (locale-aware money amounts,
+YYYY-MM-DD dates, currency codes). Schema issue messages carry i18n *keys*,
+translated at the form seam, so validation copy flows through each form's
+existing presentation path (inline ARIA field errors via `useFieldErrors`, or
+the form's single error toast). Per-form schemas live next to their forms:
+
+- `apps/frontend/src/components/forms/addTransactionForm.ts` (`addTransactionSchema`)
+- `apps/frontend/src/components/portfolio/portfolioTxnSchema.ts` (add/edit portfolio txns)
+- `apps/frontend/src/features/accounts/accountFormSchema.ts`
+- `apps/frontend/src/components/tax/taxProfileSchema.ts`
+
+Non-financial forms may still use plain controlled-state checks; new forms
+should compose the shared builders. Example (real schema):
 
 ```typescript
-import { z } from 'zod';
-
-const transactionSchema = z.object({
-  date: z.string().date(),
-  amount: z.number(),
-  recipient_id: z.number().positive(),
-  category_id: z.number().positive().optional(),
-  memo: z.string().max(500).optional(),
+export const addTransactionSchema = z.object({
+  transaction_date: ymdDateString('validation.required'),
+  amount: moneyAmount({
+    required: 'validation.required',
+    invalid: 'addTxn.invalidAmount',
+    zero: 'addTxn.zeroAmount',
+  }),
+  bank_account: requiredTrimmedString('portfolio.move.selectAccount'),
+  recipient_id: requiredString('validation.required'),
+  // category/memo/currency/comment pass through unvalidated
 });
 ```
 

@@ -7,13 +7,22 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useUpdateTransaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
-import { formatCurrency, numberFormatToLocale, parseLocaleNumber } from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { moneyAmount, ymdDateString } from "@/lib/forms/schemas";
 import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
 import { TagInput } from "@/components/shared/TagInput";
 import type { TransactionUpdate } from "@/types/api";
 import type { TableTransaction, InfoEditableField } from "../types";
+
+// Inline single-field edits keep their original silent-block behavior (the
+// row simply stays in edit mode), so these schemas' i18n-key messages are
+// never rendered — the parse result is the contract. Amount accepts any
+// locale-formatted finite number, 0 and negatives included (the sign flips
+// expense/income); date must be a non-empty YYYY-MM-DD.
+const editAmountSchema = moneyAmount({ required: "addTxn.invalidAmount", invalid: "addTxn.invalidAmount" });
+const editDateSchema = ymdDateString("validation.required");
 
 interface TransactionInfoDialogProps {
     infoTransaction: TableTransaction | null;
@@ -65,12 +74,12 @@ export function TransactionInfoDialog({
         let localValue: string | number | undefined = trimmed;
 
         if (editingInfoField === 'amount') {
-            const parsed = parseLocaleNumber(trimmed);
-            if (Number.isNaN(parsed)) return;
-            payload.amount = parsed;
-            localValue = parsed;
+            const parsed = editAmountSchema.safeParse(trimmed);
+            if (!parsed.success) return;
+            payload.amount = parsed.data;
+            localValue = parsed.data;
         } else if (editingInfoField === 'date') {
-            if (!trimmed) return;
+            if (!editDateSchema.safeParse(trimmed).success) return;
             payload.transaction_date = trimmed;
         } else if (editingInfoField === 'memo') {
             // Cleared fields must be SENT as explicit null — `|| undefined`

@@ -1,5 +1,5 @@
-import { parseDecimal } from '@/lib/decimal';
 import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
+import { editPortfolioTxnSchema, parseNonNegative } from './portfolioTxnSchema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -22,13 +22,6 @@ import {
 } from '@/hooks/useDialogFormState';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
-
-function parseNonNegative(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  const n = parseDecimal(value, NaN);
-  if (!Number.isFinite(n) || n < 0) return undefined;
-  return n;
-}
 
 function normalizeYmdInput(value?: string): string {
   if (!value) return '';
@@ -88,19 +81,17 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
 
   const isBuySell = transaction.type === 'buy' || transaction.type === 'sell';
   const isGift = transaction.type === 'gift';
-  const isUnitMathTxn = isBuySell || isGift;
 
-  const amountInput = parseNonNegative(form.amount);
-  const unitsInput = parsePositive(form.units);
-  const priceInput = parsePositive(form.pricePerUnit);
-
-  const unitMath = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput, derive: isUnitMathTxn });
+  // Render-time unit math only feeds the live UI (the derived-amount hint and
+  // the inline two-of-three message); the submit gate below re-runs the same
+  // helper inside the Zod schema, so the two can never disagree.
+  const unitMath = deriveUnitMath({
+    amount: parseNonNegative(form.amount),
+    units: parsePositive(form.units),
+    price: parsePositive(form.pricePerUnit),
+    derive: isBuySell || isGift,
+  });
   const { derivedAmount } = unitMath;
-
-  const effectiveAmount = unitMath.effectiveAmount;
-  const effectiveUnits = unitMath.effectiveUnits;
-  const effectivePrice = unitMath.effectivePrice;
-
   const buySellIsValid = !isBuySell || unitMath.isConsistent;
 
   const showUnits = unitBased && ['buy', 'sell', 'gift'].includes(transaction.type);
@@ -110,35 +101,11 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isBuySell && !buySellIsValid) {
-      toast.error(t('addPortTxn.error.twoOfThreeRequired'));
-      return;
-    }
-    if (!isGift && (effectiveAmount === undefined || isNaN(effectiveAmount) || effectiveAmount <= 0)) {
-      toast.error(t('addPortTxn.error.amountRequired'));
-      return;
-    }
-    if (isGift && effectiveUnits === undefined) {
-      toast.error(t('addPortTxn.error.unitsRequired'));
-      return;
-    }
-    if (!form.date) {
-      toast.error(t('plannedPage.link.pickDate'));
-      return;
-    }
-
-    // Same guard as the Add dialog: NaN fallback so garbage can't silently
-    // become €0, and an FX rate of 0 (min="0" permits it) must not reach the
-    // backend's "must be positive" check as a raw 400.
-    const feesValue = form.fees ? parseDecimal(form.fees, NaN) : 0;
-    const taxesValue = form.taxes ? parseDecimal(form.taxes, NaN) : 0;
-    const fxRateValue = form.fxRateToEur ? parseDecimal(form.fxRateToEur, NaN) : null;
-    if (
-      !Number.isFinite(feesValue) || feesValue < 0 ||
-      !Number.isFinite(taxesValue) || taxesValue < 0 ||
-      (fxRateValue !== null && (!Number.isFinite(fxRateValue) || fxRateValue <= 0))
-    ) {
-      toast.error(t('addPortTxn.error.invalidNumber'));
+    // Validation lives in editPortfolioTxnSchema; the first failing rule's
+    // i18n-key message becomes the same single error toast as before.
+    const parsed = editPortfolioTxnSchema({ isBuySell, isGift }).safeParse(form);
+    if (!parsed.success) {
+      toast.error(t(parsed.error.issues[0].message));
       return;
     }
 
@@ -146,18 +113,18 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
       // account_id: a number reassigns the lot, explicit null clears it back to
       // unassigned (the PATCH endpoint maps null → SQL NULL, undefined → unchanged).
       await updateTransaction(transaction.id, {
-        date: form.date,
-        amount: effectiveAmount,
-        units: effectiveUnits,
-        price_per_unit: effectivePrice,
+        date: parsed.data.date,
+        amount: parsed.data.amount,
+        units: parsed.data.units,
+        price_per_unit: parsed.data.pricePerUnit,
         // Cleared fields must be SENT, not dropped: undefined keys vanish from
         // the JSON body and the backend merge keeps the old value — "delete the
         // €7.50 fee → Save → success" left the fee in the DB (and the FX/note
         // likewise). Cleared money fields are 0; cleared note/FX are explicit
         // null, same semantics as account_id below.
-        fees: isGift ? 0 : feesValue,
-        taxes: isGift ? 0 : taxesValue,
-        fx_rate_to_eur: fxRateValue,
+        fees: parsed.data.fees,
+        taxes: parsed.data.taxes,
+        fx_rate_to_eur: parsed.data.fxRateToEur,
         note: form.note.trim() || null,
         account_id: form.accountId ? Number(form.accountId) : null,
         is_recurring: form.isRecurring,

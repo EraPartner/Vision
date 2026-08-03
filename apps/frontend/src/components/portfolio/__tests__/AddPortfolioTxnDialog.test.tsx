@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
@@ -74,6 +75,10 @@ const SAVINGS_INVESTMENT: InvestmentSummary = {
 };
 
 describe("AddPortfolioTxnDialog", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("renders trigger button", async () => {
         // Arrange + Act
         renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
@@ -282,6 +287,37 @@ describe("AddPortfolioTxnDialog", () => {
         // Assert 2 — still blocked client-side
         expect(screen.getByRole("dialog")).toBeInTheDocument();
         expect(posted).toBe(false);
+    });
+
+    it("toasts the same first-rule message (amount required) for a dividend with no amount", async () => {
+        // The schema now sources the messages, but the presentation is the
+        // same single toast for the first failing rule.
+        const toastSpy = vi.spyOn(toast, "error");
+        let posted = false;
+        server.use(
+            http.post(`${API_BASE}/api/investments/1/transactions`, () => {
+                posted = true;
+                return ok(PORTFOLIO_TXN_STUB);
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        const typeTrigger = screen.getAllByRole("combobox")[0];
+        await user.click(typeTrigger);
+        await user.click(await screen.findByRole("option", { name: /dividend/i }));
+
+        await user.click(screen.getByRole("button", { name: /record/i }));
+
+        await waitFor(() =>
+            expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/amount is required/i)),
+        );
+        expect(toastSpy).toHaveBeenCalledTimes(1);
+        expect(posted).toBe(false);
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
     it("shows buy/sell/dividend transaction types for etf asset class", async () => {

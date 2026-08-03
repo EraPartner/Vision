@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { useBelgianTaxProfile, type BelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
+import { taxProfileIncomeStepSchema } from './taxProfileSchema';
 import {
     EmploymentStep,
     IncomeStep,
@@ -102,25 +103,18 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
 
     // Per-step required-field validation. Returns a user-facing error message when
     // the step's required fields are missing/invalid, or null when the step is OK.
-    // Only the income step has hard requirements: a positive gross annual income,
-    // and — when the "actual expenses" deduction method is chosen — a positive
-    // actual-expenses amount. The other steps have valid defaults for every field.
+    // The rules live in taxProfileIncomeStepSchema (Zod) — only the income step
+    // has hard requirements; the schema's issue messages are i18n keys,
+    // translated here so the toast copy is unchanged.
     const stepError = useCallback(
         (s: Step): string | null => {
             if (s === 'income') {
-                if (!((profile.grossAnnualIncome ?? 0) > 0)) {
-                    return t('tax.profile.validation.grossIncomeRequired');
-                }
-                if (
-                    profile.professionalExpenseMethod === 'actual' &&
-                    !((profile.actualProfessionalExpenses ?? 0) > 0)
-                ) {
-                    return t('tax.profile.validation.actualExpensesRequired');
-                }
+                const result = taxProfileIncomeStepSchema.safeParse(profile);
+                if (!result.success) return t(result.error.issues[0].message);
             }
             return null;
         },
-        [profile.grossAnnualIncome, profile.professionalExpenseMethod, profile.actualProfessionalExpenses, t],
+        [profile, t],
     );
 
     // Index of the earliest invalid step strictly before `targetIdx`, or -1 if all
