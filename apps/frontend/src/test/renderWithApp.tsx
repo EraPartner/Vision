@@ -1,6 +1,6 @@
 import { ReactElement, ReactNode } from "react";
 import { render, RenderOptions, RenderResult } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SettingsProvider } from "@/contexts/SettingsContext";
@@ -74,7 +74,7 @@ function AllProviders({
 /**
  * Render a React tree with Vision's full provider stack and a memory router.
  * Use for component-integration tests that need real context, real react-query,
- * and real react-router-dom navigation, with HTTP intercepted by MSW.
+ * and real react-router navigation, with HTTP intercepted by MSW.
  */
 export function renderWithApp(
     ui: ReactElement,

@@ -16,8 +16,14 @@
  *                         so the ADR-094 anchor+delta computed balance stays honest
  *                         — the descriptive-only default is preserved),
  *                         is_transfer=true and transfer_source='adjustment'
- *                         (migration 0075). computed rises to meet statement; drift
- *                         collapses to 0.
+ *                         (migration 0075), owned by the shared system recipient
+ *                         (`recipient_id` is NOT NULL and the row has no payee).
+ *                         computed rises to meet statement; drift collapses to 0.
+ *
+ * On a multi-currency account only the account's OWN currency partition is
+ * reconciled — that is the only currency `accounts.statement_balance` can be a
+ * statement for, and it is the currency both outcomes are denominated in. See
+ * the comment at the drift read below.
  *
  * Both are opt-in: the caller must name the mode. 'adjustment' follows the
  * 'opening' (0073) / 'trade' (0053) precedent so the row stays out of
@@ -25,9 +31,14 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
-import { COMPUTED_BALANCE_LATERAL } from '../repositories/accountBalanceSql.js';
+import {
+  computedBalanceByCurrencyAggLateral,
+  statementPartition,
+} from '../repositories/accountBalanceSql.js';
+import { recipientRepository } from '../repositories/recipientRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { todayAppDateString } from '../lib/timezone.js';
+import { roundToCents, toDecimal, toNumber } from '../lib/money.js';
 
 const ADJUSTMENT_MEMO = 'BALANCE ADJUSTMENT';
 const VALID_MODES = new Set(['accept', 'adjustment']);
@@ -74,15 +85,15 @@ export async function reconcileAccount(accountId, body) {
     );
     if (!lockRes.rows[0]) throw new NotFoundError(`Account ${accountId} not found`);
 
-    // Statement figure + the live computed balance (same lateral the hub/drift
-    // use). The FOR UPDATE cannot ride on this SELECT — the lateral aggregates,
-    // so the lock is taken separately above.
+    // Statement figure + the live computed balance, per currency partition (the
+    // same lateral the hub badge reads). The FOR UPDATE cannot ride on this
+    // SELECT — the lateral aggregates, so the lock is taken separately above.
     const res = await query(
       `SELECT a.currency,
               a.statement_balance,
-              COALESCE(lb.balance, 0) AS computed_balance
+              bp.balance_parts
          FROM accounts a
-         ${COMPUTED_BALANCE_LATERAL}
+         ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
         WHERE a.id = $1`,
       [accountId],
     );
@@ -93,9 +104,24 @@ export async function reconcileAccount(accountId, body) {
       throw new ValidationError('Account has no statement balance to reconcile against');
     }
 
+    // Multi-currency: reconcile ONE partition — the reconciliation base, which
+    // is the shared definition the hub badge and the reconcile dialog's
+    // `reconcilable_balance` also read, so the figure resolved here is the one
+    // the user was shown. `statement_balance` is a single figure sitting next to
+    // `accounts.currency` and carrying a single date, so that is the only
+    // currency it can be a statement for; measuring the drift against anything
+    // else — a cross-currency Σ of bare amounts, or an FX-converted total that
+    // moves with the daily rate — would not actually clear the badge. Every
+    // single-currency account keeps its previous figure exactly (see
+    // statementPartition). The other partitions are untouched: they have no
+    // statement figure to reconcile against.
+    const base = statementPartition(row.balance_parts, row.currency);
     const statement = Number(row.statement_balance);
-    const computed = Number(row.computed_balance);
-    const drift = statement - computed;
+    // Round the base to cents BEFORE differencing, mirroring the hub's
+    // `reconcilable_balance` — the drift resolved here must equal the drift
+    // the dialog displayed, even when the partition sum carries a 4-dp tail.
+    const computed = toNumber(roundToCents(toDecimal(base.balance)));
+    const drift = toNumber(toDecimal(statement).minus(toDecimal(computed)));
 
     if (Math.abs(drift) < DRIFT_EPSILON) {
       throw new ValidationError('Account is already reconciled (no drift to resolve)');
@@ -106,7 +132,12 @@ export async function reconcileAccount(accountId, body) {
     const today = todayAppDateString();
 
     if (mode === 'accept') {
-      // Adopt the computed balance as the statement of record; drift → 0.
+      // Adopt the reconciliation base — exactly the figure the dialog displayed
+      // — as the statement of record; drift → 0. On an account whose declared
+      // currency holds nothing the base is 0, and writing 0 is the honest
+      // outcome: there is no balance in the statement's currency to adopt.
+      // (The dialog shows that 0 as the base, so this is no longer a figure the
+      // user never saw.)
       const upd = await query(
         `UPDATE accounts
             SET statement_balance = $2, statement_balance_date = $3, updated_at = NOW()
@@ -124,13 +155,23 @@ export async function reconcileAccount(accountId, body) {
     }
 
     // mode === 'adjustment': stamp a descriptive delta row (no `balance`) so the
-    // computed balance rises to meet the statement.
+    // computed balance rises to meet the statement. The row is stamped in the
+    // BASE's currency, not blindly in `accounts.currency`: on a mislabelled
+    // single-currency account (USD rows under an account still declared EUR)
+    // those differ, and a EUR adjustment would open a second partition instead
+    // of moving the USD one the drift was measured against — leaving the badge
+    // exactly where it was. They are the same code for every other account.
+    //
+    // `recipient_id` is NOT NULL (migration 0001) and this row has no payee, so
+    // it is owned by the shared system recipient — resolved inside this
+    // transaction, so a rolled-back reconcile leaves no trace of it either.
+    const systemRecipientId = await recipientRepository.getOrCreateSystemId();
     const ins = await query(
       `INSERT INTO transactions
-         (date, amount, currency, memo, account_id, is_transfer, transfer_source, is_active)
-       VALUES ($1, $2, $3, $4, $5, true, 'adjustment', true)
+         (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, true, 'adjustment', true)
        RETURNING id, amount, transfer_source`,
-      [today, drift, row.currency, ADJUSTMENT_MEMO, accountId],
+      [today, drift, base.currency, ADJUSTMENT_MEMO, accountId, systemRecipientId],
     );
     return {
       mode,

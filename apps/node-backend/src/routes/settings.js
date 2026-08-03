@@ -161,6 +161,7 @@ const SETTING_SCHEMAS = {
   onboarding_complete: z.boolean(),
   app_settings: jsonObjectSchema,
   backup_settings: jsonObjectSchema,
+  services_settings: jsonObjectSchema,
   widget_visibility: jsonObjectSchema,
   rebalance_plans: rebalancePlansSchema,
   belgian_tax_profile: belgianTaxProfileSchema,
@@ -243,6 +244,12 @@ const SETTING_DEFAULTS = {
   backup_settings: {
     backupDir: '',
     backupOnQuit: false,
+  },
+  // Opt-in "keep services running on quit" toggle (packaging/electron/main.js
+  // will-quit handler) — leaving containers up puts the next launch on the
+  // hot-boot path instead of a warm restart.
+  services_settings: {
+    keepServicesOnQuit: false,
   },
   widget_visibility: {},
   cost_basis_method: 'weighted_avg',

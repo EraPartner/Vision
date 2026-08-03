@@ -61,7 +61,7 @@ export default function SavingsPage() {
     return (
       <div className="space-y-6">
         <PageHeader title={t('savings.title')} icon={PiggyBank} />
-        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+        <PageError title={t('savings.pageErrorTitle')} message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
       </div>
     );
   }

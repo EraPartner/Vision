@@ -3,7 +3,7 @@ title: Health API
 type: api
 status: active
 date: 2026-04-19
-updated: 2026-05-23
+updated: 2026-08-02
 tags: [api, health, monitoring, backend, readiness, warmup, electron, liveness, startup]
 description: Health check endpoints for backend readiness and cache warmup status. GET /health is a shallow liveness probe; GET /health/detailed is the warmup readiness gate used by the Electron shell for initial navigation.
 aliases: [health endpoints, readiness check, backend health]
@@ -19,7 +19,7 @@ The Health API provides two endpoints that serve distinct roles:
 - **`GET /health/detailed`** — **Warmup readiness** probe. Returns `status: warming | ready` and per-cache boolean flags. Used by the Electron shell to gate the **first** page navigation (`pollReady()`), preventing a blank dashboard on cold start.
 
 > [!info] Why two probes?
-> `GET /health` can return 200 before `refreshMaterializedViews()` and other backend warmup tasks finish. The Electron shell previously navigated on this shallow check, causing cold-start blank dashboards. It now navigates only when `/health/detailed` reports `status === 'ready'` OR `caches.materializedViews === true`. The watchdog intentionally keeps polling the lighter `/health` — "is the backend process alive?" is the right question there, not "are all caches warm?".
+> `GET /health` can return 200 before the materialized views are built/refreshed and the other backend warmup tasks finish. The Electron shell previously navigated on this shallow check, causing cold-start blank dashboards. It now navigates only when `/health/detailed` reports `status === 'ready'` OR `caches.materializedViews === true`. The watchdog intentionally keeps polling the lighter `/health` — "is the backend process alive?" is the right question there, not "are all caches warm?".
 
 Both endpoints return quickly (no I/O on the hot path) and are safe for high-frequency polling.
 
@@ -94,7 +94,7 @@ GET /health/detailed
 | `version` | string | Application version |
 | `timestamp` | string | ISO 8601 timestamp when response was generated |
 | `caches` | object | Map of cache names to boolean warmup flags |
-| `caches.materializedViews` | boolean | Materialized views have been refreshed (`refreshMaterializedViews()` complete). **This is the primary gate used by the Electron shell for initial navigation** — it is DB-only and fast, so it becomes true well before network-bound tasks. |
+| `caches.materializedViews` | boolean | The whole materialized-view lifecycle has settled — create, index, refresh (`startup/warmup.js`). **This is the primary gate used by the Electron shell for initial navigation** — it is DB-only, so it becomes true well before network-bound tasks. On a warm boot the views already exist and creation is a metadata no-op; on a first boot (or after a migration that drops a view to redefine it) it also covers building them, which is a full aggregation scan of `transactions` per view. |
 | `caches.exchangeRates` | boolean | Exchange rate cache is warm (loaded + synced from price provider) |
 | `caches.inflation` | boolean | Inflation rate cache is warm |
 | `caches.portfolioSnapshots` | boolean | Portfolio snapshot cache is warm |
@@ -104,10 +104,11 @@ GET /health/detailed
 
 At startup, the backend initializes several caches:
 
-1. **Exchange Rates** — Fetches from price provider (e.g., Fixer, ECB), populates in-memory cache
-2. **Inflation Rates** — Loads historical inflation data for tax calculations
-3. **Portfolio Snapshots** — Computes portfolio snapshots for all users
-4. **Info Caches** — Legacy aggregation caches (Phase 9 shadow mode)
+1. **Materialized Views** — Creates any missing view, ensures its unique index, then refreshes (`materializedViewService.js`). Deliberately *not* pre-`listen`: a missing view means a full aggregation scan of `transactions`, and reads fall back to live queries while it is absent
+2. **Exchange Rates** — Fetches from price provider (e.g., Fixer, ECB), populates in-memory cache
+3. **Inflation Rates** — Loads historical inflation data for tax calculations
+4. **Portfolio Snapshots** — Computes portfolio snapshots for all users
+5. **Info Caches** — Legacy aggregation caches (Phase 9 shadow mode)
 
 Each warmup task:
 - Runs asynchronously in the background

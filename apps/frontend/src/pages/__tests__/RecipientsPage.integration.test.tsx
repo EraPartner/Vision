@@ -30,9 +30,9 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        // PageError renders a hardcoded "Something went wrong" h3
+        // PageError renders the default "Couldn't load this page" h3 (no title prop passed here)
         expect(
-            await screen.findByRole("heading", { name: /something went wrong/i }, { timeout: 5000 }),
+            await screen.findByRole("heading", { name: /couldn't load this page/i }, { timeout: 5000 }),
         ).toBeInTheDocument();
 
         consoleSpy.mockRestore();

@@ -1,7 +1,11 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
 import { categoryKeys } from '@/lib/queryKeys';
+import {
+  CATEGORY_FETCH_LIMIT,
+  fetchCategoriesForExclusions,
+  takeStartedCategoriesPreload,
+} from '@/lib/categoriesPreload';
 import { useSettings } from '@/contexts/SettingsContext';
 
 /**
@@ -19,8 +23,10 @@ import { useSettings } from '@/contexts/SettingsContext';
 
 // One limit for the whole app. Categories rarely number in the hundreds; if a
 // deployment ever exceeds this, the fetch is uniform across screens (no per-screen
-// divergence) and the cap is logged below rather than silently truncating.
-export const CATEGORY_FETCH_LIMIT = 1000;
+// divergence) and the cap is logged rather than silently truncating. Defined in
+// lib/categoriesPreload (which owns the request, so boot and hook issue exactly
+// the same one); re-exported here, where it has always lived for consumers.
+export { CATEGORY_FETCH_LIMIT };
 
 export type ExclusionScopeName = 'dashboard' | 'statistics';
 
@@ -38,7 +44,7 @@ export interface ExcludedIds {
 const EMPTY: number[] = [];
 
 export function useExcludedIds(scope: ExclusionScopeName): ExcludedIds {
-  const { settings } = useSettings();
+  const { settings, isLoading: settingsLoading } = useSettings();
 
   const exclusionsApply =
     settings.exclusionScope === 'everywhere' || settings.exclusionScope === scope;
@@ -49,14 +55,11 @@ export function useExcludedIds(scope: ExclusionScopeName): ExcludedIds {
   const categoriesQuery = useQuery({
     queryKey: categoryKeys.allForExclusions,
     queryFn: async () => {
-      const res = await apiClient.getCategories({ limit: CATEGORY_FETCH_LIMIT });
-      if (res.items.length >= CATEGORY_FETCH_LIMIT) {
-        // Uniform across screens, but flag the (unlikely) truncation rather than hide it.
-        console.warn(
-          `useExcludedIds: category list hit the ${CATEGORY_FETCH_LIMIT} fetch cap; hidden-category exclusions may be incomplete.`,
-        );
-      }
-      return res.items;
+      // The boot preload (main.tsx) has this request in flight — or already
+      // answered — before React mounts. Adopt it for the first fetch; it is
+      // taken once, so every later refetch goes to the network.
+      const preloaded = await takeStartedCategoriesPreload();
+      return preloaded ?? (await fetchCategoriesForExclusions());
     },
     enabled: needsHidden,
     staleTime: 60_000,
@@ -77,8 +80,18 @@ export function useExcludedIds(scope: ExclusionScopeName): ExcludedIds {
     return [...settings.excludedRecipientIds].sort((a, b) => a - b);
   }, [exclusionsApply, settings.excludedRecipientIds]);
 
-  // Ready when the category fetch isn't needed, or it has resolved.
-  const isReady = !needsHidden || categoriesQuery.isSuccess;
+  // Ready when settings are the user's own (not the store defaults) AND the
+  // category fetch either isn't needed or has resolved.
+  //
+  // The settings half matters for money, not latency: until hydration lands,
+  // `settings.excluded*Ids` are the empty defaults, so an exclusion set resolved
+  // now can be missing categories the user actually excludes. Consumers embed
+  // these arrays in their query keys, so such a fetch is not merely early — it
+  // lands under a *different* key and renders totals that look final until
+  // hydration swaps the key and refetches. Both preloads start at module scope,
+  // so waiting for settings costs no round trip on the critical path; it just
+  // stops the first paint of a number from being computed with the wrong set.
+  const isReady = !settingsLoading && (!needsHidden || categoriesQuery.isSuccess);
 
   return { excludedCategoryIds, excludedRecipientIds, exclusionsApply, isReady };
 }

@@ -27,17 +27,18 @@ import {
  * portfolioPerformanceSnapshotService re-projects the raw row, dropping `id` /
  * `computed_at` / `cumulative_inflation` / `real_return_pct` and applying `??`
  * defaults — so `inflation_adjusted_value` may fall back to `value` and the
- * three `*_invested` columns may fall back to the number `0` on rows written
- * before those columns existed. `value_fx_neutral` becomes `undefined` (not
- * null) when absent.
+ * three `*_invested` columns may fall back to the string `'0'` on rows written
+ * before those columns existed, keeping the NUMERIC-string contract uniform
+ * with every other money field here. `value_fx_neutral` becomes `undefined`
+ * (not null) when absent.
  *
  * @typedef {Pick<PortfolioPerformanceSnapshotRow,
  *   'snapshot_date'|'invested'|'value'|'stocks_etfs_value'|'crypto_value'
  *   |'metals_value'|'cash_value'|'gain_loss'|'return_pct'|'currency'> & {
  *     inflation_adjusted_value: string,
- *     stocks_etfs_invested: string|number,
- *     crypto_invested: string|number,
- *     metals_invested: string|number,
+ *     stocks_etfs_invested: string,
+ *     crypto_invested: string,
+ *     metals_invested: string,
  *     value_fx_neutral?: string|undefined,
  *   }} PerformanceSnapshot
  */
@@ -52,7 +53,7 @@ const PERIOD_OFFSETS = {
 };
 
 /**
- * @param {DecimalInput} value a NUMERIC column (pg string), or a `??` fallback number
+ * @param {DecimalInput} value a NUMERIC column (pg string), or a `??` fallback string
  * @returns {number}
  */
 function parseSnapshotNumber(value) {

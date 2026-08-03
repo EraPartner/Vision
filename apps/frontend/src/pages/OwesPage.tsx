@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { Progress } from "@/components/ui/progress";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { transactionKeys } from "@/lib/queryKeys";

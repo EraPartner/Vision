@@ -17,7 +17,7 @@ import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleTime } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
 import { bisector, extent, max, min, sum } from "d3-array";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
@@ -129,7 +129,7 @@ function AreaSeriesLayerInner<Datum>({
                         const s = series[i];
                         const color = s.color ?? getChartColor(i);
                         return (
-                            <motion.path
+                            <m.path
                                 key={`stack-${stack.key}`}
                                 d={path(stack) || ""}
                                 fill={color}
@@ -156,7 +156,7 @@ function AreaSeriesLayerInner<Datum>({
                 const color = s.color ?? getChartColor(i);
                 return (
                     <g key={s.key}>
-                        <motion.g
+                        <m.g
                             initial={reduce ? { opacity: 1 } : { opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{
@@ -186,7 +186,7 @@ function AreaSeriesLayerInner<Datum>({
                                 strokeDasharray={s.dashed ? "5 4" : undefined}
                                 fill="none"
                             />
-                        </motion.g>
+                        </m.g>
                     </g>
                 );
             })
@@ -430,7 +430,7 @@ function AreaChartInner<Datum>({
                     {/* Draw-in: horizontal sweep reveal (skipped under reduced motion) */}
                     <defs>
                         <clipPath id={revealId}>
-                            <motion.rect
+                            <m.rect
                                 x={0}
                                 y={-margin.top}
                                 height={height}

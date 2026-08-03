@@ -307,6 +307,77 @@ describe("InvestmentDetailDialog", () => {
         expect(dialog).toHaveAttribute("data-state", "open");
     });
 
+    // ─── Nested dialogs (draft preservation) ────────────────────────────────
+    //
+    // The embedded Add/Edit dialogs used to be rendered inside this dialog's
+    // own DialogContent, which Radix unmounts on close — so dismissing the
+    // OUTER dialog destroyed the inner one's preserved draft (useDialogFormState
+    // only survives while mounted). They are mounted alongside this dialog now
+    // and driven by its state, which is what these pin.
+
+    /** Open the detail dialog, then its embedded Add-transaction dialog. */
+    async function openNestedAddDialog(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await screen.findByRole("dialog");
+        const opener = await screen.findByRole("button", { name: /^add transaction$/i });
+        await user.click(opener);
+        // addPortTxn.note = "Optional note..." — a field of the nested dialog only.
+        return { opener, note: await screen.findByLabelText(/optional note/i) };
+    }
+
+    it("keeps a nested dialog's draft when the outer dialog is dismissed", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
+
+        const { note } = await openNestedAddDialog(user);
+        await user.type(note, "half-typed draft");
+
+        // Dismiss the nested dialog, then the outer one — neither is a
+        // deliberate exit (no Cancel, no submit), so nothing may be reset.
+        await user.keyboard("{Escape}");
+        await waitFor(() =>
+            expect(screen.queryByLabelText(/optional note/i)).not.toBeInTheDocument(),
+        );
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+        // Reopen both: the draft is still there.
+        const reopened = await openNestedAddDialog(user);
+        expect(reopened.note).toHaveValue("half-typed draft");
+    });
+
+    it("opens the embedded Edit dialogs from their in-dialog controls", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
+
+        await user.click(await screen.findByRole("button", { name: /details/i }));
+        await screen.findByRole("dialog");
+
+        // These controls used to be the nested dialogs' own DialogTriggers.
+        await user.click(screen.getByRole("button", { name: /^edit$/i }));
+        expect((await screen.findAllByText("Edit Investment")).length).toBeGreaterThan(0);
+        await user.keyboard("{Escape}");
+        await waitFor(() =>
+            expect(screen.queryByText("Edit Investment")).not.toBeInTheDocument(),
+        );
+
+        await user.click(await screen.findByRole("tab", { name: /transactions/i }));
+        await user.click(await screen.findByRole("button", { name: /edit transaction/i }));
+        expect((await screen.findAllByText("Edit Transaction")).length).toBeGreaterThan(0);
+    });
+
+    it("returns focus to the control that opened a nested dialog", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<InvestmentDetailDialog investment={INVESTMENT} />);
+
+        // Lifted out of the outer content, the nested dialog has no
+        // DialogTrigger of its own for Radix to hand focus back to.
+        const { opener } = await openNestedAddDialog(user);
+        await user.keyboard("{Escape}");
+
+        await waitFor(() => expect(opener).toHaveFocus());
+    });
+
     it("delete transaction error keeps dialog open and surfaces alert", async () => {
         server.use(
             http.get(`${API_BASE}/api/investments/:id/transactions`, () =>

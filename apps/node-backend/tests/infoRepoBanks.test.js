@@ -134,21 +134,22 @@ describe('banksRepository.getBankBalances', () => {
     //  (a) manual-only — nothing ever stamped: no anchor_date, count = ALL
     //      active rows, no statement balance so no drift;
     //  (b) stamped + manual rows after the anchor: anchor_date + entries-since
-    //      + a native-currency drift matching the hub badge;
+    //      + a native-currency drift (statement 5087.5 − the account's own
+    //      EUR partition, 5100) matching the hub badge;
     //  (c) display_name falls back to the account name when unset.
     query
       .mockResolvedValueOnce({
         rows: [
-          { bank_account: 'Cash', display_name: 'Cash', currency: 'EUR', balance: '200', drift: null, anchor_date: null, post_anchor_count: '3', transaction_count: '3', first_transaction: '2026-01-01', last_transaction: '2026-07-01' },
-          { bank_account: 'BE12 3456', display_name: 'KBC Zichtrekening', currency: 'EUR', balance: '5100', drift: '-12.5', anchor_date: '2026-06-30', post_anchor_count: '2', transaction_count: '40', first_transaction: '2024-01-01', last_transaction: '2026-07-20' },
+          { bank_account: 'Cash', display_name: 'Cash', currency: 'EUR', balance: '200', statement_balance: null, account_currency: 'EUR', anchor_date: null, post_anchor_count: '3', transaction_count: '3', first_transaction: '2026-01-01', last_transaction: '2026-07-01' },
+          { bank_account: 'BE12 3456', display_name: 'KBC Zichtrekening', currency: 'EUR', balance: '5100', statement_balance: '5087.5', account_currency: 'EUR', anchor_date: '2026-06-30', post_anchor_count: '2', transaction_count: '40', first_transaction: '2024-01-01', last_transaction: '2026-07-20' },
         ],
       })
       .mockResolvedValueOnce({ rows: [] });
 
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
       [
-        { bank_account: 'Cash', display_name: 'Cash', amount_eur: 200, drift: null, anchor_date: null, post_anchor_count: '3', transaction_count: '3', first_transaction: '2026-01-01', last_transaction: '2026-07-01' },
-        { bank_account: 'BE12 3456', display_name: 'KBC Zichtrekening', amount_eur: 5100, drift: '-12.5', anchor_date: '2026-06-30', post_anchor_count: '2', transaction_count: '40', first_transaction: '2024-01-01', last_transaction: '2026-07-20' },
+        { bank_account: 'Cash', display_name: 'Cash', currency: 'EUR', balance: '200', amount_eur: 200, statement_balance: null, account_currency: 'EUR', anchor_date: null, post_anchor_count: '3', transaction_count: '3', first_transaction: '2026-01-01', last_transaction: '2026-07-01' },
+        { bank_account: 'BE12 3456', display_name: 'KBC Zichtrekening', currency: 'EUR', balance: '5100', amount_eur: 5100, statement_balance: '5087.5', account_currency: 'EUR', anchor_date: '2026-06-30', post_anchor_count: '2', transaction_count: '40', first_transaction: '2024-01-01', last_transaction: '2026-07-20' },
       ],
       [],
     ]);
@@ -168,7 +169,8 @@ describe('banksRepository.getBankBalances', () => {
     expect(r.accounts[0].drift).toBeUndefined();
 
     // (b) stamped + manual: "as of 2026-06-30 statement + 2 entries since",
-    // drift is the hub's native-currency figure.
+    // drift is the hub's native-currency figure, derived per currency from the
+    // account's own-currency partition (5087.5 − 5100).
     expect(r.accounts[1]).toMatchObject({
       bank_account: 'BE12 3456',
       display_name: 'KBC Zichtrekening',
@@ -199,7 +201,7 @@ describe('banksRepository.getBankBalances', () => {
     expect(r.accounts[0].display_name).toBe('Old Row');
   });
 
-  it('selects display_name, drift and the lateral provenance columns in the current-balance SQL', async () => {
+  it('selects display_name, the drift inputs and the lateral provenance columns in the current-balance SQL', async () => {
     query.mockResolvedValue({ rows: [] });
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([[], []]);
 
@@ -207,7 +209,12 @@ describe('banksRepository.getBankBalances', () => {
 
     const currentBalanceSql = query.mock.calls[0][0];
     expect(currentBalanceSql).toContain('COALESCE(a.display_name, a.name) AS display_name');
-    expect(currentBalanceSql).toContain('a.statement_balance - COALESCE(lb.balance, 0)');
+    // Drift is no longer computed in SQL against the cross-currency lb.balance:
+    // the raw inputs come out and the shared statementPartitionBalance helper
+    // (the same one the hub uses) resolves it per currency in JS.
+    expect(currentBalanceSql).not.toContain('a.statement_balance - COALESCE(lb.balance, 0)');
+    expect(currentBalanceSql).toContain('a.statement_balance');
+    expect(currentBalanceSql).toContain("COALESCE(a.currency, 'EUR') AS account_currency");
     expect(currentBalanceSql).toContain('lb.anchor_date');
     expect(currentBalanceSql).toContain('lb.post_anchor_count');
   });

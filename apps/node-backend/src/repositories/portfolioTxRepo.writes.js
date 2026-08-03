@@ -1,24 +1,18 @@
 /**
  * Portfolio transaction repo — write operations (create, update, hardDelete).
- * Polymorphic on assetClass; delegates unit-math + inheritance-table paths to common helpers.
+ * Delegates unit-math validation to the common helpers. Writes target the flat
+ * `portfolio_transactions` table — the only shape after migration 0087 (ADR-109).
  */
 
-import { query, withSavepointIfInTransaction } from '../database/connection.js';
+import { query } from '../database/connection.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 import { getById, mapPortfolioTxRow } from './portfolioTxRepo.reads.js';
 import {
-  hasPortfolioTransactionInheritanceSchema,
-  getAccountIdRelation,
-  markInheritanceSchemaPresent,
-  isNonUpdatablePortfolioTransactionsViewError,
-  isMissingInheritanceRelationError,
+  hasPortfolioTransactionImportBatchIdColumn,
   UNIT_BASED_ASSET_CLASSES,
   makeValidationError,
   normalizeTransactionPayload,
   validateSellUnitsAvailability,
-  createThroughInheritanceTables,
-  updateThroughInheritanceTables,
-  hardDeleteThroughInheritanceTables,
 } from './portfolioTxRepo.common.js';
 
 /** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
@@ -27,7 +21,7 @@ import {
  * @param {import('./portfolioTxRepo.common.js').PortfolioTransactionInput} input
  * @returns {Promise<PortfolioTransactionRow|null>}
  */
-export async function create({ investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency = 'EUR', note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, preloaded_asset_class }) {
+export async function create({ investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency = 'EUR', note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, import_batch_id, preloaded_asset_class }) {
   let assetClass = preloaded_asset_class;
   if (!assetClass) {
     const investmentResult = await query('SELECT asset_class FROM investments WHERE id = $1', [investment_id]);
@@ -54,6 +48,7 @@ export async function create({ investment_id, type, date, amount, units, price_p
     recurrence_end_date,
     fx_rate_to_eur,
     account_id,
+    import_batch_id,
   }, { assetClass });
 
   // Recurrence hygiene: a non-recurring row must not carry a stale interval /
@@ -75,51 +70,46 @@ export async function create({ investment_id, type, date, amount, units, price_p
     units: payload.units,
   });
 
-  // The schema-shape fallbacks below CATCH a failed statement and try another
-  // route. On a pool connection that's fine; inside an ambient withTransaction
-  // a failed statement poisons the whole tx, so each attempt that can be
-  // recovered from runs under a savepoint.
-  if (await hasPortfolioTransactionInheritanceSchema()) {
-    try {
-      return await withSavepointIfInTransaction('ptx_create_inherit', () =>
-        createThroughInheritanceTables(payload, getById, assetClass));
-    } catch (err) {
-      if (!isMissingInheritanceRelationError(err)) throw err;
-    }
+  const columns = [
+    'investment_id', 'type', 'date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes',
+    'currency', 'note', 'is_recurring', 'recurrence_interval', 'recurrence_end_date',
+    'fx_rate_to_eur', 'account_id',
+  ];
+  const values = [
+    payload.investment_id,
+    payload.type,
+    payload.date,
+    payload.amount,
+    payload.units ?? null,
+    payload.price_per_unit ?? null,
+    payload.fees ?? 0,
+    payload.taxes ?? 0,
+    payload.currency,
+    payload.note || null,
+    payload.is_recurring || false,
+    payload.recurrence_interval || null,
+    payload.recurrence_end_date || null,
+    payload.fx_rate_to_eur ?? null,
+    payload.account_id ?? null,
+  ];
+
+  // Import provenance (0086): appended ONLY for the import commit path, and only
+  // when the column exists on this database. Manual creates therefore emit the
+  // exact same statement as before — and neither the probe nor the extra column
+  // costs them anything.
+  if (payload.import_batch_id != null && await hasPortfolioTransactionImportBatchIdColumn()) {
+    columns.push('import_batch_id');
+    values.push(payload.import_batch_id);
   }
 
-  try {
-    return await withSavepointIfInTransaction('ptx_create_flat', async () => {
-      const result = await query(
-        `INSERT INTO portfolio_transactions
-           (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-           RETURNING *`,
-        [
-          payload.investment_id,
-          payload.type,
-          payload.date,
-          payload.amount,
-          payload.units ?? null,
-          payload.price_per_unit ?? null,
-          payload.fees ?? 0,
-          payload.taxes ?? 0,
-          payload.currency,
-          payload.note || null,
-          payload.is_recurring || false,
-          payload.recurrence_interval || null,
-          payload.recurrence_end_date || null,
-          payload.fx_rate_to_eur ?? null,
-          payload.account_id ?? null,
-        ]
-      );
-      return mapPortfolioTxRow(result.rows[0]);
-    });
-  } catch (err) {
-    if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
-    markInheritanceSchemaPresent();
-    return createThroughInheritanceTables(payload, getById, assetClass);
-  }
+  const result = await query(
+    `INSERT INTO portfolio_transactions
+       (${columns.join(', ')})
+       VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})
+       RETURNING *`,
+    values
+  );
+  return mapPortfolioTxRow(result.rows[0]);
 }
 
 /**
@@ -213,20 +203,10 @@ export async function update(id, fields) {
 
   if (normalizedSetClauses.length === 0) return existing;
 
-  if (await hasPortfolioTransactionInheritanceSchema()) {
-    return updateThroughInheritanceTables(id, normalizedFields, getById);
-  }
-
   normalizedParams.push(id);
   const sql = `UPDATE portfolio_transactions SET ${normalizedSetClauses.join(', ')} WHERE id = $${normalizedIdx} RETURNING *`;
-  try {
-    const result = await query(sql, normalizedParams);
-    return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
-  } catch (err) {
-    if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
-    markInheritanceSchemaPresent();
-    return updateThroughInheritanceTables(id, normalizedFields, getById);
-  }
+  const result = await query(sql, normalizedParams);
+  return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
 }
 
 /**
@@ -234,37 +214,51 @@ export async function update(id, fields) {
  * @returns {Promise<boolean>}
  */
 export async function hardDelete(id) {
-  if (await hasPortfolioTransactionInheritanceSchema()) {
-    try {
-      return await hardDeleteThroughInheritanceTables(id);
-    } catch (err) {
-      if (!isMissingInheritanceRelationError(err)) throw err;
-    }
-  }
+  const result = await query('DELETE FROM portfolio_transactions WHERE id = $1', [id]);
+  return result.rowCount > 0;
+}
 
-  try {
-    const result = await query('DELETE FROM portfolio_transactions WHERE id = $1', [id]);
-    return result.rowCount > 0;
-  } catch (err) {
-    if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
-    markInheritanceSchemaPresent();
-    return hardDeleteThroughInheritanceTables(id);
-  }
+/**
+ * Hard-delete every lot stamped with `import_batch_id = batchId` in ONE statement
+ * (migration 0086) — the portfolio equivalent of the bank side's
+ * `DELETE FROM transactions WHERE import_batch_id = $1`.
+ *
+ * Scope is the batch stamp and nothing else: no id list is passed in, so this
+ * cannot repeat the cross-table id confusion that once let a `transactions.id`
+ * delete an unrelated portfolio trade of the same number. Cash rows live in
+ * `transactions` and are never stamped with a PORTFOLIO batch id (the column
+ * there FKs to `import_batches`, a different table), so they are structurally
+ * out of reach of this statement.
+ *
+ * Returns the deleted ids so the caller can tell which of a batch's committed
+ * rows were covered here and which (pre-0086, `import_batch_id IS NULL`) still
+ * need the per-id fallback.
+ *
+ * @param {number|string} batchId
+ * @returns {Promise<Array<number|string>>} ids of the lots deleted (empty on an
+ *          un-migrated database, where the caller's fallback does all the work)
+ */
+export async function hardDeleteByImportBatch(batchId) {
+  if (!await hasPortfolioTransactionImportBatchIdColumn()) return [];
+
+  const result = await query(
+    'DELETE FROM portfolio_transactions WHERE import_batch_id = $1 RETURNING id',
+    [batchId],
+  );
+  return result.rows.map((/** @type {{id: number|string}} */ r) => r.id);
 }
 
 /**
  * Repoint portfolio lots from merged-away source accounts onto the survivor
- * (ADR-088 account merge). Writes through the inheritance base when present —
- * the UPDATE cascades to the child tables — and the flat table otherwise.
+ * (ADR-088 account merge).
  *
  * @param {number} targetId
  * @param {number[]} sourceIds
  * @returns {Promise<number>} rows repointed
  */
 export async function repointAccount(targetId, sourceIds) {
-  const relation = await getAccountIdRelation();
   const result = await query(
-    `UPDATE ${relation} SET account_id = $1 WHERE account_id = ANY($2::int[])`,
+    'UPDATE portfolio_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])',
     [targetId, sourceIds],
   );
   return result.rowCount ?? 0;

@@ -5,6 +5,7 @@ export default function MetalsPage() {
     <StocksPage
       assetClasses={["metals"]}
       titleKey="metals.title"
+      errorTitleKey="metals.pageErrorTitle"
       emptyTitleKey="metals.noMetals"
       emptyDescriptionKey="metals.noMetalsDesc"
       allowedAddAssetClasses={["metals"]}

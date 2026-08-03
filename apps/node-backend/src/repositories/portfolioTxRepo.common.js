@@ -1,15 +1,16 @@
 /**
  * Portfolio transaction repo — shared helpers:
- *   - schema-cache probe + reset
- *   - error classifiers (view-not-updatable, missing inheritance, duplicate id)
- *   - asset-class maps (table-by-class, unit-based set)
+ *   - import_batch_id column probe (0086 rollout window) + reset
  *   - validation (normalizeTransactionPayload, validateSellUnitsAvailability)
- *   - inheritance-table CRUD helpers (create/update/hardDelete through base)
+ *   - asset-class helpers (unit-based set)
+ *
+ * `portfolio_transactions` is a plain flat table on every install: fresh installs get it
+ * from the 0001 baseline and legacy table-inheritance installs are converted by migration
+ * 0087 (ADR-109) before the backend starts listening, so no schema-shape probing is needed.
  */
 
-import { query, withTransaction, withSavepointIfInTransaction } from '../database/connection.js';
+import { query } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
-import { buildUpdateSql } from '../lib/sqlClauses.js';
 import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
 import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision/types/assetClasses';
 
@@ -35,118 +36,54 @@ import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision
  * @property {string|null} [recurrence_end_date]
  * @property {number|string|null} [fx_rate_to_eur]
  * @property {number|null} [account_id]
+ * @property {number|string|null} [import_batch_id] The portfolio import batch that
+ *           created this lot (migration 0086) — set only by the import commit path,
+ *           NULL for manual entry. Rollback bulk-deletes on it.
  * @property {string} [preloaded_asset_class]
  */
 
 // Mirrors the recurrence_interval DB enum (migration 0001) and the frontend
-// RecurrenceInterval union. An out-of-set value has no DB CHECK on the flat
-// table path and otherwise surfaces as a raw enum-cast 500.
+// RecurrenceInterval union. An out-of-set value has no DB CHECK and otherwise
+// surfaces as a raw enum-cast 500.
 export const VALID_RECURRENCE_INTERVALS = new Set([
   'daily', 'weekly', 'bi-weekly', 'monthly', 'quarterly', 'yearly',
 ]);
 
 /** @type {boolean|undefined} */
-let _hasPortfolioTransactionInheritanceSchema;
-
-/** @returns {Promise<boolean>} true on legacy table-inheritance installs. */
-export async function hasPortfolioTransactionInheritanceSchema() {
-  if (_hasPortfolioTransactionInheritanceSchema !== undefined) {
-    return _hasPortfolioTransactionInheritanceSchema;
-  }
-
-  const result = await query("SELECT to_regclass('public.portfolio_transactions_base') AS portfolio_transactions_base");
-  _hasPortfolioTransactionInheritanceSchema = Boolean(result.rows[0]?.portfolio_transactions_base);
-  return _hasPortfolioTransactionInheritanceSchema;
-}
+let _hasPortfolioTransactionImportBatchIdColumn;
 
 /**
- * Which relation carries `account_id` for portfolio lots: the inheritance base
- * (an UPDATE there cascades to the child tables) or, in the flat schema, the
- * table itself. `portfolio_transactions` is a VIEW in the inheritance schema
- * and is not updatable, so the distinction is load-bearing for writes.
+ * Whether portfolio_transactions carries `import_batch_id` (migration 0086).
  *
- * Deliberately NOT cached, unlike hasPortfolioTransactionInheritanceSchema():
- * the account-merge paths probe per call, and sharing the cache here would
- * change their behavior (a cached probe never re-observes a schema change and
- * suppresses the probe statement callers assert on).
+ * Migrations are applied at app boot, not by the code that needs them, so there
+ * is a window on an un-migrated database where the column does not exist yet.
+ * Probing (once per process) lets the import commit path omit the column from
+ * its INSERT instead of 500-ing every row with 42703, and lets rollback fall
+ * back to its per-id path — see 0086's docstring.
  *
- * @returns {Promise<'portfolio_transactions_base'|'portfolio_transactions'>}
+ * @returns {Promise<boolean>}
  */
-export async function getAccountIdRelation() {
-  const result = await query(`SELECT to_regclass('public.portfolio_transactions_base') AS r`);
-  return result.rows[0]?.r ? 'portfolio_transactions_base' : 'portfolio_transactions';
-}
+export async function hasPortfolioTransactionImportBatchIdColumn() {
+  if (_hasPortfolioTransactionImportBatchIdColumn !== undefined) {
+    return _hasPortfolioTransactionImportBatchIdColumn;
+  }
 
-export function markInheritanceSchemaPresent() {
-  _hasPortfolioTransactionInheritanceSchema = true;
-}
-
-export function markInheritanceSchemaAbsent() {
-  _hasPortfolioTransactionInheritanceSchema = false;
+  const result = await query(
+    `SELECT EXISTS (
+       SELECT 1 FROM pg_attribute
+        WHERE attrelid = to_regclass('public.portfolio_transactions')
+          AND attname = 'import_batch_id'
+          AND attnum > 0
+          AND NOT attisdropped
+     ) AS present`
+  );
+  _hasPortfolioTransactionImportBatchIdColumn = Boolean(result.rows[0]?.present);
+  return _hasPortfolioTransactionImportBatchIdColumn;
 }
 
 export function __resetPortfolioTransactionSchemaCache() {
-  _hasPortfolioTransactionInheritanceSchema = undefined;
+  _hasPortfolioTransactionImportBatchIdColumn = undefined;
 }
-
-/**
- * @param {any} err
- * @returns {boolean}
- */
-export function isNonUpdatablePortfolioTransactionsViewError(err) {
-  const msg = err?.message || '';
-  return msg.includes('cannot update view "portfolio_transactions"')
-    || msg.includes('cannot insert into view "portfolio_transactions"')
-    || msg.includes('cannot delete from view "portfolio_transactions"');
-}
-
-/**
- * @param {any} err
- * @returns {boolean}
- */
-export function isMissingInheritanceRelationError(err) {
-  if (err?.code === '42P01') return true;
-  const msg = err?.message || '';
-  return msg.includes('relation "portfolio_transactions_base" does not exist')
-    || msg.includes('relation "stock_transactions" does not exist')
-    || msg.includes('relation "etf_transactions" does not exist')
-    || msg.includes('relation "crypto_transactions" does not exist')
-    || msg.includes('relation "metals_transactions" does not exist')
-    || msg.includes('relation "real_estate_transactions" does not exist')
-    || msg.includes('relation "savings_transactions" does not exist')
-    || msg.includes('relation "bond_transactions" does not exist');
-}
-
-/**
- * @param {any} err
- * @param {string} childTable
- * @returns {boolean}
- */
-function isDuplicatePortfolioTransactionIdError(err, childTable) {
-  if (err?.code !== '23505') return false;
-  const msg = err?.message || '';
-  const detail = err?.detail || '';
-  const constraint = err?.constraint || '';
-  return (constraint === `${childTable}_pkey` || msg.includes(`${childTable}_pkey`))
-    && (detail.includes('Key (id)=') || msg.includes('Key (id)='));
-}
-
-async function resyncPortfolioTransactionsBaseIdSequence() {
-  await query(
-    "SELECT setval(pg_get_serial_sequence('portfolio_transactions_base', 'id'), COALESCE((SELECT MAX(id) FROM portfolio_transactions_base), 0) + 1, false)"
-  );
-}
-
-/** @type {Record<string, string>} */
-export const TRANSACTION_TABLE_BY_ASSET_CLASS = {
-  stock: 'stock_transactions',
-  etf: 'etf_transactions',
-  crypto: 'crypto_transactions',
-  metals: 'metals_transactions',
-  real_estate: 'real_estate_transactions',
-  savings: 'savings_transactions',
-  bond: 'bond_transactions',
-};
 
 // Derived from the shared canonical subset (@vision/types/assetClasses) so it
 // cannot drift from the frontend's copy. Widened to Set<string>: callers probe
@@ -253,8 +190,8 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   if (type != null && !VALID_PORTFOLIO_TXN_TYPES.has(type)) {
     throw makeValidationError(`Invalid transaction type: ${type}`);
   }
-  // recurrence_interval is a DB enum with no CHECK on the flat-table path; an
-  // out-of-set value 500'd at insert. The import path never sets it (undefined).
+  // recurrence_interval is a DB enum with no CHECK constraint; an out-of-set
+  // value 500'd at insert. The import path never sets it (undefined).
   if (payload.recurrence_interval != null && payload.recurrence_interval !== ''
       && !VALID_RECURRENCE_INTERVALS.has(payload.recurrence_interval)) {
     throw makeValidationError(`Invalid recurrence_interval: ${payload.recurrence_interval}`);
@@ -403,181 +340,5 @@ export async function validateSellUnitsAvailability({
   const EPSILON = 1e-8;
   if (sellUnits - availableUnits > EPSILON) {
     throw makeValidationError('sell units exceed available holdings');
-  }
-}
-
-export const BASE_ALLOWED_FIELDS = [
-  'date',
-  'amount',
-  'fees',
-  'taxes',
-  'currency',
-  'note',
-  'is_recurring',
-  'recurrence_interval',
-  'recurrence_end_date',
-  'fx_rate_to_eur',
-  'account_id', // owning account for the lot (ADR-091)
-];
-
-/** @type {Record<string, string[]>} */
-export const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
-  stock: ['units', 'price_per_unit'],
-  etf: ['units', 'price_per_unit'],
-  crypto: ['units', 'price_per_unit'],
-  metals: ['units', 'price_per_unit'],
-  real_estate: [],
-  savings: [],
-  bond: [],
-};
-
-/**
- * @param {PortfolioTransactionInput & Record<string, any>} fields
- * @param {(id: number) => Promise<PortfolioTransactionRow|null>} getByIdFn
- * @param {string} preloadedAssetClass
- * @returns {Promise<PortfolioTransactionRow|null>}
- */
-export async function createThroughInheritanceTables(fields, getByIdFn, preloadedAssetClass) {
-  const {
-    investment_id,
-    type,
-    date,
-    amount,
-    units,
-    price_per_unit,
-    fees,
-    taxes,
-    currency = 'EUR',
-    note,
-    is_recurring,
-    recurrence_interval,
-    recurrence_end_date,
-    fx_rate_to_eur,
-    account_id,
-  } = fields;
-
-  const assetClass = preloadedAssetClass;
-  const childTable = TRANSACTION_TABLE_BY_ASSET_CLASS[assetClass];
-
-  if (!childTable) throw new Error(`Unsupported investment asset_class: ${assetClass}`);
-
-  const baseColumns = [
-    'investment_id',
-    'type',
-    'date',
-    'amount',
-    'fees',
-    'taxes',
-    'currency',
-    'note',
-    'is_recurring',
-    'recurrence_interval',
-    'recurrence_end_date',
-    'fx_rate_to_eur',
-    'account_id',
-  ];
-  const baseValues = [
-    investment_id,
-    type,
-    date,
-    amount,
-    fees || 0,
-    taxes || 0,
-    currency,
-    note || null,
-    is_recurring || false,
-    recurrence_interval || null,
-    recurrence_end_date || null,
-    fx_rate_to_eur ?? null,
-    account_id ?? null,
-  ];
-
-  /** @type {string[]} */
-  const childColumns = [];
-  /** @type {any[]} */
-  const childValues = [];
-  if (assetClass === 'stock' || assetClass === 'etf' || assetClass === 'crypto' || assetClass === 'metals') {
-    childColumns.push('units', 'price_per_unit');
-    childValues.push(units || null, price_per_unit || null);
-  }
-
-  const columns = [...baseColumns, ...childColumns];
-  const values = [...baseValues, ...childValues];
-  const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
-  const insertSql = `INSERT INTO ${childTable} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
-
-  try {
-    let insertResult;
-    try {
-      // Savepoint so a caught 23505 inside an ambient withTransaction doesn't
-      // poison the tx before the resync + retry below.
-      insertResult = await withSavepointIfInTransaction('ptx_inherit_insert', () => query(insertSql, values));
-    } catch (err) {
-      // Resync only on an actual duplicate-id collision. Running setval()
-      // unconditionally before every insert made concurrent creates race each
-      // other into 23505 instead of preventing it.
-      if (!isDuplicatePortfolioTransactionIdError(err, childTable)) throw err;
-      await resyncPortfolioTransactionsBaseIdSequence();
-      insertResult = await query(insertSql, values);
-    }
-
-    const id = insertResult.rows[0]?.id;
-    if (!id) return null;
-    return getByIdFn(id);
-  } catch (err) {
-    if (!isMissingInheritanceRelationError(err)) throw err;
-    markInheritanceSchemaAbsent();
-    throw err;
-  }
-}
-
-/**
- * @param {number} id
- * @returns {Promise<boolean>}
- */
-export async function hardDeleteThroughInheritanceTables(id) {
-  try {
-    const result = await query('DELETE FROM portfolio_transactions_base WHERE id = $1', [id]);
-    return result.rowCount > 0;
-  } catch (err) {
-    if (!isMissingInheritanceRelationError(err)) throw err;
-    markInheritanceSchemaAbsent();
-    throw err;
-  }
-}
-
-/**
- * @param {number} id
- * @param {Record<string, any>} fields
- * @param {(id: number) => Promise<PortfolioTransactionRow|null>} getByIdFn
- * @returns {Promise<PortfolioTransactionRow|null>}
- */
-export async function updateThroughInheritanceTables(id, fields, getByIdFn) {
-  try {
-    const existing = await getByIdFn(id);
-    if (!existing) return null;
-
-    const investmentResult = await query('SELECT asset_class FROM investments WHERE id = $1', [existing.investment_id]);
-    const assetClass = investmentResult.rows[0]?.asset_class;
-    const childTable = TRANSACTION_TABLE_BY_ASSET_CLASS[assetClass];
-    const childAllowed = CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS[assetClass] || [];
-
-    if (!childTable) return existing;
-
-    const baseUpdate = buildUpdateSql('portfolio_transactions_base', id, fields, BASE_ALLOWED_FIELDS);
-    const childUpdate = buildUpdateSql(childTable, id, fields, childAllowed);
-
-    if (!baseUpdate && !childUpdate) return existing;
-
-    await withTransaction(async (client) => {
-      if (baseUpdate) await client.query(baseUpdate.sql, baseUpdate.params);
-      if (childUpdate) await client.query(childUpdate.sql, childUpdate.params);
-    });
-
-    return getByIdFn(id);
-  } catch (err) {
-    if (!isMissingInheritanceRelationError(err)) throw err;
-    markInheritanceSchemaAbsent();
-    throw err;
   }
 }

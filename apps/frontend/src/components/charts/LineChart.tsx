@@ -8,7 +8,7 @@ import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleTime } from "@visx/scale";
 import { Line, LinePath } from "@visx/shape";
 import { bisector, extent, max, min } from "d3-array";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
@@ -105,7 +105,7 @@ function LineSeriesLayerInner<Datum>({
                       })
                     : (data as Datum[]);
                 return (
-                    <motion.g
+                    <m.g
                         key={s.key}
                         initial={reduce ? { opacity: 1 } : { opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -129,7 +129,7 @@ function LineSeriesLayerInner<Datum>({
                                 return v != null && Number.isFinite(v);
                             }}
                         />
-                    </motion.g>
+                    </m.g>
                 );
             })}
         </>

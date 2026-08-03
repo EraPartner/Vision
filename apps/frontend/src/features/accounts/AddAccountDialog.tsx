@@ -18,6 +18,7 @@ import { toYmd } from "@/components/shared/dateUtils";
 import type { AccountType, AccountOwner, AccountLiquidityClass, AccountTaxWrapper } from "@/types/api";
 import { SUPPORTED_CURRENCIES as CURRENCIES } from "@/utils/currency";
 import { toAccountPayload } from "./accountFormMapping";
+import { accountFormSchema } from "./accountFormSchema";
 
 export type AccountFormValues = {
     name: string;
@@ -167,14 +168,19 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.name.trim()) return;
-        // A statement balance is only meaningful with its as-of date (ADR-094).
-        // The date input is marked required, but it lives in the Advanced section
-        // which is unmounted while collapsed — so a bare `return` here would be a
-        // silent dead-end. Expand the section (revealing the required field) and
-        // surface a toast instead of failing invisibly.
-        // (Edit only — create no longer renders the statement fields, §3 F1.)
-        if (isEditMode && form.statementBalance && !form.statementBalanceDate) {
+        // Validation + string normalization live in accountFormSchema; the
+        // presentation of each failure is unchanged.
+        const parsed = accountFormSchema(isEditMode ? "edit" : "create").safeParse(form);
+        if (!parsed.success) {
+            // Missing name: silent block, as always (the submit button is
+            // disabled on it too — this is the keyboard-submit backstop).
+            if (parsed.error.issues.some((issue) => issue.path[0] === "name")) return;
+            // Statement balance without its as-of date (ADR-094, edit only).
+            // The date input is marked required, but it lives in the Advanced
+            // section which is unmounted while collapsed — so a bare `return`
+            // here would be a silent dead-end. Expand the section (revealing
+            // the required field) and surface a toast instead of failing
+            // invisibly.
             setShowAdvanced(true);
             toast.error(t('accounts.field.statementBalance'), {
                 description: t('accounts.field.statementBalanceDate'),
@@ -184,10 +190,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
 
         const values: AccountFormValues = {
             ...form,
-            name: form.name.trim(),
-            display_name: form.display_name.trim(),
-            institution: form.institution.trim(),
-            currency: form.currency.trim().toUpperCase() || "EUR",
+            ...parsed.data,
             // Belt-and-braces: a create payload must never carry a statement
             // reading, whatever a stale form value says.
             ...(isEditMode ? {} : { statementBalance: "", statementBalanceDate: "" }),

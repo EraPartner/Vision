@@ -1,3 +1,14 @@
+/**
+ * Mocked-repository suite for the CSV importers.
+ *
+ * The connection mock below exposes `query` only — no `withTransaction` — so
+ * the batched resolve cannot run and every case here drives the per-row
+ * fallback, which is exactly what this suite is for: the fallback must keep
+ * behaving like the loop that shipped before the batching. The batched path
+ * needs real SQL semantics (ON CONFLICT arbiters, normalized-name matching) and
+ * is covered against a real database in dataImport.db.test.js.
+ */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { mockLogger } from './helpers/mockLogger.js';
@@ -126,6 +137,21 @@ describe('Data Import Service', () => {
       expect(result.imported).toBe(1);
       expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('invalid category format'));
+    });
+
+    it('should fall back to the per-row loop when the batched resolve is unavailable', async () => {
+      parse.mockReturnValue([{ name: 'Alice' }, { name: 'Bob' }]);
+      recipientRepository.createOrGet
+        .mockResolvedValueOnce({ recipient: { id: 1 }, created: true })
+        .mockResolvedValueOnce({ recipient: { id: 2 }, created: false });
+
+      const result = await importRecipientsCSV('/tmp/recipients.csv');
+
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to per-row'));
+      expect(recipientRepository.createOrGet).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({
+        total_processed: 2, imported: 1, skipped: 1, errors: 0, bank_account_errors: 0,
+      });
     });
 
     it('should throw CSV parse errors with explicit prefix', async () => {

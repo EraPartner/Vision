@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router";
 
 export type Workspace = "budgeting" | "portfolio" | "research";
 

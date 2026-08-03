@@ -456,7 +456,7 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 
 Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
 
-**Audit trail:** Every committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `db_editor_audit_table_time_idx`) inside the same transaction, and also emitted on the structured logger. The audit record is created even if the change targets the `db_editor_audit` table itself. Migration: `alembic/versions/0059_db_editor_audit.py`.
+**Audit trail:** Every committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `idx_db_editor_audit_table_time`) inside the same transaction, and also emitted on the structured logger. The audit record is created even if the change targets the `db_editor_audit` table itself. Migration: `alembic/versions/0059_db_editor_audit.py`.
 
 See [[docs/features/database-maintenance|Database Maintenance Feature]] and [[docs/adr/101-db-data-editor|ADR-101]] for full safety model.
 

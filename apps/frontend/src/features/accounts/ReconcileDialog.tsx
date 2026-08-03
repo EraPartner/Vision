@@ -1,26 +1,38 @@
 /**
  * Drift reconciliation workflow (ADR-094, Phase C — accounts rewrite).
  *
- * The drift badge on an account card (statement_balance − computed_balance) used
- * to be a dead-end `title` tooltip: the only way to clear a drift was Edit →
+ * The drift badge on an account card (statement_balance − reconcilable_balance)
+ * used to be a dead-end `title` tooltip: the only way to clear a drift was Edit →
  * Advanced. This dialog, opened by clicking the badge, shows the statement figure,
  * the computed (ledger) figure and their difference, then offers two explicit
  * resolutions backed by POST /api/accounts/:id/reconcile:
  *
- *   - "accept"     — adopt the computed balance: the stored statement figure is
+ *   - "accept"     — adopt the ledger figure: the stored statement figure is
  *                    rewritten to match it (no transaction created).
  *   - "adjustment" — keep the statement as truth: the server stamps one balancing
- *                    'adjustment' ledger row so the computed balance rises to meet
+ *                    'adjustment' ledger row so the ledger figure rises to meet
  *                    it. Opt-in and balance-free, preserving the ADR-094
  *                    descriptive-only default.
  *
  * Either way the drift collapses to 0 and every balance/net-worth view refreshes.
  *
+ * WHICH ledger figure: reconciliation is native-currency and single-partition.
+ * `computed_balance` is the account's whole value converted into its own
+ * currency at today's rate; `reconcilable_balance` is the balance of the ONE
+ * currency partition the statement figure is a statement for, unconverted. The
+ * server resolves against the latter, so every difference shown here — stored
+ * badge and live preview alike — is measured against it too. The two coincide on
+ * a single-currency account (the overwhelmingly common case, where this dialog
+ * is visually unchanged); where they do not, both are rendered and labelled, and
+ * the figures on screen satisfy difference = statement − base.
+ *
  * WP-B5 (§3 F1) adds the flow's missing front half and its missing exit:
  *
  *   - a FRESH statement reading (amount + as-of date, defaulting to today) can be
  *     typed here instead of Edit → Advanced → two raw fields. The Difference row
- *     previews `entered − computed` live as the user types. Saving it PATCHes
+ *     previews `entered − reconcilable_balance` live as the user types — the
+ *     same subtraction the server performs, so the preview cannot promise a
+ *     figure the resolution then contradicts. Saving it PATCHes
  *     statement_balance/statement_balance_date through the normal account update
  *     path — no new endpoint. When a reading is entered, the two resolutions
  *     operate on THAT figure: the PATCH lands first, then the reconcile call
@@ -31,7 +43,7 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -75,11 +87,13 @@ const READING_SHAPE_RE = /^-?\d+([.,]\d+)?$/;
 const DRIFT_EPSILON = 0.005;
 
 /**
- * Round to cents, half away from zero — the rule PostgreSQL NUMERIC(15,2) uses
- * when it stores the figure. The preview, the epsilon short-circuit and the
- * PATCH body must all agree with what will actually be stored: previewing
- * 900.005 as "no drift" while the server stores a 0.01 drift would pop a
- * success toast over an unresolved difference.
+ * Round to cents, half away from zero. Storage is NUMERIC(18,4) since
+ * migration 0088 (ADR-060 D7), so this is deliberate INPUT policy rather than
+ * a storage constraint: bank statements quote cents, and the dialog keeps
+ * capturing readings at cent precision. What matters is that the preview, the
+ * epsilon short-circuit and the PATCH body all agree on the same rounded
+ * figure: previewing 900.005 as "no drift" while the server stores a 0.01
+ * drift would pop a success toast over an unresolved difference.
  */
 function roundToCents(value: number): number {
   const sign = value < 0 ? -1 : 1;
@@ -99,7 +113,30 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
 
   const statement = account.statement_balance ?? 0;
   const computed = account.computed_balance ?? 0;
-  const delta = account.drift ?? statement - computed;
+  // The RECONCILIATION BASE: the balance of the one currency partition the
+  // statement figure is a statement for (server: statementPartition). On a
+  // single-currency account it IS `computed_balance`; on a multi-currency one it
+  // is not, because `computed_balance` is every partition converted into the
+  // account currency at today's rate. Every drift number this dialog shows —
+  // stored or previewed — is measured against this base, so it is always the
+  // number the server would stamp. Falling back to `computed_balance` keeps a
+  // payload without the field (an older server, or the detail endpoint, which
+  // does not return it) behaving exactly as before.
+  const base = account.reconcilable_balance ?? computed;
+  // The base, the statement figure and the drift are ONE native triple in this
+  // currency — no FX anywhere, so the difference never moves with the daily
+  // rate. It is the account currency except on a mislabelled single-currency
+  // account (a USD ledger still declared EUR), where it is the ledger's code.
+  const baseCurrency = account.reconcilable_currency ?? account.currency;
+  const delta = account.drift ?? statement - base;
+  // `computed_balance` answers a different question (what is this account worth,
+  // all currencies, in its own currency) and is a different figure only when the
+  // account holds a currency other than the base's. Show it as a separate row
+  // when it genuinely differs, so the arithmetic on screen stays
+  // drift = statement − base rather than looking like it should be
+  // statement − computed.
+  const baseIsComputed = baseCurrency === account.currency
+    && Math.abs(base - computed) < DRIFT_EPSILON;
   // Provenance of the computed figure (WP-B2) — same subline as the hub card.
   const provenanceText = useBalanceProvenance()(account);
 
@@ -123,7 +160,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
   // Live preview: the drift the entered reading WOULD produce. Falls back to the
   // stored drift while the input is empty (or unusable), so the figure never
   // goes blank and never previews a half-typed number.
-  const previewDrift = hasReading ? parsedReading - computed : delta;
+  const previewDrift = hasReading ? parsedReading - base : delta;
   const previewIsZero = Math.abs(previewDrift) < DRIFT_EPSILON;
 
   // The statement date in play for the ledger deep-link: the freshly entered one
@@ -203,7 +240,10 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
       apiClient.setOpeningBalance(account.id, {
         balance: statement,
         date: storedStatementDate ?? toYmd(new Date()),
-        currency: account.currency,
+        // The statement figure is denominated in the base's currency (see
+        // `baseCurrency`), which is what the description below shows it as —
+        // stamping the anchor in any other code would record a different number.
+        currency: baseCurrency,
       }),
     onSuccess: (result) => {
       invalidateAccountDerived(queryClient);
@@ -266,18 +306,37 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
           <dl>
             <div className="flex items-center justify-between py-1">
               <dt className="text-muted-foreground">{t('accounts.reconcile.statementLabel')}</dt>
-              <dd className="tabular-nums font-medium">{fmtCur(statement, account.currency)}</dd>
+              <dd className="tabular-nums font-medium">{fmtCur(statement, baseCurrency)}</dd>
             </div>
             <div className="flex items-center justify-between py-1">
               <dt className="text-muted-foreground">{t('accounts.reconcile.computedLabel')}</dt>
               <dd className="tabular-nums font-medium">{fmtCur(computed, account.currency)}</dd>
             </div>
+            {/* The base the difference below is actually measured against.
+                Rendered only when it differs from the computed balance — i.e.
+                only for a multi-currency (or mislabelled) account — so the
+                common single-currency dialog is unchanged. */}
+            {!baseIsComputed && (
+              <div className="flex items-center justify-between py-1">
+                <dt className="text-muted-foreground">
+                  {t('accounts.reconcile.reconcilableLabel', { currency: baseCurrency })}
+                </dt>
+                <dd data-testid="reconcile-base" className="tabular-nums font-medium">
+                  {fmtCur(base, baseCurrency)}
+                </dd>
+              </div>
+            )}
             {provenanceText && (
               <div className="pb-1 text-right text-xs text-muted-foreground">
                 {provenanceText}
               </div>
             )}
           </dl>
+          {!baseIsComputed && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('accounts.reconcile.reconcilableHint', { currency: baseCurrency })}
+            </p>
+          )}
 
           {/* Recording a statement reading no longer means Edit → Advanced. */}
           <div className="mt-2 grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
@@ -288,7 +347,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
                 type="text"
                 inputMode="decimal"
                 pattern="^-?[0-9]+([.,][0-9]+)?$"
-                placeholder={fmtCur(statement, account.currency)}
+                placeholder={fmtCur(statement, baseCurrency)}
                 value={reading}
                 disabled={busy}
                 onChange={(e) => setReading(e.target.value)}
@@ -329,7 +388,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
                 previewIsZero ? 'text-muted-foreground' : 'text-destructive',
               )}
             >
-              {previewDrift > 0 ? '+' : ''}{fmtCur(previewDrift, account.currency)}
+              {previewDrift > 0 ? '+' : ''}{fmtCur(previewDrift, baseCurrency)}
             </span>
           </div>
           {hasReading && (
@@ -398,7 +457,7 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
               <p className="text-sm font-medium">{t('accounts.reconcile.backfillTitle')}</p>
               <p className="text-xs text-muted-foreground">
                 {t('accounts.reconcile.backfillDescription', {
-                  balance: fmtCur(statement, account.currency),
+                  balance: fmtCur(statement, baseCurrency),
                 })}
               </p>
               <Button

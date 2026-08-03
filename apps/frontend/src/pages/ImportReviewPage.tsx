@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -19,7 +19,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
+import {
+  DeferredRecipientCombobox,
+  useRecipientComboboxLabel,
+} from "@/components/shared/RecipientCombobox";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatCurrency } from "@/utils/currency";
@@ -116,6 +119,14 @@ export default function ImportReviewPage() {
   const locale = numberFormatToLocale(appSettings?.numberFormat ?? "us");
 
   const [groupOverrides, setGroupOverrides] = useState<Map<string, GroupState>>(new Map());
+
+  // One recipients subscription for the whole page. Every group's combobox is
+  // deferred (query + list mount with its popover), so this single observer —
+  // reading the exact page a closed combobox reads — paints all of their
+  // labels and warms the cache their popovers open against. A year of bank CSV
+  // is 100-300 groups; before this it was that many observers, debounce timers
+  // and per-render page scans.
+  const recipientLabelFor = useRecipientComboboxLabel();
 
   const { data: preview, isLoading, error } = useQuery({
     queryKey: importKeys.preview(batchId),
@@ -461,8 +472,9 @@ export default function ImportReviewPage() {
                   {(state.recipientSaving || state.categorySaving) && (
                     <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                   )}
-                  <RecipientCombobox
+                  <DeferredRecipientCombobox
                     value={effectiveRecipientId}
+                    label={recipientLabelFor(effectiveRecipientId)}
                     onSelect={(id, name) =>
                       handleGroupOverride(groupKey, fallbackState, group.rows, id, name)
                     }

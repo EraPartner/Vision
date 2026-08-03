@@ -8,6 +8,8 @@ import {useCategories} from "@/hooks/useCategories";
 import {useLanguage} from "@/contexts/LanguageContext";
 
 interface CategoryComboboxProps {
+    /** Put on the trigger, so a <Label htmlFor> can reach it. */
+    id?: string;
     value?: number | null;
     onSelect: (categoryId: number | null, categoryName: string | null) => void;
     disabled?: boolean;
@@ -15,7 +17,7 @@ interface CategoryComboboxProps {
     portalContainer?: HTMLElement | null;
 }
 
-export function CategoryCombobox({value, onSelect, disabled, className, portalContainer}: CategoryComboboxProps) {
+export function CategoryCombobox({id, value, onSelect, disabled, className, portalContainer}: CategoryComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const {data} = useCategories({limit: 500, active: true});
@@ -28,6 +30,7 @@ export function CategoryCombobox({value, onSelect, disabled, className, portalCo
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button
+                    id={id}
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}

@@ -177,6 +177,8 @@ export const apiClient = {
     loadBackupSettings: electron.loadBackupSettings,
     getBackupEncryptionStatus: electron.getBackupEncryptionStatus,
     setBackupPassphrase: electron.setBackupPassphrase,
+    saveServicesSettings: electron.saveServicesSettings,
+    loadServicesSettings: electron.loadServicesSettings,
 
     // Saved charts
     getSavedCharts: charts.getSavedCharts,

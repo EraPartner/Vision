@@ -11,8 +11,14 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
-import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
+import {
+  COMPUTED_BALANCE_LATERAL,
+  computedBalanceByCurrencyAggLateral,
+  statementPartition,
+} from './accountBalanceSql.js';
 import { buildInsert, buildSetClauses, buildLimitOffset } from '../lib/sqlClauses.js';
+import { loadCurrentRates, convertWithRates } from '../services/currency/currencyConversionService.js';
+import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
 
 /** @typedef {import('../types/rows.js').AccountRow} AccountRow */
 /** @typedef {import('../types/rows.js').AccountWithBalanceRow} AccountWithBalanceRow */
@@ -33,6 +39,21 @@ const WRITABLE = new Set([
   'is_active', 'closed_at',
 ]);
 
+/**
+ * SQL `btrim(x)` — strips ASCII space (U+0020) ONLY, exactly like the sync
+ * trigger's `btrim(NEW.bank_account)`. Deliberately NOT `String#trim()`, which
+ * strips all Unicode whitespace: a label ending in e.g. U+00A0 (NBSP) must
+ * resolve to the SAME identity the trigger computes, or explicit resolution
+ * and the trigger fork — two accounts minted for one label, and the trigger
+ * overwrites the explicitly-written account_id with the other one.
+ *
+ * @param {unknown} s
+ * @returns {string}
+ */
+function sqlBtrim(s) {
+  return String(s).replace(/^ +| +$/g, '');
+}
+
 export const accountRepository = {
   /**
    * List accounts (optionally filtered by active status), each with its computed
@@ -43,9 +64,41 @@ export const accountRepository = {
    * and has_transactions — whether the account has any active ledger rows
    * (portfolio accounts whose activity lives in portfolio_transactions have none).
    *
+   * Multi-currency accounts: the anchor+delta computation is partitioned by
+   * `transactions.currency` (`computedBalanceByCurrencyAggLateral`) and each
+   * partition is converted into the account's OWN currency, at today's rate,
+   * before the per-account total is summed — `computed_balance` stays a figure
+   * denominated in `accounts.currency`, which is what every consumer (the hub
+   * cards, the dashboard cards, `groupAccounts.sumConvertedBalances`, the
+   * reconcile dialog) already assumes when it re-converts for display. The
+   * single-partition form this replaced added a EUR amount to a USD amount as
+   * bare numbers (100 EUR + 100 USD at 0.5 → 100 instead of 150). A
+   * single-currency account has exactly one partition and is unaffected.
+   *
+   * `drift` is the statement figure minus the RECONCILIATION BASE — the balance
+   * of the partition the statement figure is a statement for (`statementPartition`)
+   * — never minus the FX-converted total, which would make the badge move with
+   * the daily rate. It stays a native-currency figure, the same one
+   * `reconcileService` acts on, so the badge and the reconcile dialog can never
+   * disagree.
+   *
+   * That base is emitted alongside it as `reconcilable_balance` /
+   * `reconcilable_currency`, because on a multi-currency account it is NOT
+   * `computed_balance` (which is the converted all-currency total) and the
+   * reconcile dialog must preview `typed reading − base`, not
+   * `typed reading − computed_balance`. The three native figures on that dialog
+   * satisfy `drift = statement_balance − reconcilable_balance` by construction,
+   * all denominated in `reconcilable_currency`.
+   *
+   * `computed_balance` / `drift` / `reconcilable_balance` are therefore computed
+   * in JS and emitted as NUMBERS (previously raw pg NUMERIC strings — the
+   * OpenAPI schema and the frontend `Account` type have always declared `number`).
+   *
    * `limit` is optional and defaults to unbounded — the accounts list has always
    * served every row and the hub UI has no paging, so only an explicit
-   * limit/offset narrows it (buildLimitOffset).
+   * limit/offset narrows it (buildLimitOffset). The per-currency lateral is the
+   * aggregated (one row per account) form precisely so LIMIT keeps counting
+   * accounts rather than currency partitions.
    *
    * @param {{ active?: boolean|null, limit?: number|null, offset?: number }} [opts]
    * @returns {Promise<AccountWithBalanceRow[]>}
@@ -53,18 +106,20 @@ export const accountRepository = {
   async getAll({ active = null, limit = null, offset = 0 } = {}) {
     let sql = `
       SELECT ${COLUMNS},
-             lb.balance AS computed_balance,
              lb.anchor_date,
              lb.post_anchor_count,
-             CASE WHEN a.statement_balance IS NOT NULL
-                  THEN a.statement_balance - COALESCE(lb.balance, 0)
-                  ELSE NULL END AS drift,
+             bp.balance_parts,
              EXISTS (
                SELECT 1 FROM transactions t2
                WHERE t2.account_id = a.id AND t2.is_active = true
              ) AS has_transactions
       FROM accounts a
+      -- lb stays the account-level (cross-currency) lateral for the PROVENANCE
+      -- fields only: "as of {date} statement + {n} entries since" describes the
+      -- account's stamping history, not a currency's. The balance and drift
+      -- below come from the per-currency partitions.
       ${COMPUTED_BALANCE_LATERAL}
+      ${computedBalanceByCurrencyAggLateral({ account: 'a.id' })}
       WHERE 1=1`;
     if (active === true) sql += ` AND a.is_active = true`;
     else if (active === false) sql += ` AND a.is_active = false`;
@@ -73,17 +128,52 @@ export const accountRepository = {
     const params = [];
     sql += buildLimitOffset(params, { limit, offset });
     const result = await query(sql, params);
+    // One rate table for the whole page (memory-cached in the conversion
+    // service); converting per partition inside the loop would await it N times.
+    const rates = await loadCurrentRates();
     // Provenance shaping (WP-B2, mirrors infoRepositoryBanks): anchor_date is
     // already a 'YYYY-MM-DD' string via to_char in the lateral — SQL NULL
     // (nothing stamped) becomes undefined, never null (convention: the backend
     // never returns null). COUNT(*) arrives as a bigint string; emit a number.
-    return result.rows.map((/** @type {any} */ row) => ({
-      ...row,
-      anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
-      post_anchor_count: row.post_anchor_count == null
-        ? undefined
-        : parseInt(row.post_anchor_count, 10),
-    }));
+    return result.rows.map((/** @type {any} */ row) => {
+      const { balance_parts: parts, ...rest } = row;
+      /** @type {Array<{ currency: string, balance: string }>} */
+      const partitions = parts ?? [];
+      const accountCurrency = (row.currency || 'EUR').toUpperCase();
+      let total = toDecimal(0);
+      for (const part of partitions) {
+        total = total.plus(toDecimal(convertWithRates(
+          toNumber(toDecimal(part.balance)),
+          (part.currency || 'EUR').toUpperCase(),
+          accountCurrency,
+          rates,
+        )));
+      }
+      // The reconciliation base: what the statement figure is measured against
+      // and what `reconcileService` will stamp. Emitted so the dialog previews
+      // `typed reading − base` rather than `typed reading − computed_balance`
+      // (those differ on every multi-currency account).
+      const base = statementPartition(partitions, row.currency);
+      const baseBalance = toNumber(roundToCents(toDecimal(base.balance)));
+      return {
+        ...rest,
+        computed_balance: toNumber(roundToCents(total)),
+        reconcilable_balance: baseBalance,
+        reconcilable_currency: base.currency,
+        // Subtract the ROUNDED base: `drift = statement − reconcilable_balance`
+        // must hold exactly on the wire, and a 4-dp partition tail would
+        // otherwise skew the identity by up to a cent.
+        drift: row.statement_balance == null
+          ? null
+          : toNumber(roundToCents(
+            toDecimal(row.statement_balance).minus(toDecimal(baseBalance)),
+          )),
+        anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
+        post_anchor_count: row.post_anchor_count == null
+          ? undefined
+          : parseInt(row.post_anchor_count, 10),
+      };
+    });
   },
 
   /**
@@ -270,16 +360,20 @@ export const accountRepository = {
 
   /**
    * Resolve an account id by name, creating the row if absent. Mirrors the
-   * dual-write trigger's normalization — identity is lower(btrim(name)), D1 —
-   * so explicit creation and trigger-driven creation converge on the same row.
-   * On conflict the existing row keeps its stored casing (no-op update purely
-   * to RETURNING the id in one round-trip).
+   * dual-write trigger's normalization EXACTLY — identity is
+   * lower(btrim(name)), D1, and the JS-side pre-trim is `sqlBtrim` (U+0020
+   * only), never `String#trim()` — so explicit creation and trigger-driven
+   * creation converge on the same row for every label, including ones padded
+   * with non-ASCII whitespace. On conflict the existing row keeps its stored
+   * casing (no-op update purely to RETURNING the id in one round-trip).
    *
-   * @param {string} name
-   * @returns {Promise<number|undefined>} undefined when `name` trims to empty
+   * @param {string|null|undefined} name
+   * @returns {Promise<number|undefined>} undefined when `name` is null or
+   *   btrims to empty (the trigger's blank path — no account)
    */
   async resolveOrCreateByName(name) {
-    const trimmed = String(name).trim();
+    if (name == null) return undefined;
+    const trimmed = sqlBtrim(name);
     if (!trimmed) return undefined;
     const result = await query(
       `INSERT INTO accounts (name, display_name) VALUES ($1, $1)

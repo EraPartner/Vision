@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router";
 import { isTypingTarget } from "@/lib/keyboard";
 import { GO_TO_ROUTES, SECTION_CYCLE } from "@/lib/navigation";
 

@@ -64,6 +64,10 @@ const settings = deepFreeze({
 
   database: {
     url: env.DATABASE_URL,
+    // Privileged (DDL) connection string for the least-privilege setup; also
+    // read by alembic/env.py directly from the environment. undefined in the
+    // classic single-role setup.
+    migrationsUrl: env.DATABASE_URL_MIGRATIONS,
     echo: env.DB_ECHO,
     poolSize: env.DB_POOL_SIZE,
     maxOverflow: env.DB_MAX_OVERFLOW,

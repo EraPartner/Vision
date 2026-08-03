@@ -1,11 +1,16 @@
 /**
  * Investment Repository - data access for investments table.
+ *
+ * `investments` is a plain flat table on every install: fresh installs get it from the
+ * 0001 baseline and legacy table-inheritance installs are converted by migration 0087
+ * (ADR-109) before the backend starts listening, so no schema-shape probing is needed.
  */
 
-import { query, withTransaction } from '../database/connection.js';
+import { query } from '../database/connection.js';
+import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import { coerceNumericFields } from '../lib/money.js';
-import { buildSetClauses, buildUpdateSql } from '../lib/sqlClauses.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 /** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
 
@@ -39,8 +44,7 @@ import { buildSetClauses, buildUpdateSql } from '../lib/sqlClauses.js';
  */
 
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
-// so rows match the `number` API/TS types (the inheritance create/update paths
-// all return through getById, so coercing the methods below covers them too).
+// so rows match the `number` API/TS types.
 const INVESTMENT_NUMERIC_FIELDS = ['current_price', 'interest_rate', 'cadastral_income', 'municipality_tax_rate'];
 /**
  * Coerce an `investments` row to its emitted shape: the four NUMERIC columns
@@ -57,154 +61,15 @@ const mapInvestmentRow = (row) => {
   return mapped;
 };
 
-/** @type {boolean|undefined} */
-let _hasInvestmentInheritanceSchema;
-/** @type {boolean|undefined} */
-let _hasMetalsInheritanceTable;
-
-/** @returns {Promise<boolean>} true on legacy table-inheritance installs (ADR-109). */
-async function hasInvestmentInheritanceSchema() {
-  if (_hasInvestmentInheritanceSchema !== undefined) return _hasInvestmentInheritanceSchema;
-
-  const result = await query("SELECT to_regclass('public.investments_base') AS investments_base");
-  _hasInvestmentInheritanceSchema = Boolean(result.rows[0]?.investments_base);
-  return _hasInvestmentInheritanceSchema;
-}
-
-export function __resetInvestmentSchemaCache() {
-  _hasInvestmentInheritanceSchema = undefined;
-  _hasMetalsInheritanceTable = undefined;
-}
-
-/** @returns {Promise<boolean>} */
-async function hasMetalsInheritanceTable() {
-  if (_hasMetalsInheritanceTable !== undefined) return _hasMetalsInheritanceTable;
-  const result = await query("SELECT to_regclass('public.metals_investments') AS metals_investments");
-  _hasMetalsInheritanceTable = Boolean(result.rows[0]?.metals_investments);
-  return _hasMetalsInheritanceTable;
-}
-
-/**
- * @param {any} err
- * @returns {boolean}
- */
-function isNonUpdatableInvestmentsViewError(err) {
-  const msg = err?.message || '';
-  return msg.includes('cannot update view "investments"')
-    || msg.includes("cannot insert into view \"investments\"")
-    || msg.includes("cannot delete from view \"investments\"");
-}
-
-/**
- * @param {any} err
- * @param {string} [columnName]
- * @returns {boolean}
- */
-function isUndefinedColumnError(err, columnName) {
-  if (err?.code !== '42703') return false;
-  const msg = err?.message || '';
-  if (!columnName) return msg.includes('column');
-  return msg.includes(`column "${columnName}"`);
-}
-
-/**
- * @param {any} err
- * @returns {boolean}
- */
-function isMissingInheritanceRelationError(err) {
-  if (err?.code === '42P01') return true;
-  const msg = err?.message || '';
-  return msg.includes('relation "investments_base" does not exist')
-    || msg.includes('relation "stock_investments" does not exist')
-    || msg.includes('relation "etf_investments" does not exist')
-    || msg.includes('relation "crypto_investments" does not exist')
-    || msg.includes('relation "real_estate_investments" does not exist')
-    || msg.includes('relation "savings_investments" does not exist')
-    || msg.includes('relation "bond_investments" does not exist')
-    || msg.includes('relation "metals_investments" does not exist');
-}
-
-/**
- * @param {any} err
- * @param {string} childTable
- * @returns {boolean}
- */
-function isDuplicateInvestmentIdError(err, childTable) {
-  if (err?.code !== '23505') return false;
-  const msg = err?.message || '';
-  const detail = err?.detail || '';
-  const constraint = err?.constraint || '';
-  return (constraint === `${childTable}_pkey` || msg.includes(`${childTable}_pkey`))
-    && (detail.includes('Key (id)=') || msg.includes('Key (id)='));
-}
-
-async function resyncInvestmentsBaseIdSequence() {
-  await query(
-    "SELECT setval(pg_get_serial_sequence('investments_base', 'id'), COALESCE((SELECT MAX(id) FROM investments_base), 0) + 1, false)"
-  );
-}
-
-/** @type {Record<string, string>} */
-const INHERITED_TABLE_BY_ASSET_CLASS = {
-  stock: 'stock_investments',
-  etf: 'etf_investments',
-  crypto: 'crypto_investments',
-  metals: 'metals_investments',
-  real_estate: 'real_estate_investments',
-  savings: 'savings_investments',
-  bond: 'bond_investments',
-};
-
-/**
- * @param {string} assetClass
- * @returns {Promise<string|undefined>}
- */
-async function resolveChildTable(assetClass) {
-  if (assetClass !== 'metals') return INHERITED_TABLE_BY_ASSET_CLASS[assetClass];
-  const hasMetalsTable = await hasMetalsInheritanceTable();
-  return hasMetalsTable ? 'metals_investments' : 'stock_investments';
-}
-
-const BASE_ALLOWED_FIELDS = [
-  'name',
-  'currency',
-  'notes',
-  'is_active',
-  'price_provider',
-  'price_provider_id',
-  'price_provider_url',
-  'price_provider_latest_url',
-  'price_provider_latest_path',
-  'price_provider_history_url',
-  'price_provider_history_path',
-  'price_provider_history_ts_path',
-  'price_provider_history_price_path',
-  'price_updated_at',
-];
-
-/** @type {Record<string, string[]>} */
-const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
-  stock: ['symbol', 'current_price'],
-  etf: ['symbol', 'current_price'],
-  crypto: ['symbol', 'current_price'],
-  metals: ['symbol', 'current_price'],
-  real_estate: ['current_price', 'location', 'municipality', 'cadastral_income', 'municipality_tax_rate'],
-  savings: ['current_price', 'interest_rate'],
-  bond: ['current_price', 'interest_rate', 'maturity_date'],
-};
-
 // Single source of truth for the investment INSERT column list and the
 // coalescing defaults each column applies. Order is load-bearing — it drives
-// placeholder numbering. `base: true` marks the columns that also live on
-// investments_base in the inheritance schema (everything except the
-// asset-class-specific child columns). create() and createThroughInheritanceTables()
-// previously spelled these out as modernValues/legacyValues/baseValues/legacyBaseValues.
-/** @type {Array<{ column: string, base?: boolean, value: (f: any) => any }>} */
+// placeholder numbering.
+/** @type {Array<{ column: string, value: (f: any) => any }>} */
 const INVESTMENT_INSERT_FIELDS = [
-  { column: 'name', base: true, value: (f) => f.name },
+  { column: 'name', value: (f) => f.name },
   { column: 'symbol', value: (f) => f.symbol || null },
   { column: 'asset_class', value: (f) => f.asset_class },
-  { column: 'currency', base: true, value: (f) => f.currency },
+  { column: 'currency', value: (f) => f.currency },
   { column: 'current_price', value: (f) => f.current_price || null },
   { column: 'interest_rate', value: (f) => f.interest_rate || null },
   { column: 'maturity_date', value: (f) => f.maturity_date || null },
@@ -212,43 +77,25 @@ const INVESTMENT_INSERT_FIELDS = [
   { column: 'municipality', value: (f) => f.municipality || null },
   { column: 'cadastral_income', value: (f) => f.cadastral_income ?? null },
   { column: 'municipality_tax_rate', value: (f) => f.municipality_tax_rate ?? null },
-  { column: 'notes', base: true, value: (f) => f.notes || null },
-  { column: 'price_provider', base: true, value: (f) => f.price_provider || 'manual' },
-  { column: 'price_provider_id', base: true, value: (f) => f.price_provider_id || null },
-  { column: 'price_provider_url', base: true, value: (f) => f.price_provider_url || null },
-  { column: 'price_provider_latest_url', base: true, value: (f) => f.price_provider_latest_url || null },
-  { column: 'price_provider_latest_path', base: true, value: (f) => f.price_provider_latest_path || null },
-  { column: 'price_provider_history_url', base: true, value: (f) => f.price_provider_history_url || null },
-  { column: 'price_provider_history_path', base: true, value: (f) => f.price_provider_history_path || null },
-  { column: 'price_provider_history_ts_path', base: true, value: (f) => f.price_provider_history_ts_path || null },
-  { column: 'price_provider_history_price_path', base: true, value: (f) => f.price_provider_history_price_path || null },
+  { column: 'notes', value: (f) => f.notes || null },
+  { column: 'price_provider', value: (f) => f.price_provider || 'manual' },
+  { column: 'price_provider_id', value: (f) => f.price_provider_id || null },
+  { column: 'price_provider_url', value: (f) => f.price_provider_url || null },
+  { column: 'price_provider_latest_url', value: (f) => f.price_provider_latest_url || null },
+  { column: 'price_provider_latest_path', value: (f) => f.price_provider_latest_path || null },
+  { column: 'price_provider_history_url', value: (f) => f.price_provider_history_url || null },
+  { column: 'price_provider_history_path', value: (f) => f.price_provider_history_path || null },
+  { column: 'price_provider_history_ts_path', value: (f) => f.price_provider_history_ts_path || null },
+  { column: 'price_provider_history_price_path', value: (f) => f.price_provider_history_price_path || null },
 ];
-
-const INVESTMENT_BASE_FIELDS = INVESTMENT_INSERT_FIELDS.filter((f) => f.base);
-
-// The provider columns the legacy flat/base insert paths carry (name … price_provider_url).
-const INVESTMENT_LEGACY_FLAT_FIELDS = INVESTMENT_INSERT_FIELDS.slice(0, 15);
-const INVESTMENT_LEGACY_BASE_FIELDS = INVESTMENT_BASE_FIELDS.slice(0, 6);
 
 /** Column names for a create() payload — the caller-facing field set. */
 const INVESTMENT_CREATE_COLUMNS = INVESTMENT_INSERT_FIELDS.map((f) => f.column);
 
-/**
- * @param {Array<{ column: string }>} fieldSpecs
- * @returns {string[]}
- */
-function investmentColumns(fieldSpecs) {
-  return fieldSpecs.map((f) => f.column);
-}
-
-/**
- * @param {Array<{ value: (f: any) => any }>} fieldSpecs
- * @param {any} source
- * @returns {any[]}
- */
-function investmentValues(fieldSpecs, source) {
-  return fieldSpecs.map((f) => f.value(source));
-}
+// Widened to Set<string>: create() probes a raw payload value with .has()
+// (same idiom as UNIT_BASED_ASSET_CLASSES in portfolioTxRepo.common.js).
+/** @type {Set<string>} */
+const SUPPORTED_ASSET_CLASSES = new Set(VALID_ASSET_CLASSES);
 
 /**
  * @param {number} count
@@ -309,154 +156,9 @@ async function ensureSymbolIsUnique(symbol, excludeId) {
   }
 }
 
-/**
- * @param {number} id
- * @param {Record<string, any>} fields
- * @param {(id: number) => Promise<InvestmentRow|null>} getByIdFn
- * @returns {Promise<InvestmentRow|null>}
- */
-async function updateThroughInheritanceTables(id, fields, getByIdFn) {
-  try {
-    const existing = await getByIdFn(id);
-    if (!existing) return null;
-
-    const assetClass = existing.asset_class;
-    const childTable = await resolveChildTable(assetClass);
-    const childAllowed = CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS[assetClass] || [];
-
-    if (!childTable) return existing;
-
-    const baseUpdate = buildUpdateSql('investments_base', id, fields, BASE_ALLOWED_FIELDS);
-    const childUpdate = buildUpdateSql(childTable, id, fields, childAllowed);
-
-    if (!baseUpdate && !childUpdate) return existing;
-
-    await withTransaction(async (client) => {
-      if (baseUpdate) await client.query(baseUpdate.sql, baseUpdate.params);
-      if (childUpdate) await client.query(childUpdate.sql, childUpdate.params);
-    });
-    return getByIdFn(id);
-  } catch (err) {
-    if (!isMissingInheritanceRelationError(err)) throw err;
-    _hasInvestmentInheritanceSchema = false;
-    throw err;
-  }
-}
-
-/**
- * @param {InvestmentCreateFields & Record<string, any>} fields
- * @param {(id: number) => Promise<InvestmentRow|null>} getByIdFn
- * @returns {Promise<InvestmentRow|null>}
- */
-async function createThroughInheritanceTables(fields, getByIdFn) {
-  const {
-    asset_class,
-    currency = 'EUR',
-    symbol,
-    current_price,
-    interest_rate,
-    maturity_date,
-    location,
-    municipality,
-    cadastral_income,
-    municipality_tax_rate,
-  } = fields;
-
-  const childTable = await resolveChildTable(asset_class);
-  if (!childTable) {
-    throw makeValidationError(`Unsupported asset_class: ${asset_class}`);
-  }
-
-  // Base columns/values are the provider/name field set; `currency` carries the
-  // 'EUR' default so a missing currency behaves as before.
-  const source = { ...fields, currency };
-  const baseColumns = investmentColumns(INVESTMENT_BASE_FIELDS);
-  const baseValues = investmentValues(INVESTMENT_BASE_FIELDS, source);
-
-  /** @type {string[]} */
-  const childColumns = [];
-  /** @type {any[]} */
-  const childValues = [];
-
-  if (asset_class === 'stock' || asset_class === 'etf' || asset_class === 'crypto' || asset_class === 'metals') {
-    childColumns.push('symbol', 'current_price');
-    childValues.push(symbol || null, current_price || null);
-  } else if (asset_class === 'real_estate') {
-    childColumns.push('current_price', 'location', 'municipality', 'cadastral_income', 'municipality_tax_rate');
-    childValues.push(current_price || null, location || null, municipality || null, cadastral_income ?? null, municipality_tax_rate ?? null);
-  } else if (asset_class === 'savings') {
-    childColumns.push('current_price', 'interest_rate');
-    childValues.push(current_price || null, interest_rate || null);
-  } else if (asset_class === 'bond') {
-    childColumns.push('current_price', 'interest_rate', 'maturity_date');
-    childValues.push(current_price || null, interest_rate || null, maturity_date || null);
-  }
-
-  const columns = [...baseColumns, ...childColumns];
-  const values = [...baseValues, ...childValues];
-  const placeholders = investmentPlaceholders(values.length);
-  const insertSql = `INSERT INTO ${childTable} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
-
-  // Legacy schema folds the extra provider URL/path columns back into
-  // price_provider_url / price_provider_id.
-  const legacyProviderUrl = source.price_provider_url || source.price_provider_latest_url || null;
-  const legacyProviderId = source.price_provider_id || source.price_provider_latest_path || null;
-  const legacySource = { ...source, price_provider_id: legacyProviderId, price_provider_url: legacyProviderUrl };
-  const legacyBaseColumns = investmentColumns(INVESTMENT_LEGACY_BASE_FIELDS);
-  const legacyBaseValues = investmentValues(INVESTMENT_LEGACY_BASE_FIELDS, legacySource);
-  const legacyColumns = [...legacyBaseColumns, ...childColumns];
-  const legacyValues = [...legacyBaseValues, ...childValues];
-  const legacyPlaceholders = investmentPlaceholders(legacyValues.length);
-  const legacyInsertSql = `INSERT INTO ${childTable} (${legacyColumns.join(', ')}) VALUES (${legacyPlaceholders}) RETURNING id`;
-
-  try {
-    const insertWithColumnFallback = async () => {
-      try {
-        return await query(insertSql, values);
-      } catch (err) {
-        if (!isUndefinedColumnError(err, 'price_provider_latest_url')) throw err;
-        return query(legacyInsertSql, legacyValues);
-      }
-    };
-
-    let insertResult;
-    try {
-      insertResult = await insertWithColumnFallback();
-    } catch (err) {
-      if (!isDuplicateInvestmentIdError(err, childTable)) throw err;
-      await resyncInvestmentsBaseIdSequence();
-      insertResult = await insertWithColumnFallback();
-    }
-
-    const id = insertResult.rows[0]?.id;
-    if (!id) return null;
-    return getByIdFn(id);
-  } catch (err) {
-    if (!isMissingInheritanceRelationError(err)) throw err;
-    _hasInvestmentInheritanceSchema = false;
-    throw err;
-  }
-}
-
-/**
- * @param {number} id
- * @returns {Promise<boolean>}
- */
-async function hardDeleteThroughInheritanceTables(id) {
-  try {
-    const result = await query('DELETE FROM investments_base WHERE id = $1', [id]);
-    return result.rowCount > 0;
-  } catch (err) {
-    if (!isMissingInheritanceRelationError(err)) throw err;
-    _hasInvestmentInheritanceSchema = false;
-    throw err;
-  }
-}
-
-// Per-investment ticker visibility lives in a side table (migration 0061) so the
-// preference works whether `investments` is a plain table or the legacy
-// inheritance VIEW — neither of which we have to alter. Reads LEFT JOIN it
-// (absent row = visible); the toggle UPSERTs it via update() below.
+// Per-investment ticker visibility lives in a side table (migration 0061).
+// Reads LEFT JOIN it (absent row = visible); the toggle UPSERTs it via
+// update() below.
 const TICKER_PREF_SELECT = 'COALESCE(tp.show_in_ticker, true) AS show_in_ticker';
 const TICKER_PREF_JOIN = 'LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id';
 
@@ -567,6 +269,11 @@ export const investmentRepository = {
       throw makeValidationError('name is required');
     }
     name = trimmedName;
+    // Same 400 the legacy inheritance path raised — without this, an unknown
+    // asset_class only fails at the DB enum cast (a raw 500).
+    if (!SUPPORTED_ASSET_CLASSES.has(asset_class)) {
+      throw makeValidationError(`Unsupported asset_class: ${asset_class}`);
+    }
     symbol = normalizeSymbol(symbol);
     // Same uniqueness rule as update() (there is no DB unique index on symbol,
     // so create was the one path that could still insert a duplicate — e.g. a
@@ -598,50 +305,16 @@ export const investmentRepository = {
       price_provider_history_price_path,
     };
 
-    if (await hasInvestmentInheritanceSchema()) {
-      try {
-        return await createThroughInheritanceTables(payload, this.getById.bind(this));
-      } catch (err) {
-        if (!isMissingInheritanceRelationError(err)) throw err;
-      }
-    }
+    const columns = INVESTMENT_CREATE_COLUMNS.join(', ');
+    const placeholders = investmentPlaceholders(INVESTMENT_INSERT_FIELDS.length);
+    const values = INVESTMENT_INSERT_FIELDS.map((f) => f.value(payload));
 
-    const modernColumns = investmentColumns(INVESTMENT_INSERT_FIELDS).join(', ');
-    const modernPlaceholders = investmentPlaceholders(INVESTMENT_INSERT_FIELDS.length);
-    const modernValues = investmentValues(INVESTMENT_INSERT_FIELDS, payload);
-
-    try {
-      const result = await query(
-        `INSERT INTO investments (${modernColumns})
-         VALUES (${modernPlaceholders}) RETURNING *`,
-        modernValues
-      );
-      return mapInvestmentRow(result.rows[0]);
-    } catch (err) {
-      if (isUndefinedColumnError(err, 'price_provider_latest_url')) {
-        const legacyProviderUrl = price_provider_url || price_provider_latest_url || null;
-        const legacyProviderId = price_provider_id || price_provider_latest_path || null;
-        const legacySource = { ...payload, price_provider_id: legacyProviderId, price_provider_url: legacyProviderUrl };
-        const legacyColumns = investmentColumns(INVESTMENT_LEGACY_FLAT_FIELDS).join(', ');
-        const legacyPlaceholders = investmentPlaceholders(INVESTMENT_LEGACY_FLAT_FIELDS.length);
-        const legacyValues = investmentValues(INVESTMENT_LEGACY_FLAT_FIELDS, legacySource);
-        try {
-          const legacyResult = await query(
-            `INSERT INTO investments (${legacyColumns})
-             VALUES (${legacyPlaceholders}) RETURNING *`,
-            legacyValues
-          );
-          return mapInvestmentRow(legacyResult.rows[0]);
-        } catch (legacyErr) {
-          if (!isNonUpdatableInvestmentsViewError(legacyErr)) throw legacyErr;
-          _hasInvestmentInheritanceSchema = true;
-          return createThroughInheritanceTables(payload, this.getById.bind(this));
-        }
-      }
-      if (!isNonUpdatableInvestmentsViewError(err)) throw err;
-      _hasInvestmentInheritanceSchema = true;
-      return createThroughInheritanceTables(payload, this.getById.bind(this));
-    }
+    const result = await query(
+      `INSERT INTO investments (${columns})
+       VALUES (${placeholders}) RETURNING *`,
+      values
+    );
+    return mapInvestmentRow(result.rows[0]);
   },
 
   /**
@@ -684,22 +357,12 @@ export const investmentRepository = {
       return showInTicker !== undefined ? this.getById(id) : existing;
     }
 
-    if (await hasInvestmentInheritanceSchema()) {
-      return updateThroughInheritanceTables(id, normalizedFields, this.getById.bind(this));
-    }
-
     params.push(id);
     const sql = `UPDATE investments SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
-    try {
-      const result = await query(sql, params);
-      if (!result.rows[0]) return null;
-      // Re-read when the ticker pref changed so the joined value is in the response.
-      return showInTicker !== undefined ? this.getById(id) : mapInvestmentRow(result.rows[0]);
-    } catch (err) {
-      if (!isNonUpdatableInvestmentsViewError(err)) throw err;
-      _hasInvestmentInheritanceSchema = true;
-      return updateThroughInheritanceTables(id, normalizedFields, this.getById.bind(this));
-    }
+    const result = await query(sql, params);
+    if (!result.rows[0]) return null;
+    // Re-read when the ticker pref changed so the joined value is in the response.
+    return showInTicker !== undefined ? this.getById(id) : mapInvestmentRow(result.rows[0]);
   },
 
   /**
@@ -708,35 +371,20 @@ export const investmentRepository = {
    * @returns {Promise<InvestmentRow|null>}
    */
   async updatePrice(id, { current_price, price_updated_at }) {
-    const fields = { current_price, price_updated_at };
-    // Mirror update(): only go through the inheritance tables when that schema
-    // is actually present. On a flat `investments` schema the inheritance path
-    // throws, which previously broke the live-price scheduler entirely.
-    if (await hasInvestmentInheritanceSchema()) {
-      return updateThroughInheritanceTables(id, fields, this.getById.bind(this));
-    }
-    try {
-      const result = await query(
-        `UPDATE investments
-            SET current_price = $1, price_updated_at = $2
-          WHERE id = $3
-        RETURNING *`,
-        [current_price, price_updated_at, id]
-      );
-      return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
-    } catch (err) {
-      if (!isNonUpdatableInvestmentsViewError(err)) throw err;
-      _hasInvestmentInheritanceSchema = true;
-      return updateThroughInheritanceTables(id, fields, this.getById.bind(this));
-    }
+    const result = await query(
+      `UPDATE investments
+          SET current_price = $1, price_updated_at = $2
+        WHERE id = $3
+      RETURNING *`,
+      [current_price, price_updated_at, id]
+    );
+    return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
   },
 
   /**
    * Batch variant of updatePrice: one UNNEST-driven UPDATE for the whole
    * refresh instead of N sequential round trips (same pattern as
-   * priceCache.saveHistoricalPointsToDatabase). Falls back to the per-row
-   * path on the legacy inheritance schema, where the flat `investments`
-   * relation is a non-updatable view.
+   * priceCache.saveHistoricalPointsToDatabase).
    *
    * @param {Array<{id: number, current_price: number, price_updated_at: string}>} updates
    * @returns {Promise<number>} number of rows updated
@@ -744,39 +392,20 @@ export const investmentRepository = {
   async updatePricesBulk(updates) {
     if (!Array.isArray(updates) || updates.length === 0) return 0;
 
-    const perRowFallback = async () => {
-      let updated = 0;
-      for (const u of updates) {
-        const row = await this.updatePrice(u.id, u);
-        if (row) updated += 1;
-      }
-      return updated;
-    };
-
-    if (await hasInvestmentInheritanceSchema()) {
-      return perRowFallback();
-    }
-
-    try {
-      const result = await query(
-        `UPDATE investments i
-            SET current_price = u.current_price,
-                price_updated_at = u.price_updated_at
-           FROM UNNEST($1::int[], $2::numeric[], $3::timestamptz[])
-                AS u(id, current_price, price_updated_at)
-          WHERE i.id = u.id`,
-        [
-          updates.map((u) => u.id),
-          updates.map((u) => u.current_price),
-          updates.map((u) => u.price_updated_at),
-        ]
-      );
-      return result.rowCount ?? 0;
-    } catch (err) {
-      if (!isNonUpdatableInvestmentsViewError(err)) throw err;
-      _hasInvestmentInheritanceSchema = true;
-      return perRowFallback();
-    }
+    const result = await query(
+      `UPDATE investments i
+          SET current_price = u.current_price,
+              price_updated_at = u.price_updated_at
+         FROM UNNEST($1::int[], $2::numeric[], $3::timestamptz[])
+              AS u(id, current_price, price_updated_at)
+        WHERE i.id = u.id`,
+      [
+        updates.map((u) => u.id),
+        updates.map((u) => u.current_price),
+        updates.map((u) => u.price_updated_at),
+      ]
+    );
+    return result.rowCount ?? 0;
   },
 
   /** @returns {Promise<Date|null>} TIMESTAMPTZ — a `Date`, not a string. */
@@ -796,22 +425,8 @@ export const investmentRepository = {
    * @returns {Promise<boolean>}
    */
   async hardDelete(id) {
-    if (await hasInvestmentInheritanceSchema()) {
-      try {
-        return await hardDeleteThroughInheritanceTables(id);
-      } catch (err) {
-        if (!isMissingInheritanceRelationError(err)) throw err;
-      }
-    }
-
-    try {
-      const result = await query('DELETE FROM investments WHERE id = $1', [id]);
-      return result.rowCount > 0;
-    } catch (err) {
-      if (!isNonUpdatableInvestmentsViewError(err)) throw err;
-      _hasInvestmentInheritanceSchema = true;
-      return hardDeleteThroughInheritanceTables(id);
-    }
+    const result = await query('DELETE FROM investments WHERE id = $1', [id]);
+    return result.rowCount > 0;
   },
 };
 

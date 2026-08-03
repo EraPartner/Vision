@@ -68,7 +68,7 @@
  * @property {Date} date DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string.
  * @property {string} amount NUMERIC(18,4) — pg emits NUMERIC as a string.
  * @property {string|null} currency VARCHAR(3); NOT NULL + DEFAULT 'EUR' from migration 0046, nullable on older rows.
- * @property {string|null} balance NUMERIC(15,2); NULL on manually-created rows (import pipeline only — ADR-094).
+ * @property {string|null} balance NUMERIC(18,4) since migration 0088 (ADR-060 D7); NULL on manually-created rows (import pipeline only — ADR-094).
  * @property {string|null} memo
  * @property {string|null} comment
  * @property {string|null} bank_account Denormalised account label; being retired in favour of `account_id` (ADR-088).
@@ -136,7 +136,7 @@
  * @typedef {object} PlannedTransactionRow
  * @property {number} id
  * @property {Date} planned_date DATE
- * @property {string} amount NUMERIC(15,2)
+ * @property {string} amount NUMERIC(18,4) since migration 0088 (ADR-060 D7)
  * @property {string|null} currency
  * @property {string|null} memo
  * @property {string|null} comment
@@ -361,7 +361,7 @@
  * @property {boolean} multi_currency_cash
  * @property {boolean} has_cash_sleeve
  * @property {number|null} funding_account_id
- * @property {string|null} statement_balance NUMERIC(15,2).
+ * @property {string|null} statement_balance NUMERIC(18,4) since migration 0088 (ADR-060 D7).
  * @property {string|null} statement_balance_date 'YYYY-MM-DD' — `to_char`-formatted in the projection.
  * @property {boolean} is_active
  * @property {Date|null} closed_at
@@ -371,13 +371,22 @@
 
 /**
  * `AccountRow` plus the balance/provenance columns `getAll` adds via
- * `COMPUTED_BALANCE_LATERAL`. `post_anchor_count` is re-emitted as a `number`
- * (the raw `COUNT(*)` bigint string is parsed) and both provenance fields become
- * `undefined` rather than `null` when nothing is stamped.
+ * `COMPUTED_BALANCE_LATERAL` + `computedBalanceByCurrencyAggLateral`.
+ * `post_anchor_count` is re-emitted as a `number` (the raw `COUNT(*)` bigint
+ * string is parsed) and both provenance fields become `undefined` rather than
+ * `null` when nothing is stamped. `computed_balance` (Σ of the account's
+ * currency partitions, converted into `currency`), `reconcilable_balance` (the
+ * reconciliation base — `statementPartition`, in `reconcilable_currency`) and
+ * `drift` (statement figure − that base) are derived in JS from the partitions,
+ * so they are `number`s — matching the OpenAPI schema — rather than pg NUMERIC
+ * strings. The three native figures satisfy
+ * `drift = statement_balance − reconcilable_balance`.
  *
  * @typedef {AccountRow & {
- *   computed_balance: string|null,
- *   drift: string|null,
+ *   computed_balance: number,
+ *   reconcilable_balance: number,
+ *   reconcilable_currency: string,
+ *   drift: number|null,
  *   has_transactions: boolean,
  *   anchor_date?: string,
  *   post_anchor_count?: number,
@@ -396,7 +405,7 @@
  * @property {number} id
  * @property {number} transaction_id
  * @property {number} recipient_id
- * @property {string} amount NUMERIC(15,2)
+ * @property {string} amount NUMERIC(18,4) since migration 0088 (ADR-060 D7)
  * @property {string|null} note
  * @property {boolean} is_settled
  * @property {Date} created_at
@@ -443,7 +452,7 @@
  * @typedef {object} SplitPaymentRow
  * @property {number} id
  * @property {number} split_id
- * @property {string} amount NUMERIC(15,2)
+ * @property {string} amount NUMERIC(18,4) since migration 0088 (ADR-060 D7)
  * @property {Date} paid_at DATE
  * @property {string|null} note
  * @property {Date} created_at
@@ -480,9 +489,8 @@
  * `INVESTMENT_NUMERIC_FIELDS` are coerced to numbers and `maturity_date` is
  * rendered as a calendar-day string. Every other column is raw.
  *
- * Note `investments` is a plain table on fresh installs but a VIEW over
- * `investments_base` + child tables on legacy inheritance installs (ADR-109);
- * the projected shape is the same either way.
+ * `investments` is a plain flat table on every install (ADR-109; legacy
+ * inheritance installs were converted by migration 0087).
  *
  * @typedef {object} InvestmentRow
  * @property {number} id
@@ -535,6 +543,9 @@
  * @property {string|null} recurrence_interval `recurrence_interval` enum.
  * @property {string|null} recurrence_end_date 'YYYY-MM-DD'
  * @property {number|null} [account_id] Owning account for the lot (ADR-091).
+ * @property {number|null} [import_batch_id] The portfolio import batch that created
+ *           this lot (migration 0086); NULL for manual entry and for lots committed
+ *           before 0086 applied. Rollback bulk-deletes on it.
  * @property {Date} [created_at]
  * @property {Date} [updated_at]
  * @property {string} [asset_class] Not a column — only present when a caller merged the investment's class in.

@@ -76,7 +76,9 @@ describe('getUncategorised', () => {
     expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL');
     expect(sql).toContain('t.date >= $1');
     expect(sql).toContain('t.date <= $2');
-    expect(sql).toContain('t.bank_account ILIKE $3');
+    // ADR-088 contract phase: the bank filter resolves through account_id.
+    expect(sql).toContain('t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $3)');
+    expect(sql).not.toContain('t.bank_account');
     expect(sql).toContain('t.recipient_id = $4');
     expect(sql).toContain('r.name ILIKE $5');
     expect(params).toEqual(['2024-01-01', '2024-12-31', '%kbc%', 5, '%aldi%', 25, 5]);

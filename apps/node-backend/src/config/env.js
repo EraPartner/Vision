@@ -66,6 +66,12 @@ const envSchema = z.object({
   NODE_ENV: optionalStringEnv,
 
   DATABASE_URL: stringEnv(DEFAULT_DATABASE_URL),
+  // Least-privilege setup (optional): privileged connection string used for
+  // Alembic DDL (alembic/env.py prefers it over DATABASE_URL) and for the
+  // boot-time role bootstrap (database/roleBootstrap.js) that creates the
+  // non-superuser app role on already-initialised databases. Unset = classic
+  // single-role setup.
+  DATABASE_URL_MIGRATIONS: optionalStringEnv,
   DB_ECHO: booleanEnv(false),
   DB_POOL_SIZE: intEnv(5),
   DB_MAX_OVERFLOW: intEnv(10),

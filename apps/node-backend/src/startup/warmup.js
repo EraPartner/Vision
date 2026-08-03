@@ -2,8 +2,9 @@
  * Startup warmup tasks.
  *
  * Extracted from main.js so the boot path stays focused on Express wiring.
- * Runs after the HTTP server is listening; populates exchange-rate / inflation
- * / portfolio-snapshot / info caches, then schedules recurring refreshes.
+ * Runs after the HTTP server is listening; builds the materialized views and
+ * populates exchange-rate / inflation / portfolio-snapshot / info caches, then
+ * schedules recurring refreshes.
  *
  * All tasks are best-effort: failures are logged and the task is marked
  * 'failed' (not left 'pending'), so /health/detailed still settles out of
@@ -13,7 +14,11 @@
 
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
-import { refreshMaterializedViews } from '../services/materializedViewService.js';
+import {
+  createMaterializedViews,
+  ensureMaterializedViewIndexes,
+  refreshMaterializedViews,
+} from '../services/materializedViewService.js';
 import {
   warmCache as warmExchangeRateCache,
   clearMemoryCache as clearExchangeRateCache,
@@ -250,8 +255,8 @@ async function refreshInvestmentPricesOnStartup() {
  * Sequencing:
  *  1. Probe internet once. When offline, skip outbound fetches to avoid
  *     per-call timeouts blocking readiness.
- *  2. Kick off independent fire-and-forget warm tasks (MV refresh, inflation,
- *     Kinesis sanitize).
+ *  2. Kick off independent fire-and-forget warm tasks (materialized-view
+ *     create/index/refresh, inflation, Kinesis sanitize).
  *  3. Chain dependent work: exchange-rate warm + FX backfill → portfolio
  *     snapshots → info caches.
  *  4. Schedule recurring intervals (12h FX, 1h quotes, 24h cashflow MC).
@@ -271,20 +276,37 @@ export async function runWarmupTasks({ warmupStatus }) {
     logger.warn('Could not hydrate research provider API keys; using env fallback', { error: err.message });
   }
 
-  // One-time internal-transfer backfill on upgrade (ADR-083). Best-effort and
-  // DB-only; refreshes the MVs afterwards so the exclusion is reflected. Runs
-  // before the MV refresh below kicks off; both are idempotent.
-  backfillTransfersOnce()
-    .then((r) => { if (!r.skipped) return refreshMaterializedViews(); })
-    .catch((err) => {
-      logger.error('Internal-transfer backfill failed on startup', { error: err.message });
-    });
-
-  refreshMaterializedViews()
+  // Whole materialized-view lifecycle — create, index, refresh — runs here, not
+  // pre-`listen`. Creation is only a metadata no-op once the views exist: on a
+  // first-ever boot, or after a migration that drops a view to redefine it
+  // (0084/0085), each `CREATE MATERIALIZED VIEW` is a full aggregation scan of
+  // `transactions`, which pre-listen was serialized ahead of `/health` inside
+  // the window the Electron 60s poll budget races. Requests that land before the
+  // views exist are correct, just slower: `mvAvailable()` sees the missing
+  // relation and the repositories take their base-table path.
+  //
+  // Failure is degradation, not a boot failure — the pre-listen call used to
+  // abort `start()` (exit 1) instead. MVs are derived artifacts, so a creation
+  // failure is reported exactly like the refresh failure it replaces: the flag
+  // settles 'failed', /health/detailed reports `degraded: true`, and every read
+  // falls back to the live query.
+  const materializedViewsReady = createMaterializedViews()
+    .then(() => ensureMaterializedViewIndexes())
+    .then(() => refreshMaterializedViews())
     .then(() => { warmupStatus.materializedViews = 'ready'; })
     .catch((err) => {
       warmupStatus.materializedViews = 'failed';
-      logger.error('Failed to refresh materialized views on startup', { error: err.message });
+      logger.error('Failed to prepare materialized views on startup', { error: err.message });
+    });
+
+  // One-time internal-transfer backfill on upgrade (ADR-083). Best-effort and
+  // DB-only; refreshes the MVs afterwards so the exclusion is reflected — after
+  // the chain above, since refreshing a view that does not exist yet is a no-op
+  // that logs an error. Both refreshes are idempotent and coalesce.
+  backfillTransfersOnce()
+    .then((r) => (r.skipped ? undefined : materializedViewsReady.then(() => refreshMaterializedViews())))
+    .catch((err) => {
+      logger.error('Internal-transfer backfill failed on startup', { error: err.message });
     });
 
   // Best-effort retention sweeps for unbounded audit/staging tables (self-catching).

@@ -114,6 +114,12 @@ COPY --from=frontend-builder /app/dist ./dist
 COPY config/alembic.ini ./config/
 COPY alembic/ ./alembic/
 
+# Least-privilege grant set + first-init script. The .sql.tpl is read at
+# RUNTIME by the boot role bootstrap (src/database/roleBootstrap.js) to grant
+# the non-superuser app role on already-initialised databases — keep it in the
+# image or that bootstrap degrades to a warning.
+COPY docker/postgres-init/ ./docker/postgres-init/
+
 ENV NODE_ENV=production
 ENV ENVIRONMENT=production
 # Pin the process timezone to UTC (ADR-009: storage = UTC, business math =

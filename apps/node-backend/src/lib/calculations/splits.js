@@ -11,7 +11,40 @@
  * All functions are pure: no I/O, no mutation of inputs.
  */
 
-import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal } from '../money.js';
+import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal, Decimal } from '../money.js';
+
+/**
+ * Storage scale of split/payment money columns: NUMERIC(18,4) since migration
+ * 0088 (ADR-060 D7 — 18,4 is the domain money precision).
+ */
+export const MONEY_DECIMALS = 4;
+
+/**
+ * Round to the NUMERIC(18,4) storage precision (banker's rounding), as a
+ * Decimal. Validation MUST compare at this scale, not at cents: storage keeps
+ * 4 decimals, so a cap checked at 2 dp but stored at 4 dp admits sub-cent
+ * over-payments/over-allocations (two 25.0025 payments both pass a 50.00 cap
+ * rounded to cents, yet their stored sum is 50.0050).
+ *
+ * @param {number|string|import('decimal.js').default} value
+ * @returns {import('decimal.js').default}
+ */
+export function roundToMoneyPrecision(value) {
+  return toDecimal(value).toDecimalPlaces(MONEY_DECIMALS, Decimal.ROUND_HALF_EVEN);
+}
+
+/**
+ * Normalize a JS money input to exactly the value NUMERIC(18,4) will store.
+ * Apply at the write boundary so the amount that was validated IS the amount
+ * that is stored (same idea as the old roundToCents-before-INSERT, but at the
+ * domain precision instead of cents — 2-dp inputs pass through unchanged).
+ *
+ * @param {number|string|import('decimal.js').default} value
+ * @returns {number}
+ */
+export function normalizeMoneyAmount(value) {
+  return toNumber(roundToMoneyPrecision(value));
+}
 
 /**
  * @typedef {Object} ValidationResult
@@ -71,8 +104,12 @@ export function validateSplitAllocation({
   if (!Number.isFinite(newSplitAmount) || newSplitAmount <= 0) {
     return { ok: false, error: 'Split amount must be a positive number' };
   }
-  const projected = roundToCentsDecimal(toDecimal(currentSplitTotal).plus(newSplitAmount));
-  const limit = roundToCentsDecimal(transactionTotal);
+  // Compare at the NUMERIC(18,4) storage precision: existing totals arrive
+  // exact from the DB, and callers normalize the candidate via
+  // normalizeMoneyAmount, so projected-vs-limit here is exactly the
+  // comparison Postgres would see after INSERT.
+  const projected = roundToMoneyPrecision(toDecimal(currentSplitTotal).plus(newSplitAmount));
+  const limit = roundToMoneyPrecision(transactionTotal);
   if (projected.gt(limit)) {
     return { ok: false, error: 'Split amount exceeds transaction total' };
   }
@@ -133,8 +170,10 @@ export function validatePaymentAmount({
   if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
     return { ok: false, error: 'Payment amount must be a positive number' };
   }
-  const projected = roundToCentsDecimal(toDecimal(alreadyPaid).plus(paymentAmount));
-  const limit = roundToCentsDecimal(splitAmount);
+  // Same storage-precision comparison as validateSplitAllocation — a cent-level
+  // cap would re-admit the sub-cent over-payment regression (see migration 0088).
+  const projected = roundToMoneyPrecision(toDecimal(alreadyPaid).plus(paymentAmount));
+  const limit = roundToMoneyPrecision(splitAmount);
   if (projected.gt(limit)) {
     return { ok: false, error: 'Payment would exceed split outstanding balance' };
   }
@@ -188,6 +227,8 @@ export function computeOwedSummary(rows) {
 
 export default {
   roundToCents,
+  roundToMoneyPrecision,
+  normalizeMoneyAmount,
   validateSplitAllocation,
   validateBatchSplitAllocation,
   validatePaymentAmount,

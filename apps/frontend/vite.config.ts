@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => ({
                  *
                  * Chunks:
                  *  react-vendor   — React + React DOM (core runtime, almost never changes)
-                 *  router         — react-router-dom
+                 *  router         — react-router
                  *  query          — TanStack Query
                  *  tanstack       — TanStack Table + Virtual
                  *  charts         — recharts (largest single dep)

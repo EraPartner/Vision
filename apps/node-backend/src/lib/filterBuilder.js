@@ -79,8 +79,13 @@ export function parseAmountFilter(value, signed = false) {
  * @param {number|null}   [opts.accountId]     exact match on t.account_id — the preferred account
  *                                             filter (ADR-088; the bank_account string is being retired)
  * @param {number[]|null} [opts.accountIds]    multiple account ids (IN clause); ignored when accountId is set
- * @param {string|null}   [opts.bankAccount]   substring, ILIKE — legacy escape hatch; prefer accountId
- * @param {string[]|null} [opts.bankAccounts]  exact match IN clause; ignored when bankAccount is set; capped at MAX_LIST_SIZE
+ * @param {string|null}   [opts.bankAccount]   substring, ILIKE on the account's canonical name
+ *                                             (accounts.name via t.account_id — ADR-088 contract:
+ *                                             the SQL no longer touches the retired bank_account
+ *                                             string) — legacy escape hatch; prefer accountId
+ * @param {string[]|null} [opts.bankAccounts]  exact match on accounts.name (resolved through
+ *                                             t.account_id); ignored when bankAccount is set;
+ *                                             capped at MAX_LIST_SIZE
  * @param {number|null}   [opts.categoryId]    matches transaction, recipient-default or primary-default
  * @param {number[]|null} [opts.categoryIds]   multiple category IDs (IN clause); ignored when categoryId is set
  * @param {number|null} [opts.recipientId]      matches the txn recipient or any sub-recipient under it
@@ -157,14 +162,19 @@ export function buildTransactionWhere(opts = {}) {
       params.push(...safe);
     }
   }
+  // Both bank filters resolve through account_id (ADR-088 contract phase): the
+  // label lives on accounts.name, and rows are matched by FK — never by the
+  // retired transactions.bank_account string. Under the dual-write parity
+  // invariant (trigger 0051/0083 + rename propagation) the observable matches
+  // are identical to the old string predicates.
   if (bankAccount) {
-    clauses.push(`t.bank_account ILIKE $${p++}`);
+    clauses.push(`t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${p++})`);
     params.push(`%${bankAccount}%`);
   } else if (Array.isArray(bankAccounts) && bankAccounts.length > 0) {
     const safe = bankAccounts.slice(0, MAX_LIST_SIZE).map((s) => String(s).trim()).filter(Boolean);
     if (safe.length > 0) {
       const placeholders = safe.map(() => `$${p++}`).join(', ');
-      clauses.push(`t.bank_account IN (${placeholders})`);
+      clauses.push(`t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name IN (${placeholders}))`);
       params.push(...safe);
     }
   }
@@ -267,7 +277,10 @@ export function buildTransactionWhere(opts = {}) {
     const matchingCategories = `SELECT sc.id FROM categories sc WHERE sc.general ILIKE $${p} OR sc.detail ILIKE $${p}`;
     const branches = [
       `SELECT st.id FROM transactions st WHERE st.memo ILIKE $${p} OR st.comment ILIKE $${p}`,
-      `SELECT st.id FROM transactions st WHERE st.bank_account ILIKE $${p} OR st.currency ILIKE $${p}`,
+      // Bank label via the account entity (ADR-088): the search must match the
+      // canonical accounts.name through the FK, not the retired string column.
+      `SELECT st.id FROM transactions st WHERE st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE $${p})`,
+      `SELECT st.id FROM transactions st WHERE st.currency ILIKE $${p}`,
     ];
     if (/^[0-9.-]+$/.test(searchText)) {
       branches.push(`SELECT st.id FROM transactions st WHERE CAST(st.amount AS TEXT) ILIKE $${p}`);

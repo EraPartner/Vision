@@ -87,4 +87,8 @@ export const BACKUP_EXCLUDED_TABLES = Object.freeze({
   feature_flags: 'Dropped in migration 0011 — no longer exists in current schema',
   bank_statements: 'Dropped in migration 0014 — bank reconciliation feature was removed',
   reconciliation_entries: 'Dropped in migration 0014 — bank reconciliation feature was removed',
+  investments_flat:
+    'Transient name inside migration 0087 (ADR-109 conversion) — renamed to `investments` before the migration commits, so no table of this name exists at head',
+  portfolio_transactions_flat:
+    'Transient name inside migration 0087 (ADR-109 conversion) — renamed to `portfolio_transactions` before the migration commits, so no table of this name exists at head',
 });

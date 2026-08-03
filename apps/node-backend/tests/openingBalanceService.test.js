@@ -98,6 +98,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // account row lock (FOR UPDATE)
       .mockResolvedValueOnce({ rows: [{ earliest: null }] }) // no prior activity
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 42, amount: 0, balance: 1000, transfer_source: 'opening' }] });
 
     const result = await setOpeningBalance(5, { balance: 1000, date: '2024-01-01' });
@@ -110,17 +111,25 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     expect(query.mock.calls[0][0]).toMatch(/SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/);
     expect(query.mock.calls[0][1]).toEqual([5]);
 
-    // Third query is the upsert; params carry the server-stamped balance and currency.
-    const [sql, params] = query.mock.calls[2];
+    // Fourth query is the upsert (lock, earliest-activity probe, system-recipient
+    // upsert, upsert); params carry the server-stamped balance and currency.
+    const [sql, params] = query.mock.calls[3];
     expect(sql).toMatch(/transfer_source = 'opening'/);
     expect(sql).toMatch(/is_transfer, transfer_source, is_active/);
-    expect(params).toEqual([5, 1000, 'EUR', '2024-01-01', 'OPENING BALANCE']);
+    expect(params).toEqual([5, 1000, 'EUR', '2024-01-01', 'OPENING BALANCE', 900]);
+    // recipient_id is NOT NULL: the INSERT branch must name the column and bind
+    // the system recipient (omitting it raised 23502 live). The UPDATE branch
+    // must NOT touch it — re-running the action keeps the anchor's recipient.
+    expect(sql).toMatch(/recipient_id,/);
+    expect(sql.slice(sql.indexOf('updated AS'), sql.indexOf('inserted AS'))).not.toMatch(/recipient_id/);
+    expect(query.mock.calls[2][0]).toMatch(/SELECT id FROM recipients WHERE normalized_name/);
   });
 
   it('warns when the anchor date does not precede existing activity', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: '2023-06-01' }] }) // activity predates the anchor
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 7 }] });
 
     const result = await setOpeningBalance(5, { balance: 500, date: '2024-01-01' });
@@ -135,6 +144,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2023, 5, 1) }] })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 8 }] });
 
     const result = await setOpeningBalance(5, { balance: 500, date: '2024-01-01' });
@@ -145,6 +155,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2024, 5, 1) }] })
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [{ id: 9 }] });
 
     const result = await setOpeningBalance(5, { balance: 500, date: '2024-01-01' });

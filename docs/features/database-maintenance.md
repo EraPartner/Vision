@@ -252,7 +252,7 @@ CREATE TABLE db_editor_audit (
   statement   TEXT NOT NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX db_editor_audit_table_time_idx ON db_editor_audit (table_name, created_at DESC);
+CREATE INDEX idx_db_editor_audit_table_time ON db_editor_audit (table_name, created_at DESC);
 ```
 
 Audit rows are written inside the same transaction as the change, so a rollback also removes the audit entry. The `db_editor_audit` table is itself browsable (and editable) through the data editor.

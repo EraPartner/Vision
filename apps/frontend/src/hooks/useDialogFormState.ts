@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 
 /**
  * Form state for a dialog whose typed input must survive an accidental
@@ -38,6 +38,63 @@ export function useDialogFormState<T>(makeSeed: () => T): {
     };
 
     return { form, setForm, reset, dirty };
+}
+
+/**
+ * Props a draft-preserving dialog exposes so a parent can own its mounting.
+ *
+ * The preservation above only holds while the dialog is mounted, so a parent
+ * that renders one *inside its own* dialog content destroys the draft on its
+ * own dismissal — Radix unmounts content when it closes. Such a parent lifts
+ * the dialog out of its content and drives it through these props instead;
+ * `open` being supplied also means the dialog renders no `DialogTrigger`, since
+ * the control that opens it now lives in the parent.
+ */
+export interface ControlledDialogProps {
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    /**
+     * Where focus goes when the dialog closes. Without a `DialogTrigger` Radix
+     * has nothing to return focus to and would drop it on the body, so the
+     * parent passes the control that opened the dialog.
+     */
+    returnFocusRef?: RefObject<HTMLElement | null>;
+}
+
+/**
+ * Open state that is the component's own until a parent supplies `open`.
+ *
+ * `controlled` is what the dialog checks before rendering its trigger.
+ */
+export function useControlledOpen({ open, onOpenChange }: ControlledDialogProps): {
+    open: boolean;
+    setOpen: (next: boolean) => void;
+    controlled: boolean;
+} {
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+    const controlled = open !== undefined;
+
+    return {
+        open: controlled ? open : uncontrolledOpen,
+        setOpen: (next: boolean) => {
+            if (!controlled) setUncontrolledOpen(next);
+            onOpenChange?.(next);
+        },
+        controlled,
+    };
+}
+
+/** Return-focus handler for a controlled dialog's `DialogContent`. */
+export function returnFocusOnClose(
+    returnFocusRef: ControlledDialogProps["returnFocusRef"],
+): ((event: Event) => void) | undefined {
+    if (!returnFocusRef) return undefined;
+    // Radix composes this before its own handler and skips that one once the
+    // event is default-prevented, so this is the whole close-focus behaviour.
+    return (event: Event) => {
+        event.preventDefault();
+        returnFocusRef.current?.focus();
+    };
 }
 
 /**

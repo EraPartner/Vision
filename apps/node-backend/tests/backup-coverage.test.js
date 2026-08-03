@@ -35,6 +35,11 @@ const MIGRATIONS_DIR = join(REPO_ROOT, 'alembic', 'versions');
  *      → CREATE TABLE / DROP TABLE in upgrade body text
  *   3. SQLAlchemy Alembic API calls within upgrade()
  *      → op.create_table('name', ...) / op.drop_table('name')
+ *   4. Literal renames (0087-style conversion migrations)
+ *      → ALTER TABLE a RENAME TO b — the old name leaves the schema, the new
+ *        name enters it. Only literal names are tracked; dynamically built
+ *        renames (f-strings/plpgsql) reference tables this parser never saw
+ *        created, so they cannot desync the set.
  *
  * For correctness inside a single migration (e.g. 0014 drops then re-creates
  * the same table) the upgrade body tokens are processed IN SEQUENCE, not as
@@ -86,19 +91,25 @@ function deriveMigrationTableSet() {
     // Step 2: process upgrade body tokens IN SEQUENCE so that drop+re-create
     // within the same migration is handled correctly.
     const TOKEN_RE =
-      /(?:(CREATE)\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|(DROP)\s+TABLE\s+(?:IF\s+EXISTS\s+)?|op\.(create_table|drop_table)\s*\(\s*['"])([a-z_][a-z0-9_]*)/gi;
+      /(?:(CREATE)\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|(DROP)\s+TABLE\s+(?:IF\s+EXISTS\s+)?|op\.(create_table|drop_table)\s*\(\s*['"]|(ALTER)\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-z_][a-z0-9_]*)\s+RENAME\s+TO\s+)([a-z_][a-z0-9_]*)/gi;
 
     for (const m of upgradeBody.matchAll(TOKEN_RE)) {
       // m[1]: CREATE keyword (raw SQL create)
       // m[2]: DROP keyword (raw SQL drop)
       // m[3]: op.create_table | op.drop_table (alembic API)
-      // m[4]: table name
-      const table = m[4].toLowerCase();
+      // m[4]: ALTER keyword (raw SQL rename) — m[5] is the old table name
+      // m[6]: table name (created / dropped / rename target)
+      const table = m[6].toLowerCase();
       const isCreate = !!(m[1] || m[3] === 'create_table');
       const isDrop = !!(m[2] || m[3] === 'drop_table');
+      const isRename = !!m[4];
 
       if (isCreate) schema.add(table);
       else if (isDrop) schema.delete(table);
+      else if (isRename) {
+        schema.delete(m[5].toLowerCase());
+        schema.add(table);
+      }
     }
   }
 

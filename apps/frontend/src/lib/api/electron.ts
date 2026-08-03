@@ -37,6 +37,11 @@ type ElectronBackup = {
     setPassphrase?: (passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>;
 };
 
+type ElectronServices = {
+    saveSettings: (settings: { keepServicesOnQuit: boolean }) => Promise<void>;
+    loadSettings: () => Promise<{ keepServicesOnQuit: boolean }>;
+};
+
 /** Native menu / dock menu message — see packaging/electron/main.js menuAction(). */
 export interface ElectronMenuAction {
     action: 'navigate' | 'open-settings' | 'open-shortcuts' | 'new-transaction' | 'toggle-sidebar';
@@ -74,6 +79,10 @@ function getElectronUpdater(): ElectronUpdater | undefined {
 
 function getElectronBackup(): ElectronBackup | undefined {
     return (window as Window & { electronBackup?: ElectronBackup }).electronBackup;
+}
+
+function getElectronServices(): ElectronServices | undefined {
+    return (window as Window & { electronServices?: ElectronServices }).electronServices;
 }
 
 export function getElectronAPI(): ElectronAPI | undefined {
@@ -231,6 +240,42 @@ export async function loadBackupSettings(): Promise<{ backupDir: string; backupO
         if (result?.value) {
             const v = result.value as { backupDir?: string; backupOnQuit?: boolean };
             return { backupDir: v.backupDir ?? '', backupOnQuit: v.backupOnQuit ?? false };
+        }
+    } catch {
+        // fall through
+    }
+    return null;
+}
+
+/**
+ * Persist the opt-in "keep services running on quit" toggle. No-op outside
+ * Electron (there is nothing to keep running). Same dual-write as
+ * saveBackupSettings: the database is the source of truth, the Electron
+ * settings.json mirror is the fallback the will-quit handler reads when the
+ * backend has already started shutting down.
+ */
+export async function saveServicesSettings(settings: {
+    keepServicesOnQuit: boolean;
+}): Promise<void> {
+    await saveSetting('services_settings', settings);
+    const services = getElectronServices();
+    if (services) services.saveSettings(settings).catch(() => {});
+}
+
+export async function loadServicesSettings(): Promise<{ keepServicesOnQuit: boolean } | null> {
+    const services = getElectronServices();
+    if (services) {
+        try {
+            return await services.loadSettings();
+        } catch {
+            // fall through to backend API read
+        }
+    }
+    try {
+        const result = await getSetting('services_settings');
+        if (result?.value) {
+            const v = result.value as { keepServicesOnQuit?: boolean };
+            return { keepServicesOnQuit: v.keepServicesOnQuit ?? false };
         }
     } catch {
         // fall through

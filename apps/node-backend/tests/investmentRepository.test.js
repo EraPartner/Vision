@@ -4,18 +4,16 @@ import { mockTxConnection } from './helpers/repoMocks.js';
 vi.mock('../src/database/connection.js', () => mockTxConnection());
 
 import { query } from '../src/database/connection.js';
-import investmentRepository, { __resetInvestmentSchemaCache } from '../src/repositories/investmentRepository.js';
+import investmentRepository from '../src/repositories/investmentRepository.js';
 
 describe('investmentRepository.create', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    __resetInvestmentSchemaCache();
   });
 
-  it('creates through legacy investments table when inheritance schema is absent', async () => {
+  it('creates through the flat investments table', async () => {
     query
       .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
       .mockResolvedValueOnce({ rows: [{ id: 1, name: 'BTC', asset_class: 'crypto' }] });
 
     const result = await investmentRepository.create({
@@ -33,99 +31,20 @@ describe('investmentRepository.create', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       2,
-      "SELECT to_regclass('public.investments_base') AS investments_base"
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      3,
       `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
       ['BTC', 'BTC', 'crypto', 'EUR', 50000, null, null, null, null, null, null, null, 'manual', null, null, null, null, null, null, null, null]
     );
     expect(result).toEqual({ id: 1, name: 'BTC', asset_class: 'crypto' });
   });
 
-  it('falls back to inheritance tables when insert into investments view is not updatable', async () => {
+  it('carries provider URL/path fields through the insert', async () => {
     query
       .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
-      .mockRejectedValueOnce({ message: 'cannot insert into view "investments"', code: '55000' })
-      .mockResolvedValueOnce({ rows: [{ id: 17 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 17, asset_class: 'stock', name: 'AAPL' }] });
-
-    const result = await investmentRepository.create({
-      name: 'AAPL',
-      symbol: 'AAPL',
-      asset_class: 'stock',
-      currency: 'USD',
-      current_price: 180.5,
-      notes: 'Tech stock',
-      price_provider: 'yahoo',
-      price_provider_id: 'AAPL',
-    });
-
-    expect(query).toHaveBeenNthCalledWith(
-      3,
-      `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
-      ['AAPL', 'AAPL', 'stock', 'USD', 180.5, null, null, null, null, null, null, 'Tech stock', 'yahoo', 'AAPL', null, null, null, null, null, null, null]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      4,
-      'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      ['AAPL', 'USD', 'Tech stock', 'yahoo', 'AAPL', null, null, null, null, null, null, null, 'AAPL', 180.5]
-    );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [17]);
-    expect(result).toEqual({ id: 17, asset_class: 'stock', name: 'AAPL' });
-  });
-
-  it('falls back to legacy insert columns when modern provider columns are missing', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
-      .mockRejectedValueOnce({
-        code: '42703',
-        message: 'column "price_provider_latest_url" of relation "investments" does not exist',
-      })
       .mockResolvedValueOnce({ rows: [{ id: 8, asset_class: 'metals', name: 'Napoleon' }] });
 
     const result = await investmentRepository.create({
       name: 'Napoleon',
-      symbol: 'NAPOLEON',
-      asset_class: 'metals',
-      currency: 'EUR',
-      current_price: 706.5,
-      price_provider: 'custom',
-      price_provider_latest_url: 'https://example.com/latest',
-      price_provider_latest_path: 'napoleon.price',
-    });
-
-    expect(query).toHaveBeenNthCalledWith(
-      4,
-      `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
-      ['Napoleon', 'NAPOLEON', 'metals', 'EUR', 706.5, null, null, null, null, null, null, null, 'custom', 'napoleon.price', 'https://example.com/latest']
-    );
-    expect(result).toEqual({ id: 8, asset_class: 'metals', name: 'Napoleon' });
-  });
-
-  it('falls back to inheritance create when legacy insert also hits non-updatable investments view', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
-      .mockRejectedValueOnce({
-        code: '42703',
-        message: 'column "price_provider_latest_url" of relation "investments" does not exist',
-      })
-      .mockRejectedValueOnce({
-        code: '55000',
-        message: 'cannot insert into view "investments"',
-      })
-      .mockResolvedValueOnce({ rows: [{ metals_investments: null }] })
-      .mockResolvedValueOnce({ rows: [{ id: 99 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 99, asset_class: 'metals', name: 'Napoleon 20F' }] });
-
-    const result = await investmentRepository.create({
-      name: 'Napoleon 20F',
       symbol: 'NAPOLEON',
       asset_class: 'metals',
       currency: 'EUR',
@@ -140,117 +59,17 @@ describe('investmentRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      6,
-      'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      ['Napoleon 20F', 'EUR', null, 'custom', null, null, 'https://example.com/latest', 'napoleon.price', 'https://example.com/history', 'points', 'timestamp_ms', 'price', 'NAPOLEON', 706.5]
-    );
-    expect(query).toHaveBeenNthCalledWith(7, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [99]);
-    expect(result).toEqual({ id: 99, asset_class: 'metals', name: 'Napoleon 20F' });
-  });
-
-  it('creates directly through inheritance tables when schema exists', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockResolvedValueOnce({ rows: [{ id: 25 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 25, asset_class: 'real_estate', name: 'Apartment' }] });
-
-    const result = await investmentRepository.create({
-      name: 'Apartment',
-      asset_class: 'real_estate',
-      currency: 'EUR',
-      current_price: 220000,
-      location: 'Brussels',
-      municipality: 'Brussels',
-      cadastral_income: 1200,
-      municipality_tax_rate: 7.5,
-    });
-
-    expect(query).toHaveBeenNthCalledWith(
       2,
-      'INSERT INTO real_estate_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, current_price, location, municipality, cadastral_income, municipality_tax_rate) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id',
-      ['Apartment', 'EUR', null, 'manual', null, null, null, null, null, null, null, null, 220000, 'Brussels', 'Brussels', 1200, 7.5]
+      expect.stringContaining('INSERT INTO investments'),
+      ['Napoleon', 'NAPOLEON', 'metals', 'EUR', 706.5, null, null, null, null, null, null, null, 'custom', null, null, 'https://example.com/latest', 'napoleon.price', 'https://example.com/history', 'points', 'timestamp_ms', 'price']
     );
-    expect(query).toHaveBeenNthCalledWith(3, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [25]);
-    expect(result).toEqual({ id: 25, asset_class: 'real_estate', name: 'Apartment' });
-  });
-
-  it('falls back to legacy inheritance columns when child table misses modern provider columns', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockResolvedValueOnce({ rows: [{ metals_investments: null }] })
-      .mockRejectedValueOnce({
-        code: '42703',
-        message: 'column "price_provider_latest_url" of relation "stock_investments" does not exist',
-      })
-      .mockResolvedValueOnce({ rows: [{ id: 44 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 44, asset_class: 'metals', name: 'Napoleon 20F' }] });
-
-    const result = await investmentRepository.create({
-      name: 'Napoleon 20F',
-      symbol: 'NAPOLEON',
-      asset_class: 'metals',
-      currency: 'EUR',
-      current_price: 705.2,
-      price_provider: 'custom',
-      price_provider_latest_url: 'https://example.com/latest',
-      price_provider_latest_path: 'napoleon.price',
-    });
-
-    expect(query).toHaveBeenNthCalledWith(
-      5,
-      'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
-      ['Napoleon 20F', 'EUR', null, 'custom', 'napoleon.price', 'https://example.com/latest', 'NAPOLEON', 705.2]
-    );
-    expect(query).toHaveBeenNthCalledWith(6, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [44]);
-    expect(result).toEqual({ id: 44, asset_class: 'metals', name: 'Napoleon 20F' });
-  });
-
-  it('resyncs investments_base sequence and retries when inherited insert hits duplicate id', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [] }) // symbol-uniqueness check (no duplicate)
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockRejectedValueOnce({
-        code: '23505',
-        constraint: 'stock_investments_pkey',
-        detail: 'Key (id)=(1) already exists.',
-        message: 'duplicate key value violates unique constraint "stock_investments_pkey"',
-      })
-      .mockResolvedValueOnce({ rows: [{ setval: 42 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 42 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 42, asset_class: 'stock', name: 'AAPL' }] });
-
-    const result = await investmentRepository.create({
-      name: 'AAPL',
-      symbol: 'AAPL',
-      asset_class: 'stock',
-      currency: 'USD',
-      current_price: 180.5,
-    });
-
-    expect(query).toHaveBeenNthCalledWith(
-      3,
-      'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      ['AAPL', 'USD', null, 'manual', null, null, null, null, null, null, null, null, 'AAPL', 180.5]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      4,
-      "SELECT setval(pg_get_serial_sequence('investments_base', 'id'), COALESCE((SELECT MAX(id) FROM investments_base), 0) + 1, false)"
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      5,
-      'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      ['AAPL', 'USD', null, 'manual', null, null, null, null, null, null, null, null, 'AAPL', 180.5]
-    );
-    expect(query).toHaveBeenNthCalledWith(6, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [42]);
-    expect(result).toEqual({ id: 42, asset_class: 'stock', name: 'AAPL' });
+    expect(result).toEqual({ id: 8, asset_class: 'metals', name: 'Napoleon' });
   });
 });
 
 describe('investmentRepository.create symbol uniqueness', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    __resetInvestmentSchemaCache();
   });
 
   it('rejects a duplicate symbol on create with the same error shape as update', async () => {
@@ -269,10 +88,7 @@ describe('investmentRepository.create symbol uniqueness', () => {
   });
 
   it('skips the uniqueness check when no symbol is provided', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockResolvedValueOnce({ rows: [{ id: 12 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 12, asset_class: 'savings', name: 'Book' }] });
+    query.mockResolvedValueOnce({ rows: [{ id: 12, asset_class: 'savings', name: 'Book' }] });
 
     const result = await investmentRepository.create({
       name: 'Book', asset_class: 'savings', currency: 'EUR', interest_rate: 2,
@@ -289,18 +105,16 @@ describe('investmentRepository.create symbol uniqueness', () => {
 describe('investmentRepository.update', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    __resetInvestmentSchemaCache();
   });
 
-  it('updates legacy updatable investments view directly when possible', async () => {
+  it('updates the investments table directly', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'stock', name: 'AAPL' }] })
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
       .mockResolvedValueOnce({ rows: [{ id: 1, name: 'AAPL' }] });
 
     const result = await investmentRepository.update(1, { current_price: 123.45 });
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(2);
     expect(query).toHaveBeenNthCalledWith(
       1,
       'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
@@ -308,125 +122,10 @@ describe('investmentRepository.update', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       2,
-      "SELECT to_regclass('public.investments_base') AS investments_base"
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      3,
       'UPDATE investments SET current_price = $1 WHERE id = $2 RETURNING *',
       [123.45, 1]
     );
     expect(result).toEqual({ id: 1, name: 'AAPL' });
-  });
-
-  it('falls back to base + child table updates when investments is a non-updatable view', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'stock' }] })
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
-      .mockRejectedValueOnce({ message: 'cannot update view "investments"', code: '55000' })
-      .mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'stock' }] })
-      .mockResolvedValueOnce({ rowCount: 1 })
-      .mockResolvedValueOnce({ rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'stock', current_price: '31.20', price_provider_id: 'IONQ' }] });
-
-    const result = await investmentRepository.update(1, {
-      current_price: 31.2,
-      price_updated_at: '2026-03-23T11:34:56.000Z',
-    });
-
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
-      [1]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      2,
-      "SELECT to_regclass('public.investments_base') AS investments_base"
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      3,
-      'UPDATE investments SET current_price = $1, price_updated_at = $2 WHERE id = $3 RETURNING *',
-      [31.2, '2026-03-23T11:34:56.000Z', 1]
-    );
-    expect(query).toHaveBeenNthCalledWith(4, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
-    expect(query).toHaveBeenNthCalledWith(
-      5,
-      'UPDATE investments_base SET price_updated_at = $1 WHERE id = $2',
-      ['2026-03-23T11:34:56.000Z', 1]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      6,
-      'UPDATE stock_investments SET current_price = $1 WHERE id = $2',
-      [31.2, 1]
-    );
-    expect(query).toHaveBeenNthCalledWith(7, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
-    expect(result).toEqual({ id: 1, asset_class: 'stock', current_price: 31.2, price_provider_id: 'IONQ' });
-  });
-
-  it('updates price via inheritance tables without touching investments view', async () => {
-    query
-      // updatePrice now checks the schema first (mirroring update()) — a
-      // truthy investments_base means take the inheritance path.
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'etf' }] })
-      .mockResolvedValueOnce({ rowCount: 1 })
-      .mockResolvedValueOnce({ rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'etf', current_price: '90.50' }] });
-
-    const result = await investmentRepository.updatePrice(1, {
-      current_price: 90.5,
-      price_updated_at: '2026-03-23T11:50:00.000Z',
-    });
-
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      "SELECT to_regclass('public.investments_base') AS investments_base"
-    );
-    expect(query).toHaveBeenNthCalledWith(2, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
-    expect(query).toHaveBeenNthCalledWith(
-      3,
-      'UPDATE investments_base SET price_updated_at = $1 WHERE id = $2',
-      ['2026-03-23T11:50:00.000Z', 1]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      4,
-      'UPDATE etf_investments SET current_price = $1 WHERE id = $2',
-      [90.5, 1]
-    );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
-    expect(result).toEqual({ id: 1, asset_class: 'etf', current_price: 90.5 });
-  });
-
-  it('updates generic fields via inheritance tables when schema exists', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ id: 7, asset_class: 'stock', name: 'Old Name' }] })
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockResolvedValueOnce({ rows: [{ id: 7, asset_class: 'stock', name: 'Old Name' }] })
-      .mockResolvedValueOnce({ rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: 7, asset_class: 'stock', name: 'New Name' }] });
-
-    const result = await investmentRepository.update(7, { name: 'New Name' });
-
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
-      [7]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      2,
-      "SELECT to_regclass('public.investments_base') AS investments_base"
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      3,
-      'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
-      [7]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      4,
-      'UPDATE investments_base SET name = $1 WHERE id = $2',
-      ['New Name', 7]
-    );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [7]);
-    expect(result).toEqual({ id: 7, asset_class: 'stock', name: 'New Name' });
   });
 
   it('rejects changing asset_class', async () => {
@@ -469,7 +168,7 @@ describe('investmentRepository.update', () => {
 
     const result = await investmentRepository.update(5, { show_in_ticker: false });
 
-    // No column UPDATE and no schema probe — only getById, the upsert, then getById.
+    // No column UPDATE — only getById, the upsert, then getById.
     expect(query).toHaveBeenCalledTimes(3);
     expect(query).toHaveBeenNthCalledWith(
       2,
@@ -480,68 +179,91 @@ describe('investmentRepository.update', () => {
   });
 });
 
+describe('investmentRepository.updatePrice', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('updates price columns in one statement', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'etf', current_price: '90.50' }] });
+
+    const result = await investmentRepository.updatePrice(1, {
+      current_price: 90.5,
+      price_updated_at: '2026-03-23T11:50:00.000Z',
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE investments'),
+      [90.5, '2026-03-23T11:50:00.000Z', 1]
+    );
+    expect(result).toEqual({ id: 1, asset_class: 'etf', current_price: 90.5 });
+  });
+
+  it('returns null for a missing investment', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    const result = await investmentRepository.updatePrice(404, {
+      current_price: 1,
+      price_updated_at: null,
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('investmentRepository.updatePricesBulk', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('updates all rows via a single UNNEST statement', async () => {
+    query.mockResolvedValueOnce({ rowCount: 2 });
+
+    const updated = await investmentRepository.updatePricesBulk([
+      { id: 1, current_price: 10, price_updated_at: '2026-01-01T00:00:00.000Z' },
+      { id: 2, current_price: 20, price_updated_at: '2026-01-01T00:00:00.000Z' },
+    ]);
+
+    expect(updated).toBe(2);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM UNNEST'),
+      [[1, 2], [10, 20], ['2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z']]
+    );
+  });
+
+  it('returns 0 for an empty batch without querying', async () => {
+    expect(await investmentRepository.updatePricesBulk([])).toBe(0);
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
 describe('investmentRepository.hardDelete', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    __resetInvestmentSchemaCache();
   });
 
-  it('falls back to deleting from investments_base when investments view is non-updatable', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
-      .mockRejectedValueOnce({ message: 'cannot delete from view "investments"', code: '55000' })
-      .mockResolvedValueOnce({ rowCount: 1 });
-
-    const deleted = await investmentRepository.hardDelete(9);
-
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      "SELECT to_regclass('public.investments_base') AS investments_base"
-    );
-    expect(query).toHaveBeenNthCalledWith(2, 'DELETE FROM investments WHERE id = $1', [9]);
-    expect(query).toHaveBeenNthCalledWith(3, 'DELETE FROM investments_base WHERE id = $1', [9]);
-    expect(deleted).toBe(true);
-  });
-
-  it('deletes directly from investments view when updatable', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
-      .mockResolvedValueOnce({ rowCount: 1 });
+  it('deletes from the investments table', async () => {
+    query.mockResolvedValueOnce({ rowCount: 1 });
 
     const deleted = await investmentRepository.hardDelete(10);
 
-    expect(query).toHaveBeenNthCalledWith(2, 'DELETE FROM investments WHERE id = $1', [10]);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith('DELETE FROM investments WHERE id = $1', [10]);
     expect(deleted).toBe(true);
   });
 
-  it('deletes through inheritance table when schema exists', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockResolvedValueOnce({ rowCount: 1 });
+  it('returns false when nothing was deleted', async () => {
+    query.mockResolvedValueOnce({ rowCount: 0 });
 
-    const deleted = await investmentRepository.hardDelete(11);
-
-    expect(query).toHaveBeenNthCalledWith(2, 'DELETE FROM investments_base WHERE id = $1', [11]);
-    expect(deleted).toBe(true);
-  });
-
-  it('falls back to legacy delete when inheritance relation is missing', async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
-      .mockRejectedValueOnce({ code: '42P01', message: 'relation "investments_base" does not exist' })
-      .mockResolvedValueOnce({ rowCount: 1 });
-
-    const deleted = await investmentRepository.hardDelete(12);
-
-    expect(query).toHaveBeenNthCalledWith(3, 'DELETE FROM investments WHERE id = $1', [12]);
-    expect(deleted).toBe(true);
+    expect(await investmentRepository.hardDelete(11)).toBe(false);
   });
 });
 
 describe('investmentRepository read helpers and extra branches', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    __resetInvestmentSchemaCache();
   });
 
   it('supports getAll/getCount/getAllWithCount/getById branch paths', async () => {
@@ -580,13 +302,12 @@ describe('investmentRepository read helpers and extra branches', () => {
     expect(result).toBeNull();
   });
 
-  it('throws for unsupported inheritance asset class in create path', async () => {
-    query.mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] });
-
+  it('throws for an unsupported asset class in create', async () => {
     // Must be a VALIDATION_ERROR so the controller maps it to a 400, not a 500
     // (translateRepoError in investmentController keys on this code).
     await expect(
       investmentRepository.create({ name: 'X', asset_class: 'unsupported', currency: 'EUR' })
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: 'Unsupported asset_class: unsupported' });
+    expect(query).not.toHaveBeenCalled();
   });
 });

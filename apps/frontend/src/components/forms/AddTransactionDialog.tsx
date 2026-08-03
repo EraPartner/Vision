@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react";
-import {useSearchParams} from "react-router-dom";
+import {useSearchParams} from "react-router";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {toast} from "sonner";
 import {Button} from "@/components/ui/button";
@@ -16,8 +16,8 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { useAccounts } from "@/hooks/useAccounts";
-import { createAddTransactionFormState } from "@/components/forms/addTransactionForm";
-import { parseLocaleNumber } from "@/utils/currency";
+import { ADD_TRANSACTION_FIELD_IDS, addTransactionSchema, createAddTransactionFormState } from "@/components/forms/addTransactionForm";
+import { fieldErrorsFromZod } from "@/lib/forms/schemas";
 import { AccountCombobox } from "@/components/shared/AccountCombobox";
 import { FieldError } from "@/components/ui/field-error";
 import { fieldErrorProps, useFieldErrors, type FieldErrorMap } from "@/hooks/useFieldErrors";
@@ -69,26 +69,16 @@ export function AddTransactionDialog() {
 
     // Validation is recomputed every render but only *shown* once a submit has
     // been blocked (see useFieldErrors), so a corrected field clears itself.
-    // These are the same conditions that used to return early / fire a toast —
-    // the toast is gone because the message now lives on the field itself,
-    // where a screen reader is taken to it. Server errors still toast, below.
-    const amountValue = parseLocaleNumber(form.amount);
-    const fieldErrors: FieldErrorMap = {
-        tx_date: !form.transaction_date ? t('validation.required') : undefined,
-        tx_amount: !form.amount
-            ? t('validation.required')
-            : !Number.isFinite(amountValue)
-                ? (t('addTxn.invalidAmount') || 'Invalid amount')
-                // Sign is the expense/income marker, so 0 is meaningless — the
-                // backend rejects it too; catching it here gives a proper message.
-                : amountValue === 0
-                    ? t('addTxn.zeroAmount')
-                    : undefined,
-        // The bank-account field is a combobox and has no native `required`
-        // message of its own.
-        tx_bank: !form.bank_account.trim() ? t('portfolio.move.selectAccount') : undefined,
-        tx_recipient: !form.recipient_id ? t('validation.required') : undefined,
-    };
+    // The rules live in addTransactionSchema (Zod) — the same conditions that
+    // used to be hand-rolled here; issue messages are i18n keys translated at
+    // this seam, so the message on each field is unchanged. Server errors
+    // still toast, below.
+    const parsed = addTransactionSchema.safeParse(form);
+    const fieldErrors: FieldErrorMap = fieldErrorsFromZod(
+        parsed.success ? undefined : parsed.error,
+        ADD_TRANSACTION_FIELD_IDS,
+        t,
+    );
     const { visibleErrors, checkValid, resetErrors } = useFieldErrors(fieldErrors, FIELD_ORDER);
 
     const resetForm = () => {
@@ -98,7 +88,10 @@ export function AddTransactionDialog() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!checkValid()) return;
+        // checkValid() is false exactly when the schema found an issue on one
+        // of the four mapped fields; the extra parsed.success guard is for the
+        // type system, not the user.
+        if (!checkValid() || !parsed.success) return;
 
         createMutation.mutate(
             {
@@ -107,7 +100,7 @@ export function AddTransactionDialog() {
                 recipient_id: Number(form.recipient_id),
                 category_id: form.category_id ? Number(form.category_id) : undefined,
                 memo: form.memo.trim() || undefined,
-                amount: amountValue,
+                amount: parsed.data.amount,
                 currency: form.currency || appSettings.defaultCurrency,
                 comment: form.comment.trim() || undefined,
             },
@@ -137,7 +130,15 @@ export function AddTransactionDialog() {
                     <DialogTitle>{t('form.addTransaction.title')}</DialogTitle>
                     <DialogDescription className="sr-only">{t('form.addTransaction.title')}</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                {/* noValidate: this form's validation is `fieldErrors` above, and
+                    it has to be the only one. The browser's own constraint check
+                    runs BEFORE the submit event, so a native `required`/`pattern`
+                    failure would swallow the submit, focus whichever control the
+                    browser picked, and show a transient bubble — never the inline
+                    messages, and never the first field in FIELD_ORDER. The
+                    attributes stay on the inputs (they still carry the semantics
+                    to assistive tech); only the browser's UI is turned off. */}
+                <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="tx_date">{t('form.addTransaction.date')}</Label>
@@ -220,7 +221,12 @@ export function AddTransactionDialog() {
 
                     <DialogFooter className="pt-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-                        <Button type="submit" disabled={createMutation.isPending || !form.transaction_date || !form.bank_account.trim() || !form.recipient_id || !form.amount}>
+                        {/* Only the in-flight guard disables this button. Disabling
+                            it on the empty-required fields made the inline errors
+                            mouse-unreachable — the pointer hit a dead control and
+                            nothing ever said which field was missing. A blocked
+                            submit is the thing that reveals them. */}
+                        <Button type="submit" disabled={createMutation.isPending}>
                             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                             {t('common.create')}
                         </Button>

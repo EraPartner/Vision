@@ -135,6 +135,119 @@ export function computedBalanceByCurrencyLateral({ account, alias = 'bal' }) {
 }
 
 /**
+ * {@link computedBalanceByCurrencyLateral} folded to **one row per account**:
+ * the partitions arrive as a single JSON array instead of one SQL row apiece.
+ *
+ * Why it exists: the row-per-partition form fans an account out across several
+ * rows, which is fine for a caller that immediately re-folds them
+ * (`getBankBalances`) but wrong for callers whose rows ARE accounts —
+ * `accountRepository.getAll` pages with LIMIT/OFFSET (partition-grained rows
+ * would slice an account in half), `assembleRebalanceInputs` emits one
+ * `cashAccounts` entry per account, and net worth's `.length > 0` guard means
+ * "there are in-net-worth accounts". It is also a LEFT join, so an account with
+ * no active rows at all keeps its row (with a NULL array) rather than vanishing
+ * — every one of those callers lists accounts that legitimately hold no ledger
+ * activity (a fresh account, a portfolio account whose activity lives in
+ * `portfolio_transactions`).
+ *
+ * Exposes ONE column under `alias`:
+ *   - `balance_parts` — `[{ currency, balance }, …]` ordered by currency, or
+ *     SQL NULL when the account has no active rows. `balance` is emitted as a
+ *     **string** (`::text`): a JSON number would round-trip a NUMERIC through
+ *     an IEEE double before `toDecimal` ever sees it. Feed each entry through
+ *     `toDecimal(part.balance)` exactly as you would a NUMERIC column.
+ *
+ * Conversion is the caller's job and must happen per partition, at today's
+ * rate (these are *current* balances) — see
+ * {@link computedBalanceByCurrencyLateral} for why summing first is wrong.
+ *
+ * @param {{ account: string, alias?: string, column?: string }} opts
+ *   `account` is interpolated raw: pass a LITERAL SQL expression from the call
+ *   site (`a.id`), never user input.
+ * @returns {string}
+ */
+export function computedBalanceByCurrencyAggLateral({
+  account,
+  alias = 'bp',
+  column = 'balance_parts',
+}) {
+  return `
+  LEFT JOIN LATERAL (
+    SELECT jsonb_agg(
+             jsonb_build_object('currency', bal.currency, 'balance', bal.balance::text)
+             ORDER BY bal.currency
+           ) AS ${column}
+    -- A one-row driver so the shared per-currency lateral (which is written as
+    -- a JOIN onto a preceding FROM item) can be spliced in unchanged; the
+    -- correlation to ${account} reaches through both nesting levels.
+    FROM (SELECT 1) ${alias}_drv
+    ${computedBalanceByCurrencyLateral({ account, alias: 'bal' })}
+  ) ${alias} ON true
+`;
+}
+
+/**
+ * The partition a **statement figure** reconciles against, given an account's
+ * `balance_parts` (see {@link computedBalanceByCurrencyAggLateral}).
+ *
+ * This is the single definition of the **reconciliation base**: the drift badge
+ * (hub + dashboard), the `reconcilable_balance` the reconcile dialog previews
+ * against, and what `reconcileService` actually stamps all read it, so the
+ * number a user sees is by construction the number the server will write.
+ *
+ * `accounts.statement_balance` is one number carrying one date, and the column
+ * next to it is `accounts.currency` — so it can only be read as the bank's
+ * figure for the account's OWN currency. Drift is therefore that figure minus
+ * that currency's partition, never minus a cross-currency sum (which added a
+ * EUR amount to a USD amount as bare numbers) and never minus the FX-converted
+ * total (which would make a reconciliation figure move with the daily rate,
+ * and would size the reconcile 'adjustment' row by today's rate).
+ *
+ * Resolution order:
+ *   1. The partition in the account's own currency, **even when it is zero** —
+ *      a EUR account spent down to zero alongside some USD holdings has a EUR
+ *      statement of 0, and must not silently start reconciling against the USD.
+ *   2. Failing that, the ONE remaining partition once zero-sum partitions are
+ *      dropped: a ledger of USD rows under an account still declared EUR is a
+ *      mislabelled single-currency account, not an account with an empty EUR
+ *      statement. Zero-sum partitions are dropped FIRST because they carry no
+ *      reconciliation information and would otherwise make this rule
+ *      discontinuous on noise — one cancelled/offsetting foreign transfer pair
+ *      (net 0) used to flip the base from that lone partition to 0, and the
+ *      drift from 0 to the whole balance.
+ *   3. Otherwise zero, in the account's own currency: the statement figure
+ *      names a currency this account holds nothing in.
+ *
+ * The returned `currency` is what the figure is denominated in — normally
+ * `accounts.currency`, but the mislabelled-account case (2) returns the
+ * partition's own code. Callers must label the base, the statement and the
+ * drift with it (they are one native triple, `drift = statement − balance`),
+ * and `reconcileService` stamps its adjustment row in it — an adjustment in any
+ * other currency would land in a different partition and never clear the drift
+ * it was sized against.
+ *
+ * @param {Array<{ currency: string, balance: string }>|null|undefined} parts
+ * @param {string|null|undefined} accountCurrency `accounts.currency`.
+ * @returns {{ currency: string, balance: string }} `balance` is a numeric
+ *   string (pass it through `toDecimal`, like a NUMERIC column).
+ */
+export function statementPartition(parts, accountCurrency) {
+  const want = (accountCurrency || 'EUR').toUpperCase();
+  const list = (parts ?? []).map((p) => ({
+    currency: (p.currency || 'EUR').toUpperCase(),
+    balance: String(p.balance),
+  }));
+
+  const own = list.find((p) => p.currency === want);
+  if (own) return own;
+
+  const funded = list.filter((p) => Number(p.balance) !== 0);
+  if (funded.length === 1) return funded[0];
+
+  return { currency: want, balance: '0' };
+}
+
+/**
  * The same anchor+delta balance as a **daily series**: one row per
  * (account[, currency], day) over a caller-supplied day grid.
  *
@@ -331,5 +444,7 @@ export function computedBalanceSeriesCtes({
 export default {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyLateral,
+  computedBalanceByCurrencyAggLateral,
+  statementPartition,
   computedBalanceSeriesCtes,
 };

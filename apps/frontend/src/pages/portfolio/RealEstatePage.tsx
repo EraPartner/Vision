@@ -70,7 +70,7 @@ export default function RealEstatePage() {
     return (
       <div className="space-y-6">
         <PageHeader title={t('realestate.title')} icon={Building2} />
-        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+        <PageError title={t('realestate.pageErrorTitle')} message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
       </div>
     );
   }

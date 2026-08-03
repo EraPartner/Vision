@@ -3,17 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ACCOUNT_STUB, err, ok } from "@/test/msw/handlers";
+import { ACCOUNT_STUB, RECIPIENT_STUB, err, ok } from "@/test/msw/handlers";
 import ImportReviewPage from "@/pages/ImportReviewPage";
 
 const API_BASE = "http://localhost:3002";
 
 function renderReviewPage() {
-    renderWithApp(
+    return renderWithApp(
         <Routes>
             <Route path="/import/:batchId/review" element={<ImportReviewPage />} />
         </Routes>,
@@ -495,6 +495,230 @@ describe("ImportReviewPage (integration)", () => {
         expect(nudgeCalls).toHaveLength(0);
 
         toastSpy.mockRestore();
+    });
+
+    // ─── Per-group recipient combobox ──────────────────────────────────────
+    //
+    // Every group's trigger row carries a recipient picker. The page renders
+    // them deferred: the visible control is the real Radix trigger, painted
+    // from ONE page-level `useRecipients` subscription, and the query + command
+    // list mount with the popover. These pin both halves — the row must look
+    // and read exactly like a live combobox, and the per-group cost must stay
+    // off until a popover actually opens.
+
+    const groupWithRecipient = (recipientId: number, name: string, rowId: number) => ({
+        recipient_id: recipientId,
+        recipient_name: name,
+        row_count: 1,
+        rows: [
+            {
+                id: rowId,
+                tx_date: "2026-05-01",
+                amount: "-5.00",
+                currency: "EUR",
+                recipient_raw: `RAW ${rowId}`,
+                memo: null,
+                match_source: "exact",
+                match_similarity: null,
+            },
+        ],
+        matched_pattern_text: null,
+    });
+
+    /** Three groups whose recipients all sit inside the fetched page. */
+    function useThreeGroups() {
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok({
+                    items: [
+                        { ...RECIPIENT_STUB, id: 1, name: "Amazon" },
+                        { ...RECIPIENT_STUB, id: 2, name: "Netflix" },
+                        { ...RECIPIENT_STUB, id: 3, name: "Spotify" },
+                    ],
+                    total: 3,
+                    limit: 100,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+                ok({
+                    batch_id: 1,
+                    groups: [
+                        groupWithRecipient(1, "Amazon", 10),
+                        groupWithRecipient(2, "Netflix", 11),
+                        groupWithRecipient(3, "Spotify", 12),
+                    ],
+                    totals: { exact: 3, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                }),
+            ),
+        );
+    }
+
+    /** The recipient pickers, in group order. */
+    async function findPickers() {
+        await vi.waitFor(() => expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0));
+        return screen.getAllByRole("combobox");
+    }
+
+    it("names each group's current recipient in its trigger combobox", async () => {
+        useThreeGroups();
+        renderReviewPage();
+
+        const pickers = await findPickers();
+        // Same text the live combobox paints in its closed state.
+        await vi.waitFor(() => expect(pickers[0]).toHaveTextContent("Amazon"));
+        expect(pickers[1]).toHaveTextContent("Netflix");
+        expect(pickers[2]).toHaveTextContent("Spotify");
+    });
+
+    it("holds one recipients subscription for the whole list, not one per group", async () => {
+        useThreeGroups();
+        const { queryClient } = renderReviewPage();
+
+        const pickers = await findPickers();
+        await vi.waitFor(() => expect(pickers[0]).toHaveTextContent("Amazon"));
+
+        const observers = queryClient
+            .getQueryCache()
+            .findAll({ queryKey: ["recipients"] })
+            .reduce((n, query) => n + query.getObserversCount(), 0);
+        // 3 groups, 1 observer. Mounting a live combobox per group would make
+        // this scale with the group count (a year of CSV: 100-300+).
+        expect(observers).toBe(1);
+        // ...and it is a single cache entry, i.e. the page-level resolver reads
+        // the very same query key a combobox opens against.
+        expect(queryClient.getQueryCache().findAll({ queryKey: ["recipients"] })).toHaveLength(1);
+    });
+
+    it("keeps the command list unmounted until a group's popover opens", async () => {
+        const user = userEvent.setup();
+        useThreeGroups();
+        renderReviewPage();
+
+        const [trigger] = await findPickers();
+        expect(screen.queryByPlaceholderText(/search recipients/i)).not.toBeInTheDocument();
+
+        await user.click(trigger);
+        expect(
+            await screen.findByPlaceholderText(/search recipients/i),
+        ).toBeInTheDocument();
+        // The page-level subscription warms the exact cache entry the popover
+        // queries, so the list is populated on open — no empty-then-fill flash.
+        expect(screen.getByRole("option", { name: /amazon/i })).toBeInTheDocument();
+        expect(screen.getByRole("option", { name: /spotify/i })).toBeInTheDocument();
+
+        await user.keyboard("{Escape}");
+        await vi.waitFor(() =>
+            expect(
+                screen.queryByPlaceholderText(/search recipients/i),
+            ).not.toBeInTheDocument(),
+        );
+    });
+
+    it("falls back to the placeholder when the recipient is past the fetched page", async () => {
+        // Parity guard: the live combobox resolves its closed label against the
+        // first unsearched page and shows the placeholder for anything beyond
+        // it. The page-level resolver reads that same page, so the rendered row
+        // must be identical — including this fallback.
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok({
+                    items: [{ ...RECIPIENT_STUB, id: 1, name: "Amazon" }],
+                    total: 1,
+                    limit: 100,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+            http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+                ok({
+                    batch_id: 1,
+                    groups: [groupWithRecipient(2, "Netflix", 11)],
+                    totals: { exact: 1, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                }),
+            ),
+        );
+
+        renderReviewPage();
+
+        // The group header still names Netflix; only the picker falls back.
+        expect(await screen.findByText("Netflix")).toBeInTheDocument();
+        const [picker] = await findPickers();
+        expect(picker).toHaveTextContent(/select recipient/i);
+    });
+
+    it("assigns a picked recipient to every row of its group", async () => {
+        const user = userEvent.setup();
+        const overrides: Array<{ rowId: string; recipientId: unknown }> = [];
+
+        useThreeGroups();
+        server.use(
+            http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+                ok({
+                    batch_id: 1,
+                    groups: [
+                        {
+                            ...groupWithRecipient(1, "Amazon", 10),
+                            row_count: 2,
+                            rows: [
+                                groupWithRecipient(1, "Amazon", 10).rows[0],
+                                groupWithRecipient(1, "Amazon", 20).rows[0],
+                            ],
+                        },
+                    ],
+                    totals: { exact: 2, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                }),
+            ),
+            http.post(
+                `${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`,
+                async ({ params, request }) => {
+                    const body = (await request.json()) as { recipient_id: number | null };
+                    overrides.push({
+                        rowId: String(params.rowId),
+                        recipientId: body.recipient_id,
+                    });
+                    return ok({ row_id: Number(params.rowId), user_override_recipient_id: body.recipient_id });
+                },
+            ),
+        );
+
+        renderReviewPage();
+
+        const [picker] = await findPickers();
+        await vi.waitFor(() => expect(picker).toHaveTextContent("Amazon"));
+        await user.click(picker);
+        await user.click(await screen.findByRole("option", { name: /netflix/i }));
+
+        await vi.waitFor(() => expect(overrides).toHaveLength(2));
+        expect(overrides.map((o) => o.rowId).sort()).toEqual(["10", "20"]);
+        expect(overrides.every((o) => o.recipientId === 2)).toBe(true);
+        // Trigger reflects the pick without waiting for the preview refetch.
+        await vi.waitFor(() =>
+            expect(screen.getAllByRole("combobox")[0]).toHaveTextContent("Netflix"),
+        );
+    });
+
+    it("is reachable by keyboard and opens on Enter", async () => {
+        const user = userEvent.setup();
+        useThreeGroups();
+        renderReviewPage();
+
+        const [trigger] = await findPickers();
+        const back = screen.getByRole("button", { name: /back to import/i });
+        back.focus();
+
+        // Tab forward until focus lands on the first group's picker — it must
+        // be in the natural tab order, not behind a hover-only affordance.
+        for (let i = 0; i < 6 && document.activeElement !== trigger; i++) {
+            await user.tab();
+        }
+        expect(trigger).toHaveFocus();
+
+        await user.keyboard("{Enter}");
+        expect(
+            await screen.findByPlaceholderText(/search recipients/i),
+        ).toBeInTheDocument();
     });
 
     it("does not crash when preview endpoint returns 404", async () => {

@@ -1,7 +1,8 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { LazyMotion } from "framer-motion";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
@@ -23,6 +24,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 // Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
 // sidebar hover can warm the same chunks the router requests on click.
 import { routeLoaders } from "@/lib/routePreload";
+import { loadMotionFeatures } from "@/lib/motionFeatures";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 
 const TaxOverviewPage = lazy(routeLoaders["/tax"]);
@@ -184,6 +186,15 @@ function RedirectSymbolToMarket() {
 
 const App = () => {
     return (
+        // Single Framer Motion feature provider for the whole tree — mounted
+        // above DevtoolsGate because the API Inspector renders <Tabs> (an `m`
+        // call site) outside AppLayout. `strict` makes any stray `motion.*`
+        // component inside this tree throw in dev instead of silently pulling a
+        // second copy of the animation engine into the boot chunk. Features are
+        // fetched asynchronously; see lib/motionFeatures.ts. `children` keeps a
+        // stable element identity across LazyMotion's post-load re-render, so
+        // React bails out of re-rendering the app when the bundle arrives.
+        <LazyMotion features={loadMotionFeatures} strict>
         <QueryClientProvider client={queryClient}>
             <DevtoolsGate />
             <SettingsPreloadProvider>
@@ -267,6 +278,7 @@ const App = () => {
                 </ThemeProvider>
             </SettingsPreloadProvider>
         </QueryClientProvider>
+        </LazyMotion>
     );
 };
 

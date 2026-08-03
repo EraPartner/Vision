@@ -13,11 +13,8 @@ import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool, getPoolStats, query } from './database/connection.js';
+import { ensureAppRole } from './database/roleBootstrap.js';
 import { runMigrations } from './database/migrate.js';
-import {
-  createMaterializedViews,
-  ensureMaterializedViewIndexes,
-} from './services/materializedViewService.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
 import { createCsrfGuard } from './middleware/csrfGuard.js';
@@ -500,6 +497,20 @@ async function start() {
   }
 
   try {
+    // Least-privilege role bootstrap — MUST run before the pool poll below:
+    // in the three-variable setup DATABASE_URL points at the non-superuser app
+    // role, which does not exist yet on an already-initialised database (the
+    // docker/postgres-init script only runs on first volume init). Connects
+    // once as the privileged DATABASE_URL_MIGRATIONS role, creates the app
+    // role if missing and (re)applies the shared grant set. No-op in the
+    // classic single-role setup; warn-not-crash on every failure path.
+    const endRoleBootstrap = bootMark('role_bootstrap');
+    await ensureAppRole({
+      databaseUrl: settings.database.url,
+      migrationsUrl: settings.database.migrationsUrl,
+    });
+    endRoleBootstrap();
+
     // Wait for PostgreSQL to be fully ready.
     // With depends_on removed from docker-compose, both containers start in
     // parallel. On a cold first-ever start postgres can take up to ~30s to
@@ -523,14 +534,6 @@ async function start() {
         const endMig = bootMark('run_migrations');
         await runMigrations();
         endMig();
-        // Materialized views are runtime artifacts, not schema — create/index/refresh
-        // after the underlying tables exist.
-        const endCreateMv = bootMark('create_mat_views');
-        await createMaterializedViews();
-        endCreateMv();
-        const endIdxMv = bootMark('ensure_mv_indexes');
-        await ensureMaterializedViewIndexes();
-        endIdxMv();
         // One database-wide ANALYZE at boot so small, rarely-mutated tables
         // (which no migration or trigger ever ANALYZEs) still hand the planner
         // fresh statistics. Fire-and-forget: ANALYZE only refreshes planner
@@ -545,9 +548,15 @@ async function start() {
         query('ANALYZE').catch((err) =>
           logger.warn({ err: err.message }, 'boot-time ANALYZE failed; non-fatal'),
         );
-        // refreshMaterializedViews moved to post-listen warmup so /health
-        // goes green sooner. Stale MV data is acceptable for the first few
-        // seconds of warm boot.
+        // Materialized views are runtime artifacts, not schema (ADR-027), so the
+        // whole create/index/refresh lifecycle lives in the post-listen warmup
+        // (startup/warmup.js) rather than here. Creation is not a no-op on the
+        // boots that matter: on a first-ever boot, or after a migration that
+        // drops a view to redefine it (0084/0085), `CREATE MATERIALIZED VIEW`
+        // runs a full aggregation scan of `transactions` per view — pre-listen
+        // that sat inside the window the Electron 60s poll budget is racing.
+        // The Electron first-navigation gate reads `caches.materializedViews`,
+        // which still only flips once that whole chain settles.
       } else {
         attemptCount++;
         // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms

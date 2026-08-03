@@ -260,7 +260,7 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 ### Investment
 
 > [!info] Canonical shape is a single flat table (ADR-109)
-> Fresh installs (the `0001` baseline) create **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. The PostgreSQL table-inheritance shape (base `investments_base` + 7 child tables + an `investments` VIEW) exists **only on legacy installs** upgraded through the pre-baseline chain, and is being retired via a one-time guarded conversion migration (ADR-109). Asset-class-specific columns are simply NULL when not applicable.
+> Every install has **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. Fresh installs get it from the `0001` baseline; legacy installs that carried the ADR-004 table-inheritance shape (base `investments_base` + 7 child tables + an `investments` VIEW) are converted by the one-time guarded migration `0087_flat_investments_conversion` (parity-checked copy, rename-based rollback — the old relations survive renamed `legacy_inh_*` until a later housekeeping drop). Asset-class-specific columns are simply NULL when not applicable.
 
 **Purpose:** All investment holdings, one row per holding, discriminated by `asset_class`.
 
@@ -289,17 +289,17 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
-| `investment_id` | INTEGER | PRIMARY KEY | References an investment by id (no FK — `investments` may be a view on legacy installs; orphaned rows are harmless) |
+| `investment_id` | INTEGER | PRIMARY KEY | References an investment by id (no FK — historical: `investments` was a view on legacy installs when 0061 shipped; orphaned rows are harmless) |
 | `show_in_ticker` | BOOLEAN | NOT NULL, DEFAULT true | `false` = excluded from ticker tape and not quoted from Yahoo. Absent row = `true`. |
 
 > [!info] Migration 0061 creates this table
 > `investment_ticker_prefs` is created by migration `0061_investments_show_in_ticker` (down_revision `0060_brokerage_import_routing`) via a plain `CREATE TABLE IF NOT EXISTS`. Downgrade drops the table. Apply with `bun run db:upgrade`.
 >
-> A side table was chosen because `investments` is a plain table on fresh installs (0001 schema) but a **VIEW** over `investments_base` on legacy inheritance installs — `ALTER TABLE investments ADD COLUMN` fails on those. A separate table is the only schema-shape-agnostic, cleanly reversible option. There is no `investments.show_in_ticker` column.
+> A side table was chosen because, when 0061 shipped, `investments` was a plain table on fresh installs (0001 schema) but a **VIEW** over `investments_base` on legacy inheritance installs — `ALTER TABLE investments ADD COLUMN` failed on those. The two-shape era ended with the ADR-109 conversion (migration 0087), but the side table remains as-is. There is no `investments.show_in_ticker` column.
 
 **Read path:** `investmentRepository` `getById`, `getAll`, and `getAllWithCount` each do a `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.
 
-**Write path:** `investmentRepository.update()` peels `show_in_ticker` out of the update body (it is **not** in the column allow-lists `allowed` / `BASE_ALLOWED_FIELDS`) and performs an `INSERT ... ON CONFLICT (investment_id) DO UPDATE` upsert into `investment_ticker_prefs`, then returns the joined read.
+**Write path:** `investmentRepository.update()` peels `show_in_ticker` out of the update body (it is **not** in the column allow-list `allowed`) and performs an `INSERT ... ON CONFLICT (investment_id) DO UPDATE` upsert into `investment_ticker_prefs`, then returns the joined read.
 
 **Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.js`) so it is included in `.visionbak` exports.
 
@@ -307,25 +307,24 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 ---
 
-### PortfolioTransaction (Base Table)
+### PortfolioTransaction
 
-**Purpose:** Base for investment buy/sell transactions.
+**Purpose:** Investment trades and cash events (lots), one flat `portfolio_transactions` table on every install (ADR-109; the legacy `portfolio_transactions_base` + child-table shape converts via migration 0087, which also makes the FKs below real on former legacy installs).
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | SERIAL | PK | Unique identifier |
-| `investment_id` | INTEGER | FK → investments_base | Associated investment |
-| `type` | portfolio_txn_type | NOT NULL | Enum: buy, sell, dividend, transfer |
+| `investment_id` | INTEGER | NOT NULL, FK → investments ON DELETE CASCADE | Associated investment |
+| `type` | portfolio_txn_type | NOT NULL | Enum: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
 | `date` | DATE | NOT NULL | Transaction date |
 | `amount` | NUMERIC(18,4) | NOT NULL | Total amount |
+| `units` | NUMERIC(18,8) | NULLABLE | Units traded (unit-based asset classes) |
+| `price_per_unit` | NUMERIC(18,6) | NULLABLE | Unit price (unit-based asset classes) |
+| `fees` / `taxes` | NUMERIC(18,4) | DEFAULT 0 | Transaction costs |
 | `currency` | VARCHAR(10) | DEFAULT 'EUR' | Currency |
 | `fx_rate_to_eur` | NUMERIC(20,10) | NULLABLE | FX rate to EUR |
-
-**Child Tables** (inherit units field):
-- `stock_transactions` — units NUMERIC(18,8)
-- `etf_transactions` — units NUMERIC(18,8)
-- `crypto_transactions` — units NUMERIC(18,8)
-- `metals_transactions` — units NUMERIC(18,8)
+| `account_id` | INTEGER | FK → accounts ON DELETE RESTRICT, NULLABLE | Owning account for the lot (ADR-091, migration 0052) |
+| `import_batch_id` | BIGINT | FK → portfolio_import_batches ON DELETE SET NULL, NULLABLE | Portfolio import batch that created this lot (migration 0086); NULL for manual entries and for lots committed before 0086 applied. Lets rollback delete a batch in one statement, mirroring `transactions.import_batch_id` (migration 0003). Partial index `WHERE import_batch_id IS NOT NULL`. |
 
 ---
 
@@ -882,6 +881,13 @@ All of them share these anchor columns; the remaining columns are the source's n
 
 **Purpose:** Holds one CSV row during the portfolio import pipeline (staging through commit). After commit, rows remain for audit; rolling back the batch deletes the committed `portfolio_transactions` but retains staging rows marked `aborted`.
 
+> [!info] How rollback finds the rows to delete
+> Trades are deleted in one `DELETE … WHERE import_batch_id = $1` against the lot table
+> (migration 0086). `committed_txn_id` remains load-bearing for two cases: brokerage **cash**
+> rows, whose `committed_txn_id` is a `transactions.id` (a different table with an independent
+> sequence — it must never be fed to the portfolio delete, see ADR-095), and lots committed
+> **before** 0086 applied, which carry `import_batch_id = NULL` and are still rolled back per id.
+
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | BIGSERIAL | PK | Unique row identifier |
@@ -948,7 +954,7 @@ entity "planned_transactions" as pt {
   * recipient_id
 }
 
-entity "investments_base" as inv {
+entity "investments" as inv {
   * id
   * name
   * asset_class
@@ -985,8 +991,8 @@ SELECT
   i.asset_class,
   COUNT(*) as holdings,
   SUM(pt.amount * pt.fx_rate_to_eur) as total_invested
-FROM investments_base i
-JOIN portfolio_transactions_base pt ON i.id = pt.investment_id
+FROM investments i
+JOIN portfolio_transactions pt ON i.id = pt.investment_id
 WHERE i.is_active = true
 GROUP BY i.asset_class;
 ```

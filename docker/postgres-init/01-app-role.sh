@@ -34,16 +34,15 @@ echo "[postgres-init] Creating least-privilege application role ftm_app."
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<EOSQL
   CREATE ROLE ftm_app LOGIN PASSWORD '${POSTGRES_APP_PASSWORD}'
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
-  GRANT CONNECT ON DATABASE ${POSTGRES_DB} TO ftm_app;
-  -- CREATE on the schema is required: the backend creates/refreshes its
-  -- materialized views and their indexes at runtime (materializedViewService).
-  GRANT USAGE, CREATE ON SCHEMA public TO ftm_app;
-  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ftm_app;
-  GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ftm_app;
-  -- Tables/sequences created later by Alembic (running as ${POSTGRES_USER})
-  -- must stay readable/writable for the app role without manual re-grants.
-  ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} IN SCHEMA public
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ftm_app;
-  ALTER DEFAULT PRIVILEGES FOR ROLE ${POSTGRES_USER} IN SCHEMA public
-    GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ftm_app;
 EOSQL
+
+# Grant set lives in app-role-grants.sql.tpl (single source of truth, shared
+# with the runtime bootstrap in apps/node-backend/src/database/roleBootstrap.js).
+# The path is the compose mount point of docker/postgres-init — hardcoded
+# because init scripts may be *sourced* by the postgres entrypoint, making
+# $0-relative paths unreliable.
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  -v app_role=ftm_app \
+  -v owner_role="$POSTGRES_USER" \
+  -v db_name="$POSTGRES_DB" \
+  -f /docker-entrypoint-initdb.d/app-role-grants.sql.tpl

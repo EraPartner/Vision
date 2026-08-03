@@ -438,12 +438,13 @@ export async function getStoredRateToEurOnOrBefore(currencyCode, dateValue, maxL
  * Group stored `exchange_rates` rows into a per-currency, date-ascending index
  * for binary search.
  *
- * `rate_date` is typed loosely on purpose: the two call sites project it
- * differently — `getHistoricalRateIndex` selects the raw DATE (so pg hands back
- * a local-midnight `Date`) while `loadHistoricalRateIndex` in
- * portfolioSummaryService projects `to_char(rate_date, 'YYYY-MM-DD')` (a
- * string). `normalizeDateInput` accepts both, so the index is identical either
- * way.
+ * `rate_date` is typed loosely on purpose: both call sites (`getHistoricalRateIndex`
+ * and `loadHistoricalRateIndex` in portfolioSummaryService) now project
+ * `to_char(rate_date, 'YYYY-MM-DD')` (a wire string) rather than the raw DATE
+ * column, avoiding the local-midnight `Date` → UTC-extraction day-shift that a
+ * naive read of that column would reintroduce. `normalizeDateInput` still
+ * accepts a `Date` too, so a future caller that selects the raw column stays
+ * correct rather than silently wrong.
  *
  * @param {Array<Pick<ExchangeRateRow, 'currency_code'|'rate_to_eur'> & { rate_date: Date|string }>} rows
  * @returns {HistoricalRateIndex}

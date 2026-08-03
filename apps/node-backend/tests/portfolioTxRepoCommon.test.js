@@ -5,20 +5,13 @@ vi.mock('../src/database/connection.js', () => mockConnection());
 
 import { query } from '../src/database/connection.js';
 import {
-  hasPortfolioTransactionInheritanceSchema,
-  markInheritanceSchemaPresent,
-  markInheritanceSchemaAbsent,
+  hasPortfolioTransactionImportBatchIdColumn,
   __resetPortfolioTransactionSchemaCache,
-  isNonUpdatablePortfolioTransactionsViewError,
-  isMissingInheritanceRelationError,
-  TRANSACTION_TABLE_BY_ASSET_CLASS,
   UNIT_BASED_ASSET_CLASSES,
   buildListWhereClause,
   makeValidationError,
   normalizeTransactionPayload,
   validateSellUnitsAvailability,
-  BASE_ALLOWED_FIELDS,
-  CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS,
 } from '../src/repositories/portfolioTxRepo.common.js';
 
 beforeEach(() => {
@@ -28,83 +21,36 @@ beforeEach(() => {
 
 afterEach(() => __resetPortfolioTransactionSchemaCache());
 
-describe('schema cache', () => {
+describe('import_batch_id column probe (0086)', () => {
   it('queries Postgres on first probe and caches result', async () => {
-    query.mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: 'public.portfolio_transactions_base' }] });
-    expect(await hasPortfolioTransactionInheritanceSchema()).toBe(true);
+    query.mockResolvedValueOnce({ rows: [{ present: true }] });
+    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
     expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toContain("to_regclass('public.portfolio_transactions')");
 
     // Second call should not re-query.
-    expect(await hasPortfolioTransactionInheritanceSchema()).toBe(true);
+    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it('caches absence (null result)', async () => {
-    query.mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: null }] });
-    expect(await hasPortfolioTransactionInheritanceSchema()).toBe(false);
-  });
-
-  it('mark helpers override the cache', async () => {
-    markInheritanceSchemaAbsent();
-    expect(await hasPortfolioTransactionInheritanceSchema()).toBe(false);
-    expect(query).not.toHaveBeenCalled();
-
-    markInheritanceSchemaPresent();
-    expect(await hasPortfolioTransactionInheritanceSchema()).toBe(true);
-    expect(query).not.toHaveBeenCalled();
+  it('caches absence on an un-migrated database', async () => {
+    query.mockResolvedValueOnce({ rows: [{ present: false }] });
+    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
+    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
+    expect(query).toHaveBeenCalledTimes(1);
   });
 
   it('reset clears the cache', async () => {
-    markInheritanceSchemaPresent();
+    query.mockResolvedValueOnce({ rows: [{ present: true }] });
+    await hasPortfolioTransactionImportBatchIdColumn();
     __resetPortfolioTransactionSchemaCache();
-    query.mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: 'present' }] });
-    await hasPortfolioTransactionInheritanceSchema();
-    expect(query).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('error classifiers', () => {
-  it('isNonUpdatablePortfolioTransactionsViewError matches view-update messages', () => {
-    expect(isNonUpdatablePortfolioTransactionsViewError({ message: 'cannot update view "portfolio_transactions"' })).toBe(true);
-    expect(isNonUpdatablePortfolioTransactionsViewError({ message: 'cannot insert into view "portfolio_transactions"' })).toBe(true);
-    expect(isNonUpdatablePortfolioTransactionsViewError({ message: 'cannot delete from view "portfolio_transactions"' })).toBe(true);
-    expect(isNonUpdatablePortfolioTransactionsViewError({ message: 'something else' })).toBe(false);
-    expect(isNonUpdatablePortfolioTransactionsViewError(null)).toBe(false);
-  });
-
-  it('isMissingInheritanceRelationError catches code 42P01', () => {
-    expect(isMissingInheritanceRelationError({ code: '42P01' })).toBe(true);
-  });
-
-  it('isMissingInheritanceRelationError catches each missing-relation message', () => {
-    for (const tableName of [
-      'portfolio_transactions_base',
-      'stock_transactions',
-      'etf_transactions',
-      'crypto_transactions',
-      'metals_transactions',
-      'real_estate_transactions',
-      'savings_transactions',
-      'bond_transactions',
-    ]) {
-      expect(isMissingInheritanceRelationError({ message: `relation "${tableName}" does not exist` })).toBe(true);
-    }
-  });
-
-  it('isMissingInheritanceRelationError returns false on unrelated errors', () => {
-    expect(isMissingInheritanceRelationError({ code: '23505' })).toBe(false);
-    expect(isMissingInheritanceRelationError({ message: 'syntax error' })).toBe(false);
-    expect(isMissingInheritanceRelationError(null)).toBe(false);
+    query.mockResolvedValueOnce({ rows: [{ present: false }] });
+    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('asset class maps', () => {
-  it('TRANSACTION_TABLE_BY_ASSET_CLASS covers all expected classes', () => {
-    expect(Object.keys(TRANSACTION_TABLE_BY_ASSET_CLASS)).toEqual([
-      'stock', 'etf', 'crypto', 'metals', 'real_estate', 'savings', 'bond',
-    ]);
-  });
-
   it('UNIT_BASED_ASSET_CLASSES includes the unit-based classes only', () => {
     for (const c of ['stock', 'etf', 'crypto', 'metals']) {
       expect(UNIT_BASED_ASSET_CLASSES.has(c)).toBe(true);
@@ -388,20 +334,5 @@ describe('validateSellUnitsAvailability', () => {
       type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 5, excludeTransactionId: 99,
     });
     expect(query.mock.calls[0][1]).toEqual([1, '2025-04-01', 99]);
-  });
-});
-
-describe('allowed-fields constants', () => {
-  it('BASE_ALLOWED_FIELDS includes core columns', () => {
-    expect(BASE_ALLOWED_FIELDS).toContain('amount');
-    expect(BASE_ALLOWED_FIELDS).toContain('date');
-    expect(BASE_ALLOWED_FIELDS).toContain('fx_rate_to_eur');
-    expect(BASE_ALLOWED_FIELDS).not.toContain('id');
-  });
-
-  it('CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS limits fields by class', () => {
-    expect(CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS.stock).toEqual(['units', 'price_per_unit']);
-    expect(CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS.real_estate).toEqual([]);
-    expect(CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS.savings).toEqual([]);
   });
 });

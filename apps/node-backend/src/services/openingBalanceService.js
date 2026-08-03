@@ -7,7 +7,8 @@
  * exception: this service stamps a single system anchor row per (account, currency)
  * with amount=0, a server-written `balance`, is_transfer=true and
  * transfer_source='opening' (migration 0073's new CHECK value, following ADR-090's
- * 'trade' precedent). Because the row is is_transfer=true it stays out of
+ * 'trade' precedent), owned by the shared system recipient (`recipient_id` is NOT
+ * NULL and an anchor has no payee). Because the row is is_transfer=true it stays out of
  * income/spending aggregations, and transfer_source='opening' keeps the ADR-083
  * reconciler (which only touches NULL/'auto') from pairing it.
  *
@@ -25,6 +26,7 @@
 import { z } from 'zod';
 import { query, withTransaction } from '../database/connection.js';
 import accountRepository from '../repositories/accountRepository.js';
+import { recipientRepository } from '../repositories/recipientRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { assertCurrency, assertYmd } from '../middleware/validation.js';
 import { toWireDate } from '../lib/dateFormat.js';
@@ -133,6 +135,12 @@ export async function setOpeningBalance(accountId, body) {
         ? 'Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor.'
         : null;
 
+    // `recipient_id` is NOT NULL (migration 0001) and an anchor has no payee, so
+    // the INSERT branch owns it with the shared system recipient. The UPDATE
+    // branch deliberately leaves the column alone: re-running the action must
+    // not overwrite a recipient the user has since set on the existing anchor.
+    const systemRecipientId = await recipientRepository.getOrCreateSystemId();
+
     // Single atomic upsert: UPDATE the existing (account, currency) anchor if one
     // exists, else INSERT. `balance` is server-stamped here — the one sanctioned
     // exception to the ADR-094 import-pipeline-only write protection.
@@ -151,15 +159,16 @@ export async function setOpeningBalance(accountId, body) {
        ),
        inserted AS (
           INSERT INTO transactions
-            (date, amount, balance, currency, memo, account_id, is_transfer, transfer_source, is_active)
-          SELECT $4, 0, $2, $3, $5, $1, true, 'opening', true
+            (date, amount, balance, currency, memo, account_id, recipient_id,
+             is_transfer, transfer_source, is_active)
+          SELECT $4, 0, $2, $3, $5, $1, $6, true, 'opening', true
            WHERE NOT EXISTS (SELECT 1 FROM existing)
           RETURNING *
        )
        SELECT * FROM updated
        UNION ALL
        SELECT * FROM inserted`,
-      [accountId, balance, currency, date, OPENING_MEMO],
+      [accountId, balance, currency, date, OPENING_MEMO, systemRecipientId],
     );
 
     return { transaction: upsertRes.rows[0] || null, warning };

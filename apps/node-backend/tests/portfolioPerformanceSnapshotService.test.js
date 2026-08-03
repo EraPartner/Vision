@@ -525,6 +525,19 @@ describe('portfolioPerformanceSnapshotService', () => {
     expect(query.mock.calls[0][1]).toEqual(['EUR', '2026-01-01', '2026-01-31']);
   });
 
+  it('defaults missing *_invested columns to the NUMERIC-string "0", not the number 0', async () => {
+    // Rows written before the *_invested columns existed have them NULL —
+    // the default must keep the same string contract as every other money
+    // field so consumers don't see a string|number split.
+    query.mockResolvedValueOnce({ rows: [{ snapshot_date: '2026-01-01', value: '10', invested: '9', currency: 'EUR' }] });
+
+    const [row] = await getSnapshots('2026-01-01', '2026-01-31', 'EUR');
+
+    expect(row.stocks_etfs_invested).toBe('0');
+    expect(row.crypto_invested).toBe('0');
+    expect(row.metals_invested).toBe('0');
+  });
+
   // Reconciliation regression tests — these lock in parity between the
   // snapshot builder and the live /portfolio-summary valuation. Bug:
   // pre-fix the snapshot ignored accrued interest and appreciation, leading

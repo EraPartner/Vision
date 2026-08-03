@@ -7,7 +7,7 @@ import { Group } from "@visx/group";
 import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis } from "./ChartAxis";
@@ -117,7 +117,7 @@ interface BarLayerProps<Datum> {
 
 /**
  * Bars + overlay lines behind React.memo: hover state changes in Inner fire
- * on every bar pointerenter/leave and must not re-render N×S motion.rects
+ * on every bar pointerenter/leave and must not re-render N×S m.rects
  * (plus the overlay path rebuild). All props are referentially stable across
  * those renders.
  */
@@ -160,7 +160,7 @@ function BarLayerInner<Datum>({
                         const yBot = valueScale(Math.min(v, 0)) ?? baseline;
                         const h = Math.max(0, yBot - yTop);
                         return (
-                            <motion.rect
+                            <m.rect
                                 key={`b-${di}-${s.key}`}
                                 x={x}
                                 width={bw}
@@ -199,7 +199,7 @@ function BarLayerInner<Datum>({
                     const xEnd = valueScale(Math.max(v, 0)) ?? 0;
                     const w = Math.max(0, xEnd - xStart);
                     return (
-                        <motion.rect
+                        <m.rect
                             key={`b-${di}-${s.key}`}
                             y={y}
                             height={bh}

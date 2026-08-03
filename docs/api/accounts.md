@@ -149,9 +149,12 @@ Read-only dry-run of merging **this** account (`:id`, the source) **into**
 
 - `reassigned.*` — row counts that WOULD move (the same categories `POST /merge` repoints).
 - `projectedBalance` — the post-merge **computed** balance: the anchor+delta definition
-  (`COMPUTED_BALANCE_LATERAL` semantics, [[docs/adr/094-balance-reconciliation-drift|ADR-094]])
-  evaluated over the **union** of survivor + source active rows as if they were already one
-  account, reported in the survivor's native currency (`projectedBalanceCurrency`).
+  ([[docs/adr/094-balance-reconciliation-drift|ADR-094]]) evaluated **per currency**
+  (`computedBalanceByCurrencyAggLateral`, the same builder the accounts hub uses) over the
+  **union** of survivor + source active rows as if they were already one account, each currency
+  partition then converted at its own current rate into the survivor's native currency
+  (`projectedBalanceCurrency`). It therefore equals the `computed_balance` the hub reports for
+  the survivor once the merge lands.
 - `stampsInterleaved` — the same detection the merge guard uses: would the merge interleave
   stamped balance histories (and therefore clear the survivor's statement anchor)?
 

@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { parseDecimal } from '@/lib/decimal';
 import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
+import { addPortfolioTxnSchema } from './portfolioTxnSchema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -13,17 +12,23 @@ import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/
 import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { toYmd } from '@/components/shared/dateUtils';
-import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
+import {
+  useDialogFormState,
+  useReseedOnIdentityChange,
+  useControlledOpen,
+  returnFocusOnClose,
+  type ControlledDialogProps,
+} from '@/hooks/useDialogFormState';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
-interface Props {
+interface Props extends ControlledDialogProps {
   investment: InvestmentSummary;
   trigger?: React.ReactNode;
 }
 
 
-export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
-  const [open, setOpen] = useState(false);
+export function AddPortfolioTxnDialog({ investment, trigger, open: openProp, onOpenChange, returnFocusRef }: Props) {
+  const { open, setOpen, controlled } = useControlledOpen({ open: openProp, onOpenChange });
   const { t } = useLanguage();
   const { addTransaction, isAddingTransaction } = usePortfolio();
 
@@ -65,49 +70,28 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     setOpen(v);
   };
 
-  const amountInput = parsePositive(form.amount);
-  const unitsInput = parsePositive(form.units);
-  const priceInput = parsePositive(form.pricePerUnit);
   const isBuySell = ['buy', 'sell'].includes(form.type);
   const isGift = form.type === 'gift';
 
-  const unitMath = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput, derive: isBuySell });
+  // Render-time unit math only feeds the live UI (the derived-amount hint and
+  // the inline two-of-three message); the submit gate below re-runs the same
+  // helper inside the Zod schema, so the two can never disagree.
+  const unitMath = deriveUnitMath({
+    amount: parsePositive(form.amount),
+    units: parsePositive(form.units),
+    price: parsePositive(form.pricePerUnit),
+    derive: isBuySell,
+  });
   const { derivedAmount } = unitMath;
-
-  const effectiveAmount = isGift ? 0 : unitMath.effectiveAmount;
-  const effectiveUnits = unitMath.effectiveUnits;
-  const effectivePrice = unitMath.effectivePrice;
-
   const buySellIsValid = !isBuySell || unitMath.isConsistent;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isBuySell && !buySellIsValid) {
-      toast.error(t('addPortTxn.error.twoOfThreeRequired'));
-      return;
-    }
-
-    if (!isGift && (effectiveAmount === undefined || isNaN(effectiveAmount))) {
-      toast.error(t('addPortTxn.error.amountRequired'));
-      return;
-    }
-
-    if (isGift && effectiveUnits === undefined) {
-      toast.error(t('addPortTxn.error.unitsRequired'));
-      return;
-    }
-
-    // NaN fallback, not the default 0 — garbage in these fields must block the
-    // submit instead of silently posting €0 fees/taxes or fx_rate_to_eur = 0.
-    const feesValue = form.fees ? parseDecimal(form.fees, NaN) : undefined;
-    const taxesValue = form.taxes ? parseDecimal(form.taxes, NaN) : undefined;
-    const fxRateValue = form.fxRateToEur ? parseDecimal(form.fxRateToEur, NaN) : undefined;
-    if (
-      (feesValue !== undefined && (!Number.isFinite(feesValue) || feesValue < 0)) ||
-      (taxesValue !== undefined && (!Number.isFinite(taxesValue) || taxesValue < 0)) ||
-      (fxRateValue !== undefined && (!Number.isFinite(fxRateValue) || fxRateValue <= 0))
-    ) {
-      toast.error(t('addPortTxn.error.invalidNumber'));
+    // Validation lives in addPortfolioTxnSchema; the first failing rule's
+    // i18n-key message becomes the same single error toast as before.
+    const parsed = addPortfolioTxnSchema({ isBuySell, isGift }).safeParse(form);
+    if (!parsed.success) {
+      toast.error(t(parsed.error.issues[0].message));
       return;
     }
 
@@ -115,13 +99,13 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
       await addTransaction({
         investmentId: investment.id,
         type: form.type,
-        date: form.date,
-        amount: isGift ? 0 : effectiveAmount,
-        units: effectiveUnits,
-        price_per_unit: effectivePrice,
-        fees: isGift ? 0 : feesValue,
-        taxes: isGift ? 0 : taxesValue,
-        fx_rate_to_eur: fxRateValue,
+        date: parsed.data.date,
+        amount: parsed.data.amount,
+        units: parsed.data.units,
+        price_per_unit: parsed.data.pricePerUnit,
+        fees: parsed.data.fees,
+        taxes: parsed.data.taxes,
+        fx_rate_to_eur: parsed.data.fxRateToEur,
         currency: investment.currency,
         note: form.note.trim() || undefined,
         is_recurring: form.isRecurring,
@@ -142,14 +126,16 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <Plus className="h-4 w-4" /> {t('form.addTransaction.title')}
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      {!controlled && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <Plus className="h-4 w-4" /> {t('form.addTransaction.title')}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={returnFocusOnClose(returnFocusRef)}>
         <DialogHeader>
           <DialogTitle>{t('addPortTxn.title', { symbol: investment.symbol || investment.name })}</DialogTitle>
           <DialogDescription className="sr-only">{t('addPortTxn.title', { symbol: investment.symbol || investment.name })}</DialogDescription>

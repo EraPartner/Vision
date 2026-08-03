@@ -24,11 +24,19 @@
  * can re-reconcile with a fresh statement. Sequential merges (old account closed
  * before the new one opened — the phantom-dedup use case) don't overlap and are
  * untouched.
+ *
+ * Colliding-anchor guard: opening-balance anchors are unique per
+ * (account, currency) (migration 0077), so merging two accounts that each hold
+ * one in the same currency is unsatisfiable. That is refused up front with a
+ * 400 rather than left to surface as a mid-transaction 23505 — see
+ * collidingAnchorCurrencies.
  */
 
 import { query, withTransaction } from '../database/connection.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { roundMoney } from '../lib/money.js';
+import { roundToCents, toDecimal, toNumber } from '../lib/money.js';
+import { computedBalanceByCurrencyAggLateral } from '../repositories/accountBalanceSql.js';
+import { convertWithRates, loadCurrentRates } from './currency/currencyConversionService.js';
 import { accountRepository } from '../repositories/accountRepository.js';
 import { transactionRepository } from '../repositories/transactionRepository.js';
 import { plannedTransactionRepository } from '../repositories/plannedTransactionRepository.js';
@@ -55,6 +63,41 @@ export function stampRangesOverlap(ranges) {
     }
   }
   return false;
+}
+
+/**
+ * Currencies in which MORE THAN ONE of the merged accounts holds an
+ * opening-balance anchor (`transfer_source = 'opening'`).
+ *
+ * The repoint moves every anchor onto the survivor, and
+ * `uq_transactions_opening_anchor` — UNIQUE (account_id, currency) WHERE
+ * transfer_source = 'opening' (migration 0077) — permits exactly one per
+ * (account, currency). Two anchors in the same currency therefore make the
+ * merge unsatisfiable: Postgres raises 23505 mid-transaction, which nothing
+ * maps to an HTTP status. It is a genuine ambiguity rather than a bug to paper
+ * over — the two anchors state two different opening balances for what the user
+ * is asserting is one account, and picking a winner would silently discard the
+ * other account's carried-in balance. So the merge refuses and the user removes
+ * one anchor first.
+ *
+ * Pure (no I/O), same as {@link stampRangesOverlap}, so the predicate is
+ * directly testable and preview/merge can share it verbatim.
+ *
+ * @param {{ account_id:number, currency:string }[]} anchors
+ * @returns {string[]} colliding currency codes, ordered, no duplicates
+ */
+export function collidingAnchorCurrencies(anchors) {
+  /** @type {Map<string, Set<number>>} */
+  const accountsByCurrency = new Map();
+  for (const { account_id: accountId, currency } of anchors || []) {
+    const code = (currency || 'EUR').toUpperCase();
+    if (!accountsByCurrency.has(code)) accountsByCurrency.set(code, new Set());
+    accountsByCurrency.get(code).add(accountId);
+  }
+  return [...accountsByCurrency.entries()]
+    .filter(([, ids]) => ids.size > 1)
+    .map(([code]) => code)
+    .sort();
 }
 
 /**
@@ -86,12 +129,25 @@ export async function mergeAccounts(targetId, sourceIds) {
     const stampRanges = await transactionRepository.getStampedDateRangesByAccount([targetId, ...ids]);
     const stampsInterleaved = stampRangesOverlap(stampRanges);
 
+    // Colliding-anchor guard: read under the same locks, before the repoint that
+    // would violate uq_transactions_opening_anchor. Refuse rather than choose an
+    // anchor for the user (see collidingAnchorCurrencies).
+    const collisions = collidingAnchorCurrencies(
+      await transactionRepository.getOpeningAnchorsByAccount([targetId, ...ids]),
+    );
+    if (collisions.length) {
+      throw new ValidationError(
+        `More than one of these accounts has an opening balance in ${collisions.join(', ')}. `
+        + 'Remove the opening balance from all but one of them, then merge '
+        + '(an account can hold only one opening balance per currency).',
+      );
+    }
+
     const txCount = await transactionRepository.repointAccount(targetId, targetName, ids);
     const plannedCount = await plannedTransactionRepository.repointAccount(targetId, targetName, ids);
 
-    // Portfolio lots: account_id lives on the inheritance base (an UPDATE cascades to the child
-    // tables) or, in the flat schema, on the table itself. (portfolio_transactions is a view in the
-    // inheritance schema and is not updatable.)
+    // Portfolio lots: account_id lives on the flat portfolio_transactions table
+    // (the only shape after migration 0087, ADR-109).
     const portfolioCount = await portfolioTransactionRepository.repointAccount(targetId, ids);
 
     // Accounts that used a merged source as their funding/settlement account.
@@ -129,16 +185,27 @@ export async function mergeAccounts(targetId, sourceIds) {
  *   - reassigned.* — row counts that WOULD move (same categories mergeAccounts
  *     repoints).
  *   - projectedBalance — the post-merge computed balance: the anchor+delta
- *     definition (COMPUTED_BALANCE_LATERAL semantics) evaluated over the UNION
- *     of survivor + source active rows as if they were already one account.
- *     Reported in the survivor's native currency (projectedBalanceCurrency),
- *     mirroring how the hub reports computed_balance.
+ *     definition evaluated PER CURRENCY (computedBalanceByCurrencyAggLateral)
+ *     over the UNION of survivor + source active rows as if they were already
+ *     one account, each partition then converted at its own current rate.
+ *     Reported in the survivor's native currency (projectedBalanceCurrency) —
+ *     the same currency, the same builder and the same conversion the hub uses
+ *     for computed_balance, so the figure the dialog previews is the figure the
+ *     hub will show once the merge lands. Summing the union cross-currency
+ *     first and converting once (what this hand-inlined before) added a EUR
+ *     amount to a USD amount as bare numbers.
  *   - stampsInterleaved — same detection the merge guard uses (would the merge
  *     invalidate the survivor's statement anchor).
+ *   - openingAnchorCollision — same detection the merge guard uses: both
+ *     accounts hold an opening balance in one currency, so `POST /merge` will
+ *     refuse with a 400 (see collidingAnchorCurrencies). Preview reports it
+ *     alongside stampsInterleaved so the dialog can warn BEFORE the click; the
+ *     projected balance is still returned, but it cannot be realized until an
+ *     anchor is removed.
  *
  * @param {number} sourceId  the account that would be merged away
  * @param {number} targetId  the survivor (`?into=`)
- * @returns {Promise<{ into:number, source:number, reassigned:{transactions:number,planned:number,portfolio:number,funding:number}, projectedBalance:number, projectedBalanceCurrency:string, stampsInterleaved:boolean }>}
+ * @returns {Promise<{ into:number, source:number, reassigned:{transactions:number,planned:number,portfolio:number,funding:number}, projectedBalance:number, projectedBalanceCurrency:string, stampsInterleaved:boolean, openingAnchorCollision:boolean }>}
  */
 export async function previewMerge(sourceId, targetId) {
   if (!Number.isInteger(sourceId) || sourceId <= 0) {
@@ -161,45 +228,44 @@ export async function previewMerge(sourceId, targetId) {
   if (!byId.has(targetId)) throw new NotFoundError(`Account ${targetId} not found`);
   if (!byId.has(sourceId)) throw new NotFoundError(`Account ${sourceId} not found`);
 
-  // Same table set mergeAccounts repoints, as COUNTs. The relation probe is the
-  // same repo helper the merge write path uses, so preview and merge can never
-  // disagree about which table carries account_id.
-  const portfolioTable = await portfolioTransactionRepository.getAccountIdRelation();
-
+  // Same table set mergeAccounts repoints, as COUNTs.
   const unionIds = [targetId, sourceId];
-  const [txCount, plannedCount, portfolioCount, fundingCount, projected, stampRanges] = await Promise.all([
+  const [txCount, plannedCount, portfolioCount, fundingCount, projected, rates, stampRanges, anchors] = await Promise.all([
     query('SELECT COUNT(*) AS n FROM transactions WHERE account_id = $1', [sourceId]),
     query('SELECT COUNT(*) AS n FROM planned_transactions WHERE account_id = $1', [sourceId]),
-    query(`SELECT COUNT(*) AS n FROM ${portfolioTable} WHERE account_id = $1`, [sourceId]),
+    query('SELECT COUNT(*) AS n FROM portfolio_transactions WHERE account_id = $1', [sourceId]),
     query('SELECT COUNT(*) AS n FROM accounts WHERE funding_account_id = $1', [sourceId]),
-    // Anchor+delta over the union set: the most recent stamped row across BOTH
-    // accounts anchors, every active row after it (from either account) is the
-    // delta; with no stamp anywhere it degrades to Σ(amount) over the union —
-    // exactly COMPUTED_BALANCE_LATERAL's semantics with
-    // `account_id IN (target, source)` substituted for `account_id = a.id`.
+    // Per-currency anchor+delta over the union set, via the shared hub builder:
+    // within each currency the most recent stamped row across BOTH accounts
+    // anchors and every active row of that currency after it is the delta. The
+    // account expression is the LITERAL `ANY($1::int[])` (never user input), so
+    // the builder's `t.account_id = ${account}` becomes the union predicate —
+    // which is exactly what the merged account's rows will look like.
     query(
-      `WITH anchor AS (
-         SELECT t.balance, t.date, t.id
-         FROM transactions t
-         WHERE t.account_id = ANY($1::int[]) AND t.is_active = true AND t.balance IS NOT NULL
-         ORDER BY t.date DESC, t.id DESC
-         LIMIT 1
-       ),
-       delta AS (
-         SELECT COALESCE(SUM(t2.amount), 0) AS amount
-         FROM transactions t2
-         WHERE t2.account_id = ANY($1::int[]) AND t2.is_active = true
-           AND (
-             NOT EXISTS (SELECT 1 FROM anchor)
-             OR (t2.date, t2.id) > (SELECT date, id FROM anchor)
-           )
-       )
-       SELECT COALESCE((SELECT balance FROM anchor), 0)
-            + (SELECT amount FROM delta) AS balance`,
+      `SELECT bp.balance_parts
+         FROM (SELECT 1) merge_drv
+         ${computedBalanceByCurrencyAggLateral({ account: 'ANY($1::int[])' })}`,
       [unionIds],
     ),
+    // One rate table for every partition; these are CURRENT balances, so each
+    // converts at today's rate (see computedBalanceByCurrencyLateral).
+    loadCurrentRates(),
     transactionRepository.getStampedDateRangesByAccount(unionIds),
+    transactionRepository.getOpeningAnchorsByAccount(unionIds),
   ]);
+
+  const targetCurrency = (byId.get(targetId).currency || 'EUR').toUpperCase();
+  /** @type {Array<{ currency: string, balance: string }>} */
+  const partitions = projected.rows[0]?.balance_parts ?? [];
+  let total = toDecimal(0);
+  for (const part of partitions) {
+    total = total.plus(toDecimal(convertWithRates(
+      toNumber(toDecimal(part.balance)),
+      (part.currency || 'EUR').toUpperCase(),
+      targetCurrency,
+      rates,
+    )));
+  }
 
   return {
     into: targetId,
@@ -210,11 +276,13 @@ export async function previewMerge(sourceId, targetId) {
       portfolio: parseInt(portfolioCount.rows[0].n, 10),
       funding: parseInt(fundingCount.rows[0].n, 10),
     },
-    // pg NUMERIC arrives as a string; emit a rounded number (banker's, cents).
-    projectedBalance: roundMoney(projected.rows[0]?.balance ?? 0),
-    projectedBalanceCurrency: byId.get(targetId).currency,
+    // Partition balances arrive as NUMERIC-backed strings; emit the converted
+    // total as a rounded number (banker's, cents), like the hub's computed_balance.
+    projectedBalance: toNumber(roundToCents(total)),
+    projectedBalanceCurrency: targetCurrency,
     stampsInterleaved: stampRangesOverlap(stampRanges),
+    openingAnchorCollision: collidingAnchorCurrencies(anchors).length > 0,
   };
 }
 
-export default { mergeAccounts, previewMerge, stampRangesOverlap };
+export default { mergeAccounts, previewMerge, stampRangesOverlap, collidingAnchorCurrencies };

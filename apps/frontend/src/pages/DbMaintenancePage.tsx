@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminKeys } from '@/lib/queryKeys';
 import { Database, HardDrive, RefreshCw, Zap } from 'lucide-react';

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -15,17 +14,23 @@ import type { PriceProvider } from '@/types/api';
 import { PriceProviderFields, PRICE_PROVIDERS } from './PriceProviderFields';
 import { priceProviderPayload } from './priceProviderPayload';
 import { INVESTMENT_CURRENCIES } from '@/utils/currency';
-import { useDialogFormState, useReseedOnIdentityChange } from '@/hooks/useDialogFormState';
+import {
+  useDialogFormState,
+  useReseedOnIdentityChange,
+  useControlledOpen,
+  returnFocusOnClose,
+  type ControlledDialogProps,
+} from '@/hooks/useDialogFormState';
 
-interface Props {
+interface Props extends ControlledDialogProps {
   investment: InvestmentSummary;
   trigger?: React.ReactNode;
 }
 
-export function EditInvestmentDialog({ investment, trigger }: Props) {
+export function EditInvestmentDialog({ investment, trigger, open: openProp, onOpenChange, returnFocusRef }: Props) {
   const { t } = useLanguage();
   const { updateInvestment, isUpdatingInvestment } = usePortfolio();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, controlled } = useControlledOpen({ open: openProp, onOpenChange });
 
   const initialForm = () => ({
     name: investment.name,
@@ -104,10 +109,12 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? <Button variant="outline">{t('common.edit')}</Button>}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      {!controlled && (
+        <DialogTrigger asChild>
+          {trigger ?? <Button variant="outline">{t('common.edit')}</Button>}
+        </DialogTrigger>
+      )}
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={returnFocusOnClose(returnFocusRef)}>
         <DialogHeader>
           <DialogTitle>{t('invEdit.title')}</DialogTitle>
           <DialogDescription className="sr-only">{t('invEdit.title')}</DialogDescription>

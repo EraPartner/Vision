@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useVisualEffectsTier } from '@/hooks/useVisualEffectsTier';
 import { getElectronAPI, isElectronMac, type ElectronMenuAction } from '@/lib/api/electron';

@@ -78,7 +78,6 @@ describe('account merge atomicity (ADR-088)', () => {
       }
       if (sql.includes('FOR UPDATE') && sql.includes('ANY')) return { rows: [{ id: 1 }] };
       if (sql.includes('GROUP BY account_id')) return { rows: [] };
-      if (sql.includes('to_regclass')) return { rows: [{ r: 'public.portfolio_transactions_base' }] };
       // The realistic late failure: account_id FKs are ON DELETE RESTRICT, so a
       // missed reference makes the final DELETE raise after every repoint ran.
       if (sql.includes('DELETE FROM accounts')) throw new Error('23503 foreign key violation');
@@ -93,7 +92,7 @@ describe('account merge atomicity (ADR-088)', () => {
     // so the ROLLBACK above undoes every one of them.
     expect(sqls.some((s) => s.includes('UPDATE transactions SET account_id'))).toBe(true);
     expect(sqls.some((s) => s.includes('UPDATE planned_transactions SET account_id'))).toBe(true);
-    expect(sqls.some((s) => s.includes('UPDATE portfolio_transactions_base SET account_id'))).toBe(true);
+    expect(sqls.some((s) => s.includes('UPDATE portfolio_transactions SET account_id'))).toBe(true);
     expect(sqls.some((s) => s.includes('UPDATE accounts SET funding_account_id'))).toBe(true);
     // …and the survivor lock was taken on the same connection, before them.
     expect(sqls.indexOf('SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE')).toBe(1);

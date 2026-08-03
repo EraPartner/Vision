@@ -373,7 +373,7 @@ As of 2026-05-14, all transactions are deduplicated via a `tx_hash` column in th
 
 ```sql
 ALTER TABLE transactions ADD COLUMN tx_hash TEXT;
-CREATE UNIQUE INDEX uniq_transactions_tx_hash 
+CREATE UNIQUE INDEX uq_transactions_tx_hash 
   ON transactions (tx_hash) WHERE tx_hash IS NOT NULL;
 ```
 

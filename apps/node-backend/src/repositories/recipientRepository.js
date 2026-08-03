@@ -15,6 +15,15 @@ import { query } from '../database/connection.js';
 import { normalizeForMatching } from '../lib/textNormalization.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
 
+/**
+ * Display name of the shared recipient that owns server-generated ledger rows
+ * (`transfer_source` 'opening' / 'adjustment'). `transactions.recipient_id` is
+ * NOT NULL (migration 0001) and no row may name a real payee it never paid, so
+ * those rows point here instead. Stable — the row is resolved by normalized
+ * name, so renaming this constant would orphan the existing one.
+ */
+export const SYSTEM_RECIPIENT_NAME = 'SYSTEM';
+
 /** @typedef {import('../types/rows.js').RecipientRow} RecipientRow */
 /** @typedef {import('../types/rows.js').EnrichedRecipientRow} EnrichedRecipientRow */
 
@@ -187,6 +196,55 @@ export const recipientRepository = {
     `;
     const result = await query(sql, [id]);
     return result.rows[0] || null;
+  },
+
+  /**
+   * Id of the shared system recipient ({@link SYSTEM_RECIPIENT_NAME}), created
+   * on first use. Server-generated ledger rows (reconcile 'adjustment', the
+   * opening-balance anchor) have no payee but `transactions.recipient_id` is
+   * NOT NULL, so they carry this id.
+   *
+   * Created at time of use rather than seeded by a migration: nothing else
+   * needs it to exist, and an installation that never reconciles never grows
+   * the row. It is created INACTIVE — `is_active = false` keeps it out of the
+   * recipients page's default (active-only) list and out of the pickers that
+   * request active recipients, while the FK and every transaction display join
+   * (a plain LEFT JOIN on recipients) are indifferent to the flag.
+   *
+   * Two phases, because the row exists on all but the first call ever:
+   *   1. SELECT by normalized_name. A hit returns without writing — no tuple
+   *      churn, no row lock held for the rest of the caller's transaction, and
+   *      no `updated_at` bump (which on an ADOPTED user recipient would edit
+   *      the user's own row and invalidate the DB editor's xmin optimistic
+   *      concurrency check on every reconcile).
+   *   2. On a miss, INSERT ... ON CONFLICT DO UPDATE ... RETURNING id — not
+   *      `createOrGet`'s DO NOTHING + re-SELECT, which finds nothing when a
+   *      concurrent transaction has inserted the row but not yet committed.
+   *      Here that would surface as a failed reconcile rather than a skipped
+   *      import row, so the id must come back unconditionally: DO UPDATE blocks
+   *      on the conflicting row and always returns it.
+   *
+   * An existing user recipient that normalizes to the same name is adopted
+   * as-is — never deactivated, and after phase 1 never even written to.
+   *
+   * @returns {Promise<number>}
+   */
+  async getOrCreateSystemId() {
+    const normalized = normalizeForMatching(SYSTEM_RECIPIENT_NAME);
+    const existing = await query(
+      `SELECT id FROM recipients WHERE normalized_name = $1`,
+      [normalized],
+    );
+    if (existing.rows[0]) return existing.rows[0].id;
+
+    const result = await query(
+      `INSERT INTO recipients (name, normalized_name, is_active)
+       VALUES ($1, $2, false)
+       ON CONFLICT (normalized_name) DO UPDATE SET normalized_name = EXCLUDED.normalized_name
+       RETURNING id`,
+      [SYSTEM_RECIPIENT_NAME, normalized],
+    );
+    return result.rows[0].id;
   },
 
   /**

@@ -6,15 +6,25 @@
  *
  * Sub-modules:
  *   infoRepositoryHelpers.js          — shared utilities (only clearMvCache re-exported here)
- *   infoRepositoryStatistics.js       — getStatistics, getCategoryBreakdown, getBanks,
- *                                        getTransactionCount, getTransactionSummary
+ *   infoRepositoryStatistics.js       — getCategoryBreakdown, getBanks,
+ *                                        getTransactionCount, getCategoryPivot
  *   infoRepositoryMonthly.js          — getMonthlyFinancialSummary
  *   infoRepositoryAverageVsCurrent.js — getAverageVsCurrentSpending
  *   infoRepositoryForecast.js         — getCashflowComparison + forecast series
  *   infoRepositoryBanks.js            — getBankBalances
  *   infoRepositoryNetWorth.js         — getNetWorthFromSnapshots
  *   infoRepositoryPlanned.js          — getPlannedExpensesNextMonth
- *   infoRepositoryRecipients.js       — getRecipientInsights
+ *   infoRepositoryRecipients.js       — getRecipientInsights (getRecipientPivot is
+ *                                        imported directly by the aggregation layer,
+ *                                        see below)
+ *
+ * infoRepositoryTags.js (getTagPivot) is deliberately NOT assembled here. Like
+ * getRecipientPivot, it is a pivot-style method consumed only by the calc/
+ * aggregation layer (services/calculations/aggregation/tagPivot.js), which
+ * imports tagInsightsRepository directly rather than going through this
+ * facade — mirroring how recipientPivot.js bypasses the facade for
+ * getRecipientPivot. Nothing else needs getTagPivot, so there is no barrel
+ * entry to add.
  */
 
 export { clearMvCache } from './infoRepositoryHelpers.js';

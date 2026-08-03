@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, TrendingDown, Eye, Trash2, Calendar,
-  DollarSign, Percent, ArrowUpRight, Clock, Pencil,
+  DollarSign, Percent, ArrowUpRight, Clock, Pencil, Plus,
 } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { onActivateKeyDown } from '@/utils/a11y';
@@ -25,7 +25,7 @@ import type { InvestmentSummary, PortfolioTxnType } from '@/types/portfolio';
 import { getAssetClassLabel, getTxnTypeLabel } from '@/types/portfolio';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 type TxnRow = InvestmentSummary['transactions'][number];
 
@@ -75,6 +75,34 @@ export function InvestmentDetailDialog({
   onAddTransaction, onEditInvestment, onEditTransaction,
 }: Props) {
   const [open, setOpen] = useState(false);
+
+  // The three nested dialogs are mounted OUTSIDE this dialog's DialogContent.
+  // Radix unmounts content when the dialog closes, so a nested dialog rendered
+  // inside it lost its preserved draft (useDialogFormState only survives while
+  // mounted) the moment this outer dialog was dismissed — the user's own
+  // dialog was never the one being dismissed, which made the loss silent.
+  // Mounting is therefore this component's, not the content's; opening is
+  // driven by the controls below. `nestedMounted` keeps the cost off rows the
+  // user never opened (usePortfolio recomputes the whole portfolio per
+  // consumer, and there is one of these per holding row).
+  const [nestedMounted, setNestedMounted] = useState(false);
+  const [addTxnOpen, setAddTxnOpen] = useState(false);
+  const [editInvestmentOpen, setEditInvestmentOpen] = useState(false);
+  // The row being edited is held by id, so the dialog keeps reading the live
+  // transaction after a refetch instead of a frozen copy. It is deliberately
+  // NOT cleared on close: that is what keeps the draft alive for a reopen.
+  const [editTxnId, setEditTxnId] = useState<number | null>(null);
+  const [editTxnOpen, setEditTxnOpen] = useState(false);
+  const editTxn = investment.transactions.find((tx) => tx.id === editTxnId);
+  // Without a DialogTrigger of their own the nested dialogs have nothing to
+  // hand focus back to, so the control that opened them is remembered here.
+  const nestedOpenerRef = useRef<HTMLElement | null>(null);
+
+  const openNested = (openDialog: (v: boolean) => void) => (event: React.MouseEvent<HTMLElement>) => {
+    nestedOpenerRef.current = event.currentTarget;
+    openDialog(true);
+  };
+
   const navigate = useNavigate();
   const { deleteTransaction } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -124,7 +152,20 @@ export function InvestmentDetailDialog({
       {t('portfolio.addTransaction')}
     </Button>
   ) : (
-    <AddPortfolioTxnDialog investment={investment} />
+    // Same button AddPortfolioTxnDialog renders as its own default trigger; it
+    // only opens the lifted dialog below instead of being that dialog's trigger,
+    // so it also carries by hand the opener semantics DialogTrigger used to add.
+    <Button
+      size="sm"
+      variant="outline"
+      className="gap-1.5"
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={addTxnOpen}
+      onClick={openNested(setAddTxnOpen)}
+    >
+      <Plus className="h-4 w-4" /> {t('form.addTransaction.title')}
+    </Button>
   );
 
   const handleDeleteTxn = async (txnId: number, txnType: string) => {
@@ -147,7 +188,7 @@ export function InvestmentDetailDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { if (v) setNestedMounted(true); setOpen(v); }}>
         <DialogTrigger asChild>
           {trigger ?? (
             <Button size="sm" variant="ghost" className="gap-1.5">
@@ -189,14 +230,17 @@ export function InvestmentDetailDialog({
                     <Pencil className="h-4 w-4" /> {t('common.edit')}
                   </Button>
                 ) : (
-                  <EditInvestmentDialog
-                    investment={investment}
-                    trigger={
-                      <Button size="sm" variant="outline" className="gap-1.5">
-                        <Pencil className="h-4 w-4" /> {t('common.edit')}
-                      </Button>
-                    }
-                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded={editInvestmentOpen}
+                    onClick={openNested(setEditInvestmentOpen)}
+                  >
+                    <Pencil className="h-4 w-4" /> {t('common.edit')}
+                  </Button>
                 )}
               </div>
             </div>
@@ -546,20 +590,21 @@ export function InvestmentDetailDialog({
                             <Pencil className="h-4 w-4" />
                           </Button>
                         ) : (
-                          <EditPortfolioTxnDialog
-                            investment={investment}
-                            transaction={txn}
-                            trigger={
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                                aria-label={t('aria.editTransaction')}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            }
-                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label={t('aria.editTransaction')}
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-expanded={editTxnOpen && editTxnId === txn.id}
+                            onClick={(event) => {
+                              setEditTxnId(txn.id);
+                              openNested(setEditTxnOpen)(event);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                         )}
                         <Button
                           size="icon"
@@ -585,6 +630,33 @@ export function InvestmentDetailDialog({
           </Tabs>
         </DialogContent>
       </Dialog>
+      {/* Siblings of the dialog above, not children of its content: they must
+          outlive its dismissal for their drafts to survive one. */}
+      {nestedMounted && !onAddTransaction && (
+        <AddPortfolioTxnDialog
+          investment={investment}
+          open={addTxnOpen}
+          onOpenChange={setAddTxnOpen}
+          returnFocusRef={nestedOpenerRef}
+        />
+      )}
+      {nestedMounted && !onEditInvestment && (
+        <EditInvestmentDialog
+          investment={investment}
+          open={editInvestmentOpen}
+          onOpenChange={setEditInvestmentOpen}
+          returnFocusRef={nestedOpenerRef}
+        />
+      )}
+      {nestedMounted && !onEditTransaction && editTxn && (
+        <EditPortfolioTxnDialog
+          investment={investment}
+          transaction={editTxn}
+          open={editTxnOpen}
+          onOpenChange={setEditTxnOpen}
+          returnFocusRef={nestedOpenerRef}
+        />
+      )}
       <ConfirmDialog />
     </>
   );

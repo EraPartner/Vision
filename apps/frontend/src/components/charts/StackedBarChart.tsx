@@ -7,7 +7,7 @@ import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { BarStack } from "@visx/shape";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis } from "./ChartAxis";
@@ -57,7 +57,7 @@ interface StackedBarLayerProps<Datum> {
 }
 
 /**
- * The BarStack (stack layout + N×S motion.rects) behind React.memo: hover
+ * The BarStack (stack layout + N×S m.rects) behind React.memo: hover
  * state changes in Inner fire on every segment pointerenter/leave and must
  * not recompute the stack. All props are referentially stable across those
  * renders.
@@ -93,7 +93,7 @@ function StackedBarLayerInner<Datum>({
                         );
                         const bx = bar.x + (bar.width - bw) / 2;
                         return (
-                            <motion.rect
+                            <m.rect
                                 key={`sb-${stack.index}-${bar.index}`}
                                 x={bx}
                                 width={bw}

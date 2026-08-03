@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -52,6 +52,82 @@ describe("BehaviorSection — cost basis method", () => {
 
         await waitFor(() => {
             expect(errorToast).toHaveBeenCalled();
+        });
+    });
+});
+
+// ── Keep services running on quit ────────────────────────────────────────────
+// Electron-only opt-in toggle. `apiClient.isElectron()` returns true iff
+// `window.electronUpdater` exists; the toggle itself loads/persists through
+// `window.electronServices` (services:save/load-settings IPC).
+
+interface ServicesSettings {
+    keepServicesOnQuit: boolean;
+}
+
+function installElectronStubs(loadedSettings: ServicesSettings = { keepServicesOnQuit: false }) {
+    const win = window as unknown as Record<string, unknown>;
+    win.electronUpdater = {
+        pullImage: vi.fn().mockResolvedValue({ success: true, wasNew: false }),
+    };
+    const saveSettings = vi.fn().mockResolvedValue(undefined);
+    const loadSettings = vi.fn().mockResolvedValue(loadedSettings);
+    win.electronServices = { saveSettings, loadSettings };
+    return { saveSettings, loadSettings };
+}
+
+function clearElectronStubs() {
+    const win = window as unknown as Record<string, unknown>;
+    delete win.electronUpdater;
+    delete win.electronServices;
+}
+
+describe("BehaviorSection — keep services running on quit", () => {
+    beforeEach(() => {
+        clearElectronStubs();
+    });
+
+    afterEach(() => {
+        clearElectronStubs();
+        vi.restoreAllMocks();
+    });
+
+    it("is hidden in the web (non-Electron) context", async () => {
+        renderWithApp(<BehaviorSection />);
+
+        // Wait for a row that always renders so we know the section settled.
+        await costBasisTrigger();
+
+        expect(
+            screen.queryByRole("switch", { name: /keep services running on quit/i }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("renders and reflects the stored value in the Electron context", async () => {
+        installElectronStubs({ keepServicesOnQuit: true });
+        renderWithApp(<BehaviorSection />);
+
+        const switchEl = await screen.findByRole("switch", { name: /keep services running on quit/i });
+        await waitFor(() => {
+            expect(switchEl).toHaveAttribute("data-state", "checked");
+        });
+    });
+
+    it("persists the toggle via the services save-settings IPC", async () => {
+        const { saveSettings } = installElectronStubs({ keepServicesOnQuit: false });
+        const user = userEvent.setup();
+        renderWithApp(<BehaviorSection />);
+
+        const switchEl = await screen.findByRole("switch", { name: /keep services running on quit/i });
+        await waitFor(() => expect(switchEl).toHaveAttribute("data-state", "unchecked"));
+
+        await user.click(switchEl);
+
+        await waitFor(() => {
+            expect(switchEl).toHaveAttribute("data-state", "checked");
+        });
+        await waitFor(() => {
+            expect(saveSettings).toHaveBeenCalledWith({ keepServicesOnQuit: true });
         });
     });
 });

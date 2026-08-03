@@ -86,9 +86,28 @@ export interface Account {
     funding_account_id?: number;
     statement_balance?: number;
     statement_balance_date?: string;
-    /** Latest active transaction balance (ADR-094); computed, read-only. */
+    /**
+     * The account's anchor+delta computed balance (ADR-094), denominated in
+     * `currency`; computed, read-only. A multi-currency account's partitions are
+     * converted into `currency` at today's rate, so this figure moves with FX.
+     */
     computed_balance?: number;
-    /** statement_balance − computed_balance; null when no statement balance (ADR-094). */
+    /**
+     * The reconciliation base: the computed balance of the ONE currency
+     * partition `statement_balance` is a statement for, in
+     * `reconcilable_currency` and never FX-converted. Equal to
+     * `computed_balance` on a single-currency account; on a multi-currency one
+     * it is the figure the server reconciles against, so the reconcile dialog
+     * must preview against this and not `computed_balance`. List endpoint only.
+     */
+    reconcilable_balance?: number;
+    /** Currency of `reconcilable_balance` and `drift`. List endpoint only. */
+    reconcilable_currency?: string;
+    /**
+     * statement_balance − reconcilable_balance, in `reconcilable_currency`;
+     * null when no statement balance (ADR-094). Native-currency by design, so
+     * the badge never moves with the daily exchange rate.
+     */
     drift?: number;
     /** YYYY-MM-DD date of the stamped statement anchor behind computed_balance (WP-A1 provenance); absent when unstamped. Only set by the list endpoint. */
     anchor_date?: string;

@@ -667,7 +667,7 @@ describe("Portfolio pages (integration)", () => {
         // these tests create a bare investment, so switch it off.
         await user.click(screen.getByRole("switch"));
 
-        const createBtn = screen.getByRole("button", { name: /^create$/i });
+        const createBtn = screen.getByRole("button", { name: /^add$/i });
         await user.click(createBtn);
 
         await vi.waitFor(() => {
@@ -698,7 +698,7 @@ describe("Portfolio pages (integration)", () => {
         // these tests create a bare investment, so switch it off.
         await user.click(screen.getByRole("switch"));
 
-        const createBtn = screen.getByRole("button", { name: /^create$/i });
+        const createBtn = screen.getByRole("button", { name: /^add$/i });
         await user.click(createBtn);
 
         // useInvestmentMutations onError fires: toast.error(t('portfolio.createInvestmentFailedTitle'), ...)
@@ -735,7 +735,7 @@ describe("Portfolio pages (integration)", () => {
         const nameInput = await screen.findByLabelText(/name \*/i);
         await user.type(nameInput, "Bitcoin");
 
-        await user.click(screen.getByRole("button", { name: /^create$/i }));
+        await user.click(screen.getByRole("button", { name: /^add$/i }));
 
         await vi.waitFor(() => {
             expect(toastSpy).toHaveBeenCalled();
@@ -1136,7 +1136,7 @@ describe("Portfolio pages (integration)", () => {
             const nameInput = await screen.findByLabelText(/name \*/i);
             await user.type(nameInput, "Bitcoin");
 
-            await user.click(screen.getByRole("button", { name: /^create$/i }));
+            await user.click(screen.getByRole("button", { name: /^add$/i }));
 
             await waitFor(() => expect(getCalls).toBeGreaterThan(before), { timeout: 4000 });
         });
@@ -1180,7 +1180,7 @@ describe("Portfolio pages (integration)", () => {
             // these tests create a bare investment, so switch it off.
             await user.click(screen.getByRole("switch"));
 
-            await user.click(screen.getByRole("button", { name: /^create$/i }));
+            await user.click(screen.getByRole("button", { name: /^add$/i }));
 
             await waitFor(() => expect(getCalls).toBeGreaterThan(before), { timeout: 4000 });
         });

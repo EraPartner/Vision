@@ -30,11 +30,7 @@ import { logger } from '../config/logger.js';
  * `rows` is deliberately `any` rather than `any[]`: a declared array type
  * makes `.map()`/`.forEach()` at call sites apply real generic inference to
  * the callback, which surfaces latent shape mismatches in already-ratcheted
- * consumer files this slice is not scoped to touch (e.g.
- * services/portfolioPerformanceSnapshotService.js's `stocks_etfs_invested:
- * row.stocks_etfs_invested ?? 0` widens a documented-`string` column to
- * `string|number` — a real pre-existing bug, reported to the orchestrator,
- * left unfixed here per the zero-behavior-change rule). `any` preserves the
+ * consumer files this slice is not scoped to touch. `any` preserves the
  * pre-annotation behavior (an unresolved `pg.QueryResult` reference was
  * already implicitly `any` end-to-end) while still being an explicit, not
  * implicit, `any` for noImplicitAny purposes.

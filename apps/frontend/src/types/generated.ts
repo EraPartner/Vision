@@ -184,7 +184,7 @@ export interface paths {
         put?: never;
         /**
          * Reconcile an account's drift
-         * @description Resolves the drift (statement_balance − computed_balance) surfaced by the drift badge (ADR-094, Phase C). `mode: 'accept'` rewrites the stored statement figure to the computed balance (no transaction created); `mode: 'adjustment'` stamps one server-side ledger row (amount=drift, balance-free, is_transfer=true, transfer_source='adjustment') so the computed balance rises to meet the statement — preserving the ADR-094 descriptive-only default. Either way the drift collapses to 0.
+         * @description Resolves the drift (statement_balance − reconcilable_balance) surfaced by the drift badge (ADR-094, Phase C). Both modes act on the reconciliation base — the one currency partition the statement figure is a statement for — so a multi-currency account resolves in its own currency and the other partitions are untouched. `mode: 'accept'` rewrites the stored statement figure to that base (no transaction created); `mode: 'adjustment'` stamps one server-side ledger row (amount=drift, in `reconcilable_currency`, balance-free, is_transfer=true, transfer_source='adjustment') so the base rises to meet the statement — preserving the ADR-094 descriptive-only default. Either way the drift collapses to 0.
          */
         post: operations["reconcileAccount"];
         delete?: never;
@@ -3153,9 +3153,13 @@ export interface components {
             statement_balance?: number | null;
             /** Format: date */
             statement_balance_date?: string | null;
-            /** @description Latest active transaction balance for the account (ADR-094) */
+            /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at today's rate, so this figure moves with exchange rates. */
             computed_balance?: number | null;
-            /** @description statement_balance − computed_balance; null if no statement balance (ADR-094) */
+            /** @description The reconciliation base: the computed balance of the single currency partition `statement_balance` is a statement for, in `reconcilable_currency` and NOT FX-converted. Equals `computed_balance` for a single-currency account and differs on a multi-currency one, so the reconcile dialog previews an entered reading against THIS figure — it is what `POST /accounts/{id}/reconcile` resolves against. Only returned by the list endpoint. */
+            reconcilable_balance?: number | null;
+            /** @description Currency of `reconcilable_balance` and `drift` — normally `currency`, but the account's sole funded partition's code when the ledger's currency disagrees with the declared one. Only returned by the list endpoint. */
+            reconcilable_currency?: string;
+            /** @description statement_balance − reconcilable_balance, in `reconcilable_currency` (ADR-094); null if no statement balance. Native-currency by design — never statement_balance − computed_balance, which on a multi-currency account would make the badge move with the daily exchange rate. */
             drift?: number | null;
             /**
              * Format: date
@@ -4149,12 +4153,14 @@ export interface operations {
                                 portfolio?: number;
                                 funding?: number;
                             };
-                            /** @description Post-merge computed balance (anchor+delta over the union of both accounts' active rows) */
+                            /** @description Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at its own current rate into the survivor's currency */
                             projectedBalance?: number;
                             /** @description The survivor's native currency (ISO-4217) */
                             projectedBalanceCurrency?: string;
                             /** @description Whether both accounts carry stamped balance histories with overlapping date ranges (the merge would clear the survivor's statement anchor) */
                             stampsInterleaved?: boolean;
+                            /** @description Whether both accounts hold an opening balance in the same currency (only one is allowed per account and currency, so POST /merge would refuse with a 400 until one is removed) */
+                            openingAnchorCollision?: boolean;
                         };
                     };
                 };

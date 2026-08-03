@@ -167,7 +167,38 @@ describe('materializedViewService', () => {
     expect(sqlCalls.some((sql) => sql.includes('CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily'))).toBe(true);
-    expect(logger.info).toHaveBeenCalledWith('Materialized views ready');
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/^Materialized views ready in \d+ms$/),
+    );
+  });
+
+  // Creation is the same full aggregation scan the refresh is, so it must not run
+  // under the pool's 30s statement_timeout either: on a large install the CREATE
+  // would be cancelled and — now that creation is deferred past listen and no
+  // longer aborts boot — the views would silently never get built.
+  it('builds the views with the pool statement_timeout lifted', async () => {
+    const { createMaterializedViews, query, clientSql } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await createMaterializedViews();
+
+    expect(clientSql).toContain('SET statement_timeout = 0');
+    expect(clientSql.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS'))).toBe(true);
+    expect(clientSql.filter((sql) => sql === 'RESET statement_timeout')).not.toHaveLength(0);
+  });
+
+  // The boot-wide ANALYZE in main.js runs pre-listen, so it no longer covers
+  // views created afterwards — and a matview is never auto-analyzed.
+  it('analyzes each view after creating it', async () => {
+    const { createMaterializedViews, query } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await createMaterializedViews();
+
+    const sqlCalls = query.mock.calls.map(([sql]) => sql);
+    expect(sqlCalls).toContain('ANALYZE mv_monthly_summary');
+    expect(sqlCalls).toContain('ANALYZE mv_category_totals');
+    expect(sqlCalls).toContain('ANALYZE mv_cashflow_daily');
   });
 
   // Guard for the canonical 3-level effective-category resolution (own →

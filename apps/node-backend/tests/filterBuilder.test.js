@@ -73,7 +73,10 @@ describe('buildTransactionWhere', () => {
     });
     expect(sql).toContain('t.date >= $1');
     expect(sql).toContain('t.date <= $2');
-    expect(sql).toContain('t.bank_account ILIKE $3');
+    // ADR-088 contract phase: the bank filter resolves through account_id and
+    // matches accounts.name — the SQL must NOT touch the retired string column.
+    expect(sql).toContain('t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $3)');
+    expect(sql).not.toContain('t.bank_account');
     expect(params).toEqual(['2026-01-01', '2026-01-31', '%BE12%']);
     expect(nextParamIdx).toBe(4);
   });
@@ -126,7 +129,11 @@ describe('buildTransactionWhere', () => {
     // outer join aliases, so each branch can use its own index.
     expect(sql).toContain('t.id IN (');
     expect(sql).toContain('st.memo ILIKE $1 OR st.comment ILIKE $1');
-    expect(sql).toContain('st.bank_account ILIKE $1 OR st.currency ILIKE $1');
+    // Bank-label branch goes through the account entity (ADR-088), the
+    // currency branch stays on the transaction row.
+    expect(sql).toContain('st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE $1)');
+    expect(sql).toContain('st.currency ILIKE $1');
+    expect(sql).not.toContain('bank_account');
     expect(sql).toContain('sr.name ILIKE $1');
     expect(sql).toContain('sc.general ILIKE $1 OR sc.detail ILIKE $1');
     expect(sql).toContain('sr.default_category_id IN');
@@ -291,7 +298,7 @@ describe('buildAggregationFilter', () => {
     const { whereSql, params, nextParamIdx } = buildAggregationFilter({
       bankAccount: 'BE12',
     });
-    expect(whereSql).toBe('1=1 AND t.is_active = true AND t.bank_account ILIKE $1');
+    expect(whereSql).toBe('1=1 AND t.is_active = true AND t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $1)');
     expect(params).toEqual(['%BE12%']);
     expect(nextParamIdx).toBe(2);
   });
@@ -311,11 +318,11 @@ describe('buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)'
     expect(params).toEqual([3, 9]);
   });
 
-  it('accountId wins over accountIds; string filters still compose', () => {
+  it('accountId wins over accountIds; the bank-name filter still composes', () => {
     const { sql, params } = buildTransactionWhere({ accountId: 4, accountIds: [5, 6], bankAccount: 'BE12', active: false });
     expect(sql).toContain('t.account_id = $1');
-    expect(sql).not.toContain('t.account_id IN');
-    expect(sql).toContain('t.bank_account ILIKE $2');
+    expect(sql).not.toContain('t.account_id IN ($');
+    expect(sql).toContain('t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $2)');
     expect(params).toEqual([4, '%BE12%']);
   });
 
@@ -326,29 +333,30 @@ describe('buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)'
 });
 
 describe('buildTransactionWhere — bankAccounts (plural IN clause)', () => {
-  it('builds correct IN clause for exact IBAN match', () => {
+  it('builds an exact accounts.name match resolved through account_id (ADR-088)', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ bankAccounts: ['NL12INGB0001234567', 'BE68539007547034'], active: false });
-    expect(sql).toContain('t.bank_account IN ($1, $2)');
+    expect(sql).toContain('t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name IN ($1, $2))');
+    expect(sql).not.toContain('bank_account');
     expect(params).toEqual(['NL12INGB0001234567', 'BE68539007547034']);
     expect(nextParamIdx).toBe(3);
   });
 
   it('skips clause when array is empty', () => {
     const { sql, params } = buildTransactionWhere({ bankAccounts: [], active: false });
-    expect(sql).not.toContain('t.bank_account IN');
+    expect(sql).not.toContain('fa.name IN');
     expect(params).toHaveLength(0);
   });
 
   it('filters out empty string values', () => {
     const { sql, params } = buildTransactionWhere({ bankAccounts: ['', '  '], active: false });
-    expect(sql).not.toContain('t.bank_account IN');
+    expect(sql).not.toContain('fa.name IN');
     expect(params).toHaveLength(0);
   });
 
   it('bankAccount (singular ILIKE) takes precedence over bankAccounts', () => {
     const { sql, params } = buildTransactionWhere({ bankAccount: 'NL12', bankAccounts: ['BE68539007547034'], active: false });
-    expect(sql).toContain('ILIKE');
-    expect(sql).not.toContain('IN (');
+    expect(sql).toContain('fa.name ILIKE');
+    expect(sql).not.toContain('fa.name IN (');
     expect(params).toEqual(['%NL12%']);
   });
 

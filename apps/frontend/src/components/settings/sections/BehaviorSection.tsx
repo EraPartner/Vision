@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,28 @@ export const BehaviorSection = memo(function BehaviorSection() {
     const { t } = useLanguage();
     const { appSettings, updateAppSettings } = useAppSettings();
     const queryClient = useQueryClient();
+
+    // Opt-in "keep services running on quit" toggle — Electron-only, so it's
+    // loaded/persisted through the desktop IPC bridge, not the AppSettings
+    // context. Default OFF: an unconfigured install stops containers on quit.
+    const [keepServicesOnQuit, setKeepServicesOnQuit] = useState(false);
+
+    useEffect(() => {
+        if (!apiClient.isElectron()) return;
+        let cancelled = false;
+        apiClient.loadServicesSettings()
+            .then((s) => {
+                if (cancelled || !s) return;
+                setKeepServicesOnQuit(s.keepServicesOnQuit);
+            })
+            .catch(() => { /* leave default (off) — saves stay possible from there */ });
+        return () => { cancelled = true; };
+    }, []);
+
+    const handleKeepServicesOnQuitChange = (v: boolean) => {
+        setKeepServicesOnQuit(v);
+        void apiClient.saveServicesSettings({ keepServicesOnQuit: v });
+    };
 
     const handleCostBasisMethodChange = async (v: string) => {
         updateAppSettings({ costBasisMethod: v as CostBasisMethod });
@@ -85,6 +107,20 @@ export const BehaviorSection = memo(function BehaviorSection() {
                         onCheckedChange={(v) => updateAppSettings({ autoClearPlannedOnMatch: v })}
                     />
                 </SettingRow>
+
+                {apiClient.isElectron() && (
+                    <SettingRow
+                        title={t('settings.general.keepServicesOnQuit')}
+                        description={t('settings.general.keepServicesOnQuitHint')}
+                        htmlFor="keep-services-on-quit"
+                    >
+                        <Switch
+                            id="keep-services-on-quit"
+                            checked={keepServicesOnQuit}
+                            onCheckedChange={handleKeepServicesOnQuitChange}
+                        />
+                    </SettingRow>
+                )}
             </SettingsGroup>
 
             <SettingsGroup>

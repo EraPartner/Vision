@@ -9,6 +9,7 @@ import {
   COMPUTED_BALANCE_LATERAL,
   computedBalanceByCurrencyLateral,
   computedBalanceSeriesCtes,
+  statementPartition,
 } from './accountBalanceSql.js';
 import {
   roundToCents,
@@ -33,10 +34,12 @@ export const banksRepository = {
    * Each account row additionally carries (WP-A1, additive — existing fields
    * are untouched):
    *   - `display_name`      — friendly label (falls back to `name`).
-   *   - `drift`             — statement_balance − computed balance in the
-   *                           account's native currency (same figure as the
-   *                           hub's drift badge); absent when no statement
-   *                           balance is stored.
+   *   - `drift`             — statement_balance − the reconciliation base (the
+   *                           computed balance of the partition the statement is
+   *                           a statement for), in that native currency — the
+   *                           same figure as the hub's drift badge, since both
+   *                           go through `statementPartition`; absent when no
+   *                           statement balance is stored.
    *   - `anchor_date` / `post_anchor_count` — balance provenance from the
    *     shared lateral ("as of {date} statement + {n} entries since" vs
    *     "sum of {n} entries" when anchor_date is absent).
@@ -70,9 +73,18 @@ export const banksRepository = {
                COALESCE(a.display_name, a.name) AS display_name,
                bal.currency,
                bal.balance,
-               CASE WHEN a.statement_balance IS NOT NULL
-                    THEN a.statement_balance - COALESCE(lb.balance, 0)
-                    ELSE NULL END AS drift,
+               -- Drift inputs, resolved in JS by the SAME shared helper the hub
+               -- badge uses (statementPartition) so the two surfaces
+               -- cannot disagree: the statement figure minus the partition it is
+               -- a statement FOR — the account's own currency's, since
+               -- a.statement_balance is one number carrying one date and sitting
+               -- next to a.currency. It used to read the cross-currency
+               -- lb.balance for hub parity, which put a Σ-of-bare-amounts drift
+               -- next to a per-currency converted balance on the same badge; the
+               -- hub now derives drift this way too, so parity holds on the
+               -- correct figure instead of the wrong one.
+               a.statement_balance,
+               COALESCE(a.currency, 'EUR') AS account_currency,
                lb.anchor_date,
                lb.post_anchor_count,
                -- FX anchor for the conversion below: TODAY, the day this
@@ -92,9 +104,10 @@ export const banksRepository = {
         -- One row per currency the account holds, each with its own anchored
         -- running balance, converted independently below (the per-account total
         -- is summed after conversion). lb above stays the account-level
-        -- (cross-currency) figure ONLY for drift and the provenance fields, so
-        -- the drift badge keeps matching the accounts hub, which reads the same
-        -- lateral.
+        -- (cross-currency) figure ONLY for the provenance fields — "as of {date}
+        -- statement + {n} entries since" describes the account's stamping
+        -- history, not one currency's — matching the accounts hub, which reads
+        -- the same lateral for the same two fields.
         ${computedBalanceByCurrencyLateral({ account: 'a.id' })}
         JOIN LATERAL (
           -- Per-account activity metadata over active rows.
@@ -170,7 +183,7 @@ export const banksRepository = {
         [
           latestBalanceResult.rows.map((/** @type {{
             bank_account: string, display_name: string, currency: string|null,
-            balance: string, drift: string|null,
+            balance: string, statement_balance: string|null, account_currency: string,
             anchor_date: string|null, post_anchor_count: string|null,
             date: Date|null, transaction_count: string,
             first_transaction: Date|null, last_transaction: Date|null,
@@ -203,8 +216,16 @@ export const banksRepository = {
 
     // One row per (account, currency partition): sum the CONVERTED partitions
     // back into a single per-account balance, keeping the account metadata from
-    // whichever partition arrived first (it is identical across them).
-    /** @type {Map<string, { account: Record<string, any>, balance: import('decimal.js').Decimal }>} */
+    // whichever partition arrived first (it is identical across them). The
+    // NATIVE (unconverted) partitions are collected alongside so drift can be
+    // resolved per currency once every partition has been seen.
+    /** @type {Map<string, {
+     *   account: Record<string, any>,
+     *   balance: import('decimal.js').Decimal,
+     *   parts: Array<{ currency: string, balance: string }>,
+     *   statementBalance: string|null,
+     *   accountCurrency: string,
+     * }>} */
     const accountsByName = new Map();
     for (const row of currentBalancesConverted) {
       let entry = accountsByName.get(row.bank_account);
@@ -214,9 +235,6 @@ export const banksRepository = {
             bank_account: row.bank_account,
             display_name: row.display_name || row.bank_account,
             balance: 0,
-            // Native-currency drift, matching the hub's badge (accountRepository).
-            // SQL NULL (no statement balance) → undefined, never null (convention).
-            drift: row.drift == null ? undefined : roundToCents(toNumber(toDecimal(row.drift))),
             // Provenance (WP-A1): anchor_date is already a YYYY-MM-DD string via
             // to_char in the lateral; NULL (no stamp) → undefined.
             anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
@@ -231,15 +249,29 @@ export const banksRepository = {
             last_transaction: toWireDate(row.last_transaction),
           },
           balance: toDecimal(0),
+          parts: [],
+          statementBalance: row.statement_balance,
+          accountCurrency: row.account_currency,
         };
         accountsByName.set(row.bank_account, entry);
         accounts.push(entry.account);
       }
       entry.balance = entry.balance.plus(toDecimal(row.amount_eur));
+      entry.parts.push({ currency: row.currency, balance: row.balance });
     }
     let totalNetPositionDec = toDecimal(0);
     for (const entry of accountsByName.values()) {
       entry.account.balance = roundToCents(entry.balance);
+      // Native-currency, per-currency drift — the statement figure minus its own
+      // currency's partition, resolved by the shared helper so this badge and
+      // the hub's (accountRepository.getAll) are the same number by
+      // construction. No statement balance → undefined, never null (convention).
+      entry.account.drift = entry.statementBalance == null
+        ? undefined
+        : roundToCents(toNumber(
+          toDecimal(entry.statementBalance)
+            .minus(toDecimal(statementPartition(entry.parts, entry.accountCurrency).balance)),
+        ));
       totalNetPositionDec = totalNetPositionDec.plus(toDecimal(entry.account.balance));
     }
     const totalNetPosition = toNumber(totalNetPositionDec);
