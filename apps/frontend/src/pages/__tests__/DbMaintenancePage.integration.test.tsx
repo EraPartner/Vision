@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { Routes, Route, useParams } from "react-router-dom";
+import { Routes, Route, useParams } from "react-router";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";

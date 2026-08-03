@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";

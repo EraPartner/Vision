@@ -9,7 +9,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 
 type ExecutionHistoryItem = {

@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react";
-import {useSearchParams} from "react-router-dom";
+import {useSearchParams} from "react-router";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {toast} from "sonner";
 import {Button} from "@/components/ui/button";

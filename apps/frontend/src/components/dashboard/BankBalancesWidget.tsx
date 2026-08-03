@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CardSheen } from "@/components/shared/CardSheen";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { cashflowKeys } from "@/lib/queryKeys";

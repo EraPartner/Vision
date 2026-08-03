@@ -1,5 +1,5 @@
 import { m, useReducedMotion } from "framer-motion";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { durations, easings } from "@/lib/motion";
 
 interface PageTransitionProps {

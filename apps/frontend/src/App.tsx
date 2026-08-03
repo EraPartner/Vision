@@ -2,7 +2,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LazyMotion } from "framer-motion";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";

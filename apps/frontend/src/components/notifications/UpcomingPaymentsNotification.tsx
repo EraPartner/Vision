@@ -2,7 +2,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Bell, X, CalendarClock } from "lucide-react";
 import { useEffect } from "react";
 import { formatCurrency } from "@/utils/currency";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router";
 import {
   Sidebar,
   SidebarContent,

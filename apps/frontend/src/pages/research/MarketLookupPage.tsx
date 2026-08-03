@@ -27,7 +27,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";

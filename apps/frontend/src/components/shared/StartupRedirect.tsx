@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import type { StartupSection } from "@/stores/settingsStore";

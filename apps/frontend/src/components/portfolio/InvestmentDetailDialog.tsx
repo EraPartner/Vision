@@ -25,7 +25,7 @@ import type { InvestmentSummary, PortfolioTxnType } from '@/types/portfolio';
 import { getAssetClassLabel, getTxnTypeLabel } from '@/types/portfolio';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 type TxnRow = InvestmentSummary['transactions'][number];
 

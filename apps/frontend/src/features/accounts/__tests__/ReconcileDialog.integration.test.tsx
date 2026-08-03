@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";

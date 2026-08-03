@@ -1,5 +1,5 @@
 import { useMemo, lazy, Suspense } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useStatistics } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

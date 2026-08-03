@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, ACCOUNT_STUB } from "@/test/msw/handlers";
