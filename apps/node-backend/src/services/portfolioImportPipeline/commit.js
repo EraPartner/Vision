@@ -139,7 +139,7 @@ export async function commitBatch({ batchId, onProgress }) {
   // key makes the write idempotent anyway.
   /** @type {number|null} */
   let cashRecipientId = null;
-  if (isBrokerage && batchAccountId && matched.some((r) => r.route === 'cash')) {
+  if (isBrokerage && batchAccountId && matched.some((/** @type {{route?: string}} */ r) => r.route === 'cash')) {
     const brokerName = [batchRows[0]?.account_institution, batchRows[0]?.account_name]
       .map((v) => (typeof v === 'string' ? v.trim() : ''))
       .find((v) => v.length > 0);
