@@ -837,7 +837,6 @@
   "form.addRecipient.title": "Ontvanger toevoegen",
   "form.addTransaction.amount": "Bedrag",
   "form.addTransaction.amountPlaceholder": "0,00",
-  "form.addTransaction.bank": "Bank",
   "form.addTransaction.category": "Categorie",
   "form.addTransaction.date": "Datum",
   "form.addTransaction.recipient": "Ontvanger",

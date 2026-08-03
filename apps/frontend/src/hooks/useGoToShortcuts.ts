@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { isTypingTarget } from "@/lib/keyboard";
+import { isShortcutSafeTarget } from "@/lib/keyboard";
 import { GO_TO_ROUTES, SECTION_CYCLE } from "@/lib/navigation";
 
 // Budgeting owns the root and every route that isn't portfolio/research
@@ -26,7 +26,7 @@ export function useGoToShortcuts(): void {
         };
 
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) {
+            if (e.metaKey || e.ctrlKey || e.altKey || isShortcutSafeTarget(e.target)) {
                 disarm();
                 return;
             }
@@ -62,7 +62,7 @@ export function useSectionCycleShortcuts(): void {
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || isTypingTarget(e.target)) return;
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || isShortcutSafeTarget(e.target)) return;
             if (e.key !== "[" && e.key !== "]") return;
             e.preventDefault();
             const current = currentSectionIndex(location.pathname);
