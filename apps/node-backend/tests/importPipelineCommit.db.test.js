@@ -419,7 +419,7 @@ describeDb('importPipeline commit (real Postgres)', () => {
   });
 
   it('marks a row whose tx_hash already exists on an INACTIVE transaction as a duplicate', async () => {
-    // uniq_transactions_tx_hash is partial on `tx_hash IS NOT NULL` with no
+    // uq_transactions_tx_hash is partial on `tx_hash IS NOT NULL` with no
     // is_active predicate, so a soft-deleted row still blocks the insert. The
     // field check (is_active = true) cannot see it — the hash check must.
     await insertTxn({ tx_hash: 'seen-before', is_active: false, memo: 'ARCHIVED' });

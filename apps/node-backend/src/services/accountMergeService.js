@@ -70,7 +70,7 @@ export function stampRangesOverlap(ranges) {
  * opening-balance anchor (`transfer_source = 'opening'`).
  *
  * The repoint moves every anchor onto the survivor, and
- * `ux_transactions_opening_anchor` — UNIQUE (account_id, currency) WHERE
+ * `uq_transactions_opening_anchor` — UNIQUE (account_id, currency) WHERE
  * transfer_source = 'opening' (migration 0077) — permits exactly one per
  * (account, currency). Two anchors in the same currency therefore make the
  * merge unsatisfiable: Postgres raises 23505 mid-transaction, which nothing
@@ -130,7 +130,7 @@ export async function mergeAccounts(targetId, sourceIds) {
     const stampsInterleaved = stampRangesOverlap(stampRanges);
 
     // Colliding-anchor guard: read under the same locks, before the repoint that
-    // would violate ux_transactions_opening_anchor. Refuse rather than choose an
+    // would violate uq_transactions_opening_anchor. Refuse rather than choose an
     // anchor for the user (see collidingAnchorCurrencies).
     const collisions = collidingAnchorCurrencies(
       await transactionRepository.getOpeningAnchorsByAccount([targetId, ...ids]),

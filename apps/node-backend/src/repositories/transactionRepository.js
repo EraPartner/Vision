@@ -137,7 +137,7 @@ const STAMP_RANGES_SQL = `
 
 // Opening-balance anchors per account, keyed on the ORIGINAL account_id — the
 // account-merge collision guard must read this before the repoint. Not filtered
-// on is_active: `ux_transactions_opening_anchor` is
+// on is_active: `uq_transactions_opening_anchor` is
 // (account_id, currency) WHERE transfer_source = 'opening' with no is_active
 // predicate, so a deactivated anchor still collides.
 const OPENING_ANCHORS_SQL = `
@@ -833,7 +833,7 @@ export const transactionRepository = {
    * BEFORE an account-merge repoint, for the same reason as
    * {@link getStampedDateRangesByAccount}: the repoint erases the provenance
    * this guard needs — and, since the repoint moves every anchor onto the
-   * survivor, it is also what would violate `ux_transactions_opening_anchor`.
+   * survivor, it is also what would violate `uq_transactions_opening_anchor`.
    *
    * @param {number[]} accountIds
    * @returns {Promise<{account_id:number,currency:string}[]>}

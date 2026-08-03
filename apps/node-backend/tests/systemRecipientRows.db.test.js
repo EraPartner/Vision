@@ -286,14 +286,14 @@ describe.skipIf(!hasTestDatabase())('system-generated ledger rows + their recipi
       const preview = await previewMerge(source, survivor);
       expect(preview.openingAnchorCollision).toBe(true);
 
-      // ux_transactions_opening_anchor is UNIQUE (account_id, currency) WHERE
+      // uq_transactions_opening_anchor is UNIQUE (account_id, currency) WHERE
       // transfer_source = 'opening', so the repoint would raise 23505 —
       // unmapped, therefore a 500. The guard turns it into an actionable 400.
       const err = await mergeAccounts(survivor, [source]).catch((e) => e);
       expect(err).toBeInstanceOf(ValidationError);
       expect(err.status).toBe(400);
       expect(err.message).toMatch(/opening balance in EUR/);
-      expect(err.message).not.toMatch(/duplicate key|ux_transactions_opening_anchor/);
+      expect(err.message).not.toMatch(/duplicate key|uq_transactions_opening_anchor/);
       expect(err.code).not.toBe('23505');
 
       // Nothing moved: both accounts and both anchors survive, each on its own

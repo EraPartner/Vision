@@ -245,7 +245,7 @@ describe('collidingAnchorCurrencies (opening-anchor merge guard)', () => {
   });
 
   it('compares currencies case-insensitively and defaults a missing code to EUR', () => {
-    // ux_transactions_opening_anchor is on the stored value; the column is
+    // uq_transactions_opening_anchor is on the stored value; the column is
     // NOT NULL + upper-cased in practice, so this is belt-and-braces.
     expect(collidingAnchorCurrencies([
       { account_id: 1, currency: 'eur' },

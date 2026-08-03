@@ -149,7 +149,7 @@ function sanitize(body, { requireName }) {
 /**
  * A statement balance is only meaningful with its as-of date (ADR-094 drift
  * anchors on it). Enforced here for a friendly 4xx; migration 0065's CHECK
- * (ck_accounts_statement_balance_has_date) backstops at the DB.
+ * (chk_accounts_statement_balance_has_date) backstops at the DB.
  *
  * `balance` is `number|string` because callers pass either side of a "provided
  * vs. stored" ternary: a zod-sanitized incoming value (coerced to `number`) or

@@ -447,9 +447,13 @@ describeDb('migration 0088 downgrade pre-flight refuses sub-cent rows', () => {
     );
 
     // Legal at (18,4); rounds to 0.00 under the downgrade's USING round(…, 2).
+    // Target the revision BELOW 0088 explicitly (not `-1`: head has moved past
+    // 0088 — 0089/0090's naming migrations — and with transaction_per_migration
+    // those later downgrades commit and unwind cleanly before 0088's pre-flight
+    // gets its chance to refuse).
     let err = null;
     try {
-      await alembic('downgrade', '-1');
+      await alembic('downgrade', '0087_flat_investments_conversion');
     } catch (e) {
       err = e;
     }
@@ -470,7 +474,7 @@ describeDb('migration 0088 downgrade pre-flight refuses sub-cent rows', () => {
     // Clear the offending row exactly as the message instructs; the downgrade
     // then completes and re-narrows everything.
     await db.query(`DELETE FROM transaction_splits WHERE id = $1`, [split[0].id]);
-    await alembic('downgrade', '-1');
+    await alembic('downgrade', '0087_flat_investments_conversion');
     const { rows: renarrowed } = await db.query(
       `SELECT count(*)::int AS n FROM information_schema.columns
        WHERE table_schema = 'public' AND numeric_precision = 15 AND numeric_scale = 2`,

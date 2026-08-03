@@ -525,7 +525,7 @@ async function loadDupCandidates(dates) {
  * Which of the chunk's tx_hashes already exist in `transactions`? Stands in
  * for the per-row `ON CONFLICT (tx_hash) DO NOTHING` returning no row.
  *
- * Deliberately NOT filtered by `is_active`: `uniq_transactions_tx_hash` is a
+ * Deliberately NOT filtered by `is_active`: `uq_transactions_tx_hash` is a
  * partial index on `tx_hash IS NOT NULL` with no is_active predicate, so a
  * soft-deleted row still causes a conflict.
  *
