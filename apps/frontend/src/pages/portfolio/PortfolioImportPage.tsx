@@ -38,6 +38,7 @@ import {
 } from "@/hooks/usePortfolioParserConfigs";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import type { ImportProgress } from "@/lib/api/types";
+import { isImportCancelled } from '@/lib/api/importCancelled';
 
 const DEFAULT_CONFIG: PortfolioCustomConfig = {
   dateColumn: "", typeColumn: "", symbolColumn: "", nameColumn: "",
@@ -138,8 +139,10 @@ export function PortfolioImportPage() {
       setFile(null);
       setProgress((p) => (p ? { ...p, phase: "complete", percent: 100 } : null));
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("importPage.failed");
-      if (message === "Import cancelled") {
+      // Detect cancellation by type, not by matching the error text: the old
+      // `message === "Import cancelled"` sentinel would have started reporting
+      // cancelled imports as server errors the moment that string was reworded.
+      if (isImportCancelled(error)) {
         toast.info(t("importPage.toast.importCancelled"));
         setProgress(null);
       } else {
