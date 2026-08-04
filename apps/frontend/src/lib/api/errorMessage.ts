@@ -37,6 +37,7 @@ export const API_ERROR_KEYS = {
     cancelled: 'apiError.cancelled',
     server: 'apiError.server',
     rateLimited: 'apiError.rateLimited',
+    rateLimitedIn: 'apiError.rateLimitedIn',
     validation: 'apiError.validation',
     notFound: 'apiError.notFound',
     conflict: 'apiError.conflict',
@@ -102,6 +103,18 @@ export function isAuthoredMessage(message: unknown): boolean {
     return !MACHINE_MESSAGE_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
+/**
+ * Pull a positive `retry_after` (seconds) out of `ApiClientError.details`.
+ * Returns null when absent or unusable, so the caller falls back to copy that
+ * makes no promise about timing.
+ */
+function readRetryAfter(details: unknown): number | null {
+    if (!details || typeof details !== 'object') return null;
+    const raw = (details as Record<string, unknown>).retry_after;
+    const seconds = typeof raw === 'number' ? raw : Number(raw);
+    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
+}
+
 /** Read a string property off an unknown throwable without narrowing it first. */
 function readString(value: unknown, key: 'name' | 'message'): string {
     if (!value || typeof value !== 'object') return '';
@@ -146,6 +159,13 @@ function transportKey(err: unknown, name: string, message: string): string | nul
  */
 export function apiErrorToMessage(err: unknown, t: TranslateFn): string {
     if (err instanceof ApiClientError) {
+        // A rate limit that told us how long to wait can say so. The transport's
+        // own 429 sentence is hardcoded English and never passes through, so
+        // client.ts puts the number in `details` instead.
+        const retryAfter = readRetryAfter(err.details);
+        if (err.code === ApiErrorCode.RATE_LIMITED && retryAfter !== null) {
+            return t(API_ERROR_KEYS.rateLimitedIn, { seconds: retryAfter });
+        }
         const passThroughAllowed =
             !NEVER_PASS_THROUGH.has(err.code) && err.status >= 400 && err.status < 500;
         if (passThroughAllowed && isAuthoredMessage(err.message)) return err.message.trim();

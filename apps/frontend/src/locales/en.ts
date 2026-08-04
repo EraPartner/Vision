@@ -389,6 +389,7 @@ const en: Record<string, string> = {
   'apiError.network': 'Can\'t reach the server. Check that Vision is running and try again.',
   'apiError.notFound': 'That item no longer exists. Refresh and try again.',
   'apiError.rateLimited': 'Too many requests in a row. Wait a moment and try again.',
+  'apiError.rateLimitedIn': 'Too many requests in a row. Try again in {seconds} seconds.',
   'apiError.server': 'The server ran into a problem. Try again in a moment.',
   'apiError.timeout': 'The server took too long to respond. Try again.',
   'apiError.unauthorized': 'Sign in again to continue.',

@@ -387,6 +387,7 @@
   "apiError.network": "Kan de server niet bereiken. Controleer of Vision draait en probeer opnieuw.",
   "apiError.notFound": "Dit item bestaat niet meer. Ververs en probeer opnieuw.",
   "apiError.rateLimited": "Te veel verzoeken achter elkaar. Wacht even en probeer opnieuw.",
+  "apiError.rateLimitedIn": "Te veel verzoeken achter elkaar. Probeer over {seconds} seconden opnieuw.",
   "apiError.server": "De server liep tegen een probleem aan. Probeer het zo meteen opnieuw.",
   "apiError.timeout": "De server deed er te lang over om te antwoorden. Probeer opnieuw.",
   "apiError.unauthorized": "Meld je opnieuw aan om verder te gaan.",
