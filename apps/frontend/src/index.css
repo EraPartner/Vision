@@ -527,7 +527,7 @@
             0 1px 0 hsl(var(--glass-highlight) / 0.3) inset,
             0 12px 28px hsl(var(--glass-shadow) / 0.05);
         opacity: 1;
-        transition: opacity var(--duration-normal) var(--ease-out-quint);
+        transition: opacity var(--duration-normal) var(--ease-glide);
     }
 
     .app-topbar[data-scrolled="false"]::before {
@@ -756,7 +756,7 @@
             0 1px 0 hsl(var(--glass-highlight) / 0.16) inset,
             0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset,
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
-        transition: transform var(--duration-fast) var(--ease-out-quint);
+        transition: transform var(--duration-fast) var(--ease-glide);
     }
 
     .premium-frame::after {
@@ -768,7 +768,7 @@
         pointer-events: none;
         box-shadow: 0 12px 30px hsl(var(--glass-shadow) / 0.1);
         opacity: 0;
-        transition: opacity var(--duration-normal) var(--ease-out-quint);
+        transition: opacity var(--duration-normal) var(--ease-glide);
     }
 
     .premium-frame:hover {
@@ -794,7 +794,7 @@
     }
 
     .micro-lift {
-        transition: transform var(--duration-fast) var(--ease-out-quint);
+        transition: transform var(--duration-fast) var(--ease-glide);
     }
 
     .micro-lift:hover {
@@ -831,6 +831,27 @@
         );
     }
 
+    /* THE press response. Hover-only life is the "demo reel" tell — anything
+       clickable must acknowledge the moment of commitment, not just the
+       approach. Two expressions of one rule, picked by what the surface
+       already does on hover:
+
+       1. `.press-feedback` — surfaces that LIFT or float on hover (buttons,
+          cards, option tiles, the sidebar segmented control). Uses the
+          composite `transform`, which in Tailwind v4 is a different property
+          from the `translate`/`scale` its hover utilities ride, so it stacks
+          with them; it also outranks `.micro-lift:hover` (declared above), so
+          a lifted card genuinely settles rather than scaling while raised.
+          Pair with `active:translate-y-0` when the element ALSO carries a
+          Tailwind `hover:-translate-y-*`, which this rule cannot cancel.
+       2. `active:bg-*` — flat list surfaces whose hover character is a
+          background tint (sidebar menu items, virtualized table rows). Press
+          takes that same background deeper. Rows in particular cannot use
+          expression 1: the virtualizer owns their inline `transform`.
+
+       `ease-out` here is deliberate rather than a curve-table token: at 90ms
+       the press must read as instant, and --ease-glide's long tail would
+       soften exactly the crispness this is for. */
     .press-feedback {
         transition: transform 90ms ease-out;
     }
@@ -843,9 +864,9 @@
         border-radius: 0.75rem;
         border: 1px solid transparent;
         transition:
-            background-color var(--duration-fast) var(--ease-out-quint),
-            border-color var(--duration-fast) var(--ease-out-quint),
-            box-shadow var(--duration-normal) var(--ease-out-quint),
+            background-color var(--duration-fast) var(--ease-glide),
+            border-color var(--duration-fast) var(--ease-glide),
+            box-shadow var(--duration-normal) var(--ease-glide),
             transform 120ms ease-out;
     }
 
@@ -900,7 +921,7 @@
      * ------------------------------------------------------------------ */
 
     .animate-in {
-        animation: animate-in var(--duration-slow) var(--ease-out-quint);
+        animation: animate-in var(--duration-slow) var(--ease-out-expo);
     }
 
     @keyframes animate-in {
@@ -916,7 +937,7 @@
     }
 
     .animate-stagger > * {
-        animation: animate-in var(--duration-slow) var(--ease-out-quint) both;
+        animation: animate-in var(--duration-slow) var(--ease-out-expo) both;
     }
 
     .animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
@@ -936,7 +957,7 @@
        Applied to inline success icons on mount and, globally below, to the
        icon slot of sonner success toasts (covers every toast.success). */
     .icon-success-bounce {
-        animation: icon-success-bounce 600ms var(--ease-out-quint) 100ms both;
+        animation: icon-success-bounce 600ms var(--ease-out-expo) 100ms both;
     }
 
     @keyframes icon-success-bounce {
@@ -961,7 +982,7 @@
     }
 
     [data-sonner-toast][data-type="success"] [data-icon] {
-        animation: icon-success-bounce 600ms var(--ease-out-quint) 150ms both;
+        animation: icon-success-bounce 600ms var(--ease-out-expo) 150ms both;
     }
 
     .gradient-bg {

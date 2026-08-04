@@ -158,7 +158,12 @@ export default function WatchlistPage() {
                   // cv-auto: skip layout + the backdrop-filter blur composite for
                   // off-screen cards in this uncapped grid (compositor cost scales
                   // with visible count, not total). Appearance unchanged on screen.
-                  "cv-auto glass-regular premium-frame micro-lift cursor-pointer transition-[box-shadow,border-color] hover:shadow-glass-soft hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                  // Lifts on hover, so it settles on press: `press-feedback`
+                  // supplies the scale (and outranks micro-lift's hover
+                  // transform), `active:translate-y-0` cancels Card's
+                  // Tailwind hover lift, which rides the separate `translate`
+                  // property in Tailwind v4 and so is not cancelled by it.
+                  "cv-auto glass-regular premium-frame micro-lift press-feedback active:translate-y-0 cursor-pointer transition-[box-shadow,border-color] hover:shadow-glass-soft hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                   isBelowTarget && "ring-2 ring-success/50"
                 )}
                 onDoubleClick={() => handleDoubleClick(item)}

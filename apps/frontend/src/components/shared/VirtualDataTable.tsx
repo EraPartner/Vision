@@ -819,7 +819,17 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     : -1
                                                 : undefined
                                         }
-                                        className={cn("flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset", isEditing && "bg-primary/5", onRowDoubleClick && "cursor-pointer", rowsInteractive && "touch-manipulation")}
+                                        // `active:bg-muted` is this row's press
+                                        // response — the deeper end of the same
+                                        // background its hover already uses, and
+                                        // the idiom SidebarMenuButton established
+                                        // (`active:bg-foreground/[0.08]`). It is
+                                        // deliberately NOT `.press-feedback`: the
+                                        // virtualizer owns this element's inline
+                                        // `transform`, so a class-level scale
+                                        // would either be dead (inline wins) or
+                                        // destroy the row's absolute positioning.
+                                        className={cn("flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset", isEditing && "bg-primary/5", onRowDoubleClick && "cursor-pointer", rowsInteractive && "touch-manipulation active:bg-muted")}
                                         style={{
                                             position: "absolute",
                                             top: 0,

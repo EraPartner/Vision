@@ -338,7 +338,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                             key={adapter.key}
                                             onClick={() => setSelectedBank(adapter.key)}
                                             className={cn(
-                                                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-[color,background-color,border-color,box-shadow] hover:shadow-md",
+                                                "press-feedback flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-[color,background-color,border-color,box-shadow] hover:shadow-md",
                                                 selectedBank === adapter.key
                                                     ? "border-primary bg-primary/5 shadow-sm"
                                                     : "border-border hover:border-primary/40"
@@ -417,7 +417,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                                         setSelectedCategories(next);
                                                     }}
                                                     className={cn(
-                                                        "flex items-center gap-2 p-2.5 rounded-lg border transition-[color,background-color,border-color] text-left",
+                                                        "press-feedback flex items-center gap-2 p-2.5 rounded-lg border transition-[color,background-color,border-color] text-left",
                                                         selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                                                     )}
                                                 >
@@ -474,7 +474,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                     <button
                                         key={feat.path}
                                         onClick={() => handleNavigate(feat.path)}
-                                        className="flex items-start gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-[color,background-color,border-color] text-left group"
+                                        className="press-feedback flex items-start gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-[color,background-color,border-color] text-left group"
                                     >
                                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                                             <feat.icon className="h-4 w-4 text-primary" />

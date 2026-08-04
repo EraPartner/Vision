@@ -345,7 +345,7 @@ export default function DashboardPage() {
 
     if (partialError && !hasAnyData) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.errorLoading', { msg: String(partialErrorMessage) })} icon={LayoutDashboard} />
             </div>
         );
@@ -364,7 +364,7 @@ export default function DashboardPage() {
 
     return (
         <ChartSyncProvider>
-        <div className="space-y-8 animate-in">
+        <div className="space-y-8">
             {/* Page header */}
             <PageHeader
                 title={t(greetingKey) || t('dashboard.title')}

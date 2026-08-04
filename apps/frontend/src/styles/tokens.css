@@ -108,12 +108,31 @@
         --aurora-wash-alpha: 0.06;
         --grain-alpha: 0.018;
 
-        /* -------- Motion -------- */
+        /* -------- Motion --------
+           THE curve table. Three curves, one job each — this block is the
+           single source of truth and `lib/motion.ts` mirrors it verbatim for
+           Framer (which needs the raw control points, not a CSS string).
+           `lib/__tests__/motionTokenParity.test.ts` parses this file and fails
+           if the two ever disagree, in either direction, so a curve cannot be
+           edited in one layer and drift in the other.
+
+           Pick by ROLE, not by vibe:
+           - --ease-glide     something already on screen moving between two
+                              resting states: hover lifts, colour/border/shadow,
+                              the tab pill, sidebar width, a progress fill.
+                              (This is Apple's sheet curve — it was previously
+                              shipped, dishonestly, under BOTH the names
+                              `--ease-out-expo` and `--ease-out-quint`.)
+           - --ease-out-expo  something ARRIVING: page entrance, `.animate-in`,
+                              `.animate-stagger`, sheets, chart draw-ins.
+                              Now the real out-expo, matching Framer.
+           - --ease-in-out-quart  ambient loops that ease at both ends (aurora
+                              drift). */
         --duration-fast: 150ms;
         --duration-normal: 260ms;
         --duration-slow: 420ms;
-        --ease-out-expo: cubic-bezier(0.32, 0.72, 0, 1);
-        --ease-out-quint: cubic-bezier(0.32, 0.72, 0, 1);
+        --ease-glide: cubic-bezier(0.32, 0.72, 0, 1);
+        --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
         --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
 
         /* -------- Typography -------- */

@@ -315,7 +315,7 @@ export default function RecipientsPage() {
 
     if (isLoading) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
                 <Card {...loadingSurfaceProps}>
                     <CardHeader className="pb-3">
@@ -333,7 +333,7 @@ export default function RecipientsPage() {
 
     if (error) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
                 <Card>
                     <CardContent className="pt-0">
@@ -379,7 +379,7 @@ export default function RecipientsPage() {
 
     return (
         <>
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader
                     title={t('recipientsPage.tableTitle')}
                     subtitle={t('recipientsPage.tableSubtitle', { n: totalItems })}

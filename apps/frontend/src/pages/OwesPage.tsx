@@ -42,7 +42,7 @@ export default function OwesPage() {
 
     if (isLoading) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
                 <div {...loadingSurfaceProps} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {[...Array(3)].map((_, i) => (
@@ -61,7 +61,7 @@ export default function OwesPage() {
     }
 
     return (
-        <div className="space-y-8 animate-in">
+        <div className="space-y-8">
             <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
 
             {totalOwed > 0 && (
@@ -187,7 +187,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
     };
 
     return (
-        <div className="space-y-6 animate-in">
+        <div className="space-y-6">
             <PageHeader
                 title={recipient.name}
                 subtitle={t('owesPage.outstandingSplits')}

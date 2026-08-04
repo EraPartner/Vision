@@ -93,7 +93,7 @@ export default function PortfolioForecastPage() {
   const unavailable = forecast && forecast.available === false;
 
   return (
-    <div className="space-y-6 animate-in">
+    <div className="space-y-6">
       <PageHeader
         title={t("research.forecast.title")}
         subtitle={t("research.forecast.subtitle")}

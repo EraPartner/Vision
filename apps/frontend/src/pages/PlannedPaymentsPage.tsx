@@ -402,7 +402,7 @@ export default function PlannedPaymentsPage() {
 
   if (loading) {
     return (
-      <div {...loadingSurfaceProps} className="space-y-8 animate-in">
+      <div {...loadingSurfaceProps} className="space-y-8">
         <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
@@ -419,7 +419,7 @@ export default function PlannedPaymentsPage() {
 
   return (
     <>
-      <div className="space-y-8 animate-in">
+      <div className="space-y-8">
         <div className="flex items-start justify-between">
           <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
           <div className="flex gap-2">

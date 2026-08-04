@@ -1002,7 +1002,7 @@ export default function MarketOverviewPage() {
             title={held ? t("research.markets.held") : undefined}
             className={cn(
               "relative flex flex-col gap-1 rounded-xl border border-border/40 p-3.5 text-left transition-colors",
-              "micro-lift hover:border-primary/40 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "micro-lift press-feedback hover:border-primary/40 outline-none focus-visible:ring-2 focus-visible:ring-ring",
               pct == null && "bg-muted/20",
               held &&
                 "border-accent/60 ring-2 ring-accent ring-offset-1 ring-offset-background shadow-[0_0_14px_-2px_hsl(var(--accent)/0.55)]",
@@ -1032,7 +1032,7 @@ export default function MarketOverviewPage() {
   );
 
   return (
-    <div className="space-y-6 animate-in">
+    <div className="space-y-6">
       <PageHeader title={t("research.markets.title")} subtitle={t("research.markets.subtitle")} icon={Globe} />
 
       <div className="space-y-3">
