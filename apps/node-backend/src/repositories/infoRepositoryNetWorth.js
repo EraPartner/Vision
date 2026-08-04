@@ -21,6 +21,49 @@ import {
   sanitizeIsolatedDailyInvestmentSpikes,
 } from './infoRepositoryHelpers.js';
 
+// ── Shared row-level resolution ────────────────────────────────────────────
+// Both of these read `transactions.account_id` and nothing else, exactly like
+// the history walk's `account_list` below. They are module-level constants
+// because more than one statement needs them and a predicate copied into two
+// places is precisely how the walk, the date probe and the fallback drift apart.
+
+/**
+ * Excludes rows POSITIVELY attributed to an `in_net_worth = false` (tracking-only)
+ * account, mirroring the walk's `account_list` resolution. Requires the
+ * transactions alias to be `t`; splices onto an existing WHERE.
+ *
+ * It deliberately cannot inner-join `accounts`: the un-migrated ledger the
+ * fallback exists for has rows carrying a `bank_account` string (or nothing) and
+ * NO accounts row behind them, and an inner join would drop exactly the rows the
+ * fallback is here to count. Rows with a NULL account_id therefore stay counted —
+ * they are unattributed, and nothing says they belong to a tracking-only account.
+ */
+const NOT_TRACKING_ONLY = `
+            AND NOT EXISTS (
+              SELECT 1 FROM accounts a
+              WHERE a.id = t.account_id AND a.in_net_worth = false
+            )`;
+
+/**
+ * The walk's liability split — `(a.type = 'liability')` on the row's account —
+ * as a row-level expression. Requires the transactions alias to be `t`.
+ *
+ * **Un-attributable rows resolve to `false` (liquid).** A row with a NULL
+ * `account_id` has no `accounts` row to read a type from, so there is no
+ * `is_liability` to split on; `bank_account` is deliberately NOT consulted,
+ * because resolving liability by name while {@link NOT_TRACKING_ONLY} resolves
+ * tracking by id would make the two predicates disagree about which account a
+ * row belongs to. `false` is also the choice that changes nothing: the
+ * un-migrated ledger this path serves is a plain bank ledger, and
+ * `netWorth = liquid + liabilities + investments` is identical either way — only
+ * the presentational split between the two buckets moves.
+ */
+const IS_LIABILITY_BY_ACCOUNT = `
+            COALESCE(
+              (SELECT a.type = 'liability' FROM accounts a WHERE a.id = t.account_id),
+              false
+            )`;
+
 export const netWorthRepository = {
   /**
    * Net Worth (snapshot-backed) — reads investment values from pre-computed
@@ -54,13 +97,26 @@ export const netWorthRepository = {
     // transaction when there are no active ones — folded into one round-trip via
     // COALESCE (LEAST ignores NULLs, so it only falls through when both the
     // snapshot and active-txn minima are NULL) (SIMP-51).
+    //
+    // Both transaction arms carry NOT_TRACKING_ONLY, the same exclusion the walk
+    // and the fallback apply: this date is the series START BOUND, so without it
+    // the span is set by rows that can never contribute a value to it. An
+    // all-tracking ledger returned a 401-day all-zero snapshots array whose span
+    // came entirely from excluded rows; worse, on a MIXED ledger the phantom
+    // leading-zero region became the monthly-change baseline, so an account
+    // opened this month reported its whole balance as this month's gain
+    // (measured: monthlyChange 1050 where 50 is the real movement).
+    //
+    // The third arm needs it just as much as the second: it has no is_active
+    // filter, so leaving it bare let an all-tracking ledger fall straight
+    // through to it and restore the very span the second arm had just dropped.
     const firstDateResult = await query(`
       SELECT COALESCE(
         LEAST(
           (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
-          (SELECT MIN(date)::date FROM transactions WHERE is_active = true)
+          (SELECT MIN(t.date)::date FROM transactions t WHERE t.is_active = true ${NOT_TRACKING_ONLY})
         ),
-        (SELECT MIN(date)::date FROM transactions)
+        (SELECT MIN(t.date)::date FROM transactions t WHERE true ${NOT_TRACKING_ONLY})
       )::date AS first_data_date
     `, [targetCurrency]);
 
@@ -213,26 +269,18 @@ export const netWorthRepository = {
     // unstamped account resolves to its running Σ(amount) day by day, which is
     // exactly what this fallback computes.
     //
-    // `NOT_TRACKING_ONLY` below is what keeps the two populations apart. The
-    // fallback used to sum EVERY active transaction with no account /
+    // `NOT_TRACKING_ONLY` (module scope) is what keeps the two populations
+    // apart. The fallback used to sum EVERY active transaction with no account /
     // in_net_worth predicate at all, so a ledger whose only active accounts are
     // in_net_worth=false reported THEIR running total as net worth (measured:
-    // liquid −143.25 where 0 is correct). It cannot simply inner-join
-    // `accounts` either — the un-migrated ledger it exists for has rows with a
-    // `bank_account` string (or nothing) and NO accounts row behind them, and
-    // an inner join would drop exactly the rows the fallback is here to count.
+    // liquid −143.25 where 0 is correct). An all-tracking ledger now yields no
+    // rows at all → every day is 0.
     //
-    // So the predicate excludes only rows POSITIVELY attributed to an
-    // in_net_worth=false account, mirroring the walk's own resolution, which
-    // reads `transactions.account_id` and nothing else (`account_list` above).
-    // Rows with a NULL account_id stay counted: they are unattributed, and
-    // nothing says they belong to a tracking-only account. An all-tracking
-    // ledger therefore yields no rows at all → every day is 0.
-    const NOT_TRACKING_ONLY = `
-            AND NOT EXISTS (
-              SELECT 1 FROM accounts a
-              WHERE a.id = t.account_id AND a.in_net_worth = false
-            )`;
+    // `IS_LIABILITY_BY_ACCOUNT` (module scope) gives this path the same
+    // liquid/liability split the walk has. Without it every fallback row landed
+    // in `liquid` and `liabilities` was structurally 0 here, so the bucket a day
+    // fell into depended on which of the two paths answered. See that constant
+    // for where an un-attributable row lands and why.
     if (bankHistoryConverted.length === 0) {
       logger.debug('Net worth account balance history empty; using transaction flow fallback', {
         targetCurrency,
@@ -247,48 +295,66 @@ export const netWorthRepository = {
           SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
           FROM bounds
         ),
-        currencies AS (
-          SELECT DISTINCT COALESCE(t.currency, 'EUR') AS currency
+        flow_rows AS (
+          -- The row population and the two resolutions, written ONCE. The
+          -- bucket list and the daily aggregate below both read this CTE, so
+          -- they cannot disagree about which rows are in scope or which bucket
+          -- one falls into.
+          SELECT
+            t.date::date AS day,
+            COALESCE(t.currency, 'EUR') AS currency,
+            ${IS_LIABILITY_BY_ACCOUNT} AS is_liability,
+            t.amount
           FROM transactions t
           WHERE t.is_active = true
             AND t.date >= (SELECT start_date FROM bounds)
             AND t.date <= (SELECT end_date FROM bounds)
             ${NOT_TRACKING_ONLY}
         ),
+        buckets AS (
+          -- The (currency, is_liability) pairs the ledger actually holds. Each
+          -- gets its own dense day series and its own running total, so a
+          -- liability's negative balance never nets against liquid cash before
+          -- the JS reducer can split them (ADR-092).
+          SELECT DISTINCT currency, is_liability FROM flow_rows
+        ),
         tx_daily AS (
           SELECT
-            t.date::date AS day,
-            COALESCE(t.currency, 'EUR') AS currency,
-            COALESCE(SUM(t.amount), 0) AS amount
-          FROM transactions t
-          WHERE t.is_active = true
-            AND t.date >= (SELECT start_date FROM bounds)
-            AND t.date <= (SELECT end_date FROM bounds)
-            ${NOT_TRACKING_ONLY}
-          GROUP BY t.date::date, COALESCE(t.currency, 'EUR')
+            day,
+            currency,
+            is_liability,
+            COALESCE(SUM(amount), 0) AS amount
+          FROM flow_rows
+          GROUP BY day, currency, is_liability
         ),
         tx_series AS (
           SELECT
             d.day,
-            c.currency,
+            b.currency,
+            b.is_liability,
             COALESCE(td.amount, 0) AS amount
           FROM days d
-          CROSS JOIN currencies c
-          LEFT JOIN tx_daily td ON td.day = d.day AND td.currency = c.currency
+          CROSS JOIN buckets b
+          LEFT JOIN tx_daily td
+            ON td.day = d.day
+           AND td.currency = b.currency
+           AND td.is_liability = b.is_liability
         ),
         tx_cumulative AS (
           SELECT
             day,
             currency,
-            SUM(amount) OVER (PARTITION BY currency ORDER BY day) AS value
+            is_liability,
+            SUM(amount) OVER (PARTITION BY currency, is_liability ORDER BY day) AS value
           FROM tx_series
         )
         SELECT
           to_char(day, 'YYYY-MM-DD') AS day,
           currency,
+          is_liability,
           value
         FROM tx_cumulative
-        ORDER BY day, currency
+        ORDER BY day, currency, is_liability
       `, [firstDataDateYmd, todayYmd]);
 
       bankHistoryConverted = await convertRowsWithHistoricalRateFallback(

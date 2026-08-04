@@ -54,7 +54,7 @@ describe('InfoRepository', () => {
     clearMvCache();
     // Default: mvAvailable returns false (no materialized views)
     query.mockImplementation(async (sql) => {
-      if (typeof sql === 'string' && sql.includes('SELECT 1 FROM')) {
+      if (typeof sql === 'string' && sql.includes('SELECT 1 FROM mv_')) {
         return { rows: [] };
       }
       return { rows: [] };
@@ -65,7 +65,7 @@ describe('InfoRepository', () => {
     it('should return combined net worth from bank balances and portfolio snapshots', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return {
@@ -108,7 +108,7 @@ describe('InfoRepository', () => {
     it('should overlay the latest point with the live portfolio value when provided', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return {
@@ -147,7 +147,7 @@ describe('InfoRepository', () => {
     it('should pass target currency through conversion calls', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [{ day: todayKey, investments: '4470' }] };
@@ -169,7 +169,7 @@ describe('InfoRepository', () => {
 
     it('should handle empty portfolio and bank data', async () => {
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: null }] };
         return { rows: [] };
       });
@@ -186,7 +186,7 @@ describe('InfoRepository', () => {
     it('should return investments: 0 when snapshots table is empty', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
@@ -209,7 +209,7 @@ describe('InfoRepository', () => {
       const secondDayKey = todayAppDateString();
       const firstDayKey = addDaysYmd(secondDayKey, -1);
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: firstDayKey }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };
@@ -237,9 +237,11 @@ describe('InfoRepository', () => {
         // Discriminated by 'tx_cumulative', the fallback's own CTE:
         // `COALESCE(SUM(t.amount), 0) AS amount` also appears inside the
         // shared balance-series CTEs, so it cross-matches the history walk.
-        // Like the 'WITH anchor' branch below, this MUST come before the
-        // generic 'SELECT 1 FROM' one — the fallback's tracking-only exclusion
-        // contains `NOT EXISTS (SELECT 1 FROM accounts a …)`.
+        // (The fallback's tracking-only exclusion also contains
+        // `NOT EXISTS (SELECT 1 FROM accounts a …)`, which used to require
+        // this branch to precede the generic 'SELECT 1 FROM' one below; that
+        // guard is now scoped to `SELECT 1 FROM mv_`, so it no longer collides
+        // and the ordering is no longer load-bearing for this reason.)
         if (sql.includes('tx_cumulative')) {
           return {
             rows: [
@@ -248,7 +250,7 @@ describe('InfoRepository', () => {
             ],
           };
         }
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [{ day: todayKey, investments: '500' }] };
@@ -277,7 +279,7 @@ describe('InfoRepository', () => {
     it('should fall back to the seed date via the combined COALESCE query when there are no active transactions', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         // The first-data-date query now folds the active-only minimum and the
         // all-transactions fallback into one COALESCE (SIMP-51); the DB resolves
         // the fallback and returns the seed date directly.
@@ -304,7 +306,10 @@ describe('InfoRepository', () => {
     // The unified current-balance query is discriminated by 'balance_parts'
     // (the per-currency aggregated lateral's one column) — the daily history
     // walk ends in a 'balance_series' CTE instead, so the two mocks can't
-    // cross-match. It MUST come before the generic 'SELECT 1 FROM' branch.
+    // cross-match. (This query's `NOT EXISTS (SELECT 1 FROM anchor)` used to
+    // require this branch to precede the generic 'SELECT 1 FROM' one below;
+    // that guard is now scoped to `SELECT 1 FROM mv_`, so it no longer
+    // collides and the ordering is no longer load-bearing for this reason.)
     //
     // `currentRows` are shaped like the real result set: one row per account
     // carrying its currency partitions as a JSON array (NULL when the account
@@ -312,7 +317,7 @@ describe('InfoRepository', () => {
     const mockUnifiedNetWorth = ({ firstDataDate, investmentsRows, walkRows, currentRows }) => {
       query.mockImplementation(async (sql) => {
         if (sql.includes('balance_parts')) return { rows: currentRows };
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: firstDataDate }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: investmentsRows };
@@ -485,7 +490,7 @@ describe('InfoRepository', () => {
     it('should emit debug log with summary metrics', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM mv_')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
           return { rows: [] };

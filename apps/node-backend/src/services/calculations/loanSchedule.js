@@ -12,6 +12,7 @@
  */
 
 import { roundMoney } from '../../lib/money.js';
+import { ValidationError } from '../../middleware/errorHandler.js';
 
 const EPSILON = 0.0000001;
 
@@ -96,11 +97,13 @@ export function validateLoanConfig(config) {
 export function generateLoanRepaymentSchedule(config) {
   const { errors, normalized } = validateLoanConfig(config);
   if (errors.length > 0) {
-    const err = /** @type {Error & { statusCode?: number }} */ (
-      new Error(`Invalid loan configuration: ${errors.join(', ')}`)
-    );
-    err.statusCode = 400;
-    throw err;
+    // ValidationError, not a plain Error with `statusCode`: both reach the
+    // client as 400, but only an AppError's message survives. A bare
+    // `statusCode` makes this error "not ours" to the handler, which then
+    // replaces the enumerated reasons with the generic "Bad Request" reason
+    // phrase (errorHandler.js THE RULE, clause 2) — the text is authored here
+    // and safe, so it should reach the caller intact.
+    throw new ValidationError(`Invalid loan configuration: ${errors.join(', ')}`);
   }
 
   const {
@@ -128,11 +131,9 @@ export function generateLoanRepaymentSchedule(config) {
   } else if (loanType === 'interest_only') {
     regularPayment = principal * monthlyRate;
   } else {
-    const err = /** @type {Error & { statusCode?: number }} */ (
-      new Error(`Unsupported loan_type '${loanType}'. Use amortizing, fixed_principal, or interest_only.`)
-    );
-    err.statusCode = 400;
-    throw err;
+    // Same reasoning as the config-validation throw above: authored, safe text
+    // that only survives the handler as an AppError.
+    throw new ValidationError(`Unsupported loan_type '${loanType}'. Use amortizing, fixed_principal, or interest_only.`);
   }
 
   // If the payment day lands before the loan's start within the start month

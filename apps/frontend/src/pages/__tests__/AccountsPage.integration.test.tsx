@@ -218,6 +218,19 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
             type: "checking", computed_balance: 300, statement_balance: 312.4,
             drift: 12.4, statement_balance_date: null,
         },
+        {
+            // The MISLABELLED-account topology (accountBalanceSql.js
+            // statementPartition, case 2): the account is declared in EUR but
+            // its only funded partition is USD, so the server reconciles
+            // against that partition and `drift` comes back in USD —
+            // `reconcilable_currency !== currency`. The badge must stamp the
+            // symbol of the currency the figure is actually IN.
+            ...ACCOUNT_STUB, id: 15, name: "Mislabelled", display_name: "Mislabelled",
+            type: "checking", currency: "EUR", multi_currency_cash: true,
+            computed_balance: 1150, statement_balance: 1299.9,
+            reconcilable_balance: 1284.4, reconcilable_currency: "USD",
+            drift: 15.5, statement_balance_date: FRESH_YMD,
+        },
     ];
 
     /** The drift badge inside the card for `label`. */
@@ -279,6 +292,24 @@ describe("AccountsPage (integration, WP-B3 grouped hub)", () => {
         expect(day46.className).not.toMatch(/text-destructive/);
         // NUMERIC-string drift still renders as money (normalizeAccount coercion).
         expect(day46.textContent).toMatch(/-79,85/);
+    });
+
+    it("stamps the drift badge with reconcilable_currency, not the account's declared currency", async () => {
+        mockAccounts(DRIFT_FIXTURE);
+        renderWithApp(<AccountsPage />);
+        await screen.findByRole("region", { name: "Cash & Savings" });
+
+        // `drift` is statement_balance − reconcilable_balance, denominated in
+        // `reconcilable_currency` (USD here) — putting the declared EUR symbol
+        // on it labels a dollar figure as euros.
+        const badge = driftBadgeFor("Mislabelled");
+        expect(badge.textContent).toMatch(/15,50/);
+        expect(badge.textContent).toMatch(/\$/);
+        expect(badge.textContent).not.toContain("€");
+
+        // The single-currency accounts stay byte-identical: no
+        // reconcilable_currency on the wire → the declared currency is used.
+        expect(driftBadgeFor("Fresh Drift").textContent).toContain("€");
     });
 
     it("opens the Reconcile dialog from a stale (warning-tone) badge just like a fresh one", async () => {

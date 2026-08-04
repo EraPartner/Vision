@@ -139,6 +139,30 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         expect(within(clean).queryByText(/^Drift/)).not.toBeInTheDocument();
     });
 
+    // `computed_balance` is denominated in the ACCOUNT's currency (ADR-094), not
+    // in the app's default — the same contract the Accounts hub card and
+    // groupAccounts' converted subtotals honour. The card used to hard-code the
+    // default currency, putting a € sign on a US$ figure.
+    it("labels each card's computed balance in the account's own currency, not the app default", async () => {
+        mockWidgetApi({
+            entityAccounts: [
+                { ...ENTITY_ACCOUNTS[0], id: 4, name: "Wise USD", display_name: "Wise USD", currency: "USD", computed_balance: 1234.5, statement_balance: null, statement_balance_date: null, drift: null },
+                ENTITY_ACCOUNTS[1],
+            ],
+        });
+        renderWithApp(<BankBalancesWidget />);
+
+        // Compacted for display, full figure in the title (same as the total card).
+        const usdCard = await screen.findByRole("button", { name: "Open details for Wise USD" });
+        expect(within(usdCard).getByTitle(/1\.234,50/).textContent).toMatch(/\$/);
+        expect(usdCard.textContent).not.toMatch(/€/);
+
+        // The EUR account beside it still reads in euro — nothing global changed.
+        const eurCard = screen.getByRole("button", { name: "Open details for Argenta Savings" });
+        expect(eurCard.textContent).toMatch(/€/);
+        expect(eurCard.textContent).not.toMatch(/\$/);
+    });
+
     it("renders a stale drift chip in warning tone once the statement reading ages past the threshold", async () => {
         mockWidgetApi({
             entityAccounts: [

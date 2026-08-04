@@ -262,7 +262,16 @@ export function BankBalancesWidget() {
                                         <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                     </div>
                                     <div className={cn("text-xl font-bold tabular-nums", acctPositive ? "text-foreground" : "text-loss")}>
-                                        {(() => { const r = formatCurrencyCompact(balance, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
+                                        {/* `computed_balance` is denominated in the ACCOUNT's currency
+                                            (ADR-094: a multi-currency account's partitions are converted
+                                            into `a.currency`, not into the app default), so it must be
+                                            labelled with `a.currency` — the same idiom the Accounts hub
+                                            card uses (AccountsPage: fmtCur(a.computed_balance, a.currency));
+                                            group subtotals there convert first (sumConvertedBalances).
+                                            Labelling it `defaultCurrency` put a € sign on a $ figure. The
+                                            total/chart above stay in `defaultCurrency` because the server
+                                            converts THAT payload for the requested currency. */}
+                                        {(() => { const r = formatCurrencyCompact(balance, a.currency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                                     </div>
                                     {provenanceText && (
                                         <div className="text-xs text-muted-foreground mt-1 truncate" title={provenanceText}>

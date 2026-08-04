@@ -55,9 +55,14 @@ describe('assembleRebalanceInputs (ADR-098)', () => {
       rows: [{ id: 10, name: 'USD cash', currency: 'USD', balance_parts: [{ currency: 'USD', balance: '100' }] }],
     });
 
-    await assembleRebalanceInputs({ currency: 'EUR' });
+    const out = await assembleRebalanceInputs({ currency: 'EUR' });
 
     expect(convertToCurrency).toHaveBeenCalledWith(100, 'USD', 'EUR');
+    // The emitted entry must not label the converted figure with the account's
+    // own code: `balance` is EUR (the target) even though the account is USD.
+    expect(out.cashAccounts).toEqual([
+      { id: 10, name: 'USD cash', accountCurrency: 'USD', balance: 100, balanceCurrency: 'EUR' },
+    ]);
   });
 
   // The defect: the cross-currency lateral summed 100 EUR + 100 USD as bare
@@ -83,7 +88,11 @@ describe('assembleRebalanceInputs (ADR-098)', () => {
     const out = await assembleRebalanceInputs({ currency: 'EUR' });
 
     expect(out.availableCash).toBe(150); // NOT (100 + 100) at one rate
-    expect(out.cashAccounts).toEqual([{ id: 10, name: 'Wise', currency: 'EUR', balance: 150 }]);
+    // `balance` is the TARGET-currency total; the account's own code rides
+    // along under its own name so neither can be mistaken for the other.
+    expect(out.cashAccounts).toEqual([
+      { id: 10, name: 'Wise', accountCurrency: 'EUR', balance: 150, balanceCurrency: 'EUR' },
+    ]);
     // The EUR partition is already in the target and must not hit FX at all.
     expect(convertToCurrency).toHaveBeenCalledTimes(1);
     expect(convertToCurrency).toHaveBeenCalledWith(100, 'USD', 'EUR');
@@ -99,6 +108,8 @@ describe('assembleRebalanceInputs (ADR-098)', () => {
     const out = await assembleRebalanceInputs({ currency: 'EUR' });
 
     expect(out.availableCash).toBe(0);
-    expect(out.cashAccounts).toEqual([{ id: 12, name: 'Fresh', currency: 'EUR', balance: 0 }]);
+    expect(out.cashAccounts).toEqual([
+      { id: 12, name: 'Fresh', accountCurrency: 'EUR', balance: 0, balanceCurrency: 'EUR' },
+    ]);
   });
 });

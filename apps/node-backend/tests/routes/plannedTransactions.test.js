@@ -42,8 +42,18 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
+// Spy-wrapped, NOT replaced: the schedule maths stays real for every other test
+// in this file (the -860.66 pins below depend on it). The wrapper only exists so
+// a single test can make the generator throw a non-AppError and prove the route
+// does not relabel an internal fault as a client 400.
+vi.mock('../../src/services/calculations/loanSchedule.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, generateLoanRepaymentSchedule: vi.fn(actual.generateLoanRepaymentSchedule) };
+});
+
 import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
+import { generateLoanRepaymentSchedule } from '../../src/services/calculations/loanSchedule.js';
 
 const { default: plannedRouter } = await import('../../src/routes/plannedTransactions.js');
 
@@ -231,6 +241,66 @@ describe('Planned Transaction Routes', () => {
         loan_term_months: 601,
       }).expect(400);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // generateLoanScheduleOrThrow used to wrap EVERY throw from the generator in
+  // `new ValidationError('Invalid loan parameters: ' + err.message)`. That did
+  // two wrong things at once, pinned separately below.
+  describe('loan schedule failures keep their own class and message', () => {
+    it('surfaces the generator ValidationError verbatim — one prefix, not two', async () => {
+      const res = await post({
+        bank_account: 'Mortgage',
+        is_loan: true,
+        loan_type: 'amortizing',
+        loan_principal: -1,
+        loan_annual_interest_rate: 6,
+        loan_term_months: 12,
+        loan_start_date: '2026-04-01',
+        loan_payment_day: 1,
+      }).expect(400);
+
+      expect(res.body.error.message).toBe(
+        'Invalid loan configuration: loan_principal must be a positive number',
+      );
+      expect(res.body.error.message).not.toMatch(/Invalid loan parameters/);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('does not relabel a non-AppError fault in the schedule maths as a client 400', async () => {
+      generateLoanRepaymentSchedule.mockImplementationOnce(() => {
+        throw new TypeError('remaining.toFixed is not a function');
+      });
+
+      const res = await post({
+        bank_account: 'Mortgage',
+        is_loan: true,
+        loan_type: 'amortizing',
+        loan_principal: 10000,
+        loan_annual_interest_rate: 6,
+        loan_term_months: 12,
+        loan_start_date: '2026-04-01',
+        loan_payment_day: 1,
+      }).expect(500);
+
+      expect(res.body.error.message).not.toMatch(/Invalid loan parameters/);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('does not relabel a non-AppError fault raised by a PATCH regeneration either', async () => {
+      plannedTransactionRepository.getById.mockResolvedValueOnce({
+        id: 1, is_loan: true, loan_type: 'amortizing', loan_principal: 5000,
+        loan_annual_interest_rate: 3, loan_term_months: 24,
+        loan_start_date: '2026-04-01', loan_payment_day: 1,
+      });
+      generateLoanRepaymentSchedule.mockImplementationOnce(() => {
+        throw new TypeError('remaining.toFixed is not a function');
+      });
+
+      const res = await patch(1, { loan_principal: 10000 }).expect(500);
+
+      expect(res.body.error.message).not.toMatch(/Invalid loan parameters/);
+      expect(plannedTransactionRepository.updateWithLoanSchedule).not.toHaveBeenCalled();
     });
   });
 

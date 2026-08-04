@@ -34,7 +34,19 @@ export interface RebalanceResponse {
     targetWeights: Record<string, number>;
     actualValues: Record<string, number>;
     availableCash: number;
-    cashAccounts: Array<{ id: number; name: string; currency: string; balance: number }>;
+    /**
+     * The spendable accounts behind `availableCash`. `balance` is that account's
+     * cash CONVERTED into `balanceCurrency` (== the response's `currency`), so it
+     * is directly summable into `availableCash`; `accountCurrency` is merely the
+     * account's own declared code and must never be used to format `balance`.
+     */
+    cashAccounts: Array<{
+        id: number;
+        name: string;
+        accountCurrency: string;
+        balance: number;
+        balanceCurrency: string;
+    }>;
     /** Per-sleeve cash to deploy (only underweight sleeves appear). */
     deployment: Record<string, number>;
 }

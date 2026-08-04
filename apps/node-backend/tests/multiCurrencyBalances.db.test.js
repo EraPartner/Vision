@@ -354,7 +354,13 @@ describe.skipIf(!hasTestDatabase())('cross-currency computed balance, all reader
 
       expect(out.availableCash).toBe(150); // NOT 100
       expect(out.cashAccounts).toEqual([
-        { id: expect.any(Number), name: 'WISE MULTI', currency: 'EUR', balance: 150 },
+        {
+          id: expect.any(Number),
+          name: 'WISE MULTI',
+          accountCurrency: 'EUR',
+          balance: 150,
+          balanceCurrency: 'EUR',
+        },
       ]);
     });
 
