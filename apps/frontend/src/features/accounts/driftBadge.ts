@@ -108,7 +108,13 @@ export function useDriftBadge(): (account: Account) => DriftBadgeContent | null 
 
             // Sign is explicit for a positive drift (the statement is ahead of
             // the ledger); the formatter already renders the minus otherwise.
-            const amount = `${drift > 0 ? '+' : ''}${fmtCur(drift, account.currency)}`;
+            // `drift` is statement_balance − reconcilable_balance, denominated
+            // in `reconcilable_currency` (api.ts) — NOT in the account's
+            // declared `currency`. Those differ on a mislabelled account (one
+            // funded partition in a foreign currency), where stamping
+            // `account.currency` puts the wrong symbol on the figure. The
+            // fallback keeps every single-currency account byte-identical.
+            const amount = `${drift > 0 ? '+' : ''}${fmtCur(drift, account.reconcilable_currency ?? account.currency)}`;
             const statementDate = statementYmd(account);
             const stale = isStatementStale(statementDate);
 
