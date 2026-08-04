@@ -401,7 +401,8 @@ function CompactReturnCard({
         : "bg-gradient-to-br from-loss/20 to-loss/10 text-loss";
     return (
         <Card
-            className="liquid-glass micro-lift relative overflow-hidden border shadow-md lg:col-span-2 lg:row-span-1"
+            variant="interactive"
+            className="liquid-glass relative overflow-hidden border shadow-md lg:col-span-2 lg:row-span-1"
         >
             <TrendHue tone={trend ? "gain" : "loss"} />
             <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
@@ -462,7 +463,8 @@ function TotalValueCard({
 
     return (
         <Card
-            className="liquid-glass micro-lift relative overflow-hidden border shadow-lg lg:col-span-2 lg:row-span-3"
+            variant="interactive"
+            className="liquid-glass relative overflow-hidden border shadow-lg lg:col-span-2 lg:row-span-3"
         >
             <TrendHue tone={isGain ? "gain" : "loss"} />
             <CardSheen className="h-40 w-40 -mt-20 -mr-20" />

@@ -104,6 +104,7 @@ export default function AccountsPage() {
             role="button"
             tabIndex={0}
             aria-label={t('accounts.openDetail', { name: a.display_name || a.name })}
+            variant="interactive"
             className={cn("glass-regular cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2", !a.is_active && "opacity-60")}
             // Single click → the /accounts/:id ledger route (WP-B4).
             onClick={() => navigate(`/accounts/${a.id}`)}

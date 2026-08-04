@@ -594,7 +594,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     };
 
     return (
-        <Card className="premium-frame micro-lift relative overflow-hidden">
+        <Card className="premium-frame relative overflow-hidden">
             <CardSheen />
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                 <div>

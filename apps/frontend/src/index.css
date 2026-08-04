@@ -737,8 +737,17 @@
      * Interaction feedback
      * ------------------------------------------------------------------ */
 
-    /* premium-frame and micro-lift are frequently combined (and premium-frame
-       is baked into the Card base). Their transitions animate transform ONLY:
+    /* premium-frame is baked into the Card base, so its RESTING appearance —
+       the embossed frame — applies to every card. Its hover response does not:
+       that lives in `.premium-frame-interactive`, which the Card `interactive`
+       variant adds (ADR-105 hierarchy — see components/ui/card.tsx). Splitting
+       the two is what keeps the variant from being defeated by a global rule:
+       a border that recolors to primary under the cursor is an affordance, and
+       an affordance on every surface is an affordance on none. `premium-frame`
+       is used exclusively on `<Card>` in the app, so the split has no other
+       consumers to consider.
+
+       These transitions animate transform ONLY:
        box-shadow and border-color are paint properties, so animating them
        repainted the card plus its full shadow extent on every frame of the
        260ms hover ease — sweeping the cursor across a card grid stacked
@@ -756,7 +765,6 @@
             0 1px 0 hsl(var(--glass-highlight) / 0.16) inset,
             0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset,
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
-        transition: transform var(--duration-fast) var(--ease-glide);
     }
 
     .premium-frame::after {
@@ -771,11 +779,18 @@
         transition: opacity var(--duration-normal) var(--ease-glide);
     }
 
-    .premium-frame:hover {
+    /* The hover half of premium-frame, gated behind the Card `interactive`
+       variant. Only the transform transition lives here — the ::after opacity
+       fade stays on the base rule, where it costs nothing while opacity is 0. */
+    .premium-frame-interactive {
+        transition: transform var(--duration-fast) var(--ease-glide);
+    }
+
+    .premium-frame-interactive:hover {
         border-color: hsl(var(--primary) / 0.4);
     }
 
-    .premium-frame:hover::after {
+    .premium-frame-interactive:hover::after {
         opacity: 1;
     }
 
@@ -789,7 +804,7 @@
         box-shadow: 0 18px 40px hsl(0 0% 0% / 0.48);
     }
 
-    .dark .premium-frame:hover {
+    .dark .premium-frame-interactive:hover {
         border-color: hsl(var(--primary) / 0.5);
     }
 
@@ -1123,6 +1138,7 @@
         .premium-icon-action,
         .icon-touch-target,
         .premium-frame,
+        .premium-frame-interactive,
         .surface-default,
         .surface-elevated,
         .glass,

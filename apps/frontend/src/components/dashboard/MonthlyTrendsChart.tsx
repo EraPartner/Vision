@@ -137,7 +137,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
     }
 
     return (
-        <Card className="relative overflow-hidden glass-regular premium-frame micro-lift">
+        <Card className="relative overflow-hidden glass-regular premium-frame">
             <CardSheen />
             <CardHeader className="space-y-3">
                 <div className="flex items-center gap-3">

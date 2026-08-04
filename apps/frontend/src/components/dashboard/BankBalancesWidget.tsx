@@ -192,7 +192,7 @@ export function BankBalancesWidget() {
     return (
         <div className="space-y-4">
             {/* Total Net Position Card */}
-            <Card className="glass-regular premium-frame micro-lift group relative overflow-hidden">
+            <Card variant="interactive" className="glass-regular premium-frame group relative overflow-hidden">
                 <CardSheen />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
@@ -238,6 +238,7 @@ export function BankBalancesWidget() {
                                 role="button"
                                 tabIndex={0}
                                 aria-label={t('accounts.openDetail', { name: label })}
+                                variant="interactive"
                                 className="glass-regular premium-frame group cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
                                 onClick={() => openAccountDetail(a.id)}
                                 onKeyDown={(e) => {

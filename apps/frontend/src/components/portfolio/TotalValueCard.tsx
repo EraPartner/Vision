@@ -217,7 +217,7 @@ export function TotalValueCard({
   const tone: TrendTone = isGain === undefined ? "neutral" : isGain ? "gain" : "loss";
 
   return (
-    <Card className="liquid-glass micro-lift border relative overflow-hidden h-full">
+    <Card variant="interactive" className="liquid-glass border relative overflow-hidden h-full">
       <TrendHue tone={tone} />
       <CardHeader className="flex flex-row items-start justify-between pb-3 space-y-0">
         <div className="space-y-1">

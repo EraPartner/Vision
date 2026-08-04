@@ -132,7 +132,7 @@ export default function ResearchHomePage() {
             const pct = quote?.changePercent;
             const up = (pct ?? 0) >= 0;
             return (
-              <Card key={b.symbol} className="glass-regular micro-lift">
+              <Card key={b.symbol} variant="interactive" className="glass-regular">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-xs font-medium text-muted-foreground">{b.label}</span>

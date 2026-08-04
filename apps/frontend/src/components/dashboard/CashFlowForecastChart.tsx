@@ -388,7 +388,7 @@ export function CashFlowForecastChart({
     if (embedded) return chartContent;
 
     return (
-        <Card className="relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-2">
+        <Card className="relative overflow-hidden glass-regular premium-frame lg:col-span-2">
             <CardSheen />
             <CardHeader className="space-y-3">
                 <div className="flex items-center gap-3">

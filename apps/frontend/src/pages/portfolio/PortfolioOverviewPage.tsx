@@ -298,7 +298,7 @@ export default function PortfolioOverviewPage() {
               </div>
               <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2 grid grid-cols-1 grid-rows-3 gap-4">
                 {cards.map((c) => (
-                  <Card key={c.title} className="liquid-glass micro-lift border relative overflow-hidden">
+                  <Card key={c.title} variant="interactive" className="liquid-glass border relative overflow-hidden">
                     <TrendHue tone={c.gain ? "gain" : "loss"} />
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
