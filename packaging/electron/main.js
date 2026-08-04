@@ -1289,23 +1289,35 @@ function httpPut(url, payload) {
 }
 
 // ── IPC handler registration ─────────────────────────────────────────────────
-// Wraps ipcMain.handle() with the guard/boilerplate shared by most channels:
-//   • requireMainSender — reject calls that don't originate from the main
-//     window's webContents. `senderFailure` is the exact value returned on
-//     rejection; the shapes differ per channel and are load-bearing for the
-//     renderer bridge (electron.ts), so divergent channels pass their own.
+// EVERY channel registers through this wrapper — never call ipcMain.handle()
+// directly. The sender check is applied by DEFAULT and must be opted *out* of
+// explicitly (`allowAnySender: true`, with a comment saying why), so a new
+// handler is guarded by omission rather than by the author remembering.
+//   • sender guard — reject calls that don't originate from the main window's
+//     webContents. `senderFailure` is the exact value returned on rejection;
+//     the shapes differ per channel and are load-bearing for the renderer
+//     bridge (electron.ts), so divergent channels pass their own. Channels
+//     whose contract has no failure shape (pure reads) pass REJECT_SENDER,
+//     which rejects the invoke promise instead of inventing a return value.
 //   • requireWorkDir — precondition for handlers that shell out to Docker.
 //   • wrapErrors — uniform catch → { success: false, error: String(err) }.
-// Handlers with non-uniform failure shapes (update:check-github,
-// update:pre-update-backup, recovery:open-logs) keep plain ipcMain.handle.
+// Nothing currently opts out: the app has exactly one BrowserWindow, new
+// windows are denied (setWindowOpenHandler), and the splash + error pages load
+// into that same window — so the recovery channels reached from error.html do
+// come from mainWindow.webContents like every other channel.
+const REJECT_SENDER = Symbol('reject-unauthorized-sender');
+
 function registerHandler(channel, fn, {
-  requireMainSender = false,
+  allowAnySender = false,
   senderFailure = { success: false, error: 'Unauthorized sender' },
   requireWorkDir = false,
   wrapErrors = false,
 } = {}) {
   ipcMain.handle(channel, async (event, ...args) => {
-    if (requireMainSender && (!mainWindow || event.sender !== mainWindow.webContents)) {
+    if (!allowAnySender && (!mainWindow || event.sender !== mainWindow.webContents)) {
+      if (senderFailure === REJECT_SENDER) {
+        throw new Error(`Unauthorized sender for ${channel}`);
+      }
       return senderFailure;
     }
     if (requireWorkDir && !workDir) return { success: false, error: 'workDir not set' };
@@ -1326,15 +1338,19 @@ registerHandler('update:pull-image', async () => {
     await pollHealth().catch(() => {});
   }
   return { success: true, wasNew };
-}, { requireWorkDir: true, wrapErrors: true });
+}, {
+  requireWorkDir: true,
+  wrapErrors: true,
+  senderFailure: { success: false, wasNew: false, error: 'Unauthorized sender' },
+});
 
-ipcMain.handle('update:check-github', async () => {
+registerHandler('update:check-github', async () => {
   try {
     return await checkForShellUpdate();
   } catch (err) {
     return { error: String(err), update_mode: getUpdateMode() };
   }
-});
+}, { senderFailure: REJECT_SENDER });
 
 registerHandler('update:install-shell', async () => {
   if (app.isPackaged && !useRepoMode) {
@@ -1343,13 +1359,13 @@ registerHandler('update:install-shell', async () => {
   return await installPreparedShellUpdate();
 }, { wrapErrors: true });
 
-ipcMain.handle('update:get-mode', () => ({
+registerHandler('update:get-mode', () => ({
   mode: getUpdateMode(),
   is_packaged: app.isPackaged,
   use_repo_mode: useRepoMode,
-}));
+}), { senderFailure: REJECT_SENDER });
 
-ipcMain.handle('update:pre-update-backup', async () => {
+registerHandler('update:pre-update-backup', async () => {
   try {
     const backupDir = path.join(app.getPath('userData'), 'pre-update-backups');
     fs.mkdirSync(backupDir, { recursive: true });
@@ -1398,7 +1414,7 @@ function hasAllowedRestoreExt(p) {
   return false;
 }
 
-ipcMain.handle('backup:select-file', async () => {
+registerHandler('backup:select-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
     title: 'Select Backup File to Restore',
@@ -1412,9 +1428,9 @@ ipcMain.handle('backup:select-file', async () => {
   const chosen = path.resolve(result.filePaths[0]);
   ALLOWED_RESTORE_PATHS.add(chosen);
   return chosen;
-});
+}, { senderFailure: null });
 
-ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
+registerHandler('backup:is-encrypted', async (_event, filePath) => {
   try {
     if (typeof filePath !== 'string' || !filePath) return false;
     const resolved = path.resolve(filePath);
@@ -1427,7 +1443,7 @@ ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
   } catch {
     return false;
   }
-});
+}, { senderFailure: REJECT_SENDER });
 
 registerHandler('backup:restore', async (event, filePath, opts) => {
   if (typeof filePath !== 'string' || !filePath) {
@@ -1485,7 +1501,7 @@ registerHandler('backup:restore', async (event, filePath, opts) => {
   } finally {
     startHealthWatchdog();
   }
-}, { requireMainSender: true, requireWorkDir: true });
+}, { requireWorkDir: true });
 
 // ── IPC: backup:run ───────────────────────────────────────────────────────────
 // frontendStateJson is the serialised { keys: { … } } localStorage snapshot,
@@ -1503,9 +1519,9 @@ registerHandler('backup:run', async (event, destDir, frontendStateJson = null) =
   } finally {
     backupInFlight = false;
   }
-}, { requireMainSender: true, requireWorkDir: true, wrapErrors: true });
+}, { requireWorkDir: true, wrapErrors: true });
 
-ipcMain.handle('backup:select-dir', async () => {
+registerHandler('backup:select-dir', async () => {
   const defaultPath = getDefaultICloudBackupDir() || app.getPath('documents');
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
@@ -1515,7 +1531,7 @@ ipcMain.handle('backup:select-dir', async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
-});
+}, { senderFailure: null });
 
 // Sender check matters here like on backup:restore — a compromised non-main
 // frame must not be able to repoint where the quit-time backup writes.
@@ -1540,18 +1556,18 @@ registerHandler('backup:save-settings', async (event, { backupDir, backupOnQuit 
     console.warn('backup:save-settings: could not persist to DB, kept in local settings.json', err.message);
   }
   return { success: true };
-}, { requireMainSender: true });
-
-ipcMain.handle('backup:get-encryption-status', async () => {
-  return { success: true, ...(await getBackupPassphraseStatus()) };
 });
 
-ipcMain.handle('backup:set-passphrase', async (_event, passphrase) => {
+registerHandler('backup:get-encryption-status', async () => {
+  return { success: true, ...(await getBackupPassphraseStatus()) };
+}, { senderFailure: REJECT_SENDER });
+
+registerHandler('backup:set-passphrase', async (_event, passphrase) => {
   const value = typeof passphrase === 'string' ? passphrase : '';
   return await setBackupPassphrase(value.trim());
-});
+}, { senderFailure: { success: false, available: false, error: 'Unauthorized sender' } });
 
-ipcMain.handle('backup:load-settings', async () => {
+registerHandler('backup:load-settings', async () => {
   // Prefer reading from the database; fall back to settings.json if the backend
   // is not yet available (e.g. during very early startup).
   try {
@@ -1574,7 +1590,7 @@ ipcMain.handle('backup:load-settings', async () => {
   }
   const s = resolveBackupSettingsWithDefaults(await loadSettings());
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
-});
+}, { senderFailure: REJECT_SENDER });
 
 // ── Services (keep-running-on-quit) settings ─────────────────────────────────
 // Opt-in toggle: when enabled, quit leaves the Docker containers running so the
@@ -1593,9 +1609,9 @@ registerHandler('services:save-settings', async (event, { keepServicesOnQuit } =
     console.warn('services:save-settings: could not persist to DB, kept in local settings.json', err.message);
   }
   return { success: true };
-}, { requireMainSender: true });
+});
 
-ipcMain.handle('services:load-settings', async () => {
+registerHandler('services:load-settings', async () => {
   try {
     // The API wraps responses as { ok, data: { key, value } } (ADR-026).
     const body = await httpGet(`http://localhost:${appPort}/api/settings/services_settings`);
@@ -1611,15 +1627,15 @@ ipcMain.handle('services:load-settings', async () => {
   }
   const s = await loadSettings();
   return { keepServicesOnQuit: s.keepServicesOnQuit === true };
-});
+}, { senderFailure: REJECT_SENDER });
 
 // ── Recovery (error page) ────────────────────────────────────────────────────
-ipcMain.handle('recovery:retry', () => {
+registerHandler('recovery:retry', () => {
   pollAndLoad();
   return { success: true };
 });
 
-ipcMain.handle('recovery:open-logs', async () => {
+registerHandler('recovery:open-logs', async () => {
   try {
     const logsDir = app.getPath('logs');
     fs.mkdirSync(logsDir, { recursive: true });
@@ -1669,7 +1685,7 @@ registerHandler('app:renderer-ready', () => {
     mainWindow.webContents.send(channel, payload);
   }
   return { success: true };
-}, { requireMainSender: true, senderFailure: { success: false } });
+}, { senderFailure: { success: false } });
 
 function menuAction(action, payload) {
   sendToApp('menu:action', { action, payload });
@@ -1865,7 +1881,7 @@ registerHandler('app:set-badge', (event, count) => {
   const clamped = Math.max(0, Math.min(999, Math.floor(n)));
   app.dock.setBadge(clamped > 0 ? String(clamped) : '');
   return { success: true };
-}, { requireMainSender: true, senderFailure: { success: false } });
+}, { senderFailure: { success: false } });
 
 // System accent color — RRGGBBAA hex from macOS, or null when unavailable.
 function readSystemAccentColor() {
@@ -1880,7 +1896,7 @@ function readSystemAccentColor() {
 
 registerHandler('app:get-accent-color', () => {
   return readSystemAccentColor();
-}, { requireMainSender: true, senderFailure: null });
+}, { senderFailure: null });
 
 // Renderer mirrors the active theme's primary colors here so the next boot
 // splash matches the chosen palette (see splashDataUrl / readSplashTheme).
@@ -1898,7 +1914,7 @@ registerHandler('theme:persist-splash', async (event, colors) => {
     console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
     return { success: false };
   }
-}, { requireMainSender: true, senderFailure: { success: false } });
+}, { senderFailure: { success: false } });
 
 function subscribeAccentColorChanges() {
   if (process.platform !== 'darwin') return;
