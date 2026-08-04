@@ -34,14 +34,33 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
 
-  // Prefill from an existing statement balance when present, else the computed
-  // balance — a sensible starting figure the user can override.
+  // The anchor is stamped per (account, currency) and is a NATIVE figure, so
+  // every number this dialog offers must be denominated in the currency it
+  // stamps. That is `reconcilable_currency` — the one currency partition the
+  // statement figure is a statement for (ReconcileDialog's `baseCurrency`,
+  // which its §3 F4 backfill posts the anchor in). It falls back to the
+  // account's own currency for a payload without the field (an older server, or
+  // the detail endpoint, which does not return it), which is also the exact
+  // value on every single-currency account.
+  const anchorCurrency = account.reconcilable_currency ?? account.currency;
+
+  // Prefill from an existing statement balance when present, else the
+  // reconciliation base — a sensible starting figure the user can override.
+  // NOT `computed_balance`: that is every partition FX-converted into the
+  // account currency at today's rate, so on a multi-currency account it would
+  // offer a cross-currency total as this partition's native opening anchor
+  // (same defect class as the reconcile dialog's, fixed there). `statement_balance`
+  // and `reconcilable_balance` are both already in `anchorCurrency`; the
+  // `computed_balance` tail only fires when `reconcilable_balance` is absent,
+  // where the two coincide anyway.
   const [balance, setBalance] = useState(
     account.statement_balance != null
       ? String(account.statement_balance)
-      : account.computed_balance != null
-        ? String(account.computed_balance)
-        : '',
+      : account.reconcilable_balance != null
+        ? String(account.reconcilable_balance)
+        : account.computed_balance != null
+          ? String(account.computed_balance)
+          : '',
   );
   const [date, setDate] = useState(
     account.statement_balance_date
@@ -58,7 +77,9 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
       apiClient.setOpeningBalance(account.id, {
         balance: Number(balance),
         date,
-        currency: account.currency,
+        // Stamp the anchor in the currency the prefilled figure is denominated
+        // in (see `anchorCurrency`) — same code the reconcile backfill posts.
+        currency: anchorCurrency,
       }),
     onSuccess: (result) => {
       // Account balance/drift and every net-worth view derive from the ledger.
@@ -89,7 +110,7 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="opening-balance">
-              {t('accounts.openingBalance.balanceLabel')} ({account.currency})
+              {t('accounts.openingBalance.balanceLabel')} ({anchorCurrency})
             </Label>
             <Input
               id="opening-balance"

@@ -34,8 +34,15 @@ const SLEEVE_ROLLUP = Object.freeze({
  * classic-portfolio target vocabulary), plus the deployable cash from spendable
  * accounts, so `rebalanceDeployment` lines actuals up against the target weights.
  *
+ * Each `cashAccounts` entry names BOTH currencies in play, because they differ:
+ * `balance` is the account's cash converted into the target currency (it is a
+ * summand of `availableCash`), while `accountCurrency` is only the account's own
+ * declared code. The entry used to carry the latter under a bare `currency`,
+ * which read as the denomination of the `balance` beside it and would label a
+ * EUR-converted figure "USD".
+ *
  * @param {{ currency?: string }} args
- * @returns {Promise<{ currency: string, actualValues: Record<string, number>, availableCash: number, cashAccounts: Array<{ id:number, name:string, currency:string, balance:number }> }>}
+ * @returns {Promise<{ currency: string, actualValues: Record<string, number>, availableCash: number, cashAccounts: Array<{ id:number, name:string, accountCurrency:string, balance:number, balanceCurrency:string }> }>}
  */
 export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
   const target = (currency || 'EUR').toUpperCase();
@@ -92,9 +99,19 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
       accountTotal = accountTotal.plus(toDecimal(converted));
     }
     availableCash = availableCash.plus(accountTotal);
-    // `currency` labels the ACCOUNT (its declared currency), while `balance` is
-    // in the target currency — the pre-existing shape of this payload.
-    cashAccounts.push({ id: Number(r.id), name: r.name, currency: acctCurrency, balance: toNumber(roundToCents(accountTotal)) });
+    // Both currencies are named explicitly: `balance` is the per-account total
+    // CONVERTED into `target` (that is what makes it summable into
+    // `availableCash`), and the account's own declared code is a separate,
+    // separately-named field. A single `currency` key next to a money figure
+    // reads as that figure's denomination, so carrying the account code there
+    // mislabelled every foreign-currency account's converted balance.
+    cashAccounts.push({
+      id: Number(r.id),
+      name: r.name,
+      accountCurrency: acctCurrency,
+      balance: toNumber(roundToCents(accountTotal)),
+      balanceCurrency: target,
+    });
   }
 
   return {
