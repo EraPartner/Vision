@@ -2363,7 +2363,7 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-27 · error-humanizer (fe431ca) follow-up_
   - `UpdateNotification.tsx:78,103,135`, `AboutSection.tsx:87,110,136`, `BackupSection.tsx:127,171,189`, `useRestoreBackup.tsx:123,152` render `String(err)` from window.electronUpdater/electronBackup IPC bridges. Deliberately excluded from fe431ca (never HTTP; generic copy would swallow useful IPC detail). Wants its own small IPC humanizer.
 
-- [ ] **client.ts drops `retry_after` on 429 — the rate-limit toast can't say how long to wait** ⏬
+- [x] **client.ts drops `retry_after` on 429 — the rate-limit toast can't say how long to wait** ⏬ ✅ 2026-08-04 · 470b9e4 (done exactly as the finding prescribed: the count rides in `ApiClientError.details` as `{ retry_after }` and `apiErrorToMessage` renders the new `apiError.rateLimitedIn` with it. The transport's hardcoded English sentence is left in place — it is still never shown, and rewriting it would only relocate the hardcoded copy. Guarded beyond the finding's ask: a missing, zero, negative or non-numeric value falls back to the existing timing-free `apiError.rateLimited` rather than promising a wait it cannot substantiate, and fractional seconds round up. Key added to en+nl; nine new cases in the errorMessage suite cover the render, the rounding and each fallback shape. Frontend suite green 2281, typecheck/lint/validate-locales clean)
   - ↪ _from: Orchestration session 2026-07-27 · error-humanizer follow-up_
   - `client.ts:155-161` bakes retry seconds into a hardcoded English sentence that the mapper now correctly refuses to pass through, so the number is lost. Put `retry_after` into `ApiClientError.details` and render "…try again in {n} seconds" in `apiError.rateLimited`.
 
