@@ -17,6 +17,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { Money } from "@/components/shared/Money";
+import { RollingNumber } from "@/components/shared/RollingNumber";
+import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { useDebounce } from "@/hooks/useDebounce";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -50,8 +53,16 @@ export default function PortfolioForecastPage() {
   const [paths, setPaths] = useState(1000);
   const [targetValue, setTargetValue] = useState("");
 
-  const fmtMoney = (v: number | null | undefined) =>
-    v == null || isNaN(v) ? "—" : formatCurrency(v, currency, locale, 0);
+  // Stat-tile money: same currency/locale/0-decimals resolution the chart axis
+  // uses (formatCurrency(v, currency, locale, 0)), rendered with the Money
+  // micro-typography. Same null/NaN → "—" gap handling as before.
+  const moneyNode = (v: number | null | undefined) =>
+    v == null || isNaN(v) ? "—" : <Money amount={v} currency={currency} fractionDigits={0} />;
+  // Headline tile keeps the odometer it had when it took a plain string, with
+  // the Money treatment riding along inside it.
+  const fmtParts = useCurrencyPartsFormatter();
+  const moneyOdometer = (v: number | null | undefined) =>
+    v == null || isNaN(v) ? "—" : <RollingNumber parts={fmtParts(v, { decimals: 0 })} />;
   const fmtPct = (v: number | null | undefined, signed = false) =>
     v == null || isNaN(v) ? "—" : `${signed && v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
 
@@ -220,8 +231,8 @@ export default function PortfolioForecastPage() {
               icon={Wallet}
               title={t("research.forecast.projectedMedian")}
               loading={isFetching && !forecast}
-              value={fmtMoney(forecast?.projected?.p50)}
-              subtitle={forecast ? `${fmtMoney(forecast.projected?.p10)} – ${fmtMoney(forecast.projected?.p90)}` : undefined}
+              value={moneyOdometer(forecast?.projected?.p50)}
+              subtitle={forecast ? <>{moneyNode(forecast.projected?.p10)} – {moneyNode(forecast.projected?.p90)}</> : undefined}
             />
             <StatCard
               icon={TrendingUp}
@@ -242,7 +253,7 @@ export default function PortfolioForecastPage() {
               title={forecast?.targetValue ? t("research.forecast.probTarget") : t("research.forecast.probBelowInvested")}
               loading={isFetching && !forecast}
               value={fmtPct(forecast?.targetValue ? forecast?.probTarget : forecast?.probBelowInvested)}
-              subtitle={forecast?.targetValue ? fmtMoney(forecast.targetValue) : fmtMoney(forecast?.netInvested)}
+              subtitle={forecast?.targetValue ? moneyNode(forecast.targetValue) : moneyNode(forecast?.netInvested)}
             />
           </div>
 

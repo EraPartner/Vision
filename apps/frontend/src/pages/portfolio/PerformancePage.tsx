@@ -30,6 +30,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TrendHue } from "@/components/shared/TrendHue";
 import { CardSheen } from "@/components/shared/CardSheen";
+import { StatCard } from "@/components/dashboard/StatCard";
 
 const CHART_KEYS = {
     invested: 'invested',
@@ -266,26 +267,35 @@ export default function PerformancePage() {
                             fxFallbackNote: t('portfolio.fxFallbackNote'),
                         }}
                     />
-                    <CompactReturnCard
+                    <StatCard
+                        size="compact"
+                        className="lg:col-span-2 lg:row-span-1"
                         title={t('portfolio.totalReturn')}
                         value={`${overallMetrics.totalReturnPct >= 0 ? "+" : ""}${overallMetrics.totalReturnPct.toFixed(2)}%`}
-                        subtitle={formatCurrency(overallMetrics.totalGainLoss, defaultCurrency, locale)}
+                        subtitle={<Money amount={overallMetrics.totalGainLoss} currency={defaultCurrency} />}
                         icon={overallMetrics.totalReturnPct >= 0 ? TrendingUp : TrendingDown}
-                        trend={overallMetrics.totalReturnPct >= 0}
+                        trend={overallMetrics.totalReturnPct >= 0 ? "income" : "expense"}
+                        valueClassName={overallMetrics.totalReturnPct >= 0 ? "amount-gain" : "amount-loss"}
                     />
-                    <CompactReturnCard
+                    <StatCard
+                        size="compact"
+                        className="lg:col-span-2 lg:row-span-1"
                         title={t('portfolio.annualizedReturn')}
                         value={`${overallMetrics.annualizedReturn >= 0 ? "+" : ""}${overallMetrics.annualizedReturn.toFixed(2)}%`}
                         subtitle={t('performance.projectedYearly')}
                         icon={Activity}
-                        trend={overallMetrics.annualizedReturn >= 0}
+                        trend={overallMetrics.annualizedReturn >= 0 ? "income" : "expense"}
+                        valueClassName={overallMetrics.annualizedReturn >= 0 ? "amount-gain" : "amount-loss"}
                     />
-                    <CompactReturnCard
+                    <StatCard
+                        size="compact"
+                        className="lg:col-span-2 lg:row-span-1"
                         title={t('portfolio.realReturn')}
                         value={`${overallMetrics.realReturnPct >= 0 ? "+" : ""}${overallMetrics.realReturnPct.toFixed(2)}%`}
                         subtitle={t('performance.cumulativeInflation', { n: overallMetrics.cumulativeInflation.toFixed(1) })}
                         icon={Percent}
-                        trend={overallMetrics.realReturnPct >= 0}
+                        trend={overallMetrics.realReturnPct >= 0 ? "income" : "expense"}
+                        valueClassName={overallMetrics.realReturnPct >= 0 ? "amount-gain" : "amount-loss"}
                     />
                 </div>
             )}
@@ -386,36 +396,6 @@ export default function PerformancePage() {
 
             <PerformanceBreakdown heatmapData={heatmapData} breakdownSummary={breakdownSummary} />
         </div>
-    );
-}
-
-type IconType = React.ComponentType<{ className?: string }>;
-
-function CompactReturnCard({
-    title, value, subtitle, icon: Icon, trend,
-}: {
-    title: string; value: string; subtitle: string; icon: IconType; trend: boolean;
-}) {
-    const iconBg = trend
-        ? "bg-gradient-to-br from-gain/20 to-gain/10 text-gain"
-        : "bg-gradient-to-br from-loss/20 to-loss/10 text-loss";
-    return (
-        <Card
-            variant="interactive"
-            className="liquid-glass relative overflow-hidden border shadow-md lg:col-span-2 lg:row-span-1"
-        >
-            <TrendHue tone={trend ? "gain" : "loss"} />
-            <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
-                <div className="min-w-0">
-                    <p className="text-xs font-medium text-muted-foreground truncate">{title}</p>
-                    <div className={cn("text-xl font-bold leading-tight", trend ? "amount-gain" : "amount-loss")}>{value}</div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{subtitle}</p>
-                </div>
-                <div className={cn("h-9 w-9 shrink-0 rounded-xl flex items-center justify-center", iconBg, "shadow-sm")}>
-                    <Icon className="h-4 w-4" />
-                </div>
-            </CardContent>
-        </Card>
     );
 }
 
