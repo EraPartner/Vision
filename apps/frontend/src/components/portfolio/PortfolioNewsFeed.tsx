@@ -100,12 +100,21 @@ function NewsItem({ article, locale }: { article: MarketNewsArticle; locale: str
     ? formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true, locale })
     : null;
 
+  // A link `safeHref` rejects yields an inert, unfocusable anchor. Render a
+  // plain container for that case instead of a card that keeps the full hover
+  // treatment while doing nothing on click. Working links are unchanged.
+  const href = safeHref(article.link);
+  const linkProps = href
+    ? ({ href, target: "_blank", rel: "noopener noreferrer" } as const)
+    : {};
+  const Wrapper = href ? "a" : "div";
+
   return (
-    <a
-      href={safeHref(article.link)}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex gap-3 py-3 border-b border-border/50 last:border-0 group hover:bg-muted/50 -mx-2 px-2 rounded-md transition-colors"
+    <Wrapper
+      {...linkProps}
+      className={`flex gap-3 py-3 border-b border-border/50 last:border-0 -mx-2 px-2 rounded-md${
+        href ? " group hover:bg-muted/50 transition-colors" : ""
+      }`}
     >
       {article.thumbnail && (
         <RemoteNewsImage
@@ -116,9 +125,15 @@ function NewsItem({ article, locale }: { article: MarketNewsArticle; locale: str
         />
       )}
       <div className="flex-1 min-w-0">
-        <h4 className="text-sm font-medium text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+        <h4
+          className={`text-sm font-medium text-foreground leading-snug line-clamp-2${
+            href ? " group-hover:text-primary transition-colors" : ""
+          }`}
+        >
           {article.title}
-          <ExternalLink className="inline-block h-3 w-3 ml-1 opacity-0 group-hover:opacity-60 transition-opacity" />
+          {href && (
+            <ExternalLink className="inline-block h-3 w-3 ml-1 opacity-0 group-hover:opacity-60 transition-opacity" />
+          )}
         </h4>
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           <span className="text-xs text-muted-foreground">{article.publisher}</span>
@@ -138,6 +153,6 @@ function NewsItem({ article, locale }: { article: MarketNewsArticle; locale: str
           ))}
         </div>
       </div>
-    </a>
+    </Wrapper>
   );
 }

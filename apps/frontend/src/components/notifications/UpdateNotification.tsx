@@ -235,7 +235,9 @@ export function UpdateNotification() {
                     )}
 
                     <DialogFooter className="gap-2">
-                        {status.html_url && (
+                        {/* Gate on the resolved href: a rejected URL used to leave
+                            a fully enabled-looking button that did nothing. */}
+                        {safeHref(status.html_url) && (
                             <Button
                                 variant="ghost"
                                 size="sm"
