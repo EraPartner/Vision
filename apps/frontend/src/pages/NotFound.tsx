@@ -2,8 +2,9 @@ import { Link, useLocation } from "react-router";
 import { useEffect } from "react";
 import logger from "@/lib/logger";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { FileQuestion, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VisionMark } from "@/components/shared/VisionMark";
 
 const NotFound = () => {
     const location = useLocation();
@@ -17,7 +18,7 @@ const NotFound = () => {
         <div className="flex min-h-[70vh] items-center justify-center">
             <div className="text-center space-y-6 max-w-md mx-auto px-4">
                 <div className="inline-flex items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary mx-auto shadow-sm">
-                    <FileQuestion className="h-10 w-10" />
+                    <VisionMark className="h-10 w-10" />
                 </div>
                 <div className="space-y-2">
                     <h1 className="text-6xl font-bold text-foreground tracking-tight">{t('notFound.title')}</h1>

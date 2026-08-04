@@ -1,0 +1,15 @@
+{
+  "name": "Vision",
+  "short_name": "Vision",
+  "description": "Track your spending, manage transactions, and take control of your personal finances with Vision",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#0E1315",
+  "background_color": "#0E1315",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}

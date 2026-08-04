@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { PanelLeftClose, Wallet } from "lucide-react";
+import { PanelLeftClose } from "lucide-react";
 import { m, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -31,6 +31,7 @@ import {
   WORKSPACE_ROOT_URLS,
 } from "@/lib/navigation";
 import { InsightsNavBadge } from "@/components/layout/InsightsNavBadge";
+import { VisionMark } from "@/components/shared/VisionMark";
 
 /**
  * The active-route accent rail as a shared layout element: framer-motion
@@ -104,7 +105,7 @@ export function AppSidebar() {
             aria-label={t('aria.toggleSidebar')}
             className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-300 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Wallet className="h-4 w-4 text-primary-foreground" />
+            <VisionMark className="h-4 w-4 text-primary-foreground" />
           </button>
           {!collapsed && (
             <>

@@ -14,6 +14,7 @@ import {
     LayoutDashboard,
 } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
+import { VisionMark } from "@/components/shared/VisionMark";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -236,9 +237,9 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                                <Wallet className="h-4 w-4 text-primary-foreground" />
+                                <VisionMark className="h-4 w-4 text-primary-foreground" />
                             </div>
-                            <span className="font-bold text-foreground">Vision</span>
+                            <span className="font-display font-semibold tracking-tight text-foreground">Vision</span>
                         </div>
                         <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('aria.close')} onClick={onComplete}>
                             <X className="h-4 w-4" />
