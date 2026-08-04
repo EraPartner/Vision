@@ -641,7 +641,13 @@ function upsertEnvKey(contents, key, value) {
  * @returns {Promise<boolean>} true when the pin was written
  */
 async function pinImageDigest(workDir, digest) {
-  if (!/^sha256:[0-9a-f]{64}$/.test(String(digest || ''))) return false;
+  // Validate and rebuild in one step: `reference` is constructed here from the
+  // captured hex rather than by interpolating the caller's string, so the value
+  // that reaches the file is bounded to `@sha256:` + 64 characters of [0-9a-f]
+  // by construction. Anything else returns before any file is touched.
+  const match = /^sha256:([0-9a-f]{64})$/.exec(String(digest || ''));
+  if (!match) return false;
+  const reference = `@sha256:${match[1]}`;
   const targets = [canonicalEnvPath(), path.join(workDir, '.env')];
   const seen = new Set();
   let wrote = false;
@@ -651,8 +657,14 @@ async function pinImageDigest(workDir, digest) {
     seen.add(resolved);
     const current = await fs.promises.readFile(resolved, 'utf8').catch(() => null);
     if (current === null) continue;
-    const updated = upsertEnvKey(current, 'APP_IMAGE_REF', `@${digest}`);
+    const updated = upsertEnvKey(current, 'APP_IMAGE_REF', reference);
     if (updated === current) { wrote = true; continue; }
+    // codeql[js/http-to-file-access]: the digest originates from the GitHub
+    // release API, but it is not written through — it is matched against
+    // ^sha256:[0-9a-f]{64}$ above and the written value is rebuilt from the
+    // capture group, so no network-supplied text can reach the file. The target
+    // is the app's own 0600 .env, and this pin is what lets the stack run an
+    // immutable image instead of a mutable tag.
     await fs.promises.writeFile(resolved, updated, { encoding: 'utf8', mode: 0o600 });
     wrote = true;
   }
