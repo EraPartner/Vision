@@ -15,10 +15,16 @@ services:
     # Postgres uses /dev/shm for parallel query workers and large sorts/hash
     # joins; Docker's 64mb default is easily exhausted. 256mb is a safe bump.
     shm_size: 256mb
-    env_file: .env
+    # No `env_file: .env` here on purpose: the db container needs exactly one
+    # secret, and inheriting the whole file would also hand it the app's API
+    # keys, ADMIN_AUTH_TOKEN and DATABASE_URL for no reason. POSTGRES_PASSWORD
+    # still comes from the same .env — Compose reads it for interpolation — it
+    # is just passed on its own. Keep the app service's env_file.
     environment:
       POSTGRES_USER: ftm_user
       POSTGRES_DB: financial_transactions
+      # Superuser password for first init (ignored once the volume exists).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
@@ -36,9 +42,16 @@ services:
 
   app:
     # CI pushes ghcr.io/erapartner/vision:<semver> and :latest on every release tag.
-    # Electron sets APP_IMAGE_TAG to the exact version tag so `docker compose pull`
-    # fetches the correct image when updating.
-    image: ghcr.io/erapartner/vision:${APP_IMAGE_TAG:-latest}
+    # APP_IMAGE_REF is the reference SUFFIX, so it can carry either form:
+    #   @sha256:…  — an immutable digest, written into .env by the Electron
+    #                updater from the digest the GitHub release published
+    #   :1.2.3     — a plain tag, for manual pinning
+    # Unset falls back to :latest, which is what every install ran before the
+    # digest pin existed and what a fresh install runs until its first update.
+    # A tag is mutable: the registry can repoint it at different content. The
+    # digest is not, and it reaches the app over the GitHub API rather than from
+    # the registry itself, so a compromised registry alone cannot swap the image.
+    image: ghcr.io/erapartner/vision${APP_IMAGE_REF:-:latest}
     pull_policy: missing
     restart: unless-stopped
     logging:

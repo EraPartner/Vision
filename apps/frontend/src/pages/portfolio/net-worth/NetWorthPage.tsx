@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
@@ -129,7 +130,7 @@ export default function NetWorthPage() {
             <Wallet className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-1">{t('networth.unableToLoad')}</h3>
             <p className="text-muted-foreground text-sm">
-              {error instanceof Error ? error.message : t('networth.tryAgain')}
+              {apiErrorToMessage(error, t)}
             </p>
           </CardContent>
         </Card>

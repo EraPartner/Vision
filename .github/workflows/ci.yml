@@ -449,6 +449,94 @@ jobs:
           json-final-path: apps/node-backend/coverage/coverage-final.json
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Branch protection — Dependabot auto-merge (auto-merge.yml) lands a PR as soon
+  # as the *required* checks pass, so that automation is only ever as safe as the
+  # ruleset's required-check list. Nothing in this repo asserted that list, which
+  # meant a rename or removal server-side would silently widen what can
+  # auto-merge, with no diff to review and no failing job.
+  #
+  # This reads the rules that actually apply to the default branch and fails if
+  # our gates are not among the required checks. It queries the per-branch
+  # `rules` endpoint rather than `rulesets` on purpose: `rules` answers "what
+  # applies to this branch" and is readable with the workflow's own token, where
+  # the rulesets admin endpoint is not.
+  #
+  # Deliberately NOT wired into `ci-complete`: it reports on every PR but does
+  # not gate merges, so a false positive cannot block the queue while it beds in.
+  # Promote it once it has a track record.
+  # ─────────────────────────────────────────────────────────────────────────────
+  verify-branch-protection:
+    name: Verify Branch Protection
+    needs: [changes]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Assert the required-check list still names our gates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # Two separate mechanisms, asserted separately because that is how this
+          # repo actually enforces them:
+          #   • "CI Complete" is the aggregate status check the ruleset requires.
+          #   • CodeQL is NOT a required status check — it is enforced by the
+          #     ruleset's dedicated `code_scanning` rule, which gates on alert
+          #     severity rather than on the analysis job's check run.
+          EXPECTED_CHECKS=$'CI Complete'
+          EXPECTED_SCANNERS=$'CodeQL'
+
+          if ! RULES=$(gh api "repos/${REPO}/rules/branches/${DEFAULT_BRANCH}" 2>/dev/null); then
+            echo "::warning title=Branch protection unverified::Could not read branch rules for ${DEFAULT_BRANCH} (token access or API availability). Skipped rather than failed — verify by hand."
+            exit 0
+          fi
+
+          echo "Rule types active on ${DEFAULT_BRANCH}:"
+          echo "$RULES" | jq -r '.[].type' | sort -u | sed 's/^/  - /'
+
+          CONTEXTS=$(echo "$RULES" | jq -r '
+            .[] | select(.type == "required_status_checks")
+                | .parameters.required_status_checks[]?.context' | sort -u)
+          SCANNERS=$(echo "$RULES" | jq -r '
+            .[] | select(.type == "code_scanning")
+                | .parameters.code_scanning_tools[]?.tool' | sort -u)
+
+          echo "Required status checks:"
+          if [ -z "$CONTEXTS" ]; then echo "  (none)"; else echo "$CONTEXTS" | sed 's/^/  - /'; fi
+          echo "Code-scanning tools gated by the ruleset:"
+          if [ -z "$SCANNERS" ]; then echo "  (none)"; else echo "$SCANNERS" | sed 's/^/  - /'; fi
+
+          MISSING=0
+          while IFS= read -r want; do
+            [ -z "$want" ] && continue
+            if ! echo "$CONTEXTS" | grep -Fxq "$want"; then
+              echo "MISSING required status check: '${want}'"
+              MISSING=1
+            fi
+          done <<< "$EXPECTED_CHECKS"
+          while IFS= read -r want; do
+            [ -z "$want" ] && continue
+            if ! echo "$SCANNERS" | grep -Fxq "$want"; then
+              echo "MISSING code-scanning gate: '${want}'"
+              MISSING=1
+            fi
+          done <<< "$EXPECTED_SCANNERS"
+
+          if [ "$MISSING" = "1" ]; then
+            echo
+            echo "The ruleset for '${DEFAULT_BRANCH}' no longer enforces a gate this repo relies on."
+            echo "Dependabot auto-merge lands patch/minor PRs as soon as the *required* gates pass,"
+            echo "so anything missing here no longer blocks a merge."
+            echo "Fix the ruleset in repository settings, or update EXPECTED_CHECKS /"
+            echo "EXPECTED_SCANNERS above if something was renamed deliberately."
+            exit 1
+          fi
+          echo "Branch protection OK — every expected gate is enforced."
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Compose sync — named volumes in docker-compose.yml must match the embedded
   # packaging/electron/resources/docker-compose.yml. Divergence caused the
   # v1.0.2 data-wipe bug; catch it early in CI, not just at release time.

@@ -190,7 +190,12 @@ export default function PlannedPaymentsPage() {
       header: t('plannedPage.col.payment'),
       editable: false,
       minWidth: 180,
-      render: (row: TableRow) => (
+      render: (row: TableRow) => {
+        // Gate on the resolved href, not on `row.url`: a URL safeHref rejects
+        // used to still render this icon with its "Open related link" tooltip
+        // and hover colour, pointing at nothing.
+        const rowHref = safeHref(row.url);
+        return (
         <div className="flex flex-col gap-0.5">
           <div className={cn("font-medium flex items-center gap-2", !row.is_active ? "text-muted-foreground line-through" :
             row.is_executed ? "text-muted-foreground line-through" :
@@ -199,8 +204,8 @@ export default function PlannedPaymentsPage() {
               {row.is_loan && (
                 <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{t('plannedPage.loanBadge')}</Badge>
               )}
-              {row.url && (
-                <a href={safeHref(row.url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('plannedPage.openLink')} className="text-muted-foreground hover:text-primary">
+              {rowHref && (
+                <a href={rowHref} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('plannedPage.openLink')} className="text-muted-foreground hover:text-primary">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-1.414 1.414a4 4 0 01-5.656-5.656l1.414-1.414" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7h6v6" />
@@ -213,7 +218,8 @@ export default function PlannedPaymentsPage() {
             <span className="text-xs text-muted-foreground">→ {row.recipient}</span>
           )}
         </div>
-      ),
+        );
+      },
     },
     {
       key: "amount",

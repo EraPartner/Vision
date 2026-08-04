@@ -49,7 +49,7 @@ describe("ImportReviewPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows error message and Back to Import button when preview API fails", async () => {
+    it("shows generic server copy and Back to Import button when preview API fails", async () => {
         const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
@@ -59,10 +59,13 @@ describe("ImportReviewPage (integration)", () => {
 
         renderReviewPage();
 
-        // apiRequest retries on 500 — needs extended timeout
+        // 5xx text is generated, never authored for a user, so the humanizer
+        // swallows it — this used to assert the raw backend string rendered.
+        // apiRequest retries on 500, hence the extended timeout.
         expect(
-            await screen.findByText(/preview unavailable/i, {}, { timeout: 5000 }),
+            await screen.findByText(/server ran into a problem/i, {}, { timeout: 5000 }),
         ).toBeInTheDocument();
+        expect(screen.queryByText(/preview unavailable/i)).not.toBeInTheDocument();
         expect(
             await screen.findByRole("button", { name: /back to import/i }),
         ).toBeInTheDocument();

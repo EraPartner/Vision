@@ -114,7 +114,9 @@ fi
 # ── Electron dependencies ─────────────────────────────────────────────────────
 echo "==> Installing Electron dependencies..."
 cd "$REPO_PATH/packaging/electron"
-bun install
+# --frozen-lockfile: build the .app from the committed bun.lock, so what a user
+# installs matches what was tested rather than re-resolving against package.json.
+bun install --frozen-lockfile
 
 # ── Build .app ────────────────────────────────────────────────────────────────
 echo "==> Building Vision.app (this takes a minute)..."

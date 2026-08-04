@@ -253,6 +253,48 @@ async function fetchUrlBody(url) {
   return await res.text();
 }
 
+// ── Container image digest (supply chain) ────────────────────────────────────
+// The desktop stack pulls ghcr.io/erapartner/vision by TAG, which a registry can
+// repoint at any time. The release pipeline publishes the digest of the image it
+// actually pushed as a release asset, so the desktop app can pin to immutable
+// content instead. The digest arrives over the GitHub API — a different system
+// from the registry — so a compromised registry alone cannot substitute an image.
+const IMAGE_METADATA_ASSET = 'docker-image-tag.txt';
+
+// Anchored and length-bounded on purpose: this value is written into .env and
+// from there into the compose `image:` reference, so anything other than an
+// exact sha256 digest must be rejected rather than interpolated.
+const IMAGE_DIGEST_PATTERN = /^digest=(sha256:[0-9a-f]{64})\s*$/m;
+
+function pickImageMetadataAsset(release) {
+  const assets = Array.isArray(release?.assets) ? release.assets : [];
+  return assets.find((a) => (a?.name || '').toLowerCase() === IMAGE_METADATA_ASSET) || null;
+}
+
+/**
+ * Resolve the image digest published alongside the latest release.
+ *
+ * Returns `null` for every failure mode — no release, no asset (every release
+ * published before the pipeline started emitting it), a malformed body, or a
+ * network error. Callers must treat null as "keep the reference you already
+ * have", so a lookup failure never blocks an update or changes what runs.
+ *
+ * @returns {Promise<string|null>} e.g. `sha256:abc…` (64 hex chars) or null
+ */
+async function resolveReleaseImageDigest() {
+  try {
+    const release = await readGitHubRelease();
+    const asset = pickImageMetadataAsset(release);
+    if (!asset?.browser_download_url) return null;
+    const body = await fetchUrlBody(asset.browser_download_url);
+    const match = IMAGE_DIGEST_PATTERN.exec(body);
+    return match ? match[1] : null;
+  } catch (err) {
+    console.warn('Image digest lookup failed (non-fatal):', err?.message || err);
+    return null;
+  }
+}
+
 function computeFileSha256(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -515,4 +557,5 @@ module.exports = {
   checkForShellUpdate,
   installPreparedShellUpdate,
   setupManualShellUpdater,
+  resolveReleaseImageDigest,
 };

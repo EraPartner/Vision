@@ -122,6 +122,30 @@ function quoteIdent(name) {
 }
 
 /**
+ * Resolve a caller-supplied identifier to the catalog's OWN copy of that name.
+ *
+ * Every identifier that reaches SQL text goes through here first, so the string
+ * that gets interpolated always originates from pg's catalog (listUserTables /
+ * information_schema) rather than from the request — the request value is only
+ * ever used as a lookup key. That is stricter than validate-then-use-the-input:
+ * it holds by construction even if a membership check upstream is later
+ * loosened, and it is what makes the safety legible to static taint analysis,
+ * which cannot see a `Set.has()` test as a sanitizer and therefore reports the
+ * read query below as a high-severity injection sink.
+ *
+ * @param {unknown} name
+ * @param {Iterable<string>} allowed catalog-derived names
+ * @returns {string|null} the catalog's string, or null when there is no match
+ */
+function resolveIdent(name, allowed) {
+  if (typeof name !== 'string' || name.length === 0) return null;
+  for (const candidate of allowed) {
+    if (candidate === name) return candidate;
+  }
+  return null;
+}
+
+/**
  * @param {unknown} value
  * @param {number} fallback
  * @param {number} min
@@ -160,16 +184,17 @@ async function listUserTables() {
 
 /**
  * @param {unknown} table
- * @returns {Promise<void>}
+ * @returns {Promise<string>} the catalog's own copy of the table name
  */
-async function assertEditableTable(table) {
+async function resolveEditableTable(table) {
   if (typeof table !== 'string' || table.length === 0) {
     throw new ValidationError('Table name is required');
   }
-  const allowed = await listUserTables();
-  if (!allowed.has(table)) {
+  const resolved = resolveIdent(table, await listUserTables());
+  if (resolved === null) {
     throw new NotFoundError(`Unknown table: ${table}`);
   }
+  return resolved;
 }
 
 // ── Introspection ───────────────────────────────────────────────────────────
@@ -180,10 +205,13 @@ async function assertEditableTable(table) {
  * @returns {Promise<TableMeta>}
  */
 export async function getTableMeta(table) {
-  await assertEditableTable(table);
+  // `safeTable` is the catalog's string, not the caller's — see resolveIdent.
+  // Everything downstream (meta.table, and through it every quoteIdent call in
+  // this module) is built from it.
+  const safeTable = await resolveEditableTable(table);
 
   const now = Date.now();
-  const cached = tableMetaCache.get(table);
+  const cached = tableMetaCache.get(safeTable);
   if (cached && cached.expiresAt > now) return cached.value;
 
   const [colsRes, pkRes] = await Promise.all([
@@ -193,7 +221,7 @@ export async function getTableMeta(table) {
          FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = $1
         ORDER BY ordinal_position`,
-      [table],
+      [safeTable],
     ),
     query(
       `SELECT a.attname AS column_name
@@ -203,7 +231,7 @@ export async function getTableMeta(table) {
          JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
         WHERE n.nspname = 'public' AND c.relname = $1 AND i.indisprimary
         ORDER BY array_position(i.indkey, a.attnum)`,
-      [table],
+      [safeTable],
     ),
   ]);
 
@@ -223,11 +251,11 @@ export async function getTableMeta(table) {
   });
 
   const meta = {
-    table,
+    table: safeTable,
     columns,
     primaryKey: (/** @type {{ column_name: string }[]} */ (pkRes.rows)).map((r) => r.column_name),
   };
-  tableMetaCache.set(table, { value: meta, expiresAt: now + META_TTL_MS });
+  tableMetaCache.set(safeTable, { value: meta, expiresAt: now + META_TTL_MS });
   return meta;
 }
 
@@ -240,14 +268,15 @@ export async function getTableMeta(table) {
  * @returns {string}
  */
 function buildFilterFragment(filter, params, columnNames) {
-  if (!columnNames.has(filter.column)) {
+  const column = resolveIdent(filter.column, columnNames);
+  if (column === null) {
     throw new ValidationError(`Unknown filter column: ${filter.column}`);
   }
   const op = filter.op ?? 'eq';
   if (!FILTER_OPS.has(op)) {
     throw new ValidationError(`Unknown filter operator: ${op}`);
   }
-  const col = quoteIdent(filter.column);
+  const col = quoteIdent(column);
   switch (op) {
     case 'isnull':
       return `${col} IS NULL`;
@@ -284,7 +313,7 @@ function buildFilterFragment(filter, params, columnNames) {
  *          the raw-WHERE escape hatch was removed.
  */
 export async function readRows(table, opts = {}) {
-  const { columns, primaryKey } = await getTableMeta(table);
+  const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
   const columnNames = new Set(columns.map((c) => c.name));
 
   const limit = clampInt(opts.limit, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
@@ -309,16 +338,17 @@ export async function readRows(table, opts = {}) {
 
   let orderSql = '';
   if (opts.orderBy !== undefined && String(opts.orderBy) !== '') {
-    if (!columnNames.has(opts.orderBy)) {
+    const orderCol = resolveIdent(opts.orderBy, columnNames);
+    if (orderCol === null) {
       throw new ValidationError(`Unknown sort column: ${opts.orderBy}`);
     }
     const dir = String(opts.dir).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-    orderSql = `ORDER BY ${quoteIdent(opts.orderBy)} ${dir}`;
+    orderSql = `ORDER BY ${quoteIdent(orderCol)} ${dir}`;
   } else if (primaryKey.length) {
     orderSql = `ORDER BY ${primaryKey.map(quoteIdent).join(', ')}`;
   }
 
-  const tbl = quoteIdent(table);
+  const tbl = quoteIdent(safeTable);
   // xmin (the row version) rides along as a hidden optimistic-concurrency token.
   const dataSql = `SELECT *, xmin::text AS __xmin FROM ${tbl} ${whereSql} ${orderSql} LIMIT ${limit} OFFSET ${offset}`;
   const countSql = `SELECT count(*)::bigint AS total FROM ${tbl} ${whereSql}`;
@@ -332,7 +362,7 @@ export async function readRows(table, opts = {}) {
     const countRes = await client.query(countSql, params);
     await client.query('COMMIT');
     return {
-      table,
+      table: safeTable,
       columns,
       primaryKey,
       rows: dataRes.rows,
@@ -384,7 +414,7 @@ function normalizeWrite(value) {
  * Used both for dry-run previews and for execution, so the SQL shown to the
  * user is exactly what runs.
  *
- * @param {string} table
+ * @param {string} table must already be catalog-resolved (resolveEditableTable)
  * @param {Change} change
  * @param {MutationCtx} ctx
  * @returns {{ sql: string, params: unknown[] }}
@@ -414,7 +444,7 @@ function buildMutationSql(table, change, ctx) {
     }
     const params = cols.map((c) => normalizeWrite(change.values[c]));
     const placeholders = cols.map((_, i) => `$${i + 1}`);
-    const sql = `INSERT INTO ${tbl} (${cols.map(quoteIdent).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+    const sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(ctx.colMeta.get(c).name)).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
     return { sql, params };
   }
 
@@ -433,7 +463,7 @@ function buildMutationSql(table, change, ctx) {
     const params = [];
     const assigns = cols.map((c) => {
       params.push(normalizeWrite(change.set[c]));
-      return `${quoteIdent(c)} = $${params.length}`;
+      return `${quoteIdent(ctx.colMeta.get(c).name)} = $${params.length}`;
     });
     const where = ctx.primaryKey.map((k) => {
       params.push(change.pk[k]);
@@ -493,7 +523,7 @@ function pickPk(row, primaryKey) {
 
 /**
  * @param {QueryRunner} client
- * @param {string} table
+ * @param {string} table must already be catalog-resolved (resolveEditableTable)
  * @param {Change} change
  * @param {MutationCtx} ctx
  * @returns {Promise<{ op: string, after?: Record<string, unknown>, audit: AuditEntry }>}
@@ -573,7 +603,7 @@ async function writeAuditRows(client, audit) {
  * @param {{dryRun?:boolean}} [opts]
  */
 export async function applyMutations(table, changes, { dryRun = false } = {}) {
-  const { columns, primaryKey } = await getTableMeta(table);
+  const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
   if (!primaryKey.length) {
     throw new ValidationError(`Table "${table}" has no primary key and cannot be edited`);
   }
@@ -587,7 +617,7 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
   const statements = changes.map((change, index) => {
     const ctx = { colMeta, primaryKey, index };
     validateChange(change, ctx);
-    const { sql, params } = buildMutationSql(table, change, ctx);
+    const { sql, params } = buildMutationSql(safeTable, change, ctx);
     return { op: change.op, sql, params, preview: renderPreview(sql, params) };
   });
 
@@ -606,7 +636,7 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
     const results = [];
     for (let index = 0; index < changes.length; index++) {
       const ctx = { colMeta, primaryKey, index };
-      const result = await applyOne(client, table, changes[index], ctx);
+      const result = await applyOne(client, safeTable, changes[index], ctx);
       results.push({ op: result.op, after: result.after });
       audit.push(result.audit);
     }
@@ -619,7 +649,7 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
       logger.info('db-editor mutation committed', { table: a.table, op: a.op, pk: a.pk });
     }
 
-    const refreshed = MATVIEW_BASE_TABLES.has(table);
+    const refreshed = MATVIEW_BASE_TABLES.has(safeTable);
     if (refreshed) scheduleAggregationRefresh();
 
     return { dryRun: false, applied: results.length, results, refreshScheduled: refreshed };

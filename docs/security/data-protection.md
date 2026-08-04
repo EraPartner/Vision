@@ -277,6 +277,45 @@ Sensitive configuration via environment variables only:
 
 Never stored in source code or committed to git.
 
+### Provider API Keys Are Stored in Plaintext (Accepted Risk)
+
+`provider_api_keys.api_key` (migration 0043) is a plain `TEXT` column, even
+though the `pgcrypto` extension has been available since the baseline migration
+(`0001`). The table is in `BACKUP_COVERED_TABLES`, so Settings-managed research
+provider keys appear in the clear in every database dump and in every
+**unencrypted** backup bundle.
+
+**Why this is accepted rather than fixed:**
+
+- The same class of secret already lives in plaintext in `.env` — provider keys
+  set by environment variable, `DATABASE_URL` with the database password, and
+  `ADMIN_AUTH_TOKEN`. `pgp_sym_encrypt` would need its key from that same file,
+  so anyone who can read the ciphertext can almost always read the key too. It
+  moves the secret, it does not protect it.
+- The threat it would actually address — an attacker who reads the database or a
+  dump but *not* the host filesystem — is narrow for a single-user, local-first
+  deployment where the database and `.env` sit on the same machine.
+- Encrypting the column adds a real failure mode: a backup restored onto a fresh
+  install without the original key would silently produce unusable provider keys,
+  with no signal until an API call fails.
+- Anything in the database that an attacker would want is already there in the
+  clear — the transaction ledger is the sensitive asset, not the vendor keys.
+
+**Compensating controls:**
+
+- Backup bundles support AES-256-GCM encryption (see *Backup Encryption* below);
+  use it if backups leave the machine.
+- Provider keys are per-vendor, revocable at the vendor, and grant no access to
+  Vision's own data.
+- The database role the runtime pool uses can be a non-superuser (`ftm_app`); see
+  `.env.example`.
+
+**What would change this decision:** multi-user support, a hosted/shared
+deployment, or storing a secret whose compromise is not independently revocable.
+At that point the fix is a new migration adding an encrypted column, a backfill,
+and a drop of the old one — with a documented key-recovery story for restores,
+which is the part that must be designed first.
+
 ### Error Information Disclosure
 
 Production error responses suppress stack traces and internal details:
@@ -530,7 +569,7 @@ Homebrew installation script now prevents pipe-to-bash vulnerabilities:
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Authentication | Planned | Multi-user support with auth |
-| Encryption at rest | Planned | Database encryption |
+| Encryption at rest | Planned | Database encryption (would subsume the plaintext `provider_api_keys` risk accepted above) |
 | API authentication | Planned | Token-based API auth |
 | Audit logging | Planned | Track all data modifications |
 

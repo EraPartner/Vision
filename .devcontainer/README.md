@@ -14,7 +14,7 @@ Docker-in-Docker.
 | Frontend (Vite) | `bun run dev` | `8080` published to `127.0.0.1` |
 | Alembic migrations | Python venv at `./venv` | — |
 | GitHub CLI (`gh`) | apt | — |
-| Claude Code | Installed via the official `claude-code` devcontainer feature | — |
+| Claude Code | npm, pinned + SHA256-verified in `Dockerfile` (not the devcontainer feature) | — |
 
 The base image is plain `debian:bookworm-slim`. The container user is
 `dev` (UID 1000).
@@ -74,17 +74,22 @@ Egress is enforced in two layers by the root entrypoint on every start:
 2. **`iptables` egress lock**: only the `proxy` UID may originate
    outbound packets; everything else must use the proxy or be dropped.
    IPv6 is default-deny; denied egress is rate-limited-logged
-   (`dmesg | grep vision-deny`).
+   (`dmesg | grep egress-deny`).
 
-Allowlist (in `squid.conf`): Anthropic + Claude Code, `registry.npmjs.org`,
-GitHub, PyPI, Debian/PostgreSQL apt, Yahoo Finance, `*.visualstudio.com`.
+Allowlist (in `allowlist.txt`, copied to `/etc/squid/allowlist.txt`; `squid.conf`
+only *references* it): Anthropic + Claude Code, `registry.npmjs.org`, GitHub,
+PyPI, Yahoo Finance, `*.visualstudio.com`. **No Debian/PostgreSQL apt hosts are
+allowlisted** — `apt-get` does not work inside the container, which is why the
+Playwright system-deps install fails here (see Known limitations).
 
 > **Everything routes through the proxy.** `HTTP(S)_PROXY` is set, and
 > `NODE_USE_ENV_PROXY=1` makes Node ≥24's global `fetch` honor it too — so
 > `claude`, `bun`, `npm`, `git`, `gh`, `pip`, and app `fetch` all egress via
 > squid. The backend's yahoo-finance calls **work inside the container** now
-> (those hosts are allowlisted). To change the allowlist, edit `squid.conf`
-> and **rebuild** (it's baked into the image).
+> (those hosts are allowlisted). To change the allowlist, edit `allowlist.txt`
+> and **rebuild** (it's baked into the image by `COPY allowlist.txt
+> /etc/squid/allowlist.txt`). The launcher warns when a running container's copy
+> has drifted from the file in the workspace.
 
 squid is supervised by the entrypoint: if it crashes, it's restarted
 (egress stays denied while down — fail-closed).
@@ -97,14 +102,14 @@ on top of the sandbox.
 **Observability.** Blocked egress shows as a TLS/cert error or
 `CONNECT 403` — that's the policy denying it. The definitive log is
 `/var/log/squid/access.log` (`dev`-readable; `TCP_DENIED`/`NONE` = blocked).
-`dmesg | grep vision-deny` catches proxy-bypass attempts but needs root.
+`dmesg | grep egress-deny` catches proxy-bypass attempts but needs root.
 Run `.devcontainer/bin/doctor` for a one-shot readiness check.
 
 **Not covered:** WebSearch/WebFetch run Anthropic-side, not through the
 proxy. ECH (encrypted SNI) destinations fail closed (no SNI → terminated).
 
 **Caps:** drops all Linux caps, re-adds only `NET_ADMIN, CHOWN,
-DAC_OVERRIDE, FOWNER, SETUID, SETGID, SETPCAP` (entrypoint iptables/perms/
+DAC_OVERRIDE, FOWNER, SETUID, SETGID` (entrypoint iptables/perms/
 Postgres + squid privilege-drops). Add to `runArgs` if new tooling needs more.
 
 **Prereqs / portability:** The container is allocated 4 GB RAM (`-m 4g`).
@@ -163,17 +168,21 @@ them inside the container if you want them active there.
 Pull-on-start is safe under concurrency: it only reads from the stage, so
 there's no write race against a host-side claude session.
 
-### Push on session exit (automatic)
+### Push on session exit (opt-in)
 
-The reverse (container → host) now runs automatically. The `vision-claude`
+The reverse (container → host) is **off by default** — set `VISION_AUTOSYNC=1`
+for the session to enable it. Left unset, config Claude changes inside the
+container stays in the container and is lost when it goes away; run
+`vision-claude-sync push` by hand to keep it. The `vision-claude`
 wrapper no longer `exec`s the session — it stays the parent process and, on
 **session exit** (normal or Ctrl-C), runs `vision-claude-sync push` against the
 exact container it launched. So if Claude inside the container modifies its own
 config — adds an agent, edits a rule, registers an MCP, writes a memory — those
 changes land back on the host with no manual step. Pushing only after the
 session ends keeps a single writer, so it can't race a live host-side claude on
-`~/.claude.json`. Disable with `VISION_AUTOSYNC=0`; `vision-claude-sync push`
-remains the manual fallback (e.g. after a crash, or to retry a failed auto-push).
+`~/.claude.json`. `vision-claude-sync push` remains the manual fallback — and the
+only path at all unless you opted in (e.g. after a crash, or to retry a failed
+auto-push).
 
 **Files excluded from sync** (volatile runtime state, not portable):
 `.credentials.json`, `backups/`, `cache/`, `paste-cache/`, `daemon.log`,
@@ -214,8 +223,10 @@ security add-generic-password \
 That's it. The `vision-claude` wrapper now does
 `security find-generic-password -s vision-claude-code-token -w` on every
 invocation and forwards the result to the container via
-`container exec -e CLAUDE_CODE_OAUTH_TOKEN=…`. No plaintext
-file, no fish universal var, no `.credentials.json` in `~/.claude`.
+`container exec -e CLAUDE_CODE_OAUTH_TOKEN` — the **name only**, so the token
+value is never part of a command line another process could read out of `ps`;
+the value travels in the launcher's own environment. No plaintext file, no fish
+universal var, no `.credentials.json` in `~/.claude`.
 
 **The Keychain "Always Allow" decision.** The first time `security` reads
 this entry, macOS will pop the standard Keychain prompt. Your choices:
@@ -270,16 +281,16 @@ set up.
 
 - **App `fetch` to non-allowlisted hosts** — works for allowlisted hosts
   via `NODE_USE_ENV_PROXY=1` (e.g. yahoo-finance reaches `*.finance.yahoo.com`
-  through the proxy); anything not in `squid.conf`'s allowlist is denied.
+  through the proxy); anything not in `allowlist.txt` is denied.
 - **Puppeteer (PDF rendering)** — Chromium isn't preinstalled. If you
   need PDF rendering in dev, run `bunx playwright install chromium --with-deps`
   once and set `PUPPETEER_EXECUTABLE_PATH`.
 - **Electron `.dmg` build (`bun run dist`)** — needs macOS native tools;
   run on the host, not in this container.
-- **Changing the egress allowlist** — edit `squid.conf` and rebuild
+- **Changing the egress allowlist** — edit `allowlist.txt` and rebuild
   (it's baked into the image, not read from the workspace).
-- **Host Ollama** — blocked; add the host's address to the `squid.conf`
-  allowlist and rebuild if you want it through.
+- **Host Ollama** — blocked; add the host's address to `allowlist.txt` and
+  rebuild if you want it through.
 
 ## Verified isolation + functionality
 

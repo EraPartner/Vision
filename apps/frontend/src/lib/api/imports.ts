@@ -3,6 +3,7 @@ import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from 
 import { postMultipartImport } from '@/lib/api/helpers';
 import { readSseStream } from '@/lib/api/sse';
 import type { ImportProgress, ImportResult, BatchListResponse, ImportPreviewResponse } from '@/lib/api/types';
+import { ImportCancelledError } from '@/lib/api/importCancelled';
 
 /**
  * Runtime guards for the import SSE streams (ZOD-10). Loose objects so the
@@ -135,7 +136,7 @@ export function importCSVWithProgress(
             };
         } catch (err) {
             if ((err as Error).name === 'AbortError') {
-                throw new Error('Import cancelled', { cause: err });
+                throw new ImportCancelledError({ cause: err });
             }
             throw err;
         }

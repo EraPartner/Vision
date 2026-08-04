@@ -6,6 +6,7 @@ import { readSseStream } from '@/lib/api/sse';
 import type { ImportProgress } from '@/lib/api/types';
 import type { AssetClass as AssetClassValue } from '@vision/types/assetClasses';
 import type { PortfolioTxnType as PortfolioTxnTypeValue } from '@vision/types/portfolioTxnTypes';
+import { ImportCancelledError } from '@/lib/api/importCancelled';
 
 /**
  * Runtime guards for the portfolio import SSE stream (ZOD-10); see the
@@ -225,7 +226,7 @@ export function importPortfolioCSVWithProgress(
       }
       return finalResult ?? { batch_id: 0, imported: 0, duplicates: 0, errors: 0, status: 'completed' };
     } catch (err) {
-      if ((err as Error).name === 'AbortError') throw new Error('Import cancelled', { cause: err });
+      if ((err as Error).name === 'AbortError') throw new ImportCancelledError({ cause: err });
       throw err;
     }
   })();

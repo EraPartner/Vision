@@ -16,6 +16,7 @@ import { apiClient } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
 import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
+import { electronErrorToMessage } from '@/lib/api/electronErrorMessage';
 
 type UpdateStatus = {
     up_to_date: boolean;
@@ -79,12 +80,12 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
             try {
                 const backupResult = await apiClient.preUpdateBackup();
                 if (backupResult && !backupResult.success) {
-                    toast.error(t('update.backupFailed'), { description: backupResult.error });
+                    toast.error(t('update.backupFailed'), { description: electronErrorToMessage(backupResult.error, t) });
                     setApplyPhase('idle');
                     return;
                 }
             } catch (err: unknown) {
-                const msg = (err as { message?: string })?.message ?? t('update.backupFailed');
+                const msg = electronErrorToMessage(err, t);
                 toast.error(t('update.backupFailed'), { description: msg });
                 setApplyPhase('idle');
                 return;
@@ -96,7 +97,7 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
             try {
                 const result = await apiClient.triggerDockerUpdate();
                 if (!result?.success) {
-                    toast.error(t('settings.app.updateFailed'), { description: result?.error });
+                    toast.error(t('settings.app.updateFailed'), { description: electronErrorToMessage(result?.error, t) });
                     setApplyPhase('idle');
                     return;
                 }
@@ -107,7 +108,7 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
                 });
                 setApplyPhase('done');
             } catch (err: unknown) {
-                const msg = (err as { message?: string })?.message ?? t('settings.app.updateFailedDesc');
+                const msg = electronErrorToMessage(err, t);
                 toast.error(t('settings.app.updateFailed'), { description: msg });
                 setApplyPhase('idle');
             }
@@ -130,7 +131,7 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
                 return;
             }
             if (!result.success) {
-                toast.error(t('settings.app.updateFailed'), { description: result.error });
+                toast.error(t('settings.app.updateFailed'), { description: electronErrorToMessage(result.error, t) });
                 setApplyPhase('idle');
                 return;
             }
@@ -140,7 +141,7 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
                 duration: 8000,
             });
         } catch (err: unknown) {
-            const msg = (err as { message?: string })?.message ?? t('settings.app.updateFailedDesc');
+            const msg = electronErrorToMessage(err, t);
             toast.error(t('settings.app.updateFailed'), { description: msg });
             setApplyPhase('idle');
         }
@@ -198,7 +199,10 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
                                 )}
                                 {updateStatus.error && <p className="mt-0.5 text-xs opacity-80">{updateStatus.error}</p>}
                             </div>
-                            {updateStatus.html_url && (
+                            {/* Gate on the resolved href: a rejected URL used to
+                                leave this icon rendered, hoverable and tooltipped,
+                                pointing at nothing. */}
+                            {safeHref(updateStatus.html_url) && (
                                 <a href={safeHref(updateStatus.html_url)} target="_blank" rel="noopener noreferrer" className="shrink-0 opacity-70 transition-opacity hover:opacity-100" title={t('update.releaseNotes')}>
                                     <ExternalLink className="h-3.5 w-3.5" />
                                 </a>

@@ -53,14 +53,21 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
     <div className="space-y-3">
       <div className="flex justify-end"><ProvenanceBadge meta={result?.meta} /></div>
       {articles.map((article) => {
+        // A rejected link yields an inert, unfocusable anchor — render a plain
+        // container for it rather than a row that keeps the hover treatment
+        // while doing nothing on click. Working links are unchanged.
         const href = safeHref(article.link);
+        const linkProps = href
+          ? ({ href, target: "_blank", rel: "noopener noreferrer" } as const)
+          : {};
+        const Wrapper = href ? "a" : "div";
         return (
-          <a
+          <Wrapper
             key={article.link}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex gap-3 p-2 -mx-2 rounded-md hover:bg-muted/70 transition-colors group"
+            {...linkProps}
+            className={`flex gap-3 p-2 -mx-2 rounded-md${
+              href ? " hover:bg-muted/70 transition-colors group" : ""
+            }`}
           >
             {article.thumbnail && (
               <RemoteNewsImage
@@ -71,7 +78,11 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
               />
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+              <p
+                className={`text-sm font-medium text-foreground line-clamp-2${
+                  href ? " group-hover:text-primary transition-colors" : ""
+                }`}
+              >
                 {article.title}
               </p>
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -82,10 +93,12 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
                     <span>{formatDateWithAppSettings(new Date(article.publishedAt), appSettings.dateFormat)}</span>
                   </>
                 )}
-                <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                {href && (
+                  <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
               </div>
             </div>
-          </a>
+          </Wrapper>
         );
       })}
     </div>
