@@ -894,6 +894,22 @@ describe("Phase F1: extended mutation contracts", () => {
         messages: z.array(z.unknown()),
     });
 
+    // Both CSV import routes answer with the same object on the auto-commit
+    // path — `buildImportResult(buildPipelineResult(...))`, node-backend
+    // routes/importRoutes.js:59-94. `status` is derived server-side from
+    // `errors`, so the vocabulary is closed.
+    const ImportCsvResultSchema = z.object({
+        total: z.number().int().nonnegative(),
+        imported: z.number().int().nonnegative(),
+        duplicates: z.number().int().nonnegative(),
+        errors: z.number().int().nonnegative(),
+        batch_id: z.number().int().positive(),
+        auto_linked_count: z.number().int().nonnegative(),
+        status: z.enum(["completed", "completed_with_errors"]),
+        error_message: z.string().nullable(),
+        links: z.array(LinkSchema),
+    });
+
     it.each<
         [
             string,
@@ -1126,6 +1142,22 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/planned-transactions/:id/execute",
             PlannedTransactionItemSchema,
+        ],
+        [
+            "POST /api/import/csv returns completed import result",
+            "POST",
+            "/api/import/csv",
+            {},
+            "POST /api/import/csv",
+            ImportCsvResultSchema,
+        ],
+        [
+            "POST /api/import/csv/custom returns completed import result",
+            "POST",
+            "/api/import/csv/custom",
+            {},
+            "POST /api/import/csv/custom",
+            ImportCsvResultSchema,
         ],
         [
             "POST /api/import/batches/:batchId/commit returns commit result",

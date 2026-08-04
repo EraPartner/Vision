@@ -175,6 +175,31 @@ export const ACCOUNT_STUB = {
 };
 
 /**
+ * Completed CSV import result — what `POST /api/import/csv` and
+ * `POST /api/import/csv/custom` actually put on the wire when the batch
+ * auto-commits: `buildImportResult(buildPipelineResult(...))`
+ * (node-backend/src/routes/importRoutes.js:59-94).
+ *
+ * `status` is derived by the backend, never sent as "queued": it is
+ * "completed_with_errors" when `errors > 0` and "completed" otherwise. The
+ * other outcome of these two routes is the 202 review path
+ * (`{ batch_id, requires_review: true, match_source_counts }`,
+ * `respondReviewRequired`); the default handler models the completed one, so a
+ * test that needs the review branch overrides it via `server.use(...)`.
+ */
+export const IMPORT_CSV_RESULT_STUB = {
+    total: 3,
+    imported: 2,
+    duplicates: 1,
+    errors: 0,
+    batch_id: 1,
+    auto_linked_count: 0,
+    status: "completed",
+    error_message: null,
+    links: [],
+};
+
+/**
  * Default handlers cover the chatty boot-time endpoints so any page can render
  * without crashing. Tests override per-flow handlers via `server.use(...)`.
  */
@@ -484,12 +509,8 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/categories/:id`, () => ok(CATEGORY_STUB)),
 
     // Imports
-    http.post(`${API_BASE}/api/import/csv`, () =>
-        ok({ batch_id: 1, rows: 0, status: "queued" }),
-    ),
-    http.post(`${API_BASE}/api/import/csv/custom`, () =>
-        ok({ batch_id: 1, rows: 0, status: "queued" }),
-    ),
+    http.post(`${API_BASE}/api/import/csv`, () => ok(IMPORT_CSV_RESULT_STUB)),
+    http.post(`${API_BASE}/api/import/csv/custom`, () => ok(IMPORT_CSV_RESULT_STUB)),
     http.post(`${API_BASE}/api/import/categories`, () =>
         ok({ message: "Imported", count: 0 }),
     ),
