@@ -22,7 +22,7 @@ import { generateLoanRepaymentSchedule } from '../services/calculations/loanSche
 import { isValidPattern } from '../lib/calculations/recurrence.js';
 import { executePlanned } from '../services/plannedExecutionService.js';
 import { getMatchSuggestions } from '../services/plannedMatchService.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { AppError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { parsePagination } from '../lib/pagination.js';
 
@@ -274,12 +274,30 @@ function parsePlannedBody(schema, body) {
   return result.data;
 }
 
-/** @param {import('../services/calculations/loanSchedule.js').LoanConfig} input */
+/**
+ * This wrapper used to be type-agnostic: every throw became
+ * `ValidationError('Invalid loan parameters: ' + err.message)`. Two faults.
+ *
+ *  1. The generator validates its own input and authors its own message
+ *     ("Invalid loan configuration: <enumerated reasons>", loanSchedule.js:106),
+ *     so re-wrapping it doubled the prefix on the wire — the client read
+ *     "Invalid loan parameters: Invalid loan configuration: …". A typed error
+ *     is already the right class, status and text: re-throw it untouched.
+ *  2. Worse, ANY other throw was relabelled as bad client input — an
+ *     arithmetic fault or outright bug in the schedule maths answered 400 and
+ *     logged at warn, i.e. blamed the caller and stayed out of the error logs.
+ *     Non-typed throws now surface as the 500 they are (the message is
+ *     production-sanitized by the error handler, and `cause` keeps the original
+ *     for the logs).
+ *
+ * @param {import('../services/calculations/loanSchedule.js').LoanConfig} input
+ */
 function generateLoanScheduleOrThrow(input) {
   try {
     return generateLoanRepaymentSchedule(input);
   } catch (err) {
-    throw new ValidationError(`Invalid loan parameters: ${err.message}`);
+    if (err instanceof AppError) throw err;
+    throw new AppError(`Loan schedule generation failed: ${err.message}`, { cause: err });
   }
 }
 
