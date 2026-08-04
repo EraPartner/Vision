@@ -123,6 +123,16 @@ describe.skipIf(!hasTestDatabase())('startup: materialized views are built after
     await runToCompletion(DB_MIGRATE_JS, childEnv);
 
     scratch = new pg.Pool({ connectionString: scratchUrl(), max: 4 });
+    // afterAll's `DROP DATABASE ... WITH (FORCE)` deliberately terminates whatever
+    // is still attached, so a 57P01 ("terminating connection due to administrator
+    // command") on these connections is expected teardown noise, not a result. It
+    // still has to be *listened* for: pg re-emits an idle client's error on the
+    // Pool, and an EventEmitter 'error' with no listener throws — which vitest
+    // reports as an uncaught exception and exits non-zero even when every test
+    // passed. Observed on CI 2026-08-04: 222 files / 3593 tests green, run failed.
+    // A connection error that matters still fails the run through the assertions
+    // that depend on it, so swallowing the event here hides nothing.
+    scratch.on('error', () => {});
     // A corpus the views actually aggregate — an empty MV would prove nothing
     // about the scan that made this finding.
     const { rows: [cat] } = await scratch.query(
@@ -144,6 +154,7 @@ describe.skipIf(!hasTestDatabase())('startup: materialized views are built after
     baseUrl = `http://127.0.0.1:${await freePort()}`;
     // Held across the boot: blocks CREATE MATERIALIZED VIEW, nothing pre-listen.
     locker = new pg.Client({ connectionString: scratchUrl() });
+    locker.on('error', () => {}); // same FORCE-drop termination, same reason
     await locker.connect();
     await locker.query('BEGIN');
     await locker.query('LOCK TABLE transactions IN ACCESS EXCLUSIVE MODE');
