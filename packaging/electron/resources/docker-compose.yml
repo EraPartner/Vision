@@ -15,10 +15,16 @@ services:
     # Postgres uses /dev/shm for parallel query workers and large sorts/hash
     # joins; Docker's 64mb default is easily exhausted. 256mb is a safe bump.
     shm_size: 256mb
-    env_file: .env
+    # No `env_file: .env` here on purpose: the db container needs exactly one
+    # secret, and inheriting the whole file would also hand it the app's API
+    # keys, ADMIN_AUTH_TOKEN and DATABASE_URL for no reason. POSTGRES_PASSWORD
+    # still comes from the same .env — Compose reads it for interpolation — it
+    # is just passed on its own. Keep the app service's env_file.
     environment:
       POSTGRES_USER: ftm_user
       POSTGRES_DB: financial_transactions
+      # Superuser password for first init (ignored once the volume exists).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
