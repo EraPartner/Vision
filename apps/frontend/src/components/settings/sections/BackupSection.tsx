@@ -13,6 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { apiClient } from '@/lib/api';
 import { useRestoreBackup } from '@/hooks/useRestoreBackup';
 import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
+import { electronErrorToMessage } from '@/lib/api/electronErrorMessage';
 
 type EncryptionStatus = {
     secureStorageAvailable: boolean;
@@ -121,10 +122,10 @@ export const BackupSection = memo(function BackupSection() {
                     toast.info(t('settings.backup.cleanupRemoved').replace('{count}', String(result.cleanupRemoved ?? 0)));
                 }
             } else {
-                toast.error(t('settings.backup.failed'), { description: result.error });
+                toast.error(t('settings.backup.failed'), { description: electronErrorToMessage(result.error, t) });
             }
         } catch (err: unknown) {
-            toast.error(t('settings.backup.failed'), { description: String(err) });
+            toast.error(t('settings.backup.failed'), { description: electronErrorToMessage(err, t) });
         } finally {
             setBackupRunning(false);
         }
@@ -150,7 +151,7 @@ export const BackupSection = memo(function BackupSection() {
                 return;
             }
             if (!result.success) {
-                toast.error(t('settings.backup.passphrase.saveFailed'), { description: result.error });
+                toast.error(t('settings.backup.passphrase.saveFailed'), { description: electronErrorToMessage(result.error, t) });
                 return;
             }
             await refreshEncryptionStatus();
@@ -168,7 +169,7 @@ export const BackupSection = memo(function BackupSection() {
                 } catch { /* ignore */ }
             }
         } catch (err: unknown) {
-            toast.error(t('settings.backup.passphrase.saveFailed'), { description: String(err) });
+            toast.error(t('settings.backup.passphrase.saveFailed'), { description: electronErrorToMessage(err, t) });
         } finally {
             setSavingBackupPassphrase(false);
         }
@@ -179,14 +180,14 @@ export const BackupSection = memo(function BackupSection() {
         try {
             const result = await apiClient.setBackupPassphrase('');
             if (!result?.success) {
-                toast.error(t('settings.backup.passphrase.saveFailed'), { description: result?.error });
+                toast.error(t('settings.backup.passphrase.saveFailed'), { description: electronErrorToMessage(result?.error, t) });
                 return;
             }
             await refreshEncryptionStatus();
             setBackupPassphrase('');
             toast.success(t('settings.backup.passphrase.cleared'));
         } catch (err: unknown) {
-            toast.error(t('settings.backup.passphrase.saveFailed'), { description: String(err) });
+            toast.error(t('settings.backup.passphrase.saveFailed'), { description: electronErrorToMessage(err, t) });
         } finally {
             setSavingBackupPassphrase(false);
         }

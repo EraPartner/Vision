@@ -15,6 +15,7 @@ import { ArrowUpCircle, Download, ExternalLink, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { electronErrorToMessage } from '@/lib/api/electronErrorMessage';
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -74,12 +75,12 @@ export function UpdateNotification() {
             try {
                 const backupResult = await apiClient.preUpdateBackup();
                 if (backupResult && !backupResult.success) {
-                    toast.error(t('update.backupFailed'), { description: backupResult.error });
+                    toast.error(t('update.backupFailed'), { description: electronErrorToMessage(backupResult.error, t) });
                     setPhase("idle");
                     return;
                 }
             } catch (err) {
-                const msg = err instanceof Error ? err.message : t('update.backupFailed');
+                const msg = electronErrorToMessage(err, t);
                 toast.error(t('update.backupFailed'), { description: msg });
                 setPhase("idle");
                 return;
@@ -92,7 +93,7 @@ export function UpdateNotification() {
             try {
                 const result = await apiClient.triggerDockerUpdate();
                 if (!result?.success) {
-                    toast.error(t('update.failed'), { description: result?.error });
+                    toast.error(t('update.failed'), { description: electronErrorToMessage(result?.error, t) });
                     setPhase("idle");
                     return;
                 }
@@ -104,7 +105,7 @@ export function UpdateNotification() {
                 });
                 setPhase("done");
             } catch (err) {
-                const msg = err instanceof Error ? err.message : t('update.failed');
+                const msg = electronErrorToMessage(err, t);
                 toast.error(t('update.failed'), { description: msg });
                 setPhase("idle");
             }
@@ -134,7 +135,7 @@ export function UpdateNotification() {
             }
 
             if (!result.success) {
-                toast.error(t('update.failed'), { description: result.error });
+                toast.error(t('update.failed'), { description: electronErrorToMessage(result.error, t) });
                 setPhase("idle");
                 return;
             }
@@ -146,7 +147,7 @@ export function UpdateNotification() {
                 duration: 6000,
             });
         } catch (err) {
-            const msg = err instanceof Error ? err.message : t('update.failed');
+            const msg = electronErrorToMessage(err, t);
             toast.error(t('update.failed'), { description: msg });
             setPhase("idle");
         }

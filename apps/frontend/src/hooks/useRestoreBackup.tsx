@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { electronErrorToMessage } from '@/lib/api/electronErrorMessage';
 
 const ERR_PASSPHRASE_REQUIRED = 'PASSPHRASE_REQUIRED';
 const ERR_INVALID_PASSPHRASE = 'INVALID_PASSPHRASE';
@@ -120,7 +121,7 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                 }
                 setRunning(false);
             } catch (err: unknown) {
-                toast.error(t('settings.restore.failed'), { description: String(err) });
+                toast.error(t('settings.restore.failed'), { description: electronErrorToMessage(err, t) });
                 setRunning(false);
             }
         },
@@ -149,7 +150,7 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
             setPassphraseInput('');
             if (outcome !== 'ok') setRunning(false);
         } catch (err: unknown) {
-            toast.error(t('settings.restore.failed'), { description: String(err) });
+            toast.error(t('settings.restore.failed'), { description: electronErrorToMessage(err, t) });
             setPassphraseOpen(false);
             setPendingFile(null);
             setRunning(false);
