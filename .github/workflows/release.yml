@@ -282,11 +282,15 @@ jobs:
         run: |
           set -euo pipefail
           cd packaging/electron
-          # Hardened install for the shipped artifact: pin to the committed lockfile
-          # (npm ci) and block transitive lifecycle scripts (--ignore-scripts) so no
-          # postinstall code runs into the signed .dmg. electron-builder fetches the
-          # Electron binary itself via @electron/get, independent of npm postinstall.
-          npm ci --ignore-scripts
+          # Hardened install for the shipped artifact: pin to the committed
+          # lockfile (--frozen-lockfile) and block transitive lifecycle scripts
+          # (--ignore-scripts) so no postinstall code runs into the signed .dmg.
+          # electron-builder fetches the Electron binary itself via @electron/get,
+          # independent of any postinstall.
+          # bun, not npm: packaging/electron's package-lock.json was deleted in
+          # 4a671a3 and bun.lock is the only committed lockfile, so `npm ci` here
+          # had no lockfile left to install from.
+          bun install --frozen-lockfile --ignore-scripts
           npx electron-builder --mac --arm64 --publish never
 
       - name: Stage release artifacts
