@@ -42,9 +42,16 @@ services:
 
   app:
     # CI pushes ghcr.io/erapartner/vision:<semver> and :latest on every release tag.
-    # Electron sets APP_IMAGE_TAG to the exact version tag so `docker compose pull`
-    # fetches the correct image when updating.
-    image: ghcr.io/erapartner/vision:${APP_IMAGE_TAG:-latest}
+    # APP_IMAGE_REF is the reference SUFFIX, so it can carry either form:
+    #   @sha256:…  — an immutable digest, written into .env by the Electron
+    #                updater from the digest the GitHub release published
+    #   :1.2.3     — a plain tag, for manual pinning
+    # Unset falls back to :latest, which is what every install ran before the
+    # digest pin existed and what a fresh install runs until its first update.
+    # A tag is mutable: the registry can repoint it at different content. The
+    # digest is not, and it reaches the app over the GitHub API rather than from
+    # the registry itself, so a compromised registry alone cannot swap the image.
+    image: ghcr.io/erapartner/vision${APP_IMAGE_REF:-:latest}
     pull_policy: missing
     restart: unless-stopped
     logging:

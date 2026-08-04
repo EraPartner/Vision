@@ -21,7 +21,7 @@ const backupRestore = require('./backup/restore');
 const { runBundleBackup, runBundleRestore, runRestore } = backupRestore;
 const updater = require('./updater');
 const {
-  GITHUB_OWNER, GITHUB_REPO, getUpdateMode, checkForShellUpdate,
+  GITHUB_OWNER, GITHUB_REPO, getUpdateMode, checkForShellUpdate, resolveReleaseImageDigest,
   installPreparedShellUpdate, setupManualShellUpdater,
 } = updater;
 // Async i18n loader for main process dialogs. Populated during launch() before
@@ -605,6 +605,58 @@ function parseEnvKeys(contents) {
     map.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
   }
   return map;
+}
+
+// Write (or replace) a single key in an .env body, preserving every other line
+// and the file's ordering. Unlike mergeProviderKeys this DOES overwrite: the
+// image reference is meant to move when a newer digest is resolved.
+function upsertEnvKey(contents, key, value) {
+  const line = `${key}=${value}`;
+  const lines = (contents || '').split('\n');
+  let replaced = false;
+  const next = lines.map((raw) => {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('#')) return raw;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1 || trimmed.slice(0, eq).trim() !== key) return raw;
+    replaced = true;
+    return line;
+  });
+  if (replaced) return next.join('\n');
+  const body = contents || '';
+  return `${body}${body.endsWith('\n') || body === '' ? '' : '\n'}${line}\n`;
+}
+
+/**
+ * Pin the app image to `digest` by writing APP_IMAGE_REF into the .env files
+ * compose reads. Both copies are updated so the canonical .env and the work-dir
+ * .env cannot disagree about which image the stack runs.
+ *
+ * The value is validated here as well as at the source: it is interpolated
+ * straight into the compose `image:` reference, so nothing but an exact sha256
+ * digest may reach it.
+ *
+ * @param {string} workDir
+ * @param {string} digest e.g. `sha256:abc…`
+ * @returns {Promise<boolean>} true when the pin was written
+ */
+async function pinImageDigest(workDir, digest) {
+  if (!/^sha256:[0-9a-f]{64}$/.test(String(digest || ''))) return false;
+  const targets = [canonicalEnvPath(), path.join(workDir, '.env')];
+  const seen = new Set();
+  let wrote = false;
+  for (const file of targets) {
+    const resolved = path.resolve(file);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    const current = await fs.promises.readFile(resolved, 'utf8').catch(() => null);
+    if (current === null) continue;
+    const updated = upsertEnvKey(current, 'APP_IMAGE_REF', `@${digest}`);
+    if (updated === current) { wrote = true; continue; }
+    await fs.promises.writeFile(resolved, updated, { encoding: 'utf8', mode: 0o600 });
+    wrote = true;
+  }
+  return wrote;
 }
 
 // Append provider keys present in `workContents` (e.g. the repo-root .env) or, as a
@@ -1332,6 +1384,17 @@ function registerHandler(channel, fn, {
 
 // ── IPC: renderer can request a Docker image update ──────────────────────────
 registerHandler('update:pull-image', async () => {
+  // Pin to the digest the release published BEFORE pulling, so the pull fetches
+  // immutable content rather than whatever the tag currently points at. A failed
+  // lookup returns null and leaves the previous reference in place, so the update
+  // proceeds exactly as it did before rather than being blocked on GitHub.
+  const digest = await resolveReleaseImageDigest();
+  if (digest) {
+    const pinned = await pinImageDigest(workDir, digest);
+    console.log(pinned
+      ? `[update] pinned app image to ${digest}`
+      : `[update] could not write image pin for ${digest} — continuing with the existing reference`);
+  }
   const wasNew = await pullLatestImage(workDir);
   if (wasNew) {
     await restartAppContainer(workDir, overrideFiles);
