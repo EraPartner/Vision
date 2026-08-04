@@ -106,9 +106,16 @@ export class RateLimitedError extends AppError {
  *     stores the UPSTREAM provider's HTTP status and a message naming our
  *     internal call ("Ollama POST /api/chat failed with 404"); it is normally
  *     wrapped into an AppError (aiChatService.js:325), but if one ever escapes,
- *     this rule keeps the wording out of the response. Same for the plain
- *     `err.statusCode = 400` throws in services/calculations/loanSchedule.js:70,102
- *     — they get a truthful 400 without this handler vouching for their text.
+ *     this rule keeps the wording out of the response.
+ *
+ *     `services/calculations/loanSchedule.js` used to be cited here as a second
+ *     example. It no longer is: its two throws were the case where clause 2 cost
+ *     something real — the text ("Invalid loan configuration: <enumerated
+ *     reasons>") is authored by us and safe, but a bare `statusCode` made it
+ *     indistinguishable from an unvetted library message, so it was replaced by
+ *     "Bad Request". They now throw `ValidationError`, which is the right way to
+ *     get an authored 4xx message through: same status, full fidelity, via the
+ *     AppError path rather than by widening the trust rule.
  *
  * `details` is still AppError-only: nothing here fabricates one.
  */
