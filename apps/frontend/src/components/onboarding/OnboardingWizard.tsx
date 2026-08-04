@@ -187,8 +187,14 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         setImporting(true);
         try {
             const result = await apiClient.importCSV(file, selectedBank);
-            setImportResult({ imported: result.imported, duplicates: result.duplicates });
-            toast.success(t('onboarding.toast.imported', { n: String(result.imported) }));
+            // The route answers 202 `{ batch_id, requires_review, match_source_counts }`
+            // when rows still need review — nothing is committed on that branch, so
+            // there are no counts (the same convention importCSVWithProgress uses for
+            // its `review_required` event). Reading them unguarded rendered "undefined".
+            const imported = 'requires_review' in result ? 0 : result.imported;
+            const duplicates = 'requires_review' in result ? 0 : result.duplicates;
+            setImportResult({ imported, duplicates });
+            toast.success(t('onboarding.toast.imported', { n: String(imported) }));
         } catch (err: unknown) {
             toast.error(t('onboarding.toast.importFailed', { msg: (err as Error).message }));
         } finally {

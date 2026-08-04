@@ -1561,6 +1561,54 @@ components:
           type: string
           format: date-time
 
+    # Body of the 201 answer from POST /api/import/csv and /api/import/csv/custom,
+    # built by buildImportResult(buildPipelineResult(...)) in routes/importRoutes.js.
+    ImportCsvResult:
+      type: object
+      required: [total, imported, duplicates, errors, batch_id, auto_linked_count, status, error_message, links]
+      properties:
+        total:
+          type: integer
+          description: Rows read from the CSV.
+        imported:
+          type: integer
+        duplicates:
+          type: integer
+        errors:
+          type: integer
+          description: Validation errors plus commit errors.
+        batch_id:
+          type: integer
+        auto_linked_count:
+          type: integer
+          description: Planned payments auto-cleared by the imported transactions.
+        status:
+          type: string
+          enum: [completed, completed_with_errors]
+        error_message:
+          type: string
+          nullable: true
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/Link"
+
+    # Body of the 202 answer from the same two routes: rows need user review, so
+    # nothing was committed and no counts exist yet.
+    ImportCsvReviewRequired:
+      type: object
+      required: [batch_id, requires_review, match_source_counts]
+      properties:
+        batch_id:
+          type: integer
+        requires_review:
+          type: boolean
+        match_source_counts:
+          type: object
+          description: Rows per match source (exact / fuzzy / pattern / new).
+          additionalProperties:
+            type: integer
+
     # ─── Recipient sub-resources ──────────────────────────────────────────────
     RecipientPattern:
       type: object
@@ -5752,8 +5800,8 @@ paths:
                 bank:
                   type: string
       responses:
-        "200":
-          description: Import batch created
+        "201":
+          description: All rows matched exactly — batch committed immediately
           content:
             application/json:
               schema:
@@ -5762,7 +5810,18 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/ImportBatch"
+                        $ref: "#/components/schemas/ImportCsvResult"
+        "202":
+          description: Some rows need review — batch left in awaiting_review; client must use the review endpoints then POST commit
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ImportCsvReviewRequired"
 
   /api/import/csv/custom:
     post:
@@ -5784,12 +5843,28 @@ paths:
                   type: string
                   description: JSON column mapping
       responses:
-        "200":
-          description: Import batch created
+        "201":
+          description: All rows matched exactly — batch committed immediately
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ImportCsvResult"
+        "202":
+          description: Some rows need review — batch left in awaiting_review; client must use the review endpoints then POST commit
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ImportCsvReviewRequired"
 
   /api/import/csv/stream:
     post:
