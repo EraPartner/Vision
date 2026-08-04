@@ -350,7 +350,7 @@ export default function ImportReviewPage() {
           {t("importReview.back")}
         </Button>
         <p className="text-destructive text-sm">
-          {error instanceof Error ? error.message : t("importReview.loadError")}
+          {apiErrorToMessage(error, t)}
         </p>
       </div>
     );
