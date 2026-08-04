@@ -4456,6 +4456,19 @@ look-changing one.
 
 ### 🏗️ DevOps / CI-CD / Packaging
 
+- [ ] **The pre-push gate fails on any fresh clone: `packaging/electron` is not a workspace, so its deps never install, but a backend test requires its code** 🔼 🔎 verified-present 2026-08-04
+  - ↪ _from: Orchestration session 2026-08-04 · import-contract push (hit live — the gate blocked a push whose diff touched only frontend files and openapi.yaml)_
+  - `package.json:7-11` lists workspaces `apps/frontend`, `apps/node-backend`, `packages/*` — **not** `packaging/electron`, which has its own `package.json` declaring `yauzl ^3.3.0`, `archiver`, `electron`, `electron-builder`. A root `bun install` therefore leaves `packaging/electron/node_modules` absent.
+  - But `apps/node-backend/tests/backup-roundtrip.test.js` requires `packaging/electron/backup/bundle.js`, which requires `yauzl` — resolved from `packaging/electron/node_modules`, not from the backend's own copy. Measured on a fresh clone: **10 tests failing in that one file**, `Cannot find module 'yauzl'`, while 3247 passed.
+  - `.githooks/pre-push` runs the backend suite, so the gate rejects **every** push from a fresh clone regardless of the diff. `cd packaging/electron && bun install` (291 packages) fixes it and the file goes 12/12 green — so the failure is purely a missing install, not a code defect.
+  - Fix: either add `packaging/electron` to the root workspaces array, or have the backend test skip when the bundle's deps are absent, or install it from the repo's setup path. Note CI presumably installs it separately, which is why this has never shown up as a red build — it only bites local clones and agent sessions.
+
+- [ ] **The pre-commit big-file gate blocks the repo's own backlog file on every single commit, and its comment contradicts its code** 🔽 🔎 verified-present 2026-08-04
+  - ↪ _from: Orchestration session 2026-08-04 · backlog bookkeeping (hit on every TODO.md commit this session)_
+  - `.githooks/pre-commit:76-89` fails any staged file over 1 MB. `TODO.md` is **1,479,203 bytes** and has been over the limit throughout recent history (`c1d6761` 1,419,576 → `4c006f8` 1,465,106), so every backlog-bookkeeping commit — the file's whole purpose — must be made with `ALLOW_BIG_FILES=1`.
+  - The check's own header comment (`:12`) describes it as catching "oversized files **newly staged**", but `STAGED` at `:31` is `git diff --cached --name-only --diff-filter=ACMR`, which includes plain modifications. The intent (catch an accidentally-committed binary) and the behaviour (flag a long-tracked text file that grew by 30 lines) have diverged.
+  - Fix: restrict the size check to added files (`--diff-filter=A`) so it matches its documented intent, or exempt known-large tracked text files. A routinely-bypassed gate trains the bypass habit, which is the actual cost here.
+
 - [x] **`CI Complete` goes green when the whole Docker tier is skipped — gate bypass, actively triggered by the known artifact-quota failures** 🔺 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 55d9364 (#93) (CI Complete asserts trivy-scan/docker-verify succeeded; a skipped required job no longer passes green (draft-PR skip of live-api still allowed))
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/ci.yml:656-670` — `ci-complete` runs with `if: always()` and greps `needs.*.result` for `failure|cancelled` only. When `build-image` fails (which it does today on artifact quota), `trivy-scan`, `docker-verify`, and `test-live-api-contracts` all come back `skipped`, the grep matches nothing, and the single required status check passes — silently waiving the Trivy CVE gate, the compose /health boot check, and the migration-reversibility round-trip (the check that exists because of the v1.0.2 data-loss class of bug).
