@@ -338,7 +338,113 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
 
       const r = await infoRepository.getNetWorthFromSnapshots();
       expect(r.current).toEqual({ liquid: 0, liabilities: 0, investments: 0, netWorth: 0 });
-      expect(r.snapshots.map((s) => s.liquid)).toEqual([0, 0]);
+      // Not `[0, 0]`: the two tracking rows do not define the series span
+      // either, so there is no series at all rather than a run of zero days
+      // measured out by excluded rows. See the span tests below.
+      expect(r.snapshots).toEqual([]);
+    });
+
+    // ── first_data_date: the series START BOUND, under the same exclusion ────
+    // `firstDataDateYmd` is what the day grid, the walk and the fallback are all
+    // bounded by. It used to be MIN(date) over ALL active transactions, tracking
+    // rows included, so rows that can never contribute a value still set the
+    // span.
+
+    it('does not let tracking-only rows set the series span', async () => {
+      await seedBase();
+      const today = TODAY();
+      // 400 days back: far enough that the old span is unmistakable.
+      const old = addDaysYmd(today, -400);
+      await addAccount('TRACKING', { inNetWorth: false });
+      await insertTxn({ date: old, amount: '-133.25', bank: 'TRACKING' });
+      await insertTxn({ date: today, amount: '-10.00', bank: 'TRACKING' });
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      // Was 401 all-zero snapshots spanning `old`..today — a 13-month chart
+      // whose every point is 0 and whose length came entirely from the rows the
+      // computation excludes.
+      expect(r.snapshots).toEqual([]);
+      expect(r.current).toEqual({ liquid: 0, liabilities: 0, investments: 0, netWorth: 0 });
+    });
+
+    it('applies the exclusion to the no-active-rows arm too', async () => {
+      await seedBase();
+      const today = TODAY();
+      const old = addDaysYmd(today, -400);
+      await addAccount('TRACKING', { inNetWorth: false });
+      await insertTxn({ date: old, amount: '-133.25', bank: 'TRACKING' });
+      await getTestPool().query(`UPDATE transactions SET is_active = false`);
+
+      // The date probe COALESCEs to a third arm ("any transaction") when there
+      // are no active ones, and that arm has no is_active filter — leaving it
+      // bare let this ledger fall straight through to it and restore the very
+      // 401-day span the active-rows arm had just dropped.
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.snapshots).toEqual([]);
+    });
+
+    it('still spans from the first IN-net-worth row when a tracking account is older', async () => {
+      await seedBase();
+      const today = TODAY();
+      const old = addDaysYmd(today, -400);
+      const d3 = addDaysYmd(today, -3);
+      // The exclusion must narrow the span to the rows that count — never past
+      // them. A real in-net-worth row keeps its full history.
+      await addAccount('TRACKING', { inNetWorth: false });
+      await addAccount('KBC');
+      await insertTxn({ date: old, amount: '-1.00', bank: 'TRACKING' });
+      await insertTxn({ date: d3, amount: '-10.00', bank: 'KBC', balance: '1000.00' });
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.snapshots[0].date).toBe(d3);
+      expect(r.snapshots).toHaveLength(4); // d3..today inclusive
+      expect(r.snapshots.every((s) => s.liquid === 1000)).toBe(true);
+    });
+
+    // The invariant the span bug actually broke, in its strongest form: a
+    // tracking-only account is not part of net worth, so adding one must not
+    // move ANY field of the answer. It did — the phantom leading-zero region it
+    // manufactured became the monthly-change baseline, so an account opened this
+    // month reported its whole balance as this month's gain (measured 1050 where
+    // 50 is the real movement) with monthlyChangePercent collapsing to 0.
+    it('is completely unaffected by the presence of a tracking-only account', async () => {
+      const today = TODAY();
+      const monthStart = firstOfMonthYmd(today);
+
+      /** Seed the in-net-worth half of the ledger; optionally an older tracking account. */
+      async function build({ withTracking }) {
+        await seedBase();
+        if (withTracking) {
+          await addAccount('TRACKING', { inNetWorth: false });
+          await insertTxn({ date: addDaysYmd(monthStart, -400), amount: '-133.25', bank: 'TRACKING' });
+          await insertTxn({ date: today, amount: '-10.00', bank: 'TRACKING' });
+        }
+        await addAccount('KBC');
+        // Opens THIS month — that is what makes the baseline observable.
+        await insertTxn({ date: monthStart, amount: '-10.00', bank: 'KBC', balance: '1000.00' });
+        await insertTxn({ date: today, amount: '50.00', bank: 'KBC' });
+        return infoRepository.getNetWorthFromSnapshots();
+      }
+
+      /** The suite's afterEach only runs between tests; this test builds twice. */
+      async function wipe() {
+        const pool = getTestPool();
+        await pool.query('DELETE FROM transactions');
+        await pool.query('DELETE FROM accounts');
+        await pool.query('DELETE FROM recipients');
+        await pool.query('DELETE FROM categories');
+        for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];
+      }
+
+      const withTracking = await build({ withTracking: true });
+      await wipe();
+      const without = await build({ withTracking: false });
+
+      expect(withTracking).toEqual(without);
+      // Anchored independently of the day of month, so this stays deterministic:
+      // the span starts where the in-net-worth account does, not 400 days early.
+      expect(withTracking.snapshots[0].date).toBe(monthStart);
+      expect(withTracking.current.liquid).toBe(1050);
     });
 
     // The other half of the same predicate: the fallback must keep counting
@@ -375,6 +481,80 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
 
       const r = await infoRepository.getNetWorthFromSnapshots();
       expect(r.current.liquid).toBe(1000); // not 866.75
+    });
+
+    // ── the fallback's liquid/liability split ────────────────────────────────
+    // The fallback had no is_liability split at all, so `liabilities` was
+    // structurally 0 on that path and every row landed in `liquid`. It now
+    // carries the walk's own resolution — `accounts.type = 'liability'` on the
+    // row's `account_id`, the same column `account_list` reads.
+
+    it('leaves un-attributable fallback rows in liquid, not liabilities', async () => {
+      await seedBase();
+      const today = TODAY();
+      // The un-migrated shape: a big negative running balance behind a
+      // bank_account string with no accounts row. There is no `accounts.type` to
+      // read, so there is nothing to split on — the documented resolution is
+      // `false` (liquid), which is also what keeps this ledger's reported
+      // buckets identical to what it has always reported. netWorth is the same
+      // number either way; only the split between the two buckets is at stake.
+      await insertTxn({ date: today, amount: '-5000.00', bank: null });
+      await getTestPool().query(`UPDATE transactions SET bank_account = 'LEGACY MORTGAGE'`);
+      expect(
+        (await getTestPool().query(`SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`)).rows[0].n,
+      ).toBe(1);
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.current).toEqual({ liquid: -5000, liabilities: 0, investments: 0, netWorth: -5000 });
+    });
+
+    // What makes that decision total rather than a guess: every row the fallback
+    // can ever see is un-attributable. A row with a non-null account_id belongs
+    // to an account that is either in_net_worth=false (dropped by the fallback's
+    // own exclusion) or in_net_worth=true — and the latter puts the account in
+    // `account_list`, which makes the walk non-empty, which means the fallback
+    // never fires. `accounts.in_net_worth` is NOT NULL, so there is no third
+    // case. This pins that boundary from the liability side.
+    it('answers an attributed liability account from the walk, never the fallback', async () => {
+      await seedBase();
+      const today = TODAY();
+      await addAccount('MORTGAGE', { type: 'liability' });
+      await insertTxn({ date: today, amount: '-5000.00', bank: 'MORTGAGE' });
+      expect(
+        (await getTestPool().query(`SELECT count(*)::int AS n FROM transactions WHERE account_id IS NOT NULL`)).rows[0].n,
+      ).toBe(1);
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      // Split by the walk — a mortgage is not liquid cash (ADR-092).
+      expect(r.current).toEqual({ liquid: 0, liabilities: -5000, investments: 0, netWorth: -5000 });
+    });
+
+    // The split must not disturb the multi-currency partitioning the fallback
+    // already does: it now runs one dense day series per (currency, bucket)
+    // pair rather than per currency.
+    it('keeps the fallback per-currency running totals intact under the split', async () => {
+      await seedBase();
+      const today = TODAY();
+      const d1 = addDaysYmd(today, -1);
+      // Rate resolves from the DB, never the network (same shape the
+      // multi-currency suite seeds). USD at 0.5 EUR on both days, so the
+      // conversion cannot mask an accumulation error behind a moving rate.
+      for (const [d, latest] of [[d1, false], [today, true]]) {
+        await getTestPool().query(
+          `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
+           VALUES ('USD', $1::date, 0.5, $2)`,
+          [d, latest],
+        );
+      }
+      await insertTxn({ date: d1, amount: '100.00', currency: 'EUR', bank: null });
+      await insertTxn({ date: d1, amount: '100.00', currency: 'USD', bank: null });
+      await insertTxn({ date: today, amount: '10.00', currency: 'USD', bank: null });
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      // Each currency accumulates on its own and converts at its own rate:
+      // d1 = 100 EUR + 100/2 USD = 150; today = 100 + 110/2 = 155.
+      expect(r.snapshots.map((s) => [s.date, s.liquid])).toEqual([[d1, 150], [today, 155]]);
+      expect(r.current.liabilities).toBe(0);
     });
   });
 
