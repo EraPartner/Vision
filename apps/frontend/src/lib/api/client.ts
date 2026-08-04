@@ -153,11 +153,19 @@ export async function parseEnvelopeError(
             });
         }
         if (response.status === 429) {
-            const retryAfter = legacy.retry_after ?? 'a few';
+            // The hardcoded English sentence below is a machine shape the
+            // humanizer refuses to pass through, which used to lose the retry
+            // count entirely. Carry it in `details` so `apiErrorToMessage` can
+            // render it in the user's language.
+            const retryAfter = legacy.retry_after;
+            const retrySeconds = Number(retryAfter);
             return new ApiClientError({
                 status: response.status,
                 code: ApiErrorCode.RATE_LIMITED,
-                message: `Too many requests. Please try again in ${retryAfter} seconds.`,
+                message: `Too many requests. Please try again in ${retryAfter ?? 'a few'} seconds.`,
+                details: Number.isFinite(retrySeconds) && retrySeconds > 0
+                    ? { retry_after: retrySeconds }
+                    : undefined,
             });
         }
         if (typeof legacy.detail === 'string' && legacy.detail.trim()) {

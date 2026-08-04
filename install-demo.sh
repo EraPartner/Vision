@@ -52,7 +52,8 @@ docker image inspect vision-app:latest >/dev/null 2>&1 || { echo "ERROR: failed 
 # ── 3) Build Vision Demo.app ─────────────────────────────────────────────────
 echo "==> Installing Electron deps..."
 cd "$ELECTRON_DIR"
-bun install
+# --frozen-lockfile: see install.sh — build from the committed bun.lock.
+bun install --frozen-lockfile
 echo "==> Generating locales..."
 GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js
 echo "==> Building $APP_NAME.app (takes a couple of minutes)..."

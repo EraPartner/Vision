@@ -98,18 +98,17 @@ app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {Exp
   // string|string[]|undefined (some headers, e.g. Set-Cookie-likes, do
   // repeat), but Origin never does.
   const origin = /** @type {string|undefined} */ (req.headers.origin);
+  // corsOrigins is always string[] (env.CORS_ORIGINS is parsed by csvEnv).
+  // There is no wildcard mode: a `'*'` branch used to sit here, but the value
+  // it compared against could never be the bare string '*', so the mode was
+  // unreachable for the whole life of the code. It was removed rather than
+  // made reachable — reflecting `Access-Control-Allow-Origin: *` is not a
+  // behaviour to resurrect by accident, and every doc describes CORS_ORIGINS
+  // as a comma-separated allowlist.
   const allowed = settings.api.corsOrigins;
-  // corsOrigins is `string[] | string` (config/config.js), but env.CORS_ORIGINS
-  // (csvEnv) always parses to string[], never the bare string '*' — this
-  // comparison can consequently never be true. Pre-existing dead branch,
-  // already filed as a real-mismatch finding (see config/config.js's comment
-  // on corsOrigins); annotated faithfully here, not fixed.
-  const isWildcard = allowed === '*';
-  // Never combine wildcard origin with credentials (browsers reject; CodeQL flags
-  // it as an injection vector). Reflect only origins on an explicit allowlist.
-  const originAllowed = Array.isArray(allowed)
-    ? allowed.includes(/** @type {string} */ (origin))
-    : !isWildcard && allowed === origin;
+  // Reflect only origins on the explicit allowlist, never a wildcard, so the
+  // credentialed response below is always bound to one vetted origin.
+  const originAllowed = allowed.includes(/** @type {string} */ (origin));
 
   if (originAllowed && origin) {
     // Vary: Origin tells shared caches not to serve this response to other origins.
@@ -117,13 +116,6 @@ app.use(/** @param {ExpressRequest} req @param {ExpressResponse} res @param {Exp
     // codeql[js/cors-misconfiguration]: origin is validated against the settings allowlist above; wildcard is never combined with credentials.
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
-    res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
-    res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);
-  } else if (isWildcard && settings.security.devBypass) {
-    // Dev convenience only: wildcard origin without credentials. Gated on the
-    // explicit VISION_DEV opt-in so an unset env never reflects a wildcard.
-    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
     res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
     res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);

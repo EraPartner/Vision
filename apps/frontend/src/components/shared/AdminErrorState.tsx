@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ApiClientError } from '@/lib/api/client';
+import { apiErrorToMessage } from '@/lib/api/errorMessage';
 
 /**
  * True when a query error is an admin auth failure (401 Unauthorized / 403
@@ -43,7 +44,9 @@ export function AdminErrorState({ error, fallbackMessage }: { error: unknown; fa
         );
     }
 
-    const message = error instanceof Error ? error.message : String(error);
+    // Humanized, not raw: this is the page-level twin of the toast leak — a
+    // browser's "Failed to fetch" or a transport sentinel is noise to a user.
+    const message = apiErrorToMessage(error, t);
     return (
         <Card className="!border-destructive/60 bg-destructive/5">
             <CardContent className="pt-6">

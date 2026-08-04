@@ -89,11 +89,16 @@ describe('toOllamaMessage', () => {
     });
   });
 
-  it('serializes an object tool_result to JSON for tool rows', () => {
+  // Fixtures use the camelCase field names aiChatRepository's MESSAGE_COLUMNS
+  // aliases to in SQL (toolName/toolResult) — the shape aiChatService actually
+  // passes. They previously used the raw snake_case column names, which no
+  // caller has ever produced, so they exercised a fallback branch that could
+  // not fire in production; that branch is now gone.
+  it('serializes an object toolResult to JSON for tool rows', () => {
     const row = {
       role: 'tool',
-      tool_name: 'getSpendByCategory',
-      tool_result: { ok: true, data: [{ category: 'Food', total: 42.5 }] },
+      toolName: 'getSpendByCategory',
+      toolResult: { ok: true, data: [{ category: 'Food', total: 42.5 }] },
     };
     const msg = toOllamaMessage(row);
     expect(msg.role).toBe('tool');
@@ -104,31 +109,31 @@ describe('toOllamaMessage', () => {
     });
   });
 
-  it('passes through a pre-stringified tool_result', () => {
+  it('passes through a pre-stringified toolResult', () => {
     const row = {
       role: 'tool',
-      tool_name: 'x',
-      tool_result: '{"already":"json"}',
+      toolName: 'x',
+      toolResult: '{"already":"json"}',
     };
     const msg = toOllamaMessage(row);
     expect(msg.content).toBe('{"already":"json"}');
   });
 
-  it('falls back to "unknown" when tool_name is missing on tool row', () => {
-    const row = { role: 'tool', tool_result: { ok: true, data: {} } };
+  it('falls back to "unknown" when toolName is missing on tool row', () => {
+    const row = { role: 'tool', toolResult: { ok: true, data: {} } };
     expect(toOllamaMessage(row).name).toBe('unknown');
   });
 
-  it('substitutes a fallback envelope when tool_result is missing', () => {
-    const row = { role: 'tool', tool_name: 'x' };
+  it('substitutes a fallback envelope when toolResult is missing', () => {
+    const row = { role: 'tool', toolName: 'x' };
     const msg = toOllamaMessage(row);
     const parsed = JSON.parse(msg.content);
     expect(parsed.ok).toBe(false);
     expect(parsed.error.code).toBe('MISSING');
   });
 
-  it('substitutes a fallback envelope when tool_result is null', () => {
-    const row = { role: 'tool', tool_name: 'x', tool_result: null };
+  it('substitutes a fallback envelope when toolResult is null', () => {
+    const row = { role: 'tool', toolName: 'x', toolResult: null };
     const parsed = JSON.parse(toOllamaMessage(row).content);
     expect(parsed.ok).toBe(false);
   });
@@ -271,8 +276,8 @@ describe('buildChatMessages', () => {
       { role: 'user', content: 'show spend' },
       {
         role: 'tool',
-        tool_name: 'getSpendByCategory',
-        tool_result: { ok: true, data: [{ category: 'Food', total: 100 }] },
+        toolName: 'getSpendByCategory',
+        toolResult: { ok: true, data: [{ category: 'Food', total: 100 }] },
       },
     ];
     const messages = buildChatMessages({

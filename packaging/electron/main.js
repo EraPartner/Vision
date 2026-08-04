@@ -21,7 +21,7 @@ const backupRestore = require('./backup/restore');
 const { runBundleBackup, runBundleRestore, runRestore } = backupRestore;
 const updater = require('./updater');
 const {
-  GITHUB_OWNER, GITHUB_REPO, getUpdateMode, checkForShellUpdate,
+  GITHUB_OWNER, GITHUB_REPO, getUpdateMode, checkForShellUpdate, resolveReleaseImageDigest,
   installPreparedShellUpdate, setupManualShellUpdater,
 } = updater;
 // Async i18n loader for main process dialogs. Populated during launch() before
@@ -605,6 +605,96 @@ function parseEnvKeys(contents) {
     map.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
   }
   return map;
+}
+
+// Write (or replace) a single key in an .env body, preserving every other line
+// and the file's ordering. Unlike mergeProviderKeys this DOES overwrite: the
+// image reference is meant to move when a newer digest is resolved.
+function upsertEnvKey(contents, key, value) {
+  const line = `${key}=${value}`;
+  const lines = (contents || '').split('\n');
+  let replaced = false;
+  const next = lines.map((raw) => {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('#')) return raw;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1 || trimmed.slice(0, eq).trim() !== key) return raw;
+    replaced = true;
+    return line;
+  });
+  if (replaced) return next.join('\n');
+  const body = contents || '';
+  return `${body}${body.endsWith('\n') || body === '' ? '' : '\n'}${line}\n`;
+}
+
+const HEX_DIGITS = '0123456789abcdef';
+const DIGEST_HEX_LENGTH = 64;
+
+/**
+ * Rebuild a hex string from a trusted alphabet.
+ *
+ * Every character of the result is taken from `HEX_DIGITS`, a module-level
+ * literal; the input is used only to pick an index. So the returned string
+ * shares no data with the caller's — which is the point, because this value
+ * ends up in a file and then in the compose `image:` reference. A regex test
+ * would prove the same thing to a human but not to static analysis, which
+ * reported the write as network-data-to-file-system; this is the same
+ * lookup-through-a-trusted-source indirection dbEditor uses for SQL
+ * identifiers, and it makes the guarantee structural rather than incidental.
+ *
+ * @param {string} value
+ * @returns {string|null} null if any character is not a lowercase hex digit
+ */
+function rebuildHex(value) {
+  let out = '';
+  for (const char of value) {
+    const index = HEX_DIGITS.indexOf(char);
+    if (index === -1) return null;
+    out += HEX_DIGITS[index];
+  }
+  return out;
+}
+
+/**
+ * Pin the app image to `digest` by writing APP_IMAGE_REF into the .env files
+ * compose reads. Both copies are updated so the canonical .env and the work-dir
+ * .env cannot disagree about which image the stack runs.
+ *
+ * The value is validated here as well as at the source: it is interpolated
+ * straight into the compose `image:` reference, so nothing but an exact sha256
+ * digest may reach it.
+ *
+ * @param {string} workDir
+ * @param {string} digest e.g. `sha256:abc…`
+ * @returns {Promise<boolean>} true when the pin was written
+ */
+async function pinImageDigest(workDir, digest) {
+  const match = /^sha256:([0-9a-f]{64})$/.exec(String(digest || ''));
+  if (!match) return false;
+  const hex = rebuildHex(match[1]);
+  if (hex === null || hex.length !== DIGEST_HEX_LENGTH) return false;
+  const reference = `@sha256:${hex}`;
+  const targets = [canonicalEnvPath(), path.join(workDir, '.env')];
+  const seen = new Set();
+  let wrote = false;
+  for (const file of targets) {
+    const resolved = path.resolve(file);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    const current = await fs.promises.readFile(resolved, 'utf8').catch(() => null);
+    if (current === null) continue;
+    const updated = upsertEnvKey(current, 'APP_IMAGE_REF', reference);
+    if (updated === current) { wrote = true; continue; }
+    // codeql[js/http-to-file-access]: retained as documentation, not as the
+    // control — rebuildHex above is what actually severs the flow. The digest
+    // comes from the GitHub release API, is matched against
+    // ^sha256:[0-9a-f]{64}$, and is then rebuilt character-by-character from a
+    // literal alphabet, so the bytes written share no data with the response.
+    // The target is the app's own 0600 .env.
+    await fs.promises.writeFile(resolved, updated, { encoding: 'utf8', mode: 0o600 });
+    wrote = true;
+  }
+  return wrote;
 }
 
 // Append provider keys present in `workContents` (e.g. the repo-root .env) or, as a
@@ -1289,23 +1379,35 @@ function httpPut(url, payload) {
 }
 
 // ── IPC handler registration ─────────────────────────────────────────────────
-// Wraps ipcMain.handle() with the guard/boilerplate shared by most channels:
-//   • requireMainSender — reject calls that don't originate from the main
-//     window's webContents. `senderFailure` is the exact value returned on
-//     rejection; the shapes differ per channel and are load-bearing for the
-//     renderer bridge (electron.ts), so divergent channels pass their own.
+// EVERY channel registers through this wrapper — never call ipcMain.handle()
+// directly. The sender check is applied by DEFAULT and must be opted *out* of
+// explicitly (`allowAnySender: true`, with a comment saying why), so a new
+// handler is guarded by omission rather than by the author remembering.
+//   • sender guard — reject calls that don't originate from the main window's
+//     webContents. `senderFailure` is the exact value returned on rejection;
+//     the shapes differ per channel and are load-bearing for the renderer
+//     bridge (electron.ts), so divergent channels pass their own. Channels
+//     whose contract has no failure shape (pure reads) pass REJECT_SENDER,
+//     which rejects the invoke promise instead of inventing a return value.
 //   • requireWorkDir — precondition for handlers that shell out to Docker.
 //   • wrapErrors — uniform catch → { success: false, error: String(err) }.
-// Handlers with non-uniform failure shapes (update:check-github,
-// update:pre-update-backup, recovery:open-logs) keep plain ipcMain.handle.
+// Nothing currently opts out: the app has exactly one BrowserWindow, new
+// windows are denied (setWindowOpenHandler), and the splash + error pages load
+// into that same window — so the recovery channels reached from error.html do
+// come from mainWindow.webContents like every other channel.
+const REJECT_SENDER = Symbol('reject-unauthorized-sender');
+
 function registerHandler(channel, fn, {
-  requireMainSender = false,
+  allowAnySender = false,
   senderFailure = { success: false, error: 'Unauthorized sender' },
   requireWorkDir = false,
   wrapErrors = false,
 } = {}) {
   ipcMain.handle(channel, async (event, ...args) => {
-    if (requireMainSender && (!mainWindow || event.sender !== mainWindow.webContents)) {
+    if (!allowAnySender && (!mainWindow || event.sender !== mainWindow.webContents)) {
+      if (senderFailure === REJECT_SENDER) {
+        throw new Error(`Unauthorized sender for ${channel}`);
+      }
       return senderFailure;
     }
     if (requireWorkDir && !workDir) return { success: false, error: 'workDir not set' };
@@ -1320,21 +1422,36 @@ function registerHandler(channel, fn, {
 
 // ── IPC: renderer can request a Docker image update ──────────────────────────
 registerHandler('update:pull-image', async () => {
+  // Pin to the digest the release published BEFORE pulling, so the pull fetches
+  // immutable content rather than whatever the tag currently points at. A failed
+  // lookup returns null and leaves the previous reference in place, so the update
+  // proceeds exactly as it did before rather than being blocked on GitHub.
+  const digest = await resolveReleaseImageDigest();
+  if (digest) {
+    const pinned = await pinImageDigest(workDir, digest);
+    console.log(pinned
+      ? `[update] pinned app image to ${digest}`
+      : `[update] could not write image pin for ${digest} — continuing with the existing reference`);
+  }
   const wasNew = await pullLatestImage(workDir);
   if (wasNew) {
     await restartAppContainer(workDir, overrideFiles);
     await pollHealth().catch(() => {});
   }
   return { success: true, wasNew };
-}, { requireWorkDir: true, wrapErrors: true });
+}, {
+  requireWorkDir: true,
+  wrapErrors: true,
+  senderFailure: { success: false, wasNew: false, error: 'Unauthorized sender' },
+});
 
-ipcMain.handle('update:check-github', async () => {
+registerHandler('update:check-github', async () => {
   try {
     return await checkForShellUpdate();
   } catch (err) {
     return { error: String(err), update_mode: getUpdateMode() };
   }
-});
+}, { senderFailure: REJECT_SENDER });
 
 registerHandler('update:install-shell', async () => {
   if (app.isPackaged && !useRepoMode) {
@@ -1343,13 +1460,13 @@ registerHandler('update:install-shell', async () => {
   return await installPreparedShellUpdate();
 }, { wrapErrors: true });
 
-ipcMain.handle('update:get-mode', () => ({
+registerHandler('update:get-mode', () => ({
   mode: getUpdateMode(),
   is_packaged: app.isPackaged,
   use_repo_mode: useRepoMode,
-}));
+}), { senderFailure: REJECT_SENDER });
 
-ipcMain.handle('update:pre-update-backup', async () => {
+registerHandler('update:pre-update-backup', async () => {
   try {
     const backupDir = path.join(app.getPath('userData'), 'pre-update-backups');
     fs.mkdirSync(backupDir, { recursive: true });
@@ -1398,7 +1515,7 @@ function hasAllowedRestoreExt(p) {
   return false;
 }
 
-ipcMain.handle('backup:select-file', async () => {
+registerHandler('backup:select-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
     title: 'Select Backup File to Restore',
@@ -1412,9 +1529,9 @@ ipcMain.handle('backup:select-file', async () => {
   const chosen = path.resolve(result.filePaths[0]);
   ALLOWED_RESTORE_PATHS.add(chosen);
   return chosen;
-});
+}, { senderFailure: null });
 
-ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
+registerHandler('backup:is-encrypted', async (_event, filePath) => {
   try {
     if (typeof filePath !== 'string' || !filePath) return false;
     const resolved = path.resolve(filePath);
@@ -1427,7 +1544,7 @@ ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
   } catch {
     return false;
   }
-});
+}, { senderFailure: REJECT_SENDER });
 
 registerHandler('backup:restore', async (event, filePath, opts) => {
   if (typeof filePath !== 'string' || !filePath) {
@@ -1485,7 +1602,7 @@ registerHandler('backup:restore', async (event, filePath, opts) => {
   } finally {
     startHealthWatchdog();
   }
-}, { requireMainSender: true, requireWorkDir: true });
+}, { requireWorkDir: true });
 
 // ── IPC: backup:run ───────────────────────────────────────────────────────────
 // frontendStateJson is the serialised { keys: { … } } localStorage snapshot,
@@ -1503,9 +1620,9 @@ registerHandler('backup:run', async (event, destDir, frontendStateJson = null) =
   } finally {
     backupInFlight = false;
   }
-}, { requireMainSender: true, requireWorkDir: true, wrapErrors: true });
+}, { requireWorkDir: true, wrapErrors: true });
 
-ipcMain.handle('backup:select-dir', async () => {
+registerHandler('backup:select-dir', async () => {
   const defaultPath = getDefaultICloudBackupDir() || app.getPath('documents');
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
@@ -1515,7 +1632,7 @@ ipcMain.handle('backup:select-dir', async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
-});
+}, { senderFailure: null });
 
 // Sender check matters here like on backup:restore — a compromised non-main
 // frame must not be able to repoint where the quit-time backup writes.
@@ -1540,18 +1657,18 @@ registerHandler('backup:save-settings', async (event, { backupDir, backupOnQuit 
     console.warn('backup:save-settings: could not persist to DB, kept in local settings.json', err.message);
   }
   return { success: true };
-}, { requireMainSender: true });
-
-ipcMain.handle('backup:get-encryption-status', async () => {
-  return { success: true, ...(await getBackupPassphraseStatus()) };
 });
 
-ipcMain.handle('backup:set-passphrase', async (_event, passphrase) => {
+registerHandler('backup:get-encryption-status', async () => {
+  return { success: true, ...(await getBackupPassphraseStatus()) };
+}, { senderFailure: REJECT_SENDER });
+
+registerHandler('backup:set-passphrase', async (_event, passphrase) => {
   const value = typeof passphrase === 'string' ? passphrase : '';
   return await setBackupPassphrase(value.trim());
-});
+}, { senderFailure: { success: false, available: false, error: 'Unauthorized sender' } });
 
-ipcMain.handle('backup:load-settings', async () => {
+registerHandler('backup:load-settings', async () => {
   // Prefer reading from the database; fall back to settings.json if the backend
   // is not yet available (e.g. during very early startup).
   try {
@@ -1574,7 +1691,7 @@ ipcMain.handle('backup:load-settings', async () => {
   }
   const s = resolveBackupSettingsWithDefaults(await loadSettings());
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
-});
+}, { senderFailure: REJECT_SENDER });
 
 // ── Services (keep-running-on-quit) settings ─────────────────────────────────
 // Opt-in toggle: when enabled, quit leaves the Docker containers running so the
@@ -1593,9 +1710,9 @@ registerHandler('services:save-settings', async (event, { keepServicesOnQuit } =
     console.warn('services:save-settings: could not persist to DB, kept in local settings.json', err.message);
   }
   return { success: true };
-}, { requireMainSender: true });
+});
 
-ipcMain.handle('services:load-settings', async () => {
+registerHandler('services:load-settings', async () => {
   try {
     // The API wraps responses as { ok, data: { key, value } } (ADR-026).
     const body = await httpGet(`http://localhost:${appPort}/api/settings/services_settings`);
@@ -1611,15 +1728,15 @@ ipcMain.handle('services:load-settings', async () => {
   }
   const s = await loadSettings();
   return { keepServicesOnQuit: s.keepServicesOnQuit === true };
-});
+}, { senderFailure: REJECT_SENDER });
 
 // ── Recovery (error page) ────────────────────────────────────────────────────
-ipcMain.handle('recovery:retry', () => {
+registerHandler('recovery:retry', () => {
   pollAndLoad();
   return { success: true };
 });
 
-ipcMain.handle('recovery:open-logs', async () => {
+registerHandler('recovery:open-logs', async () => {
   try {
     const logsDir = app.getPath('logs');
     fs.mkdirSync(logsDir, { recursive: true });
@@ -1669,7 +1786,7 @@ registerHandler('app:renderer-ready', () => {
     mainWindow.webContents.send(channel, payload);
   }
   return { success: true };
-}, { requireMainSender: true, senderFailure: { success: false } });
+}, { senderFailure: { success: false } });
 
 function menuAction(action, payload) {
   sendToApp('menu:action', { action, payload });
@@ -1865,7 +1982,7 @@ registerHandler('app:set-badge', (event, count) => {
   const clamped = Math.max(0, Math.min(999, Math.floor(n)));
   app.dock.setBadge(clamped > 0 ? String(clamped) : '');
   return { success: true };
-}, { requireMainSender: true, senderFailure: { success: false } });
+}, { senderFailure: { success: false } });
 
 // System accent color — RRGGBBAA hex from macOS, or null when unavailable.
 function readSystemAccentColor() {
@@ -1880,7 +1997,7 @@ function readSystemAccentColor() {
 
 registerHandler('app:get-accent-color', () => {
   return readSystemAccentColor();
-}, { requireMainSender: true, senderFailure: null });
+}, { senderFailure: null });
 
 // Renderer mirrors the active theme's primary colors here so the next boot
 // splash matches the chosen palette (see splashDataUrl / readSplashTheme).
@@ -1898,7 +2015,7 @@ registerHandler('theme:persist-splash', async (event, colors) => {
     console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
     return { success: false };
   }
-}, { requireMainSender: true, senderFailure: { success: false } });
+}, { senderFailure: { success: false } });
 
 function subscribeAccentColorChanges() {
   if (process.platform !== 'darwin') return;

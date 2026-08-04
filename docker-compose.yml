@@ -27,11 +27,19 @@ services:
     # Postgres uses /dev/shm for parallel query workers and large sorts/hash
     # joins; Docker's 64mb default is easily exhausted. 256mb is a safe bump.
     shm_size: 256mb
-    env_file: .env
+    # No `env_file: .env` here on purpose: the db container needs exactly two
+    # secrets, and inheriting the whole file would also hand it the app's API
+    # keys, ADMIN_AUTH_TOKEN and DATABASE_URL for no reason. The `${…}` values
+    # below still come from the same .env — Compose reads it for interpolation —
+    # they are just passed one at a time. Keep the app service's env_file.
     environment:
       POSTGRES_USER: ftm_user
       POSTGRES_DB: financial_transactions
-      # Password is read from POSTGRES_PASSWORD in .env (see .env.example)
+      # Superuser password for first init (ignored once the volume exists).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Consumed only by docker/postgres-init/01-app-role.sh, mounted below;
+      # unset/empty means "single-role setup" and the script no-ops.
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-}
       # Pin the cluster's session timezone to UTC (ADR-009: storage = UTC).
       # Without this, CURRENT_DATE/NOW() follow initdb's OS-detected default,
       # which is implicit and not guaranteed across hosts.

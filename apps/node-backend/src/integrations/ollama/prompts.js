@@ -20,19 +20,6 @@
  */
 
 /**
- * `toOllamaMessage` below reads `row.tool_result`/`row.tool_name` as a
- * fallback alongside the real `AiMessageRow` fields `toolResult`/`toolName`.
- * aiChatRepository's `MESSAGE_COLUMNS` always aliases these to camelCase in
- * SQL (see types/rows.js `AiMessageRow`), and `buildChatMessages`'s only
- * caller (aiChatService.js) always passes `AiMessageRow[]` from
- * `aiChatRepository.getMessages`, so the snake_case branch is dead — no row
- * shape reaching this function has ever had `tool_result`/`tool_name`.
- * Typed here (rather than dropped) to keep this a pure annotation pass; see
- * orchestrator report for the dead-code finding.
- * @typedef {AiMessageRow & { tool_result?: any, tool_name?: string }} OllamaSourceRow
- */
-
-/**
  * The shape sent to Ollama's /api/chat `messages` field. Mirrors
  * `OllamaMessage` in services/aiChatService.js — duplicated locally rather
  * than imported so this integrations-layer module doesn't reach up into
@@ -108,18 +95,21 @@ export function buildSystemPrompt(toolNames) {
  * For persisted assistant rows, we only have the final text (`content`). We
  * don't replay prior tool_calls in history — the tool_result rows carry the
  * ground-truth numbers, which is what the model needs to stay grounded.
- * @param {OllamaSourceRow|null|undefined} row
+ * @param {AiMessageRow|null|undefined} row
  * @returns {OllamaMessage|null}
  */
 export function toOllamaMessage(row) {
   if (!row || !row.role) return null;
 
   if (row.role === 'tool') {
-    const payload = row.toolResult ?? row.tool_result
+    // Only the camelCase fields: aiChatRepository's MESSAGE_COLUMNS aliases
+    // these in SQL and the sole caller passes AiMessageRow[], so the snake_case
+    // fallback that used to sit here could never fire.
+    const payload = row.toolResult
       ?? { ok: false, error: { code: 'MISSING', message: 'No result persisted' } };
     return {
       role: 'tool',
-      name: row.toolName || row.tool_name || 'unknown',
+      name: row.toolName || 'unknown',
       content: typeof payload === 'string' ? payload : JSON.stringify(payload),
     };
   }

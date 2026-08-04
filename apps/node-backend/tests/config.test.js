@@ -151,6 +151,34 @@ describe('Configuration Management', () => {
 
   });
 
+  describe('CORS origins are always a list, never a wildcard', () => {
+    // main.js used to carry a `corsOrigins === '*'` wildcard-dev-bypass branch
+    // that reflected `Access-Control-Allow-Origin: *`. csvEnv can never produce
+    // the bare string '*', so the branch was unreachable and was deleted rather
+    // than made reachable. These pin the parse so it cannot come back by
+    // accident through the config layer.
+    it('parses CORS_ORIGINS into an array', async () => {
+      process.env.CORS_ORIGINS = 'http://a.test,http://b.test';
+      const { getSettings } = await importConfigFresh();
+      expect(getSettings().api.corsOrigins).toEqual(['http://a.test', 'http://b.test']);
+    });
+
+    it('parses a literal * as a one-element list, not a wildcard string', async () => {
+      process.env.CORS_ORIGINS = '*';
+      const { getSettings } = await importConfigFresh();
+      const { corsOrigins } = getSettings().api;
+      expect(Array.isArray(corsOrigins)).toBe(true);
+      expect(corsOrigins).toEqual(['*']);
+      expect(corsOrigins).not.toBe('*');
+    });
+
+    it('falls back to the default list when unset', async () => {
+      delete process.env.CORS_ORIGINS;
+      const { getSettings } = await importConfigFresh();
+      expect(Array.isArray(getSettings().api.corsOrigins)).toBe(true);
+    });
+  });
+
   describe('Environment Priority', () => {
     it('should prioritize SERVER_HOST over HOSTNAME', async () => {
       process.env.SERVER_HOST = 'server-host';

@@ -196,3 +196,52 @@ describe('copy coverage', () => {
         expect(message).not.toBe('Failed to fetch');
     });
 });
+
+describe('rate limits carry the retry hint', () => {
+    // client.ts bakes the retry count into a hardcoded English sentence that
+    // this module refuses to pass through, so the number rides in `details`.
+    const t = (key: string, vars?: Record<string, string | number>) =>
+        vars ? `${key}:${JSON.stringify(vars)}` : key;
+
+    it('renders the seconds when retry_after is present', () => {
+        const err = new ApiClientError({
+            status: 429,
+            code: ApiErrorCode.RATE_LIMITED,
+            message: 'Too many requests. Please try again in 30 seconds.',
+            details: { retry_after: 30 },
+        });
+        expect(apiErrorToMessage(err, t)).toBe('apiError.rateLimitedIn:{"seconds":30}');
+    });
+
+    it('rounds a fractional retry_after up', () => {
+        const err = new ApiClientError({
+            status: 429,
+            code: ApiErrorCode.RATE_LIMITED,
+            message: 'Too many requests. Please try again in 1.2 seconds.',
+            details: { retry_after: 1.2 },
+        });
+        expect(apiErrorToMessage(err, t)).toBe('apiError.rateLimitedIn:{"seconds":2}');
+    });
+
+    it('falls back to timing-free copy when retry_after is absent', () => {
+        const err = new ApiClientError({
+            status: 429,
+            code: ApiErrorCode.RATE_LIMITED,
+            message: 'Too many requests. Please try again in a few seconds.',
+        });
+        expect(apiErrorToMessage(err, t)).toBe('apiError.rateLimited');
+    });
+
+    it.each([[0], [-5], ['soon'], [null]])(
+        'falls back for an unusable retry_after (%s)',
+        (value) => {
+            const err = new ApiClientError({
+                status: 429,
+                code: ApiErrorCode.RATE_LIMITED,
+                message: 'Too many requests.',
+                details: { retry_after: value },
+            });
+            expect(apiErrorToMessage(err, t)).toBe('apiError.rateLimited');
+        },
+    );
+});
