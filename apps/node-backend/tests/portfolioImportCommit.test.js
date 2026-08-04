@@ -15,12 +15,17 @@ vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
   default: { create: vi.fn(), hardDelete: vi.fn() },
 }));
 
+vi.mock('../src/repositories/recipientRepository.js', () => ({
+  default: { createOrGet: vi.fn(), getOrCreateSystemId: vi.fn() },
+}));
+
 vi.mock('../src/services/portfolio/fxResolve.js', () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
 import { query } from '../src/database/connection.js';
 import portfolioTransactionRepository from '../src/repositories/portfolioTransactionRepository.js';
+import recipientRepository from '../src/repositories/recipientRepository.js';
 import { autoResolveFxRateToEur } from '../src/services/portfolio/fxResolve.js';
 import { commitBatch } from '../src/services/portfolioImportPipeline/commit.js';
 
@@ -30,10 +35,19 @@ let marked;
 let batchAccountId;
 let isBrokerage;
 let cashDuplicate;
+let accountInstitution;
+let accountName;
 
 function dispatch(sql, params) {
-  if (/SELECT account_id, is_brokerage FROM portfolio_import_batches/.test(sql)) {
-    return { rows: [{ account_id: batchAccountId, is_brokerage: isBrokerage }] };
+  if (/SELECT b\.account_id, b\.is_brokerage/.test(sql)) {
+    return {
+      rows: [{
+        account_id: batchAccountId,
+        is_brokerage: isBrokerage,
+        account_institution: accountInstitution,
+        account_name: accountName,
+      }],
+    };
   }
   if (/FROM portfolio_import_staging_rows isr/.test(sql)) return { rows: matchedRows };
   if (/FROM portfolio_transactions\s+WHERE investment_id/.test(sql)) {
@@ -67,10 +81,16 @@ beforeEach(() => {
   batchAccountId = null;
   isBrokerage = false;
   cashDuplicate = false;
+  accountInstitution = 'IBKR';
+  accountName = 'IBKR SLEEVE';
   query.mockReset();
   query.mockImplementation((sql, params) => Promise.resolve(dispatch(sql, params)));
   portfolioTransactionRepository.create.mockReset();
   portfolioTransactionRepository.create.mockResolvedValue({ id: 100 });
+  recipientRepository.createOrGet.mockReset();
+  recipientRepository.createOrGet.mockResolvedValue({ recipient: { id: 42 }, created: false });
+  recipientRepository.getOrCreateSystemId.mockReset();
+  recipientRepository.getOrCreateSystemId.mockResolvedValue(99);
   autoResolveFxRateToEur.mockReset();
   autoResolveFxRateToEur.mockResolvedValue(undefined);
 });
@@ -182,6 +202,84 @@ describe('commitBatch (portfolio)', () => {
     expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
     const cashInserts = query.mock.calls.filter(([s]) => /INSERT INTO transactions/.test(s));
     expect(cashInserts).toHaveLength(1);
+  });
+
+  // ── Cash-row recipient (NOT NULL since 0001; this insert omitted it and every
+  // cash row died with 23502 — the bug was invisible to mocks that only check
+  // "no error", so these tests pin the actual column list and parameters). ──
+  it('cash INSERT carries recipient_id in its column list and params (pinned SQL)', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 1000, note: 'wire' })];
+    await commitBatch({ batchId: 5 });
+
+    const [sql, params] = query.mock.calls.find(([s]) => /INSERT INTO transactions/.test(s));
+    // Exact column list — a regression that drops recipient_id (or reorders it
+    // away from its parameter) must fail here, not only on a real database.
+    expect(sql).toMatch(
+      /INSERT INTO transactions \(date, amount, currency, memo, account_id, recipient_id, is_active\)\s*VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, true\)/,
+    );
+    // [date, signed amount, currency, memo, account_id, recipient_id]
+    expect(params).toEqual(['2026-01-05', 1000, 'EUR', 'wire', 7, 42]);
+  });
+
+  it('resolves the cash recipient from the sleeve account institution, trimmed, via createOrGet', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    accountInstitution = '  DeGiro  ';
+    matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 1000 })];
+    await commitBatch({ batchId: 5 });
+    // createOrGet uppercases + writes normalized_name itself; commit's job is to
+    // hand it the trimmed institution so identity can't fork on whitespace.
+    expect(recipientRepository.createOrGet).toHaveBeenCalledWith({ name: 'DeGiro' });
+    expect(recipientRepository.getOrCreateSystemId).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the account NAME when the institution is blank', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    accountInstitution = '   ';
+    accountName = 'IBKR SLEEVE';
+    matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 1000 })];
+    await commitBatch({ batchId: 5 });
+    expect(recipientRepository.createOrGet).toHaveBeenCalledWith({ name: 'IBKR SLEEVE' });
+  });
+
+  it('falls back to the shared SYSTEM recipient when the account has no usable label', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    accountInstitution = null;
+    accountName = '   ';
+    matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 1000 })];
+    await commitBatch({ batchId: 5 });
+    expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
+    expect(recipientRepository.getOrCreateSystemId).toHaveBeenCalledTimes(1);
+    const [, params] = query.mock.calls.find(([s]) => /INSERT INTO transactions/.test(s));
+    expect(params[5]).toBe(99); // the SYSTEM id, not null
+  });
+
+  it('hoists recipient resolution to once per commit, not once per cash row', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [
+      row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 1000, tx_hash: 'c1' }),
+      row({ id: 10, route: 'cash', type: null, type_raw: 'withdrawal', investment_id: null, amount: 250, tx_hash: 'c2' }),
+    ];
+    const res = await commitBatch({ batchId: 5 });
+    expect(res).toMatchObject({ imported: 2 });
+    expect(recipientRepository.createOrGet).toHaveBeenCalledTimes(1);
+    const cashInserts = query.mock.calls.filter(([s]) => /INSERT INTO transactions/.test(s));
+    expect(cashInserts).toHaveLength(2);
+    for (const [, params] of cashInserts) expect(params[5]).toBe(42);
+  });
+
+  it('does not touch the recipient repository when the batch has no cash rows', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ route: 'portfolio', type: 'buy', type_raw: 'buy' })];
+    await commitBatch({ batchId: 5 });
+    expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
+    expect(recipientRepository.getOrCreateSystemId).not.toHaveBeenCalled();
   });
 
   it('brokerage withdrawal: debits the sleeve (negative amount) even though staging is absolute', async () => {

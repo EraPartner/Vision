@@ -9,12 +9,13 @@
 
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
 import investmentRepository from '../repositories/investmentRepository.js';
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import {
   getRowForInvestmentCreation,
   overrideInvestment,
   getCommittedRows,
   markBatchAborted,
+  resetCommittedRowsToMatched,
 } from '../repositories/portfolioImportBatchRepository.js';
 
 export {
@@ -97,36 +98,77 @@ export async function createInvestmentForRow({ batchId, rowId }) {
  *      double-counted and no batch is left un-rollbackable by the migration
  *      boundary.
  *
+ * ATOMICITY: the whole rollback — all three passes, the staging-row reset and
+ * the abort mark — runs inside ONE withTransaction. A mid-way failure (e.g.
+ * between the trade pass and the cash pass) therefore rolls everything back:
+ * no partial deletion is ever visible and the batch stays un-aborted, so the
+ * caller can simply retry. (query()/queryPrepared join the ambient transaction
+ * client via AsyncLocalStorage, so every repository call below participates.)
+ *
+ * ROUTE GUARD: the cash pass runs ONLY for a brokerage batch. On a
+ * non-brokerage batch the commit path ignores `route` entirely (commit.js
+ * checks `isBrokerage && row.route === 'cash'`), so every committed_txn_id is a
+ * PORTFOLIO id — feeding a hypothetical route='cash' staging row (unreachable
+ * through the app, but one UPDATE away in SQL) into the ledger DELETE would
+ * destroy an innocent `transactions` row of the same number. Such rows are
+ * treated as the trades they actually are.
+ *
+ * DIRECT DELETION of a `portfolio_import_batches` row (SQL / db editor — the
+ * app itself never deletes batch rows) strands what the batch committed:
+ * `portfolio_transactions.import_batch_id` is ON DELETE SET NULL (a deliberate
+ * 0086 choice — "manually deleting a batch row preserves the lots it created")
+ * while `portfolio_import_staging_rows` CASCADE-deletes, so a later
+ * rollbackBatch has nothing left to find (`{deleted: 0}`; the DELETE route
+ * 404s anyway once the batch row is gone). Documented rather than
+ * FK-protected: RESTRICTing the FK would reverse 0086's explicit intent and
+ * needs a new migration. Roll back FIRST if you want the data gone.
+ *
  * @param {number} batchId
  * @returns {Promise<{ deleted: number }>} rows actually deleted (unchanged
  *          semantics: already-gone rows are not counted)
  */
 export async function rollbackBatch(batchId) {
-  const rows = await getCommittedRows(batchId);
+  return withTransaction(async () => {
+    const rows = await getCommittedRows(batchId);
 
-  // 1. Trades stamped with this batch — one statement.
-  const bulkDeletedIds = await portfolioTransactionRepository.hardDeleteByImportBatch(batchId);
-  let deleted = bulkDeletedIds.length;
-  // committed_txn_id is INTEGER while portfolio ids can arrive as BIGINT strings
-  // from pg; compare as strings so the "already covered" test can't miss.
-  const bulkDeleted = new Set(bulkDeletedIds.map(String));
+    // Brokerage flag for the route guard (see docstring). Committed cash rows
+    // can only exist on a brokerage batch (resolveAndCheck writes route='cash'
+    // only when is_brokerage) — this re-check keeps a corrupted/hand-edited
+    // staging row from crossing the transactions/portfolio id line.
+    const { rows: batchRows } = await query(
+      `SELECT is_brokerage FROM portfolio_import_batches WHERE id = $1`,
+      [batchId],
+    );
+    const isBrokerage = batchRows[0]?.is_brokerage === true;
 
-  // 2. Cash rows → the ledger, never the portfolio table.
-  const cashIds = rows.filter((r) => r.route === 'cash' && r.id != null).map((r) => r.id);
-  if (cashIds.length > 0) {
-    const r = await query('DELETE FROM transactions WHERE id = ANY($1::int[])', [cashIds]);
-    deleted += r.rowCount ?? 0;
-  }
+    // 1. Trades stamped with this batch — one statement.
+    const bulkDeletedIds = await portfolioTransactionRepository.hardDeleteByImportBatch(batchId);
+    let deleted = bulkDeletedIds.length;
+    // committed_txn_id is INTEGER while portfolio ids can arrive as BIGINT strings
+    // from pg; compare as strings so the "already covered" test can't miss.
+    const bulkDeleted = new Set(bulkDeletedIds.map(String));
 
-  // 3. Pre-0086 trades the stamp cannot reach.
-  const unstampedTradeIds = rows
-    .filter((r) => r.route !== 'cash' && r.id != null && !bulkDeleted.has(String(r.id)))
-    .map((r) => r.id);
-  for (const id of unstampedTradeIds) {
-    const ok = await portfolioTransactionRepository.hardDelete(id);
-    if (ok) deleted++;
-  }
+    // 2. Cash rows → the ledger, never the portfolio table (brokerage only).
+    const cashIds = isBrokerage
+      ? rows.filter((r) => r.route === 'cash' && r.id != null).map((r) => r.id)
+      : [];
+    if (cashIds.length > 0) {
+      const r = await query('DELETE FROM transactions WHERE id = ANY($1::int[])', [cashIds]);
+      deleted += r.rowCount ?? 0;
+    }
 
-  await markBatchAborted(batchId);
-  return { deleted };
+    // 3. Pre-0086 trades the stamp cannot reach. On a non-brokerage batch this
+    // includes route='cash' rows — they were committed as trades (see guard).
+    const unstampedTradeIds = rows
+      .filter((r) => (!isBrokerage || r.route !== 'cash') && r.id != null && !bulkDeleted.has(String(r.id)))
+      .map((r) => r.id);
+    for (const id of unstampedTradeIds) {
+      const ok = await portfolioTransactionRepository.hardDelete(id);
+      if (ok) deleted++;
+    }
+
+    await resetCommittedRowsToMatched(batchId);
+    await markBatchAborted(batchId);
+    return { deleted };
+  });
 }

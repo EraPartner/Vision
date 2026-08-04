@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
+  // rollbackBatch wraps its passes in one transaction; in the mocked world the
+  // callback just runs (atomicity itself is proven on real Postgres in
+  // portfolioImportRollback.db.test.js).
+  withTransaction: vi.fn(async (fn) => fn({})),
 }));
 
 vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
@@ -20,20 +24,39 @@ vi.mock('../src/repositories/portfolioImportBatchRepository.js', () => ({
   overrideInvestment: vi.fn(),
   getCommittedRows: vi.fn(),
   markBatchAborted: vi.fn(),
+  resetCommittedRowsToMatched: vi.fn(),
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   getPreviewRows: vi.fn(),
   setBatchAccount: vi.fn(),
 }));
 
-import { query } from '../src/database/connection.js';
+import { query, withTransaction } from '../src/database/connection.js';
 import portfolioTransactionRepository from '../src/repositories/portfolioTransactionRepository.js';
-import { getCommittedRows, markBatchAborted } from '../src/repositories/portfolioImportBatchRepository.js';
+import {
+  getCommittedRows,
+  markBatchAborted,
+  resetCommittedRowsToMatched,
+} from '../src/repositories/portfolioImportBatchRepository.js';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
+
+/**
+ * Default query mock: answer rollbackBatch's is_brokerage lookup (true unless a
+ * test says otherwise — most of these fixtures model the brokerage cash flow),
+ * `{rowCount: 1}` for everything else (the ledger DELETE).
+ * @param {boolean} isBrokerage
+ */
+function mockQueries(isBrokerage) {
+  query.mockImplementation(async (/** @type {string} */ sql) => (
+    /is_brokerage/.test(String(sql))
+      ? { rows: [{ is_brokerage: isBrokerage }], rowCount: 1 }
+      : { rows: [], rowCount: 1 }
+  ));
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  query.mockResolvedValue({ rows: [], rowCount: 1 });
+  mockQueries(true);
   portfolioTransactionRepository.hardDelete.mockResolvedValue(true);
   // Default: nothing carries the 0086 stamp, i.e. the pre-migration world. Each
   // test that exercises the bulk path says so explicitly.
@@ -45,7 +68,6 @@ describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
     // The critical cross-table id bug: transactions.id 812 fed to the
     // portfolio hard-delete removed UNRELATED portfolio trade 812.
     getCommittedRows.mockResolvedValue([{ id: 812, route: 'cash' }]);
-    query.mockResolvedValue({ rows: [], rowCount: 1 });
 
     const res = await rollbackBatch(5);
 
@@ -53,6 +75,34 @@ describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
     expect(query).toHaveBeenCalledWith('DELETE FROM transactions WHERE id = ANY($1::int[])', [[812]]);
     expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
     expect(markBatchAborted).toHaveBeenCalledWith(5);
+  });
+
+  it("guards route='cash' on a NON-brokerage batch: rolled back as the trade it was committed as", async () => {
+    // A non-brokerage commit ignores `route` and writes every row as a trade
+    // (commit.js checks `isBrokerage && route === 'cash'`), so its
+    // committed_txn_id is a PORTFOLIO id. Feeding it to the ledger DELETE
+    // would destroy an unrelated transactions row of the same number.
+    mockQueries(false);
+    getCommittedRows.mockResolvedValue([{ id: 812, route: 'cash' }]);
+
+    const res = await rollbackBatch(5);
+
+    expect(res).toEqual({ deleted: 1 });
+    expect(query).not.toHaveBeenCalledWith('DELETE FROM transactions WHERE id = ANY($1::int[])', expect.anything());
+    expect(portfolioTransactionRepository.hardDelete).toHaveBeenCalledWith(812);
+  });
+
+  it('runs inside one transaction and resets committed staging rows before aborting', async () => {
+    getCommittedRows.mockResolvedValue([{ id: 42, route: 'portfolio' }]);
+
+    await rollbackBatch(5);
+
+    expect(withTransaction).toHaveBeenCalledTimes(1);
+    expect(resetCommittedRowsToMatched).toHaveBeenCalledWith(5);
+    expect(markBatchAborted).toHaveBeenCalledWith(5);
+    // Reset happens before the abort mark (both inside the transaction).
+    expect(resetCommittedRowsToMatched.mock.invocationCallOrder[0])
+      .toBeLessThan(markBatchAborted.mock.invocationCallOrder[0]);
   });
 
   it('never passes a cash id to the batch-stamped bulk delete', async () => {

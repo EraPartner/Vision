@@ -171,7 +171,7 @@ export function AddTransactionDialog() {
                             <FieldError field="tx_bank" message={visibleErrors.tx_bank} />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="tx_currency">{t('form.addTransaction.bank')}</Label>
+                            <Label htmlFor="tx_currency">{t('accounts.field.currency')}</Label>
                             <Input id="tx_currency" placeholder={t('addTxn.currencyPlaceholder')} maxLength={10} value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
                         </div>
                     </div>

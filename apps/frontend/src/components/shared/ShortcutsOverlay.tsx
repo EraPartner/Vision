@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { isTypingTarget } from "@/lib/keyboard";
+import { isShortcutSafeTarget } from "@/lib/keyboard";
 import { GO_TO_ROUTES } from "@/lib/navigation";
 import { isElectron } from "@/lib/api/electron";
 
@@ -27,7 +27,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey && !isTypingTarget(e.target)) {
+            if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey && !isShortcutSafeTarget(e.target)) {
                 e.preventDefault();
                 onOpenChange(!open);
             }
