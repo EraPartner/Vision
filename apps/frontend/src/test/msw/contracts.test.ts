@@ -916,15 +916,118 @@ describe("Phase F1: extended GET endpoint contracts", () => {
 
 describe("Phase F1: extended mutation contracts", () => {
     const MessageSchema = z.object({ message: z.string() });
+    const ConversationSchema = z.object({
+        id: z.string(),
+        title: z.string(),
+        model: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+    });
+    // POST /api/ai/conversations and GET /api/ai/conversations/:id share this
+    // shape. The POST route names its local `conversation` (routes/ai.js:272)
+    // but assigns it `createEmptyConversation`'s return value, which really is
+    // `{ conversation, messages: [] }` (services/aiChatService.js:468-475) —
+    // verified in the service, not inferred from the variable name.
     const ConversationWithMessagesSchema = z.object({
-        conversation: z.object({
-            id: z.string(),
-            title: z.string(),
-            model: z.string(),
-            createdAt: z.string(),
-            updatedAt: z.string(),
-        }),
+        conversation: ConversationSchema,
         messages: z.array(z.unknown()),
+    });
+
+    // routes/ai.js:324-331 — the non-streaming chat turn. `usage` is
+    // aiChatService's `lastUsage` (every counter nullable until the model
+    // answers); `ChatTurnResponse` in types/aiChat.ts is the client-side twin.
+    const ChatMessageSchema = z.object({
+        id: z.string(),
+        conversationId: z.string(),
+        role: z.string(),
+        content: z.string().nullable(),
+        createdAt: z.string(),
+    });
+    const ChatTurnSchema = z.object({
+        conversation: ConversationSchema,
+        userMessage: ChatMessageSchema,
+        toolMessages: z.array(ChatMessageSchema),
+        assistantMessage: ChatMessageSchema,
+        usage: z.object({
+            evalCount: z.number().nullable(),
+            promptEvalCount: z.number().nullable(),
+            totalDurationMs: z.number().nullable(),
+        }),
+        iterations: z.number().int().nonnegative(),
+    });
+
+    // `splitRepository.formatSplit` (splitRepository.js:717) — the body of
+    // POST /api/splits/:id/settle.
+    const SplitSchema = z.object({
+        id: z.number().int().positive(),
+        transaction_id: z.number().int().positive(),
+        recipient_id: z.number().int().positive(),
+        recipient_name: z.string().nullable(),
+        amount: z.number(),
+        amount_paid: z.number(),
+        note: z.string().nullable(),
+        is_settled: z.boolean(),
+        created_at: z.string(),
+        updated_at: z.string(),
+    });
+
+    // `splitRepository.formatPayment` (splitRepository.js:701) — the body of
+    // POST /api/splits/:id/pay.
+    const SplitPaymentSchema = z.object({
+        id: z.number().int().positive(),
+        split_id: z.number().int().positive(),
+        amount: z.number(),
+        note: z.string().nullable(),
+        paid_at: z.string(),
+        created_at: z.string(),
+    });
+
+    // The counter object both CSV metadata importers answer with:
+    // `res.ok({ ...result, status })`, routes/importRoutes.js:388 / :406.
+    const CsvCountsSchema = z.object({
+        total_processed: z.number().int().nonnegative(),
+        imported: z.number().int().nonnegative(),
+        skipped: z.number().int().nonnegative(),
+        errors: z.number().int().nonnegative(),
+        status: z.enum(["completed", "completed_with_errors"]),
+    });
+
+    // accountRepository's COLUMNS (accountRepository.js:26-29) plus the route's
+    // `links: []`. Every accounts single-row body carries exactly these.
+    const AccountSchema = z.object({
+        id: z.number().int().positive(),
+        name: z.string(),
+        display_name: z.string().nullable(),
+        institution: z.string().nullable(),
+        currency: z.string(),
+        type: z.string(),
+        liquidity_class: z.string(),
+        spendable: z.boolean(),
+        in_net_worth: z.boolean(),
+        tax_wrapper: z.string(),
+        owner: z.string(),
+        multi_currency_cash: z.boolean(),
+        has_cash_sleeve: z.boolean(),
+        funding_account_id: z.number().int().positive().nullable(),
+        statement_balance: z.number().nullable(),
+        statement_balance_date: z.string().nullable(),
+        is_active: z.boolean(),
+        closed_at: z.string().nullable(),
+        created_at: z.string(),
+        updated_at: z.string().nullable(),
+        links: z.array(z.unknown()),
+    });
+
+    // `attachmentRepository.formatRow` (attachmentRepository.js:19-29). Note
+    // `size_bytes` (number), not `size` — AttachmentPanel.tsx:61 reads it.
+    const AttachmentSchema = z.object({
+        id: z.number().int().positive(),
+        transaction_id: z.number().int().positive(),
+        filename: z.string(),
+        stored_path: z.string(),
+        mime_type: z.string(),
+        size_bytes: z.number(),
+        created_at: z.string(),
     });
 
     // Both CSV import routes answer with the same object on the auto-commit
@@ -958,28 +1061,24 @@ describe("Phase F1: extended mutation contracts", () => {
         ]
     >([
         [
-            "POST /api/admin/database/vacuum returns message",
+            // `res.ok({ vacuumed: table ?? 'all' })` — there is no `message`.
+            "POST /api/admin/database/vacuum returns { vacuumed }",
             "POST",
             "/api/admin/database/vacuum",
             undefined,
             "POST /api/admin/database/vacuum",
-            MessageSchema,
+            z.object({ vacuumed: z.string() }),
             200, // routes/admin.js:282 — bare res.ok
         ],
         [
-            "POST /api/ai/chat returns message shape",
+            // The non-streaming turn returns the WHOLE turn, not one message.
+            "POST /api/ai/chat returns the chat turn",
             "POST",
             "/api/ai/chat",
             { conversationId: "conv-1", content: "test" },
             "POST /api/ai/chat",
-            z.object({
-                id: z.string(),
-                conversationId: z.string(),
-                role: z.string(),
-                content: z.string(),
-                createdAt: z.string(),
-            }),
-            200, // routes/ai.js:324 — bare res.ok
+            ChatTurnSchema,
+            200, // routes/ai.js:324-331 — bare res.ok
         ],
         [
             "POST /api/ai/conversations returns conversation+messages",
@@ -991,12 +1090,14 @@ describe("Phase F1: extended mutation contracts", () => {
             201, // routes/ai.js:273
         ],
         [
-            "POST /api/info/exchange-rates/refresh returns refresh result",
+            // Message only — the route counts nothing, so there is no
+            // `rates_updated` field to read.
+            "POST /api/info/exchange-rates/refresh returns message only",
             "POST",
             "/api/info/exchange-rates/refresh",
             undefined,
             "POST /api/info/exchange-rates/refresh",
-            z.object({ message: z.string(), rates_updated: z.number() }),
+            MessageSchema,
             200, // routes/info/rates.js:94 — bare res.ok
         ],
         [
@@ -1061,12 +1162,14 @@ describe("Phase F1: extended mutation contracts", () => {
             200, // routes/recipients.js:157 — bare res.ok
         ],
         [
-            "POST /api/recipients/:id/unmerge returns message",
+            // Returns the re-read recipient (`{ ...recipient, links: [] }`),
+            // not an acknowledgement.
+            "POST /api/recipients/:id/unmerge returns the recipient",
             "POST",
             "/api/recipients/1/unmerge",
             undefined,
             "POST /api/recipients/:id/unmerge",
-            MessageSchema,
+            RecipientItemSchema,
             200, // routes/recipients.js:172 — bare res.ok
         ],
         [
@@ -1127,41 +1230,28 @@ describe("Phase F1: extended mutation contracts", () => {
             z.object({ items: z.array(z.unknown()) }),
             201, // routes/splits.js:298
         ],
+        // NOTE: there is deliberately no `PATCH /api/splits/:id` row here.
+        // routes/splits.js registers get/post/delete only, so that verb 404s
+        // in production; the row and its handler were removed rather than
+        // rewritten, and no frontend client sends a PATCH there.
         [
-            // NOTE: routes/splits.js has no PATCH /:id — this row (and the
-            // handler backing it) pins a route the backend does not serve.
-            // Filed as a separate finding; 200 here matches the fixture, not a
-            // real response.
-            "PATCH /api/splits/:id returns split shape",
-            "PATCH",
-            "/api/splits/1",
-            {},
-            "PATCH /api/splits/:id",
-            z.object({
-                id: z.number(),
-                transaction_id: z.number(),
-                recipient_id: z.number(),
-                amount: z.number(),
-                is_paid: z.boolean(),
-            }),
-            200,
-        ],
-        [
-            "POST /api/splits/:id/pay returns message",
+            // Answers with the inserted split_payments row, not a message.
+            "POST /api/splits/:id/pay returns the payment row",
             "POST",
             "/api/splits/1/pay",
             {},
             "POST /api/splits/:id/pay",
-            MessageSchema,
+            SplitPaymentSchema,
             201, // routes/splits.js:320 — inserts a payment row
         ],
         [
-            "POST /api/splits/:id/settle returns message",
+            // Answers with the updated split row, not a message.
+            "POST /api/splits/:id/settle returns the split row",
             "POST",
             "/api/splits/1/settle",
             {},
             "POST /api/splits/:id/settle",
-            MessageSchema,
+            SplitSchema,
             200, // routes/splits.js:343 — bare res.ok (flips a flag)
         ],
         [
@@ -1238,18 +1328,63 @@ describe("Phase F1: extended mutation contracts", () => {
             200, // routes/importRoutes.js:621 — bare res.ok
         ],
         [
-            // NOTE: the real route is POST, not PUT
-            // (routes/importRoutes.js:549, and lib/api/imports.ts
-            // `overrideImportRow` posts). This row and its handler pin a verb
-            // the backend does not serve; filed as a separate finding. 200
-            // matches the fixture, not a real response.
-            "PUT /api/import/batches/:batchId/rows/:rowId/override returns message",
-            "PUT",
+            // POST, not PUT: routes/importRoutes.js:549, and
+            // `lib/api/imports.ts::overrideImportRow` posts. The body echoes
+            // the row id and the override that landed — never a message.
+            "POST /api/import/batches/:batchId/rows/:rowId/override returns the applied override",
+            "POST",
             "/api/import/batches/1/rows/1/override",
             {},
-            "PUT override",
-            MessageSchema,
-            200,
+            "POST override",
+            z.object({
+                row_id: z.number().int().positive(),
+                user_override_recipient_id: z.number().int().positive().nullable(),
+            }),
+            200, // routes/importRoutes.js:568 — bare res.ok
+        ],
+
+        // ── Rows added for the four handlers ea3a2eb corrected to 201 but
+        // left uncovered by this table. Statuses cited as above; bodies read
+        // off the same routes.
+        [
+            "POST /api/accounts returns the created account",
+            "POST",
+            "/api/accounts",
+            {},
+            "POST /api/accounts",
+            AccountSchema,
+            201, // routes/accounts.js:55
+        ],
+        [
+            "POST /api/attachments/transaction/:id returns the attachment row",
+            "POST",
+            "/api/attachments/transaction/1",
+            {},
+            "POST /api/attachments/transaction/:id",
+            AttachmentSchema,
+            201, // routes/attachments.js:112
+        ],
+        [
+            "POST /api/import/categories returns CSV counts",
+            "POST",
+            "/api/import/categories",
+            {},
+            "POST /api/import/categories",
+            CsvCountsSchema,
+            201, // routes/importRoutes.js:406
+        ],
+        [
+            // Same counter object plus `bank_account_errors`
+            // (RecipientImportResults, dataImportService.js:69-75).
+            "POST /api/import/recipients returns CSV counts",
+            "POST",
+            "/api/import/recipients",
+            {},
+            "POST /api/import/recipients",
+            CsvCountsSchema.extend({
+                bank_account_errors: z.number().int().nonnegative(),
+            }),
+            201, // routes/importRoutes.js:388
         ],
     ])("%s", async (_name, method, path, body, label, schema, status) => {
         validate(schema, await mutateEnvelope(method, path, body, status), label);

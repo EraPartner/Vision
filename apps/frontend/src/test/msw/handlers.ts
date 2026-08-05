@@ -194,8 +194,51 @@ export const ACCOUNT_STUB = {
     computed_balance: 0,
     drift: null,
     is_active: true,
+    // `closed_at` and `links` are on every accounts single-row body:
+    // accountRepository's COLUMNS list (accountRepository.js:26-29) plus the
+    // route's `res.ok({ ...account, links: [] })` (routes/accounts.js:45/56/…).
+    closed_at: null,
     created_at: "2025-01-01T00:00:00.000Z",
     updated_at: null,
+    links: [],
+};
+
+/**
+ * A `transaction_splits` row as `splitRepository.formatSplit` emits it
+ * (apps/node-backend/src/repositories/splitRepository.js:717). This is what
+ * `POST /api/splits/:id/settle` answers with — `res.ok(split)`, splits.js:343
+ * — not a `{message}` acknowledgement.
+ *
+ * `settleSplit`'s `RETURNING *` carries no join, so the real response has
+ * `recipient_name: null` and `amount_paid: 0` regardless of the split's actual
+ * paid total (documented on the repo method); the stub mirrors that.
+ */
+export const SPLIT_STUB = {
+    id: 1,
+    transaction_id: 1,
+    recipient_id: 1,
+    recipient_name: null,
+    amount: 25,
+    amount_paid: 0,
+    note: null,
+    is_settled: false,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-01T00:00:00.000Z",
+};
+
+/**
+ * A `split_payments` row as `splitRepository.formatPayment` emits it
+ * (splitRepository.js:701): NUMERIC `amount` coerced to a number, DATE
+ * `paid_at` as a calendar-day string. `POST /api/splits/:id/pay` answers with
+ * this row (`res.ok(payment)`, splits.js:321), not a `{message}`.
+ */
+export const SPLIT_PAYMENT_STUB = {
+    id: 1,
+    split_id: 1,
+    amount: 10,
+    note: null,
+    paid_at: "2025-01-15",
+    created_at: "2025-01-15T10:00:00.000Z",
 };
 
 /**
@@ -518,15 +561,31 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/admin/update/check`, () =>
         ok({ available: false, current: "test", latest: "test" }),
     ),
+    // `res.ok({ vacuumed: table ?? 'all' })` — routes/admin.js:282. There is no
+    // `message` on this route; `lib/api/admin.ts::vacuumTable` reads `vacuumed`.
     http.post(`${API_BASE}/api/admin/database/vacuum`, () =>
-        ok({ message: "Vacuum complete" }),
+        ok({ vacuumed: "all" }),
     ),
 
     // AI
+    // The non-streaming turn returns the whole turn, not a single message:
+    // `res.ok({ conversation, userMessage, toolMessages, assistantMessage,
+    // usage, iterations })` — routes/ai.js:324-331 (`ChatTurnResponse` in
+    // types/aiChat.ts). The frontend only uses /api/ai/chat/stream today.
     http.post(`${API_BASE}/api/ai/chat`, () =>
-        ok({ id: "msg-1", conversationId: "conv-1", role: "assistant", content: "ok", createdAt: "2025-01-01T00:00:00Z" }),
+        ok({
+            conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
+            userMessage: { id: "msg-1", conversationId: "conv-1", role: "user", content: "test", toolName: null, toolArgs: null, toolResult: null, status: "complete", createdAt: "2025-01-01T00:00:00Z" },
+            toolMessages: [],
+            assistantMessage: { id: "msg-2", conversationId: "conv-1", role: "assistant", content: "ok", toolName: null, toolArgs: null, toolResult: null, status: "complete", createdAt: "2025-01-01T00:00:00Z" },
+            usage: { evalCount: null, promptEvalCount: null, totalDurationMs: null },
+            iterations: 1,
+        }),
     ),
-    // 201: routes/ai.js:273.
+    // 201: routes/ai.js:273. The body really is `{conversation, messages}`:
+    // routes/ai.js:272 names its local `conversation`, but the value comes from
+    // `createEmptyConversation`, which returns `{ conversation, messages: [] }`
+    // (services/aiChatService.js:468-475) — same shape as GET /:id.
     http.post(`${API_BASE}/api/ai/conversations`, () =>
         ok201({
             conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
@@ -544,9 +603,12 @@ export const defaultHandlers = [
 
     // Attachments
     http.get(`${API_BASE}/api/attachments/transaction/:id`, () => ok({ items: [] })),
-    // 201: routes/attachments.js:113.
+    // 201: routes/attachments.js:113. Body is `attachmentRepository.formatRow`
+    // (attachmentRepository.js:19-29) — `size_bytes` (a number) and
+    // `stored_path`, NOT `size`. `AttachmentPanel.tsx:61` renders
+    // `attachment.size_bytes`.
     http.post(`${API_BASE}/api/attachments/transaction/:id`, () =>
-        ok201({ id: 1, transaction_id: 1, filename: "test.pdf", mime_type: "application/pdf", size: 1024, created_at: "2025-01-01T00:00:00Z" }),
+        ok201({ id: 1, transaction_id: 1, filename: "test.pdf", stored_path: "attachments/test.pdf", mime_type: "application/pdf", size_bytes: 1024, created_at: "2025-01-01T00:00:00Z" }),
     ),
     http.get(`${API_BASE}/api/attachments/:id`, () =>
         new Response(new Blob(["data"], { type: "application/pdf" }), { status: 200 }),
@@ -568,18 +630,26 @@ export const defaultHandlers = [
     // `importCsvReviewRequiredHandlers` above.
     http.post(`${API_BASE}/api/import/csv`, () => ok201(IMPORT_CSV_RESULT_STUB)),
     http.post(`${API_BASE}/api/import/csv/custom`, () => ok201(IMPORT_CSV_RESULT_STUB)),
-    // 201: routes/importRoutes.js:406 (categories), :388 (recipients).
+    // 201: routes/importRoutes.js:406 (categories), :388 (recipients). Both
+    // answer `{ ...result, status }` where `result` is the CSV importer's
+    // counter object (`dataImportService.js` — total_processed/imported/
+    // skipped/errors, plus bank_account_errors on the recipients path) and
+    // `status` is derived from `errors`. There is no `message`/`count`:
+    // `SimpleImportCard`'s success toast reads imported/skipped/errors.
     http.post(`${API_BASE}/api/import/categories`, () =>
-        ok201({ message: "Imported", count: 0 }),
+        ok201({ total_processed: 0, imported: 0, skipped: 0, errors: 0, status: "completed" }),
     ),
     http.post(`${API_BASE}/api/import/recipients`, () =>
-        ok201({ message: "Imported", count: 0 }),
+        ok201({ total_processed: 0, imported: 0, skipped: 0, errors: 0, bank_account_errors: 0, status: "completed" }),
     ),
     http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
         ok({ message: "Committed", batch_id: 1, transactions_committed: 0 }),
     ),
-    http.put(`${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`, () =>
-        ok({ message: "Override applied" }),
+    // POST, not PUT: routes/importRoutes.js:549. `lib/api/imports.ts:274`
+    // posts, so the old `http.put` mock served a verb the backend does not
+    // register. Body is `{ row_id, user_override_recipient_id }`, not a message.
+    http.post(`${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`, ({ params }) =>
+        ok({ row_id: Number(params.rowId), user_override_recipient_id: null }),
     ),
 
     // Info / portfolio extras
@@ -601,8 +671,11 @@ export const defaultHandlers = [
             summaries: [],
         }),
     ),
+    // `res.ok({ message: 'Exchange rates refreshed from ECB' })` —
+    // routes/info/rates.js:94. The route counts nothing: there is no
+    // `rates_updated` on the wire, and `lib/api/info.ts:364` reads `{message}`.
     http.post(`${API_BASE}/api/info/exchange-rates/refresh`, () =>
-        ok({ message: "Rates refreshed", rates_updated: 0 }),
+        ok({ message: "Exchange rates refreshed from ECB" }),
     ),
     http.post(`${API_BASE}/api/info/refresh-views`, () =>
         ok({ message: "Views refreshed" }),
@@ -641,8 +714,11 @@ export const defaultHandlers = [
     http.post(`${API_BASE}/api/recipients/:id/merge`, () =>
         ok({ message: "Merged", merged_count: 0 }),
     ),
+    // `res.ok({ ...recipient, links: [] })` — routes/recipients.js:172. The
+    // route re-reads and returns the recipient; `lib/api/recipients.ts:61`
+    // types it `Promise<Recipient>`. No `message` is ever sent.
     http.post(`${API_BASE}/api/recipients/:id/unmerge`, () =>
-        ok({ message: "Unmerged" }),
+        ok({ ...RECIPIENT_STUB, primary_recipient_id: null }),
     ),
     http.get(`${API_BASE}/api/recipients/:id/patterns`, () =>
         ok({ items: [], total: 0 }),
@@ -685,17 +761,20 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [] })),
     // 201: routes/splits.js:298.
     http.post(`${API_BASE}/api/splits/batch`, () => ok201({ items: [] })),
-    http.patch(`${API_BASE}/api/splits/:id`, () =>
-        ok({ id: 1, transaction_id: 1, recipient_id: 1, amount: 0, note: null, is_paid: false, paid_at: null, created_at: "2025-01-01T00:00:00Z" }),
-    ),
+    // NOTE: there is deliberately no `http.patch('/api/splits/:id')` handler.
+    // routes/splits.js registers get/post/delete only — a PATCH there 404s in
+    // production, and no frontend client sends one. Mocking it would resurrect
+    // the dead route this pass removed.
     http.delete(`${API_BASE}/api/splits/:id`, () => noContent()),
-    // 201: routes/splits.js:320 — /pay inserts a payment row, so it creates.
-    // /settle below only flips a flag and stays 200 (routes/splits.js:343).
+    // 201: routes/splits.js:320 — /pay inserts a payment row, so it creates,
+    // and answers with that row (`res.ok(payment)`, splits.js:321).
+    // /settle only flips a flag: 200, and answers with the updated split
+    // (`res.ok(split)`, splits.js:343). Neither sends a `{message}`.
     http.post(`${API_BASE}/api/splits/:id/pay`, () =>
-        ok201({ message: "Paid" }),
+        ok201(SPLIT_PAYMENT_STUB),
     ),
     http.post(`${API_BASE}/api/splits/:id/settle`, () =>
-        ok({ message: "Settled" }),
+        ok({ ...SPLIT_STUB, is_settled: true }),
     ),
     http.get(`${API_BASE}/api/splits/owed/:recipientId`, () =>
         ok({ items: [], total_owed: 0 }),
