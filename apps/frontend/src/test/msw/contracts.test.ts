@@ -23,6 +23,7 @@ import {
     RECIPIENT_STUB,
     INVESTMENT_STUB,
     PLANNED_TRANSACTION_STUB,
+    importCsvReviewRequiredHandlers,
 } from "./handlers";
 
 const BASE = "http://localhost:3002";
@@ -1181,5 +1182,36 @@ describe("Phase F1: extended mutation contracts", () => {
         ],
     ])("%s", async (_name, method, path, body, label, schema) => {
         validate(schema, await mutateEnvelope(method, path, body), label);
+    });
+
+    // The other arm of the same two routes. Both import routes answer 202 with
+    // `respondReviewRequired`'s object (importRoutes.js:74-84) when rows still
+    // need review: no counts at all, because nothing was committed. Pinned here
+    // so the client-side union (`ImportCsvResponse` in lib/api/imports.ts) has
+    // a fixture on both arms rather than only the auto-commit one.
+    const ImportCsvReviewRequiredSchema = z.object({
+        batch_id: z.number().int().positive(),
+        requires_review: z.literal(true),
+        match_source_counts: z.record(z.string(), z.number().int().nonnegative()),
+    });
+
+    it.each([
+        ["POST /api/import/csv", "/api/import/csv"],
+        ["POST /api/import/csv/custom", "/api/import/csv/custom"],
+    ])("%s answers 202 with the review-required shape", async (label, path) => {
+        server.use(...importCsvReviewRequiredHandlers);
+
+        const res = await fetch(`${BASE}${path}`, { method: "POST" });
+        expect(res.status, `expected 202 for POST ${path}`).toBe(202);
+
+        const json = (await res.json()) as { ok: boolean; data: unknown };
+        expect(json.ok).toBe(true);
+        const data = validate(ImportCsvReviewRequiredSchema, json.data, label);
+
+        // The counts the 201 arm carries must be absent here — reading them is
+        // exactly the drift this fixture exists to catch.
+        expect(data).not.toHaveProperty("total");
+        expect(data).not.toHaveProperty("imported");
+        expect(data).not.toHaveProperty("total_processed");
     });
 });

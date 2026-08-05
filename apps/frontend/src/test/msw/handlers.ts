@@ -184,8 +184,9 @@ export const ACCOUNT_STUB = {
  * "completed_with_errors" when `errors > 0` and "completed" otherwise. The
  * other outcome of these two routes is the 202 review path
  * (`{ batch_id, requires_review: true, match_source_counts }`,
- * `respondReviewRequired`); the default handler models the completed one, so a
- * test that needs the review branch overrides it via `server.use(...)`.
+ * `respondReviewRequired`); the default handler models the completed one, and
+ * `importCsvReviewRequiredHandlers` below models the other arm for tests that
+ * need it, via `server.use(...)`.
  */
 export const IMPORT_CSV_RESULT_STUB = {
     total: 3,
@@ -198,6 +199,38 @@ export const IMPORT_CSV_RESULT_STUB = {
     error_message: null,
     links: [],
 };
+
+/**
+ * The other arm of the same two routes: `respondReviewRequired`
+ * (node-backend/src/routes/importRoutes.js:74-84) answers 202 with only these
+ * three fields — no `total`, no counts, because nothing was committed.
+ */
+export const IMPORT_CSV_REVIEW_REQUIRED_STUB = {
+    batch_id: 7,
+    requires_review: true,
+    match_source_counts: { exact: 1, fuzzy: 1, pattern: 0, new: 2 },
+};
+
+/**
+ * Override handlers that put both CSV import routes on the 202 review branch.
+ * Pass to `server.use(...)` in a test that needs that arm. The status really is
+ * 202 (not the default 200 of `ok()`) because that is the contract clients
+ * narrow on alongside `requires_review`.
+ */
+export const importCsvReviewRequiredHandlers = [
+    http.post(`${API_BASE}/api/import/csv`, () =>
+        HttpResponse.json(
+            { ok: true, data: IMPORT_CSV_REVIEW_REQUIRED_STUB },
+            { status: 202 },
+        ),
+    ),
+    http.post(`${API_BASE}/api/import/csv/custom`, () =>
+        HttpResponse.json(
+            { ok: true, data: IMPORT_CSV_REVIEW_REQUIRED_STUB },
+            { status: 202 },
+        ),
+    ),
+];
 
 /**
  * Default handlers cover the chatty boot-time endpoints so any page can render

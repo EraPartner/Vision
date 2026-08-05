@@ -50,11 +50,14 @@ const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
 };
 
 /**
- * The two bodies `POST /api/import/csv` can answer with, sourced from the
- * OpenAPI document so they cannot drift from the backend again: `201` with the
- * committed-import counts, or `202` when rows need review and nothing was
- * committed yet. Narrow with `'requires_review' in result` (the idiom
- * TransactionImportCard already uses for the streaming variant).
+ * The two bodies `POST /api/import/csv` and `POST /api/import/csv/custom` can
+ * answer with, sourced from the OpenAPI document so they cannot drift from the
+ * backend again: `201` with the committed-import counts, or `202` when rows
+ * need review and nothing was committed yet. Both routes share the same
+ * response tail in the backend (`buildImportResult(buildPipelineResult(...))`
+ * and `respondReviewRequired`, node-backend routes/importRoutes.js:59-94), so
+ * they share the union here. Narrow with `'requires_review' in result` (the
+ * idiom TransactionImportCard already uses for the streaming variant).
  */
 export type ImportCsvResult = components['schemas']['ImportCsvResult'];
 export type ImportCsvReviewRequired = components['schemas']['ImportCsvReviewRequired'];
@@ -168,7 +171,7 @@ export function importCSVCustom(
     separator: string = ',',
     encoding: string = 'utf-8',
     skipRows: number = 0,
-): Promise<{ batch_id: number; imported: number; duplicates: number; total_processed: number; message: string }> {
+): Promise<ImportCsvResponse> {
     const queryParams = new URLSearchParams();
     queryParams.append('bank_name', bankName);
     queryParams.append('date_format', dateFormat);

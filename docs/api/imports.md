@@ -5,8 +5,8 @@ method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
 date: 2026-04-26
-updated: 2026-06-01
-last_modified: 2026-06-01
+updated: 2026-08-05
+last_modified: 2026-08-05
 tags: [api, import, csv, bank, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
@@ -45,13 +45,17 @@ Import transactions from a CSV file using a predefined bank adapter.
 - vision
 - custom
 
-**Response:**
+**Response:** `201 Created` — all rows matched, batch committed
+(`ImportCsvResult` in `openapi.yaml`):
 ```json
 {
+  "total": 157,
   "imported": 150,
-  "duplicates_skipped": 5,
+  "duplicates": 5,
   "errors": 2,
-  "status": "completed",
+  "batch_id": 12,
+  "auto_linked_count": 3,
+  "status": "completed_with_errors",
   "error_message": null,
   "links": []
 }
