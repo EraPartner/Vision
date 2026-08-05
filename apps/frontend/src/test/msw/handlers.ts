@@ -10,9 +10,33 @@ interface EnvelopeMeta {
     [key: string]: unknown;
 }
 
-/** ADR-026 success envelope: { ok: true, data, meta? } */
+/**
+ * ADR-026 success envelope: { ok: true, data, meta? }.
+ *
+ * The status is part of the contract, not an afterthought: express routes that
+ * call `res.status(201)` (or 202) before `res.ok(...)` put a different code on
+ * the wire than the ones that just call `res.ok(...)`. A handler that answers
+ * 200 for a 201 route is a mock that cannot fail when the route's status
+ * drifts — hence the explicit `ok201`/`ok202` variants below, and the
+ * status column pinned per row in contracts.test.ts.
+ */
+function okWithStatus<T>(status: number, data: T, meta?: EnvelopeMeta) {
+    return HttpResponse.json({ ok: true, data, ...(meta ? { meta } : {}) }, { status });
+}
+
+/** 200 OK — routes that call `res.ok(...)` with no preceding `res.status(...)`. */
 export function ok<T>(data: T, meta?: EnvelopeMeta) {
-    return HttpResponse.json({ ok: true, data, ...(meta ? { meta } : {}) });
+    return okWithStatus(200, data, meta);
+}
+
+/** 201 Created — routes that call `res.status(201)` before `res.ok(...)`. */
+export function ok201<T>(data: T, meta?: EnvelopeMeta) {
+    return okWithStatus(201, data, meta);
+}
+
+/** 202 Accepted — the deferred-work arm (CSV import's review branch). */
+export function ok202<T>(data: T, meta?: EnvelopeMeta) {
+    return okWithStatus(202, data, meta);
 }
 
 /** ADR-026 failure envelope: { ok: false, error: { message, code? } } */
@@ -218,18 +242,8 @@ export const IMPORT_CSV_REVIEW_REQUIRED_STUB = {
  * narrow on alongside `requires_review`.
  */
 export const importCsvReviewRequiredHandlers = [
-    http.post(`${API_BASE}/api/import/csv`, () =>
-        HttpResponse.json(
-            { ok: true, data: IMPORT_CSV_REVIEW_REQUIRED_STUB },
-            { status: 202 },
-        ),
-    ),
-    http.post(`${API_BASE}/api/import/csv/custom`, () =>
-        HttpResponse.json(
-            { ok: true, data: IMPORT_CSV_REVIEW_REQUIRED_STUB },
-            { status: 202 },
-        ),
-    ),
+    http.post(`${API_BASE}/api/import/csv`, () => ok202(IMPORT_CSV_REVIEW_REQUIRED_STUB)),
+    http.post(`${API_BASE}/api/import/csv/custom`, () => ok202(IMPORT_CSV_REVIEW_REQUIRED_STUB)),
 ];
 
 /**
@@ -462,7 +476,8 @@ export const defaultHandlers = [
     // These prevent onUnhandledRequest:"error" and are validated by contract
     // tests. Integration tests override them per-flow via server.use().
 
-    http.post(`${API_BASE}/api/transactions`, () => ok(TRANSACTION_STUB)),
+    // 201: routes/transactions.js:576.
+    http.post(`${API_BASE}/api/transactions`, () => ok201(TRANSACTION_STUB)),
     http.patch(`${API_BASE}/api/transactions/:id`, () => ok(TRANSACTION_STUB)),
     http.delete(`${API_BASE}/api/transactions/:id`, () => noContent()),
 
@@ -474,18 +489,22 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/recipients/:id`, () => ok(RECIPIENT_STUB)),
     http.delete(`${API_BASE}/api/recipients/:id`, () => noContent()),
 
-    http.post(`${API_BASE}/api/investments`, () => ok(INVESTMENT_STUB)),
+    // 201: controllers/investmentController.js:389.
+    http.post(`${API_BASE}/api/investments`, () => ok201(INVESTMENT_STUB)),
     http.patch(`${API_BASE}/api/investments/:id`, () => ok(INVESTMENT_STUB)),
     http.delete(`${API_BASE}/api/investments/:id`, () => noContent()),
 
-    http.post(`${API_BASE}/api/accounts`, () => ok(ACCOUNT_STUB)),
+    // 201: routes/accounts.js:55.
+    http.post(`${API_BASE}/api/accounts`, () => ok201(ACCOUNT_STUB)),
     http.patch(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
     http.delete(`${API_BASE}/api/accounts/:id`, () => noContent()),
     http.post(`${API_BASE}/api/accounts/:id/merge`, () =>
         ok({ into: 1, merged: [2], reassigned: { transactions: 0, planned: 0, portfolio: 0, funding: 0 } }),
     ),
 
-    http.post(`${API_BASE}/api/planned-transactions`, () => ok(PLANNED_TRANSACTION_STUB)),
+    // 201: routes/plannedTransactions.js:443. The /:id/execute route below is
+    // a plain 200 — it updates an existing row rather than creating one.
+    http.post(`${API_BASE}/api/planned-transactions`, () => ok201(PLANNED_TRANSACTION_STUB)),
     http.patch(`${API_BASE}/api/planned-transactions/:id`, () => ok(PLANNED_TRANSACTION_STUB)),
     http.delete(`${API_BASE}/api/planned-transactions/:id`, () => noContent()),
     http.post(`${API_BASE}/api/planned-transactions/:id/execute`, () =>
@@ -507,8 +526,9 @@ export const defaultHandlers = [
     http.post(`${API_BASE}/api/ai/chat`, () =>
         ok({ id: "msg-1", conversationId: "conv-1", role: "assistant", content: "ok", createdAt: "2025-01-01T00:00:00Z" }),
     ),
+    // 201: routes/ai.js:273.
     http.post(`${API_BASE}/api/ai/conversations`, () =>
-        ok({
+        ok201({
             conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
             messages: [],
         }),
@@ -524,8 +544,9 @@ export const defaultHandlers = [
 
     // Attachments
     http.get(`${API_BASE}/api/attachments/transaction/:id`, () => ok({ items: [] })),
+    // 201: routes/attachments.js:113.
     http.post(`${API_BASE}/api/attachments/transaction/:id`, () =>
-        ok({ id: 1, transaction_id: 1, filename: "test.pdf", mime_type: "application/pdf", size: 1024, created_at: "2025-01-01T00:00:00Z" }),
+        ok201({ id: 1, transaction_id: 1, filename: "test.pdf", mime_type: "application/pdf", size: 1024, created_at: "2025-01-01T00:00:00Z" }),
     ),
     http.get(`${API_BASE}/api/attachments/:id`, () =>
         new Response(new Blob(["data"], { type: "application/pdf" }), { status: 200 }),
@@ -542,13 +563,17 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/categories/:id`, () => ok(CATEGORY_STUB)),
 
     // Imports
-    http.post(`${API_BASE}/api/import/csv`, () => ok(IMPORT_CSV_RESULT_STUB)),
-    http.post(`${API_BASE}/api/import/csv/custom`, () => ok(IMPORT_CSV_RESULT_STUB)),
+    // 201 on the auto-commit arm: routes/importRoutes.js:242 (/csv) and :283
+    // (/csv/custom). The review arm answers 202 — see
+    // `importCsvReviewRequiredHandlers` above.
+    http.post(`${API_BASE}/api/import/csv`, () => ok201(IMPORT_CSV_RESULT_STUB)),
+    http.post(`${API_BASE}/api/import/csv/custom`, () => ok201(IMPORT_CSV_RESULT_STUB)),
+    // 201: routes/importRoutes.js:406 (categories), :388 (recipients).
     http.post(`${API_BASE}/api/import/categories`, () =>
-        ok({ message: "Imported", count: 0 }),
+        ok201({ message: "Imported", count: 0 }),
     ),
     http.post(`${API_BASE}/api/import/recipients`, () =>
-        ok({ message: "Imported", count: 0 }),
+        ok201({ message: "Imported", count: 0 }),
     ),
     http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
         ok({ message: "Committed", batch_id: 1, transactions_committed: 0 }),
@@ -600,8 +625,10 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/investments/:id/transactions`, () =>
         ok({ items: [], total: 0 }),
     ),
+    // 201: controllers/investmentController.js:612. The PATCH below is 200
+    // (same controller, :682).
     http.post(`${API_BASE}/api/investments/:id/transactions`, () =>
-        ok({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok201({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
     ),
     http.patch(`${API_BASE}/api/investments/transactions/:id`, () =>
         ok({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
@@ -620,8 +647,9 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/recipients/:id/patterns`, () =>
         ok({ items: [], total: 0 }),
     ),
+    // 201: routes/recipients.js:201.
     http.post(`${API_BASE}/api/recipients/:id/patterns`, () =>
-        ok({ id: 1, pattern: "TEST*", pattern_kind: "glob", case_sensitive: false, priority: 1, is_active: true, source: "user", notes: null, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok201({ id: 1, pattern: "TEST*", pattern_kind: "glob", case_sensitive: false, priority: 1, is_active: true, source: "user", notes: null, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
     ),
     http.patch(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
         ok({ patternId: 1 }),
@@ -644,8 +672,9 @@ export const defaultHandlers = [
 
     // Saved charts
     http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [], total: 0 })),
+    // 201: routes/savedCharts.js:175.
     http.post(`${API_BASE}/api/saved-charts`, () =>
-        ok({ id: 1, name: "Test chart", config: {}, created_at: "2025-01-01T00:00:00Z" }),
+        ok201({ id: 1, name: "Test chart", config: {}, created_at: "2025-01-01T00:00:00Z" }),
     ),
     http.patch(`${API_BASE}/api/saved-charts/:id`, () =>
         ok({ id: 1, name: "Updated", config: {}, created_at: "2025-01-01T00:00:00Z" }),
@@ -654,13 +683,16 @@ export const defaultHandlers = [
 
     // Splits sub-routes
     http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [] })),
-    http.post(`${API_BASE}/api/splits/batch`, () => ok({ items: [] })),
+    // 201: routes/splits.js:298.
+    http.post(`${API_BASE}/api/splits/batch`, () => ok201({ items: [] })),
     http.patch(`${API_BASE}/api/splits/:id`, () =>
         ok({ id: 1, transaction_id: 1, recipient_id: 1, amount: 0, note: null, is_paid: false, paid_at: null, created_at: "2025-01-01T00:00:00Z" }),
     ),
     http.delete(`${API_BASE}/api/splits/:id`, () => noContent()),
+    // 201: routes/splits.js:320 — /pay inserts a payment row, so it creates.
+    // /settle below only flips a flag and stays 200 (routes/splits.js:343).
     http.post(`${API_BASE}/api/splits/:id/pay`, () =>
-        ok({ message: "Paid" }),
+        ok201({ message: "Paid" }),
     ),
     http.post(`${API_BASE}/api/splits/:id/settle`, () =>
         ok({ message: "Settled" }),
@@ -688,8 +720,9 @@ export const defaultHandlers = [
     ),
 
     // Watchlist sub-routes
+    // 201: routes/watchlist.js:196.
     http.post(`${API_BASE}/api/watchlist`, () =>
-        ok({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+        ok201({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
     ),
     http.patch(`${API_BASE}/api/watchlist/:id`, () =>
         ok({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),

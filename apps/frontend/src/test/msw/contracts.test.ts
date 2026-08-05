@@ -30,9 +30,22 @@ const BASE = "http://localhost:3002";
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
-async function getEnvelope(path: string): Promise<unknown> {
+/**
+ * The status code is part of the contract, not decoration. `res.ok` (any 2xx)
+ * cannot tell a 200 from a 201, so a route that quietly changed its status
+ * would sail past a body-only assertion — the same defect class as the body
+ * drift these tests exist to catch, one layer down. Both helpers below assert
+ * an EXACT status; mutation rows carry theirs as a table column, derived from
+ * the express route's `res.status(...)` call (or its absence, which means 200).
+ *
+ * Every GET route in this file reaches the wire through a bare `res.ok(...)`
+ * with no preceding `res.status(...)`, so 200 is pinned here rather than
+ * repeated as an identical column across ~60 rows. A GET that ever needs a
+ * different code should take the second argument.
+ */
+async function getEnvelope(path: string, expectedStatus = 200): Promise<unknown> {
     const res = await fetch(`${BASE}${path}`);
-    expect(res.ok, `HTTP ${res.status} for ${path}`).toBe(true);
+    expect(res.status, `expected ${expectedStatus} for GET ${path}`).toBe(expectedStatus);
     const json = (await res.json()) as { ok: boolean; data: unknown };
     expect(json.ok, `envelope.ok false for ${path}`).toBe(true);
     return json.data;
@@ -42,13 +55,14 @@ async function mutateEnvelope(
     method: "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     body?: Record<string, unknown>,
+    expectedStatus = 200,
 ): Promise<unknown> {
     const res = await fetch(`${BASE}${path}`, {
         method,
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
     });
-    expect(res.ok, `HTTP ${res.status} for ${method} ${path}`).toBe(true);
+    expect(res.status, `expected ${expectedStatus} for ${method} ${path}`).toBe(expectedStatus);
     const json = (await res.json()) as { ok: boolean; data: unknown };
     expect(json.ok, `envelope.ok false for ${method} ${path}`).toBe(true);
     return json.data;
@@ -333,19 +347,37 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
 // ── E2: Mutation contract tests ───────────────────────────────────────────────
 
 describe("Mutation handler contracts (E2)", () => {
-    describe.each<[string, string, z.ZodTypeAny]>([
-        ["transactions", "/api/transactions", TransactionItemSchema],
-        ["categories", "/api/categories", CategoryItemSchema],
-        ["recipients", "/api/recipients", RecipientItemSchema],
-        ["investments", "/api/investments", InvestmentItemSchema],
-        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema],
-    ])("%s", (label, path, ItemSchema) => {
-        it(`POST ${path} response matches item schema`, async () => {
-            validate(ItemSchema, await mutateEnvelope("POST", path, {}), `POST ${label}`);
+    // Fourth column = the status the real POST answers. It is NOT uniform:
+    // transactions/investments/planned-transactions call `res.status(201)`
+    // before `res.ok(...)`, while categories and recipients do not and so
+    // answer 200. Sources, in table order:
+    //   routes/transactions.js:576            → 201
+    //   routes/categories.js:53-59            → 200 (no res.status call)
+    //   routes/recipients.js:77-89            → 200 (no res.status call)
+    //   controllers/investmentController.js:389 → 201
+    //   routes/plannedTransactions.js:443     → 201
+    // Every PATCH in this table is a bare `res.ok(...)` → 200.
+    describe.each<[string, string, z.ZodTypeAny, number]>([
+        ["transactions", "/api/transactions", TransactionItemSchema, 201],
+        ["categories", "/api/categories", CategoryItemSchema, 200],
+        ["recipients", "/api/recipients", RecipientItemSchema, 200],
+        ["investments", "/api/investments", InvestmentItemSchema, 201],
+        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema, 201],
+    ])("%s", (label, path, ItemSchema, createStatus) => {
+        it(`POST ${path} answers ${createStatus} and matches item schema`, async () => {
+            validate(
+                ItemSchema,
+                await mutateEnvelope("POST", path, {}, createStatus),
+                `POST ${label}`,
+            );
         });
 
-        it(`PATCH ${path}/:id response matches item schema`, async () => {
-            validate(ItemSchema, await mutateEnvelope("PATCH", `${path}/1`, {}), `PATCH ${label}`);
+        it(`PATCH ${path}/:id answers 200 and matches item schema`, async () => {
+            validate(
+                ItemSchema,
+                await mutateEnvelope("PATCH", `${path}/1`, {}, 200),
+                `PATCH ${label}`,
+            );
         });
 
         it(`DELETE ${path}/:id answers 204 with no body`, async () => {
@@ -911,6 +943,9 @@ describe("Phase F1: extended mutation contracts", () => {
         links: z.array(LinkSchema),
     });
 
+    // Last column = the exact status the real express route answers, read off
+    // its `res.status(...)` call (or its absence → 200). Cited per row so a
+    // future reader can re-derive it without trusting the mock.
     it.each<
         [
             string,
@@ -919,6 +954,7 @@ describe("Phase F1: extended mutation contracts", () => {
             Record<string, unknown> | undefined,
             string,
             z.ZodTypeAny,
+            number,
         ]
     >([
         [
@@ -928,6 +964,7 @@ describe("Phase F1: extended mutation contracts", () => {
             undefined,
             "POST /api/admin/database/vacuum",
             MessageSchema,
+            200, // routes/admin.js:282 — bare res.ok
         ],
         [
             "POST /api/ai/chat returns message shape",
@@ -942,6 +979,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 content: z.string(),
                 createdAt: z.string(),
             }),
+            200, // routes/ai.js:324 — bare res.ok
         ],
         [
             "POST /api/ai/conversations returns conversation+messages",
@@ -950,6 +988,7 @@ describe("Phase F1: extended mutation contracts", () => {
             { title: "Test" },
             "POST /api/ai/conversations",
             ConversationWithMessagesSchema,
+            201, // routes/ai.js:273
         ],
         [
             "POST /api/info/exchange-rates/refresh returns refresh result",
@@ -958,6 +997,7 @@ describe("Phase F1: extended mutation contracts", () => {
             undefined,
             "POST /api/info/exchange-rates/refresh",
             z.object({ message: z.string(), rates_updated: z.number() }),
+            200, // routes/info/rates.js:94 — bare res.ok
         ],
         [
             "POST /api/info/refresh-views returns message",
@@ -966,6 +1006,7 @@ describe("Phase F1: extended mutation contracts", () => {
             undefined,
             "POST /api/info/refresh-views",
             MessageSchema,
+            200, // routes/info/maintenance.js:20 — bare res.ok
         ],
         [
             "POST /api/investments/refresh-prices returns price refresh shape",
@@ -980,6 +1021,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 cached_count: z.number(),
                 live: z.boolean(),
             }),
+            200, // controllers/investmentController.js:440 — bare res.ok
         ],
         [
             "POST /api/investments/:id/transactions returns single transaction",
@@ -994,6 +1036,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 amount: z.number(),
                 currency: z.string(),
             }),
+            201, // controllers/investmentController.js:612
         ],
         [
             "PATCH /api/investments/transactions/:id returns single transaction",
@@ -1006,6 +1049,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 investment_id: z.number(),
                 type: z.string(),
             }),
+            200, // controllers/investmentController.js:682 — bare res.ok
         ],
         [
             "POST /api/recipients/:id/merge returns merged shape",
@@ -1014,6 +1058,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/recipients/:id/merge",
             z.object({ message: z.string(), merged_count: z.number() }),
+            200, // routes/recipients.js:157 — bare res.ok
         ],
         [
             "POST /api/recipients/:id/unmerge returns message",
@@ -1022,6 +1067,7 @@ describe("Phase F1: extended mutation contracts", () => {
             undefined,
             "POST /api/recipients/:id/unmerge",
             MessageSchema,
+            200, // routes/recipients.js:172 — bare res.ok
         ],
         [
             "POST /api/recipients/:id/patterns returns pattern shape",
@@ -1038,6 +1084,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 is_active: z.boolean(),
                 source: z.string(),
             }),
+            201, // routes/recipients.js:201
         ],
         [
             "POST /api/recipients/:id/patterns/preview returns matches",
@@ -1046,6 +1093,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/recipients/:id/patterns/preview",
             z.object({ matches: z.array(z.unknown()) }),
+            200, // routes/recipients.js:209 — bare res.ok (preview creates nothing)
         ],
         [
             "POST /api/saved-charts returns chart shape",
@@ -1059,6 +1107,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 config: z.unknown(),
                 created_at: z.string(),
             }),
+            201, // routes/savedCharts.js:175
         ],
         [
             "PATCH /api/saved-charts/:id returns chart shape",
@@ -1067,6 +1116,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "PATCH /api/saved-charts/:id",
             z.object({ id: z.number(), name: z.string() }),
+            200, // routes/savedCharts.js:186 — bare res.ok
         ],
         [
             "POST /api/splits/batch returns items",
@@ -1075,8 +1125,13 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/splits/batch",
             z.object({ items: z.array(z.unknown()) }),
+            201, // routes/splits.js:298
         ],
         [
+            // NOTE: routes/splits.js has no PATCH /:id — this row (and the
+            // handler backing it) pins a route the backend does not serve.
+            // Filed as a separate finding; 200 here matches the fixture, not a
+            // real response.
             "PATCH /api/splits/:id returns split shape",
             "PATCH",
             "/api/splits/1",
@@ -1089,6 +1144,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 amount: z.number(),
                 is_paid: z.boolean(),
             }),
+            200,
         ],
         [
             "POST /api/splits/:id/pay returns message",
@@ -1097,6 +1153,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/splits/:id/pay",
             MessageSchema,
+            201, // routes/splits.js:320 — inserts a payment row
         ],
         [
             "POST /api/splits/:id/settle returns message",
@@ -1105,6 +1162,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/splits/:id/settle",
             MessageSchema,
+            200, // routes/splits.js:343 — bare res.ok (flips a flag)
         ],
         [
             "POST /api/splits/owed/:recipientId/settle-all returns settled count",
@@ -1113,6 +1171,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/splits/owed/:recipientId/settle-all",
             z.object({ message: z.string(), settled_count: z.number() }),
+            200, // routes/splits.js:357 — bare res.ok
         ],
         [
             "POST /api/watchlist returns watchlist item",
@@ -1127,6 +1186,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 asset_class: z.string(),
                 target_price: z.number(),
             }),
+            201, // routes/watchlist.js:196
         ],
         [
             "PATCH /api/watchlist/:id returns watchlist item",
@@ -1135,6 +1195,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "PATCH /api/watchlist/:id",
             z.object({ id: z.number(), symbol: z.string() }),
+            200, // routes/watchlist.js:205 — bare res.ok
         ],
         [
             "POST /api/planned-transactions/:id/execute returns updated planned",
@@ -1143,6 +1204,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/planned-transactions/:id/execute",
             PlannedTransactionItemSchema,
+            200, // routes/plannedTransactions.js:566 — bare res.ok
         ],
         [
             "POST /api/import/csv returns completed import result",
@@ -1151,6 +1213,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/import/csv",
             ImportCsvResultSchema,
+            201, // routes/importRoutes.js:242 (auto-commit arm; review arm = 202 below)
         ],
         [
             "POST /api/import/csv/custom returns completed import result",
@@ -1159,6 +1222,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/import/csv/custom",
             ImportCsvResultSchema,
+            201, // routes/importRoutes.js:283 (auto-commit arm; review arm = 202 below)
         ],
         [
             "POST /api/import/batches/:batchId/commit returns commit result",
@@ -1171,17 +1235,24 @@ describe("Phase F1: extended mutation contracts", () => {
                 batch_id: z.number(),
                 transactions_committed: z.number(),
             }),
+            200, // routes/importRoutes.js:621 — bare res.ok
         ],
         [
+            // NOTE: the real route is POST, not PUT
+            // (routes/importRoutes.js:549, and lib/api/imports.ts
+            // `overrideImportRow` posts). This row and its handler pin a verb
+            // the backend does not serve; filed as a separate finding. 200
+            // matches the fixture, not a real response.
             "PUT /api/import/batches/:batchId/rows/:rowId/override returns message",
             "PUT",
             "/api/import/batches/1/rows/1/override",
             {},
             "PUT override",
             MessageSchema,
+            200,
         ],
-    ])("%s", async (_name, method, path, body, label, schema) => {
-        validate(schema, await mutateEnvelope(method, path, body), label);
+    ])("%s", async (_name, method, path, body, label, schema, status) => {
+        validate(schema, await mutateEnvelope(method, path, body, status), label);
     });
 
     // The other arm of the same two routes. Both import routes answer 202 with
