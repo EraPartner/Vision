@@ -64,6 +64,65 @@ const IS_LIABILITY_BY_ACCOUNT = `
               false
             )`;
 
+/**
+ * Whether the history WALK — not the transaction-flow fallback — is the thing
+ * that will answer this request. Emits a `walk(answers boolean)` CTE; splice it
+ * as the FIRST member of a WITH chain and read it as `(SELECT answers FROM walk)`.
+ * Takes the end bound (app-timezone today) as `$2`.
+ *
+ * The runtime gate is `bankHistoryConverted.length === 0` — i.e. "the walk
+ * produced no rows". This predicate is that gate decided in advance, and it is
+ * exact rather than approximate:
+ *
+ *   walk row ⇐ an active transaction with a non-NULL `account_id` whose account
+ *   is `in_net_worth = true`, dated on or before the end bound.
+ *
+ * Each conjunct is load-bearing. `in_net_worth = true` + non-NULL `account_id`
+ * is exactly `account_list`'s membership test. `date <= end bound` is what makes
+ * the implication hold: such a row also passes the second date arm below, so the
+ * grid necessarily starts at or before it and ends at the end bound — the row is
+ * inside the grid, `balance_series` emits at least the day it falls on, and the
+ * join back to `account_list` keeps it (the FX conversion is 1:1 per row and
+ * cannot drop it). Without the date clause an account whose only activity is
+ * FUTURE-dated would be counted as "the walk answers" when the walk in fact sees
+ * nothing and the fallback is what runs.
+ */
+const WALK_ANSWERS_CTE = `
+      walk AS (
+        SELECT EXISTS (
+          SELECT 1
+          FROM transactions t
+          JOIN accounts a ON a.id = t.account_id
+          WHERE t.is_active = true
+            AND a.in_net_worth = true
+            AND t.date <= $2::date
+        ) AS answers
+      )`;
+
+/**
+ * Excludes rows the walk cannot value — those with a NULL `account_id` — but
+ * ONLY when {@link WALK_ANSWERS_CTE} says the walk is what answers. Requires
+ * the transactions alias to be `t`; splices onto an existing WHERE.
+ *
+ * This is the other half of {@link NOT_TRACKING_ONLY}, and it has to be
+ * conditional in a way that one does not. A tracking-only row can never
+ * contribute to net worth by either path, so it is excluded from the span
+ * unconditionally. An unattributed row is different: it contributes nothing to
+ * the WALK (there is no account to join it to), yet it is precisely what the
+ * FALLBACK sums — it is the un-migrated ledger that path exists for. Excluding
+ * it unconditionally would blank the un-migrated ledger's own chart; including
+ * it unconditionally lets it set the START BOUND of a series it never appears
+ * in, which is the tracking-only pathology on a different input (measured on a
+ * ledger of one unattributed +7.00 at d−20 plus one real in-net-worth account at
+ * d−3: 21 snapshots, 17 of them leading all-zero days, `monthlyChange` 1000 with
+ * `monthlyChangePercent` 0, and the +7.00 never counted in any snapshot).
+ *
+ * So the exclusion is gated on which path will answer, which the probe CAN know:
+ * see {@link WALK_ANSWERS_CTE}.
+ */
+const ATTRIBUTED_WHEN_WALK_ANSWERS = `
+            AND (t.account_id IS NOT NULL OR NOT (SELECT answers FROM walk))`;
+
 export const netWorthRepository = {
   /**
    * Net Worth (snapshot-backed) — reads investment values from pre-computed
@@ -93,6 +152,13 @@ export const netWorthRepository = {
    * @param {{ liveInvestments?: number }} [opts]
    */
   async getNetWorthFromSnapshots(targetCurrency = 'EUR', { liveInvestments } = {}) {
+    // App-timezone today (ADR-009), threaded into the SQL bounds as well so
+    // the generated day series and the JS walk below agree on the last day —
+    // Postgres CURRENT_DATE follows the server timezone, not the app's. It is
+    // resolved HERE, before the date probe, because the probe's walk-vs-fallback
+    // predicate needs the same end bound the walk will run with.
+    const todayYmd = todayAppDateString();
+
     // First data date over active transactions + snapshots, falling back to any
     // transaction when there are no active ones — folded into one round-trip via
     // COALESCE (LEAST ignores NULLs, so it only falls through when both the
@@ -110,15 +176,27 @@ export const netWorthRepository = {
     // The third arm needs it just as much as the second: it has no is_active
     // filter, so leaving it bare let an all-tracking ledger fall straight
     // through to it and restore the very span the second arm had just dropped.
+    //
+    // `ATTRIBUTED_WHEN_WALK_ANSWERS` closes the same hole for the OTHER kind of
+    // row the answering path cannot value — the unattributed (NULL account_id)
+    // one — which is conditional rather than absolute because the fallback
+    // deliberately counts those rows. See that constant and WALK_ANSWERS_CTE.
+    // Both transaction arms carry it, on the same reasoning as above: the third
+    // arm is unreachable while the walk answers (a walk-triggering row is itself
+    // active, so the second arm is non-NULL and the COALESCE never falls
+    // through), and the two arms must not disagree about the row population.
     const firstDateResult = await query(`
+      WITH ${WALK_ANSWERS_CTE}
       SELECT COALESCE(
         LEAST(
           (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
-          (SELECT MIN(t.date)::date FROM transactions t WHERE t.is_active = true ${NOT_TRACKING_ONLY})
+          (SELECT MIN(t.date)::date FROM transactions t
+            WHERE t.is_active = true ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
         ),
-        (SELECT MIN(t.date)::date FROM transactions t WHERE true ${NOT_TRACKING_ONLY})
+        (SELECT MIN(t.date)::date FROM transactions t
+          WHERE true ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
       )::date AS first_data_date
-    `, [targetCurrency]);
+    `, [targetCurrency, todayYmd]);
 
     const firstDataDate = firstDateResult.rows[0]?.first_data_date;
 
@@ -148,11 +226,6 @@ export const netWorthRepository = {
     for (const row of snapshotResult.rows) {
       investmentsByDay[row.day] = Number(row.investments) || 0;
     }
-
-    // App-timezone today (ADR-009), threaded into the SQL bounds as well so
-    // the generated day series and the JS walk below agree on the last day —
-    // Postgres CURRENT_DATE follows the server timezone, not the app's.
-    const todayYmd = todayAppDateString();
 
     // History walk and the unified current-point balances (the same
     // anchor+delta definition, unbounded) are independent — run in parallel.

@@ -447,6 +447,170 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       expect(withTracking.current.liquid).toBe(1050);
     });
 
+    // ── the same span pathology, other input: UNATTRIBUTED rows ──────────────
+    // A row with a NULL account_id is not positively attributed to a
+    // tracking-only account, so the tracking exclusion says nothing about it —
+    // yet the WALK cannot value it either (there is no account to join it to).
+    // Whenever the walk is what answers, such a row used to set the START BOUND
+    // of a series it never appears in. Measured on the ledger below before the
+    // fix: 21 snapshots with 17 leading all-zero days, monthlyChange 1000 with
+    // monthlyChangePercent 0, and the +7.00 never counted in any snapshot.
+    //
+    // The exclusion has to be CONDITIONAL, which is what makes this different
+    // from the tracking-only case: the transaction-flow fallback deliberately
+    // counts these rows (they are the un-migrated ledger it exists for), so the
+    // date probe drops them only when it can tell the walk will answer — see
+    // WALK_ANSWERS_CTE in infoRepositoryNetWorth.js. The two tests after this
+    // one pin both sides of that condition.
+    it('is completely unaffected by unattributed rows when the walk is what answers', async () => {
+      const today = TODAY();
+      const monthStart = firstOfMonthYmd(today);
+
+      /** Seed the in-net-worth half; optionally an older UNATTRIBUTED row. */
+      async function build({ withUnattributed }) {
+        await seedBase();
+        if (withUnattributed) {
+          // account_id NULL behind a bank_account string with no accounts row —
+          // the un-migrated shape (the trigger only resolves an UPDATE against
+          // an existing account).
+          await insertTxn({ date: addDaysYmd(monthStart, -400), amount: '7.00', bank: null });
+          await getTestPool().query(`UPDATE transactions SET bank_account = 'LEGACY BANK'`);
+          expect(
+            (await getTestPool().query(`SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`)).rows[0].n,
+          ).toBe(1);
+        }
+        await addAccount('KBC');
+        // Opens THIS month — that is what makes the baseline observable.
+        await insertTxn({ date: monthStart, amount: '-10.00', bank: 'KBC', balance: '1000.00' });
+        await insertTxn({ date: today, amount: '50.00', bank: 'KBC' });
+        return infoRepository.getNetWorthFromSnapshots();
+      }
+
+      /** The suite's afterEach only runs between tests; this test builds twice. */
+      async function wipe() {
+        const pool = getTestPool();
+        await pool.query('DELETE FROM transactions');
+        await pool.query('DELETE FROM accounts');
+        await pool.query('DELETE FROM recipients');
+        await pool.query('DELETE FROM categories');
+        for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];
+      }
+
+      const withUnattributed = await build({ withUnattributed: true });
+      await wipe();
+      const without = await build({ withUnattributed: false });
+
+      expect(withUnattributed).toEqual(without);
+      expect(withUnattributed.snapshots[0].date).toBe(monthStart);
+      expect(withUnattributed.current.liquid).toBe(1050);
+      // The 7.00 is nowhere in the answer: the walk cannot value it, and the
+      // fallback that would have counted it never runs here.
+      expect(withUnattributed.snapshots.some((s) => s.liquid === 7 || s.liquid === 1007)).toBe(false);
+    });
+
+    // The other side of the condition, and the reason it cannot be an
+    // unconditional exclusion: when the FALLBACK is what answers, the
+    // unattributed rows ARE the ledger, and dropping them from the probe would
+    // blank the chart of exactly the install the fallback exists for. (The
+    // plain un-migrated ledger is covered further down; this pins the awkward
+    // shape — an in-net-worth account exists, but every one of its rows is
+    // future-dated, so the walk's grid ends before it and the walk still cannot
+    // answer.)
+    it('still lets unattributed rows set the span when the walk cannot answer', async () => {
+      await seedBase();
+      const today = TODAY();
+      const d12 = addDaysYmd(today, -12);
+      await insertTxn({ date: d12, amount: '1200.00', bank: null });
+      await getTestPool().query(`UPDATE transactions SET bank_account = 'LEGACY BANK'`);
+      await addAccount('KBC');
+      await insertTxn({ date: addDaysYmd(today, 5), amount: '500.00', bank: 'KBC', balance: '5000.00' });
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.snapshots[0].date).toBe(d12);
+      expect(r.snapshots).toHaveLength(13); // d12..today inclusive
+      // Every historical day is the fallback's running total over the
+      // unattributed rows. The LAST point is the unified current-point override
+      // instead (WP-A1), which is unbounded and so does count the future-dated
+      // row — that is pre-existing behaviour and not what this test is about;
+      // what matters here is that the 13-day span survived.
+      expect(r.snapshots.slice(0, -1).every((s) => s.liquid === 1200)).toBe(true);
+      expect(r.snapshots.at(-1).liquid).toBe(5000);
+    });
+
+    // The strongest form of "never past them", on a ledger that actually looks
+    // like a user's: FULL-ARRAY equality over every retained day of a mixed
+    // ledger — two in-net-worth accounts in two currencies, a liability, a
+    // tracking-only account, unattributed rows, and a sparse investments
+    // series. The single-account guard above ("still spans from the first
+    // IN-net-worth row…") pins a length and one repeated liquid figure, so a
+    // narrowing that clipped a day off the front of a multi-account ledger, or
+    // that moved the start onto the WRONG account's first row, would pass it.
+    // Every value here is hand-computed from the fixture, not captured output.
+    it('keeps every retained day intact on a realistic mixed ledger', async () => {
+      await seedBase();
+      const today = TODAY();
+      const d = (n) => addDaysYmd(today, -n);
+      // USD flat at 0.5 EUR across the whole window (and before it), so the
+      // conversion cannot mask an accumulation error behind a moving rate.
+      for (let n = 32; n >= 0; n--) {
+        await getTestPool().query(
+          `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
+           VALUES ('USD', $1::date, 0.5, $2)`,
+          [d(n), n === 0],
+        );
+      }
+
+      await addAccount('KBC');
+      await addAccount('USD SAVINGS', { currency: 'USD' });
+      await addAccount('MORTGAGE', { type: 'liability' });
+      await addAccount('OLD TRACKER', { inNetWorth: false });
+
+      // Neither of these can contribute to any snapshot, and neither may set
+      // the span: the tracking rows are excluded outright, the unattributed
+      // ones are excluded because the walk is what answers here.
+      await insertTxn({ date: d(28), amount: '-500.00', bank: 'OLD TRACKER' });
+      await insertTxn({ date: d(30), amount: '99.00', bank: null });
+      await insertTxn({ date: d(25), amount: '11.00', currency: 'USD', bank: null });
+      await getTestPool().query(
+        `UPDATE transactions SET bank_account = 'LEGACY BANK' WHERE account_id IS NULL`,
+      );
+      expect(
+        (await getTestPool().query(`SELECT count(*)::int AS n FROM transactions WHERE account_id IS NULL`)).rows[0].n,
+      ).toBe(2);
+
+      // The in-net-worth half. KBC opens the span at d10.
+      await insertTxn({ date: d(10), amount: '-20.00', bank: 'KBC', balance: '2000.00' });
+      await insertTxn({ date: d(5), amount: '250.00', bank: 'KBC' }); // unstamped, after the anchor
+      await insertTxn({ date: d(8), amount: '100.00', currency: 'USD', bank: 'USD SAVINGS' });
+      await insertTxn({ date: d(3), amount: '-40.00', currency: 'USD', bank: 'USD SAVINGS' });
+      await insertTxn({ date: d(6), amount: '-1000.00', bank: 'MORTGAGE', balance: '-90000.00' });
+      await insertSnapshot(d(7), '3000');
+      await insertSnapshot(d(1), '3300'); // gap on d(6)..d(2) → forward-fill
+
+      // Hand-computed: KBC 2000 (stamp) → 2250 from d5; USD 100 → 60 from d3, at
+      // 0.5 → 50 then 30; MORTGAGE −90000 from d6; investments 3000 from d7,
+      // 3300 from d1. netWorth = liquid + liabilities + investments.
+      const expected = [
+        [d(10), 2000, 0, 0],
+        [d(9), 2000, 0, 0],
+        [d(8), 2050, 0, 0],
+        [d(7), 2050, 0, 3000],
+        [d(6), 2050, -90000, 3000],
+        [d(5), 2300, -90000, 3000],
+        [d(4), 2300, -90000, 3000],
+        [d(3), 2280, -90000, 3000],
+        [d(2), 2280, -90000, 3000],
+        [d(1), 2280, -90000, 3300],
+        [today, 2280, -90000, 3300],
+      ].map(([date, liquid, liabilities, investments]) => ({
+        date, liquid, liabilities, investments, netWorth: liquid + liabilities + investments,
+      }));
+
+      const r = await infoRepository.getNetWorthFromSnapshots();
+      expect(r.snapshots).toEqual(expected);
+      expect(r.current).toEqual({ liquid: 2280, liabilities: -90000, investments: 3300, netWorth: -84420 });
+    });
+
     // The other half of the same predicate: the fallback must keep counting
     // rows that are NOT positively attributed to a tracking-only account. A
     // bare inner join to `accounts` would have dropped exactly these — the
