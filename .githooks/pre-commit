@@ -9,7 +9,8 @@
 # Checks (in order):
 #   1. gitleaks -- staged changes scanned for secrets
 #   2. leftover merge-conflict markers in staged content
-#   3. oversized files newly staged (>1 MB; override ALLOW_BIG_FILES=1)
+#   3. oversized files newly added (>1 MB; added-only, so edits to an already
+#      tracked large file such as TODO.md pass; override ALLOW_BIG_FILES=1)
 #   4. ESLint on staged JS/TS -- fully-staged files are auto-fixed and re-staged,
 #      partially-staged files are checked only (we never touch unstaged hunks)
 #   5. validate-locales -- only when locale sources are touched
@@ -30,6 +31,11 @@ cd "$REPO_ROOT" || exit 1
 # Staged files (Added/Copied/Modified/Renamed). Empty -> nothing to do.
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -n "$STAGED" ] || exit 0
+
+# Newly-added files only -- the size check below uses this, not $STAGED. The
+# check exists to catch an accidentally-committed binary, not to re-flag a
+# long-tracked large text file (TODO.md is >1 MB by design) on every edit.
+STAGED_ADDED=$(git diff --cached --name-only --diff-filter=A)
 
 # Files with unstaged working-tree changes -- used to tell fully-staged files
 # (safe to auto-fix and re-add) from partially-staged ones (check only).
@@ -73,16 +79,16 @@ if [ -n "$conflicts" ]; then
   fail=1
 fi
 
-# --- 3. Oversized files ------------------------------------------------------
-if [ "${ALLOW_BIG_FILES:-}" != "1" ]; then
+# --- 3. Oversized files newly added ------------------------------------------
+if [ "${ALLOW_BIG_FILES:-}" != "1" ] && [ -n "$STAGED_ADDED" ]; then
   LIMIT=$((1024 * 1024)) # 1 MB
-  big=$(printf '%s\n' "$STAGED" | while IFS= read -r f; do
+  big=$(printf '%s\n' "$STAGED_ADDED" | while IFS= read -r f; do
     [ -n "$f" ] || continue
     size=$(git cat-file -s ":$f" 2>/dev/null || echo 0)
     [ "$size" -gt "$LIMIT" ] && printf '  %s (%s KB)\n' "$f" "$((size / 1024))"
   done)
   if [ -n "$big" ]; then
-    echo "[pre-commit] FAIL: files over 1 MB staged (override with ALLOW_BIG_FILES=1):"
+    echo "[pre-commit] FAIL: new files over 1 MB added (override with ALLOW_BIG_FILES=1):"
     echo "$big"
     fail=1
   fi

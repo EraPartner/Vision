@@ -11,8 +11,10 @@
   ],
   "scripts": {
     "install:all": "bun install",
-    "prepare": "node scripts/setup-git-hooks.js",
+    "prepare": "node scripts/setup-git-hooks.js && npm run install:electron-if-not-ci",
     "hooks:setup": "node scripts/setup-git-hooks.js",
+    "install:electron": "bun install --frozen-lockfile --cwd packaging/electron",
+    "install:electron-if-not-ci": "sh -c 'if [ -n \"$CI\" ]; then echo \"Skipping packaging/electron install in CI (workflows install it explicitly).\"; elif command -v bun >/dev/null 2>&1; then echo \"Installing packaging/electron deps (needed by the backend backup tests)...\"; bun install --frozen-lockfile --cwd packaging/electron; else echo \"bun not found -- skipping packaging/electron install. Backend backup tests will fail until you run: bun install --cwd packaging/electron\"; fi'",
     "dev": "concurrently --names \"backend,frontend\" -c \"blue,green\" \"bun run --filter 'financial-transaction-manager-node' dev\" \"bun run --filter 'vision-frontend' dev\"",
     "build": "npm run generate-locales-if-not-ci && bun run --filter 'vision-frontend' build",
     "generate-locales": "node scripts/generate-locales.js",
