@@ -747,7 +747,7 @@
        is used exclusively on `<Card>` in the app, so the split has no other
        consumers to consider.
 
-       These transitions animate transform ONLY:
+       These transitions animate the movement properties ONLY:
        box-shadow and border-color are paint properties, so animating them
        repainted the card plus its full shadow extent on every frame of the
        260ms hover ease — sweeping the cursor across a card grid stacked
@@ -767,7 +767,40 @@
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
     }
 
-    .premium-frame::after {
+    /* The hover half of premium-frame, gated behind the Card `interactive`
+       variant.
+
+       The lift rides `translate`, NOT `transform`: Tailwind v4 compiles the
+       call site's `hover:-translate-y-0.5` down to the standalone `translate`
+       property (`translate: var(--tw-translate-x) var(--tw-translate-y)`), so
+       a list naming only `transform` never animated it and the −2px lift
+       snapped into place. Both properties are named below.
+
+       The selector doubles up on `.premium-frame` purely to win specificity.
+       `.press-feedback` (further down this same layer, on every interactive
+       Card) sets the `transition` SHORTHAND, so at equal specificity its later
+       declaration reset the whole list back to `transform 90ms ease-out` and
+       dropped `translate` again. Its press entry is therefore restated here
+       verbatim rather than inherited — the press must still read as instant,
+       which is exactly why it is 90ms/ease-out and not --ease-glide (see the
+       .press-feedback comment below; its position AFTER .micro-lift is itself
+       load-bearing, so the conflict is resolved by specificity here rather
+       than by reordering there). Every card carrying `premium-frame-
+       interactive` also carries `premium-frame`: both come from the same cva
+       base in components/ui/card.tsx. */
+    .premium-frame.premium-frame-interactive {
+        transition:
+            translate var(--duration-fast) var(--ease-glide),
+            transform 90ms ease-out;
+    }
+
+    /* The pre-rendered elevated shadow, rasterized at opacity 0 so the hover
+       reveal is a compositor-only crossfade instead of a box-shadow repaint.
+       It lives on the INTERACTIVE half: only `:hover` below can ever raise it,
+       so on a static Card it was a paint layer that could never be seen. The
+       pre-render intent is untouched — every card that can show it still
+       carries it at rest, ahead of the hover. */
+    .premium-frame-interactive::after {
         content: "";
         position: absolute;
         /* Cover the border box so the shadow hugs the frame. */
@@ -777,13 +810,6 @@
         box-shadow: 0 12px 30px hsl(var(--glass-shadow) / 0.1);
         opacity: 0;
         transition: opacity var(--duration-normal) var(--ease-glide);
-    }
-
-    /* The hover half of premium-frame, gated behind the Card `interactive`
-       variant. Only the transform transition lives here — the ::after opacity
-       fade stays on the base rule, where it costs nothing while opacity is 0. */
-    .premium-frame-interactive {
-        transition: transform var(--duration-fast) var(--ease-glide);
     }
 
     .premium-frame-interactive:hover {
@@ -800,7 +826,7 @@
             0 14px 30px hsl(0 0% 0% / 0.38);
     }
 
-    .dark .premium-frame::after {
+    .dark .premium-frame-interactive::after {
         box-shadow: 0 18px 40px hsl(0 0% 0% / 0.48);
     }
 
@@ -1139,6 +1165,10 @@
         .icon-touch-target,
         .premium-frame,
         .premium-frame-interactive,
+        /* Matches the doubled selector the interactive transition is declared
+           on (see .premium-frame.premium-frame-interactive above) — a bare
+           `.premium-frame-interactive` here would lose to it on specificity. */
+        .premium-frame.premium-frame-interactive,
         .surface-default,
         .surface-elevated,
         .glass,
@@ -1153,6 +1183,17 @@
         .micro-lift:hover,
         .press-feedback:active {
             transform: none;
+        }
+
+        /* The interactive Card's lift rides `translate` (Tailwind v4's
+           `hover:-translate-y-0.5`), which `transform: none` above cannot
+           cancel. The call site's own `motion-reduce:translate-none` cannot
+           either: it is an unqualified utility (0,1,0) and loses to
+           `.hover\:-translate-y-0\.5:hover` (0,2,0). Cancelling the lift needs
+           a selector that carries `:hover` too, declared after Tailwind's
+           utilities — which this block, at the end of the utilities layer, is. */
+        .premium-frame-interactive:hover {
+            translate: none;
         }
     }
 

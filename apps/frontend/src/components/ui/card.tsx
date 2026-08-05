@@ -32,13 +32,21 @@ import {cn} from "@/lib/utils";
  * `hover:-translate-y-0.5`, which in Tailwind v4 rides the separate `translate`
  * property — two transforms composing to an inconsistent −3px on some pages and
  * −2px on others. The variant now owns the lift outright.
+ *
+ * That same `translate`-not-`transform` detail is why the reduced-motion
+ * classes below come in pairs, and why they are not the whole story: an
+ * unqualified `motion-reduce:*` utility (0,1,0) loses the cascade to
+ * `.hover\:-translate-y-0\.5:hover` (0,2,0), so the lift is actually cancelled
+ * by `.premium-frame-interactive:hover { translate: none }` in the
+ * `prefers-reduced-motion` block of index.css. These stay as the declaration of
+ * intent at the call site and to cover the resting/`:active` states.
  */
 const cardVariants = cva("glass-regular premium-frame relative rounded-[0.75rem] text-card-foreground", {
     variants: {
         variant: {
             static: "",
             interactive:
-                "premium-frame-interactive press-feedback hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transform-none motion-reduce:transition-none",
+                "premium-frame-interactive press-feedback hover:-translate-y-0.5 active:translate-y-0 motion-reduce:translate-none motion-reduce:transform-none motion-reduce:transition-none",
         },
     },
     defaultVariants: {
