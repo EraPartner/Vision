@@ -66,18 +66,27 @@ export function useCurrencyPartsFormatter(defaultCurrency?: string): CurrencyPar
       const decimals = opts.decimals ?? decimalsSetting;
       const signed = opts.signed ?? false;
       const key = `${locale}:${currency}:${decimals}:${signed ? "s" : "a"}`;
-      let formatter = cacheRef.current.get(key);
-      if (!formatter) {
-        formatter = new Intl.NumberFormat(locale, {
-          style: "currency",
-          currency,
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals,
-          signDisplay: signed ? "exceptZero" : "auto",
-        });
-        cacheRef.current.set(key, formatter);
+      // Mirrors Money.tsx's guard: a malformed-but-non-empty currency code
+      // (e.g. "US") makes the Intl.NumberFormat constructor throw RangeError.
+      // Money degrades to a bare number rather than throwing into the error
+      // boundary; this path must degrade identically, or the same bad code
+      // renders on one surface and crashes the other.
+      try {
+        let formatter = cacheRef.current.get(key);
+        if (!formatter) {
+          formatter = new Intl.NumberFormat(locale, {
+            style: "currency",
+            currency,
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+            signDisplay: signed ? "exceptZero" : "auto",
+          });
+          cacheRef.current.set(key, formatter);
+        }
+        return formatter.formatToParts(val);
+      } catch {
+        return [{ type: "literal" as const, value: `${val}` }];
       }
-      return formatter.formatToParts(val);
     },
     [locale, fallbackCurrency, decimalsSetting],
   );

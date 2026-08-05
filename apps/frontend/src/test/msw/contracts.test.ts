@@ -23,15 +23,29 @@ import {
     RECIPIENT_STUB,
     INVESTMENT_STUB,
     PLANNED_TRANSACTION_STUB,
+    importCsvReviewRequiredHandlers,
 } from "./handlers";
 
 const BASE = "http://localhost:3002";
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
-async function getEnvelope(path: string): Promise<unknown> {
+/**
+ * The status code is part of the contract, not decoration. `res.ok` (any 2xx)
+ * cannot tell a 200 from a 201, so a route that quietly changed its status
+ * would sail past a body-only assertion — the same defect class as the body
+ * drift these tests exist to catch, one layer down. Both helpers below assert
+ * an EXACT status; mutation rows carry theirs as a table column, derived from
+ * the express route's `res.status(...)` call (or its absence, which means 200).
+ *
+ * Every GET route in this file reaches the wire through a bare `res.ok(...)`
+ * with no preceding `res.status(...)`, so 200 is pinned here rather than
+ * repeated as an identical column across ~60 rows. A GET that ever needs a
+ * different code should take the second argument.
+ */
+async function getEnvelope(path: string, expectedStatus = 200): Promise<unknown> {
     const res = await fetch(`${BASE}${path}`);
-    expect(res.ok, `HTTP ${res.status} for ${path}`).toBe(true);
+    expect(res.status, `expected ${expectedStatus} for GET ${path}`).toBe(expectedStatus);
     const json = (await res.json()) as { ok: boolean; data: unknown };
     expect(json.ok, `envelope.ok false for ${path}`).toBe(true);
     return json.data;
@@ -41,13 +55,14 @@ async function mutateEnvelope(
     method: "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     body?: Record<string, unknown>,
+    expectedStatus = 200,
 ): Promise<unknown> {
     const res = await fetch(`${BASE}${path}`, {
         method,
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
     });
-    expect(res.ok, `HTTP ${res.status} for ${method} ${path}`).toBe(true);
+    expect(res.status, `expected ${expectedStatus} for ${method} ${path}`).toBe(expectedStatus);
     const json = (await res.json()) as { ok: boolean; data: unknown };
     expect(json.ok, `envelope.ok false for ${method} ${path}`).toBe(true);
     return json.data;
@@ -332,19 +347,37 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
 // ── E2: Mutation contract tests ───────────────────────────────────────────────
 
 describe("Mutation handler contracts (E2)", () => {
-    describe.each<[string, string, z.ZodTypeAny]>([
-        ["transactions", "/api/transactions", TransactionItemSchema],
-        ["categories", "/api/categories", CategoryItemSchema],
-        ["recipients", "/api/recipients", RecipientItemSchema],
-        ["investments", "/api/investments", InvestmentItemSchema],
-        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema],
-    ])("%s", (label, path, ItemSchema) => {
-        it(`POST ${path} response matches item schema`, async () => {
-            validate(ItemSchema, await mutateEnvelope("POST", path, {}), `POST ${label}`);
+    // Fourth column = the status the real POST answers. It is NOT uniform:
+    // transactions/investments/planned-transactions call `res.status(201)`
+    // before `res.ok(...)`, while categories and recipients do not and so
+    // answer 200. Sources, in table order:
+    //   routes/transactions.js:576            → 201
+    //   routes/categories.js:53-59            → 200 (no res.status call)
+    //   routes/recipients.js:77-89            → 200 (no res.status call)
+    //   controllers/investmentController.js:389 → 201
+    //   routes/plannedTransactions.js:443     → 201
+    // Every PATCH in this table is a bare `res.ok(...)` → 200.
+    describe.each<[string, string, z.ZodTypeAny, number]>([
+        ["transactions", "/api/transactions", TransactionItemSchema, 201],
+        ["categories", "/api/categories", CategoryItemSchema, 200],
+        ["recipients", "/api/recipients", RecipientItemSchema, 200],
+        ["investments", "/api/investments", InvestmentItemSchema, 201],
+        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema, 201],
+    ])("%s", (label, path, ItemSchema, createStatus) => {
+        it(`POST ${path} answers ${createStatus} and matches item schema`, async () => {
+            validate(
+                ItemSchema,
+                await mutateEnvelope("POST", path, {}, createStatus),
+                `POST ${label}`,
+            );
         });
 
-        it(`PATCH ${path}/:id response matches item schema`, async () => {
-            validate(ItemSchema, await mutateEnvelope("PATCH", `${path}/1`, {}), `PATCH ${label}`);
+        it(`PATCH ${path}/:id answers 200 and matches item schema`, async () => {
+            validate(
+                ItemSchema,
+                await mutateEnvelope("PATCH", `${path}/1`, {}, 200),
+                `PATCH ${label}`,
+            );
         });
 
         it(`DELETE ${path}/:id answers 204 with no body`, async () => {
@@ -883,15 +916,118 @@ describe("Phase F1: extended GET endpoint contracts", () => {
 
 describe("Phase F1: extended mutation contracts", () => {
     const MessageSchema = z.object({ message: z.string() });
+    const ConversationSchema = z.object({
+        id: z.string(),
+        title: z.string(),
+        model: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+    });
+    // POST /api/ai/conversations and GET /api/ai/conversations/:id share this
+    // shape. The POST route names its local `conversation` (routes/ai.js:272)
+    // but assigns it `createEmptyConversation`'s return value, which really is
+    // `{ conversation, messages: [] }` (services/aiChatService.js:468-475) —
+    // verified in the service, not inferred from the variable name.
     const ConversationWithMessagesSchema = z.object({
-        conversation: z.object({
-            id: z.string(),
-            title: z.string(),
-            model: z.string(),
-            createdAt: z.string(),
-            updatedAt: z.string(),
-        }),
+        conversation: ConversationSchema,
         messages: z.array(z.unknown()),
+    });
+
+    // routes/ai.js:324-331 — the non-streaming chat turn. `usage` is
+    // aiChatService's `lastUsage` (every counter nullable until the model
+    // answers); `ChatTurnResponse` in types/aiChat.ts is the client-side twin.
+    const ChatMessageSchema = z.object({
+        id: z.string(),
+        conversationId: z.string(),
+        role: z.string(),
+        content: z.string().nullable(),
+        createdAt: z.string(),
+    });
+    const ChatTurnSchema = z.object({
+        conversation: ConversationSchema,
+        userMessage: ChatMessageSchema,
+        toolMessages: z.array(ChatMessageSchema),
+        assistantMessage: ChatMessageSchema,
+        usage: z.object({
+            evalCount: z.number().nullable(),
+            promptEvalCount: z.number().nullable(),
+            totalDurationMs: z.number().nullable(),
+        }),
+        iterations: z.number().int().nonnegative(),
+    });
+
+    // `splitRepository.formatSplit` (splitRepository.js:717) — the body of
+    // POST /api/splits/:id/settle.
+    const SplitSchema = z.object({
+        id: z.number().int().positive(),
+        transaction_id: z.number().int().positive(),
+        recipient_id: z.number().int().positive(),
+        recipient_name: z.string().nullable(),
+        amount: z.number(),
+        amount_paid: z.number(),
+        note: z.string().nullable(),
+        is_settled: z.boolean(),
+        created_at: z.string(),
+        updated_at: z.string(),
+    });
+
+    // `splitRepository.formatPayment` (splitRepository.js:701) — the body of
+    // POST /api/splits/:id/pay.
+    const SplitPaymentSchema = z.object({
+        id: z.number().int().positive(),
+        split_id: z.number().int().positive(),
+        amount: z.number(),
+        note: z.string().nullable(),
+        paid_at: z.string(),
+        created_at: z.string(),
+    });
+
+    // The counter object both CSV metadata importers answer with:
+    // `res.ok({ ...result, status })`, routes/importRoutes.js:388 / :406.
+    const CsvCountsSchema = z.object({
+        total_processed: z.number().int().nonnegative(),
+        imported: z.number().int().nonnegative(),
+        skipped: z.number().int().nonnegative(),
+        errors: z.number().int().nonnegative(),
+        status: z.enum(["completed", "completed_with_errors"]),
+    });
+
+    // accountRepository's COLUMNS (accountRepository.js:26-29) plus the route's
+    // `links: []`. Every accounts single-row body carries exactly these.
+    const AccountSchema = z.object({
+        id: z.number().int().positive(),
+        name: z.string(),
+        display_name: z.string().nullable(),
+        institution: z.string().nullable(),
+        currency: z.string(),
+        type: z.string(),
+        liquidity_class: z.string(),
+        spendable: z.boolean(),
+        in_net_worth: z.boolean(),
+        tax_wrapper: z.string(),
+        owner: z.string(),
+        multi_currency_cash: z.boolean(),
+        has_cash_sleeve: z.boolean(),
+        funding_account_id: z.number().int().positive().nullable(),
+        statement_balance: z.number().nullable(),
+        statement_balance_date: z.string().nullable(),
+        is_active: z.boolean(),
+        closed_at: z.string().nullable(),
+        created_at: z.string(),
+        updated_at: z.string().nullable(),
+        links: z.array(z.unknown()),
+    });
+
+    // `attachmentRepository.formatRow` (attachmentRepository.js:19-29). Note
+    // `size_bytes` (number), not `size` — AttachmentPanel.tsx:61 reads it.
+    const AttachmentSchema = z.object({
+        id: z.number().int().positive(),
+        transaction_id: z.number().int().positive(),
+        filename: z.string(),
+        stored_path: z.string(),
+        mime_type: z.string(),
+        size_bytes: z.number(),
+        created_at: z.string(),
     });
 
     // Both CSV import routes answer with the same object on the auto-commit
@@ -910,6 +1046,9 @@ describe("Phase F1: extended mutation contracts", () => {
         links: z.array(LinkSchema),
     });
 
+    // Last column = the exact status the real express route answers, read off
+    // its `res.status(...)` call (or its absence → 200). Cited per row so a
+    // future reader can re-derive it without trusting the mock.
     it.each<
         [
             string,
@@ -918,29 +1057,28 @@ describe("Phase F1: extended mutation contracts", () => {
             Record<string, unknown> | undefined,
             string,
             z.ZodTypeAny,
+            number,
         ]
     >([
         [
-            "POST /api/admin/database/vacuum returns message",
+            // `res.ok({ vacuumed: table ?? 'all' })` — there is no `message`.
+            "POST /api/admin/database/vacuum returns { vacuumed }",
             "POST",
             "/api/admin/database/vacuum",
             undefined,
             "POST /api/admin/database/vacuum",
-            MessageSchema,
+            z.object({ vacuumed: z.string() }),
+            200, // routes/admin.js:282 — bare res.ok
         ],
         [
-            "POST /api/ai/chat returns message shape",
+            // The non-streaming turn returns the WHOLE turn, not one message.
+            "POST /api/ai/chat returns the chat turn",
             "POST",
             "/api/ai/chat",
             { conversationId: "conv-1", content: "test" },
             "POST /api/ai/chat",
-            z.object({
-                id: z.string(),
-                conversationId: z.string(),
-                role: z.string(),
-                content: z.string(),
-                createdAt: z.string(),
-            }),
+            ChatTurnSchema,
+            200, // routes/ai.js:324-331 — bare res.ok
         ],
         [
             "POST /api/ai/conversations returns conversation+messages",
@@ -949,14 +1087,18 @@ describe("Phase F1: extended mutation contracts", () => {
             { title: "Test" },
             "POST /api/ai/conversations",
             ConversationWithMessagesSchema,
+            201, // routes/ai.js:273
         ],
         [
-            "POST /api/info/exchange-rates/refresh returns refresh result",
+            // Message only — the route counts nothing, so there is no
+            // `rates_updated` field to read.
+            "POST /api/info/exchange-rates/refresh returns message only",
             "POST",
             "/api/info/exchange-rates/refresh",
             undefined,
             "POST /api/info/exchange-rates/refresh",
-            z.object({ message: z.string(), rates_updated: z.number() }),
+            MessageSchema,
+            200, // routes/info/rates.js:94 — bare res.ok
         ],
         [
             "POST /api/info/refresh-views returns message",
@@ -965,6 +1107,7 @@ describe("Phase F1: extended mutation contracts", () => {
             undefined,
             "POST /api/info/refresh-views",
             MessageSchema,
+            200, // routes/info/maintenance.js:20 — bare res.ok
         ],
         [
             "POST /api/investments/refresh-prices returns price refresh shape",
@@ -979,6 +1122,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 cached_count: z.number(),
                 live: z.boolean(),
             }),
+            200, // controllers/investmentController.js:440 — bare res.ok
         ],
         [
             "POST /api/investments/:id/transactions returns single transaction",
@@ -993,6 +1137,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 amount: z.number(),
                 currency: z.string(),
             }),
+            201, // controllers/investmentController.js:612
         ],
         [
             "PATCH /api/investments/transactions/:id returns single transaction",
@@ -1005,6 +1150,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 investment_id: z.number(),
                 type: z.string(),
             }),
+            200, // controllers/investmentController.js:682 — bare res.ok
         ],
         [
             "POST /api/recipients/:id/merge returns merged shape",
@@ -1013,14 +1159,18 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/recipients/:id/merge",
             z.object({ message: z.string(), merged_count: z.number() }),
+            200, // routes/recipients.js:157 — bare res.ok
         ],
         [
-            "POST /api/recipients/:id/unmerge returns message",
+            // Returns the re-read recipient (`{ ...recipient, links: [] }`),
+            // not an acknowledgement.
+            "POST /api/recipients/:id/unmerge returns the recipient",
             "POST",
             "/api/recipients/1/unmerge",
             undefined,
             "POST /api/recipients/:id/unmerge",
-            MessageSchema,
+            RecipientItemSchema,
+            200, // routes/recipients.js:172 — bare res.ok
         ],
         [
             "POST /api/recipients/:id/patterns returns pattern shape",
@@ -1037,6 +1187,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 is_active: z.boolean(),
                 source: z.string(),
             }),
+            201, // routes/recipients.js:201
         ],
         [
             "POST /api/recipients/:id/patterns/preview returns matches",
@@ -1045,6 +1196,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/recipients/:id/patterns/preview",
             z.object({ matches: z.array(z.unknown()) }),
+            200, // routes/recipients.js:209 — bare res.ok (preview creates nothing)
         ],
         [
             "POST /api/saved-charts returns chart shape",
@@ -1058,6 +1210,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 config: z.unknown(),
                 created_at: z.string(),
             }),
+            201, // routes/savedCharts.js:175
         ],
         [
             "PATCH /api/saved-charts/:id returns chart shape",
@@ -1066,6 +1219,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "PATCH /api/saved-charts/:id",
             z.object({ id: z.number(), name: z.string() }),
+            200, // routes/savedCharts.js:186 — bare res.ok
         ],
         [
             "POST /api/splits/batch returns items",
@@ -1074,36 +1228,31 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/splits/batch",
             z.object({ items: z.array(z.unknown()) }),
+            201, // routes/splits.js:298
         ],
+        // NOTE: there is deliberately no `PATCH /api/splits/:id` row here.
+        // routes/splits.js registers get/post/delete only, so that verb 404s
+        // in production; the row and its handler were removed rather than
+        // rewritten, and no frontend client sends a PATCH there.
         [
-            "PATCH /api/splits/:id returns split shape",
-            "PATCH",
-            "/api/splits/1",
-            {},
-            "PATCH /api/splits/:id",
-            z.object({
-                id: z.number(),
-                transaction_id: z.number(),
-                recipient_id: z.number(),
-                amount: z.number(),
-                is_paid: z.boolean(),
-            }),
-        ],
-        [
-            "POST /api/splits/:id/pay returns message",
+            // Answers with the inserted split_payments row, not a message.
+            "POST /api/splits/:id/pay returns the payment row",
             "POST",
             "/api/splits/1/pay",
             {},
             "POST /api/splits/:id/pay",
-            MessageSchema,
+            SplitPaymentSchema,
+            201, // routes/splits.js:320 — inserts a payment row
         ],
         [
-            "POST /api/splits/:id/settle returns message",
+            // Answers with the updated split row, not a message.
+            "POST /api/splits/:id/settle returns the split row",
             "POST",
             "/api/splits/1/settle",
             {},
             "POST /api/splits/:id/settle",
-            MessageSchema,
+            SplitSchema,
+            200, // routes/splits.js:343 — bare res.ok (flips a flag)
         ],
         [
             "POST /api/splits/owed/:recipientId/settle-all returns settled count",
@@ -1112,6 +1261,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/splits/owed/:recipientId/settle-all",
             z.object({ message: z.string(), settled_count: z.number() }),
+            200, // routes/splits.js:357 — bare res.ok
         ],
         [
             "POST /api/watchlist returns watchlist item",
@@ -1126,6 +1276,7 @@ describe("Phase F1: extended mutation contracts", () => {
                 asset_class: z.string(),
                 target_price: z.number(),
             }),
+            201, // routes/watchlist.js:196
         ],
         [
             "PATCH /api/watchlist/:id returns watchlist item",
@@ -1134,6 +1285,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "PATCH /api/watchlist/:id",
             z.object({ id: z.number(), symbol: z.string() }),
+            200, // routes/watchlist.js:205 — bare res.ok
         ],
         [
             "POST /api/planned-transactions/:id/execute returns updated planned",
@@ -1142,6 +1294,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/planned-transactions/:id/execute",
             PlannedTransactionItemSchema,
+            200, // routes/plannedTransactions.js:566 — bare res.ok
         ],
         [
             "POST /api/import/csv returns completed import result",
@@ -1150,6 +1303,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/import/csv",
             ImportCsvResultSchema,
+            201, // routes/importRoutes.js:242 (auto-commit arm; review arm = 202 below)
         ],
         [
             "POST /api/import/csv/custom returns completed import result",
@@ -1158,6 +1312,7 @@ describe("Phase F1: extended mutation contracts", () => {
             {},
             "POST /api/import/csv/custom",
             ImportCsvResultSchema,
+            201, // routes/importRoutes.js:283 (auto-commit arm; review arm = 202 below)
         ],
         [
             "POST /api/import/batches/:batchId/commit returns commit result",
@@ -1170,16 +1325,99 @@ describe("Phase F1: extended mutation contracts", () => {
                 batch_id: z.number(),
                 transactions_committed: z.number(),
             }),
+            200, // routes/importRoutes.js:621 — bare res.ok
         ],
         [
-            "PUT /api/import/batches/:batchId/rows/:rowId/override returns message",
-            "PUT",
+            // POST, not PUT: routes/importRoutes.js:549, and
+            // `lib/api/imports.ts::overrideImportRow` posts. The body echoes
+            // the row id and the override that landed — never a message.
+            "POST /api/import/batches/:batchId/rows/:rowId/override returns the applied override",
+            "POST",
             "/api/import/batches/1/rows/1/override",
             {},
-            "PUT override",
-            MessageSchema,
+            "POST override",
+            z.object({
+                row_id: z.number().int().positive(),
+                user_override_recipient_id: z.number().int().positive().nullable(),
+            }),
+            200, // routes/importRoutes.js:568 — bare res.ok
         ],
-    ])("%s", async (_name, method, path, body, label, schema) => {
-        validate(schema, await mutateEnvelope(method, path, body), label);
+
+        // ── Rows added for the four handlers ea3a2eb corrected to 201 but
+        // left uncovered by this table. Statuses cited as above; bodies read
+        // off the same routes.
+        [
+            "POST /api/accounts returns the created account",
+            "POST",
+            "/api/accounts",
+            {},
+            "POST /api/accounts",
+            AccountSchema,
+            201, // routes/accounts.js:55
+        ],
+        [
+            "POST /api/attachments/transaction/:id returns the attachment row",
+            "POST",
+            "/api/attachments/transaction/1",
+            {},
+            "POST /api/attachments/transaction/:id",
+            AttachmentSchema,
+            201, // routes/attachments.js:112
+        ],
+        [
+            "POST /api/import/categories returns CSV counts",
+            "POST",
+            "/api/import/categories",
+            {},
+            "POST /api/import/categories",
+            CsvCountsSchema,
+            201, // routes/importRoutes.js:406
+        ],
+        [
+            // Same counter object plus `bank_account_errors`
+            // (RecipientImportResults, dataImportService.js:69-75).
+            "POST /api/import/recipients returns CSV counts",
+            "POST",
+            "/api/import/recipients",
+            {},
+            "POST /api/import/recipients",
+            CsvCountsSchema.extend({
+                bank_account_errors: z.number().int().nonnegative(),
+            }),
+            201, // routes/importRoutes.js:388
+        ],
+    ])("%s", async (_name, method, path, body, label, schema, status) => {
+        validate(schema, await mutateEnvelope(method, path, body, status), label);
+    });
+
+    // The other arm of the same two routes. Both import routes answer 202 with
+    // `respondReviewRequired`'s object (importRoutes.js:74-84) when rows still
+    // need review: no counts at all, because nothing was committed. Pinned here
+    // so the client-side union (`ImportCsvResponse` in lib/api/imports.ts) has
+    // a fixture on both arms rather than only the auto-commit one.
+    const ImportCsvReviewRequiredSchema = z.object({
+        batch_id: z.number().int().positive(),
+        requires_review: z.literal(true),
+        match_source_counts: z.record(z.string(), z.number().int().nonnegative()),
+    });
+
+    it.each([
+        ["POST /api/import/csv", "/api/import/csv"],
+        ["POST /api/import/csv/custom", "/api/import/csv/custom"],
+    ])("%s answers 202 with the review-required shape", async (label, path) => {
+        server.use(...importCsvReviewRequiredHandlers);
+
+        const res = await fetch(`${BASE}${path}`, { method: "POST" });
+        expect(res.status, `expected 202 for POST ${path}`).toBe(202);
+
+        const json = (await res.json()) as { ok: boolean; data: unknown };
+        expect(json.ok).toBe(true);
+        const data = validate(ImportCsvReviewRequiredSchema, json.data, label);
+
+        // The counts the 201 arm carries must be absent here — reading them is
+        // exactly the drift this fixture exists to catch.
+        expect(data).not.toHaveProperty("total");
+        expect(data).not.toHaveProperty("imported");
+        expect(data).not.toHaveProperty("total_processed");
     });
 });

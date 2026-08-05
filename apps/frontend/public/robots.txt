@@ -1,14 +1,4 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# Vision is a self-hosted personal-finance app with no public content —
+# every page is one user's private financial data. Disallow indexing entirely.
 User-agent: *
-Allow: /
+Disallow: /

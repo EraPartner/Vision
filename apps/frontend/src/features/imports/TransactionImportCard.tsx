@@ -48,7 +48,8 @@ import {
 } from "@/hooks/useCustomParserConfigs";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { consumePendingImportFile } from "@/lib/importHandoff";
-import type { ImportProgress } from "@/lib/api/types";
+import type { ImportProgress, ImportResult } from "@/lib/api/types";
+import type { ImportCsvResult } from "@/lib/api/imports";
 
 interface CustomConfig {
   dateColumn: string;
@@ -177,16 +178,29 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
     setProgress({ phase: 'connecting', current: 0, total: 0, imported: 0, duplicates: 0, errors: 0, percent: 0 });
 
     try {
-      let data;
+      let data: ImportCsvResult | ImportResult;
       if (isCustomLike) {
-        data = await apiClient.importCSVCustom(
+        const custom = await apiClient.importCSVCustom(
           file, bank,
           customConfig.dateFormat, customConfig.dateColumn,
           customConfig.recipientColumn, customConfig.amountColumn,
           customConfig.memoColumn || undefined,
           customConfig.separator, customConfig.encoding, customConfig.skipRows,
         );
-        setProgress({ phase: 'complete', current: data.total_processed, total: data.total_processed, imported: data.imported, duplicates: data.duplicates, errors: (data as { errors?: number }).errors || 0, percent: 100 });
+        if ('requires_review' in custom) {
+          // 202: the batch is parked in awaiting_review, nothing was committed
+          // and this branch carries no counts at all (`respondReviewRequired`
+          // sends only batch_id / requires_review / match_source_counts). So
+          // there is no completed-progress panel and no "imported N" toast to
+          // show — the review page is the entire outcome.
+          navigate(`/import/${custom.batch_id}/review`);
+          return;
+        }
+        // 201: the row count on this route is `total`. It was read as
+        // `total_processed` — a field this route has never put on the wire —
+        // which is what rendered "undefined total processed" in the toast.
+        data = custom;
+        setProgress({ phase: 'complete', current: custom.total, total: custom.total, imported: custom.imported, duplicates: custom.duplicates, errors: custom.errors, percent: 100 });
       } else {
         const { abort, result } = apiClient.importCSVWithProgress(file, bank, (p) => setProgress(p));
         abortRef.current = abort;
@@ -199,7 +213,11 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         return;
       }
 
-      toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.duplicates, total: data.total_processed }), {
+      // Both shapes that reach here are committed imports; the SSE result names
+      // the row count `total_processed` (importRoutes.js:362) and the
+      // non-streaming route names it `total` (buildPipelineResult).
+      const totalProcessed = 'total_processed' in data ? data.total_processed : data.total;
+      toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.duplicates, total: totalProcessed }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       onImportSuccess();

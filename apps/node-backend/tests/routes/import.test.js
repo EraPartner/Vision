@@ -202,6 +202,31 @@ describe('Import Routes', () => {
       expect(res.body.data.status).toBe('completed_with_errors');
     });
 
+    // The 202 arm — `respondReviewRequired` (importRoutes.js:74-84). Nothing is
+    // committed on this branch, so the body deliberately carries no counts; the
+    // client narrows on `requires_review`. Pinned so the shape cannot drift
+    // again without a test noticing.
+    it('should return 202 with the review-required shape when rows need review', async () => {
+      runImportPipeline.mockResolvedValue({
+        batchId: 42,
+        total: 5,
+        requiresReview: true,
+        matchSourceCounts: { exact: 1, fuzzy: 2, pattern: 0, new: 2 },
+      });
+
+      const res = await api.post(`${BASE}/csv`).query({ bank_name: 'belfius' }).expect(202);
+
+      expect(res.body).toEqual(okEnvelope({
+        batch_id: 42,
+        requires_review: true,
+        match_source_counts: { exact: 1, fuzzy: 2, pattern: 0, new: 2 },
+      }));
+      // No counts on this branch — the review page is the outcome, not a commit.
+      expect(res.body.data).not.toHaveProperty('total');
+      expect(res.body.data).not.toHaveProperty('imported');
+      expect(res.body.data).not.toHaveProperty('status');
+    });
+
     it('should return 400 for invalid bank config', async () => {
       runImportPipeline.mockRejectedValue(new Error('No configuration found for bank'));
 
@@ -278,6 +303,31 @@ describe('Import Routes', () => {
         bank_name: 'Custom', date_format: '%d/%m/%Y',
         date_column: 'Date', recipient_column: 'Desc', amount_column: 'Amount',
       }).expect(201);
+    });
+
+    // Same 202 arm as /csv — the custom-mapping route shares
+    // `respondReviewRequired`, and its frontend caller (TransactionImportCard)
+    // routes to the review page off exactly these fields.
+    it('should return 202 with the review-required shape when rows need review', async () => {
+      runImportPipeline.mockResolvedValue({
+        batchId: 43,
+        total: 2,
+        requiresReview: true,
+        matchSourceCounts: { exact: 0, fuzzy: 0, pattern: 0, new: 2 },
+      });
+
+      const res = await api.post(`${BASE}/csv/custom`).query({
+        bank_name: 'Custom', date_format: '%d/%m/%Y',
+        date_column: 'Date', recipient_column: 'Desc', amount_column: 'Amount',
+      }).expect(202);
+
+      expect(res.body).toEqual(okEnvelope({
+        batch_id: 43,
+        requires_review: true,
+        match_source_counts: { exact: 0, fuzzy: 0, pattern: 0, new: 2 },
+      }));
+      expect(res.body.data).not.toHaveProperty('total');
+      expect(res.body.data).not.toHaveProperty('imported');
     });
 
     it('should return 500 on error', async () => {

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
     Wallet, Upload, Tags, Sparkles, ArrowRight, ArrowLeft,
-    CheckCircle2, Loader2, BarChart3, Receipt,
+    CheckCircle2, ClipboardCheck, Loader2, BarChart3, Receipt,
     CalendarClock, TrendingUp, LineChart, X,
     HardDrive, ShieldCheck, FolderOpen, PiggyBank, CreditCard,
     LayoutDashboard,
@@ -154,6 +154,45 @@ function StepSuccess({ title, subtitle }: { title: string; subtitle?: string }) 
     );
 }
 
+/**
+ * The import step's *other* outcome: the route answered 202, the batch is
+ * parked in `awaiting_review`, and nothing was committed. On a first-ever
+ * import this is the normal answer, not the exception — `prepareImport`
+ * (node-backend services/importPipeline/index.js:78-84) requires review as
+ * soon as any row resolved to a NEW recipient, and on an empty database every
+ * recipient is new.
+ *
+ * Deliberately `StepSuccess`'s twin and not a new invention: the same
+ * `h-14 w-14` circular plate in the same centered column, so the eye reads
+ * "this is the import step's outcome" from the geometry. Only the hue differs
+ * — `primary` instead of the `accent` green — because this outcome is not
+ * done, it is waiting on the user. Hue carries the meaning; shape carries the
+ * category. The CTA is a plain `<Button>` in its default (primary) variant,
+ * the same affordance every other terminal action in this wizard uses.
+ */
+function StepNeedsReview({ title, desc, cta, later, onReview }: {
+    title: string;
+    desc: string;
+    cta: string;
+    later: string;
+    onReview: () => void;
+}) {
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+            <div className="h-14 w-14 rounded-full bg-primary/15 flex items-center justify-center">
+                <ClipboardCheck className="h-7 w-7 text-primary" />
+            </div>
+            <p className="text-lg font-semibold text-foreground">{title}</p>
+            <p className="text-sm text-muted-foreground max-w-md">{desc}</p>
+            <Button onClick={onReview} className="gap-2 mt-1">
+                {cta}
+                <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+            <p className="text-xs text-muted-foreground">{later}</p>
+        </div>
+    );
+}
+
 export function OnboardingWizard({ open, onComplete, onOpenSettings }: OnboardingWizardProps) {
     const { t } = useLanguage();
     const navigate = useNavigate();
@@ -208,6 +247,10 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
     const [file, setFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ imported: number; duplicates: number } | null>(null);
+    // Set only on the 202 arm: the staged-but-uncommitted batch this run
+    // produced. It survives the rest of the wizard so the final step can still
+    // hand the user off to it (see the footer's `onboarding.finishImport` CTA).
+    const [reviewBatch, setReviewBatch] = useState<{ batchId: number; rows: number } | null>(null);
 
     const [selectedCategories, setSelectedCategories] = useState<Set<number>>(
         new Set(SUGGESTED_CATEGORIES.map((_, i) => i))
@@ -237,11 +280,19 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
             // The route answers 202 `{ batch_id, requires_review, match_source_counts }`
             // when rows still need review — nothing is committed on that branch, so
             // there are no counts (the same convention importCSVWithProgress uses for
-            // its `review_required` event). Reading them unguarded rendered "undefined".
-            const imported = 'requires_review' in result ? 0 : result.imported;
-            const duplicates = 'requires_review' in result ? 0 : result.duplicates;
-            setImportResult({ imported, duplicates });
-            toast.success(t('onboarding.toast.imported', { n: String(imported) }));
+            // its `review_required` event). Reading them unguarded rendered "undefined";
+            // reporting them as 0 was honest but still told the user an import had
+            // happened. The batch is real and staged — it just needs the review page,
+            // so this arm offers that instead of claiming a result.
+            if ('requires_review' in result) {
+                const rows = Object.values(result.match_source_counts ?? {})
+                    .reduce((sum, n) => sum + (n ?? 0), 0);
+                setReviewBatch({ batchId: result.batch_id, rows });
+                toast.info(t('onboarding.toast.reviewRequired', { n: String(rows) }));
+                return;
+            }
+            setImportResult({ imported: result.imported, duplicates: result.duplicates });
+            toast.success(t('onboarding.toast.imported', { n: String(result.imported) }));
         } catch (err: unknown) {
             toast.error(t('onboarding.toast.importFailed', { msg: (err as Error).message }));
         } finally {
@@ -272,6 +323,31 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         onComplete();
         navigate(path);
     };
+
+    /**
+     * Hand the user off to the review page for the batch this run staged.
+     *
+     * Onboarding is marked complete *before* navigating, and that is forced,
+     * not a preference: `AppLayout` renders this wizard as
+     * `open={!onboardingComplete}` (components/layout/AppLayout.tsx:247), so
+     * navigating while still incomplete would leave a modal dialog sitting on
+     * top of the review page the user was just sent to — strictly worse than
+     * the bug being fixed.
+     *
+     * The cost is real and worth naming: taking this exit from the import step
+     * ends onboarding at step 4 of 7, so the categories, tour and backup steps
+     * are skipped. It is mitigated on three sides rather than hidden — the
+     * user is shown the "needs review" state and chooses to leave rather than
+     * being teleported; `onboarding.import.review.later` offers finishing
+     * setup first, in which case the backup step's footer CTA becomes
+     * "Finish your import" and lands them here anyway; and the whole wizard
+     * can be replayed from Settings → About ("Restart onboarding",
+     * components/settings/sections/AboutSection.tsx:51). Suspending and
+     * resuming the wizard around the review page instead would need a
+     * persisted in-progress step in `useOnboarding` plus a re-entry trigger on
+     * the review page — a step-machine change this fix has no mandate for.
+     */
+    const goToReview = (batchId: number) => handleNavigate(`/import/${batchId}/review`);
 
     return (
         <>
@@ -445,6 +521,14 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                         ? t('onboarding.import.duplicates', { n: String(importResult.duplicates) })
                                         : undefined}
                                 />
+                            ) : reviewBatch ? (
+                                <StepNeedsReview
+                                    title={t('onboarding.import.review.title', { n: String(reviewBatch.rows) })}
+                                    desc={t('onboarding.import.review.desc')}
+                                    cta={t('onboarding.import.review.cta')}
+                                    later={t('onboarding.import.review.later')}
+                                    onReview={() => goToReview(reviewBatch.batchId)}
+                                />
                             ) : (
                                 <>
                                     <CsvDropzone file={file} onFileSelect={setFile} compact />
@@ -458,7 +542,13 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                 </>
                             )}
 
-                            <p className="text-xs text-muted-foreground">{t('onboarding.import.skipHint')}</p>
+                            {/* Suppressed on the review arm only: "you can also import
+                                later" contradicts a batch that is already staged and
+                                waiting, and `onboarding.import.review.later` is the
+                                footnote that arm needs instead. */}
+                            {!reviewBatch && (
+                                <p className="text-xs text-muted-foreground">{t('onboarding.import.skipHint')}</p>
+                            )}
                         </div>
                     )}
 
@@ -631,8 +721,18 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     </div>
                     <div>
                         {step === "backup" ? (
-                            <Button onClick={onComplete} className="gap-1.5">
-                                {t('onboarding.goToDashboard')} <ArrowRight className="h-3.5 w-3.5" />
+                            /* The other half of the hand-off. A user who chose
+                               "finish setup first" on the import step still has an
+                               uncommitted batch; ending the wizard at the dashboard
+                               would strand it, so the last CTA points at the batch
+                               instead of the dashboard. Same button, same variant,
+                               same arrow — only the destination and label change. */
+                            <Button
+                                onClick={reviewBatch ? () => goToReview(reviewBatch.batchId) : onComplete}
+                                className="gap-1.5"
+                            >
+                                {reviewBatch ? t('onboarding.finishImport') : t('onboarding.goToDashboard')}
+                                <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
                         ) : step === "tour" ? (
                             <Button onClick={goNext} className="gap-1.5">
