@@ -377,7 +377,7 @@ if (settings.isProduction()) {
   const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
   // Only Vite's content-hashed bundles live under dist/assets/ — those are
   // safe to cache for a year. Everything else in dist/ has a stable name
-  // (index.html, favicon.ico, robots.txt, …) and must revalidate, or an
+  // (index.html, favicon.svg, robots.txt, …) and must revalidate, or an
   // explicit GET for it is pinned for a year and never sees an app update
   // (stale shells then 404 on their old hashed chunk URLs after an upgrade).
   // `index: false` only disables directory-index resolution, it does not
