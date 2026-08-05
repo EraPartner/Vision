@@ -1105,7 +1105,7 @@ look-changing one.
   - The non-streaming route's 202 body is narrowed in `TransactionImportCard.tsx` and now in `OnboardingWizard.tsx`, while the streaming path (`importCSVWithProgress`) has its own `review_required` event with a *different* payload shape handled in a third place. Same concept, three shapes, three narrowings.
   - Related to the already-filed finding that the streaming path's `reviewRequiredSchema` and its handler disagree about `total`. Consider one shared narrowing helper once that one is resolved, rather than before.
 
-- [ ] **Decision needed: contract tests validate response bodies but not status codes, and the MSW `ok()` helper answers 200 for routes that answer 201/202** 🔽 🔎 verified-present 2026-08-04
+- [x] **Decision needed: contract tests validate response bodies but not status codes, and the MSW `ok()` helper answers 200 for routes that answer 201/202** 🔽 🔎 verified-present 2026-08-04 ✅ 2026-08-05 · ea3a2eb (#149) (decided as the implementer recommended — pin the status. Reproduced: `handlers.ts:15` `ok()` set no `status` at all, and both `contracts.test.ts` helpers asserted `expect(res.ok).toBe(true)`, which passes for **any** 2xx, so a 201→200 or 201→202 drift could not fail either. **Ground truth was read from each express route's `res.status(...)` call, never from the mock — and that turned up 18 live discrepancies the finding named as a class but enumerated none of:** every `res.status(201)` create route was mocked as 200 (transactions, investments, planned-transactions, accounts, ai/conversations, attachments, both csv import auto-commit arms, import/recipients, import/categories, investment transactions, recipient patterns, saved-charts, splits/batch, splits/:id/pay, watchlist). Two backend non-uniformities are now documented rather than smoothed over: `POST /api/categories` and `POST /api/recipients` are the only creates in the CRUD five that do **not** set 201, and `POST /api/splits/:id/pay` is 201 while its sibling `/settle` is 200 because `/pay` inserts a payment row — each pinned to what the route really answers. GET rows pin 200 via the helper default rather than ~60 identical columns, still strictly stronger than `res.ok`. `ok201()`/`ok202()` added alongside an `ok()` that is now explicit about 200, and the review-branch rows added earlier the same day were rewired onto `ok202()` rather than duplicated. **Proven load-bearing by four deliberate breaks**, one of which the orchestrator reproduced independently before committing — reverting the transactions handler to `ok()` fails with `expected 201 for POST /api/transactions: expected 200 to be 201`. No existing test depended on the wrong status; full frontend suite 2319 passed. ⚠️ Two residues below are **more serious than the defect this finding described** — seven rows pin body shapes the backend contradicts, and two pin routes that do not exist)
   - ↪ _from: Orchestration session 2026-08-04 · import-contract fix (the open question the finding above deliberately left; implementer recommends pinning)_
   - Recommendation from the implementer: pin the status. A contract test that validates the body but not the status cannot catch a route that changes its status code — the same defect class one layer down from the body drift just fixed.
   - Suggested minimal form: add an expected-status column to the `it.each` table in `contracts.test.ts`, add `ok201()`/`ok202()` variants alongside `ok()`, and add review-branch rows for both csv routes. Touches every row of the table, so it wants its own pass rather than riding on a finding.
@@ -1114,6 +1114,29 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-08-04 · import-contract fix (noticed while correcting the OpenAPI entry for the same route)_
   - `docs/api/imports.md:47-56` shows `duplicates_skipped`, which is never emitted, and omits `total`, `duplicates`, `batch_id` and `auto_linked_count`. The real shape is now pinned in `openapi.yaml` as `ImportCsvResult`.
   - Fix: regenerate the example from the OpenAPI component. (Stale doc, not a code bug.)
+
+- [ ] **Seven contract rows pin response bodies the backend contradicts — the same drift class as the import bug, sitting unnoticed** ⏫
+  - ↪ _from: Orchestration session 2026-08-05 · contract status pinning (found while reading every route for its real status code; each passes today because the mock and the test agree with each other and both disagree with the server)_
+  - `apps/frontend/src/test/msw/contracts.test.ts` — verified against the routes:
+    - `POST /api/admin/database/vacuum` — backend returns `{vacuumed}` (`admin.js:282`), test asserts `{message}`.
+    - `POST /api/info/exchange-rates/refresh` — backend returns `{message}` only (`rates.js:94`), test asserts `{message, rates_updated}`.
+    - `POST /api/ai/conversations` — backend returns the bare conversation (`ai.js:274`), test asserts `{conversation, messages}`.
+    - `POST /api/ai/chat` — backend returns `{conversation, userMessage, toolMessages, assistantMessage, usage, iterations}` (`ai.js:324-331`), test asserts `{id, conversationId, role, content, createdAt}`.
+    - `POST /api/recipients/:id/unmerge` — backend returns the recipient (`recipients.js:172`), test asserts `{message}`.
+    - `POST /api/splits/:id/pay` and `POST /api/splits/:id/settle` — backend returns the payment / split rows, tests assert `{message}`.
+  - This is exactly the defect that let the csv import response shape drift: a contract test whose fixture is wrong pins the fiction, not the contract. Each row may also have a downstream client expecting the wrong thing, so the fix is per-row, not a sweep.
+  - Fix: correct each fixture to the real shape, then check the consuming client.
+
+- [ ] **Two contract rows pin routes the backend does not serve at all** 🔼
+  - ↪ _from: Orchestration session 2026-08-05 · contract status pinning (found the same way; both now carry an inline NOTE saying the 200 is the fixture's status, not a real response)_
+  - `PATCH /api/splits/:id` — `routes/splits.js` registers **no** `router.patch` (verbs: get, post, delete). Row at `contracts.test.ts:1115-1137`, handler at `handlers.ts:687-689`.
+  - `PUT /api/import/batches/:batchId/rows/:rowId/override` — the real route is **POST** (`importRoutes.js:549`) and the frontend client posts (`lib/api/imports.ts:274-276`), but the MSW handler registers `http.put` (`handlers.ts:590`), so the row exercises a verb that would 404 in production. Its asserted body (`{message}`) is wrong too — the route returns `{row_id, user_override_recipient_id}`.
+  - Dead mocks pinning fiction. Fix: correct the verb and body, or delete the rows if the endpoints are genuinely gone.
+
+- [ ] **Four MSW handlers are now faithful but unpinned — nothing stops them drifting back** ⏬
+  - ↪ _from: Orchestration session 2026-08-05 · contract status pinning (noticed while correcting them)_
+  - `POST /api/accounts`, `POST /api/attachments/transaction/:id`, `POST /api/import/categories` and `POST /api/import/recipients` had their status corrected to 201 by ea3a2eb, but no row in the contract table covers them, so nothing asserts it stays right.
+  - Fix: add table rows for the four. Cheap, and the natural follow-up to the status pass.
 
 - [ ] **The streaming import path has the same phantom-field bug the non-streaming one just lost — `reviewRequiredSchema` and the SSE handler disagree about `total`** 🔼
   - ↪ _from: Orchestration session 2026-08-05 · import-contract fix (implementer found it while fixing the sibling; explicitly OUT of that finding's scope, which scoped the streaming path as "fine")_
