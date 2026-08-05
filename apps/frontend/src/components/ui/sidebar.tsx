@@ -174,7 +174,7 @@ const Sidebar = React.forwardRef<
         >
             <div
                 className={cn(
-                    "relative h-svh bg-transparent transition-[width] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)]",
+                    "relative h-svh bg-transparent transition-[width] duration-[var(--duration-normal)] ease-[var(--ease-glide)]",
                     collapsible === "offcanvas"
                         ? "w-0"
                         : collapsible === "icon"
@@ -187,7 +187,7 @@ const Sidebar = React.forwardRef<
             />
             <div
                 className={cn(
-                    "fixed inset-y-0 z-50 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] md:flex",
+                    "fixed inset-y-0 z-50 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-[var(--duration-normal)] ease-[var(--ease-glide)] md:flex",
                     side === "left"
                         ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
                         : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -355,7 +355,7 @@ const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.ComponentProps<
                 ref={ref}
                 data-sidebar="group-label"
                 className={cn(
-                    "flex h-8 shrink-0 items-center rounded-md px-3 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70 outline-none ring-ring transition-[margin,opa] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+                    "flex h-8 shrink-0 items-center rounded-md px-3 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70 outline-none ring-ring transition-[margin,opa] duration-[var(--duration-fast)] ease-[var(--ease-glide)] focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
                     "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:pointer-events-none",
                     className,
                 )}
@@ -375,7 +375,7 @@ const SidebarGroupAction = React.forwardRef<HTMLButtonElement, React.ComponentPr
                 ref={ref}
                 data-sidebar="group-action"
                 className={cn(
-                    "absolute right-3 top-3.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-muted-foreground outline-none ring-ring transition-[background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+                    "absolute right-3 top-3.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-muted-foreground outline-none ring-ring transition-[background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.1] [&>svg]:size-4 [&>svg]:shrink-0",
                     "after:absolute after:-inset-2 after:md:hidden",
                     "group-data-[collapsible=icon]:hidden",
                     className,
@@ -405,7 +405,7 @@ const SidebarMenuItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li
 SidebarMenuItem.displayName = "SidebarMenuItem";
 
 const sidebarMenuButtonVariants = cva(
-    "peer/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-3 text-left text-sm tracking-tight text-foreground/80 outline-none ring-ring transition-[background-color,color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-foreground data-[state=open]:hover:bg-foreground/[0.06] data-[state=open]:hover:text-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden [&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-muted-foreground/80 data-[active=true]:[&>svg]:text-primary",
+    "peer/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-3 text-left text-sm tracking-tight text-foreground/80 outline-none ring-ring transition-[background-color,color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-glide)] hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-foreground data-[state=open]:hover:bg-foreground/[0.06] data-[state=open]:hover:text-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden [&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-muted-foreground/80 data-[active=true]:[&>svg]:text-primary",
     {
         variants: {
             variant: {
@@ -481,7 +481,7 @@ const SidebarMenuAction = React.forwardRef<
             ref={ref}
             data-sidebar="menu-action"
             className={cn(
-                "absolute right-1.5 top-1.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-muted-foreground outline-none ring-ring transition-[background-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] peer-hover/menu-button:text-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+                "absolute right-1.5 top-1.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-muted-foreground outline-none ring-ring transition-[background-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-glide)] peer-hover/menu-button:text-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.12] [&>svg]:size-4 [&>svg]:shrink-0",
                 "after:absolute after:-inset-2 after:md:hidden",
                 "peer-data-[size=sm]/menu-button:top-1",
                 "peer-data-[size=default]/menu-button:top-2",
@@ -587,7 +587,7 @@ const SidebarMenuSubButton = React.forwardRef<
             data-size={size}
             data-active={isActive}
             className={cn(
-                "flex h-8 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-3 text-muted-foreground/90 outline-none ring-ring transition-[background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] aria-disabled:pointer-events-none aria-disabled:opacity-50 hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground/70",
+                "flex h-8 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-3 text-muted-foreground/90 outline-none ring-ring transition-[background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] aria-disabled:pointer-events-none aria-disabled:opacity-50 hover:bg-foreground/[0.05] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground/70",
                 "data-[active=true]:bg-primary/10 data-[active=true]:text-foreground data-[active=true]:[&>svg]:text-primary",
                 size === "sm" && "text-xs",
                 size === "md" && "text-sm",

@@ -124,9 +124,13 @@ export default {
                 "glass-elevated":
                     "0 1px 0 0 hsl(var(--glass-highlight) / 0.5) inset, 0 22px 48px -18px hsl(var(--glass-shadow) / 0.55)",
             },
+            // Mirrors the curve table in styles/tokens.css — see the comment
+            // there for which curve owns which role. `out-quint` is gone: it
+            // was an alias for the exact same cubic-bezier as `out-expo`, and
+            // that curve is now honestly named `glide`.
             transitionTimingFunction: {
+                glide: "var(--ease-glide)",
                 "out-expo": "var(--ease-out-expo)",
-                "out-quint": "var(--ease-out-quint)",
                 "in-out-quart": "var(--ease-in-out-quart)",
             },
             transitionDuration: {
@@ -183,7 +187,10 @@ export default {
                 shimmer: "shimmer 2.4s linear infinite",
                 // Overshooting bezier gives the spring feel without JS.
                 "dialog-in": "dialog-in 420ms cubic-bezier(0.34, 1.45, 0.64, 1) both",
-                "dialog-out": "dialog-out 200ms var(--ease-out-quint) both",
+                // Dismissal is a settle, not an arrival — glide (Apple's sheet
+                // curve) is the same cubic-bezier `--ease-out-quint` resolved
+                // to, so this is a rename, not a retune.
+                "dialog-out": "dialog-out 200ms var(--ease-glide) both",
             },
         },
     },

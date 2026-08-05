@@ -132,7 +132,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             type="button"
                             onClick={() => setPaletteOpen(true)}
                             aria-label={t('commandPalette.openLabel')}
-                            className="hidden sm:flex items-center gap-2 h-9 rounded-xl border border-border/50 bg-background/50 px-3 mr-2 text-sm text-muted-foreground tracking-tight transition-[border-color,background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                            className="hidden sm:flex items-center gap-2 h-9 rounded-xl border border-border/50 bg-background/50 px-3 mr-2 text-sm text-muted-foreground tracking-tight transition-[border-color,background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
                         >
                             <Search className="h-3.5 w-3.5" />
                             <span className="hidden md:inline">{t('commandPalette.hint')}</span>
@@ -259,7 +259,7 @@ function TopbarPageTitle({ visible }: { visible: boolean }) {
     return (
         <div
             aria-hidden={!shown}
-            className={cn("min-w-0 truncate font-display text-sm font-semibold tracking-tight transition-[opacity,transform] duration-[var(--duration-normal)] ease-[var(--ease-out-quint)] motion-reduce:transition-none", shown ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-1")}
+            className={cn("min-w-0 truncate font-display text-sm font-semibold tracking-tight transition-[opacity,transform] duration-[var(--duration-normal)] ease-[var(--ease-glide)] motion-reduce:transition-none", shown ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-1")}
         >
             {title}
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useUpdateTransaction } from "@/hooks/useTransactions";
 import { useAccounts } from "@/hooks/useAccounts";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { Money } from "@/components/shared/Money";
 import { moneyAmount, ymdDateString } from "@/lib/forms/schemas";
 import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { DatePicker } from "@/components/shared/DatePicker";
@@ -37,7 +37,6 @@ export function TransactionInfoDialog({
 }: TransactionInfoDialogProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings.numberFormat);
     const updateMutation = useUpdateTransaction();
     // Account-name suggestions for the bank field (ADR-088). Writing the name keeps
     // the dual-write trigger's account_id link intact; free entry still creates new.
@@ -127,7 +126,8 @@ export function TransactionInfoDialog({
                     const fields: Array<{
                         key: string;
                         label: string;
-                        value?: string;
+                        /** Rendered display value; also the row's visibility gate (falsy → row hidden). */
+                        value?: ReactNode;
                         editable?: boolean;
                         editField?: InfoEditableField;
                         editValue?: string;
@@ -157,7 +157,7 @@ export function TransactionInfoDialog({
                             {
                                 key: 'amount',
                                 label: t('txPage.field.amount'),
-                                value: formatCurrency(txn.amount, txn.currency, locale, undefined, true),
+                                value: <Money amount={txn.amount} currency={txn.currency} signed />,
                                 editable: true,
                                 editField: 'amount',
                                 editValue: String(txn.amount),
@@ -186,7 +186,7 @@ export function TransactionInfoDialog({
                                 // never user-editable. Shown for imported rows only.
                                 key: 'balance',
                                 label: t('txPage.field.balance'),
-                                value: txn.balance != null ? formatCurrency(txn.balance, txn.currency, locale) : undefined,
+                                value: txn.balance != null ? <Money amount={txn.balance} currency={txn.currency} /> : undefined,
                             },
                             {
                                 key: 'comment',

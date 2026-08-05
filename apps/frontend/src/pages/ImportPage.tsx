@@ -14,7 +14,7 @@ export default function ImportPage() {
   const [historyKey, setHistoryKey] = useState(0);
 
   return (
-    <div className="space-y-8 animate-in max-w-2xl mx-auto">
+    <div className="space-y-8 max-w-2xl mx-auto">
       <PageHeader
         title={t('importPage.title')}
         subtitle={t('importPage.subtitle')}

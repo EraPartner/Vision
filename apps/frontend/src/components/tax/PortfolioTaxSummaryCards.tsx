@@ -1,6 +1,7 @@
 import { Landmark, Receipt, TrendingDown, AlertTriangle, SlidersHorizontal } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { TaxSummaryCard } from "@/pages/portfolio/tax/TaxSummaryCard";
 
 interface PortfolioTaxSummaryCardsProps {
@@ -26,26 +27,28 @@ export function PortfolioTaxSummaryCards({
   txYear,
 }: PortfolioTaxSummaryCardsProps) {
   const { t } = useLanguage();
-  const fmt = useCurrencyFormatter();
+  // Parts formatter: same currency/locale/decimals resolution as the string
+  // formatter it replaced, but the tiles keep the Money micro-typography.
+  const fmtParts = useCurrencyPartsFormatter();
 
   const cards = [
     {
       title: t("tax.totalTaxesPaid"),
-      value: fmt(totalTaxes),
+      value: <RollingNumber parts={fmtParts(totalTaxes)} />,
       icon: Landmark,
       desc: t("tax.acrossAllInvestmentsYear", { year: String(txYear) }),
       cls: "text-loss",
     },
     {
       title: t("tax.totalFeesPaid"),
-      value: fmt(totalFees),
+      value: <RollingNumber parts={fmtParts(totalFees)} />,
       icon: Receipt,
       desc: t("tax.brokerAndMgmtFeesYear", { year: String(txYear) }),
       cls: "text-loss",
     },
     {
       title: t("tax.totalCosts"),
-      value: fmt(totalTaxesAndFees),
+      value: <RollingNumber parts={fmtParts(totalTaxesAndFees)} />,
       icon: TrendingDown,
       desc: t("tax.combinedTaxesAndFeesYear", { year: String(txYear) }),
       cls: "text-loss",
@@ -59,14 +62,14 @@ export function PortfolioTaxSummaryCards({
     },
     {
       title: t("tax.totalWithPIT"),
-      value: fmt(portfolioTaxesPlusPIT),
+      value: <RollingNumber parts={fmtParts(portfolioTaxesPlusPIT)} />,
       icon: Landmark,
       desc: t("tax.totalWithPITDesc"),
       cls: "text-primary",
     },
     {
       title: t("tax.manualAdjustments"),
-      value: fmt(totalManualTaxes + totalManualFees),
+      value: <RollingNumber parts={fmtParts(totalManualTaxes + totalManualFees)} />,
       icon: SlidersHorizontal,
       desc: t("tax.manualAdjustmentsDescShort"),
       cls: "text-muted-foreground",

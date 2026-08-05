@@ -80,7 +80,8 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
 
   return (
     <Card
-      className="glass-elevated premium-frame micro-lift group relative overflow-hidden flex flex-col h-full">
+      variant="interactive"
+      className="glass-elevated premium-frame group relative overflow-hidden flex flex-col h-full">
       <div className={cn("absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br", trendGradient)} />
       <div
         className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-24 -mt-24 transition-transform duration-500 group-hover:scale-110" />

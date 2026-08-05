@@ -14,6 +14,7 @@ import {
     LayoutDashboard,
 } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
+import { VisionMark } from "@/components/shared/VisionMark";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -23,6 +24,52 @@ import { useAdapters } from "@/features/imports/useAdapters";
 import { RestoreFromBackupCard } from "./RestoreFromBackupCard";
 
 const ONBOARDING_KEY = "onboarding_complete";
+
+/**
+ * Heading recipes for the wizard's step titles.
+ *
+ * The app's display-type rule lives in `index.css` `@layer base`:
+ * `h1, h2, h3, .font-display { font-family: var(--font-display) }` — Fraunces.
+ * These headings are `h2`s, so they are covered by the element selector, but
+ * every other titled surface in the app writes the class out anyway
+ * (`DialogTitle`, `CardTitle`, `AlertTitle`, `EmptyState`, the sidebar
+ * wordmark). Writing it here puts the wizard back inside that convention and
+ * keeps the intent visible at the call site.
+ *
+ * `STEP_HEADING` is `DialogTitle`'s exact recipe (`ui/dialog.tsx`) — these
+ * *are* the dialog's visible titles. `WELCOME_HEADING` is `CardTitle`'s
+ * (`ui/card.tsx`), one step up, because the welcome step is the brand moment.
+ * The `outline-none` tail is pre-existing and load-bearing: the heading is
+ * focused programmatically on every step change (see `headingRef`) and must
+ * not draw a focus ring for that.
+ */
+const HEADING_FOCUS = "outline-none focus:outline-none focus-visible:outline-none";
+const STEP_HEADING = `font-display text-xl font-semibold leading-tight tracking-tight text-foreground ${HEADING_FOCUS}`;
+const WELCOME_HEADING = `font-display text-2xl font-semibold leading-tight tracking-tight text-foreground ${HEADING_FOCUS}`;
+
+/**
+ * Two-letter monogram for a bank tile.
+ *
+ * Derived from the adapter catalog's own display label — `bankName` in the
+ * backend adapter registry (`importPipeline/adapters/index.js`), served as
+ * `name` by `/api/info/supported-adapters` — so a newly registered adapter
+ * gets its own face automatically, with no second list to keep in sync (the
+ * same reason the catalog itself is registry-derived).
+ *
+ * Case is read from the label rather than forced, because the catalog already
+ * distinguishes the two kinds of name: acronyms are spelled in caps and
+ * names in title case, so "ING" → "IN" and "Belfius" → "Be" fall straight out
+ * of the data and the grid reads as a set of wordmarks rather than a set of
+ * badges. A one-letter first word borrows the next word's initial; a label
+ * with no letters at all falls back to the adapter key.
+ */
+function bankMonogram(adapter: { key: string; name: string }): string {
+    const words = (adapter.name ?? "").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    const [first = "", second = ""] = words;
+    const fromName = first.length >= 2 ? first.slice(0, 2) : first + second.slice(0, 1);
+    const mono = fromName || (adapter.key ?? "").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2);
+    return mono ? mono.charAt(0).toUpperCase() + mono.slice(1) : "?";
+}
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useOnboarding() {
@@ -187,8 +234,14 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         setImporting(true);
         try {
             const result = await apiClient.importCSV(file, selectedBank);
-            setImportResult({ imported: result.imported, duplicates: result.duplicates });
-            toast.success(t('onboarding.toast.imported', { n: String(result.imported) }));
+            // The route answers 202 `{ batch_id, requires_review, match_source_counts }`
+            // when rows still need review — nothing is committed on that branch, so
+            // there are no counts (the same convention importCSVWithProgress uses for
+            // its `review_required` event). Reading them unguarded rendered "undefined".
+            const imported = 'requires_review' in result ? 0 : result.imported;
+            const duplicates = 'requires_review' in result ? 0 : result.duplicates;
+            setImportResult({ imported, duplicates });
+            toast.success(t('onboarding.toast.imported', { n: String(imported) }));
         } catch (err: unknown) {
             toast.error(t('onboarding.toast.importFailed', { msg: (err as Error).message }));
         } finally {
@@ -230,9 +283,9 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                                <Wallet className="h-4 w-4 text-primary-foreground" />
+                                <VisionMark className="h-4 w-4 text-primary-foreground" />
                             </div>
-                            <span className="font-bold text-foreground">Vision</span>
+                            <span className="font-display font-semibold tracking-tight text-foreground">Vision</span>
                         </div>
                         <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('aria.close')} onClick={onComplete}>
                             <X className="h-4 w-4" />
@@ -259,11 +312,22 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
 
                     {/* Welcome */}
                     {step === "welcome" && (
-                        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
-                            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg">
-                                <Sparkles className="h-8 w-8 text-primary-foreground" />
+                        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 animate-in">
+                            {/* The brand moment. Same aurora-halo + glass-tile treatment
+                                `shared/EmptyState.tsx` gives a routine empty list, sized up
+                                and carrying the Vision mark instead of a stock icon. The
+                                material tiers stack the way the hierarchy in index.css
+                                describes them: glass-thick dialog → glass-regular brand tile
+                                → glass-thin working surfaces on the later steps. The
+                                entrance is `.animate-in`, which index.css already disables
+                                under `prefers-reduced-motion`. */}
+                            <div className="relative">
+                                <div aria-hidden="true" className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/15 to-accent/10 blur-2xl" />
+                                <div className="relative h-20 w-20 rounded-2xl glass-regular flex items-center justify-center">
+                                    <VisionMark className="h-10 w-10 text-primary" />
+                                </div>
                             </div>
-                            <h2 ref={headingRef} tabIndex={-1} className="text-2xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.welcome.title')}</h2>
+                            <h2 ref={headingRef} tabIndex={-1} className={WELCOME_HEADING}>{t('onboarding.welcome.title')}</h2>
                             <p className="text-muted-foreground max-w-md">{t('onboarding.welcome.desc')}</p>
                             <div className="flex gap-2 mt-2">
                                 <Badge variant="secondary" className="gap-1">
@@ -287,7 +351,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "overview" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.overview.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className={STEP_HEADING}>{t('onboarding.overview.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.overview.desc')}</p>
                             </div>
                             <div className="flex flex-col gap-3 overflow-y-auto">
@@ -319,7 +383,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "bank" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.bank.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className={STEP_HEADING}>{t('onboarding.bank.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.bank.desc')}</p>
                             </div>
                             {adaptersLoading ? (
@@ -331,13 +395,28 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                             key={adapter.key}
                                             onClick={() => setSelectedBank(adapter.key)}
                                             className={cn(
-                                                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-[color,background-color,border-color,box-shadow] hover:shadow-md",
+                                                "press-feedback flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-[color,background-color,border-color,box-shadow] hover:shadow-md",
                                                 selectedBank === adapter.key
                                                     ? "border-primary bg-primary/5 shadow-sm"
                                                     : "border-border hover:border-primary/40"
                                             )}
                                         >
-                                            <Wallet className={cn("h-6 w-6", selectedBank === adapter.key ? "text-primary" : "text-muted-foreground")} />
+                                            {/* Monogram, not an icon: six banks rendered as the same
+                                                Wallet glyph read as six clones. `aria-hidden` because
+                                                the label below already names the tile — the monogram
+                                                is a face, not a second name. `Wallet` still means
+                                                "bank/account" everywhere else in the app. The plate is
+                                                glass-thin, deliberately one tier below the welcome
+                                                step's glass-regular brand tile. */}
+                                            <span
+                                                aria-hidden="true"
+                                                className={cn(
+                                                    "h-10 w-10 rounded-xl glass-thin flex items-center justify-center font-display text-sm font-semibold tracking-tight transition-colors",
+                                                    selectedBank === adapter.key ? "text-primary" : "text-muted-foreground"
+                                                )}
+                                            >
+                                                {bankMonogram(adapter)}
+                                            </span>
                                             <span className={cn("text-sm font-medium", selectedBank === adapter.key ? "text-foreground" : "text-muted-foreground")}>
                                                 {adapter.name}
                                             </span>
@@ -353,7 +432,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "import" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.import.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className={STEP_HEADING}>{t('onboarding.import.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">
                                     {t('onboarding.import.desc', { bank: selectedBank ? adapters.find(a => a.key === selectedBank)?.name || t('onboarding.import.yourBank') : t('onboarding.import.yourBank') })}
                                 </p>
@@ -387,7 +466,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "categories" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.categories.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className={STEP_HEADING}>{t('onboarding.categories.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.categories.desc')}</p>
                             </div>
 
@@ -410,7 +489,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                                         setSelectedCategories(next);
                                                     }}
                                                     className={cn(
-                                                        "flex items-center gap-2 p-2.5 rounded-lg border transition-[color,background-color,border-color] text-left",
+                                                        "press-feedback flex items-center gap-2 p-2.5 rounded-lg border transition-[color,background-color,border-color] text-left",
                                                         selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                                                     )}
                                                 >
@@ -459,15 +538,22 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "tour" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.tour.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className={STEP_HEADING}>{t('onboarding.tour.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.tour.desc')}</p>
                             </div>
+                            {/* glass-thin instead of a bare border: the working steps join the
+                                app's material hierarchy without competing with the welcome step's
+                                glass-regular tile. The tile's own hover tint is dropped — a
+                                background-color sitting under a glass gradient just muddies it —
+                                and replaced with the same border+shadow hover the bank tiles use,
+                                so the wizard's two tile grids behave identically. The icon plate
+                                keeps its group-hover lift. */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {FEATURES.map((feat) => (
                                     <button
                                         key={feat.path}
                                         onClick={() => handleNavigate(feat.path)}
-                                        className="flex items-start gap-3 p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-[color,background-color,border-color] text-left group"
+                                        className="press-feedback glass-thin flex items-start gap-3 p-3 rounded-xl hover:border-primary/40 hover:shadow-md transition-[color,background-color,border-color,box-shadow] text-left group"
                                     >
                                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                                             <feat.icon className="h-4 w-4 text-primary" />
@@ -486,7 +572,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     {step === "backup" && (
                         <div className="flex-1 flex flex-col gap-5">
                             <div>
-                                <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-foreground outline-none focus:outline-none focus-visible:outline-none">{t('onboarding.backup.title')}</h2>
+                                <h2 ref={headingRef} tabIndex={-1} className={STEP_HEADING}>{t('onboarding.backup.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.backup.desc')}</p>
                             </div>
 
@@ -497,7 +583,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                     { icon: HardDrive,   labelKey: 'onboarding.backup.reason.local' },
                                     { icon: FolderOpen,  labelKey: 'onboarding.backup.reason.restore' },
                                 ].map(({ icon: Icon, labelKey }) => (
-                                    <div key={labelKey} className="flex items-start gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                                    <div key={labelKey} className="flex items-start gap-3 p-3 rounded-lg glass-thin">
                                         <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
                                             <Icon className="h-4 w-4 text-primary" />
                                         </div>

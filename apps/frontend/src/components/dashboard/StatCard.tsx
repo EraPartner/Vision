@@ -124,7 +124,7 @@ export function StatCard({
         : value;
 
     return (
-        <Card className={cn("glass-elevated premium-frame micro-lift group relative overflow-hidden h-full", className)}>
+        <Card variant="interactive" className={cn("glass-elevated premium-frame group relative overflow-hidden h-full", className)}>
             <TrendHue tone={tone} />
             <CardSheen animated />
             <CardHeader className={statHeaderVariants({ size })}>

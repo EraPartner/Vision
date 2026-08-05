@@ -35,6 +35,13 @@ main {
   border-radius: 12px;
   box-shadow: 0 20px 50px rgba(0,0,0,0.25);
 }
+/* Brand mark — see the note on the inline <svg> in error.html. */
+.mark {
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 0 1.25rem;
+}
 h1 {
   font-size: 1.4rem;
   margin: 0 0 0.75rem;

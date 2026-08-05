@@ -92,7 +92,7 @@ export default function ResearchHomePage() {
   const formatPrice = useCurrencyFormatter();
 
   return (
-    <div className="space-y-6 animate-in">
+    <div className="space-y-6">
       <PageHeader title={t('research.title')} subtitle={t('research.subtitle')} icon={Telescope} />
 
       {/* Prominent search */}
@@ -132,7 +132,7 @@ export default function ResearchHomePage() {
             const pct = quote?.changePercent;
             const up = (pct ?? 0) >= 0;
             return (
-              <Card key={b.symbol} className="glass-regular micro-lift">
+              <Card key={b.symbol} variant="interactive" className="glass-regular">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-xs font-medium text-muted-foreground">{b.label}</span>
@@ -227,7 +227,7 @@ export default function ResearchHomePage() {
                         key={item.id}
                         onClick={() => item.symbol && goToSymbol(item.symbol)}
                         disabled={!item.symbol}
-                        className="rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="press-feedback rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <div className="flex items-center gap-2">
                           {item.symbol
@@ -280,7 +280,7 @@ function EntryCard({ icon: Icon, title, desc, onClick }: EntryCardProps) {
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-glass-soft transition-[border-color,box-shadow] group"
+      className="press-feedback text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-glass-soft transition-[border-color,box-shadow] group"
     >
       <div className="flex items-center gap-3 mb-2">
         <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">

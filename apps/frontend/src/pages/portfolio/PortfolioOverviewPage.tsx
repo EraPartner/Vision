@@ -1,6 +1,6 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,9 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { TrendHue } from "@/components/shared/TrendHue";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
+import { Money } from "@/components/shared/Money";
 import { parseYmd } from "@/lib/timezone";
 import { ExportDialog } from "@/components/reports/ExportDialog";
 
@@ -63,6 +65,9 @@ export default function PortfolioOverviewPage() {
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
   const fmt = useCurrencyFormatter(targetCurrency);
+  // Parts sibling of `fmt` — same locale/currency/decimals, formatToParts output
+  // so the summary tiles carry the Money micro-typography through RollingNumber.
+  const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
   const assetClassGroups = useMemo(() => getAssetClassGroups(t), [t]);
 
@@ -188,20 +193,28 @@ export default function PortfolioOverviewPage() {
   const cards = [
     {
       title: t('portfolio.totalGainLoss'),
-      value: `${totalGainLossInTarget >= 0 ? '+' : ''}${fmt(totalGainLossInTarget)}`,
+      // `signed` reproduces the former `${x >= 0 ? '+' : ''}` prefix with a
+      // locale-correct sign (Intl signDisplay: "exceptZero").
+      parts: fmtParts(totalGainLossInTarget, { signed: true }),
       icon: totalGainLossInTarget >= 0 ? TrendingUp : TrendingDown,
       desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
       cls: totalGainLossInTarget >= 0 ? "amount-gain" : "amount-loss",
       gain: totalGainLossInTarget >= 0,
       // Attribution: gain = asset performance + currency effect (FX feature).
-      subline: hasFxExposure
-        ? `${t('portfolio.assetGain')} ${totalAssetGainInTarget >= 0 ? '+' : ''}${fmt(totalAssetGainInTarget)} · ${t('portfolio.fxEffect')} ${totalFxGainInTarget >= 0 ? '+' : ''}${fmt(totalFxGainInTarget)}`
-        : undefined,
+      subline: hasFxExposure ? (
+        <>
+          {t('portfolio.assetGain')}{' '}
+          <Money amount={totalAssetGainInTarget} currency={targetCurrency} signed />
+          {' · '}
+          {t('portfolio.fxEffect')}{' '}
+          <Money amount={totalFxGainInTarget} currency={targetCurrency} signed />
+        </>
+      ) : undefined,
       sublineWarning: hasFxExposure && fxRateFellBack ? t('portfolio.fxFallbackNote') : undefined,
     },
     {
       title: t('portfolio.realizedGains'),
-      value: `${totalRealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalRealizedGainInTarget)}`,
+      parts: fmtParts(totalRealizedGainInTarget, { signed: true }),
       icon: ArrowUpRight,
       desc: t('portfolio.fromClosedPositions'),
       cls: totalRealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss",
@@ -209,7 +222,7 @@ export default function PortfolioOverviewPage() {
     },
     {
       title: t('portfolio.unrealizedGains'),
-      value: `${totalUnrealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalUnrealizedGainInTarget)}`,
+      parts: fmtParts(totalUnrealizedGainInTarget, { signed: true }),
       icon: Clock,
       desc: t('portfolio.paperProfitLoss'),
       cls: totalUnrealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss",
@@ -275,7 +288,7 @@ export default function PortfolioOverviewPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
               <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
                 <TotalValueCard
-                  formattedTotal={fmt(totalPortfolioValueInTarget)}
+                  formattedTotal={<Money amount={totalPortfolioValueInTarget} currency={targetCurrency} />}
                   totalValue={totalPortfolioValueInTarget}
                   isGain={totalGainLossInTarget >= 0}
                   labels={{
@@ -298,27 +311,27 @@ export default function PortfolioOverviewPage() {
               </div>
               <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2 grid grid-cols-1 grid-rows-3 gap-4">
                 {cards.map((c) => (
-                  <Card key={c.title} className="liquid-glass micro-lift border relative overflow-hidden">
-                    <TrendHue tone={c.gain ? "gain" : "loss"} />
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                      <c.icon className={cn("h-4 w-4", c.cls)} />
-                    </CardHeader>
-                    <CardContent>
-                      <p className={cn("text-2xl font-bold", c.cls)}>{c.value}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
-                      {c.subline && (
-                        <p className="text-xs text-muted-foreground mt-1 tabular-nums">
-                          {c.subline}
-                          {c.sublineWarning && (
-                            <span title={c.sublineWarning} aria-label={c.sublineWarning}>
-                              <AlertTriangle className="inline h-3 w-3 ml-1 text-warning align-[-1px]" />
-                            </span>
-                          )}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <StatCard
+                    key={c.title}
+                    size="compact"
+                    title={c.title}
+                    value={<RollingNumber parts={c.parts} />}
+                    icon={c.icon}
+                    trend={c.gain ? "income" : "expense"}
+                    valueClassName={c.cls}
+                    subtitle={c.desc}
+                  >
+                    {c.subline && (
+                      <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                        {c.subline}
+                        {c.sublineWarning && (
+                          <span title={c.sublineWarning} aria-label={c.sublineWarning}>
+                            <AlertTriangle className="inline h-3 w-3 ml-1 text-warning align-[-1px]" />
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </StatCard>
                 ))}
               </div>
             </div>

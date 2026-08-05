@@ -100,7 +100,7 @@ export function RollingNumber({ value, parts, className }: RollingNumberProps) {
                     className="inline-block h-[1em] overflow-hidden"
                 >
                     <span
-                        className="flex flex-col transition-transform duration-[600ms] ease-[var(--ease-out-expo)]"
+                        className="flex flex-col transition-transform duration-[600ms] ease-[var(--ease-glide)]"
                         style={{ transform: `translateY(calc(${digit} * -1em))` }}
                     >
                         {REEL.map((d) => (

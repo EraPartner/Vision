@@ -1,8 +1,22 @@
 /**
  * Vision Motion Tokens
  *
- * Shared springs, easings, and variants for Framer Motion.
- * Mirrors CSS duration/easing tokens in styles/tokens.css.
+ * Shared springs and easings for Framer Motion.
+ *
+ * `styles/tokens.css` owns the curve table; this file mirrors it because
+ * Framer needs the raw control points rather than a `cubic-bezier(...)`
+ * string. The mirroring is enforced, not promised:
+ * `lib/__tests__/motionTokenParity.test.ts` parses tokens.css and asserts the
+ * two tables are identical — same names, same numbers, in both directions —
+ * so neither layer can be edited alone. Add or rename a curve here and the
+ * test fails until tokens.css agrees, and vice versa.
+ *
+ * Historical note: this docstring used to claim it "mirrors" tokens.css while
+ * the two layers in fact defined different curves under the same names —
+ * CSS shipped Apple's sheet curve as both `--ease-out-expo` and
+ * `--ease-out-quint`, while Framer ran the real out-expo. That is the drift
+ * the parity test now makes impossible.
+ *
  * All consumers honor `prefers-reduced-motion` via useReducedMotion().
  */
 
@@ -10,11 +24,17 @@ import type { Transition } from "framer-motion";
 
 // ---------- Easings ----------
 
+/**
+ * Choose by role, not by feel:
+ * - `glide`      — an on-screen element moving between two resting states
+ *                  (hover, colour/size/position changes).
+ * - `outExpo`    — an element ARRIVING (page/section entrances, chart draws).
+ * - `inOutQuart` — ambient loops that ease at both ends.
+ */
 export const easings = {
+    glide: [0.32, 0.72, 0, 1] as const,
     outExpo: [0.16, 1, 0.3, 1] as const,
-    outQuint: [0.22, 1, 0.36, 1] as const,
     inOutQuart: [0.77, 0, 0.175, 1] as const,
-    standard: [0.4, 0, 0.2, 1] as const,
 } as const;
 
 // ---------- Durations (seconds for Framer) ----------

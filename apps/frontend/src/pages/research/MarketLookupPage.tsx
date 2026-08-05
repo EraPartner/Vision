@@ -280,7 +280,7 @@ export default function MarketLookupPage() {
   );
 
   return (
-    <div className="space-y-6 animate-in">
+    <div className="space-y-6">
       <PageHeader title={t('marketLookup.title')} icon={BarChart3} />
 
       {/* Search */}

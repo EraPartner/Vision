@@ -81,7 +81,7 @@ export default function StatisticsPage() {
 
   if (isLoading) {
     return (
-      <div {...loadingSurfaceProps} className="space-y-6 animate-in">
+      <div {...loadingSurfaceProps} className="space-y-6">
         <PageHeader title={t("statsPage.title")} icon={BarChart3} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
@@ -99,7 +99,7 @@ export default function StatisticsPage() {
 
   if (isError) {
     return (
-      <div className="space-y-6 animate-in">
+      <div className="space-y-6">
         <PageHeader title={t("statsPage.title")} icon={BarChart3} />
         <Card className="glass-regular">
           <CardContent className="pt-6">
@@ -112,7 +112,7 @@ export default function StatisticsPage() {
 
   if (!data || data.monthlyData.length === 0) {
     return (
-      <div className="space-y-6 animate-in">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <PageHeader title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} icon={BarChart3} />
           <WidgetVisibilityDialog
@@ -141,7 +141,7 @@ export default function StatisticsPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <PageHeader title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} icon={BarChart3} />
         <div className="flex items-center gap-2">

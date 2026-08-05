@@ -321,7 +321,7 @@ export default function ResearchComparePage() {
     setSortMetric((prev) => (prev === key ? null : key));
 
   return (
-    <div className="space-y-6 animate-in">
+    <div className="space-y-6">
       <PageHeader title={t('research.compare.title')} subtitle={t('research.compare.subtitle')} icon={GitCompareArrows} />
 
       {/* Symbol picker */}

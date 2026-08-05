@@ -12,6 +12,7 @@ import { BarChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency } from "@/utils/currency";
+import { Money } from "@/components/shared/Money";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 
@@ -113,7 +114,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
                             {t("monthlyTrends.totalIncome")}
                         </p>
                         <p className="text-sm font-bold text-gain">
-                            {formatCurrency(totalIncome, defaultCurrency, locale)}
+                            <Money amount={totalIncome} currency={defaultCurrency} />
                         </p>
                     </div>
                 </div>
@@ -124,7 +125,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
                             {t("monthlyTrends.totalSpending")}
                         </p>
                         <p className="text-sm font-bold text-loss">
-                            {formatCurrency(totalSpending, defaultCurrency, locale)}
+                            <Money amount={totalSpending} currency={defaultCurrency} />
                         </p>
                     </div>
                 </div>
@@ -137,7 +138,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
     }
 
     return (
-        <Card className="relative overflow-hidden glass-regular premium-frame micro-lift">
+        <Card className="relative overflow-hidden glass-regular premium-frame">
             <CardSheen />
             <CardHeader className="space-y-3">
                 <div className="flex items-center gap-3">

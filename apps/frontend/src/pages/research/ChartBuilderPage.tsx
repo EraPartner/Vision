@@ -331,7 +331,7 @@ export default function ChartBuilderPage() {
   const searchOpen = isOpen && (searchItems.length > 0 || macroItems.length > 0);
 
   return (
-    <div className="space-y-6 animate-in">
+    <div className="space-y-6">
       <PageHeader title={t("research.builder.title")} subtitle={t("research.builder.subtitle")} icon={CandlestickChart} />
 
       {/* Toolbar */}

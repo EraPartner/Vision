@@ -1,6 +1,7 @@
 import { Landmark, TrendingUp, TrendingDown, PiggyBank } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import type { BelgianTaxCalculation } from "@/lib/belgianTax";
 import { TaxSummaryCard } from "@/pages/portfolio/tax/TaxSummaryCard";
 
@@ -21,54 +22,56 @@ export function TaxOverviewSummaryCards({
   viewedYear,
 }: TaxOverviewSummaryCardsProps) {
   const { t } = useLanguage();
-  const fmt = useCurrencyFormatter();
+  // Parts formatter: same currency/locale/decimals resolution as the string
+  // formatter it replaced, but the tiles keep the Money micro-typography.
+  const fmtParts = useCurrencyPartsFormatter();
 
   const cards = [
     {
       title: t("tax.card.profileGrossIncome"),
-      value: fmt(calculation.grossIncome),
+      value: <RollingNumber parts={fmtParts(calculation.grossIncome)} />,
       icon: TrendingUp,
       desc: t("tax.card.profileGrossIncome.desc"),
       cls: "text-gain",
     },
     {
       title: t("tax.card.totalPIT"),
-      value: fmt(calculation.totalPIT),
+      value: <RollingNumber parts={fmtParts(calculation.totalPIT)} />,
       icon: Landmark,
       desc: t("tax.card.totalPIT.desc",),
       cls: "text-loss",
     },
     {
       title: t("tax.card.netTakeHome"),
-      value: fmt(calculation.netTakeHome),
+      value: <RollingNumber parts={fmtParts(calculation.netTakeHome)} />,
       icon: TrendingDown,
       desc: t("tax.card.netTakeHome.desc"),
       cls: calculation.netTakeHome >= 0 ? "amount-gain" : "amount-loss",
     },
     {
       title: t("tax.card.monthlyTaxReserve"),
-      value: fmt(calculation.monthlyTaxReserve),
+      value: <RollingNumber parts={fmtParts(calculation.monthlyTaxReserve)} />,
       icon: PiggyBank,
       desc: t("tax.card.monthlyTaxReserve.desc"),
       cls: "text-primary",
     },
     {
       title: t("tax.card.portfolioTaxesYear", { year: String(viewedYear) }),
-      value: fmt(portfolioTaxesForYear),
+      value: <RollingNumber parts={fmtParts(portfolioTaxesForYear)} />,
       icon: Landmark,
       desc: t("tax.card.portfolioTaxesYear.desc"),
       cls: "text-loss",
     },
     {
       title: t("tax.card.totalWithPortfolio"),
-      value: fmt(totalTaxIncludingPortfolio),
+      value: <RollingNumber parts={fmtParts(totalTaxIncludingPortfolio)} />,
       icon: Landmark,
       desc: t("tax.card.totalWithPortfolio.desc"),
       cls: "text-primary",
     },
     {
       title: t("tax.card.totalWithPropertyEstimate", { year: String(viewedYear) }),
-      value: fmt(totalTaxIncludingPropertyEstimate),
+      value: <RollingNumber parts={fmtParts(totalTaxIncludingPropertyEstimate)} />,
       icon: Landmark,
       desc: t("tax.card.totalWithPropertyEstimate.desc"),
       cls: "text-primary",

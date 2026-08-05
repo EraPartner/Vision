@@ -390,7 +390,7 @@ export default function TransactionsPage() {
 
     if (isLoading) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('txPage.title')} subtitle={t('txPage.subtitle')} icon={Receipt} />
                 <Card {...loadingSurfaceProps}>
                     <CardHeader className="pb-3">
@@ -409,7 +409,7 @@ export default function TransactionsPage() {
 
     if (error) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('txPage.title')} icon={Receipt} />
                 <Card>
                     <CardContent className="pt-0">
@@ -422,7 +422,7 @@ export default function TransactionsPage() {
 
     return (
         <>
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader
                     title={t('txPage.title')}
                     subtitle={t('txPage.subtitle')}

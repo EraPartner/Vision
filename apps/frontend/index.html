@@ -9,6 +9,23 @@
         name="description" />
     <meta content="Vision" name="author" />
 
+    <!-- Brand mark. `favicon.svg` is the packaged app icon (packaging/electron/
+         build/icon.svg) adapted for a tab — see the note inside that file. The
+         PNGs are fallbacks for engines without SVG-favicon support; the
+         apple-touch-icon is flattened because iOS ignores alpha. -->
+    <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
+    <link href="/favicon-96.png" rel="icon" sizes="96x96" type="image/png" />
+    <link href="/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180" />
+    <link href="/manifest.json" rel="manifest" />
+
+    <!-- Browser chrome color. `theme-color` can only key off the OS preference,
+         while the app's own light/dark comes from localStorage (`vision_theme`,
+         dark by default) — so these are the closest declarative match, not an
+         exact mirror. Values are the app's own `--background` token from
+         tokens.css (:root / .dark). -->
+    <meta content="#F8F6F1" media="(prefers-color-scheme: light)" name="theme-color" />
+    <meta content="#0E1315" media="(prefers-color-scheme: dark)" name="theme-color" />
+
     <!-- Prevent flash-of-light before first paint. This MUST be a plain inline
          script: a `type="module"` script (even /src/theme-flash.ts) is folded into
          the deferred main bundle in a production build, so it runs only after the
@@ -73,6 +90,15 @@
                 hsl(var(--boot-bg));
         }
 
+        /* Brand mark, mirroring the Electron splash's .mark (currentColor, 44px)
+           so it does not blink out of existence at the splash → index.html
+           handoff. */
+        #boot-splash .boot-splash__mark {
+            width: 44px;
+            height: 44px;
+            color: currentColor;
+        }
+
         #boot-splash .boot-splash__spinner {
             width: 26px;
             height: 26px;
@@ -123,6 +149,11 @@
          no script, no imports, nothing that grows the boot graph. -->
     <div id="root">
         <div id="boot-splash" aria-hidden="true">
+            <svg class="boot-splash__mark" viewBox="262 296 500 500" fill="none"
+                xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M 268 300 L 512 792 L 756 300 L 656 300 L 512 596 L 368 300 Z" fill="currentColor" />
+                <circle cx="512" cy="444" r="40" fill="currentColor" />
+            </svg>
             <div class="boot-splash__spinner"></div>
             <div class="boot-splash__name">Vision</div>
             <div class="boot-splash__status">&nbsp;</div>

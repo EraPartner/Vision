@@ -306,7 +306,7 @@ export default function DashboardPage() {
     const statSkeleton = (
         <div {...loadingSurfaceProps} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-                <Card key={i} className="glass-regular micro-lift">
+                <Card key={i} variant="interactive" className="glass-regular">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
                         <Skeleton className="h-4 w-28" />
                         <Skeleton className="h-10 w-10 rounded-xl" />
@@ -345,7 +345,7 @@ export default function DashboardPage() {
 
     if (partialError && !hasAnyData) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.errorLoading', { msg: String(partialErrorMessage) })} icon={LayoutDashboard} />
             </div>
         );
@@ -364,7 +364,7 @@ export default function DashboardPage() {
 
     return (
         <ChartSyncProvider>
-        <div className="space-y-8 animate-in">
+        <div className="space-y-8">
             {/* Page header */}
             <PageHeader
                 title={t(greetingKey) || t('dashboard.title')}
@@ -430,7 +430,7 @@ export default function DashboardPage() {
                     <Card className="glass-regular lg:col-span-3"><CardContent className="pt-6"><ChartSkeleton height={300} /></CardContent></Card>
                 )}
                 {isVisible('monthlyTrends') && !monthlyLoading && monthlyData.length > 0 && (
-                    <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-3">
+                    <Card className="group relative overflow-hidden glass-regular premium-frame lg:col-span-3">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] text-primary transition-transform duration-300 group-hover:scale-105">
@@ -457,7 +457,7 @@ export default function DashboardPage() {
                     <Card className="glass-regular lg:col-span-2"><CardContent className="pt-6"><ChartSkeleton height={300} /></CardContent></Card>
                 )}
                 {isVisible('categoryPie') && !transactionsLoading && (
-                <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-2">
+                <Card className="group relative overflow-hidden glass-regular premium-frame lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-chart-4/20 to-chart-4/5 flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] text-chart-4 transition-transform duration-300 group-hover:scale-105">

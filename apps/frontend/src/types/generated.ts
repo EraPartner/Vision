@@ -3728,6 +3728,29 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        ImportCsvResult: {
+            /** @description Rows read from the CSV. */
+            total: number;
+            imported: number;
+            duplicates: number;
+            /** @description Validation errors plus commit errors. */
+            errors: number;
+            batch_id: number;
+            /** @description Planned payments auto-cleared by the imported transactions. */
+            auto_linked_count: number;
+            /** @enum {string} */
+            status: "completed" | "completed_with_errors";
+            error_message: string | null;
+            links: components["schemas"]["Link"][];
+        };
+        ImportCsvReviewRequired: {
+            batch_id: number;
+            requires_review: boolean;
+            /** @description Rows per match source (exact / fuzzy / pattern / new). */
+            match_source_counts: {
+                [key: string]: number;
+            };
+        };
         RecipientPattern: {
             id: number;
             pattern: string;
@@ -8014,14 +8037,25 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Import batch created */
-            200: {
+            /** @description All rows matched exactly — batch committed immediately */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["ImportBatch"];
+                        data?: components["schemas"]["ImportCsvResult"];
+                    };
+                };
+            };
+            /** @description Some rows need review — batch left in awaiting_review; client must use the review endpoints then POST commit */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ImportCsvReviewRequired"];
                     };
                 };
             };
@@ -8045,13 +8079,26 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Import batch created */
-            200: {
+            /** @description All rows matched exactly — batch committed immediately */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ImportCsvResult"];
+                    };
+                };
+            };
+            /** @description Some rows need review — batch left in awaiting_review; client must use the review endpoints then POST commit */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ImportCsvReviewRequired"];
+                    };
                 };
             };
         };

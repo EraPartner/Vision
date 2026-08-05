@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="72 72 880 880">
+  <!--
+    The Vision mark for the web surface. Derived from the packaged app icon
+    (packaging/electron/build/icon.svg) — same construction, same values:
+    obsidian glass body, emerald→champagne mark gradient, the two aurora
+    washes, the glass top-edge highlight and hairline border.
+
+    Two deliberate adaptations for a browser tab, both about the macOS icon
+    grid rather than the mark itself:
+      1. No drop shadow. The packaged icon floats on Apple's icon grid; a
+         browser tab has no such stage, and at 16px a blurred shadow only
+         muddies the silhouette (it would also need canvas we crop away).
+      2. Tightened viewBox (72 72 880 880 instead of 0 0 1024 1024). The
+         packaged icon reserves 100px of breathing room per edge because the
+         OS composites it into a larger tile; a favicon has no such tile, so
+         cropping that margin lets the mark fill the tab at the same optical
+         size as its neighbours.
+    Geometry inside the body is byte-for-byte the packaged icon's.
+    Keep the two in sync — this is the same identity, not a variant.
+  -->
+  <defs>
+    <!-- Deep warm obsidian body (matches background / glass-surface-deep) -->
+    <linearGradient id="body" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#16202A"/>
+      <stop offset="0.55" stop-color="#0E1518"/>
+      <stop offset="1" stop-color="#0A0D10"/>
+    </linearGradient>
+
+    <!-- Mark: luminous emerald (primary) kissed by champagne gold (accent) -->
+    <linearGradient id="mark" x1="0.12" y1="0.05" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#5BE6B4"/>
+      <stop offset="0.5" stop-color="#36D399"/>
+      <stop offset="1" stop-color="#E7C16A"/>
+    </linearGradient>
+
+    <!-- Aurora washes (aurora-primary / aurora-accent) -->
+    <radialGradient id="auroraEmerald" cx="0.32" cy="0.72" r="0.6">
+      <stop offset="0" stop-color="#36D399" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#36D399" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="auroraGold" cx="0.78" cy="0.22" r="0.55">
+      <stop offset="0" stop-color="#E7C16A" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#E7C16A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Glass top-edge highlight (glass-highlight) -->
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6F2EA" stop-opacity="0.42"/>
+      <stop offset="0.12" stop-color="#F6F2EA" stop-opacity="0.06"/>
+      <stop offset="0.5" stop-color="#F6F2EA" stop-opacity="0"/>
+    </linearGradient>
+
+    <radialGradient id="markGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#36D399" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#36D399" stop-opacity="0"/>
+    </radialGradient>
+
+    <clipPath id="bodyClip">
+      <rect x="100" y="100" width="824" height="824" rx="185" ry="185"/>
+    </clipPath>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#body)"/>
+
+  <!-- Atmosphere clipped to the body -->
+  <g clip-path="url(#bodyClip)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#auroraEmerald)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#auroraGold)"/>
+    <circle cx="512" cy="540" r="300" fill="url(#markGlow)"/>
+
+    <!-- The V: a rising growth stroke that reads as the letter V -->
+    <path d="M 268 300 L 512 792 L 756 300 L 656 300 L 512 596 L 368 300 Z"
+          fill="url(#mark)"
+          stroke="#7CF0CC"
+          stroke-width="3"
+          stroke-opacity="0.5"
+          stroke-linejoin="round"/>
+
+    <!-- Eye / aperture — the Vision mark -->
+    <circle cx="512" cy="444" r="60" fill="#0A0D10"/>
+    <circle cx="512" cy="444" r="60" fill="none" stroke="#E7C16A" stroke-width="6" stroke-opacity="0.85"/>
+    <circle cx="512" cy="444" r="26" fill="#5BE6B4"/>
+    <circle cx="512" cy="444" r="26" fill="url(#markGlow)"/>
+  </g>
+
+  <!-- Glass edge highlight + hairline border -->
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#edge)"/>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" ry="184.5"
+        fill="none" stroke="#F6F2EA" stroke-opacity="0.10" stroke-width="1.5"/>
+</svg>

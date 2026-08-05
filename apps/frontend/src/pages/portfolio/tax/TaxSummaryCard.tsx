@@ -4,7 +4,13 @@ import { StatCard } from "@/components/dashboard/StatCard";
 
 export interface SummaryCardItem {
   title: string;
-  value: string;
+  /**
+   * Display value. Currency amounts should be passed as a node
+   * (`<RollingNumber parts={fmtParts(x)} />`) so the tile keeps the Money
+   * micro-typography inside the odometer; plain strings (percentages, counts)
+   * still get the odometer treatment from StatCard.
+   */
+  value: React.ReactNode;
   icon: LucideIcon;
   desc: React.ReactNode;
   cls: string;

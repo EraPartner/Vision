@@ -3,6 +3,7 @@ import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from 
 import { postMultipartImport } from '@/lib/api/helpers';
 import { readSseStream } from '@/lib/api/sse';
 import type { ImportProgress, ImportResult, BatchListResponse, ImportPreviewResponse } from '@/lib/api/types';
+import type { components } from '@/types/generated';
 import { ImportCancelledError } from '@/lib/api/importCancelled';
 
 /**
@@ -48,10 +49,21 @@ const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
     review_required: reviewRequiredSchema,
 };
 
+/**
+ * The two bodies `POST /api/import/csv` can answer with, sourced from the
+ * OpenAPI document so they cannot drift from the backend again: `201` with the
+ * committed-import counts, or `202` when rows need review and nothing was
+ * committed yet. Narrow with `'requires_review' in result` (the idiom
+ * TransactionImportCard already uses for the streaming variant).
+ */
+export type ImportCsvResult = components['schemas']['ImportCsvResult'];
+export type ImportCsvReviewRequired = components['schemas']['ImportCsvReviewRequired'];
+export type ImportCsvResponse = ImportCsvResult | ImportCsvReviewRequired;
+
 export function importCSV(
     file: File,
     bankName: string,
-): Promise<{ batch_id: number; imported: number; duplicates: number; total_processed: number; message: string }> {
+): Promise<ImportCsvResponse> {
     const queryParams = new URLSearchParams();
     queryParams.append('bank_name', bankName);
     return postMultipartImport('/api/import/csv', file, queryParams);

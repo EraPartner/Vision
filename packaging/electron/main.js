@@ -1082,9 +1082,18 @@ function splashDataUrl() {
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spinner { display: none; } }
+  /* The brand mark, in currentColor so it follows the derived palette like the
+     rest of the splash (emerald on default, purple on dracula, …) rather than
+     stamping a fixed emerald on a themed backdrop. Same glyph as the app's
+     <VisionMark /> and the packaged icon. */
+  .mark { width: 44px; height: 44px; color: currentColor; }
   .name { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
   .status { font-size: 13px; font-variant-numeric: tabular-nums; }
 </style></head><body>
+  <svg class="mark" viewBox="262 296 500 500" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M 268 300 L 512 792 L 756 300 L 656 300 L 512 596 L 368 300 Z" fill="currentColor"/>
+    <circle cx="512" cy="444" r="40" fill="currentColor"/>
+  </svg>
   <div class="spinner"></div>
   <div class="name">${APP_NAME}</div>
   <div class="status" id="splash-status">${t('splash.starting')}</div>

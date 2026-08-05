@@ -42,7 +42,7 @@ export default function OwesPage() {
 
     if (isLoading) {
         return (
-            <div className="space-y-8 animate-in">
+            <div className="space-y-8">
                 <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
                 <div {...loadingSurfaceProps} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {[...Array(3)].map((_, i) => (
@@ -61,7 +61,7 @@ export default function OwesPage() {
     }
 
     return (
-        <div className="space-y-8 animate-in">
+        <div className="space-y-8">
             <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
 
             {totalOwed > 0 && (
@@ -92,6 +92,7 @@ export default function OwesPage() {
                                 role="button"
                                 tabIndex={0}
                                 aria-label={item.recipient_name}
+                                variant="interactive"
                                 className="cursor-pointer hover:border-primary/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                                 onClick={() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name })}
                                 onKeyDown={onActivateKeyDown(() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name }))}
@@ -187,7 +188,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
     };
 
     return (
-        <div className="space-y-6 animate-in">
+        <div className="space-y-6">
             <PageHeader
                 title={recipient.name}
                 subtitle={t('owesPage.outstandingSplits')}
@@ -232,6 +233,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                             return (
                                 <Card
                                     key={split.id}
+                                    variant="interactive"
                                     onDoubleClick={(e) => {
                                         const target = e.target as HTMLElement;
                                         if (target.closest('button')) return;

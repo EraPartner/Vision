@@ -9,6 +9,7 @@
  * All data is supplied by the parent; no hooks, no side effects.
  */
 
+import { type ReactNode } from 'react';
 import { Sparkline as ChartSparkline } from '@/components/charts';
 import { Money } from "@/components/shared/Money";
 import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
@@ -39,8 +40,12 @@ export interface SparklinePoint {
 }
 
 export interface TotalValueCardProps {
-  /** Headline formatted currency string. */
-  formattedTotal: string;
+  /**
+   * Headline total. Pass a `<Money>` node so the hero carries the app's
+   * currency micro-typography (raised symbol, de-emphasized cents); a plain
+   * formatted string still renders as-is.
+   */
+  formattedTotal: ReactNode;
   /** Raw numeric total — used for % splits. */
   totalValue: number;
   /** Labels. */
@@ -217,7 +222,7 @@ export function TotalValueCard({
   const tone: TrendTone = isGain === undefined ? "neutral" : isGain ? "gain" : "loss";
 
   return (
-    <Card className="liquid-glass micro-lift border relative overflow-hidden h-full">
+    <Card variant="interactive" className="liquid-glass border relative overflow-hidden h-full">
       <TrendHue tone={tone} />
       <CardHeader className="flex flex-row items-start justify-between pb-3 space-y-0">
         <div className="space-y-1">
