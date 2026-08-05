@@ -62,7 +62,7 @@ export default function PortfolioForecastPage() {
   // the Money treatment riding along inside it.
   const fmtParts = useCurrencyPartsFormatter();
   const moneyOdometer = (v: number | null | undefined) =>
-    v == null || isNaN(v) ? "—" : <RollingNumber parts={fmtParts(v, { decimals: 0 })} />;
+    v == null || isNaN(v) ? "—" : <RollingNumber parts={fmtParts(v, { currency, decimals: 0 })} />;
   const fmtPct = (v: number | null | undefined, signed = false) =>
     v == null || isNaN(v) ? "—" : `${signed && v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
 
