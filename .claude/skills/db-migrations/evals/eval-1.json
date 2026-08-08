@@ -1,0 +1,12 @@
+{
+  "skills": ["db-migrations"],
+  "query": "I added a nullable `notes` column to the recipients table. Set up the migration for that.",
+  "files": [],
+  "expected_behavior": [
+    "Creates a migration via bun run db:revision -- \"<description>\" rather than hand-writing an alembic file from scratch",
+    "Does NOT run bun run db:upgrade against the user's database without being explicitly asked",
+    "Includes or describes a rollback path (the downgrade side of the migration), not just the upgrade",
+    "Notes the change at verification tier 'high' (migration = high-risk) rather than treating it as a routine low-risk edit",
+    "Does not silently skip recording an ADR if the change reflects a real data-model decision worth capturing"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "skills": ["i18n"],
+  "query": "Add a new button label 'Export CSV' to the transactions page. It needs to show up in both English and Dutch.",
+  "files": [],
+  "expected_behavior": [
+    "Adds the new key to i18n/source/ (not directly to apps/frontend/src/locales/, which is generated)",
+    "Runs bun run generate-locales so the key reaches apps/frontend/src/locales/",
+    "Runs bun run sync-nl so the Dutch side gets the new key rather than silently drifting",
+    "Finishes with bun run validate-locales and treats a failure there as a broken build, not a warning to ignore"
+  ]
+}

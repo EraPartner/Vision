@@ -1,0 +1,11 @@
+{
+  "skills": ["release"],
+  "query": "Bump Vision to version 1.2.0 for the next release.",
+  "files": [],
+  "expected_behavior": [
+    "Updates version in BOTH root package.json and packaging/electron/package.json, not just one",
+    "Explicitly calls out that these two files must match, matching the skill's documented rule",
+    "Does not run npm run dist or otherwise trigger a real build/publish without being asked to",
+    "Does not touch docker-compose files as part of a pure version bump unless the user separately asked for that"
+  ]
+}

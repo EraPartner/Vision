@@ -1,0 +1,11 @@
+{
+  "skills": ["release"],
+  "query": "I need the Electron main process to load an external help page in a webview when the user clicks 'Help'. Wire that up.",
+  "files": [],
+  "expected_behavior": [
+    "Explicitly checks/preserves contextIsolation: on, nodeIntegration: off, and sandbox: on when touching Electron runtime code, per the skill's security posture rule",
+    "Does not implement the webview in a way that requires disabling contextIsolation or enabling nodeIntegration to work",
+    "Flags the security posture check as something to verify on this specific change, not just a general statement",
+    "If a webview inherently conflicts with the security posture, says so explicitly rather than silently weakening it"
+  ]
+}

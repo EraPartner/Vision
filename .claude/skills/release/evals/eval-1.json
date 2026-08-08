@@ -1,0 +1,11 @@
+{
+  "skills": ["release"],
+  "query": "I added a new named volume `vision_attachments_v2` to the root docker-compose.yml for storing receipt scans. What else do I need to touch before this ships?",
+  "files": [],
+  "expected_behavior": [
+    "Identifies that packaging/electron/resources/docker-compose.yml must mirror the root docker-compose.yml and needs the same volume added",
+    "Explicitly references the v1.0.2 data-loss precedent as the reason this sync matters, not just as a generic best practice",
+    "Flags this as a check to run on every compose edit, not a one-time fix",
+    "Does not treat the root docker-compose.yml edit as sufficient on its own"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "skills": ["db-migrations"],
+  "query": "What's the current migration state, and where would I look to understand past schema decisions before I design a new one?",
+  "files": [],
+  "expected_behavior": [
+    "Points to bun run db:current / db:history for the live migration state rather than guessing from the alembic/versions/ directory listing alone",
+    "Points to docs/adr/ as the place past significant data-model decisions are recorded, and docs/reference/ for the data model reference",
+    "States that alembic/versions/ is the actual migration history but ADRs capture the 'why', not just the 'what'",
+    "Recommends reading the relevant ADRs before designing a new migration, matching the skill's 'read data-model reference before schema changes' instruction"
+  ]
+}

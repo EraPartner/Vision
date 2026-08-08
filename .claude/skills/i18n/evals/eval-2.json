@@ -1,0 +1,11 @@
+{
+  "skills": ["i18n"],
+  "query": "I just hand-edited apps/frontend/src/locales/nl/common.json to fix a typo in the Dutch translation for 'Total balance'. Is that okay, or should I do something else?",
+  "files": [],
+  "expected_behavior": [
+    "Flags that apps/frontend/src/locales/ is generated output, not the source of truth",
+    "Identifies i18n/source/ as where the fix actually needs to be made so it survives the next generate-locales run",
+    "Recommends re-running bun run generate-locales after fixing the source so the hand-edit isn't silently overwritten and lost",
+    "Does not simply approve of editing the generated file in place without this caveat"
+  ]
+}
