@@ -540,19 +540,26 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ## 14. calculations/recurrence.js  _(formerly recurrenceService.js)_
 
-**File:** [[apps/node-backend/src/services/calculations/recurrence.js]]  
-**Purpose:** Calculates next occurrence dates for recurring patterns.
+**File:** [[apps/node-backend/src/lib/calculations/recurrence.js]]  
+**Purpose:** Calculates next occurrence dates for recurring patterns. **One grammar, two steppers (2026-08-09):** the pattern grammar lives only in `parseRecurrenceStep`; both the Date-space stepper (`calculateNextDate`, used by `/execute` and `expandOccurrences`) and the string-space stepper (`nextOccurrenceYmd` + `fastForwardYmd`, used by `infoRepositoryPlanned`'s next-month expansion) dispatch off it, so a new pattern is added in exactly one place.
 
 ### Exported Functions
 
 | Function | Signature | Returns |
 |----------|-----------|---------|
-| `calculateNextDate` | `(currentDate, recurrencePattern) => Date` | Next occurrence date |
-| `isValidPattern` | `(pattern) => boolean` | Pattern validity |
-| `getSupportedPatterns` | `() => string[]` | `['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly', 'every N days']` |
+| `parseRecurrenceStep` | `(pattern) => { unit: 'day'\|'month', amount } \| undefined` | The single grammar: named cadences + `every N days` (N ≥ 1) |
+| `calculateNextDate` | `(currentDate, recurrencePattern) => Date \| null` | Next occurrence (Date-space; month steps clamp in APP_TIMEZONE) |
+| `nextOccurrenceYmd` | `(ymd, pattern) => string \| undefined` | Next occurrence (string-space `YYYY-MM-DD`; pure calendar math, DST-proof) |
+| `fastForwardYmd` | `(ymd, pattern, targetYmd) => string` | Bulk-jumps a stale day-stepped anchor to ≥ 1 step before `targetYmd`; no-op for month steps |
+| `expandOccurrences` | `(row, horizonYmd, { maxOccurrences? }) => string[]` | Horizon-inclusive occurrence list, base date first, default 500-cap |
+| `isValidPattern` | `(pattern) => boolean` | Pattern validity (= `parseRecurrenceStep` succeeds) |
+| `getSupportedPatterns` | `() => string[]` | `['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']` |
+
+> [!warning] Known (preserved) stepper divergence
+> The two steppers agree except for day-based steps whose walk starts on a DST-offset (summer) anchor and crosses APP_TIMEZONE's fall-back transition: Date-space lands a calendar day early (daily repeats the transition day) while string-space stays calendar-exact. Pinned by `tests/services/recurrenceStepper.test.js` and `tests/services/recurrenceExpandOccurrences.test.js`; changing either side changes published schedules.
 
 ### Dependencies
-- None (pure utility)
+- `lib/timezone.js` (ADR-009 helpers) — otherwise pure, no IO/DB
 
 ---
 
