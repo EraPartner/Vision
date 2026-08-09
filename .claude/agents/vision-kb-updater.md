@@ -148,5 +148,4 @@ If you add or move components, also keep `docs/index.md` / `docs/diagrams/index.
 - Summary of what docs were changed/added
 - Which PlantUML diagrams in `docs/diagrams/` were updated — or an explicit note that no diagram change was warranted
 - Whether `docs/flow-visualizer.html` (components / baseEdges / flows JSON) was updated — or an explicit note that no flow / package change was warranted
-- Whether Obsidian MCP was used, and where fallback file tools were used (if any)
 - Any gaps that need human attention

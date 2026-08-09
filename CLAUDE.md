@@ -27,7 +27,8 @@ Filtered runs: `bun run --filter '<workspace>' <script>`.
    confirm against actual code before acting.
 2. Check `docs/adr/` before any architectural change (ADRs are append-only — supersede with a
    new one, never rewrite).
-3. Check `docs/reference/api-endpoint-matrix.md` (164 API operations; authoritative count in `openapi.yaml`) before adding or changing routes.
+3. Check `docs/reference/api-endpoint-matrix.md` before adding or changing routes. `openapi.yaml` is
+   the authoritative source for the operation set.
 
 Entry points: `docs/index.md` (KB home) · `docs/common-tasks.md` (task quick-ref + commands) ·
 `docs/architecture/index.md` (stack, workspaces, patterns) · `docs/reference/code-patterns.md`
