@@ -12,6 +12,7 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
+import { useChartKeyboardNav } from "./keyboardNav";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -111,7 +112,7 @@ interface BarLayerProps<Datum> {
     readonly valueScale: BarValueScale;
     readonly baseline: number;
     readonly reduce: boolean | null;
-    readonly onEnter: (datum: Datum, x: number, y: number) => void;
+    readonly onEnter: (datum: Datum, x: number, y: number, index: number) => void;
     readonly onLeave: () => void;
 }
 
@@ -181,7 +182,7 @@ function BarLayerInner<Datum>({
                                 delay: Math.min((di * series.length + si) * 0.015, 0.4),
                                 }}
                                 onPointerEnter={() =>
-                                    onEnter(d, x + bw / 2, yTop)
+                                    onEnter(d, x + bw / 2, yTop, di)
                                 }
                                 onPointerLeave={onLeave}
                             />
@@ -220,7 +221,7 @@ function BarLayerInner<Datum>({
                                 delay: Math.min((di * series.length + si) * 0.015, 0.4),
                             }}
                             onPointerEnter={() =>
-                                onEnter(d, xStart + w, y + bh / 2)
+                                onEnter(d, xStart + w, y + bh / 2, di)
                             }
                             onPointerLeave={onLeave}
                         />
@@ -371,16 +372,53 @@ function Inner<Datum>({
     );
 
     const [hover, setHover] = useState<{
+        index: number;
         datum: Datum;
         x: number;
         y: number;
     } | null>(null);
 
     const handleEnter = useCallback(
-        (datum: Datum, x: number, y: number) => setHover({ datum, x, y }),
+        (datum: Datum, x: number, y: number, index: number) => setHover({ index, datum, x, y }),
         [],
     );
     const handleLeave = useCallback(() => setHover(null), []);
+
+    const baseline = layout === "vertical" ? valueScale(0) ?? innerHeight : valueScale(0) ?? 0;
+
+    // Keyboard path (←/→, Home/End, Escape): step per category, anchoring the
+    // tooltip where the pointer would — the tip of the tallest positive bar in
+    // the category (or the baseline when every bar is negative).
+    const hoverAtIndex = useCallback(
+        (index: number) => {
+            const datum = data[index];
+            if (datum === undefined) return;
+            const cat = stableCategoryAccessor(datum);
+            const mid = (categoryScale(cat) ?? 0) + categoryScale.bandwidth() / 2;
+            if (layout === "vertical") {
+                let yTop = baseline;
+                for (const s of series) {
+                    const yv = valueScale(Math.max(s.accessor(datum), 0)) ?? baseline;
+                    if (yv < yTop) yTop = yv;
+                }
+                setHover({ index, datum, x: mid, y: yTop });
+            } else {
+                let xEnd = baseline;
+                for (const s of series) {
+                    const xv = valueScale(Math.max(s.accessor(datum), 0)) ?? baseline;
+                    if (xv > xEnd) xEnd = xv;
+                }
+                setHover({ index, datum, x: xEnd, y: mid });
+            }
+        },
+        [data, stableCategoryAccessor, categoryScale, layout, series, valueScale, baseline],
+    );
+    const { onKeyDown: handleKeyDown, onBlur: handleBlur } = useChartKeyboardNav({
+        pointCount: data.length,
+        index: hover?.index ?? null,
+        onIndexChange: hoverAtIndex,
+        onClear: handleLeave,
+    });
 
     const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
         if (!hover) return [];
@@ -404,11 +442,17 @@ function Inner<Datum>({
         return [...seriesItems, ...overlayItems];
     }, [hover, series, overlays, tooltipValueFormat]);
 
-    const baseline = layout === "vertical" ? valueScale(0) ?? innerHeight : valueScale(0) ?? 0;
-
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.bar', data.length, series.map((s) => s.label))}>
+            <svg
+                width={width}
+                height={height}
+                role="img"
+                aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.bar', data.length, series.map((s) => s.label))}
+                tabIndex={data.length > 0 ? 0 : undefined}
+                onKeyDown={handleKeyDown}
+                onBlur={handleBlur}
+            >
                 <Group left={effMargin.left} top={effMargin.top}>
                     {valueScale.ticks(5).map((tick) =>
                         layout === "vertical" ? (

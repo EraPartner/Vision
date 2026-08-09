@@ -2363,7 +2363,7 @@ const nl: Record<string, string> = {
   'settings.tab.backup': 'Back-up',
   'settings.tab.general': 'Algemeen',
   'settings.title': 'Instellingen',
-  'shortcuts.chartScrub': 'Tip: sleep over een grafiek om een periode te vergelijken.',
+  'shortcuts.chartScrub': 'Tip: sleep over een grafiek om een periode te vergelijken — of focus een grafiek en stap door punten met ←/→ (Shift+←/→ om te vergelijken).',
   'shortcuts.closeDialog': 'Dialoogvensters en menu\'s sluiten',
   'shortcuts.cycleSections': 'Wissel tussen secties',
   'shortcuts.desktopSection': 'Bureaubladmenu',

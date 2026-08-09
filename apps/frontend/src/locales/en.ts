@@ -2363,7 +2363,7 @@ const en: Record<string, string> = {
   'settings.tab.backup': 'Backup',
   'settings.tab.general': 'General',
   'settings.title': 'Settings',
-  'shortcuts.chartScrub': 'Tip: drag across a chart to compare a date range.',
+  'shortcuts.chartScrub': 'Tip: drag across a chart to compare a date range — or focus a chart and step points with ←/→ (Shift+←/→ to compare).',
   'shortcuts.closeDialog': 'Close dialogs and menus',
   'shortcuts.cycleSections': 'Switch between sections',
   'shortcuts.desktopSection': 'Desktop app menu',

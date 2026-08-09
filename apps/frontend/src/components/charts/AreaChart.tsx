@@ -22,6 +22,7 @@ import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { useChartSync } from "./ChartSyncContext";
+import { useChartKeyboardNav } from "./keyboardNav";
 import { formatScrubDelta, useChartScrub } from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
@@ -378,6 +379,23 @@ function AreaChartInner<Datum>({
 
     const handleUp = useCallback(() => scrub.end(), [scrub]);
 
+    // Keyboard path (←/→, Home/End, Shift+←/→, Escape) — drives the same
+    // hover/scrub state as the pointer, so tooltip/crosshair render unchanged.
+    const stepToIndex = useCallback(
+        (idx: number) => {
+            setHoverIndex(idx);
+            publishHover(Number(stableXAccessor(data[idx])));
+        },
+        [publishHover, stableXAccessor, data],
+    );
+    const { onKeyDown: handleKeyDown, onBlur: handleBlur } = useChartKeyboardNav({
+        pointCount: data.length,
+        index: hoverIndex,
+        onIndexChange: stepToIndex,
+        onClear: handleLeave,
+        scrub: scrubbable ? scrub : undefined,
+    });
+
     // Mirror a sibling chart's hover when not hovered locally (nearest point).
     const syncedIndex = useMemo(() => {
         if (hoverIndex != null || syncedX == null || data.length === 0) return null;
@@ -425,7 +443,15 @@ function AreaChartInner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.area', data.length, series.map((s) => s.label))}>
+            <svg
+                width={width}
+                height={height}
+                role="img"
+                aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.area', data.length, series.map((s) => s.label))}
+                tabIndex={data.length > 0 ? 0 : undefined}
+                onKeyDown={handleKeyDown}
+                onBlur={handleBlur}
+            >
                 <Group left={margin.left} top={margin.top}>
                     {/* Draw-in: horizontal sweep reveal (skipped under reduced motion) */}
                     <defs>

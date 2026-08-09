@@ -3,15 +3,17 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-06-10
-tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, june-2026]
-description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub).
+updated: 2026-08-09
+tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
+description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-09: keyboardNav.ts — shared keyboard access to per-point values (focusable charts, arrow-key stepping, Shift+arrow scrub, Escape/blur clear) on LineChart/AreaChart/BarChart and the NetSummaryCard sparkline scrub.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
 related_code:
   - apps/frontend/src/components/charts
   - apps/frontend/src/components/charts/chartAria.ts
   - apps/frontend/src/components/charts/__tests__/chartAria.test.ts
   - apps/frontend/src/components/charts/scrub.tsx
+  - apps/frontend/src/components/charts/keyboardNav.ts
+  - apps/frontend/src/components/charts/__tests__/chartKeyboardNav.test.tsx
   - apps/frontend/src/components/charts/ChartSyncContext.tsx
   - apps/frontend/src/components/charts/ChartSkeleton.tsx
 ---
@@ -65,6 +67,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 |--------|---------|---------|
 | `scrub.tsx` | `useChartScrub`, `formatScrubDelta` | Scrub-to-compare: pointer-drag range, glass Δ pill |
 | `ChartSyncContext.tsx` | `ChartSyncProvider`, `useChartSync` | Synced crosshairs across charts sharing a `syncId` |
+| `keyboardNav.ts` | `useChartKeyboardNav` | Keyboard access to per-point values: shared ←/→ · Home/End · Shift+←/→ · Escape map (2026-08) |
 
 ## Usage Patterns
 
@@ -352,11 +355,22 @@ The generated label is used as the default value for `role="img"` on the outermo
 - Legends are keyboard-accessible (tab to focus, arrow keys to navigate)
 - SVG elements carry a generated `aria-label` describing chart type and data dimensions (see above)
 
-### Keyboard Navigation
+### Keyboard Navigation (2026-08-09, `keyboardNav.ts`)
 
-- Tab navigates to interactive chart areas
-- Arrow keys navigate data points within tooltips/legends
-- Escape dismisses tooltip/legend
+Per-point values are reachable without a pointer. `useChartKeyboardNav` provides one shared key map, wired into `LineChart`, `AreaChart`, `BarChart` (SVG root gets `tabIndex={0}` — only when the chart has data, so empty charts are never dead tab stops) and the `NetSummaryCard` sparkline scrub div:
+
+- **Tab** focuses the chart (`:focus-visible` shows the app's global focus ring; mouse clicks don't).
+- **←/→** step one data point, clamped at the ends; from an empty state → starts at the first point, ← starts at the last. Reuses the exact hover state the pointer drives, so the existing `ChartTooltip`/readout renders — no new visual affordance.
+- **Home/End** jump to the first/last point.
+- **Shift+←/→** extend a range-compare scrub on `scrubbable` charts (`LineChart`/`AreaChart`), showing the same glass Δ pill as a pointer drag; a plain arrow ends the scrub (like pointerup).
+- **Escape** clears hover + scrub; it is only consumed (`preventDefault`) when there is something to clear, so enclosing dialogs still receive it. Arrows/Home/End are always consumed when handled (else the page would scroll).
+- **Blur** clears everything — no tooltip lingers on an unfocused chart.
+
+ARIA: the SVG keeps `role="img"` + the generated `aria-label` summary (above); focusable images are valid and keep the SR overview intact. `role="application"` was deliberately avoided (would drop virtual-cursor semantics), and no `aria-live` was added to the tooltip (it re-renders at pointermove rate — live announcement would be SR spam).
+
+Charts synced via `syncId` publish keyboard hover the same way as pointer hover, so siblings mirror the crosshair.
+
+**Tests:** `apps/frontend/src/components/charts/__tests__/chartKeyboardNav.test.tsx` (hook unit + wiring per chart), `apps/frontend/src/components/dashboard/__tests__/NetSummaryCard.keyboard.test.tsx`.
 
 ## Responsive Design
 
