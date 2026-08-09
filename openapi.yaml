@@ -5651,7 +5651,9 @@ paths:
                   type: string
       responses:
         "201":
-          description: Created conversation
+          description: Created conversation with its (empty) message list — same
+            `{conversation, messages}` body as GET /api/ai/conversations/{id}
+            (routes/ai.js res.ok(createEmptyConversation(...))).
           content:
             application/json:
               schema:
@@ -5660,7 +5662,16 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/AiConversation"
+                        type: object
+                        required: [conversation, messages]
+                        properties:
+                          conversation:
+                            $ref: "#/components/schemas/AiConversation"
+                          messages:
+                            type: array
+                            description: Always empty on create.
+                            items:
+                              $ref: "#/components/schemas/AiMessage"
 
   /api/ai/conversations/{id}:
     parameters:
@@ -5792,13 +5803,17 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file, bank]
+              required: [file, bank_name]
               properties:
                 file:
                   type: string
                   format: binary
-                bank:
+                bank_name:
                   type: string
+                  description: Bank adapter identifier. The route also accepts it
+                    as a query parameter (`req.query.bank_name || req.body.bank_name`,
+                    routes/importRoutes.js) — the frontend client sends it in the
+                    query string.
       responses:
         "201":
           description: All rows matched exactly — batch committed immediately
@@ -5834,14 +5849,40 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              description: Flat form fields (customCsvImportSchema in
+                routes/importRoutes.js). The route merges query and body
+                (`{...req.query, ...req.body}`), so every field may equally be
+                sent as a query parameter — the frontend client sends them all
+                in the query string.
+              required: [file, bank_name, date_format, date_column, recipient_column, amount_column]
               properties:
                 file:
                   type: string
                   format: binary
-                mapping:
+                bank_name:
                   type: string
-                  description: JSON column mapping
+                  description: Display label for the custom adapter
+                date_format:
+                  type: string
+                  description: Date format of the date column (e.g. DD/MM/YYYY)
+                date_column:
+                  type: string
+                recipient_column:
+                  type: string
+                amount_column:
+                  type: string
+                memo_column:
+                  type: string
+                separator:
+                  type: string
+                  description: Single-character CSV delimiter, default ','
+                encoding:
+                  type: string
+                  default: utf-8
+                skip_rows:
+                  type: integer
+                  default: 0
+                  minimum: 0
       responses:
         "201":
           description: All rows matched exactly — batch committed immediately
@@ -5886,11 +5927,18 @@ paths:
                   type: string
       responses:
         "200":
-          description: Import batch created
+          description: Server-Sent Events stream; events are progress /
+            review_required / complete / error. The `complete` event carries
+            `{total_processed, imported, duplicates, errors, batch_id,
+            auto_linked_count, status, percent}` (routes/importRoutes.js
+            buildComplete); `review_required` carries `{batch_id,
+            match_source_counts, percent}` — no counts. Event payloads are not
+            modelled as schemas (OpenAPI cannot type SSE events), so the
+            frontend keeps a hand-written `ImportResult` type for this stream.
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                type: string
 
   /api/import/recipients:
     post:
@@ -5909,7 +5957,7 @@ paths:
                   type: string
                   format: binary
       responses:
-        "200":
+        "201":
           description: Import result
           content:
             application/json:
@@ -5933,7 +5981,7 @@ paths:
                   type: string
                   format: binary
       responses:
-        "200":
+        "201":
           description: Import result
           content:
             application/json:

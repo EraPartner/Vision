@@ -40,7 +40,6 @@ const importResultSchema = z.looseObject({
 // (see node-backend lib/importProgress.js), so only batch_id is required.
 const reviewRequiredSchema = z.looseObject({
     batch_id: z.number(),
-    total: z.number().optional(),
 });
 
 const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
@@ -62,6 +61,20 @@ const IMPORT_STREAM_SCHEMAS: Record<string, z.ZodType> = {
 export type ImportCsvResult = components['schemas']['ImportCsvResult'];
 export type ImportCsvReviewRequired = components['schemas']['ImportCsvReviewRequired'];
 export type ImportCsvResponse = ImportCsvResult | ImportCsvReviewRequired;
+
+/**
+ * The one narrowing for the non-streaming union above: the 202 body is the
+ * only arm carrying `requires_review` (`respondReviewRequired`,
+ * node-backend routes/importRoutes.js:74-81), so key presence decides.
+ * The streaming path's `review_required` SSE event is a different wire shape
+ * (`{ batch_id, match_source_counts, percent }`, lib/importProgress.js) folded
+ * into `ImportResult` where `requires_review` is an *optional* field — its
+ * narrowing must check the value and `batch_id`, so it deliberately does not
+ * share this helper.
+ */
+export function isReviewRequired(result: ImportCsvResponse): result is ImportCsvReviewRequired {
+    return 'requires_review' in result;
+}
 
 export function importCSV(
     file: File,
@@ -124,9 +137,12 @@ export function importCSVWithProgress(
                     continue;
                 }
                 if (event === 'review_required') {
-                    const d = data as { batch_id: number; total: number };
+                    // The backend emits { batch_id, match_source_counts, percent }
+                    // — no counts (lib/importProgress.js), so total_processed is
+                    // omitted rather than synthesized (same as the portfolio
+                    // sibling in portfolioImports.ts).
+                    const d = data as { batch_id: number };
                     finalResult = {
-                        total_processed: d.total,
                         imported: 0,
                         duplicates: 0,
                         errors: 0,
@@ -134,7 +150,7 @@ export function importCSVWithProgress(
                         batch_id: d.batch_id,
                         requires_review: true,
                     };
-                    onProgress({ phase: 'review_required', current: d.total, total: d.total, imported: 0, duplicates: 0, errors: 0, percent: 100 } as ImportProgress);
+                    onProgress({ phase: 'review_required', current: 0, total: 0, imported: 0, duplicates: 0, errors: 0, percent: 100 } as ImportProgress);
                     continue;
                 }
                 if (event === 'error') {

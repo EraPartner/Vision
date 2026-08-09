@@ -155,13 +155,24 @@ export function formatCurrency(
   const effectiveLocale = locale || currencyFormatDefaults.locale;
   const effectiveFractionDigits = fractionDigits ?? currencyFormatDefaults.fractionDigits;
 
-  return new Intl.NumberFormat(effectiveLocale, {
-    style: 'currency',
-    currency: effectiveCurrency,
-    minimumFractionDigits: effectiveFractionDigits,
-    maximumFractionDigits: effectiveFractionDigits,
-    signDisplay: signed ? 'exceptZero' : 'auto',
-  }).format(amount);
+  // Mirrors the Money.tsx / useCurrencyPartsFormatter guard: a malformed
+  // currency code or out-of-range fraction digits makes the Intl.NumberFormat
+  // constructor throw RangeError. Those siblings degrade to a bare `${val}`
+  // number; this string path must degrade to the byte-identical text, or the
+  // same bad input renders on one surface and crashes the page from the other
+  // (e.g. the forecast odometer degrades while the chart axis beside it throws
+  // into the error boundary).
+  try {
+    return new Intl.NumberFormat(effectiveLocale, {
+      style: 'currency',
+      currency: effectiveCurrency,
+      minimumFractionDigits: effectiveFractionDigits,
+      maximumFractionDigits: effectiveFractionDigits,
+      signDisplay: signed ? 'exceptZero' : 'auto',
+    }).format(amount);
+  } catch {
+    return `${amount}`;
+  }
 }
 
 export interface CompactFormatResult {

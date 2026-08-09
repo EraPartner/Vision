@@ -109,20 +109,89 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 };
 
 /**
+ * Persisted app-settings blob guard, mirroring `storedDashboardSettingsSchema`
+ * below. Loose object so unknown keys survive the migration (they flow through
+ * the merge and are persisted back); per-field `.catch` so one malformed field
+ * falls back to its default instead of poisoning the whole blob. This matters
+ * most for the money-formatting fields: an unvalidated `defaultCurrency`
+ * ("US") or `showDecimalPlaces` (-1 / NaN / 101) makes `Intl.NumberFormat`
+ * throw `RangeError`, which either crashes a page into the error boundary or —
+ * where formatters guard — silently renders a bare unlocalised number on every
+ * money tile. Validating here means every consumer sees Intl-safe settings.
+ *
+ * Deliberately type/shape-level only where any value is safe downstream
+ * (`dateFormat`, `numberFormat` — `numberFormatToLocale` already maps unknown
+ * strings to its own default, so an enum catch here would *change* behavior).
+ * `showDecimalPlaces` is bounded to Intl's universally-valid 0–20 fraction
+ * digits (the UI offers 0–3); `defaultCurrency` to a well-formed ISO-4217
+ * 3-letter code, which is exactly what Intl accepts without throwing.
+ */
+const storedAppSettingsSchema = z.looseObject({
+    defaultCurrency: z
+        .string()
+        .regex(/^[A-Za-z]{3}$/)
+        .catch(DEFAULT_APP_SETTINGS.defaultCurrency),
+    dateFormat: z.string().catch(DEFAULT_APP_SETTINGS.dateFormat),
+    numberFormat: z.string().catch(DEFAULT_APP_SETTINGS.numberFormat),
+    defaultPageSize: z.number().int().positive().catch(DEFAULT_APP_SETTINGS.defaultPageSize),
+    startOfWeek: z
+        .enum(['monday', 'sunday'] as const satisfies readonly AppSettings['startOfWeek'][])
+        .catch(DEFAULT_APP_SETTINGS.startOfWeek),
+    showDecimalPlaces: z
+        .number()
+        .int()
+        .min(0)
+        .max(20)
+        .catch(DEFAULT_APP_SETTINGS.showDecimalPlaces),
+    language: z
+        .enum(['en', 'nl'] as const satisfies readonly Language[])
+        .catch(DEFAULT_APP_SETTINGS.language),
+    aiDefaultModel: z.string().optional().catch(undefined),
+    costBasisMethod: z
+        .enum(['weighted_avg', 'fifo', 'lifo'] as const satisfies readonly CostBasisMethod[])
+        .catch(DEFAULT_APP_SETTINGS.costBasisMethod),
+    adminMode: z.boolean().catch(DEFAULT_APP_SETTINGS.adminMode),
+    // Optional (not caught to the default): the pre-ADR-075 legacy mapping in
+    // migrateAppSettings must still see "absent" to apply `enhancedEffects`.
+    visualEffects: z
+        .enum(['reduced', 'standard', 'enhanced'] as const satisfies readonly VisualEffectsTier[])
+        .optional()
+        .catch(undefined),
+    autoAdaptDisplay: z.boolean().catch(DEFAULT_APP_SETTINGS.autoAdaptDisplay),
+    startupSection: z
+        .enum([
+            'budgeting',
+            'portfolio',
+            'research',
+            'ai-chat',
+            'last',
+        ] as const satisfies readonly StartupSection[])
+        .catch(DEFAULT_APP_SETTINGS.startupSection),
+    autoClearPlannedOnMatch: z.boolean().catch(DEFAULT_APP_SETTINGS.autoClearPlannedOnMatch),
+    colorblindGainLoss: z.boolean().catch(DEFAULT_APP_SETTINGS.colorblindGainLoss),
+    enhancedEffects: z.boolean().optional().catch(undefined),
+});
+
+/**
  * Merge a stored app_settings blob over the defaults, mapping the pre-ADR-075
  * `enhancedEffects` boolean onto `visualEffects` (true → enhanced, false →
  * standard). The legacy key is dropped so the next persist writes the new
  * shape. A blob that already carries `visualEffects` wins over the legacy key.
+ *
+ * The blob is untrusted (arbitrary JSON from the settings API):
+ * `storedAppSettingsSchema` validates it per-field first, so a well-formed
+ * (possibly partial) blob produces exactly the old
+ * `{ ...DEFAULT_APP_SETTINGS, ...raw }` result, unknown keys included;
+ * malformed fields fall back per-field and a blob that is not an object at
+ * all falls back to the defaults wholesale.
  */
-export function migrateAppSettings(
-    raw: (Partial<AppSettings> & { enhancedEffects?: boolean }) | undefined,
-): AppSettings {
-    if (!raw) return DEFAULT_APP_SETTINGS;
-    const { enhancedEffects, ...rest } = raw;
+export function migrateAppSettings(raw: unknown): AppSettings {
+    const parsed = storedAppSettingsSchema.safeParse(raw);
+    if (!parsed.success) return DEFAULT_APP_SETTINGS;
+    const { enhancedEffects, visualEffects, aiDefaultModel, ...rest } = parsed.data;
     const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
-    if (rest.visualEffects === undefined && enhancedEffects !== undefined) {
-        merged.visualEffects = enhancedEffects ? 'enhanced' : 'standard';
-    }
+    if (aiDefaultModel !== undefined) merged.aiDefaultModel = aiDefaultModel;
+    merged.visualEffects = visualEffects ?? (enhancedEffects ? 'enhanced' : 'standard');
     return merged;
 }
 

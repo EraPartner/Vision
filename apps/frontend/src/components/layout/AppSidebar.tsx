@@ -131,6 +131,10 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {/* Navigation landmark so SR users can jump straight to (or past) the
+            sidebar. Replicates SidebarContent's column layout (flex-col gap-2)
+            so wrapping everything in one flex child is visually free. */}
+        <nav aria-label={t('nav.primary')} className="flex w-full flex-col gap-2">
         {/* Workspace-agnostic pages (AI chat, Accounts hub — ADR-088), shown
             above the workspace switcher */}
         <SidebarGroup>
@@ -254,6 +258,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+        </nav>
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border/50 p-3">
@@ -286,7 +291,9 @@ function WorkspaceTab({
       onClick={onClick}
       title={label}
       className={cn(
-        "press-feedback min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-[background-color,color,box-shadow,transform] duration-[var(--duration-normal)] ease-[var(--ease-glide)]",
+        // Transition list composed via --press-compose (press-feedback owns the
+        // `transition` shorthand — see index.css); press entry restated verbatim.
+        "press-feedback [--press-compose:background-color_var(--duration-normal)_var(--ease-glide),color_var(--duration-normal)_var(--ease-glide),box-shadow_var(--duration-normal)_var(--ease-glide),transform_90ms_ease-out] min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight",
         active
           ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
           : "text-muted-foreground hover:text-foreground hover:bg-background/40",

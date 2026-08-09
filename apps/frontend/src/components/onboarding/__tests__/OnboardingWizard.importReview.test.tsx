@@ -60,9 +60,12 @@ function renderWizard(onComplete = vi.fn()) {
     return { ...result, onComplete };
 }
 
-/** welcome -> overview -> bank, pick KBC, -> import, attach a CSV, press Import. */
+/** welcome -> overview -> categories -> bank, pick KBC, -> import, attach a CSV, press Import. */
 async function runOnboardingImport(user: ReturnType<typeof userEvent.setup>) {
     await user.click(await screen.findByRole("button", { name: /get started/i }));
+    await user.click(await screen.findByRole("button", { name: /^next$/i }));
+    // Categories now precede import (so the review page has pickers to offer);
+    // this walk skips creating them — the step is optional either way.
     await user.click(await screen.findByRole("button", { name: /^next$/i }));
 
     // A bank must be picked: the import button stays disabled without one.
@@ -135,8 +138,8 @@ describe("OnboardingWizard — import step outcomes", () => {
         await runOnboardingImport(user);
         await screen.findByText("4 transactions are waiting for you");
 
-        // import -> categories -> tour -> backup
-        for (let i = 0; i < 3; i++) {
+        // import -> tour -> backup
+        for (let i = 0; i < 2; i++) {
             await user.click(await screen.findByRole("button", { name: /^next$/i }));
         }
         await screen.findByRole("heading", { name: /protect your data/i });

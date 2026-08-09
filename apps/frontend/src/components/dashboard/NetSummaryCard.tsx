@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkline as ChartSparkline } from "@/components/charts";
+import { useChartKeyboardNav } from "@/components/charts/keyboardNav";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { ArrowUpRight, DollarSign, TrendingDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -50,6 +51,15 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
     scrubRectRef.current = null;
     setScrubIndex(undefined);
   };
+
+  // Keyboard path: same ←/→ · Home/End · Escape map as the chart primitives,
+  // driving the same scrubIndex the pointer does (readout + hero number).
+  const { onKeyDown: scrubKeyDown, onBlur: scrubBlur } = useChartKeyboardNav({
+    pointCount: history.length > 1 ? history.length : 0,
+    index: scrubIndex ?? null,
+    onIndexChange: setScrubIndex,
+    onClear: endScrub,
+  });
 
   const isPositive = netBalance >= 0;
 
@@ -148,6 +158,11 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
           <div
             className="mt-auto cursor-crosshair select-none"
             style={{ touchAction: "pan-y" }}
+            role="group"
+            aria-label={t('dashboard.stat.netTrend', { n: chartData.length })}
+            tabIndex={0}
+            onKeyDown={scrubKeyDown}
+            onBlur={scrubBlur}
             onPointerMove={scrubFromEvent}
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);

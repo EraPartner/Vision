@@ -37,6 +37,34 @@ describe("currency format defaults", () => {
   });
 });
 
+describe("formatCurrency — malformed input degrades like Money / the parts hook", () => {
+  test("returns the bare number instead of throwing RangeError on a malformed currency code", () => {
+    // new Intl.NumberFormat(locale, { currency: "US" }) throws RangeError; the
+    // unguarded call used to escape into the page error boundary while the
+    // guarded parts formatter beside it degraded gracefully.
+    expect(() => formatCurrency(1234.56, "US", "de-DE", 0)).not.toThrow();
+    expect(formatCurrency(1234.56, "US", "de-DE", 0)).toBe("1234.56");
+  });
+
+  test("fallback text is byte-identical to the parts-formatter fallback (`${val}`)", () => {
+    // Money and useCurrencyPartsFormatter fall back to
+    // [{ type: "literal", value: `${val}` }] — the string paths must render
+    // the same text so one page shows one consistent degradation.
+    expect(formatCurrency(-42.5, "US", "de-DE", 2)).toBe("-42.5");
+    expect(formatCurrency(1234.56, "US", "de-DE", 0, true)).toBe("1234.56");
+  });
+
+  test("degrades on out-of-range fraction digits too", () => {
+    expect(formatCurrency(1234.56, "EUR", "de-DE", -1)).toBe("1234.56");
+    expect(formatCurrency(1234.56, "EUR", "de-DE", 101)).toBe("1234.56");
+  });
+
+  test("valid input still formats normally after a failed call (no poisoned state)", () => {
+    formatCurrency(1, "US", "de-DE", 2);
+    expect(formatCurrency(1234.56, "EUR", "de-DE", 2)).toBe("1.234,56\u00a0€");
+  });
+});
+
 describe("formatCurrencyCompact", () => {
   test("returns full when below threshold", () => {
     const result = formatCurrencyCompact(42, "EUR", "en-US", 2);

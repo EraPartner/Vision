@@ -35,7 +35,8 @@ export function BulkTagDialog({
         setRemoveSlugs([]);
     }
 
-    function handleApply() {
+    function handleApply(e: React.FormEvent) {
+        e.preventDefault();
         if (addSlugs.length === 0 && removeSlugs.length === 0) return;
         onApply(addSlugs, removeSlugs);
         reset();
@@ -54,6 +55,11 @@ export function BulkTagDialog({
                     <DialogTitle>{t('txPage.bulk.tagTitle', { n: selectedCount })}</DialogTitle>
                     <DialogDescription>{t('txPage.bulk.tagDesc')}</DialogDescription>
                 </DialogHeader>
+                {/* Real <form> so Enter submits once tags are chosen (cmdk
+                    preventDefaults Enter inside the comboboxes, so item selection
+                    never falls through to this). grid gap-5 mirrors DialogContent's
+                    layout, so the wrapper is layout-neutral. */}
+                <form onSubmit={handleApply} className="grid gap-5">
                 <div className="py-2 space-y-3">
                     <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">
@@ -69,16 +75,17 @@ export function BulkTagDialog({
                     </div>
                 </div>
                 <DialogFooter className="gap-2">
-                    <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }} disabled={pending}>
+                    <Button type="button" variant="ghost" onClick={() => { reset(); onOpenChange(false); }} disabled={pending}>
                         {t('common.cancel')}
                     </Button>
                     <Button
-                        onClick={handleApply}
+                        type="submit"
                         disabled={pending || (addSlugs.length === 0 && removeSlugs.length === 0)}
                     >
                         {pending ? t('common.applying') : t('common.apply')}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

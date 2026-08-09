@@ -80,7 +80,8 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     const remainingSplitCapacity = open ? Math.max(roundMoney(toDecimal(absAmount).minus(existingSplitTotal)), 0) : 0;
     const hasExceededTransactionTotal = open ? toDecimal(totalAfterSubmit).gt(roundMoney(absAmount)) : false;
 
-    const handleSubmit = () => {
+    const handleSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
         const splits = validEntries.map(e => ({
             recipient_id: e.recipient_id!,
             amount: splitType === "equal" ? equalShare : parseDecimal(e.amount),
@@ -120,6 +121,9 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                     </DialogDescription>
                 </DialogHeader>
 
+                {/* Real <form> so Enter in any entry field submits; grid gap-5
+                    mirrors DialogContent's layout, so this wrapper is layout-neutral. */}
+                <form onSubmit={handleSubmit} className="grid gap-5">
                 <div className="space-y-4">
                     {!isLoadingExistingSplits && (
                         <Alert className="py-3">
@@ -161,6 +165,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                     {/* Split type toggle */}
                     <div className="flex gap-2">
                         <Button
+                            type="button"
                             variant={splitType === "equal" ? "default" : "outline"}
                             size="sm"
                             onClick={() => setSplitType("equal")}
@@ -168,6 +173,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                             {t('splitDialog.equalSplit')}
                         </Button>
                         <Button
+                            type="button"
                             variant={splitType === "custom" ? "default" : "outline"}
                             size="sm"
                             onClick={() => setSplitType("custom")}
@@ -210,7 +216,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                                     />
                                 </div>
                                 {entries.length > 1 && (
-                                    <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive shrink-0"
+                                    <Button type="button" variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive shrink-0"
                                         aria-label={t('aria.removeEntry')}
                                         onClick={() => removeEntry(idx)}>
                                         <Trash2 className="h-4 w-4" />
@@ -220,7 +226,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                         ))}
                     </div>
 
-                    <Button variant="outline" size="sm" onClick={addEntry} className="gap-1.5">
+                    <Button type="button" variant="outline" size="sm" onClick={addEntry} className="gap-1.5">
                         <Plus className="h-4 w-4" /> {t('splitDialog.addPerson')}
                     </Button>
 
@@ -232,14 +238,15 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
                     <Button
-                        onClick={handleSubmit}
+                        type="submit"
                         disabled={validEntries.length === 0 || hasNonPositiveSplitAmount || hasExceededTransactionTotal || createSplits.isPending}
                     >
                         {createSplits.isPending ? t('splitDialog.splitting') : t('splitDialog.split')}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

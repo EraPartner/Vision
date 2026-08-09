@@ -5,8 +5,8 @@ method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
 date: 2026-04-26
-updated: 2026-08-05
-last_modified: 2026-08-05
+updated: 2026-08-09
+last_modified: 2026-08-09
 tags: [api, import, csv, bank, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
@@ -107,9 +107,16 @@ data: {"phase":"matching","current":50,"total":150}
 event: progress
 data: {"phase":"committing","current":50,"total":150,"imported":48,"duplicates":2,"errors":0}
 
-// Complete event
+// Complete event (buildComplete in routes/importRoutes.js)
 event: complete
-data: {"batchId":42,"total_processed":150,"imported":148,"duplicates":2,"errors":0}
+data: {"total_processed":150,"imported":148,"duplicates":2,"errors":0,"batch_id":42,"auto_linked_count":0,"status":"completed","percent":100}
+
+// Review-required terminal event (lib/importProgress.js) — carries NO counts:
+// the batch is parked in awaiting_review and nothing was committed yet, so the
+// client must not synthesize a total_processed (2026-08-09 fix in
+// apps/frontend/src/lib/api/imports.ts).
+event: review_required
+data: {"batch_id":42,"match_source_counts":{"exact":140,"fuzzy":10},"percent":70}
 ```
 
 **Backpressure & Resilience (Phase C):**
@@ -158,7 +165,7 @@ name,default_category
 "Gas Station","TRANSPORT:GAS"
 ```
 
-**Response:**
+**Response:** `201 Created` (2026-08-09: `openapi.yaml` corrected — it had documented this route as 200)
 ```json
 {
   "total_processed": 25,
@@ -184,6 +191,8 @@ name,default_category
 ### POST /api/import/categories
 
 Bulk import categories from CSV.
+
+**Response:** `201 Created` (2026-08-09: `openapi.yaml` corrected — it had documented this route as 200)
 
 **CSV Format:**
 ```csv

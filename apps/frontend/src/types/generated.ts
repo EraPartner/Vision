@@ -7874,14 +7874,18 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created conversation */
+            /** @description Created conversation with its (empty) message list — same `{conversation, messages}` body as GET /api/ai/conversations/{id} (routes/ai.js res.ok(createEmptyConversation(...))). */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["AiConversation"];
+                        data?: {
+                            conversation: components["schemas"]["AiConversation"];
+                            /** @description Always empty on create. */
+                            messages: components["schemas"]["AiMessage"][];
+                        };
                     };
                 };
             };
@@ -8032,7 +8036,8 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    bank: string;
+                    /** @description Bank adapter identifier. The route also accepts it as a query parameter (`req.query.bank_name || req.body.bank_name`, routes/importRoutes.js) — the frontend client sends it in the query string. */
+                    bank_name: string;
                 };
             };
         };
@@ -8073,8 +8078,20 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    /** @description JSON column mapping */
-                    mapping?: string;
+                    /** @description Display label for the custom adapter */
+                    bank_name: string;
+                    /** @description Date format of the date column (e.g. DD/MM/YYYY) */
+                    date_format: string;
+                    date_column: string;
+                    recipient_column: string;
+                    amount_column: string;
+                    memo_column?: string;
+                    /** @description Single-character CSV delimiter, default ',' */
+                    separator?: string;
+                    /** @default utf-8 */
+                    encoding?: string;
+                    /** @default 0 */
+                    skip_rows?: number;
                 };
             };
         };
@@ -8120,13 +8137,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Import batch created */
+            /** @description Server-Sent Events stream; events are progress / review_required / complete / error. The `complete` event carries `{total_processed, imported, duplicates, errors, batch_id, auto_linked_count, status, percent}` (routes/importRoutes.js buildComplete); `review_required` carries `{batch_id, match_source_counts, percent}` — no counts. Event payloads are not modelled as schemas (OpenAPI cannot type SSE events), so the frontend keeps a hand-written `ImportResult` type for this stream. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "text/event-stream": string;
                 };
             };
         };
@@ -8148,7 +8165,7 @@ export interface operations {
         };
         responses: {
             /** @description Import result */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8175,7 +8192,7 @@ export interface operations {
         };
         responses: {
             /** @description Import result */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

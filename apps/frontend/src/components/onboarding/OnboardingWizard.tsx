@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
+import { isReviewRequired } from "@/lib/api/imports";
 import { useAdapters } from "@/features/imports/useAdapters";
 import { RestoreFromBackupCard } from "./RestoreFromBackupCard";
 
@@ -117,7 +118,13 @@ interface OnboardingWizardProps {
     onOpenSettings?: (tab: string) => void;
 }
 
-const STEP_KEYS = ["welcome", "overview", "bank", "import", "categories", "tour", "backup"] as const;
+// `categories` deliberately precedes `bank`/`import`: a first import lands on
+// the review page (see `StepNeedsReview`), and the review page is where
+// categories get assigned — running the categories step first means the user
+// arrives there with real pickers instead of empty ones, and the review
+// hand-off no longer skips the one step it needs. Bank and import stay
+// adjacent because the import step reads `selectedBank`.
+const STEP_KEYS = ["welcome", "overview", "categories", "bank", "import", "tour", "backup"] as const;
 type StepKey = (typeof STEP_KEYS)[number];
 
 const SUGGESTED_CATEGORIES = [
@@ -202,9 +209,9 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
     const STEPS = [
         { key: "welcome",    label: t('onboarding.step.welcome.label'),    icon: Sparkles },
         { key: "overview",   label: t('onboarding.step.overview.label'),   icon: LayoutDashboard },
+        { key: "categories", label: t('onboarding.step.categories.label'), icon: Tags },
         { key: "bank",       label: t('onboarding.step.bank.label'),       icon: Wallet },
         { key: "import",     label: t('onboarding.step.import.label'),     icon: Upload },
-        { key: "categories", label: t('onboarding.step.categories.label'), icon: Tags },
         { key: "tour",       label: t('onboarding.step.tour.label'),       icon: BarChart3 },
         { key: "backup",     label: t('onboarding.step.backup.label'),     icon: HardDrive },
     ];
@@ -284,7 +291,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
             // reporting them as 0 was honest but still told the user an import had
             // happened. The batch is real and staged — it just needs the review page,
             // so this arm offers that instead of claiming a result.
-            if ('requires_review' in result) {
+            if (isReviewRequired(result)) {
                 const rows = Object.values(result.match_source_counts ?? {})
                     .reduce((sum, n) => sum + (n ?? 0), 0);
                 setReviewBatch({ batchId: result.batch_id, rows });
@@ -335,8 +342,9 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
      * the bug being fixed.
      *
      * The cost is real and worth naming: taking this exit from the import step
-     * ends onboarding at step 4 of 7, so the categories, tour and backup steps
-     * are skipped. It is mitigated on three sides rather than hidden — the
+     * ends onboarding at step 5 of 7, so the tour and backup steps are skipped
+     * (the categories step runs before import precisely so this exit doesn't
+     * skip it — see `STEP_KEYS`). It is mitigated on three sides rather than hidden — the
      * user is shown the "needs review" state and chooses to leave rather than
      * being teleported; `onboarding.import.review.later` offers finishing
      * setup first, in which case the backup step's footer CTA becomes
@@ -471,7 +479,9 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                             key={adapter.key}
                                             onClick={() => setSelectedBank(adapter.key)}
                                             className={cn(
-                                                "press-feedback flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-[color,background-color,border-color,box-shadow] hover:shadow-md",
+                                                // Transition list composed via --press-compose (press-feedback
+                                                // owns the `transition` shorthand — see index.css).
+                                                "press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),box-shadow_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] flex flex-col items-center gap-2 p-4 rounded-xl border-2 hover:shadow-md",
                                                 selectedBank === adapter.key
                                                     ? "border-primary bg-primary/5 shadow-sm"
                                                     : "border-border hover:border-primary/40"
@@ -579,7 +589,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                                         setSelectedCategories(next);
                                                     }}
                                                     className={cn(
-                                                        "press-feedback flex items-center gap-2 p-2.5 rounded-lg border transition-[color,background-color,border-color] text-left",
+                                                        "press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] flex items-center gap-2 p-2.5 rounded-lg border text-left",
                                                         selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                                                     )}
                                                 >
@@ -643,7 +653,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                     <button
                                         key={feat.path}
                                         onClick={() => handleNavigate(feat.path)}
-                                        className="press-feedback glass-thin flex items-start gap-3 p-3 rounded-xl hover:border-primary/40 hover:shadow-md transition-[color,background-color,border-color,box-shadow] text-left group"
+                                        className="press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),box-shadow_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] glass-thin flex items-start gap-3 p-3 rounded-xl hover:border-primary/40 hover:shadow-md text-left group"
                                     >
                                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                                             <feat.icon className="h-4 w-4 text-primary" />

@@ -132,7 +132,8 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
     setSections(checked ? defaultSectionSet(sectionDefs) : new Set());
   }
 
-  async function handleDownload() {
+  async function handleDownload(e: React.FormEvent) {
+    e.preventDefault();
     const period = buildPeriod(periodPreset, customYear, customFrom, customTo);
 
     // If all sections selected (or none deselected), send empty to use backend defaults.
@@ -199,6 +200,9 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
           <DialogDescription>{t('export.description')}</DialogDescription>
         </DialogHeader>
 
+        {/* Real <form> so Enter (e.g. in the year field) downloads. grid gap-5
+            mirrors DialogContent's layout, so the wrapper is layout-neutral. */}
+        <form onSubmit={handleDownload} className="grid gap-5">
         <div className="space-y-6 py-2">
 
           {/* ── Report type ── */}
@@ -350,6 +354,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
 
         <DialogFooter>
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => setOpen(false)}
@@ -358,8 +363,8 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
             {t('common.cancel')}
           </Button>
           <Button
+            type="submit"
             size="sm"
-            onClick={handleDownload}
             disabled={isSubmitting || sections.size === 0}
             className="gap-1.5"
           >
@@ -376,6 +381,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
             )}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

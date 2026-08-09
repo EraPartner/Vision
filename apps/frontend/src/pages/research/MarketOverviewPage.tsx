@@ -1001,8 +1001,11 @@ export default function MarketOverviewPage() {
             style={heatStyle(pct)}
             title={held ? t("research.markets.held") : undefined}
             className={cn(
-              "relative flex flex-col gap-1 rounded-xl border border-border/40 p-3.5 text-left transition-colors",
-              "micro-lift press-feedback hover:border-primary/40 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex flex-col gap-1 rounded-xl border border-border/40 p-3.5 text-left",
+              // Transition list composed via --press-compose (press-feedback owns
+              // the `transition` shorthand — see index.css); the transform entry is
+              // the press curve AND micro-lift's hover ride, both at 90ms as before.
+              "micro-lift press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] hover:border-primary/40 outline-none focus-visible:ring-2 focus-visible:ring-ring",
               pct == null && "bg-muted/20",
               held &&
                 "border-accent/60 ring-2 ring-accent ring-offset-1 ring-offset-background shadow-[0_0_14px_-2px_hsl(var(--accent)/0.55)]",

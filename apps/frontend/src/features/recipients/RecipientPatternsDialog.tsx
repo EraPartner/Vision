@@ -152,7 +152,8 @@ export function RecipientPatternsDialog({
         }
     };
 
-    const handleSave = () => {
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
         if (!form.pattern.trim()) return;
         const payload = {
             pattern: form.pattern.trim(),
@@ -300,7 +301,9 @@ export function RecipientPatternsDialog({
                         {showForm && (
                             <>
                                 <Separator />
-                                <div className="space-y-4 p-4 rounded-lg border border-primary/30 bg-primary/5">
+                                {/* Real <form>: Enter in the pattern/priority/notes
+                                    fields saves. Same block layout as the div it replaces. */}
+                                <form onSubmit={handleSave} className="space-y-4 p-4 rounded-lg border border-primary/30 bg-primary/5">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="sm:col-span-2 space-y-2">
                                             <Label htmlFor="pattern-input">
@@ -319,6 +322,7 @@ export function RecipientPatternsDialog({
                                                     autoFocus
                                                 />
                                                 <Button
+                                                    type="button"
                                                     variant="outline"
                                                     size="icon"
                                                     className="shrink-0"
@@ -417,11 +421,11 @@ export function RecipientPatternsDialog({
                                     </div>
 
                                     <div className="flex gap-2 justify-end">
-                                        <Button variant="ghost" onClick={resetForm}>
+                                        <Button type="button" variant="ghost" onClick={resetForm}>
                                             {t("recipientPatterns.cancelBtn")}
                                         </Button>
                                         <Button
-                                            onClick={handleSave}
+                                            type="submit"
                                             disabled={!form.pattern.trim() || isSaving}
                                         >
                                             {isSaving && (
@@ -430,7 +434,7 @@ export function RecipientPatternsDialog({
                                             {t("recipientPatterns.saveBtn")}
                                         </Button>
                                     </div>
-                                </div>
+                                </form>
                             </>
                         )}
 

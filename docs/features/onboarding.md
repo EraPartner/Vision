@@ -3,7 +3,7 @@ title: Feature - Onboarding
 type: feature
 status: active
 date: 2026-04-19
-updated: 2026-04-27
+updated: 2026-08-09
 tags: [feature, onboarding, wizard, first-run, phase-9, backup, encrypt, passphrase, phase-2]
 description: First-run onboarding wizard for new Vision users
 aliases: [onboarding, setup wizard, first-run, welcome]
@@ -24,15 +24,22 @@ The Onboarding Wizard guides new users through initial setup of Vision, ensuring
 
 **Location:** `apps/frontend/src/components/onboarding/OnboardingWizard.tsx`
 
-A multi-step wizard that covers:
+A multi-step wizard (`STEP_KEYS` in `OnboardingWizard.tsx`) that covers, in order:
 
-1. **Welcome** — Introduction to Vision
-2. **Language** — Select display language (English/Dutch)
-3. **Currency** — Set default currency
-4. **Number Format** — Choose number formatting (US/EU)
-5. **Date Format** — Choose date display format
-6. **First Import** — Option to import first bank CSV
-7. **Complete** — Ready to use
+1. **Welcome** — Introduction to Vision, with an early restore-from-backup offer for migrating users
+2. **Overview** — What Vision can do (budgeting + portfolio feature map)
+3. **Categories** — Create suggested spending categories
+4. **Bank Setup** — Pick the bank adapter for CSV imports
+5. **Import** — Import the first bank CSV (a first import typically answers 202 and hands off to the review page)
+6. **Feature Tour** — Clickable feature tiles that end onboarding at the chosen page
+7. **Backup** — Set a backup location, or restore from an existing backup
+
+Categories deliberately run *before* the import step: a first import lands on the
+review page (every recipient is new on an empty database), and the review page is
+where categories get assigned — so the user must arrive there with categories
+already created. Taking the review hand-off from the import step ends onboarding
+at step 5 of 7 (tour and backup are skipped; the wizard can be replayed from
+Settings → About).
 
 ---
 

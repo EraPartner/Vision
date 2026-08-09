@@ -4,8 +4,15 @@ import {cva, type VariantProps} from "class-variance-authority";
 
 import {cn} from "@/lib/utils";
 
+/* The transition list rides `--press-compose`, not `transition-*` utilities:
+   `.press-feedback` (cva base below) owns the `transition` shorthand and
+   clobbers utility longhands outright — it composes its list from this var
+   instead (see the .press-feedback comment in index.css). The trailing
+   `transform 90ms ease-out` is the press curve, restated verbatim per the
+   load-bearing rule there; the hover lift rides `translate` and stays
+   deliberately untransitioned. */
 const buttonVariants = cva(
-    "press-feedback inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight ring-offset-background transition-[background-color,box-shadow,transform,color] duration-[var(--duration-fast)] ease-[var(--ease-glide)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "press-feedback [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),box-shadow_var(--duration-fast)_var(--ease-glide),color_var(--duration-fast)_var(--ease-glide),transform_90ms_ease-out] inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium tracking-tight ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
     {
         variants: {
             variant: {

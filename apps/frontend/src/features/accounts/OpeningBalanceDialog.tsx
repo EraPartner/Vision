@@ -107,6 +107,15 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
           </DialogDescription>
         </DialogHeader>
 
+        {/* Real <form> so Enter in either field saves. grid gap-5 mirrors
+            DialogContent's layout, so the wrapper is layout-neutral. */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (canSubmit) save.mutate();
+          }}
+          className="grid gap-5"
+        >
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="opening-balance">
@@ -133,12 +142,13 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
         </div>
 
         <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button disabled={!canSubmit} onClick={() => save.mutate()}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button type="submit" disabled={!canSubmit}>
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Coins className="h-4 w-4 mr-1" />}
             {t('accounts.openingBalance.submit')}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

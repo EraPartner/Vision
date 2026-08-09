@@ -29,7 +29,8 @@ export function BulkRecategorizeDialog({
     const { t } = useLanguage();
     const [categoryId, setCategoryId] = useState<number | null>(null);
 
-    function handleApply() {
+    function handleApply(e: React.FormEvent) {
+        e.preventDefault();
         onApply(categoryId);
     }
 
@@ -40,6 +41,10 @@ export function BulkRecategorizeDialog({
                     <DialogTitle>{t('txPage.bulk.recategorizeTitle', { n: selectedCount })}</DialogTitle>
                     <DialogDescription>{t('txPage.bulk.recategorizeDesc')}</DialogDescription>
                 </DialogHeader>
+                {/* Real <form> so Enter applies (cmdk preventDefaults Enter inside
+                    the combobox). grid gap-5 mirrors DialogContent's layout, so the
+                    wrapper is layout-neutral. */}
+                <form onSubmit={handleApply} className="grid gap-5">
                 <div className="py-2">
                     <CategoryCombobox
                         value={categoryId}
@@ -48,13 +53,14 @@ export function BulkRecategorizeDialog({
                     />
                 </div>
                 <DialogFooter className="gap-2">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+                    <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
                         {t('common.cancel')}
                     </Button>
-                    <Button onClick={handleApply} disabled={pending}>
+                    <Button type="submit" disabled={pending}>
                         {pending ? t('common.applying') : t('common.apply')}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

@@ -1,4 +1,4 @@
-import { Fragment, useState, useMemo, useCallback } from "react";
+import { Fragment, useState, useMemo, useCallback, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { onActivateKeyDown } from "@/utils/a11y";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { getDaysInMonth } from "date-fns";
 import { formatPeriodShort, isExpandableGroup, computeMasterToggleState, type PivotValueMode } from "./statisticsUtils";
@@ -67,6 +68,34 @@ function buildDrillUrl(params: {
 
   sp.set('filter_label', label);
   return `/transactions?${sp.toString()}`;
+}
+
+/**
+ * Keyboard path into a drill-down cell. The <td> keeps its onClick (whole-cell
+ * mouse target, unchanged); this inner native button is the focusable element
+ * so table semantics stay intact for screen readers (StocksPage precedent).
+ * Enter/Space go through onActivateKeyDown, whose preventDefault stops the
+ * button's synthetic click from bubbling to the td (no double navigation).
+ */
+function DrillCellButton({
+  ariaLabel,
+  onDrill,
+  children,
+}: {
+  ariaLabel: string;
+  onDrill: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onKeyDown={onActivateKeyDown(onDrill)}
+      className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+    >
+      {children}
+    </button>
+  );
 }
 
 export function CategoryPivotTable({
@@ -289,31 +318,50 @@ export function CategoryPivotTable({
                         {filteredPeriods.map((p) => {
                           const val = group.months[p] || 0;
                           const canClick = val !== 0 && groupCategoryIds.length > 0;
+                          const label = `${group.general} — ${formatPeriodShort(p)}`;
+                          const drill = canClick ? () => navigate(buildDrillUrl({
+                            categoryIds: groupCategoryIds,
+                            period: p,
+                            valueMode,
+                            label,
+                          })) : undefined;
                           return (
                             <td
                               key={p}
-                              onClick={canClick ? () => navigate(buildDrillUrl({
-                                categoryIds: groupCategoryIds,
-                                period: p,
-                                valueMode,
-                                label: `${group.general} — ${formatPeriodShort(p)}`,
-                              })) : undefined}
+                              onClick={drill}
                               className={cn("text-right py-2 px-3 tabular-nums font-semibold", val === 0 && "text-muted-foreground/40", val < 0 && "text-loss", canClick && clickableCell)}
                             >
-                              {val === 0 ? "—" : formatCurrency(val)}
+                              {drill ? (
+                                <DrillCellButton ariaLabel={t("statsPage.pivot.drillAria", { label })} onDrill={drill}>
+                                  {formatCurrency(val)}
+                                </DrillCellButton>
+                              ) : (
+                                val === 0 ? "—" : formatCurrency(val)
+                              )}
                             </td>
                           );
                         })}
-                        <td
-                          onClick={groupCategoryIds.length > 0 ? () => navigate(buildDrillUrl({
+                        {(() => {
+                          const drill = groupCategoryIds.length > 0 ? () => navigate(buildDrillUrl({
                             categoryIds: groupCategoryIds,
                             valueMode,
                             label: group.general,
-                          })) : undefined}
-                          className={cn("text-right py-2 px-3 font-bold tabular-nums", group.total < 0 && "text-loss", groupCategoryIds.length > 0 && clickableCell)}
-                        >
-                          {(() => { const r = formatCompact(group.total); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
-                        </td>
+                          })) : undefined;
+                          const r = formatCompact(group.total);
+                          const content = <span title={r.isCompact ? r.full : undefined}>{r.display}</span>;
+                          return (
+                            <td
+                              onClick={drill}
+                              className={cn("text-right py-2 px-3 font-bold tabular-nums", group.total < 0 && "text-loss", groupCategoryIds.length > 0 && clickableCell)}
+                            >
+                              {drill ? (
+                                <DrillCellButton ariaLabel={t("statsPage.pivot.drillAria", { label: group.general })} onDrill={drill}>
+                                  {content}
+                                </DrillCellButton>
+                              ) : content}
+                            </td>
+                          );
+                        })()}
                       </tr>
                       {!isCollapsed && group.children.map((cat) => (
                         <tr key={cat.categoryId} id={`pivot-children-${group.general}`} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
@@ -323,31 +371,49 @@ export function CategoryPivotTable({
                           {filteredPeriods.map((p) => {
                             const val = getPeriodValue(cat, p, valueMode);
                             const canClick = val !== 0 && cat.categoryId != null;
+                            const label = `${cat.categoryName} — ${formatPeriodShort(p)}`;
+                            const drill = canClick ? () => navigate(buildDrillUrl({
+                              categoryId: cat.categoryId!,
+                              period: p,
+                              valueMode,
+                              label,
+                            })) : undefined;
                             return (
                               <td
                                 key={p}
-                                onClick={canClick ? () => navigate(buildDrillUrl({
-                                  categoryId: cat.categoryId!,
-                                  period: p,
-                                  valueMode,
-                                  label: `${cat.categoryName} — ${formatPeriodShort(p)}`,
-                                })) : undefined}
+                                onClick={drill}
                                 className={cn("text-right py-2 px-3 tabular-nums", val === 0 && "text-muted-foreground/40", val < 0 && "text-loss", canClick && clickableCell)}
                               >
-                                {val === 0 ? "—" : formatCurrency(val)}
+                                {drill ? (
+                                  <DrillCellButton ariaLabel={t("statsPage.pivot.drillAria", { label })} onDrill={drill}>
+                                    {formatCurrency(val)}
+                                  </DrillCellButton>
+                                ) : (
+                                  val === 0 ? "—" : formatCurrency(val)
+                                )}
                               </td>
                             );
                           })}
-                          <td
-                            onClick={cat.categoryId != null ? () => navigate(buildDrillUrl({
+                          {(() => {
+                            const label = String(cat.categoryName || '');
+                            const drill = cat.categoryId != null ? () => navigate(buildDrillUrl({
                               categoryId: cat.categoryId!,
                               valueMode,
-                              label: String(cat.categoryName || ''),
-                            })) : undefined}
-                            className={cn("text-right py-2 px-3 font-medium tabular-nums", cat.filteredTotal < 0 && "text-loss", cat.categoryId != null && clickableCell)}
-                          >
-                            {formatCurrency(cat.filteredTotal)}
-                          </td>
+                              label,
+                            })) : undefined;
+                            return (
+                              <td
+                                onClick={drill}
+                                className={cn("text-right py-2 px-3 font-medium tabular-nums", cat.filteredTotal < 0 && "text-loss", cat.categoryId != null && clickableCell)}
+                              >
+                                {drill ? (
+                                  <DrillCellButton ariaLabel={t("statsPage.pivot.drillAria", { label })} onDrill={drill}>
+                                    {formatCurrency(cat.filteredTotal)}
+                                  </DrillCellButton>
+                                ) : formatCurrency(cat.filteredTotal)}
+                              </td>
+                            );
+                          })()}
                         </tr>
                       ))}
                     </Fragment>
@@ -359,28 +425,35 @@ export function CategoryPivotTable({
                   <td className="py-2 px-3 sticky left-0 glass-sticky-col z-10">{t("statsPage.total")}</td>
                   {filteredPeriods.map((p) => {
                     const r = formatCompact(columnTotals[p] || 0);
+                    const label = formatPeriodShort(p);
+                    const drill = () => navigate(buildDrillUrl({
+                      period: p,
+                      valueMode,
+                      label,
+                    }));
                     return (
                       <td
                         key={p}
-                        onClick={() => navigate(buildDrillUrl({
-                          period: p,
-                          valueMode,
-                          label: formatPeriodShort(p),
-                        }))}
+                        onClick={drill}
                         className={cn("text-right py-2 px-3 tabular-nums", clickableCell)}
                       >
-                        <span title={r.isCompact ? r.full : undefined}>{r.display}</span>
+                        <DrillCellButton ariaLabel={t("statsPage.pivot.drillAria", { label })} onDrill={drill}>
+                          <span title={r.isCompact ? r.full : undefined}>{r.display}</span>
+                        </DrillCellButton>
                       </td>
                     );
                   })}
                   {(() => {
                     const r = formatCompact(filteredCategories.reduce((s, c) => s + c.filteredTotal, 0));
+                    const drill = () => navigate('/transactions');
                     return (
                       <td
-                        onClick={() => navigate('/transactions')}
+                        onClick={drill}
                         className={cn("text-right py-2 px-3 tabular-nums", clickableCell)}
                       >
-                        <span title={r.isCompact ? r.full : undefined}>{r.display}</span>
+                        <DrillCellButton ariaLabel={t("statsPage.pivot.drillAria", { label: t("statsPage.total") })} onDrill={drill}>
+                          <span title={r.isCompact ? r.full : undefined}>{r.display}</span>
+                        </DrillCellButton>
                       </td>
                     );
                   })()}

@@ -3,7 +3,7 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-06-19
-updated: 2026-06-24
+updated: 2026-08-09
 tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2, auto-link, planned-match, june-2026, instant-apply, sidebar, accessibility, colorblind, gain-loss]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and sidebar-navigated instant-apply DashboardSettingsDialog UI (ADR-084).
 aliases: [preferences, configuration, app settings, user settings]
@@ -75,6 +75,15 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
      return useSettingsStore(useShallow(s => ({ ...s.appSettings, isLoading: s.isAppSettingsLoading })));
    };
    ```
+
+### Hydration-Time Blob Validation (Zod)
+
+The persisted `app_settings` and `dashboard_settings` blobs are untrusted JSON from the settings API. Both are validated at the store boundary during hydration, in `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]`:
+
+- `migrateDashboardSettings` (ZOD-11) parses the blob with `storedDashboardSettingsSchema` — a Zod `looseObject` (unknown keys survive and are persisted back) with per-field `.catch` to the default, so one malformed field never poisons the merge.
+- `migrateAppSettings` (2026-08) does the same via `storedAppSettingsSchema`, in addition to its pre-ADR-075 `enhancedEffects → visualEffects` legacy mapping. The money-formatting fields get value-level bounds because bad values make `Intl.NumberFormat` throw `RangeError` (crashing pages into the error boundary, or degrading guarded money surfaces to raw unlocalised numbers): `defaultCurrency` must be a well-formed 3-letter ISO-4217 code, `showDecimalPlaces` an integer 0–20. `numberFormat`/`dateFormat` stay shape-level (`string`) on purpose — `numberFormatToLocale` already maps unknown strings to its own default, so tightening them here would change resolution. A blob that is not an object at all falls back to `DEFAULT_APP_SETTINGS` wholesale.
+
+A well-formed (possibly partial) blob produces exactly the pre-validation `{ ...DEFAULTS, ...blob }` result, byte for byte. All `Intl.NumberFormat`-backed money formatters (`Money.tsx`, `useCurrencyFormatter` string + parts paths, `utils/currency.ts#formatCurrency`) additionally guard construction with try/catch and degrade to the same bare `` `${val}` `` text — defense in depth for per-call currency/decimals overrides that come from data rather than settings.
 
 ### Settings Keys
 

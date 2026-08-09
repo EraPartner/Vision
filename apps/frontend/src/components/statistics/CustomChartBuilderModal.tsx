@@ -163,7 +163,9 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
     state.allCategories || state.allRecipients || state.allTags
   );
 
-  const handleSave = () => {
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSave || createChart.isPending || updateChart.isPending) return;
     const payload = {
       name: state.name.trim(),
       chartType: state.chartType,
@@ -196,6 +198,9 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
           <DialogDescription>{t('customChart.builder.desc')}</DialogDescription>
         </DialogHeader>
 
+        {/* Real <form> so Enter in the name/date fields saves. grid gap-5 mirrors
+            DialogContent's layout, so the wrapper is layout-neutral. */}
+        <form onSubmit={handleSave} className="grid gap-5">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
           {/* Left: config form */}
           <div className="space-y-4">
@@ -307,7 +312,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                       style={{ borderLeftColor: CHART_COLORS[i % CHART_COLORS.length], borderLeftWidth: 3 }}
                     >
                       <span className="truncate max-w-[150px]">{cat.name}</span>
-                      <button onClick={() => toggleCategory(cat.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
+                      <button type="button" onClick={() => toggleCategory(cat.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
@@ -369,7 +374,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                       style={{ borderLeftColor: CHART_COLORS[(selectedCats.length + i) % CHART_COLORS.length], borderLeftWidth: 3 }}
                     >
                       <span className="truncate max-w-[150px]">{rec.name}</span>
-                      <button onClick={() => toggleRecipient(rec.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
+                      <button type="button" onClick={() => toggleRecipient(rec.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
@@ -431,7 +436,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                       style={{ borderLeftColor: CHART_COLORS[(selectedCats.length + selectedRecs.length + i) % CHART_COLORS.length], borderLeftWidth: 3 }}
                     >
                       <span className="truncate max-w-[150px]">#{tag.slug}</span>
-                      <button onClick={() => toggleTag(tag.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
+                      <button type="button" onClick={() => toggleTag(tag.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
@@ -451,11 +456,12 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={!canSave || createChart.isPending || updateChart.isPending}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button type="submit" disabled={!canSave || createChart.isPending || updateChart.isPending}>
             {(createChart.isPending || updateChart.isPending) ? t('customChart.saving') : t('common.save')}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -70,14 +70,14 @@ describe('importCSVWithProgress SSE handling', () => {
         ]);
     });
 
-    it('resolves a review_required event (backend shape: no total field) exactly as before', async () => {
+    it('resolves a review_required event (backend shape: no total field) without inventing counts', async () => {
         stubFetch('event: review_required\ndata: {"batch_id":12,"match_source_counts":{"exact":1},"percent":70}\n\n');
 
         const onProgress = vi.fn<(p: ImportProgress) => void>();
         const { result } = importCSVWithProgress(file, 'test-bank', onProgress);
 
-        await expect(result).resolves.toEqual({
-            total_processed: undefined,
+        const resolved = await result;
+        expect(resolved).toEqual({
             imported: 0,
             duplicates: 0,
             errors: 0,
@@ -85,10 +85,14 @@ describe('importCSVWithProgress SSE handling', () => {
             batch_id: 12,
             requires_review: true,
         });
+        // The event carries no counts, so no phantom total_processed key
+        // (previously the handler read a nonexistent `total` field and set
+        // total_processed: undefined).
+        expect(resolved).not.toHaveProperty('total_processed');
         expect(onProgress).toHaveBeenCalledWith({
             phase: 'review_required',
-            current: undefined,
-            total: undefined,
+            current: 0,
+            total: 0,
             imported: 0,
             duplicates: 0,
             errors: 0,
