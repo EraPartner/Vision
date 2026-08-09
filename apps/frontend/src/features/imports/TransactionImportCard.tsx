@@ -216,7 +216,11 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
       // Both shapes that reach here are committed imports; the SSE result names
       // the row count `total_processed` (importRoutes.js:362) and the
       // non-streaming route names it `total` (buildPipelineResult).
-      const totalProcessed = 'total_processed' in data ? data.total_processed : data.total;
+      // (`?? 0` is a type bridge only: every committed SSE result carries
+      // total_processed — importResultSchema requires it — the field is just
+      // optional on ImportResult for the review-required variant, which
+      // returned above.)
+      const totalProcessed = 'total' in data ? data.total : data.total_processed ?? 0;
       toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.duplicates, total: totalProcessed }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });

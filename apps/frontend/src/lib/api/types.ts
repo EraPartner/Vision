@@ -24,8 +24,20 @@ export interface ImportProgress {
     percent: number;
 }
 
+/**
+ * Result of the SSE import stream (`POST /api/import/csv/stream`). Stays
+ * hand-written: the spec documents that route's response as an opaque
+ * `text/event-stream` (matching the portfolio sibling), so there is no
+ * generated schema to pin to — the `complete` event's payload is defined by
+ * `buildComplete` in node-backend routes/importRoutes.js.
+ */
 export interface ImportResult {
-    total_processed: number;
+    /**
+     * Absent on the synthesized review-required result — the backend's
+     * `review_required` SSE event carries no counts (lib/importProgress.js
+     * emits only `{batch_id, match_source_counts, percent}`).
+     */
+    total_processed?: number;
     imported: number;
     duplicates: number;
     errors: number;
