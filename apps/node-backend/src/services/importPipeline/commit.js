@@ -80,6 +80,13 @@ const COMMIT_CHUNK = 1000;
 // Static identifier, never interpolated from data.
 const CHUNK_SAVEPOINT = 'sp_commit_chunk';
 
+// error_message for a row that reaches commit with no recipient: the matcher
+// could not resolve one (match.js stamps such rows 'matched' with a NULL
+// resolved_recipient_id so they stay reviewable) and the user committed
+// without assigning one in review.
+const UNRESOLVED_RECIPIENT_MESSAGE =
+  'unresolved recipient — no recipient was matched or assigned in review';
+
 /**
  * Canonical text form of a NUMERIC value, so JS equality matches PostgreSQL's
  * `numeric = numeric`. `import_staging_rows.amount` is NUMERIC(20,4) and
@@ -826,7 +833,10 @@ async function commitChunk({ client, chunk, batchId, committedHashes }) {
 
 /**
  * Run the commit phase: drain 'matched' staging rows into `transactions` with
- * chunk-batched dedup and insert, then auto-link planned payments.
+ * chunk-batched dedup and insert, then auto-link planned payments. Rows still
+ * lacking a recipient (unresolved at match, unassigned in review) are decided
+ * into 'error' before any chunk is planned — never attempted against the
+ * NOT NULL `transactions.recipient_id`.
  *
  * @param {{ batchId: ImportBatchId, onProgress?: ImportProgressCallback }} args
  * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
@@ -834,7 +844,7 @@ async function commitChunk({ client, chunk, batchId, committedHashes }) {
 export async function commitBatch({ batchId, onProgress }) {
   await query(`UPDATE import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
 
-  const { rows: matched } = await query(
+  const { rows: reviewed } = await query(
     `SELECT isr.id,
             isr.row_index,
             to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
@@ -859,11 +869,44 @@ export async function commitBatch({ batchId, onProgress }) {
     [batchId]
   );
 
+  // Unresolved rows stay 'matched' through review (the only status the
+  // preview and the override paths accept — see matchBatch), so a row can
+  // arrive here with no recipient at all: the matcher resolved nothing and the
+  // user assigned nothing. `transactions.recipient_id` is NOT NULL, so decide
+  // those rows into 'error' up front — attempting them would make the bulk
+  // INSERT fail on the constraint and demote the whole chunk to the per-row
+  // replay, surfacing the right outcome by the wrong mechanism.
+  const unresolvedRows = reviewed.filter(
+    (r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) == null,
+  );
+  const matched = reviewed.filter(
+    (r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) != null,
+  );
+
+  if (unresolvedRows.length > 0) {
+    await query(
+      `UPDATE import_staging_rows
+          SET status = 'error', error_message = $2
+        WHERE id = ANY($1::bigint[])`,
+      [unresolvedRows.map((r) => r.id), UNRESOLVED_RECIPIENT_MESSAGE],
+    );
+    await query(
+      `UPDATE import_batches
+          SET rows_error = COALESCE(rows_error, 0) + $2
+        WHERE id = $1`,
+      [batchId, unresolvedRows.length],
+    );
+    logger.warn('[pipeline:commit] rows without a resolved recipient marked as errors', {
+      batchId,
+      rows: unresolvedRows.length,
+    });
+  }
+
   const total = matched.length;
   let seen = 0;
   let imported = 0;
   let duplicates = 0;
-  let errors = 0;
+  let errors = unresolvedRows.length;
   // tx_hashes already written to `transactions` by this run — guards against
   // two identical rows inside the same CSV both passing the field-based dup
   // check (neither is in `transactions` yet when the first is processed).
