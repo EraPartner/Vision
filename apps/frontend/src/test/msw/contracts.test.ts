@@ -993,8 +993,14 @@ describe("Phase F1: extended mutation contracts", () => {
     });
 
     // accountRepository's COLUMNS (accountRepository.js:26-29) plus the route's
-    // `links: []`. Every accounts single-row body carries exactly these.
-    const AccountSchema = z.object({
+    // `links: []`. Every accounts single-row body carries exactly these —
+    // `.strict()` because the drift this row exists to catch is ADDITIVE: the
+    // list endpoint's enrichments (`computed_balance`, `drift`,
+    // `reconcilable_*`, anchor provenance — "list endpoint only" on the
+    // Account type) leaking into a single-row fixture would sail through a
+    // key-stripping schema, exactly as ACCOUNT_STUB's stowaway
+    // `computed_balance`/`drift` once did.
+    const AccountSchema = z.strictObject({
         id: z.number().int().positive(),
         name: z.string(),
         display_name: z.string().nullable(),
@@ -1110,6 +1116,18 @@ describe("Phase F1: extended mutation contracts", () => {
             200, // routes/info/maintenance.js:20 — bare res.ok
         ],
         [
+            // `res.ok(settingsRepository.set(...))` — the stored `{ key, value }`
+            // row (settingsRepository.js:98), NOT an `{ok: true}` sentinel; the
+            // client types it `Promise<{ key, value }>` (lib/api/settings.ts:11).
+            "PUT /api/settings/:key returns the stored setting",
+            "PUT",
+            "/api/settings/language",
+            { value: "en" },
+            "PUT /api/settings/:key",
+            z.object({ key: z.string(), value: z.unknown() }),
+            200, // routes/settings.js:328 — bare res.ok
+        ],
+        [
             "POST /api/investments/refresh-prices returns price refresh shape",
             "POST",
             "/api/investments/refresh-prices",
@@ -1153,12 +1171,41 @@ describe("Phase F1: extended mutation contracts", () => {
             200, // controllers/investmentController.js:682 — bare res.ok
         ],
         [
-            "POST /api/recipients/:id/merge returns merged shape",
+            // `{ primary, merged_ids, reassigned, aliases, patternSuggestion }`
+            // — routes/recipients.js:157-163. `primary` is the re-read
+            // recipient row, `reassigned` the merge service's repoint counters
+            // (recipientMergeService.js:94-100), `patternSuggestion` the
+            // optional `{ pattern, kind, matchCount, confidence }` rule hint.
+            // The success toast reads `merged_ids.length` and `primary.name`
+            // (useRecipients.ts:91), so the old `{message, merged_count}`
+            // fixture meant no test could exercise that path against the
+            // default handler.
+            "POST /api/recipients/:id/merge returns the merge summary",
             "POST",
             "/api/recipients/1/merge",
-            {},
+            { alias_ids: [2] },
             "POST /api/recipients/:id/merge",
-            z.object({ message: z.string(), merged_count: z.number() }),
+            z.object({
+                primary: RecipientItemSchema,
+                merged_ids: z.array(z.number().int().positive()),
+                reassigned: z.object({
+                    transactions: z.number().int().nonnegative(),
+                    splits: z.number().int().nonnegative(),
+                    planned: z.number().int().nonnegative(),
+                    bankAccounts: z.number().int().nonnegative(),
+                }),
+                aliases: z.array(
+                    z.object({ id: z.number().int().positive(), name: z.string() }),
+                ),
+                patternSuggestion: z
+                    .object({
+                        pattern: z.string(),
+                        kind: z.enum(["literal_prefix", "glob", "regex"]),
+                        matchCount: z.number().int().nonnegative(),
+                        confidence: z.enum(["high", "medium", "low"]),
+                    })
+                    .nullable(),
+            }),
             200, // routes/recipients.js:157 — bare res.ok
         ],
         [

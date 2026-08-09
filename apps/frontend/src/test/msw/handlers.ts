@@ -174,6 +174,16 @@ export const PLANNED_TRANSACTION_STUB = {
     links: [],
 };
 
+/**
+ * An accounts SINGLE-ROW body: exactly accountRepository's COLUMNS list
+ * (accountRepository.js:26-29) plus the route's `res.ok({ ...account,
+ * links: [] })` (routes/accounts.js:46/56/65). Deliberately WITHOUT
+ * `computed_balance`/`drift` — those are list-endpoint enrichments
+ * (accountRepository.list, and marked "list endpoint only" on the Account
+ * type, types/api.ts:89-117) that `GET /:id`, `POST` and `PATCH` never emit.
+ * A test modelling a LIST response should use `ACCOUNT_LIST_ITEM_STUB` below,
+ * or spread the enrichments it asserts on explicitly.
+ */
 export const ACCOUNT_STUB = {
     id: 1,
     name: "Main Checking",
@@ -191,8 +201,6 @@ export const ACCOUNT_STUB = {
     funding_account_id: null,
     statement_balance: null,
     statement_balance_date: null,
-    computed_balance: 0,
-    drift: null,
     is_active: true,
     // `closed_at` and `links` are on every accounts single-row body:
     // accountRepository's COLUMNS list (accountRepository.js:26-29) plus the
@@ -201,6 +209,21 @@ export const ACCOUNT_STUB = {
     created_at: "2025-01-01T00:00:00.000Z",
     updated_at: null,
     links: [],
+};
+
+/**
+ * An accounts LIST item: the single-row columns plus the enrichments
+ * `accountRepository.list` computes per row (`computed_balance` — the
+ * anchor+delta running balance, ADR-094 — and `drift`, statement −
+ * reconciliation base, null when no statement balance). The list also emits
+ * `reconcilable_balance`/`reconcilable_currency`/`anchor_date`/
+ * `post_anchor_count`/`has_transactions`; add those explicitly in tests that
+ * assert on them, as the reconcile-dialog tests already do.
+ */
+export const ACCOUNT_LIST_ITEM_STUB = {
+    ...ACCOUNT_STUB,
+    computed_balance: 0,
+    drift: null,
 };
 
 /**
@@ -296,7 +319,15 @@ export const importCsvReviewRequiredHandlers = [
 export const defaultHandlers = [
     http.get(`${API_BASE}/api/settings`, () => ok({})),
     http.get(`${API_BASE}/api/settings/:key`, () => ok(null)),
-    http.put(`${API_BASE}/api/settings/:key`, () => ok({ ok: true })),
+    // `res.ok(settingsRepository.set(...))` — routes/settings.js:328. The body
+    // is the stored `{ key, value }` row (settingsRepository.js:98), never an
+    // `{ok: true}` sentinel. Echo the key and value so per-flow overrides see
+    // what the real route would answer. Every `saveSetting` caller today is
+    // fire-and-forget, but the client types it `Promise<{ key, value }>`.
+    http.put(`${API_BASE}/api/settings/:key`, async ({ params, request }) => {
+        const body = (await request.json().catch(() => ({}))) as { value?: unknown };
+        return ok({ key: String(params.key), value: body.value ?? null });
+    }),
 
     http.get(`${API_BASE}/api/info`, () =>
         ok({ version: "test", commit: "test", buildDate: "test" }),
@@ -711,8 +742,22 @@ export const defaultHandlers = [
     // Recipients sub-routes
     http.get(`${API_BASE}/api/recipients/clusters`, () => ok({ clusters: [] })),
     http.get(`${API_BASE}/api/recipients/:id/aliases`, () => ok({ aliases: [] })),
+    // `res.ok({ primary, merged_ids, reassigned, aliases, patternSuggestion })`
+    // — routes/recipients.js:157-163. `primary` is the re-read recipient row
+    // (`{ ...updatedPrimary, links: [] }`), `reassigned` is
+    // recipientMergeService's per-table repoint counters, and
+    // `patternSuggestion` is `{ pattern, kind, matchCount, confidence }` or
+    // null. There is no `message`/`merged_count`: the success toast
+    // (useRecipients.ts:91) renders `merged_ids.length` and `primary.name`,
+    // neither of which existed in the old `{message, merged_count}` mock.
     http.post(`${API_BASE}/api/recipients/:id/merge`, () =>
-        ok({ message: "Merged", merged_count: 0 }),
+        ok({
+            primary: { ...RECIPIENT_STUB },
+            merged_ids: [2],
+            reassigned: { transactions: 0, splits: 0, planned: 0, bankAccounts: 0 },
+            aliases: [{ id: 2, name: "Merged Alias" }],
+            patternSuggestion: null,
+        }),
     ),
     // `res.ok({ ...recipient, links: [] })` — routes/recipients.js:172. The
     // route re-reads and returns the recipient; `lib/api/recipients.ts:61`
