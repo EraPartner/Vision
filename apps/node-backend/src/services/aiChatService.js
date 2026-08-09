@@ -12,8 +12,15 @@
  *
  * Streaming mode: when `streaming: true`, uses `ollamaClient.chatStream`
  * and emits `token` events (content deltas) via `onEvent` for each chunk.
- * Also emits `tool_call` events before dispatch. The non-streaming path
- * emits `user_message`, `tool_message`, `assistant_message` events only.
+ * Also emits a `tool_call` event before each dispatch (progress affordance
+ * for slow tools) carrying the model's args when they are already a plain
+ * object, else `{}`. The non-streaming path emits `user_message`,
+ * `tool_message`, `assistant_message` events only.
+ *
+ * Tool-call argument coercion lives in exactly one place: `dispatchTool`
+ * (services/aiChat/tools/index.js). This module passes the model's raw
+ * `function.arguments` through untouched and persists/streams the `args`
+ * the dispatcher reports back.
  */
 
 import { logger } from '../config/logger.js';
@@ -53,34 +60,28 @@ export class AiChatServiceError extends AppError {
 }
 
 /**
- * @param {any} rawArgs raw `function.arguments` from an Ollama tool call —
- *   either an already-parsed object, a JSON string, or absent.
- * @returns {any}
- */
-function parseToolCallArguments(rawArgs) {
-  if (rawArgs == null) return {};
-  if (typeof rawArgs === 'object') return rawArgs;
-  if (typeof rawArgs === 'string') {
-    const trimmed = rawArgs.trim();
-    if (!trimmed) return {};
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return rawArgs;
-    }
-  }
-  return rawArgs;
-}
-
-/**
+ * Extract the tool name and the raw (uncoerced) `function.arguments` value
+ * from an Ollama `tool_calls[]` entry. Coercion is deliberately NOT done
+ * here — `dispatchTool` is the single coercion point and reports back the
+ * args the tool actually saw.
  * @param {any} toolCall raw Ollama `tool_calls[]` entry.
- * @returns {{ name: string|null, args: any }}
+ * @returns {{ name: string|undefined, rawArgs: unknown }}
  */
 function normalizeToolCall(toolCall) {
   const fn = toolCall?.function || toolCall || {};
-  const name = fn.name || toolCall?.name || null;
-  const args = parseToolCallArguments(fn.arguments ?? toolCall?.arguments);
-  return { name, args };
+  const name = fn.name || toolCall?.name || undefined;
+  const rawArgs = fn.arguments ?? toolCall?.arguments;
+  return { name, rawArgs };
+}
+
+/**
+ * True when `value` is a plain args record — the only shape the SSE
+ * `tool_call` frame may carry (the frontend schema is `z.record(...)`).
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isArgsRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -276,12 +277,12 @@ async function runChatTurnInner({
   if (preCallTool) {
     try {
       await onEvent?.({ type: 'tool_call', data: { name: preCallTool, args: {} } });
-      const result = await dispatchTool(preCallTool, {}, { conversationId: conversation.id, cache: toolCache });
+      const { args: preCallArgs, result } = await dispatchTool(preCallTool, {}, { conversationId: conversation.id, cache: toolCache });
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
         role: 'tool',
         toolName: preCallTool,
-        toolArgs: {},
+        toolArgs: preCallArgs ?? {},
         toolResult: result,
       });
       toolMessages.push(toolRow);
@@ -394,19 +395,30 @@ async function runChatTurnInner({
     });
 
     for (const rawCall of response.toolCalls) {
-      const { name, args } = normalizeToolCall(rawCall);
+      const { name, rawArgs } = normalizeToolCall(rawCall);
       if (!name) {
         logger.warn('[aiChat] tool call missing name', { rawCall });
         continue;
       }
 
-      await onEvent?.({ type: 'tool_call', data: { name, args } });
-      const result = await dispatchTool(name, args, { conversationId: conversation.id, cache: toolCache });
+      // The tool_call frame fires BEFORE dispatch so a slow tool still shows
+      // a "calling tool" progress affordance. It carries rawArgs when the
+      // model already emitted a plain object (the common case), else `{}` —
+      // the frontend frame schema requires a record and would drop the frame.
+      // Fidelity nuance: for string-JSON arguments this frame shows `{}`
+      // while the persisted row stores the dispatcher-coerced object.
+      await onEvent?.({ type: 'tool_call', data: { name, args: isArgsRecord(rawArgs) ? rawArgs : {} } });
+
+      // dispatchTool owns argument coercion and reports back what the tool
+      // actually saw. The persisted row carries that record: the coerced
+      // object on success; on a coercion failure `args` is the raw
+      // model-emitted value, persisted verbatim next to the error result.
+      const { args, result } = await dispatchTool(name, rawArgs, { conversationId: conversation.id, cache: toolCache });
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
         role: 'tool',
         toolName: name,
-        toolArgs: args,
+        toolArgs: args ?? {},
         toolResult: result,
       });
       toolMessages.push(toolRow);

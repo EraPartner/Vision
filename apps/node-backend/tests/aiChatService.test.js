@@ -313,9 +313,12 @@ describe('runChatTurn — tool-call loop', () => {
       });
 
     dispatchTool.mockResolvedValueOnce({
-      ok: true,
-      data: [{ category: 'Rent', total: 3600, count: 12 }],
-      meta: { renderAs: 'bar' },
+      args: { from: '2025-01-01', to: '2025-12-31' },
+      result: {
+        ok: true,
+        data: [{ category: 'Rent', total: 3600, count: 12 }],
+        meta: { renderAs: 'bar' },
+      },
     });
 
     const events = [];
@@ -357,7 +360,10 @@ describe('runChatTurn — tool-call loop', () => {
       });
 
     const toolPayload = { ok: true, data: [], meta: { renderAs: 'bar' } };
-    dispatchTool.mockResolvedValueOnce(toolPayload);
+    dispatchTool.mockResolvedValueOnce({
+      args: { from: '2025-01-01', to: '2025-12-31' },
+      result: toolPayload,
+    });
 
     await runChatTurn({ message: 'x', ollamaClient });
 
@@ -372,7 +378,7 @@ describe('runChatTurn — tool-call loop', () => {
     });
   });
 
-  it('parses string arguments into object', async () => {
+  it('passes raw string arguments through to dispatchTool (the single coercion point) and persists/streams the coerced args it reports', async () => {
     const ollamaClient = makeMockOllama();
     ollamaClient.chat
       .mockResolvedValueOnce({
@@ -390,15 +396,79 @@ describe('runChatTurn — tool-call loop', () => {
       .mockResolvedValueOnce({
         content: 'ok', toolCalls: [], evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
       });
-    dispatchTool.mockResolvedValueOnce({ ok: true, data: [], meta: { renderAs: 'bar' } });
+    const coerced = { from: '2025-01-01', to: '2025-01-31' };
+    dispatchTool.mockResolvedValueOnce({
+      args: coerced,
+      result: { ok: true, data: [], meta: { renderAs: 'bar' } },
+    });
 
-    await runChatTurn({ message: 'x', ollamaClient });
+    const events = [];
+    await runChatTurn({ message: 'x', ollamaClient, onEvent: (e) => events.push(e) });
 
+    // The service no longer parses — the raw string reaches the dispatcher.
     expect(dispatchTool).toHaveBeenCalledWith(
       'getSpendByCategory',
-      { from: '2025-01-01', to: '2025-01-31' },
+      '{"from":"2025-01-01","to":"2025-01-31"}',
       expect.any(Object),
     );
+    // Persisted toolArgs carries what the tool actually saw — the
+    // dispatcher-coerced object.
+    const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
+      ([arg]) => arg.role === 'tool',
+    );
+    expect(toolAppend[0].toolArgs).toEqual(coerced);
+    // The pre-dispatch tool_call frame cannot know the coerced value yet:
+    // string args ride as `{}` (the frame schema requires a record); the
+    // tool_message frame that follows carries the coerced record.
+    const toolCallEvt = events.find((e) => e.type === 'tool_call');
+    expect(toolCallEvt.data).toEqual({ name: 'getSpendByCategory', args: {} });
+    const toolMsgEvt = events.find((e) => e.type === 'tool_message');
+    expect(toolMsgEvt.data.toolArgs).toEqual(coerced);
+  });
+
+  it('bad-JSON tool args: persists the raw string next to the error result, streams an object args frame, and feeds the model the exact error payload', async () => {
+    const rawArgs = '{not valid json';
+    const validationResult = {
+      ok: false,
+      error: { code: 'VALIDATION_ERROR', message: 'arguments is not valid JSON: …' },
+    };
+    const ollamaClient = makeMockOllama();
+    ollamaClient.chat
+      .mockResolvedValueOnce({
+        content: '',
+        toolCalls: [
+          { function: { name: 'getSpendByCategory', arguments: rawArgs } },
+        ],
+        evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
+      })
+      .mockResolvedValueOnce({
+        content: 'retried', toolCalls: [], evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
+      });
+    // Real dispatchTool returns the raw value as `args` when coercion fails.
+    dispatchTool.mockResolvedValueOnce({ args: rawArgs, result: validationResult });
+
+    const events = [];
+    await runChatTurn({ message: 'x', ollamaClient, onEvent: (e) => events.push(e) });
+
+    // Honest record: the unparsed string the model emitted, plus the error.
+    const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
+      ([arg]) => arg.role === 'tool',
+    );
+    expect(toolAppend[0].toolArgs).toBe(rawArgs);
+    expect(toolAppend[0].toolResult).toBe(validationResult);
+
+    // The SSE frame schema requires a plain object — a non-record falls
+    // back to {} (the raw value rides in the following tool_message row).
+    const toolCallEvt = events.find((e) => e.type === 'tool_call');
+    expect(toolCallEvt.data).toEqual({ name: 'getSpendByCategory', args: {} });
+    const toolMsgEvt = events.find((e) => e.type === 'tool_message');
+    expect(toolMsgEvt.data.toolArgs).toBe(rawArgs);
+
+    // LLM retry contract: the second model call sees the byte-identical
+    // stringified error payload as its role:'tool' message.
+    const secondCallMessages = ollamaClient.chat.mock.calls[1][0].messages;
+    const toolMsg = secondCallMessages.find((m) => m.role === 'tool');
+    expect(toolMsg.content).toBe(JSON.stringify(validationResult));
   });
 
   it('handles multiple tool calls in one model response', async () => {
@@ -415,7 +485,7 @@ describe('runChatTurn — tool-call loop', () => {
       .mockResolvedValueOnce({
         content: 'summary', toolCalls: [], evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
       });
-    dispatchTool.mockResolvedValue({ ok: true, data: [], meta: { renderAs: 'bar' } });
+    dispatchTool.mockResolvedValue({ args: {}, result: { ok: true, data: [], meta: { renderAs: 'bar' } } });
 
     const result = await runChatTurn({ message: 'x', ollamaClient });
 
@@ -457,7 +527,7 @@ describe('runChatTurn — tool-call loop', () => {
       .mockResolvedValueOnce({
         content: 'final', toolCalls: [], evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
       });
-    dispatchTool.mockResolvedValue({ ok: true, data: [], meta: { renderAs: 'bar' } });
+    dispatchTool.mockResolvedValue({ args: {}, result: { ok: true, data: [], meta: { renderAs: 'bar' } } });
 
     const result = await runChatTurn({ message: 'x', ollamaClient });
 
@@ -475,7 +545,7 @@ describe('runChatTurn — server-side pre-call (ADR-110 §4)', () => {
   };
 
   it('dispatches the pre-call tool, persists/emits it before the assistant turn, injects it into the model context, and returns the narration', async () => {
-    dispatchTool.mockResolvedValueOnce(digest);
+    dispatchTool.mockResolvedValueOnce({ args: {}, result: digest });
 
     const ollamaClient = makeMockOllama();
     ollamaClient.chat.mockResolvedValueOnce({
@@ -582,7 +652,7 @@ describe('runChatTurn — iteration cap', () => {
       toolCalls: [{ function: { name: 'getSpendByCategory', arguments: {} } }],
       evalCount: 1, promptEvalCount: 1, totalDurationMs: 10,
     });
-    dispatchTool.mockResolvedValue({ ok: true, data: [], meta: { renderAs: 'bar' } });
+    dispatchTool.mockResolvedValue({ args: {}, result: { ok: true, data: [], meta: { renderAs: 'bar' } } });
 
     const result = await runChatTurn({ message: 'x', ollamaClient });
 
@@ -722,7 +792,7 @@ describe('runChatTurn — streaming', () => {
     expect(tokens).toEqual(['A', 'B']);
   });
 
-  it('emits tool_call event before dispatch and tool_message after', async () => {
+  it('emits tool_call before dispatch (progress affordance) and tool_message after', async () => {
     const ollamaClient = {
       chat: vi.fn(),
       chatStream: vi
@@ -754,17 +824,26 @@ describe('runChatTurn — streaming', () => {
     };
 
     dispatchTool.mockResolvedValueOnce({
-      ok: true,
-      data: [{ category: 'Rent', total: 3600 }],
-      meta: { renderAs: 'bar' },
+      args: { from: '2025-01-01', to: '2025-12-31' },
+      result: {
+        ok: true,
+        data: [{ category: 'Rent', total: 3600 }],
+        meta: { renderAs: 'bar' },
+      },
     });
 
     const events = [];
+    // Pin the pre-dispatch ordering itself: record how many dispatches had
+    // happened at the moment the tool_call frame fired.
+    let dispatchCountAtToolCall;
     const result = await runChatTurn({
       message: 'biggest?',
       ollamaClient,
       streaming: true,
-      onEvent: (e) => events.push(e),
+      onEvent: (e) => {
+        if (e.type === 'tool_call') dispatchCountAtToolCall = dispatchTool.mock.calls.length;
+        events.push(e);
+      },
     });
 
     const types = events.map((e) => e.type);
@@ -772,6 +851,7 @@ describe('runChatTurn — streaming', () => {
     const toolMsgIdx = types.indexOf('tool_message');
     expect(toolCallIdx).toBeGreaterThanOrEqual(0);
     expect(toolMsgIdx).toBeGreaterThan(toolCallIdx);
+    expect(dispatchCountAtToolCall).toBe(0);
 
     const toolCallEvt = events[toolCallIdx];
     expect(toolCallEvt.data).toEqual({
@@ -852,7 +932,7 @@ describe('no-external-calls guarantee', () => {
     aiChatRepository.getConversation.mockResolvedValue(makeConversation());
     aiChatRepository.getMessages.mockResolvedValue([]);
     aiChatRepository.appendMessage.mockResolvedValue(undefined);
-    dispatchTool.mockResolvedValue({ ok: true, data: [] });
+    dispatchTool.mockResolvedValue({ args: {}, result: { ok: true, data: [] } });
   });
 
   afterEach(() => {

@@ -16,7 +16,13 @@
  * SSE events on /chat/stream:
  *   - user_message       {message}         — user row persisted
  *   - token              "delta"           — content chunk (assistant text streaming)
- *   - tool_call          {name, args}      — model requested a tool (before dispatch)
+ *   - tool_call          {name, args}      — model requested a tool (before
+ *                                            dispatch); args are the model's own
+ *                                            when already a plain object, else {}
+ *                                            — the following tool_result row
+ *                                            carries the dispatcher-coerced args
+ *                                            the tool actually received (or the
+ *                                            raw value next to the error)
  *   - tool_result        {message}         — tool row persisted (result in .tool_result)
  *   - done               {assistantMessage, usage, iterations, conversation}
  *   - error              {detail, code?}
