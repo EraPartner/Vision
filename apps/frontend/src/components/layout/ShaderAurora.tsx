@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { prefersReducedMotion } from "@/utils/prefersReducedMotion";
+import { resolveAuroraMode } from "@/components/layout/shaderAuroraMode";
 
 /**
  * WebGL aurora — the "enhanced visual effects" layer (ADR-071).
@@ -9,8 +10,12 @@ import { prefersReducedMotion } from "@/utils/prefersReducedMotion";
  * renders at 0.25× resolution upscaled by CSS, capped at ~30 fps, pauses
  * whenever the window is blurred or the document hidden (rAF alone only
  * pauses for hidden tabs) and draws a single static frame under
- * prefers-reduced-motion. Any WebGL failure leaves the CSS aurora blobs
- * (always rendered underneath) as the silent fallback.
+ * prefers-reduced-motion or while `staticAtmosphere` is set (ADR-075
+ * large-display mitigation — the CSS side freezes the blobs via
+ * fx-static-atmosphere; the canvas must hold a frame too or its ~30fps
+ * redraw keeps forcing the full-backdrop recomposite the class exists to
+ * avoid). Any WebGL failure leaves the CSS aurora blobs (always rendered
+ * underneath) as the silent fallback.
  */
 
 const VERT = `
@@ -89,6 +94,12 @@ function resolveThemeColor(varName: string, fallback: [number, number, number]):
     return hsl ? hslToRgb(hsl[0], hsl[1], hsl[2]) : fallback;
 }
 
+interface ShaderAuroraProps {
+    /** fx-static-atmosphere state (ADR-075): large display while the user
+     * kept a higher tier — hold a static frame instead of looping. */
+    staticAtmosphere: boolean;
+}
+
 const RESOLUTION_SCALE = 0.25;
 // Backing-store width cap (ADR-075): on 1×-scaled large outputs (4K TV at
 // native resolution) innerWidth is huge and 0.25× alone would still be a
@@ -96,8 +107,14 @@ const RESOLUTION_SCALE = 0.25;
 const MAX_CANVAS_WIDTH = 640;
 const FRAME_MIN_MS = 33; // ~30 fps cap
 
-export function ShaderAurora() {
+export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    // The GL lifecycle effect mounts once ([] deps — rebuilding the context on
+    // every display move would be far costlier than the loop it manages), so
+    // the live prop value flows in through a ref and prop changes re-run the
+    // effect's mode decision via the callback it registers.
+    const staticAtmosphereRef = useRef(staticAtmosphere);
+    const syncRef = useRef<(() => void) | undefined>(undefined);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -188,9 +205,10 @@ export function ShaderAurora() {
         const refreshColors = () => {
             c1 = resolveThemeColor("--primary", c1);
             c2 = resolveThemeColor("--accent", c2);
-            // The animated loop repaints on its own; the static (reduced-motion)
-            // frame would otherwise keep the old colors after a theme switch.
-            if (reducedMotion) draw(0);
+            // The animated loop repaints on its own; a static (reduced-motion
+            // or static-atmosphere) frame would otherwise keep the old colors
+            // after a theme switch.
+            if (reducedMotion || staticAtmosphereRef.current) draw(0);
         };
         const themeObserver = new MutationObserver(refreshColors);
         themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
@@ -203,9 +221,10 @@ export function ShaderAurora() {
             canvas.height = h;
             gl!.viewport(0, 0, w, h);
             // Setting canvas.width wipes the backing store; the animated loop
-            // repaints next frame, but the static frame must be redrawn here or
-            // the reduced-motion aurora blanks permanently after the first resize.
-            if (reducedMotion) draw(0);
+            // repaints next frame, but a static frame (reduced-motion or
+            // static-atmosphere) must be redrawn here or the aurora blanks
+            // permanently after the first resize.
+            if (reducedMotion || staticAtmosphereRef.current) draw(0);
         };
         resize();
         window.addEventListener("resize", resize);
@@ -233,12 +252,26 @@ export function ShaderAurora() {
         // rAF's implicit throttling only covers hidden tabs (and, in Electron,
         // fully occluded windows) — a desktop window left visible behind
         // another keeps drawing at ~30fps forever. Gate the loop on window
-        // focus + document visibility instead, mirroring the CSS blobs'
-        // fx-idle-atmosphere pause; the last rendered frame stays on screen.
+        // focus + document visibility (mirroring the CSS blobs'
+        // fx-idle-atmosphere pause; the last rendered frame stays on screen)
+        // and on static-atmosphere (ADR-075: hold a frame, mirroring the CSS
+        // blobs' fx-static-atmosphere freeze).
         const syncLoop = () => {
-            if (document.hidden || !document.hasFocus()) stopLoop();
-            else startLoop();
+            const mode = resolveAuroraMode({
+                contextLost,
+                reducedMotion,
+                staticAtmosphere: staticAtmosphereRef.current,
+                hidden: document.hidden,
+                focused: document.hasFocus(),
+            });
+            if (mode === 'loop') {
+                startLoop();
+            } else {
+                stopLoop();
+                if (mode === 'static') draw(0);
+            }
         };
+        syncRef.current = syncLoop;
 
         if (reducedMotion) {
             draw(0);
@@ -268,6 +301,7 @@ export function ShaderAurora() {
         canvas.addEventListener("webglcontextrestored", onContextRestored);
 
         return () => {
+            syncRef.current = undefined;
             stopLoop();
             window.removeEventListener("resize", resize);
             if (!reducedMotion) {
@@ -281,6 +315,16 @@ export function ShaderAurora() {
             gl?.getExtension("WEBGL_lose_context")?.loseContext();
         };
     }, []);
+
+    // Display transitions (dragged to/from a >6MP display, detected by the
+    // useVisualEffectsTier resize+poll): re-run the mode decision so the loop
+    // stops into a held frame, or resumes, without tearing down the context.
+    // No-op before GL init or after a WebGL failure (syncRef stays unset —
+    // the CSS blobs are animating as the fallback and nothing must change).
+    useEffect(() => {
+        staticAtmosphereRef.current = staticAtmosphere;
+        syncRef.current?.();
+    }, [staticAtmosphere]);
 
     return (
         <canvas

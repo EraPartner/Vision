@@ -69,7 +69,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { mode, schedule, setMode, setSchedule } = useTheme();
     const { t } = useLanguage();
     const { workspace } = useWorkspace();
-    const { tier: effectsTier } = useVisualEffectsTier();
+    const { tier: effectsTier, largeDisplay } = useVisualEffectsTier();
     useGoToShortcuts();
     useSectionCycleShortcuts();
     useDocumentTitle();
@@ -131,7 +131,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                     {t('layout.skipToContent')}
                 </a>
                 <div aria-hidden="true" className="liquid-canvas" data-workspace={workspace}>
-                    {effectsTier === 'enhanced' && <ShaderAurora />}
+                    {/* staticAtmosphere mirrors VisualEffectsController's
+                        fx-static-atmosphere (largeDisplay && tier !== 'reduced'):
+                        while ShaderAurora is mounted, tier is 'enhanced', so
+                        largeDisplay alone is exactly that condition (ADR-075). */}
+                    {effectsTier === 'enhanced' && <ShaderAurora staticAtmosphere={largeDisplay} />}
                     <div className="liquid-canvas-grain" />
                 </div>
                 <AppSidebar />

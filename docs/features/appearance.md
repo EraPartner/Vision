@@ -3,7 +3,7 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-updated: 2026-06-24
+updated: 2026-08-09
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
@@ -363,13 +363,13 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 **`VisualEffectsController`** (`components/layout/VisualEffectsController.tsx`) — renders null, mounted in `AppLayout`. Tags `<html>`:
 - `fx-reduced` — effective tier is `reduced`. `index.css` carries a class-selector mirror of the `prefers-reduced-transparency` block (both blocks are deliberately duplicated; the media block must work before React mounts).
-- `fx-static-atmosphere` — large display but user kept a higher tier: aurora blobs stop drifting (`animation: none`) so the compositor can idle.
+- `fx-static-atmosphere` — large display but user kept a higher tier: aurora blobs stop drifting (`animation: none`) so the compositor can idle. Since 2026-08-09 the WebGL `ShaderAurora` participates too: `AppLayout` passes the same condition as a `staticAtmosphere` prop and the canvas holds a single static frame instead of looping (before this, its ~30 fps redraw kept forcing the full-backdrop recomposite the class exists to avoid).
 
-**`AppLayout`** — mounts `ShaderAurora` only when effective tier is `enhanced`.
+**`AppLayout`** — mounts `ShaderAurora` only when effective tier is `enhanced`, passing `staticAtmosphere={largeDisplay}` (equivalent to the `fx-static-atmosphere` condition while mounted, since the tier is then `enhanced`).
 
 **`ElectronBridge`** — gates the `vibrancy` html class on the *effective* tier (so vibrancy also drops on large displays when auto-adapt is on).
 
-**`ShaderAurora`** — backing store additionally capped at 640px wide (`MAX_CANVAS_WIDTH`) on top of the 0.25× resolution factor.
+**`ShaderAurora`** — backing store additionally capped at 640px wide (`MAX_CANVAS_WIDTH`) on top of the 0.25× resolution factor. Draw-loop decisions are centralised in the pure `resolveAuroraMode` (`components/layout/shaderAuroraMode.ts`): lost context → stopped (CSS blobs are the fallback and keep animating); reduced-motion or `staticAtmosphere` → single held frame (static outranks the idle pause); window blurred / tab hidden → stopped keeping the last frame; otherwise loop. A `staticAtmosphere` prop change re-runs the decision without tearing down the GL context, so dragging the window between displays freezes/resumes the canvas in place.
 
 ### Key files
 
@@ -378,6 +378,8 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 | `apps/frontend/src/lib/visualEffects.ts` | `isLargeDisplay()`, `resolveEffectiveTier()` (4-arg, incl. session override) |
 | `apps/frontend/src/hooks/useVisualEffectsTier.ts` | Resize + 5s poll hook; reads `sessionTierOverride` from store |
 | `apps/frontend/src/components/layout/VisualEffectsController.tsx` | `<html>` class manager |
+| `apps/frontend/src/components/layout/shaderAuroraMode.ts` | Pure `resolveAuroraMode()` — ShaderAurora loop/static/stopped decision |
+| `apps/frontend/src/components/layout/__tests__/shaderAuroraMode.test.ts` | 10 unit tests for the mode decision |
 | `apps/frontend/src/stores/settingsStore.ts` | Persisted state + `migrateAppSettings`; `sessionTierOverride` (non-persisted) |
 | `apps/frontend/src/lib/__tests__/visualEffects.test.ts` | 17 unit tests (13 original + 4 override cases) |
 
@@ -391,8 +393,8 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 - Colors tinted from `--primary` and `--accent` CSS vars; re-resolved on theme change via `MutationObserver`.
 - Renders at 0.25× resolution, upscaled to full viewport; additionally capped at 640px wide.
 - ~30 fps cap (rAF-throttled).
-- Single static frame when `prefers-reduced-motion: reduce` is active.
-- rAF paused when `document.hidden` (tab not visible).
+- Single static frame when `prefers-reduced-motion: reduce` is active, and (2026-08-09) while `staticAtmosphere` is set — the ADR-075 large-display mitigation now covers the WebGL layer, not just the CSS blobs. The static frame is redrawn on resize, theme change, and context restore so it never blanks or keeps stale colors.
+- rAF loop stopped while the window is blurred or the document hidden (mirrors the blobs' `fx-idle-atmosphere` pause); the last rendered frame stays on screen.
 - Any WebGL context creation failure → silently falls back to CSS blobs only (no error shown).
 - **Dark-mode canvas opacity**: `dark:opacity-50`. Reduces peak brightness so the text legibility halo can do its job without excessive shadow values.
 
@@ -411,7 +413,7 @@ See [[docs/components/ui-components#canvas-text-legibility-guarantee-june-2026|C
 - Added (addendum 2026-06-12): `settings.appearance.visualEffectsAutoNote`, `settings.appearance.visualEffectsOverrideNote`
 - Removed: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`
 
-Code links: [[apps/frontend/src/lib/visualEffects.ts]], [[apps/frontend/src/hooks/useVisualEffectsTier.ts]], [[apps/frontend/src/components/layout/VisualEffectsController.tsx]], [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]]
+Code links: [[apps/frontend/src/lib/visualEffects.ts]], [[apps/frontend/src/hooks/useVisualEffectsTier.ts]], [[apps/frontend/src/components/layout/VisualEffectsController.tsx]], [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/components/layout/shaderAuroraMode.ts]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]]
 
 ---
 
