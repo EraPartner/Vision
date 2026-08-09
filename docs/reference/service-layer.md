@@ -3,7 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-06-01
+last_modified: 2026-08-09
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added.
 aliases: [services, service layer, business logic, backend services]
@@ -42,14 +42,19 @@ Repository Layer (SQL queries)
 > `ConflictError`, … from `middleware/errorHandler.js`); **only the error-handling middleware maps
 > those to HTTP status codes**. A service should never set a status code or shape an HTTP response.
 >
-> Two current gaps to be aware of when adding upstream integrations:
-> - The `AppError` set covers 400/401/403/404/409/429 only — there is no 502/503/504 class, so an
->   uncaught provider outage or timeout surfaces as a generic 500. Upstream services (price
->   providers, research adapters, import) still `throw new Error(...)` in places rather than a typed
->   error; those reach the handler as 500s.
-> - `AiChatServiceError` and `ToolValidationError` sit **outside** the `AppError` hierarchy and are
->   hand-translated to HTTP status codes in `routes/ai.js`. New service errors should extend
->   `AppError` (carrying `status` + `code`) so no per-route translation shim is needed.
+> Upstream failures have typed classes (2026-08-09): `UpstreamError` (502 `BAD_GATEWAY`) and
+> `UpstreamTimeoutError` (504 `GATEWAY_TIMEOUT`) in `middleware/errorHandler.js`. As 5xx errors,
+> their messages are masked in production (they routinely embed provider URLs/upstream statuses);
+> the stable `code` still reaches the client. Price-provider throws (`prices/priceProviderRegistry.js`,
+> `priceProviderService.js`) use them; research adapters and import still `throw new Error(...)`
+> in places — convert as you touch them.
+>
+> `AiChatServiceError` extends `AppError` and passes through `routes/ai.js` to the middleware
+> untranslated (no per-route shim). `ToolValidationError` (`services/aiChat/tools/_validate.js`)
+> deliberately stays **outside** `AppError`: it is an in-band tool-result error — `dispatchTool`
+> catches it and feeds `{ok: false, error}` back to the model for retry; it never maps to an HTTP
+> response. New service errors that DO represent an HTTP outcome should extend `AppError`
+> (carrying `status` + `code`).
 
 ---
 
@@ -673,9 +678,11 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ### Error Handling
 
-Maps Ollama errors to `AiChatServiceError` with HTTP status:
+Maps Ollama errors to `AiChatServiceError` with HTTP status (aiChatService.js: `ABORTED` → 499,
+every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap of `TIMEOUT` onto
+`UpstreamTimeoutError` semantics is a possible follow-up, not current behavior):
 - `OLLAMA_UNREACHABLE` → 502
-- `OLLAMA_TIMEOUT` → 504
+- `OLLAMA_TIMEOUT` → 502 (not 504 today)
 - `VALIDATION_ERROR` (tool args) → 400
 - `CONVERSATION_NOT_FOUND` → 404
 

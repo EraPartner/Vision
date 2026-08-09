@@ -25,14 +25,15 @@ import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.js';
 import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
-vi.mock('../../src/services/aiChatService.js', () => {
-  class AiChatServiceError extends Error {
+vi.mock('../../src/services/aiChatService.js', async () => {
+  // Mirror the real class's hierarchy: AiChatServiceError extends AppError, so
+  // the route's `err instanceof AppError` passthrough (no translation shim)
+  // behaves the same here as against the real service module.
+  const { AppError } = await import('../../src/middleware/errorHandler.js');
+  class AiChatServiceError extends AppError {
     constructor(message, { code, status, cause } = {}) {
-      super(message);
+      super(message, { code: code || 'AI_CHAT_ERROR', status: status || 500, cause });
       this.name = 'AiChatServiceError';
-      this.code = code || 'AI_CHAT_ERROR';
-      this.status = status || 500;
-      if (cause) this.cause = cause;
     }
   }
   return {
@@ -348,7 +349,21 @@ describe('POST /api/ai/chat', () => {
     runChatTurn.mockRejectedValue(new AiChatServiceError('bad', { code: 'INVALID_INPUT', status: 400 }));
 
     const res = await api.post(`${BASE}/chat`).send({ message: 'hi' }).expect(400);
+    // Exact wire shape the deleted per-route translation shim used to produce:
+    // { ok: false, error: { code, message } , meta } — no details key.
     expect(res.body).toEqual(errEnvelope({ code: 'INVALID_INPUT', message: 'bad' }));
+  });
+
+  it('passes a 5xx AiChatServiceError through the generic handler untranslated (same wire shape as the old shim)', async () => {
+    runChatTurn.mockRejectedValue(new AiChatServiceError('Ollama call failed: connect ECONNREFUSED', {
+      code: 'OLLAMA_ERROR',
+      status: 502,
+    }));
+
+    const res = await api.post(`${BASE}/chat`).send({ message: 'hi' }).expect(502);
+    // Dev-mode harness (isProduction: false), so the 5xx message is verbatim —
+    // exactly what the old `new AppError(err.message, { status, code })` re-wrap produced.
+    expect(res.body).toEqual(errEnvelope({ code: 'OLLAMA_ERROR', message: 'Ollama call failed: connect ECONNREFUSED' }));
   });
 
   it('answers a sanitized 500 on a generic service error', async () => {
