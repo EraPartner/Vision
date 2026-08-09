@@ -2690,7 +2690,7 @@ look-changing one.
   - `apps/frontend/src/components/planned/PlannedPaymentForm.tsx` — the submit button's `disabled={loading}` never engages because no pending state is wired. Before c1d6761 (#142) the empty-required predicates masked this; now it's the sole guard.
   - Fix: thread the caller's mutation pending state into the form (or own it internally) so the in-flight disable actually fires.
 
-- [ ] **AddPortfolioTxnDialog/EditPortfolioTxnDialog still validate via transient `toast.error` — the pattern 1cb2cc7 (#131) replaced in the money forms** 🔽
+- [x] **AddPortfolioTxnDialog/EditPortfolioTxnDialog still validate via transient `toast.error` — the pattern 1cb2cc7 (#131) replaced in the money forms** 🔽 ✅ 2026-08-09 · 0467b53c (#155) (the exact 1cb2cc7 pattern ported to both dialogs: per-field FieldErrorMap sharing the Zod schema's own predicates (invalidOptionalMoney/invalidOptionalFxRate extracted into portfolioTxnSchema.ts so map and gate can't diverge), useFieldErrors reveal-on-blocked-submit + focus-first-invalid, fieldErrorProps ARIA wiring, FieldError under date/units/amount/fees/taxes/FX; the live two-of-three hint doubles as its slot's ARIA-linked error so it never renders twice; validation toasts deleted, success/server toasts kept. Integration tests assert inline error + focus + no toast + no request; full frontend suite 2397 green. Noticed, left: the "FX rate to EUR (optional)" label in PortfolioTxnFormFields is itself a hardcoded English literal — belongs to the Belgian-tax/hardcoded-copy i18n findings)
   - ↪ _from: Orchestration session 2026-08-01 · form-UX fix pass (noticed; same defect class as the fixed finding, different dialogs)_
   - Transaction type/amount/units/FX validation fires detached toasts instead of inline field errors + focus. These are money-entry dialogs.
   - Fix: adopt 1cb2cc7 (#131)'s inline required-error + focus-first-invalid pattern.
@@ -2699,7 +2699,7 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-27 · loading-a11y implementation follow-up_
   - `pages/research/ChartBuilderPage.tsx:549` renders a Skeleton gated on `oscRows.length > 0` — i.e. as an empty state, not a loading state — which is why it was left silent in 1cb2cc7 (#131) (a permanent role=status would announce loading forever). Replace with the EmptyState component.
 
-- [ ] **"Loading" screen-reader label is a hardcoded English literal, now single-sourced** ⏬
+- [x] **"Loading" screen-reader label is a hardcoded English literal, now single-sourced** ⏬ ✅ 2026-08-09 · 0467b53c (#155) (loadingSurfaceProps const → useLoadingSurfaceProps() hook reading t('common.loading') — the key already existed in both locales, no new i18n source; all 31 consumers migrated with byte-identical spread sites incl. the conditional ones; SectionLoader/module-level ChartSkeleton special cases handled; validate-locales clean)
   - ↪ _from: Orchestration session 2026-07-27 · loading-a11y implementation follow-up_
   - `lib/loadingSurface.ts` carries `aria-label: "Loading"`, following SectionLoader's pre-existing hardcoded pattern; `t('common.loading')` already exists. Localizing is now a one-line change at the single source (plus making the bundle a hook or prop-taking helper so it can read the dictionary).
 
