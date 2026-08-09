@@ -1,3 +1,5 @@
+import { roundToCents } from '../lib/money.js';
+
 /**
  * Shared SQL for an account's computed balance (ADR-094).
  *
@@ -214,7 +216,10 @@ export function computedBalanceByCurrencyAggLateral({
  *      reconciliation information and would otherwise make this rule
  *      discontinuous on noise — one cancelled/offsetting foreign transfer pair
  *      (net 0) used to flip the base from that lone partition to 0, and the
- *      drift from 0 to the whole balance.
+ *      drift from 0 to the whole balance. "Zero-sum" is judged at cents: a
+ *      sub-cent residue (|sum| rounding to 0.00 under `roundToCents`) is the
+ *      same noise a true zero is, since every consumer of the base rounds it
+ *      to cents before using it.
  *   3. Otherwise zero, in the account's own currency: the statement figure
  *      names a currency this account holds nothing in.
  *
@@ -241,7 +246,16 @@ export function statementPartition(parts, accountCurrency) {
   const own = list.find((p) => p.currency === want);
   if (own) return own;
 
-  const funded = list.filter((p) => Number(p.balance) !== 0);
+  // "Zero-sum" means "rounds to 0.00": partition sums are 4-dp NUMERIC strings,
+  // so an accumulated rounding residue (0.0001) is not reconciliation
+  // information any more than a true zero is — every downstream reading of the
+  // base already collapses it (reconcileService rounds the base via
+  // roundToCents before differencing, and DRIFT_EPSILON = 0.005 calls the
+  // resulting drift reconciled). roundToCents is the codebase-canonical 2-dp
+  // banker's rounding; money math here is uniformly 2-dp regardless of
+  // currency (no per-currency minor-unit table exists), so a fixed cent
+  // threshold is the consistent choice.
+  const funded = list.filter((p) => !roundToCents(p.balance).isZero());
   if (funded.length === 1) return funded[0];
 
   return { currency: want, balance: '0' };
