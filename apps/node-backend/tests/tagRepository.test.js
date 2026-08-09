@@ -12,13 +12,13 @@ describe('tagRepository.getAll', () => {
   it('adds is_active = true clause when active=true', async () => {
     query.mockResolvedValue({ rows: [] });
     await tagRepository.getAll({ active: true });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = true'), [50, 0]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = true'), []);
   });
 
   it('adds is_active = false clause when active=false', async () => {
     query.mockResolvedValue({ rows: [] });
     await tagRepository.getAll({ active: false });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = false'), [50, 0]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = false'), []);
   });
 
   it('omits is_active filter when active=null', async () => {
@@ -37,12 +37,14 @@ describe('tagRepository.getAll', () => {
     );
   });
 
-  it('applies LIMIT/OFFSET with default page size when unspecified', async () => {
+  // Unbounded by default (buildLimitOffset): the full-list consumers (tag
+  // pickers/filters) must never be silently truncated to a default page.
+  it('emits no LIMIT/OFFSET when unspecified', async () => {
     query.mockResolvedValue({ rows: [] });
     await tagRepository.getAll({});
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('LIMIT $1 OFFSET $2');
-    expect(params).toEqual([50, 0]);
+    expect(sql).not.toContain('LIMIT');
+    expect(params).toEqual([]);
   });
 
   it('passes through explicit limit and offset', async () => {

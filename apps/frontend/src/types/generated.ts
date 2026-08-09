@@ -3073,7 +3073,7 @@ export interface components {
             description?: string;
             is_active?: boolean;
         };
-        CategoryList: components["schemas"]["PaginationFields"] & {
+        CategoryList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Category"][];
             links: components["schemas"]["Link"][];
         };
@@ -3119,7 +3119,7 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        TagList: components["schemas"]["PaginationFields"] & {
+        TagList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Tag"][];
         };
         TagCreate: {
@@ -3794,6 +3794,10 @@ export interface operations {
             query?: {
                 /** @description Filter by active status (omit for all) */
                 is_active?: boolean;
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
             };
             header?: never;
             path?: never;
@@ -3801,7 +3805,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Tag list */
+            /** @description Tag list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4477,8 +4481,10 @@ export interface operations {
     getCategories: {
         parameters: {
             query?: {
-                limit?: number;
-                offset?: number;
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
                 search?: string;
                 is_active?: boolean;
             };
@@ -4488,7 +4494,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Category list */
+            /** @description Category list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;

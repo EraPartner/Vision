@@ -11,14 +11,18 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 export const tagService = {
   /**
-   * List tags, optionally filtered by active status, with pagination.
-   * @param {{ active?: boolean|null, limit?: number, offset?: number }} [opts]
+   * List tags (active=true|false|null for all) as `{items, total}`.
+   *
+   * `limit` is optional: absent (the default, and what every current caller
+   * sends) means the full list, so `total` is just the row count and the extra
+   * COUNT round-trip is skipped. A supplied limit/offset pages the rows while
+   * `total` stays the full match count.
+   *
+   * @param {{ active?: boolean|null, limit?: number|null, offset?: number }} [opts]
    */
-  async list({ active = null, limit, offset } = {}) {
-    const [items, total] = await Promise.all([
-      tagRepository.getAll({ active, limit, offset }),
-      tagRepository.getCount({ active }),
-    ]);
+  async list({ active = null, limit = null, offset = 0 } = {}) {
+    const items = await tagRepository.getAll({ active, limit, offset });
+    const total = limit == null ? items.length : await tagRepository.getCount({ active });
     return { items, total };
   },
 

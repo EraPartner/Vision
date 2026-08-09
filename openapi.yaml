@@ -155,7 +155,7 @@ components:
 
     CategoryList:
       allOf:
-        - $ref: "#/components/schemas/PaginationFields"
+        - $ref: "#/components/schemas/OptionalPaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -268,7 +268,7 @@ components:
 
     TagList:
       allOf:
-        - $ref: "#/components/schemas/PaginationFields"
+        - $ref: "#/components/schemas/OptionalPaginationFields"
         - type: object
           required: [items]
           properties:
@@ -1676,9 +1676,11 @@ paths:
           schema:
             type: boolean
           description: Filter by active status (omit for all)
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Tag list
+          description: Tag list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -2339,14 +2341,8 @@ paths:
       operationId: getCategories
       tags: [Categories]
       parameters:
-        - in: query
-          name: limit
-          schema:
-            type: integer
-        - in: query
-          name: offset
-          schema:
-            type: integer
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
         - in: query
           name: search
           schema:
@@ -2357,7 +2353,7 @@ paths:
             type: boolean
       responses:
         "200":
-          description: Category list
+          description: Category list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:

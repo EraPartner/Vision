@@ -37,8 +37,9 @@ export interface Category {
 export interface CategoriesListResponse {
     items: Category[];
     total: number;
-    limit: number;
-    offset: number;
+    /** Present only when the request paginated (explicit limit/offset — pagination is opt-in). */
+    limit?: number;
+    offset?: number;
     links: Link[];
 }
 
@@ -555,8 +556,9 @@ export interface Tag {
 export interface TagListResponse {
     items: Tag[];
     total: number;
-    limit: number;
-    offset: number;
+    /** Present only when the request paginated (explicit limit/offset — pagination is opt-in). */
+    limit?: number;
+    offset?: number;
 }
 
 export interface TagCreate {

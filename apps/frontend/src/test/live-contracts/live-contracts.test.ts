@@ -101,9 +101,16 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
     // contract to assert for it, so no test here; the subroutes /api/info/* and
     // the aggregation endpoints carry the coverage.
 
-    it("GET /api/categories returns paginated list", async () => {
+    // Pagination on /api/categories is opt-in: a bare GET answers the full
+    // collection with no limit/offset echoed; an explicit limit/offset pages.
+    it("GET /api/categories returns full collection when unpaginated", async () => {
         const data = await get("/api/categories");
-        validate(paginatedOf(CategoryItemSchema), data, "GET /api/categories");
+        validate(collectionSchema(CategoryItemSchema), data, "GET /api/categories");
+    });
+
+    it("GET /api/categories?limit=5 returns paginated list", async () => {
+        const data = await get("/api/categories?limit=5&offset=0");
+        validate(paginatedOf(CategoryItemSchema), data, "GET /api/categories?limit=5");
     });
 
     it("GET /api/recipients returns paginated list", async () => {

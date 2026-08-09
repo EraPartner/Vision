@@ -5,6 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/categories
 description: Category management for organizing transactions with UNIQUE constraint and atomic assignment
 date: 2026-04-16
+updated: 2026-08-09
 tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
@@ -21,20 +22,23 @@ Categories organize transactions using a "GENERAL:DETAIL" format (e.g., "FOOD:GR
 
 ### GET /api/categories
 
-Retrieve a list of categories.
+Retrieve a list of categories. Pagination is **opt-in** (`parseOptionalPagination`, see
+[[docs/reference/code-patterns#Adding pagination to a list that never had it|code-patterns]]):
+a request without `limit`/`offset` returns the **complete** collection — the full-list
+consumers (category pickers, the categories page) are never silently truncated.
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| limit | integer | 50 | Max items (clamped: 1–1000) |
-| offset | integer | 0 | Items to skip (clamped: ≥0) |
+| limit | integer | — (unbounded) | Optional page size (clamped: 1–1000). Omit together with offset for the full list |
+| offset | integer | 0 | Items to skip (clamped: ≥0). Sending either limit or offset opts into pagination |
 | general | string | null | Filter by general category |
 | detail | string | null | Filter by detail category |
 | active | boolean | true | Show active/inactive |
 | search | string | null | Search in name |
 
-**Response:**
+**Response** (unpaginated request — no `limit`/`offset` fields echoed):
 ```json
 {
   "items": [
@@ -50,14 +54,15 @@ Retrieve a list of categories.
     }
   ],
   "total": 25,
-  "limit": 50,
-  "offset": 0,
   "links": []
 }
 ```
 
+When the request paginates (explicit `limit`/`offset`), the body additionally carries
+`"limit"` and `"offset"`, and `total` stays the full match count.
+
 Implementation note:
-- Category list route now retrieves `items` and `total` concurrently with `Promise.all` (independent repository calls), keeping response shape and filtering semantics unchanged while reducing endpoint latency ([[apps/node-backend/src/routes/categories.js]]).
+- Unpaginated requests skip the `COUNT(*)` round-trip entirely (`total` = row count); paginated requests fetch the page and the count ([[apps/node-backend/src/routes/categories.js]]).
 
 ### POST /api/categories
 

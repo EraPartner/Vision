@@ -892,10 +892,10 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             z.object({ items: z.array(z.unknown()) }),
         ],
         [
-            "GET /api/splits/owed/:recipientId returns items + total_owed",
+            "GET /api/splits/owed/:recipientId returns items + total",
             "/api/splits/owed/1",
             "GET /api/splits/owed/:recipientId",
-            z.object({ items: z.array(z.unknown()), total_owed: z.number() }),
+            z.object({ items: z.array(z.unknown()), total: z.number() }),
         ],
         [
             "GET /api/transactions/:id returns single transaction",

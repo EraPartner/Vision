@@ -2,7 +2,7 @@
  * Attachment routes — receipt and document uploads for transactions.
  *
  * POST   /api/attachments/transaction/:id   upload a file
- * GET    /api/transactions/:id/attachments  list attachments for a transaction
+ * GET    /api/attachments/transaction/:id   list attachments for a transaction
  * GET    /api/attachments/:id/download      serve the file
  * DELETE /api/attachments/:id              delete a file + its DB row
  */

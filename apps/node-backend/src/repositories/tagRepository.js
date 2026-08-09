@@ -6,17 +6,22 @@
  */
 
 import { query } from '../database/connection.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.js';
 
 /** @typedef {import('../types/rows.js').TagRow} TagRow */
 
 export const tagRepository = {
   /**
-   * List tags, optionally filtered by active status, with pagination.
-   * @param {{ active?: boolean|null, limit?: number, offset?: number }} [opts]
+   * List tags, optionally filtered by active status.
+   *
+   * `limit` is optional and defaults to unbounded — the tag pickers/filters
+   * render every tag and have no paging, so only an explicit limit/offset
+   * narrows the list (buildLimitOffset).
+   *
+   * @param {{ active?: boolean|null, limit?: number|null, offset?: number }} [opts]
    * @returns {Promise<TagRow[]>}
    */
-  async getAll({ active = null, limit = 50, offset = 0 } = {}) {
+  async getAll({ active = null, limit = null, offset = 0 } = {}) {
     let sql = 'SELECT * FROM tags WHERE 1=1';
 
     if (active === true) {
@@ -25,8 +30,11 @@ export const tagRepository = {
       sql += ` AND is_active = false`;
     }
 
-    sql += ` ORDER BY slug LIMIT $1 OFFSET $2`;
-    const result = await query(sql, [limit, offset]);
+    sql += ` ORDER BY slug`;
+    /** @type {any[]} */
+    const params = [];
+    sql += buildLimitOffset(params, { limit, offset });
+    const result = await query(sql, params);
     return result.rows;
   },
 

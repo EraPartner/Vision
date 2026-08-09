@@ -53,6 +53,57 @@ describe('GET /api/tags', () => {
   });
 });
 
+describe('GET /api/tags — pagination is opt-in', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Tag pickers/filters render every tag and send no limit/offset; the route
+  // must keep answering the complete list (and must not echo limit/offset).
+  // 60 rows pins the old silent truncation at the parsePagination default of 50.
+  it('returns the full list (more than 50 rows) and no limit/offset when neither param is sent', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => ({ id: i + 1, slug: `tag-${i + 1}`, is_active: true }));
+    tagRepository.getAll.mockResolvedValue(rows);
+    const res = await api.get(BASE).expect(200);
+
+    expect(tagRepository.getAll).toHaveBeenCalledWith({ active: true, limit: null, offset: 0 });
+    expect(tagRepository.getCount).not.toHaveBeenCalled();
+    expect(res.body.data.items).toHaveLength(60);
+    expect(res.body.data.total).toBe(60);
+    expect(res.body.data.limit).toBeUndefined();
+    expect(res.body.data.offset).toBeUndefined();
+  });
+
+  it('treats an empty limit param as absent', async () => {
+    tagRepository.getAll.mockResolvedValue([{ id: 1, slug: 'a', is_active: true }]);
+    const res = await api.get(`${BASE}?limit=`).expect(200);
+
+    expect(tagRepository.getAll).toHaveBeenCalledWith({ active: true, limit: null, offset: 0 });
+    expect(res.body.data.limit).toBeUndefined();
+  });
+
+  it('pages and reports the full total when limit/offset are supplied', async () => {
+    tagRepository.getAll.mockResolvedValue([{ id: 3, slug: 'c', is_active: true }]);
+    tagRepository.getCount.mockResolvedValue(12);
+    const res = await api.get(`${BASE}?limit=1&offset=2`).expect(200);
+
+    expect(tagRepository.getAll).toHaveBeenCalledWith({ active: true, limit: 1, offset: 2 });
+    expect(res.body.data).toEqual({
+      items: [{ id: 3, slug: 'c', is_active: true }],
+      total: 12,
+      limit: 1,
+      offset: 2,
+      links: [],
+    });
+  });
+
+  it('clamps limit to the per-resource cap', async () => {
+    tagRepository.getAll.mockResolvedValue([]);
+    tagRepository.getCount.mockResolvedValue(0);
+    await api.get(`${BASE}?limit=99999`).expect(200);
+
+    expect(tagRepository.getAll).toHaveBeenCalledWith({ active: true, limit: 1000, offset: 0 });
+  });
+});
+
 describe('POST /api/tags', () => {
   beforeEach(() => vi.clearAllMocks());
 

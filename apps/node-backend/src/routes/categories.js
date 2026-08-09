@@ -6,7 +6,7 @@ import { Router } from 'express';
 import categoryRepository from '../services/categoryService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
-import { parsePagination } from '../lib/pagination.js';
+import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 // mv_monthly_summary / mv_category_totals embed the category name and the
 // recipient default-category mapping, so category mutations must schedule a
 // refresh — otherwise renamed/reassigned categories serve stale until an
@@ -20,34 +20,31 @@ import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
+// Pagination is opt-in: without limit/offset this still answers the complete
+// list (category pickers/pages render all of them), so no client is truncated.
+// When unpaginated, `total` is just the row count and the extra COUNT
+// round-trip is skipped; a supplied limit/offset pages the rows while `total`
+// stays the full match count.
 router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { general, detail, active = 'true', search } = req.query;
-  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
   const opts = {
-    limit,
-    offset,
+    ...(page ?? {}),
     general: general || null,
     detail: detail || null,
     search: search ? String(search).slice(0, 200) : null,
     active: active !== 'false',
   };
 
-  const [items, total] = await Promise.all([
-    categoryRepository.getAll(opts),
-    categoryRepository.getCount(opts),
-  ]);
+  const items = await categoryRepository.getAll(opts);
+  const total = page ? await categoryRepository.getCount(opts) : items.length;
 
-  res.ok({
-    items: items.map((c) => ({
-      ...c,
-      /** @type {any[]} */
-      links: [],
-    })),
-    total,
-    limit: opts.limit,
-    offset: opts.offset,
+  const enriched = items.map((c) => ({
+    ...c,
+    /** @type {any[]} */
     links: [],
-  });
+  }));
+  res.ok({ ...listBody(enriched, total, page), links: [] });
 });
 
 router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
