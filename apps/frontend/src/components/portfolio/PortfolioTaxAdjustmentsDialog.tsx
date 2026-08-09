@@ -93,7 +93,8 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
   // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
   const fmt = useCurrencyFormatter();
 
-  async function handleSave() {
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
     const payload: Record<number, { taxes: number; fees: number }> = {};
     const classPayload: Record<number, TaxClassificationEntry> = {};
     sorted.forEach((inv) => {
@@ -139,6 +140,9 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
           <DialogDescription>{t('tax.manualAdjustmentsDesc')}</DialogDescription>
         </DialogHeader>
 
+        {/* Real <form> so Enter in any taxes/fees field saves. grid gap-5 mirrors
+            DialogContent's layout, so the wrapper is layout-neutral. */}
+        <form onSubmit={handleSave} className="grid gap-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="rounded-lg border border-border p-3">
             <p className="text-xs text-muted-foreground">{t('tax.totalTaxesPaid')}</p>
@@ -283,9 +287,10 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
         </div>
 
         <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave}>{t('common.save')}</Button>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+          <Button type="submit">{t('common.save')}</Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

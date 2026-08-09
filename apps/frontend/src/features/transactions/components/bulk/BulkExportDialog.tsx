@@ -32,6 +32,11 @@ export function BulkExportDialog({
     const { t } = useLanguage();
     const [format, setFormat] = useState<ExportFormat>('csv');
 
+    function handleApply(e: React.FormEvent) {
+        e.preventDefault();
+        onApply(format);
+    }
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
@@ -39,6 +44,10 @@ export function BulkExportDialog({
                     <DialogTitle>{t('txPage.bulk.exportTitle', { n: selectedCount })}</DialogTitle>
                     <DialogDescription>{t('txPage.bulk.exportDesc')}</DialogDescription>
                 </DialogHeader>
+                {/* Real <form> so Enter (e.g. with a format radio focused) exports.
+                    grid gap-5 mirrors DialogContent's layout, so the wrapper is
+                    layout-neutral. */}
+                <form onSubmit={handleApply} className="grid gap-5">
                 <div className="py-2">
                     <RadioGroup value={format} onValueChange={(v) => setFormat(v as ExportFormat)}>
                         <div className="flex items-center gap-2">
@@ -52,13 +61,14 @@ export function BulkExportDialog({
                     </RadioGroup>
                 </div>
                 <DialogFooter className="gap-2">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+                    <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
                         {t('common.cancel')}
                     </Button>
-                    <Button onClick={() => onApply(format)} disabled={pending}>
+                    <Button type="submit" disabled={pending}>
                         {pending ? t('common.applying') : t('txPage.bulk.exportConfirm')}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

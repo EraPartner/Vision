@@ -135,7 +135,8 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
     setAssetClass(detectAssetClass(result.type));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedAsset || !targetPrice) return;
 
     // parseDecimal's default 0-fallback would silently save a 0 target for
@@ -196,7 +197,10 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
           <DialogDescription className="sr-only">{t('addWatchlist.title')}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        {/* Real <form>: Enter in the target-price (or notes-adjacent) fields
+            submits. In the search step handleSubmit's !selectedAsset guard makes
+            Enter a no-op. Same block layout as the div it replaces. */}
+        <form onSubmit={handleSubmit} className="space-y-4">
           {!selectedAsset ? (
               <div className="space-y-2">
                 <Label>{t('addWatchlist.searchLabel')}</Label>
@@ -238,7 +242,7 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
                       {selectedAsset.symbol}
                     </Badge>
                   </div>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedAsset(null)}>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedAsset(null)}>
                         {t('addWatchlist.change')}
                       </Button>
                     </div>
@@ -313,8 +317,8 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
               </div>
 
               <Button
+                type="submit"
                 className="w-full"
-                onClick={handleSubmit}
                 disabled={!targetPrice || isSubmitting}
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -322,7 +326,7 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
               </Button>
             </>
           )}
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

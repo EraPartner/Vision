@@ -163,6 +163,64 @@ describe("PlannedPaymentForm — amount direction", () => {
         expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: 2500 });
     });
 
+    it("submits exactly once on Enter in the amount field", async () => {
+        // Enter-to-submit regression (TODO.md "Enter never submits in the
+        // button-only dialogs"): the dialog body is now a real <form>, so Enter
+        // in a text field must submit — and only once (no button-onClick +
+        // form-onSubmit double fire).
+        const user = userEvent.setup();
+        const { onSubmit } = await renderForm();
+
+        await fillRequired(user);
+        await user.type(amountInput(), "150{Enter}");
+
+        await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: -150 });
+    });
+
+    it("does not submit on Enter inside the currency Select", async () => {
+        // Radix Select handles Enter itself (preventDefault) — picking an
+        // option with the keyboard must never fall through to the form.
+        const user = userEvent.setup();
+        const { onSubmit } = await renderForm();
+
+        await fillRequired(user);
+        await user.type(amountInput(), "150");
+        await user.click(screen.getByRole("combobox", { name: /currency/i }));
+        await user.keyboard("{ArrowDown}{Enter}");
+
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("does not submit on Enter inside the notes textarea", async () => {
+        // Native behavior stays: textareas swallow Enter as a newline.
+        const user = userEvent.setup();
+        const { onSubmit } = await renderForm();
+
+        await fillRequired(user);
+        await user.type(amountInput(), "150");
+        await user.type(screen.getByLabelText(/notes/i), "line one{Enter}line two");
+
+        expect(onSubmit).not.toHaveBeenCalled();
+        expect(screen.getByLabelText(/notes/i)).toHaveValue("line one\nline two");
+    });
+
+    it("cancel closes without submitting", async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <PlannedPaymentForm open onOpenChange={onOpenChange} onSubmit={onSubmit} />,
+        );
+        await screen.findByText("New Planned Payment");
+
+        await user.type(amountInput(), "150");
+        await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+        expect(onOpenChange).toHaveBeenCalledWith(false);
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+
     it("locks a loan to expense and re-sends the schedule's negative installment", async () => {
         const user = userEvent.setup();
         const { onSubmit } = await renderForm(LOAN);

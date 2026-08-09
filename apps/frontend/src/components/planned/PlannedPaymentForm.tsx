@@ -131,7 +131,8 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   };
   const { visibleErrors, checkValid, resetErrors } = useFieldErrors(fieldErrors, FIELD_ORDER);
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!checkValid()) return;
     // Narrowing only — `checkValid()` has already blocked a missing due date.
     if (!dueDate) return;
@@ -210,6 +211,9 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
           <DialogTitle>{initial ? t('plannedForm.editTitle') : t('plannedForm.newTitle')}</DialogTitle>
         </DialogHeader>
 
+        {/* grid gap-5 mirrors DialogContent's own layout so wrapping the body
+            and footer in a real <form> (Enter-to-submit) is layout-neutral. */}
+        <form onSubmit={handleSubmit} className="grid gap-5" noValidate>
         <div className="grid gap-4 py-2">
             {/* Name */}
             <div className="grid gap-1.5">
@@ -458,15 +462,16 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
           </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => { resetErrors(); onOpenChange(false); }}>{t('plannedForm.cancel')}</Button>
+          <Button type="button" variant="outline" onClick={() => { resetErrors(); onOpenChange(false); }}>{t('plannedForm.cancel')}</Button>
           {/* Only the in-flight guard disables this button. Disabling it on the
               empty-required fields made the inline errors unreachable entirely —
-              there is no <form> here, so the blocked-submit path is this onClick
-              and nothing else could ever reveal them. */}
-          <Button onClick={handleSubmit} disabled={loading}>
+              the blocked-submit path is the form's onSubmit (button click or
+              Enter) and nothing else could ever reveal them. */}
+          <Button type="submit" disabled={loading}>
             {initial ? t('plannedForm.saveChanges') : t('plannedForm.createPayment')}
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

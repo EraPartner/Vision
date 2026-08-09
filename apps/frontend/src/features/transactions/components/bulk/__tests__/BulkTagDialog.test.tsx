@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -104,5 +104,72 @@ describe("BulkTagDialog", () => {
         await waitFor(() =>
             expect(screen.getByRole("button", { name: /apply/i })).toBeDisabled(),
         );
+    });
+});
+
+// Enter-to-submit regression tests (TODO.md: "Enter never submits in the
+// button-only dialogs"). BulkTagDialog is the bulk representative: its inputs
+// are cmdk comboboxes, so the two things to prove are (1) the dialog body is a
+// real <form> that submits exactly once, and (2) Enter *inside* a combobox
+// selects an item and never falls through to the form.
+describe("BulkTagDialog — form submit and combobox interference", () => {
+    async function renderDialog() {
+        server.use(http.get(`${API_BASE}/api/tags`, () => ok(TAGS)));
+        const onApply = vi.fn();
+        const onOpenChange = vi.fn();
+        renderWithApp(
+            <BulkTagDialog open selectedCount={3} onOpenChange={onOpenChange} onApply={onApply} />,
+        );
+        await screen.findByText("Tag 3 transactions");
+        return { onApply, onOpenChange };
+    }
+
+    /** Pick "groceries" in the Add-tags combobox using only the keyboard's Enter. */
+    async function pickTagWithEnter(user: ReturnType<typeof userEvent.setup>) {
+        const [addTrigger] = await screen.findAllByRole("combobox");
+        await user.click(addTrigger);
+        await user.type(await screen.findByPlaceholderText("Search tags..."), "groc");
+        await user.keyboard("{Enter}");
+    }
+
+    it("Enter inside the tag combobox selects the tag without applying", async () => {
+        const user = userEvent.setup();
+        const { onApply } = await renderDialog();
+
+        await pickTagWithEnter(user);
+
+        // The item got selected (trigger label flips to the count)…
+        await waitFor(() => expect(screen.getAllByText(/1 tags/i).length).toBeGreaterThan(0));
+        // …but cmdk's Enter never reached the form.
+        expect(onApply).not.toHaveBeenCalled();
+    });
+
+    it("submitting the form applies the chosen tags exactly once", async () => {
+        const user = userEvent.setup();
+        const { onApply } = await renderDialog();
+
+        await pickTagWithEnter(user);
+        await user.keyboard("{Escape}"); // close the popover, not the dialog
+
+        // The Enter path: submit the dialog's form (what the browser does when
+        // Enter fires with the form's submit button as default).
+        const applyButton = screen.getByRole("button", { name: /apply/i });
+        expect(applyButton).toHaveAttribute("type", "submit");
+        fireEvent.submit(applyButton.closest("form")!);
+
+        await waitFor(() => expect(onApply).toHaveBeenCalledTimes(1));
+        expect(onApply).toHaveBeenCalledWith(["groceries"], []);
+    });
+
+    it("cancel closes without applying", async () => {
+        const user = userEvent.setup();
+        const { onApply, onOpenChange } = await renderDialog();
+
+        await pickTagWithEnter(user);
+        await user.keyboard("{Escape}");
+        await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+        expect(onOpenChange).toHaveBeenCalledWith(false);
+        expect(onApply).not.toHaveBeenCalled();
     });
 });

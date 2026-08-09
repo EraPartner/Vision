@@ -29,7 +29,8 @@ export function BulkRecipientDialog({
     const { t } = useLanguage();
     const [recipientId, setRecipientId] = useState<number | null>(null);
 
-    function handleApply() {
+    function handleApply(e: React.FormEvent) {
+        e.preventDefault();
         if (recipientId == null) return;
         onApply(recipientId);
     }
@@ -41,6 +42,10 @@ export function BulkRecipientDialog({
                     <DialogTitle>{t('txPage.bulk.reassignRecipientTitle', { n: selectedCount })}</DialogTitle>
                     <DialogDescription>{t('txPage.bulk.reassignRecipientDesc')}</DialogDescription>
                 </DialogHeader>
+                {/* Real <form> so Enter applies once a recipient is chosen (cmdk
+                    preventDefaults Enter inside the combobox). grid gap-5 mirrors
+                    DialogContent's layout, so the wrapper is layout-neutral. */}
+                <form onSubmit={handleApply} className="grid gap-5">
                 <div className="py-2">
                     <RecipientCombobox
                         value={recipientId}
@@ -49,13 +54,14 @@ export function BulkRecipientDialog({
                     />
                 </div>
                 <DialogFooter className="gap-2">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+                    <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
                         {t('common.cancel')}
                     </Button>
-                    <Button onClick={handleApply} disabled={pending || recipientId == null}>
+                    <Button type="submit" disabled={pending || recipientId == null}>
                         {pending ? t('common.applying') : t('common.apply')}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

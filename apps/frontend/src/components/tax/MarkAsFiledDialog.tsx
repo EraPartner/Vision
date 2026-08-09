@@ -34,7 +34,8 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
     const [open, setOpen] = useState(false);
     const [reference, setReference] = useState('');
 
-    function handleConfirm() {
+    function handleConfirm(e: React.FormEvent) {
+        e.preventDefault();
         const trimmed = reference.trim();
         markYearAsFiled(year, trimmed.length > 0 ? trimmed : undefined);
         setReference('');
@@ -58,6 +59,10 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                     <DialogDescription>{t('tax.markFiled.description')}</DialogDescription>
                 </DialogHeader>
 
+                {/* Real <form> so Enter in the reference field confirms (filing is
+                    reversible — see unmarkYearAsFiled). grid gap-5 mirrors
+                    DialogContent's layout, so this wrapper is layout-neutral. */}
+                <form onSubmit={handleConfirm} className="grid gap-5">
                 <div className="space-y-2 py-2">
                     <Label htmlFor="filing-reference" className="text-sm">
                         {t('tax.markFiled.referenceLabel')}
@@ -74,14 +79,15 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                 </div>
 
                 <DialogFooter>
-                    <Button variant="ghost" onClick={() => setOpen(false)}>
+                    <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                         {t('common.cancel')}
                     </Button>
-                    <Button onClick={handleConfirm} className="gap-1">
+                    <Button type="submit" className="gap-1">
                         <Lock className="h-3 w-3" />
                         {t('tax.markFiled.confirm')}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

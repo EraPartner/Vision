@@ -146,7 +146,8 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
     const items = data?.items || [];
     const totalOutstanding = items.reduce((sum, split) => sum + split.remaining, 0);
 
-    const handlePay = () => {
+    const handlePay = (e: React.FormEvent) => {
+        e.preventDefault();
         if (!payDialog) return;
         const amount = parseDecimal(payAmount);
         if (!amount || amount <= 0) return;
@@ -312,6 +313,10 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                     <DialogHeader>
                         <DialogTitle>{t('owesPage.recordDialog.title')}</DialogTitle>
                     </DialogHeader>
+                    {/* Real <form> so Enter in the amount field records the payment.
+                        grid gap-5 mirrors DialogContent's layout, so the wrapper is
+                        layout-neutral. */}
+                    <form onSubmit={handlePay} className="grid gap-5">
                     <div className="space-y-3">
                         <div>
                             <label className="text-sm text-muted-foreground">{t('owesPage.recordDialog.amount')}</label>
@@ -330,11 +335,12 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setPayDialog(null)}>{t('owesPage.recordDialog.cancel')}</Button>
-                        <Button onClick={handlePay} disabled={recordPayment.isPending}>
+                        <Button type="button" variant="outline" onClick={() => setPayDialog(null)}>{t('owesPage.recordDialog.cancel')}</Button>
+                        <Button type="submit" disabled={recordPayment.isPending}>
                             {recordPayment.isPending ? t('owesPage.recordDialog.recording') : t('owesPage.recordDialog.submit')}
                         </Button>
                     </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
             <ConfirmDialog />
