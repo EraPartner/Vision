@@ -33,13 +33,15 @@ import type {
   Investment,
   PortfolioTransaction,
 } from './api';
-import type { SplitItem, SplitPayment, OwedSummaryItem } from '@/lib/api/splits';
+import type { SplitItem, SplitPayment, OwedSummaryItem, OwedDetailItem } from '@/lib/api/splits';
 import type { Attachment } from '@/lib/api/attachments';
 import type { WatchlistItem } from './watchlist';
 import type {
   ChatMessage,
   ConversationSummary,
+  ConversationDetail,
   OllamaModel,
+  OllamaStatus,
   TokenUsage,
 } from './aiChat';
 
@@ -87,6 +89,14 @@ export type _KeysChatMessage = Expect<KeysSubsetOf<ChatMessage, Schemas['AiMessa
 export type _KeysTokenUsage = Expect<KeysSubsetOf<TokenUsage, Schemas['AiTokenUsage']>>;
 export type _KeysOllamaModel = Expect<KeysSubsetOf<OllamaModel, Schemas['OllamaModel']>>;
 
+// ── Third wave: the payloads left as bare `Envelope`s after the 2026-07-27
+//    schema rewrite (owed detail — the shape OwesPage divides money with —
+//    conversation detail, Ollama status). Now that the spec names them, these
+//    keep them honest.
+export type _KeysOwedDetailItem = Expect<KeysSubsetOf<OwedDetailItem, Schemas['SplitOwedDetail']>>;
+export type _KeysConversationDetail = Expect<KeysSubsetOf<ConversationDetail, Schemas['AiConversationDetail']>>;
+export type _KeysOllamaStatus = Expect<KeysSubsetOf<OllamaStatus, Schemas['OllamaStatus']>>;
+
 // ── Money/quantity fields must stay numeric in the contract (catches a
 //    regression where the OpenAPI spec re-types an amount as a string).
 export type _NumTransactionAmount = Expect<IsNumeric<Schemas['Transaction']['amount']>>;
@@ -109,3 +119,5 @@ export type _NumSplitOwedRemaining = Expect<IsNumeric<Schemas['SplitOwed']['rema
 export type _NumWatchlistTargetPrice = Expect<IsNumeric<Schemas['WatchlistItem']['target_price']>>;
 export type _NumWatchlistAddedPrice = Expect<IsNumeric<Schemas['WatchlistItem']['added_price']>>;
 export type _NumAttachmentSizeBytes = Expect<IsNumeric<Schemas['Attachment']['size_bytes']>>;
+export type _NumOwedDetailTransactionAmount = Expect<IsNumeric<Schemas['SplitOwedDetail']['transaction_amount']>>;
+export type _NumOwedDetailRemaining = Expect<IsNumeric<Schemas['SplitOwedDetail']['remaining']>>;

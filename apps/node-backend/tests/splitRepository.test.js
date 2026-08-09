@@ -204,6 +204,69 @@ describe('splitRepository emits coerced money on every write path', () => {
   });
 });
 
+// settleSplit / getSplitById used to run formatSplit over rows with no
+// amount_paid / recipient_name columns (bare `RETURNING *` / `SELECT *`),
+// fabricating `amount_paid: 0` and `recipient_name: null` — POST /settle
+// reported 0 paid on a fully-paid split. These tests emulate pg: the mock only
+// yields the aggregate columns when the SQL actually selects them, so the old
+// query shape fails visibly (0 !== 30), not just on a string assertion.
+describe('splitRepository settle/getById carry the real amount_paid and recipient_name', () => {
+  const baseRow = {
+    id: 7,
+    transaction_id: 9,
+    recipient_id: 2,
+    amount: '30.00',
+    note: 'dinner',
+    created_at: '2026-03-01',
+    updated_at: '2026-03-05',
+  };
+
+  /** Resolve with the joined columns only when the query selects them. */
+  const pgLikeMock = (settled) => async (sql) => {
+    const row = { ...baseRow, is_settled: settled };
+    if (sql.includes('split_payments') && sql.includes('recipients')) {
+      return { rows: [{ ...row, recipient_name: 'Alice', amount_paid: '30.00' }] };
+    }
+    return { rows: [row] };
+  };
+
+  it('settleSplit re-selects through recipients + split_payments (no fabricated zero)', async () => {
+    query.mockImplementationOnce(pgLikeMock(true));
+
+    const split = await splitRepository.settleSplit(7);
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('WITH settled AS');
+    expect(sql).toContain('LEFT JOIN recipients');
+    expect(sql).toContain('split_payments');
+
+    // Fully-paid split: the settle response reports the real paid total.
+    expect(split.amount_paid).toBe(30);
+    expect(split.recipient_name).toBe('Alice');
+    expect(split.is_settled).toBe(true);
+    expect(split.amount).toBe(30);
+  });
+
+  it('getSplitById joins the same columns as getSplitsByTransaction', async () => {
+    query.mockImplementationOnce(pgLikeMock(false));
+
+    const split = await splitRepository.getSplitById(7);
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('LEFT JOIN recipients');
+    expect(sql).toContain('split_payments');
+
+    expect(split.amount_paid).toBe(30);
+    expect(split.recipient_name).toBe('Alice');
+    expect(split.note).toBe('dinner');
+  });
+
+  it('settleSplit still returns null for a missing split', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await splitRepository.settleSplit(999)).toBe(null);
+  });
+});
+
 // The split lists only page when the caller asks: an absent limit must leave
 // the query unbounded so the pre-pagination clients keep seeing every row.
 describe('splitRepository opt-in LIMIT/OFFSET', () => {

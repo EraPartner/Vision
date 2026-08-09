@@ -525,10 +525,10 @@ describe("Missing GET endpoint contracts (E4)", () => {
             }),
         ],
         [
-            "GET /api/splits/owed returns expected shape",
+            "GET /api/splits/owed returns { items, total }",
             "/api/splits/owed",
             "GET /api/splits/owed",
-            z.object({ items: z.array(z.unknown()) }),
+            collectionSchema(),
         ],
         [
             "GET /api/market/quote returns { items, total }",

@@ -484,7 +484,9 @@ export const defaultHandlers = [
         }),
     ),
 
-    http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [] })),
+    // Real route answers listBody(items, total, page) — `{items, total}`
+    // (apps/node-backend/src/routes/splits.js, GET /owed).
+    http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [], total: 0 })),
 
     http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [], total: 0 })),
     http.get(`${API_BASE}/api/market/search`, () => ok({ results: [] })),

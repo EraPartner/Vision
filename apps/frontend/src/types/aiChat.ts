@@ -103,12 +103,16 @@ export type ChatStreamEvent =
   | { type: 'done'; payload: ChatDoneEvent }
   | { type: 'error'; detail: string; code?: string };
 
+/**
+ * `data` of GET /api/ai/status — exactly what routes/ai.js emits. There is no
+ * `latencyMs`: the backend never measured or sent one (removed as phantom;
+ * contract-guard now pins these keys to the OllamaStatus schema).
+ */
 export interface OllamaStatus {
   ok: boolean;
   baseUrl: string;
   displayUrl?: string;
   modelCount?: number;
-  latencyMs?: number;
   defaultModel: string;
   enabled: boolean;
   error?: string | null;
