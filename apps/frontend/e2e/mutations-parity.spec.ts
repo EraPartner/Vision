@@ -84,7 +84,14 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
         await page.getByLabel(/^name \*/i).fill(unique);
         await page.getByLabel(/^amount \*/i).fill("100");
         // Bank account is also required; the due date now defaults to today.
-        await page.getByLabel(/^bank account \*/i).fill("Test Account");
+        // AccountCombobox (components/shared/AccountCombobox.tsx) renders a
+        // `<button role="combobox">` trigger, not a text input — `.fill()`
+        // doesn't apply. Open it, type into the popover's search field, and
+        // pick the "create new account" option (typing a label that matches
+        // no existing account is the documented free-text create path).
+        await page.getByLabel(/^bank account \*/i).click();
+        await page.getByPlaceholder(/search or type a new account/i).fill("Test Account");
+        await page.getByRole("option", { name: /create account/i }).click();
         // The planned-payment dialog's submit button is "Create Payment", not "Create".
         await page.getByRole("button", { name: /^create payment$/i }).click();
 

@@ -99,6 +99,27 @@ async function insertTxn({
   return rows[0].id;
 }
 
+/**
+ * Full fixture wipe, mirroring the suite's own `afterEach` exactly (tables +
+ * caches). Shared so a test that needs to wipe and rebuild mid-test — the
+ * suite's `afterEach` only runs BETWEEN tests — can't drift from it and
+ * silently miss a table or a cache clear the way two local subsets once did.
+ */
+async function wipeAll() {
+  const pool = getTestPool();
+  await pool.query('DELETE FROM planned_transactions');
+  await pool.query('DELETE FROM transactions');
+  await pool.query('DELETE FROM portfolio_performance_snapshots');
+  await pool.query('DELETE FROM accounts');
+  await pool.query('DELETE FROM recipients');
+  await pool.query('DELETE FROM categories');
+  await pool.query('DELETE FROM exchange_rates');
+  await pool.query(`DELETE FROM user_settings WHERE key = 'includeTransfers'`);
+  for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];
+  clearMemoryCache();
+  clearMvCache();
+}
+
 async function insertSnapshot(date, value, currency = 'EUR') {
   await getTestPool().query(
     `INSERT INTO portfolio_performance_snapshots (snapshot_date, value, currency)
@@ -136,20 +157,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
     await acquireDbSuiteLock();
   }, 180_000);
 
-  afterEach(async () => {
-    const pool = getTestPool();
-    await pool.query('DELETE FROM planned_transactions');
-    await pool.query('DELETE FROM transactions');
-    await pool.query('DELETE FROM portfolio_performance_snapshots');
-    await pool.query('DELETE FROM accounts');
-    await pool.query('DELETE FROM recipients');
-    await pool.query('DELETE FROM categories');
-    await pool.query('DELETE FROM exchange_rates');
-    await pool.query(`DELETE FROM user_settings WHERE key = 'includeTransfers'`);
-    for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];
-    clearMemoryCache();
-    clearMvCache();
-  });
+  afterEach(wipeAll);
 
   afterAll(async () => {
     await releaseDbSuiteLock();
@@ -426,18 +434,9 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
         return infoRepository.getNetWorthFromSnapshots();
       }
 
-      /** The suite's afterEach only runs between tests; this test builds twice. */
-      async function wipe() {
-        const pool = getTestPool();
-        await pool.query('DELETE FROM transactions');
-        await pool.query('DELETE FROM accounts');
-        await pool.query('DELETE FROM recipients');
-        await pool.query('DELETE FROM categories');
-        for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];
-      }
-
       const withTracking = await build({ withTracking: true });
-      await wipe();
+      // The suite's afterEach only runs between tests; this test builds twice.
+      await wipeAll();
       const without = await build({ withTracking: false });
 
       expect(withTracking).toEqual(without);
@@ -486,18 +485,9 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
         return infoRepository.getNetWorthFromSnapshots();
       }
 
-      /** The suite's afterEach only runs between tests; this test builds twice. */
-      async function wipe() {
-        const pool = getTestPool();
-        await pool.query('DELETE FROM transactions');
-        await pool.query('DELETE FROM accounts');
-        await pool.query('DELETE FROM recipients');
-        await pool.query('DELETE FROM categories');
-        for (const bag of [cat, rec]) for (const k of Object.keys(bag)) delete bag[k];
-      }
-
       const withUnattributed = await build({ withUnattributed: true });
-      await wipe();
+      // The suite's afterEach only runs between tests; this test builds twice.
+      await wipeAll();
       const without = await build({ withUnattributed: false });
 
       expect(withUnattributed).toEqual(without);
