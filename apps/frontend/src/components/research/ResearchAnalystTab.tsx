@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -24,6 +24,7 @@ function gradeColor(grade: string): string {
 
 export function ResearchAnalystTab({ symbol, enabled }: ResearchAnalystTabProps) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
 
   const { data: result, isFetching } = useQuery({

@@ -4,7 +4,7 @@ import { apiClient, type MarketNewsArticle } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Newspaper, ExternalLink, Clock, WifiOff } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -18,6 +18,7 @@ interface PortfolioNewsFeedProps {
 
 export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
   const { t, language } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const isOnline = useOnlineStatus();
   const { data, isLoading, error } = useQuery({
     queryKey: ["market-news", symbols],

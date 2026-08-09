@@ -5,8 +5,8 @@ import {cn} from "@/lib/utils";
  *
  * `aria-hidden` by default: the shape conveys nothing a screen reader can use,
  * and most surfaces stack several of them, so announcing each one is pure
- * noise. The enclosing element carries `loadingSurfaceProps` and announces
- * once for the whole surface.
+ * noise. The enclosing element carries the `useLoadingSurfaceProps()` props
+ * and announces once for the whole surface.
  */
 function Skeleton({className, ...props}: React.HTMLAttributes<HTMLDivElement>) {
     return (

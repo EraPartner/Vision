@@ -13,7 +13,7 @@ import { formatDateTimeWithAppSettings } from '@/components/shared/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { loadingSurfaceProps } from '@/lib/loadingSurface';
+import { useLoadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -124,6 +124,7 @@ function TableStatRow({
 
 export default function DbMaintenancePage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const qc = useQueryClient();
     const navigate = useNavigate();
     const [vacuumingTable, setVacuumingTable] = useState<string | null>(undefined as unknown as null);

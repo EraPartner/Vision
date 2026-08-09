@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { AreaChart, type AreaSeries, type AreaReferenceLine } from "@/components/charts";
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
@@ -37,6 +37,7 @@ interface WatchlistChartDialogProps {
 
 export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChartDialogProps) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const [selectedRange, setSelectedRange] = useState(RANGES[0]);
   const [editingPrice, setEditingPrice] = useState(false);

@@ -8,7 +8,7 @@ import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurr
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -33,6 +33,7 @@ import { apiErrorToMessage } from '@/lib/api/errorMessage';
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || "EUR";
 

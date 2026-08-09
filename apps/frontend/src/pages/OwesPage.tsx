@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { parseDecimal } from "@/lib/decimal";
@@ -36,6 +36,7 @@ export default function OwesPage() {
     const [selectedRecipient, setSelectedRecipient] = useState<{ id: number; name: string } | null>(null);
 
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -138,6 +139,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
     const [payAmount, setPayAmount] = useState("");
     const [isExportingCsv, setIsExportingCsv] = useState(false);
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -361,6 +363,7 @@ type RecentRecipientTransactionRow = {
 function RecentRecipientTransactionsTable({ recipientId, recipientName }: { recipientId: number; recipientName: string }) {
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const [allItems, setAllItems] = useState<Transaction[]>([]);
     const [totalItems, setTotalItems] = useState(0);

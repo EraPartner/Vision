@@ -25,7 +25,7 @@ import { useNavigate } from "react-router";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ExportDialog } from "@/components/reports/ExportDialog";
@@ -107,6 +107,7 @@ export default function StocksPage({
   simplePnlPercentSource = 'costBasis',
 }: StocksPageProps = {}) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const navigate = useNavigate();
   const { appSettings } = useAppSettings();
   const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices, isLoading, isError, error, refetch } = usePortfolio();

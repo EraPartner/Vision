@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { safeHref } from "@/utils/safeHref";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -18,6 +18,7 @@ interface ResearchNewsTabProps {
 
 export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
 
   const { data: result, isFetching } = useQuery({

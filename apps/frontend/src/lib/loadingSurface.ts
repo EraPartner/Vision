@@ -1,13 +1,15 @@
+import { useLanguage } from "@/contexts/LanguageContext";
+
 /**
  * ARIA for the ONE element that announces a loading surface.
  *
  * `Skeleton` bones are decorative (`aria-hidden`), so something has to speak for
  * them. `role="status"` carries an implicit `aria-live="polite"`, which is what
  * makes the surface audible — but it also means a grid of twelve bones must not
- * each carry it, or a screen reader hears "Loading" twelve times. Spread this on
- * the single outermost element that already wraps the whole loading branch (a
- * grid div, a Card, a CardContent) — no extra DOM node — or directly on a lone
- * `Skeleton` that is a surface by itself.
+ * each carry it, or a screen reader hears "Loading" twelve times. Spread the
+ * hook's result on the single outermost element that already wraps the whole
+ * loading branch (a grid div, a Card, a CardContent) — no extra DOM node — or
+ * directly on a lone `Skeleton` that is a surface by itself.
  *
  * When the wrapping element is shared with the loaded state, spread it
  * conditionally (`{...(isLoading ? loadingSurfaceProps : {})}`) so the live
@@ -19,12 +21,21 @@
  * `aria-hidden` for the lone-skeleton case, which would otherwise hide the very
  * element doing the announcing.
  *
- * The label matches `SectionLoader`'s existing literal; localising it is a
- * one-line change here rather than in ~35 call sites.
+ * A hook, not a const, so the label comes from the active locale's dictionary
+ * (`common.loading`) instead of a hardcoded English literal — localised once
+ * here rather than in ~35 call sites.
  */
-export const loadingSurfaceProps = {
-    role: "status",
-    "aria-busy": true,
-    "aria-hidden": undefined,
-    "aria-label": "Loading",
-} as const;
+export function useLoadingSurfaceProps(): {
+    readonly role: "status";
+    readonly "aria-busy": true;
+    readonly "aria-hidden": undefined;
+    readonly "aria-label": string;
+} {
+    const { t } = useLanguage();
+    return {
+        role: "status",
+        "aria-busy": true,
+        "aria-hidden": undefined,
+        "aria-label": t('common.loading'),
+    } as const;
+}

@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { cn } from "@/lib/utils";
 
 /**
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
  * button-busy states keep their Loader2 spinner.)
  */
 export function SectionLoader({ className }: { className?: string }) {
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     return (
         <div {...loadingSurfaceProps} className={cn("space-y-3", className)}>
             <Skeleton className="h-7 w-1/3" />

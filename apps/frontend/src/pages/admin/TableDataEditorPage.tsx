@@ -15,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
 import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
-import { loadingSurfaceProps } from '@/lib/loadingSurface';
+import { useLoadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -147,6 +147,7 @@ export default function TableDataEditorPage() {
     const navigate = useNavigate();
     const qc = useQueryClient();
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
 
     const [page, setPage] = useState(0);
     const [sort, setSort] = useState<SortState>(undefined);

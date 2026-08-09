@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users, Regex } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useUpdateRecipient, useDeleteRecipient, useUnmergeRecipient } from "@/hooks/useRecipients";
@@ -42,6 +42,7 @@ type TableRecipient = {
 export default function RecipientsPage() {
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const pageSize = appSettings.defaultPageSize;
     const [showAll, setShowAll] = useState(false);

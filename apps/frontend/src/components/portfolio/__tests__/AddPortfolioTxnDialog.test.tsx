@@ -289,9 +289,23 @@ describe("AddPortfolioTxnDialog", () => {
         expect(posted).toBe(false);
     });
 
-    it("toasts the same first-rule message (amount required) for a dividend with no amount", async () => {
-        // The schema now sources the messages, but the presentation is the
-        // same single toast for the first failing rule.
+    // ─── Inline field validation (ARIA-associated, replaces the old toasts) ──
+    //
+    // Validation used to fire one detached `toast.error` for the schema's first
+    // failing rule. It now renders on the field, linked by `aria-describedby`,
+    // with `aria-invalid` on the control and focus moved to the first invalid
+    // field — the same pattern as the money forms. Server errors still toast.
+
+    /** The message element the control points at — the whole a11y contract. */
+    function describedError(control: HTMLElement): HTMLElement {
+        const describedBy = control.getAttribute("aria-describedby");
+        expect(describedBy).toBeTruthy();
+        const message = document.getElementById(describedBy!);
+        expect(message).toBeInTheDocument();
+        return message!;
+    }
+
+    it("renders an inline error on the amount field for a dividend with no amount, without a toast", async () => {
         const toastSpy = vi.spyOn(toast, "error");
         let posted = false;
         server.use(
@@ -312,12 +326,56 @@ describe("AddPortfolioTxnDialog", () => {
 
         await user.click(screen.getByRole("button", { name: /record/i }));
 
-        await waitFor(() =>
-            expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/amount is required/i)),
-        );
-        expect(toastSpy).toHaveBeenCalledTimes(1);
+        const amountInput = await screen.findByLabelText(/total amount/i);
+        await waitFor(() => expect(amountInput).toHaveAttribute("aria-invalid", "true"));
+        expect(describedError(amountInput)).toHaveTextContent(/amount is required/i);
+        await waitFor(() => expect(amountInput).toHaveFocus());
+        // The inline message fully replaces the transient toast.
+        expect(toastSpy).not.toHaveBeenCalled();
         expect(posted).toBe(false);
         expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("moves focus to the units field and associates the live two-of-three message on a blocked buy submit", async () => {
+        const toastSpy = vi.spyOn(toast, "error");
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        // Only 1 of the amount/units/price trio — the two-of-three rule blocks.
+        const unitsInput = await screen.findByLabelText(/units/i);
+        await user.type(unitsInput, "10");
+        await user.click(screen.getByRole("button", { name: /record/i }));
+
+        await waitFor(() => expect(unitsInput).toHaveFocus());
+        expect(unitsInput).toHaveAttribute("aria-invalid", "true");
+        expect(describedError(unitsInput)).toHaveTextContent(/enter any two/i);
+        // The live message doubles as the error element — never rendered twice.
+        expect(screen.getAllByText(/enter any two/i)).toHaveLength(1);
+        expect(toastSpy).not.toHaveBeenCalled();
+    });
+
+    it("renders an inline error on the fees field for a negative fee, without a toast", async () => {
+        const toastSpy = vi.spyOn(toast, "error");
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        await user.type(await screen.findByLabelText(/units/i), "10");
+        await user.type(screen.getByLabelText(/price per unit/i), "90");
+        const feesInput = screen.getByLabelText(/fees/i);
+        fireEvent.change(feesInput, { target: { value: "-1" } });
+        // fireEvent.submit bypasses JSDOM pattern constraint checking so handleSubmit runs
+        fireEvent.submit(screen.getByRole("dialog").querySelector("form")!);
+
+        await waitFor(() => expect(feesInput).toHaveAttribute("aria-invalid", "true"));
+        expect(describedError(feesInput)).toHaveTextContent(/valid numbers/i);
+        await waitFor(() => expect(feesInput).toHaveFocus());
+        expect(toastSpy).not.toHaveBeenCalled();
     });
 
     it("shows buy/sell/dividend transaction types for etf asset class", async () => {

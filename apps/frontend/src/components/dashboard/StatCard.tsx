@@ -139,7 +139,8 @@ export function StatCard({
                 {/* aria-busy, not role="status": stat cards come in rows of
                     four that all flip to `loading` together, and one live
                     region per card would announce "Loading" four times. The
-                    page's stat grid carries loadingSurfaceProps and announces
+                    page's stat grid carries the useLoadingSurfaceProps()
+                    props and announces
                     once for the row. */}
                 <div aria-busy={loading || undefined} className={cn(statValueVariants({ size }), valueClassName)}>
                     {loading ? (

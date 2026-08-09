@@ -4,7 +4,7 @@ import { useStatistics } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Import } from "lucide-react";
 import { ExportDialog } from "@/components/reports/ExportDialog";
@@ -52,7 +52,10 @@ const SankeyTab = lazy(() =>
   import("@/components/statistics/SankeyTab").then((m) => ({ default: m.SankeyTab }))
 );
 
-const ChartSkeleton = () => <Skeleton {...loadingSurfaceProps} className="h-[400px] w-full" />;
+const ChartSkeleton = () => {
+  const loadingSurfaceProps = useLoadingSurfaceProps();
+  return <Skeleton {...loadingSurfaceProps} className="h-[400px] w-full" />;
+};
 
 export default function StatisticsPage() {
   const {
@@ -60,6 +63,7 @@ export default function StatisticsPage() {
     getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply,
   } = useStatistics();
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } =
     useWidgetVisibility("statistics", STATISTICS_WIDGETS);
 

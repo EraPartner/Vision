@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
   AlertTriangle, Check, Link2, RefreshCw, ShieldCheck, Trash2,
 } from "lucide-react";
@@ -50,6 +50,7 @@ export function ResearchMappingDialog({
   open, onOpenChange, instrumentKey, keyType = "isin", query, assetClass, displayName, investmentId,
 }: ResearchMappingDialogProps) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
