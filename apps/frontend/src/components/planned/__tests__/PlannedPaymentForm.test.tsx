@@ -221,6 +221,16 @@ describe("PlannedPaymentForm — amount direction", () => {
         expect(onSubmit).not.toHaveBeenCalled();
     });
 
+    it("disables submit while the caller's save is in flight", async () => {
+        const onSubmit = vi.fn();
+        renderWithApp(
+            <PlannedPaymentForm open onOpenChange={vi.fn()} onSubmit={onSubmit} loading />,
+        );
+        await screen.findByText("New Planned Payment");
+
+        expect(submitButton()).toBeDisabled();
+    });
+
     it("locks a loan to expense and re-sends the schedule's negative installment", async () => {
         const user = userEvent.setup();
         const { onSubmit } = await renderForm(LOAN);

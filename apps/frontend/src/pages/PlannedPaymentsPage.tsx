@@ -479,6 +479,7 @@ export default function PlannedPaymentsPage() {
           onOpenChange={(open) => { setFormOpen(open); if (!open) setEditing(undefined); }}
           onSubmit={handleSubmit}
           initial={editing}
+          loading={actionLoading}
           key={editing?.id ?? `new-${createFormKey}`}
         />
 

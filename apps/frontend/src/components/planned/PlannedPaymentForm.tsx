@@ -56,9 +56,11 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: Omit<PlannedPayment, "id" | "created_at">) => void;
   initial?: PlannedPayment;
+  /** True while the caller's add/update mutation is in flight — disables submit. */
+  loading?: boolean;
 }
 
-export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initial }: Props) {
+export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initial, loading = false }: Props) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const [name, setName] = useState(initial?.name ?? "");
@@ -94,8 +96,6 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
-
-  const loading = false;
 
   // A loan installment is always money out, and the server derives its amount
   // from the generated repayment schedule, so the toggle locks to "expense"
