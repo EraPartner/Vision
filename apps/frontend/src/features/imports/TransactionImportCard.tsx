@@ -49,7 +49,7 @@ import {
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { consumePendingImportFile } from "@/lib/importHandoff";
 import type { ImportProgress, ImportResult } from "@/lib/api/types";
-import type { ImportCsvResult } from "@/lib/api/imports";
+import { isReviewRequired, type ImportCsvResult } from "@/lib/api/imports";
 
 interface CustomConfig {
   dateColumn: string;
@@ -187,7 +187,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
           customConfig.memoColumn || undefined,
           customConfig.separator, customConfig.encoding, customConfig.skipRows,
         );
-        if ('requires_review' in custom) {
+        if (isReviewRequired(custom)) {
           // 202: the batch is parked in awaiting_review, nothing was committed
           // and this branch carries no counts at all (`respondReviewRequired`
           // sends only batch_id / requires_review / match_source_counts). So

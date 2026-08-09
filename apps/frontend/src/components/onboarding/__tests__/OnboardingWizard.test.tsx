@@ -66,8 +66,9 @@ describe("OnboardingWizard", () => {
         stubAdapters();
         const user = userEvent.setup();
         renderWithApp(<OnboardingWizard open={true} onComplete={vi.fn()} />);
-        // welcome -> overview -> bank
+        // welcome -> overview -> categories -> bank
         await user.click(await screen.findByRole("button", { name: /get started/i }));
+        await user.click(await screen.findByRole("button", { name: /^next$/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
         expect(await screen.findByRole("heading", { name: /choose your bank/i })).toBeInTheDocument();
         expect(await screen.findByRole("button", { name: /^kbc$/i })).toBeInTheDocument();
@@ -80,6 +81,7 @@ describe("OnboardingWizard", () => {
         renderWithApp(<OnboardingWizard open={true} onComplete={vi.fn()} />);
         await user.click(await screen.findByRole("button", { name: /get started/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
+        await user.click(await screen.findByRole("button", { name: /^next$/i }));
         const kbcBtn = await screen.findByRole("button", { name: /^kbc$/i });
         await user.click(kbcBtn);
         // Selected tile gets the primary border class
@@ -90,10 +92,8 @@ describe("OnboardingWizard", () => {
         stubAdapters();
         const user = userEvent.setup();
         renderWithApp(<OnboardingWizard open={true} onComplete={vi.fn()} />);
-        // welcome -> overview -> bank -> import -> categories
+        // welcome -> overview -> categories
         await user.click(await screen.findByRole("button", { name: /get started/i }));
-        await user.click(await screen.findByRole("button", { name: /^next$/i }));
-        await user.click(await screen.findByRole("button", { name: /^next$/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
         expect(await screen.findByRole("heading", { name: /set up categories/i })).toBeInTheDocument();
         // 15 categories preselected -> "Deselect All" visible
@@ -124,7 +124,7 @@ describe("OnboardingWizard", () => {
         const onComplete = vi.fn();
         const user = userEvent.setup();
         renderWithApp(<OnboardingWizard open={true} onComplete={onComplete} />);
-        // welcome -> overview -> bank -> import -> categories -> tour
+        // welcome -> overview -> categories -> bank -> import -> tour
         await user.click(await screen.findByRole("button", { name: /get started/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
@@ -144,7 +144,7 @@ describe("OnboardingWizard", () => {
         renderWithApp(
             <OnboardingWizard open={true} onComplete={onComplete} onOpenSettings={onOpenSettings} />,
         );
-        // 6 clicks: welcome -> overview -> bank -> import -> categories -> tour -> backup
+        // 6 clicks: welcome -> overview -> categories -> bank -> import -> tour -> backup
         await user.click(await screen.findByRole("button", { name: /get started/i }));
         for (let i = 0; i < 5; i++) {
             await user.click(await screen.findByRole("button", { name: /^next$/i }));

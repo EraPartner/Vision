@@ -62,6 +62,20 @@ export type ImportCsvResult = components['schemas']['ImportCsvResult'];
 export type ImportCsvReviewRequired = components['schemas']['ImportCsvReviewRequired'];
 export type ImportCsvResponse = ImportCsvResult | ImportCsvReviewRequired;
 
+/**
+ * The one narrowing for the non-streaming union above: the 202 body is the
+ * only arm carrying `requires_review` (`respondReviewRequired`,
+ * node-backend routes/importRoutes.js:74-81), so key presence decides.
+ * The streaming path's `review_required` SSE event is a different wire shape
+ * (`{ batch_id, match_source_counts, percent }`, lib/importProgress.js) folded
+ * into `ImportResult` where `requires_review` is an *optional* field — its
+ * narrowing must check the value and `batch_id`, so it deliberately does not
+ * share this helper.
+ */
+export function isReviewRequired(result: ImportCsvResponse): result is ImportCsvReviewRequired {
+    return 'requires_review' in result;
+}
+
 export function importCSV(
     file: File,
     bankName: string,
