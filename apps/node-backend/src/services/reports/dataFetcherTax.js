@@ -71,52 +71,27 @@ import { logger } from '../../config/logger.js';
  */
 
 /**
- * One month's tax/fee totals, keyed 'YYYY-MM' in `byMonth`.
- *
- * `sections/taxMonthlyTrend.js` also reads `m.taxes` (a combined tob+wht+
- * sell+other figure), which this bucket has never carried — only the four
- * split fields plus `fees` — so that read is always `undefined` and the
- * renderer's "Taxes" series/column is always 0. Kept as an always-`undefined`
- * optional field (not fixed) to stay behavior-preserving; flagged for the
- * orchestrator.
+ * One month's tax/fee totals, keyed 'YYYY-MM' in `byMonth`. Carries the four
+ * split tax components (no combined `taxes` field — renderers sum
+ * `tob + wht + sell + other` themselves).
  * @typedef {{
  *   year: number, month: number,
  *   tob: number, wht: number, sell: number, other: number, fees: number,
- *   taxes?: undefined,
  * }} TaxMonthBucket
  */
 
 /**
  * Per-asset-class tax/fee subtotal. `byAssetClass` (below) is an ARRAY of
- * these, keyed by nothing — but `sections/feeBreakdown.js` and
- * `taxByAssetClass.js` both read it via `Object.entries(byAssetClass)` as if
- * it were an object keyed by asset-class name, using the entry's numeric
- * array-index KEY as the row label instead of the entry's own `.assetClass`
- * field. `.taxes`/`.fees` (the VALUES) are unaffected and render correctly —
- * only the label is wrong, showing "0", "1", "2", … instead of "stock",
- * "crypto", etc. Type-safe (arrays satisfy `Object.entries`'s `ArrayLike`
- * overload) so this doesn't surface as a compile error; flagged for the
- * orchestrator instead.
+ * these — renderers iterate it directly and label rows with `.assetClass`.
  * @typedef {{ assetClass: string, taxes: number, fees: number }} TaxAssetClassBucket
  */
 
 /**
- * Per-investment tax/fee subtotal.
- *
- * `sections/topInvestmentsByCost.js` reads `inv.taxes` (combined tax figure —
- * never carried; only `tob`/`wht`/`sell`/`other` are) and `inv.tobTotal` /
- * `inv.dividendWHTTotal` / `inv.sellTaxTotal` (those exact names belong to
- * {@link TaxTransactionAggregates}'s TOP-level report-wide totals, not this
- * per-investment bucket, whose equivalents are named `tob`/`wht`/`sell`). All
- * four reads are always `undefined`, so that table's TOB / Div. WHT / Sell Tax
- * columns always render 0, its "Total Cost" column is fees-only (understated
- * by the missing tax components), and its sort-by-cost is effectively
- * sort-by-fees. Kept as always-`undefined` optional fields (not fixed) to stay
- * behavior-preserving; flagged for the orchestrator.
+ * Per-investment tax/fee subtotal. `total` is the full cost figure
+ * (`tob + wht + sell + other + fees`).
  * @typedef {{
  *   investmentId: number, name: string, symbol: string|null, assetClass: string,
  *   tob: number, wht: number, sell: number, other: number, fees: number, total: number,
- *   taxes?: undefined, tobTotal?: undefined, dividendWHTTotal?: undefined, sellTaxTotal?: undefined,
  * }} TaxInvestmentBucket
  */
 
@@ -140,16 +115,7 @@ import { logger } from '../../config/logger.js';
  * Result of {@link fetchTaxData} — the full data payload tax-report section
  * renderers consume. The tax totals (`tobTotal`, `dividendWHTTotal`, etc.)
  * live at the TOP level here, unwrapped from `fetchTaxTransactions`'s result —
- * there has never been a nested `totals` object.
- *
- * `sections/taxExecutiveSummary.js`, `feeBreakdown.js`, and
- * `taxTypeBreakdown.js` all read `data.totals.*` regardless, so `totals` is
- * always `undefined` and every figure those three sections derive from it
- * falls back to 0 — `taxTypeBreakdown` in particular filters out every
- * zero-amount component, so its component list is always empty and it always
- * renders the "no tax data" placeholder. Kept as an always-`undefined`
- * optional field (not fixed) to stay behavior-preserving; flagged for the
- * orchestrator.
+ * there is no nested `totals` object.
  * @typedef {{
  *   taxYear: number,
  *   startDate: string,
@@ -170,20 +136,7 @@ import { logger } from '../../config/logger.js';
  *   byAssetClass: TaxAssetClassBucket[],
  *   byInvestment: TaxInvestmentBucket[],
  *   unconvertedCurrencies: string[],
- *   totals?: undefined,
  * }} TaxReportData
- */
-
-/**
- * The shape `sections/taxExecutiveSummary.js`, `feeBreakdown.js`, and
- * `taxTypeBreakdown.js` assume `data.totals` has — it never does (see the
- * `totals?: undefined` note on {@link TaxReportData} above). Used only to
- * type those three files' `data?.totals ?? {}` fallback so the defensive `??`
- * chain keeps compiling without asserting the field actually exists.
- * @typedef {{
- *   tobTotal?: number, dividendWHTTotal?: number, sellTaxTotal?: number,
- *   otherTaxTotal?: number, feesTotal?: number, dividendsReceived?: number,
- * }} LegacyTaxTotalsFallback
  */
 
 /**

@@ -12,17 +12,16 @@ import { fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
  * @returns {string}
  */
 export function renderTaxExecutiveSummary(data, { currency }) {
-  const totals       = data?.totals       ?? /** @type {import('../dataFetcherTax.js').LegacyTaxTotalsFallback} */ ({});
   const taxYear      = data?.taxYear      ?? '—';
   const periodNote   = data?.periodNote   ?? null;
   const taxProfile   = data?.taxProfile   ?? null;
 
-  const tobTotal          = totals.tobTotal          ?? 0;
-  const dividendWHTTotal  = totals.dividendWHTTotal  ?? 0;
-  const sellTaxTotal      = totals.sellTaxTotal      ?? 0;
-  const feesTotal         = totals.feesTotal         ?? 0;
-  const otherTaxTotal     = totals.otherTaxTotal     ?? 0;
-  const dividendsReceived = totals.dividendsReceived ?? 0;
+  const tobTotal          = data?.tobTotal          ?? 0;
+  const dividendWHTTotal  = data?.dividendWHTTotal  ?? 0;
+  const sellTaxTotal      = data?.sellTaxTotal      ?? 0;
+  const feesTotal         = data?.feesTotal         ?? 0;
+  const otherTaxTotal     = data?.otherTaxTotal     ?? 0;
+  const dividendsReceived = data?.dividendsReceived ?? 0;
 
   const totalTaxes  = tobTotal + dividendWHTTotal + sellTaxTotal + otherTaxTotal;
   const totalCosts  = totalTaxes + feesTotal;
@@ -75,7 +74,7 @@ export function renderTaxExecutiveSummary(data, { currency }) {
         { label: 'TOB (Transaction Tax)', value: fmtCurrency(tobTotal, currency), valueStyle: 'font-size:18px;' },
         { label: 'Dividend WHT', value: fmtCurrency(dividendWHTTotal, currency), valueStyle: 'font-size:18px;' },
         { label: 'Capital Gains Tax', value: fmtCurrency(sellTaxTotal, currency), valueStyle: 'font-size:18px;' },
-        { label: 'Effective WHT Rate', value: fmtPct(effectiveRate, false), valueStyle: 'font-size:18px;' },
+        { label: 'Effective WHT Rate', value: fmtPct(effectiveRate, true), valueStyle: 'font-size:18px;' },
       ], { style: 'margin-top: 8px;' })}
       <table class="data-table" style="margin-top:16px;">
         <thead><tr>
@@ -84,11 +83,11 @@ export function renderTaxExecutiveSummary(data, { currency }) {
           <th class="num">% of Total Cost</th>
         </tr></thead>
         <tbody>
-          <tr><td>TOB (Transaction Tax)</td><td class="num neg">${fmtCurrency(tobTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((tobTotal / totalCosts) * 100, false) : '—'}</td></tr>
-          <tr><td>Dividend Withholding Tax</td><td class="num neg">${fmtCurrency(dividendWHTTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((dividendWHTTotal / totalCosts) * 100, false) : '—'}</td></tr>
-          <tr><td>Capital Gains / Sell Tax</td><td class="num neg">${fmtCurrency(sellTaxTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((sellTaxTotal / totalCosts) * 100, false) : '—'}</td></tr>
-          <tr><td>Other Taxes</td><td class="num neg">${fmtCurrency(otherTaxTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((otherTaxTotal / totalCosts) * 100, false) : '—'}</td></tr>
-          <tr><td>Broker / Management Fees</td><td class="num neg">${fmtCurrency(feesTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((feesTotal / totalCosts) * 100, false) : '—'}</td></tr>
+          <tr><td>TOB (Transaction Tax)</td><td class="num neg">${fmtCurrency(tobTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((tobTotal / totalCosts) * 100, true) : '—'}</td></tr>
+          <tr><td>Dividend Withholding Tax</td><td class="num neg">${fmtCurrency(dividendWHTTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((dividendWHTTotal / totalCosts) * 100, true) : '—'}</td></tr>
+          <tr><td>Capital Gains / Sell Tax</td><td class="num neg">${fmtCurrency(sellTaxTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((sellTaxTotal / totalCosts) * 100, true) : '—'}</td></tr>
+          <tr><td>Other Taxes</td><td class="num neg">${fmtCurrency(otherTaxTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((otherTaxTotal / totalCosts) * 100, true) : '—'}</td></tr>
+          <tr><td>Broker / Management Fees</td><td class="num neg">${fmtCurrency(feesTotal, currency)}</td><td class="num">${totalCosts > 0 ? fmtPct((feesTotal / totalCosts) * 100, true) : '—'}</td></tr>
           <tr style="font-weight:600;border-top:2px solid hsl(var(--border));">
             <td>Net Dividend Result</td>
             <td class="num ${netCls}">${fmtCurrency(netResult, currency)}</td>

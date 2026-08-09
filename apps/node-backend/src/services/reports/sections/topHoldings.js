@@ -37,13 +37,13 @@ export function renderTopHoldings(data, { currency }) {
   }
 
   const sorted = [...breakdown]
-    .sort((a, b) => (Number(b.currentValue ?? b.current_value ?? 0)) - (Number(a.currentValue ?? a.current_value ?? 0)))
+    .sort((a, b) => (Number(b.currentValue ?? 0)) - (Number(a.currentValue ?? 0)))
     .slice(0, 15);
 
-  const totalValue = breakdown.reduce((s, inv) => s + Number(inv.currentValue ?? inv.current_value ?? 0), 0);
+  const totalValue = breakdown.reduce((s, inv) => s + Number(inv.currentValue ?? 0), 0);
 
   const rows = sorted.map((inv, idx) => {
-    const val      = Number(inv.currentValue    ?? inv.current_value    ?? 0);
+    const val      = Number(inv.currentValue ?? 0);
     const invested = Number(inv.totalInvested   ?? inv.total_invested   ?? 0);
     const gl       = Number(inv.gainLoss        ?? inv.gain_loss        ?? 0);
     const glPct    = Number(inv.gainLossPercent ?? inv.gain_loss_pct    ?? (invested > 0 ? (gl / invested) * 100 : 0));

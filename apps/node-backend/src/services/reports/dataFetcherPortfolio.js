@@ -32,16 +32,16 @@ import { logger } from '../../config/logger.js';
  * Several section renderers (assetClassDetail, portfolioAllocation,
  * portfolioExecutiveSummary, topHoldings) defensively read EITHER a camelCase
  * or a snake_case field name for the same value (`assetClass ?? asset_class`,
- * `currentValue ?? current_value`, `totalInvested ?? total_invested`,
- * `gainLoss ?? gain_loss`, `gainLossPercent ?? gain_loss_pct`) — apparent
- * defense against an older/alternate row shape. `getBreakdownSummary` only
- * ever emits the camelCase fields (see portfolioSummaryService.js), so every
- * snake_case branch is dead code today; kept as always-`undefined` optional
- * fields here (rather than removed) to stay behavior-preserving — flagged for
- * the orchestrator as a probable-dead-code finding.
+ * `totalInvested ?? total_invested`, `gainLoss ?? gain_loss`,
+ * `gainLossPercent ?? gain_loss_pct`) — apparent defense against an
+ * older/alternate row shape. `getBreakdownSummary` only ever emits the
+ * camelCase fields (see portfolioSummaryService.js), so every snake_case
+ * branch is dead code today; kept as always-`undefined` optional fields here
+ * (rather than removed) to stay behavior-preserving — flagged for the
+ * orchestrator as a probable-dead-code finding. (The `current_value` fallback
+ * was already removed.)
  * @typedef {Awaited<ReturnType<typeof getBreakdownSummary>>[number] & {
  *   asset_class?: undefined,
- *   current_value?: undefined,
  *   total_invested?: undefined,
  *   gain_loss?: undefined,
  *   gain_loss_pct?: undefined,

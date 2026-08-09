@@ -64,7 +64,7 @@ export function renderPortfolioAllocation(data, { currency }) {
       const ac = inv.assetClass ?? inv.asset_class ?? 'other';
       const label = ASSET_CLASS_LABELS[ac] ?? ac;
       if (!grouped.has(label)) grouped.set(label, { label, value: 0, invested: 0 });
-      grouped.get(label).value    += Number(inv.currentValue ?? inv.current_value ?? 0);
+      grouped.get(label).value    += Number(inv.currentValue ?? 0);
       grouped.get(label).invested += Number(inv.totalInvested ?? inv.total_invested ?? 0);
     }
     classes.push(...grouped.values());
