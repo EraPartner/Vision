@@ -877,10 +877,10 @@ export async function commitBatch({ batchId, onProgress }) {
   // INSERT fail on the constraint and demote the whole chunk to the per-row
   // replay, surfacing the right outcome by the wrong mechanism.
   const unresolvedRows = reviewed.filter(
-    (r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) == null,
+    (/** @type {any} */ r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) == null,
   );
   const matched = reviewed.filter(
-    (r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) != null,
+    (/** @type {any} */ r) => (r.user_override_recipient_id ?? r.resolved_recipient_id) != null,
   );
 
   if (unresolvedRows.length > 0) {
@@ -888,7 +888,7 @@ export async function commitBatch({ batchId, onProgress }) {
       `UPDATE import_staging_rows
           SET status = 'error', error_message = $2
         WHERE id = ANY($1::bigint[])`,
-      [unresolvedRows.map((r) => r.id), UNRESOLVED_RECIPIENT_MESSAGE],
+      [unresolvedRows.map((/** @type {any} */ r) => r.id), UNRESOLVED_RECIPIENT_MESSAGE],
     );
     await query(
       `UPDATE import_batches
