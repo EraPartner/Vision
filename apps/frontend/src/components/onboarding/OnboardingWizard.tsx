@@ -479,7 +479,9 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                             key={adapter.key}
                                             onClick={() => setSelectedBank(adapter.key)}
                                             className={cn(
-                                                "press-feedback flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-[color,background-color,border-color,box-shadow] hover:shadow-md",
+                                                // Transition list composed via --press-compose (press-feedback
+                                                // owns the `transition` shorthand — see index.css).
+                                                "press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),box-shadow_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] flex flex-col items-center gap-2 p-4 rounded-xl border-2 hover:shadow-md",
                                                 selectedBank === adapter.key
                                                     ? "border-primary bg-primary/5 shadow-sm"
                                                     : "border-border hover:border-primary/40"
@@ -587,7 +589,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                                         setSelectedCategories(next);
                                                     }}
                                                     className={cn(
-                                                        "press-feedback flex items-center gap-2 p-2.5 rounded-lg border transition-[color,background-color,border-color] text-left",
+                                                        "press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] flex items-center gap-2 p-2.5 rounded-lg border text-left",
                                                         selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                                                     )}
                                                 >
@@ -651,7 +653,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                     <button
                                         key={feat.path}
                                         onClick={() => handleNavigate(feat.path)}
-                                        className="press-feedback glass-thin flex items-start gap-3 p-3 rounded-xl hover:border-primary/40 hover:shadow-md transition-[color,background-color,border-color,box-shadow] text-left group"
+                                        className="press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),box-shadow_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] glass-thin flex items-start gap-3 p-3 rounded-xl hover:border-primary/40 hover:shadow-md text-left group"
                                     >
                                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                                             <feat.icon className="h-4 w-4 text-primary" />

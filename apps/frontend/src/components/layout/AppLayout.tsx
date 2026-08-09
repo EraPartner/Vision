@@ -259,7 +259,7 @@ function TopbarPageTitle({ visible }: { visible: boolean }) {
     return (
         <div
             aria-hidden={!shown}
-            className={cn("min-w-0 truncate font-display text-sm font-semibold tracking-tight transition-[opacity,transform] duration-[var(--duration-normal)] ease-[var(--ease-glide)] motion-reduce:transition-none", shown ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-1")}
+            className={cn("min-w-0 truncate font-display text-sm font-semibold tracking-tight transition-[opacity,translate] duration-[var(--duration-normal)] ease-[var(--ease-glide)] motion-reduce:transition-none", shown ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-1")}
         >
             {title}
         </div>

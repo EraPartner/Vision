@@ -227,7 +227,7 @@ export default function ResearchHomePage() {
                         key={item.id}
                         onClick={() => item.symbol && goToSymbol(item.symbol)}
                         disabled={!item.symbol}
-                        className="press-feedback rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] rounded-lg border border-border p-3 text-left hover:border-primary/40 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <div className="flex items-center gap-2">
                           {item.symbol
@@ -280,7 +280,7 @@ function EntryCard({ icon: Icon, title, desc, onClick }: EntryCardProps) {
   return (
     <button
       onClick={onClick}
-      className="press-feedback text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-glass-soft transition-[border-color,box-shadow] group"
+      className="press-feedback [--press-compose:border-color_var(--default-transition-duration)_var(--default-transition-timing-function),box-shadow_var(--default-transition-duration)_var(--default-transition-timing-function),transform_90ms_ease-out] text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-glass-soft group"
     >
       <div className="flex items-center gap-3 mb-2">
         <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">

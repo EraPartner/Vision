@@ -3,7 +3,7 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-06-17
+updated: 2026-08-09
 tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass]
 description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
@@ -77,7 +77,7 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.c
 **Motion and premium polish utilities**:
 
 - `.micro-lift` — hover elevation (`translateY(-2px)` + shadow increase, GPU-safe)
-- `.press-feedback` — subtle click/tap compression feedback
+- `.press-feedback` — subtle click/tap compression feedback (`transform: scale(0.97)` at a deliberate 90ms/`ease-out`). It owns the element's `transition` **shorthand**, so a consumer that declares its own transitions must supply its full list — restating the `transform 90ms ease-out` press entry verbatim — via the `--press-compose` custom property (e.g. `[--press-compose:background-color_var(--duration-fast)_var(--ease-glide),transform_90ms_ease-out]`), **not** via `transition-*` utilities, which the shorthand silently clobbers (Aug 2026 fix: Button, sidebar segmented control, onboarding tiles, research tiles all lost their declared background/box-shadow/color fades this way). Registered non-inheriting via `@property`; the interactive Card composes through its own higher-specificity rule instead. See the comment block at `.press-feedback` in `index.css`.
 - `.premium-icon-action` — premium icon-button hover/focus polish in chrome controls
 - `.premium-frame` — baked into base `Card` (since ADR-070) — primary-tinted hover outline; previously had to be added per callsite. Declares the same full `transition` list as `micro-lift` (border-color, box-shadow, transform) so both classes harmonize when combined.
 - `.icon-touch-target` — consistent touch-safe icon action hit areas (2.5rem square)

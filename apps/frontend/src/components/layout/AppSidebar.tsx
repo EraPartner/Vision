@@ -286,7 +286,9 @@ function WorkspaceTab({
       onClick={onClick}
       title={label}
       className={cn(
-        "press-feedback min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-[background-color,color,box-shadow,transform] duration-[var(--duration-normal)] ease-[var(--ease-glide)]",
+        // Transition list composed via --press-compose (press-feedback owns the
+        // `transition` shorthand — see index.css); press entry restated verbatim.
+        "press-feedback [--press-compose:background-color_var(--duration-normal)_var(--ease-glide),color_var(--duration-normal)_var(--ease-glide),box-shadow_var(--duration-normal)_var(--ease-glide),transform_90ms_ease-out] min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight",
         active
           ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
           : "text-muted-foreground hover:text-foreground hover:bg-background/40",

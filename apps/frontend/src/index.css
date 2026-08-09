@@ -9,6 +9,17 @@
 @import "./styles/skin-v2.css";
 @config '../tailwind.config.ts';
 
+/* Registered non-inheriting so a composed transition list set on an ancestor
+   (see `--press-compose` at `.press-feedback`, in the utilities layer below)
+   can never leak into a nested bare `.press-feedback`. `@property` must sit at
+   the stylesheet top level, hence its distance from the rule it serves. No
+   `initial-value`: with the universal syntax the var starts guaranteed-invalid,
+   which is exactly what lets `var(--press-compose, …)` fall back. */
+@property --press-compose {
+    syntax: "*";
+    inherits: false;
+}
+
 /* ------------------------------------------------------------------
  * Base
  * ------------------------------------------------------------------ */
@@ -892,9 +903,34 @@
 
        `ease-out` here is deliberate rather than a curve-table token: at 90ms
        the press must read as instant, and --ease-glide's long tail would
-       soften exactly the crispness this is for. */
+       soften exactly the crispness this is for.
+
+       COMPOSING with a consumer's own transitions — `--press-compose`. This
+       rule sets the `transition` SHORTHAND, and CSS cannot merge transition
+       lists across rules: at equal specificity this later declaration used to
+       silently reset every consumer's `transition-*` utilities to
+       `transform 90ms ease-out` (buttons lost their declared background-color/
+       box-shadow/color fades outright — verified in-browser, 2026-08-09). A
+       consumer that declares its own transitions must therefore put its FULL
+       list in the `--press-compose` custom property — NOT in `transition-*`
+       utilities, which this shorthand still clobbers — restating the
+       `transform 90ms ease-out` press entry verbatim, exactly as
+       `.premium-frame.premium-frame-interactive` above restates it:
+
+           [--press-compose:background-color_var(--duration-fast)_var(--ease-glide),transform_90ms_ease-out]
+
+       The var plays no specificity or ordering games: this stays the only
+       `transition` declaration on `.press-feedback` (so the reduced-motion
+       block below still shuts it off by source order at equal specificity),
+       its position AFTER `.micro-lift` stays load-bearing (a lifted surface
+       must settle, not scale while raised), and the fallback keeps a bare
+       `.press-feedback` byte-identical to what it always was. `@property`
+       (top of file) registers the var as non-inheriting so an ancestor's
+       composed list can never leak into a nested bare `.press-feedback`. The
+       interactive Card does not participate: its doubled-specificity rule
+       above owns the whole shorthand and already restates the press entry. */
     .press-feedback {
-        transition: transform 90ms ease-out;
+        transition: var(--press-compose, transform 90ms ease-out);
     }
 
     .press-feedback:active {
