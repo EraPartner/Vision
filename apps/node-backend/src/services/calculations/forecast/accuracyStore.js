@@ -13,24 +13,35 @@ import accuracyRepo from '../../../repositories/cashflowForecastAccuracyReposito
 import { logger } from '../../../config/logger.js';
 
 /**
- * In-memory fallback record. NOTE: this shape is camelCase
- * (userId/methodId/sampleDays), while `accuracyRepo`'s real Postgres rows
- * (`AccuracyRow` in cashflowForecastAccuracyRepository.js) are snake_case
- * (user_id/method_id/sample_days) straight off `SELECT ... FROM
- * cashflow_forecast_accuracy` with no aliasing. The two branches of
- * `withFallback` below therefore return DIFFERENT field-name shapes for the
- * "same" data depending on whether Postgres is reachable — see the ensemble
- * weighting consumer at forecast/index.js for the consequence. Typed
- * faithfully as its own shape rather than reused as `AccuracyRow` to avoid
- * papering over the mismatch.
+ * Uniform store output shape. `accuracyRepo`'s Postgres rows come back
+ * snake_case (`AccuracyRow` in cashflowForecastAccuracyRepository.js); the
+ * getters below normalize them through `toAccuracyRecord` so both branches of
+ * `withFallback` — DB and in-memory — return this same camelCase shape.
  * @typedef {{
  *   userId: string, methodId: string, asOfMonth: string,
  *   mae: number, rmse: number, mape: number, sampleDays: number,
  *   recordedAt: string,
- * }} FallbackAccuracyRow
+ * }} AccuracyRecord
  */
 
-/** @type {Map<string, FallbackAccuracyRow>} */
+/**
+ * @param {import('../../../repositories/cashflowForecastAccuracyRepository.js').AccuracyRow} row
+ * @returns {AccuracyRecord}
+ */
+function toAccuracyRecord(row) {
+  return {
+    userId: row.user_id,
+    methodId: row.method_id,
+    asOfMonth: row.as_of_month,
+    mae: row.mae,
+    rmse: row.rmse,
+    mape: row.mape,
+    sampleDays: row.sample_days,
+    recordedAt: row.recorded_at instanceof Date ? row.recorded_at.toISOString() : row.recorded_at,
+  };
+}
+
+/** @type {Map<string, AccuracyRecord>} */
 const inMemoryFallback = new Map();
 let missingTableWarned = false;
 let accuracyTableHealthy = true;
@@ -104,19 +115,13 @@ export async function recordAccuracy({ userId, methodId, asOfMonth, mae, rmse, m
 
 /**
  * @param {{ userId: string, methodId: string, limitMonths?: number }} params
- * @returns {Promise<any[]>} genuinely arbitrary at this boundary: DB-path rows
- *   are `AccuracyRow` (snake_case) and fallback-path rows are
- *   `FallbackAccuracyRow` (camelCase, see typedef above) — real callers
- *   (routes/aggregations.js, forecast/index.js) already assume the DB shape
- *   and are unaffected by widening this to `any[]` rather than exposing the
- *   true union, which would force an unrelated cast at every call site for a
- *   mismatch that's tracked, not fixed, here.
+ * @returns {Promise<AccuracyRecord[]>}
  */
 export async function getAccuracyHistory({ userId, methodId, limitMonths = 24 }) {
   return withFallback(
-    () => accuracyRepo.getHistory({ userId, methodId, limitMonths }),
+    async () => (await accuracyRepo.getHistory({ userId, methodId, limitMonths })).map(toAccuracyRecord),
     () => {
-      /** @type {FallbackAccuracyRow[]} */
+      /** @type {AccuracyRecord[]} */
       const rows = [];
       for (const [k, v] of inMemoryFallback) {
         if (!k.startsWith(`${userId}|${methodId}|`)) continue;
@@ -131,14 +136,13 @@ export async function getAccuracyHistory({ userId, methodId, limitMonths = 24 })
 
 /**
  * @param {{ userId: string }} params
- * @returns {Promise<any[]>} see getAccuracyHistory's return-type note above —
- *   same DB-shape-vs-fallback-shape mismatch, tracked not fixed here.
+ * @returns {Promise<AccuracyRecord[]>}
  */
 export async function getLatestAccuracyByMethod({ userId }) {
   return withFallback(
-    () => accuracyRepo.getLatestByMethod({ userId }),
+    async () => (await accuracyRepo.getLatestByMethod({ userId })).map(toAccuracyRecord),
     () => {
-      /** @type {Map<string, FallbackAccuracyRow>} */
+      /** @type {Map<string, AccuracyRecord>} */
       const byMethod = new Map();
       for (const [k, v] of inMemoryFallback) {
         if (!k.startsWith(`${userId}|`)) continue;
@@ -152,14 +156,13 @@ export async function getLatestAccuracyByMethod({ userId }) {
 
 /**
  * @param {{ userId: string, limitMonths?: number }} params
- * @returns {Promise<any[]>} see getAccuracyHistory's return-type note above —
- *   same DB-shape-vs-fallback-shape mismatch, tracked not fixed here.
+ * @returns {Promise<AccuracyRecord[]>}
  */
 export async function getAllAccuracyHistory({ userId, limitMonths = 24 }) {
   return withFallback(
-    () => accuracyRepo.getAllHistory({ userId, limitMonths }),
+    async () => (await accuracyRepo.getAllHistory({ userId, limitMonths })).map(toAccuracyRecord),
     () => {
-      /** @type {FallbackAccuracyRow[]} */
+      /** @type {AccuracyRecord[]} */
       const rows = [];
       for (const v of inMemoryFallback.values()) {
         if (v.userId !== userId) continue;

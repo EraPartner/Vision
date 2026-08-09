@@ -177,22 +177,22 @@ router.get('/cashflow-forecast-accuracy', /** @param {ExpressRequest} req @param
 
   const byMethod = new Map();
   for (const row of rows) {
-    if (!byMethod.has(row.method_id)) byMethod.set(row.method_id, []);
-    byMethod.get(row.method_id).push(row);
+    if (!byMethod.has(row.methodId)) byMethod.set(row.methodId, []);
+    byMethod.get(row.methodId).push(row);
   }
 
   const methods = Array.from(byMethod.entries()).map(([methodId, history]) => {
-    const sorted = [...history].sort((a, b) => b.as_of_month.localeCompare(a.as_of_month));
+    const sorted = [...history].sort((a, b) => b.asOfMonth.localeCompare(a.asOfMonth));
     const latest = sorted[0];
     return {
       method_id: methodId,
-      as_of_month: latest.as_of_month,
+      as_of_month: latest.asOfMonth,
       mae: latest.mae,
       rmse: latest.rmse,
       mape: latest.mape,
-      sample_days: latest.sample_days,
-      history: sorted.map(({ as_of_month, mae, rmse, mape, sample_days }) => ({
-        month: as_of_month, mae, rmse, mape, sample_days,
+      sample_days: latest.sampleDays,
+      history: sorted.map(({ asOfMonth, mae, rmse, mape, sampleDays }) => ({
+        month: asOfMonth, mae, rmse, mape, sample_days: sampleDays,
       })),
     };
   });
