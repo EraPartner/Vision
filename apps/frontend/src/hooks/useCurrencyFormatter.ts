@@ -25,17 +25,26 @@ export function useCurrencyFormatter(defaultCurrency?: string): CurrencyFormatte
   return useCallback(
     (val: number, currency: string = fallbackCurrency, decimals: number = decimalsSetting) => {
       const key = `${locale}:${currency}:${decimals}`;
-      let formatter = cacheRef.current.get(key);
-      if (!formatter) {
-        formatter = new Intl.NumberFormat(locale, {
-          style: "currency",
-          currency,
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals,
-        });
-        cacheRef.current.set(key, formatter);
+      // Same guard as the parts sibling below: degrade to the byte-identical
+      // bare-number text instead of throwing RangeError into the error
+      // boundary, so both formatters on a page fail the same way for the same
+      // bad currency/decimals. A throwing constructor caches nothing, so a
+      // failure never poisons the cache.
+      try {
+        let formatter = cacheRef.current.get(key);
+        if (!formatter) {
+          formatter = new Intl.NumberFormat(locale, {
+            style: "currency",
+            currency,
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          });
+          cacheRef.current.set(key, formatter);
+        }
+        return formatter.format(val);
+      } catch {
+        return `${val}`;
       }
-      return formatter.format(val);
     },
     [locale, fallbackCurrency, decimalsSetting],
   );
@@ -66,11 +75,17 @@ export function useCurrencyPartsFormatter(defaultCurrency?: string): CurrencyPar
       const decimals = opts.decimals ?? decimalsSetting;
       const signed = opts.signed ?? false;
       const key = `${locale}:${currency}:${decimals}:${signed ? "s" : "a"}`;
-      // Mirrors Money.tsx's guard: a malformed-but-non-empty currency code
-      // (e.g. "US") makes the Intl.NumberFormat constructor throw RangeError.
-      // Money degrades to a bare number rather than throwing into the error
-      // boundary; this path must degrade identically, or the same bad code
-      // renders on one surface and crashes the other.
+      // Mirrors Money.tsx's guard, and like Money's it is deliberately wide:
+      // it catches any RangeError the Intl.NumberFormat constructor throws —
+      // a malformed-but-non-empty currency code (e.g. "US") or out-of-range
+      // fraction digits. Settings-sourced values are schema-validated at the
+      // store boundary (storedAppSettingsSchema), but the per-call
+      // currency/decimals overrides come from data (holdings, accounts), so
+      // the guard stays as defense in depth. Money degrades to a bare number
+      // rather than throwing into the error boundary; this path must degrade
+      // identically, or the same bad input renders on one surface and crashes
+      // the other. A throwing constructor caches nothing, so a failure never
+      // poisons the cache.
       try {
         let formatter = cacheRef.current.get(key);
         if (!formatter) {

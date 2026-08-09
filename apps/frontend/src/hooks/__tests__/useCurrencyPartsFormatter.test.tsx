@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, render } from "@testing-library/react";
 import { useSettingsStore, DEFAULT_APP_SETTINGS } from "@/stores/settingsStore";
-import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Money } from "@/components/shared/Money";
 
 beforeEach(() => {
@@ -54,5 +54,46 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
         result.current(1, { currency: "US" });
         const parts = result.current(1234.56, { currency: "EUR" });
         expect(parts.some((p) => p.type === "currency")).toBe(true);
+    });
+});
+
+describe("useCurrencyFormatter (string path) — malformed currency degrades like the parts sibling", () => {
+    it("returns the bare number instead of throwing RangeError", () => {
+        // Pages pair this string formatter with the guarded parts formatter on
+        // the same currency (StocksPage's fmt/fmtParts, the forecast chart axis
+        // beside its odometer). Unguarded, the string path threw into the error
+        // boundary and took the page down even though the parts path degraded.
+        const { result } = renderHook(() => useCurrencyFormatter("US"));
+        expect(() => result.current(1234.56)).not.toThrow();
+        expect(result.current(1234.56)).toBe("1234.56");
+    });
+
+    it("degrades to the exact text the parts hook and Money produce for the same bad code", () => {
+        const str = renderHook(() => useCurrencyFormatter()).result.current;
+        const parts = renderHook(() => useCurrencyPartsFormatter()).result.current;
+        const partsText = parts(1234.56, { currency: "US" })
+            .map((p) => p.value)
+            .join("");
+        const { container } = render(<Money amount={1234.56} currency="US" />);
+        expect(str(1234.56, "US")).toBe(partsText);
+        expect(str(1234.56, "US")).toBe(container.textContent);
+    });
+
+    it("degrades on out-of-range decimals too, keeping sign", () => {
+        const { result } = renderHook(() => useCurrencyFormatter());
+        expect(result.current(-42.5, "EUR", -1)).toBe("-42.5");
+        expect(result.current(1234.56, "EUR", 101)).toBe("1234.56");
+    });
+
+    it("does not poison the cache — a valid code still works after a bad one", () => {
+        const { result } = renderHook(() => useCurrencyFormatter());
+        result.current(1, "US");
+        expect(result.current(1234.56, "EUR")).toBe("1.234,56\u00a0€");
+    });
+
+    it("still formats a valid currency normally", () => {
+        const { result } = renderHook(() => useCurrencyFormatter());
+        expect(result.current(1234.56, "EUR")).toBe("1.234,56\u00a0€");
+        expect(result.current(1234.56, "USD", 0)).toBe("1.235\u00a0$");
     });
 });
