@@ -219,6 +219,73 @@ async function analyzeAfterMigrations() {
 }
 
 /**
+ * Execute alembic with the given subcommand arguments. Fail-fast on non-zero
+ * exit. Logs stdout/stderr streamed from alembic.
+ *
+ * @param {string[]} args - alembic arguments after `-c <config>` (e.g. ['upgrade', 'head'])
+ * @param {number} timeoutMs
+ */
+async function execAlembic(args, timeoutMs) {
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      ALEMBIC_BIN,
+      ['-c', ALEMBIC_CONFIG, ...args],
+      {
+        cwd: REPO_ROOT,
+        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+        timeout: timeoutMs,
+        maxBuffer: 32 * 1024 * 1024
+      }
+    )
+
+    if (stdout) {
+      logger.info({ output: stdout.trim() }, 'alembic stdout')
+    }
+    if (stderr) {
+      // alembic writes INFO-level progress to stderr by default
+      logger.info({ output: stderr.trim() }, 'alembic stderr')
+    }
+  } catch (error) {
+    logger.error(
+      {
+        err: error,
+        stdout: error.stdout?.toString?.().trim?.(),
+        stderr: error.stderr?.toString?.().trim?.(),
+        code: error.code,
+        signal: error.signal
+      },
+      'alembic command failed'
+    )
+    throw new Error(
+      `Alembic ${args[0] ?? 'command'} failed (exit ${error.code ?? 'unknown'}): ${error.message}`,
+      { cause: error }
+    )
+  }
+}
+
+/**
+ * Run an arbitrary alembic subcommand (downgrade, stamp, ...) with the same
+ * `stampBaselineIfLegacy()` preflight the boot path runs. The preflight is
+ * what makes any version-table write safe here: a bare alembic invocation
+ * auto-creates (or has inherited) `alembic_version.version_num` as
+ * VARCHAR(32), which is too narrow for this chain's longer revision ids.
+ *
+ * @param {string[]} args - alembic arguments (e.g. ['downgrade', '-1'], ['stamp', 'head'])
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs]
+ */
+export async function runAlembicCommand(args, options = {}) {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+
+  logger.info({ args, cwd: REPO_ROOT }, 'alembic command start')
+
+  await stampBaselineIfLegacy()
+  await execAlembic(args, timeoutMs)
+
+  logger.info('alembic command ok')
+}
+
+/**
  * Run alembic upgrade head. Fail-fast on non-zero exit.
  * Logs stdout/stderr streamed from alembic.
  *
@@ -240,52 +307,18 @@ export async function runMigrations(options = {}) {
     return
   }
 
-  try {
-    const { stdout, stderr } = await execFileAsync(
-      ALEMBIC_BIN,
-      ['-c', ALEMBIC_CONFIG, 'upgrade', target],
-      {
-        cwd: REPO_ROOT,
-        env: { ...process.env, PYTHONUNBUFFERED: '1' },
-        timeout: timeoutMs,
-        maxBuffer: 32 * 1024 * 1024
-      }
-    )
+  await execAlembic(['upgrade', target], timeoutMs)
 
-    if (stdout) {
-      logger.info({ output: stdout.trim() }, 'alembic stdout')
-    }
-    if (stderr) {
-      // alembic writes INFO-level progress to stderr by default
-      logger.info({ output: stderr.trim() }, 'alembic stderr')
-    }
+  logger.info('alembic migrate ok')
 
-    logger.info('alembic migrate ok')
-
-    if (target === 'head') {
-      await writeHeadCache()
-    }
-
-    // Freshen planner statistics on the two tables that migrations most often
-    // rewrite/backfill wholesale (transactions, asset_price_history). This only
-    // runs when alembic actually executed — the warm-boot path short-circuits
-    // via isAtHeadCached() above and never reaches here — so it is not paid on
-    // every boot. Best-effort: bad stats are a perf issue, never a boot blocker.
-    await analyzeAfterMigrations()
-  } catch (error) {
-    logger.error(
-      {
-        err: error,
-        stdout: error.stdout?.toString?.().trim?.(),
-        stderr: error.stderr?.toString?.().trim?.(),
-        code: error.code,
-        signal: error.signal
-      },
-      'alembic migrate failed'
-    )
-    throw new Error(
-      `Alembic migration failed (exit ${error.code ?? 'unknown'}): ${error.message}`,
-      { cause: error }
-    )
+  if (target === 'head') {
+    await writeHeadCache()
   }
+
+  // Freshen planner statistics on the two tables that migrations most often
+  // rewrite/backfill wholesale (transactions, asset_price_history). This only
+  // runs when alembic actually executed — the warm-boot path short-circuits
+  // via isAtHeadCached() above and never reaches here — so it is not paid on
+  // every boot. Best-effort: bad stats are a perf issue, never a boot blocker.
+  await analyzeAfterMigrations()
 }
