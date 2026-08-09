@@ -15,11 +15,18 @@
  * could ever check: toggling an exclusion switches paths, so the two paths must
  * agree on the same corpus.
  *
- * Determinism: the window is anchored on `CURRENT_DATE`, so fixtures are dated
- * by SQL expressions relative to it. Day 5/10/15 exist in every month.
+ * Determinism: the repository's windows are anchored on the APP_TIMEZONE
+ * calendar day (ADR-009), not Postgres `CURRENT_DATE` — for the last hours of
+ * a UTC day the two disagree by one day. So, exactly as in
+ * infoRepoForecast.db.test.js, the fixture helpers substitute the literal
+ * token `CURRENT_DATE` in every date expression with the app-clock date at
+ * call time, keeping fixtures and queries on ONE clock whatever hour the suite
+ * runs. Day 5/10/15 exist in every month. The rollover describe at the bottom
+ * deliberately seeds on the DB clock via `now()`, which the substitution
+ * leaves alone.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   acquireDbSuiteLock,
   closeTestPool,
@@ -32,6 +39,7 @@ import { createMaterializedViews } from '../src/services/materializedViewService
 import { clearMvCache } from '../src/repositories/infoRepositoryHelpers.js';
 import { clearMemoryCache } from '../src/services/currency/currencyConversionService.js';
 import { closePool } from '../src/database/connection.js';
+import { todayAppDateString, appDateStringToUtc } from '../src/lib/timezone.js';
 
 const MANAGED_VIEWS = ['mv_monthly_summary', 'mv_category_totals', 'mv_cashflow_daily'];
 
@@ -42,17 +50,27 @@ const rec = {};
 const monthDay = (monthsBack, day) =>
   `date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months' + interval '${day - 1} days'`;
 
-/** 'YYYY-MM' key for the month `monthsBack` months before the current one. */
+/**
+ * Anchor a fixture date expression on the SAME clock the queries use: the
+ * literal token `CURRENT_DATE` becomes the APP_TIMEZONE calendar day, resolved
+ * at call time (so the fake-timer rollover cases see the frozen clock). `now()`
+ * is deliberately NOT substituted — the rollover describe uses it to seed on
+ * the real DB clock.
+ */
+const anchored = (dateExpr) =>
+  dateExpr.replaceAll('CURRENT_DATE', `('${todayAppDateString()}'::date)`);
+
+/** 'YYYY-MM' key for the month `monthsBack` months before the current one (app-clock anchored). */
 async function monthKey(monthsBack) {
   const { rows } = await getTestPool().query(
-    `SELECT to_char(date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months', 'YYYY-MM') AS k`,
+    anchored(`SELECT to_char(date_trunc('month', CURRENT_DATE) - interval '${monthsBack} months', 'YYYY-MM') AS k`),
   );
   return rows[0].k;
 }
 
-/** 'YYYY-MM-DD' for an arbitrary date expression. */
+/** 'YYYY-MM-DD' for an arbitrary date expression (app-clock anchored). */
 async function ymd(dateExpr) {
-  const { rows } = await getTestPool().query(`SELECT to_char((${dateExpr})::date, 'YYYY-MM-DD') AS d`);
+  const { rows } = await getTestPool().query(`SELECT to_char((${anchored(dateExpr)})::date, 'YYYY-MM-DD') AS d`);
   return rows[0].d;
 }
 
@@ -106,7 +124,7 @@ async function insertTxn({
   if (bank) await ensureAccount(bank);
   const { rows } = await getTestPool().query(
     `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, bank_account, is_active, is_transfer)
-     VALUES ((${dateExpr})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+     VALUES ((${anchored(dateExpr)})::date, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
     [amount, currency, recipientId ?? rec.misc, categoryId, bank, isActive, isTransfer],
   );
   return rows[0].id;
@@ -258,8 +276,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryMonthly (real DB
       await seedBase();
       await getTestPool().query(
         `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-         VALUES ('USD', (${monthDay(1, 5)})::date, 0.5, false),
-                ('USD', (${monthDay(2, 5)})::date, 0.25, false)`,
+         VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.5, false),
+                ('USD', (${anchored(monthDay(2, 5))})::date, 0.25, false)`,
       );
       await insertTxn({ dateExpr: monthDay(1, 5), amount: '-100.00', currency: 'USD' });
       await insertTxn({ dateExpr: monthDay(2, 5), amount: '-100.00', currency: 'USD' });
@@ -323,7 +341,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryMonthly (real DB
       await seedBase();
       await getTestPool().query(
         `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
-         VALUES ('USD', (${monthDay(1, 5)})::date, 0.5, true)`,
+         VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.5, true)`,
       );
       await insertTxn({ dateExpr: monthDay(1, 5), amount: '-100.00', currency: 'USD' });
       await insertTxn({ dateExpr: monthDay(1, 6), amount: '-10.00', currency: 'EUR' });
@@ -354,6 +372,105 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryMonthly (real DB
       // An exclusion likewise forces the live path — and is honoured.
       const excluded = await getMonthlyFinancialSummary([cat.Food], 'EUR', [], false);
       expect(byMonth(excluded)[await monthKey(1)].total_spending).toBe(-200);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // One clock: the app-date anchor across a month rollover (same technique as
+  // infoRepoForecast.db.test.js — only `Date` is faked; the DB keeps its real
+  // clock, faithfully reproducing "the app is a month ahead of CURRENT_DATE",
+  // the ~2h window before UTC midnight on every month's last day).
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('one clock: APP_TIMEZONE anchor across a month rollover', () => {
+    // These fixtures deliberately anchor on the REAL DB clock (`now()`, which
+    // the anchored() substitution leaves alone — `CURRENT_DATE` would be
+    // rewritten to the app date): the premise is "app clock one month ahead
+    // of the DB's month".
+    // Day 5 of the month five months before the one Postgres is in — inside a
+    // CURRENT_DATE-anchored window, OUTSIDE the app-anchored one.
+    const oldestDbWindowMonthDay5 = "date_trunc('month', now()) - interval '5 months' + interval '4 days'";
+    // Day 5 of the month Postgres is in — the app clock's LAST COMPLETE month.
+    const dbMonthDay5 = "date_trunc('month', now()) + interval '4 days'";
+    // Day 1 of the month the app clock is in — its "today".
+    const appToday = "date_trunc('month', now()) + interval '1 month'";
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /**
+     * Freeze the process clock inside the rollover window and return the
+     * APP_TIMEZONE calendar facts the assertions are written against.
+     *
+     * Only `Date` is faked: pg's connection/statement timers must keep running
+     * or the pool stalls.
+     */
+    async function pinClockToRollover() {
+      const { rows } = await getTestPool().query(`
+        SELECT to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM-DD') AS app_today,
+               to_char(date_trunc('month', CURRENT_DATE) + interval '1 month', 'YYYY-MM')     AS app_month,
+               to_char(date_trunc('month', CURRENT_DATE), 'YYYY-MM')                          AS db_month,
+               to_char(date_trunc('month', CURRENT_DATE) - interval '4 months', 'YYYY-MM')    AS app_window_start,
+               to_char(date_trunc('month', CURRENT_DATE) - interval '5 months', 'YYYY-MM')    AS db_window_start
+      `);
+      const facts = rows[0];
+      // 00:30 of that app-timezone day == 22:30/23:30 UTC on the day before.
+      const instant = new Date(appDateStringToUtc(facts.app_today).getTime() + 30 * 60_000);
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(instant);
+
+      // Guard the premise: the app clock reads the 1st of the next month while
+      // the UTC calendar day — the one CURRENT_DATE would report — is still in
+      // the month before it.
+      expect(todayAppDateString()).toBe(facts.app_today);
+      expect(instant.toISOString().slice(0, 7)).toBe(facts.db_month);
+      return facts;
+    }
+
+    it('live path: the 6-month set and its window both follow the app month', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: oldestDbWindowMonthDay5, amount: '-5.00' });
+      await insertTxn({ dateExpr: dbMonthDay5, amount: '-40.00' });
+      await insertTxn({ dateExpr: appToday, amount: '-10.00' });
+
+      const facts = await pinClockToRollover();
+      const r = await getMonthlyFinancialSummary([], 'EUR', [], false);
+
+      // Anchored on CURRENT_DATE the series ran db_window_start…db_month: the
+      // app month (and the row dated on the app's "today") vanished from the
+      // dashboard while a stale sixth-back month stayed in.
+      const keys = r.months.map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`);
+      expect(r.months).toHaveLength(6);
+      expect(keys[0]).toBe(facts.app_window_start);
+      expect(keys[keys.length - 1]).toBe(facts.app_month);
+      expect(keys).not.toContain(facts.db_window_start);
+      const months = byMonth(r);
+      expect(months[facts.app_month]).toMatchObject({ total_spending: -10, transaction_count: 1 });
+      expect(months[facts.db_month]).toMatchObject({ total_spending: -40, transaction_count: 1 });
+    });
+
+    it('MV fast path: SQL filter and JS zero-fill agree on ONE 6-month set', async () => {
+      await seedBase();
+      await insertTxn({ dateExpr: oldestDbWindowMonthDay5, amount: '-5.00' });
+      await insertTxn({ dateExpr: dbMonthDay5, amount: '-40.00' });
+      await createMaterializedViews();
+      clearMvCache();
+
+      const facts = await pinClockToRollover();
+      const r = await getMonthlyFinancialSummary([], 'EUR', [], false);
+
+      // Pre-fix the MV filter (CURRENT_DATE) admitted db_window_start…db_month
+      // while the zero-fill (app clock) keyed app_window_start…app_month — a
+      // SEVEN-month union on the dashboard. One bound clock ⇒ exactly the
+      // app's six months, stale month dropped, app month zero-filled.
+      const keys = r.months.map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`);
+      expect(r.months).toHaveLength(6);
+      expect(keys[0]).toBe(facts.app_window_start);
+      expect(keys[keys.length - 1]).toBe(facts.app_month);
+      expect(keys).not.toContain(facts.db_window_start);
+      const months = byMonth(r);
+      expect(months[facts.db_month]).toMatchObject({ total_spending: -40, transaction_count: 1 });
+      expect(months[facts.app_month]).toMatchObject({ total_spending: 0, transaction_count: 0 });
     });
   });
 });

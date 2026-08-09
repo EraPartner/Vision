@@ -27,6 +27,7 @@ import { query } from '../src/database/connection.js';
 import { convertRowsToEur } from '../src/services/currency/currencyConversionService.js';
 import { mvAvailable } from '../src/repositories/infoRepositoryHelpers.js';
 import { getMonthlyFinancialSummary } from '../src/repositories/infoRepositoryMonthly.js';
+import { todayAppDateString } from '../src/lib/timezone.js';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -85,6 +86,33 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     }
   });
 
+  it('binds ONE app-date anchor for both the SQL window and the zero-fill across a month rollover', async () => {
+    // 22:30 UTC on Mar 31 is already 00:30 Apr 1 in APP_TIMEZONE (Europe/
+    // Brussels) — the exact window where the DB session's CURRENT_DATE still
+    // says March. Pre-fix the MV filter selected Oct…Mar while the zero-fill
+    // keyed Nov…Apr, a 7-month union; post-fix both derive from the single
+    // bound '2025-04-01'.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-03-31T22:30:00Z'));
+    try {
+      mvAvailable.mockResolvedValueOnce(true);
+      query
+        .mockResolvedValueOnce({ rows: [] }) // homogeneity probe
+        .mockResolvedValueOnce({ rows: [] }); // MV aggregation — empty corpus
+      convertRowsToEur.mockResolvedValueOnce([]);
+
+      const r = await getMonthlyFinancialSummary([], 'EUR', [], false);
+
+      const [sql, params] = query.mock.calls[1];
+      expect(sql).not.toContain('CURRENT_DATE');
+      expect(params).toEqual(['2025-04-01']);
+      expect(r.months.map((m) => `${m.year}-${String(m.month).padStart(2, '0')}`))
+        .toEqual(['2024-11', '2024-12', '2025-01', '2025-02', '2025-03', '2025-04']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('falls through to live query when mv unavailable', async () => {
     mvAvailable.mockResolvedValueOnce(false);
     query.mockResolvedValueOnce({ rows: [] });
@@ -121,7 +149,8 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
 
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('NOT IN ($1, $2)');
-    expect(params).toEqual([5, 7]);
+    // The app-date window anchor rides after the exclusion params (ADR-009).
+    expect(params).toEqual([5, 7, todayAppDateString()]);
   });
 
   it('always uses live query when recipient exclusions present', async () => {
@@ -131,7 +160,7 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
 
     await getMonthlyFinancialSummary([], 'EUR', [3, 4], false);
     const [, params] = query.mock.calls[0];
-    expect(params).toEqual([3, 4]);
+    expect(params).toEqual([3, 4, todayAppDateString()]);
   });
 
   it('combines category and recipient exclusions with sequential param numbering', async () => {
@@ -144,7 +173,7 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     expect(sql).toMatch(/category.*\$1/);
     // Alias-aware recipient exclusion (canonical), not bare t.recipient_id.
     expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($2)');
-    expect(params).toEqual([1, 99]);
+    expect(params).toEqual([1, 99, todayAppDateString()]);
   });
 
   it('drops invalid IDs from exclusion lists', async () => {
@@ -160,7 +189,7 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     );
 
     const [, params] = query.mock.calls[0];
-    expect(params).toEqual([99, 5]);
+    expect(params).toEqual([99, 5, todayAppDateString()]);
   });
 
   it('uses earliest-transaction date when allTime=true', async () => {
