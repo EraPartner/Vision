@@ -131,6 +131,10 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {/* Navigation landmark so SR users can jump straight to (or past) the
+            sidebar. Replicates SidebarContent's column layout (flex-col gap-2)
+            so wrapping everything in one flex child is visually free. */}
+        <nav aria-label={t('nav.primary')} className="flex w-full flex-col gap-2">
         {/* Workspace-agnostic pages (AI chat, Accounts hub — ADR-088), shown
             above the workspace switcher */}
         <SidebarGroup>
@@ -254,6 +258,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+        </nav>
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border/50 p-3">

@@ -116,6 +116,20 @@ export function AppLayout({ children }: AppLayoutProps) {
             <ElectronBridge onOpenSettings={openSettingsOnTab} onOpenShortcuts={openShortcuts} />
             <VisualEffectsController />
             <div className="relative min-h-screen flex w-full overflow-x-clip">
+                {/* Skip link: first tab stop on every page. Visually hidden until
+                    keyboard-focused (sr-only + focus:not-sr-only); when visible it
+                    floats over the chrome using existing tokens only. focus:fixed
+                    keeps it out of the flex flow so nothing shifts. */}
+                <a
+                    href="#main"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        mainRef.current?.focus();
+                    }}
+                    className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-xl focus:border focus:border-border/50 focus:bg-background/90 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-glass-soft focus:outline-none focus:ring-2 focus:ring-ring/70"
+                >
+                    {t('layout.skipToContent')}
+                </a>
                 <div aria-hidden="true" className="liquid-canvas" data-workspace={workspace}>
                     {effectsTier === 'enhanced' && <ShaderAurora />}
                     <div className="liquid-canvas-grain" />
@@ -228,7 +242,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             <Settings className="h-5 w-5" />
                         </Button>
                     </header>
-                    <main ref={mainRef} tabIndex={-1} className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)] outline-none focus:outline-none focus-visible:outline-none">
+                    <main id="main" ref={mainRef} tabIndex={-1} className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)] outline-none focus:outline-none focus-visible:outline-none">
                         <FxStatusBanner />
                         <UpcomingPaymentsNotification />
                         <PageTransition>{children}</PageTransition>
