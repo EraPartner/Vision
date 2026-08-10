@@ -38,7 +38,10 @@ function normalizeString(s) {
     // U+2014 (em dash) is intentionally preserved: it is real UI typography,
     // not a smart-quote parse hazard, and downstream (TS/JSON) carry it fine.
     .replace(/\u00A0/g, ' ')
-    .replace(/\u00B7/g, '.')
+    // U+00B7 (middle dot) is preserved for the same reason as the em dash. It
+    // is the clause separator in strings like "Enter to send \u00B7 Shift+Enter";
+    // folding it to "." produced a stray spaced period (" . ") that reads as a
+    // rendering bug, and silently reverted any source-level fix.
     .replace(/\u2010|\u2011/g, '-')
     .replace(/\u2039|\u203A/g, '<>')
     .replace(/\u00AB|\u00BB/g, '"');
