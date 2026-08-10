@@ -1887,6 +1887,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Account"
+        "400":
+          description: Invalid field (e.g. funding_account_id not a positive integer or not an existing account), or statement_balance set without statement_balance_date
         "409":
           description: An account with that name already exists
 
@@ -1937,6 +1939,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Account"
+        "400":
+          description: Invalid field (e.g. funding_account_id not a positive integer, self-referencing, not an existing account, or closing a funding cycle), or an invalid statement_balance/statement_balance_date pairing
         "404":
           description: Account not found
         "409":
