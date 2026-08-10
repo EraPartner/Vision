@@ -4590,9 +4590,14 @@ look-changing one.
   - (d) Cosmetic: tax sections label asset classes with raw keys ("stock", "crypto") while portfolio sections in the same PDF use `ASSET_CLASS_LABELS` pretty names.
   - (e) Remaining dead snake_case fallbacks (`asset_class`, `total_invested`, `gain_loss`, `gain_loss_pct`) in the portfolio renderers — the 4843a9f6 (#155) drop was scoped to `current_value` only.
 
-- [ ] **`belgianRulesSummary.js` renders client-controlled `b.label` unescaped into the PDF HTML** 🔽
+- [x] **`belgianRulesSummary.js` renders client-controlled `b.label` unescaped into the PDF HTML** 🔽 ✅ 2026-08-10 · 787b2fb2 (#156) (wrapped in the file's existing escapeHtml, `?? '—'` fallback semantics preserved; pinned by a test injecting `<script>alert(1)</script>` and asserting the escaped form + absence of the raw tag; full backend suite green. Same-file audit: every other interpolation is escaped or server-derived non-string)
   - ↪ _from: Orchestration session 2026-08-10 · tax-report rate fix (noticed by the implementer; pre-existing — also logged in docs/audits/2026-07-27-codebase-research-audit.md:385, never filed here)_
   - `apps/node-backend/src/services/reports/sections/belgianRulesSummary.js:90` — `<td>${b.label ?? '—'}</td>` with no `escapeHtml`, while the same file escapes correctly elsewhere. `b.label` is free-form `z.string().optional()` from the request body and reaches Puppeteer's `page.setContent()` in a Chromium launched with `--no-sandbox`. One-word fix: wrap in `escapeHtml`; pin with a test injecting a `<script>` label.
+
+- [ ] **Same escape gap, next file over: `taxExecutiveSummary.js` renders client-controlled `filingStatus`/`region` unescaped** 🔽
+  - ↪ _from: Orchestration session 2026-08-10 · escape-gap fix (sibling sweep of the finding above; listed per scope, not fixed)_
+  - `apps/node-backend/src/services/reports/sections/taxExecutiveSummary.js:58` — `${taxProfile.filingStatus ?? ''} · ${taxProfile.region ?? ''}` unescaped; both are client-controlled `z.string().optional()` from `taxProfileSchema` (`routes/reports.js:69-73`) — same class as the fixed b.label finding. Also noted, cosmetic-only: `taxTypeBreakdown.js:43` interpolates `${c.label}` unescaped but those labels are hardcoded server constants — not exploitable, just inconsistent with the file's own escaping.
+  - Fix: wrap both fields in `escapeHtml`; extend the reportTaxSections test with an injecting fixture.
 
 - [ ] **`running_balance` wire type diverges between the CSV export stream and the repository window query** ⏬
   - ↪ _from: Orchestration session 2026-07-28 · ratchet top-level services slice (typing surfaced, out of scope)_
