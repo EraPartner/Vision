@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router";
+import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { transactionKeys } from "@/lib/queryKeys";
+import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
 import type { RawApiTransaction } from "../types";
 
@@ -61,8 +64,18 @@ export function useTransactionListData({
     accountIdFilter,
     bankAccountFilter,
 }: UseTransactionListDataOptions): UseTransactionListDataResult {
-    const [sortKey, setSortKey] = useState<string | null>(null);
-    const [sortDir, setSortDir] = useState<SortDir>(null);
+    const { t } = useLanguage();
+    // Sort is URL-first like every filter on this page, so a reloaded or shared
+    // link reproduces the sender's ordering instead of silently reverting to
+    // the default. Key and direction are only honoured together — a half-set
+    // pair (hand-edited URL) reads as unsorted.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const sortDirParam = searchParams.get("sort_dir");
+    const sortKeyParam = searchParams.get("sort_key");
+    const validDir: SortDir = sortDirParam === "asc" || sortDirParam === "desc" ? sortDirParam : null;
+    const sortKey = validDir && sortKeyParam ? sortKeyParam : null;
+    const sortDir: SortDir = sortKey ? validDir : null;
+
     const [allItems, setAllItems] = useState<RawApiTransaction[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -75,6 +88,9 @@ export function useTransactionListData({
     // Monotonic id stamped on each loadMore. Sort/filter changes bump this so
     // in-flight responses from a prior query are discarded on resolve.
     const requestIdRef = useRef(0);
+    // Lets the failure toast's retry action re-invoke the latest loadMore
+    // without loadMore having to close over itself.
+    const loadMoreRef = useRef<(() => Promise<void>) | null>(null);
 
     const setEditing = useCallback((editing: boolean) => {
         isEditingRef.current = editing;
@@ -188,17 +204,47 @@ export function useTransactionListData({
         } catch (err) {
             if (myRequestId !== requestIdRef.current) return;
             logger.error('Failed to load more transactions:', err);
+            // A silently-truncated finance list reads as "end of data", which
+            // is worse than an error. Say so, and offer an explicit retry —
+            // `hasMoreRef` is untouched, so the next page is still fetchable.
+            toast.error(t('txPage.loadMoreFailed'), {
+                description: t('txPage.loadMoreFailedDesc'),
+                action: {
+                    label: t('common.retry'),
+                    onClick: () => { void loadMoreRef.current?.(); },
+                },
+            });
         } finally {
             if (myRequestId === requestIdRef.current) {
                 setIsFetchingMore(false);
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, accountIdFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, accountIdFilter, bankAccountFilter, sortKey, sortDir, pageSize, t]);
+
+    // Assigned in an effect, not during render: a render can be discarded under
+    // concurrent rendering, and the retry action only fires post-commit anyway.
+    useEffect(() => {
+        loadMoreRef.current = loadMore;
+    }, [loadMore]);
 
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
-        setSortKey(key);
-        setSortDir(dir);
+        setSearchParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                if (key && dir) {
+                    next.set("sort_key", key);
+                    next.set("sort_dir", dir);
+                } else {
+                    next.delete("sort_key");
+                    next.delete("sort_dir");
+                }
+                return next;
+            },
+            // Replace so cycling a column through asc/desc/none does not push
+            // three history entries the user has to Back through.
+            { replace: true },
+        );
         // Keep the current rows on screen while the re-sorted page round-trips
         // (React Query's placeholderData does the same for filter/search): the
         // initialData effect swaps in the new ordering when it arrives, so the
@@ -208,7 +254,7 @@ export function useTransactionListData({
         // Invalidate any in-flight loadMore so its response cannot append
         // rows from the previous sort/filter into the list.
         requestIdRef.current += 1;
-    }, []);
+    }, [setSearchParams]);
 
     return {
         allItems,

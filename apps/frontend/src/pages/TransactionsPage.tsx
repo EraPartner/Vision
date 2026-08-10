@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { useTransactionListData } from "@/features/transactions/hooks/useTransactionListData";
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
 import { AccountFilterCombobox } from "@/features/transactions/components/AccountFilterCombobox";
@@ -37,6 +38,24 @@ export default function TransactionsPage() {
     useEffect(() => {
         if (searchParam !== null) setSearch(searchParam);
     }, [searchParam]);
+    // ...and mirror typing back out, so the search term is as shareable and
+    // reload-safe as the ten filter params beside it. Debounced on the same
+    // delay the query already uses, so a param write costs no extra request;
+    // `{ replace: true }` keeps per-keystroke entries out of history.
+    const debouncedSearch = useDebounce(search, SEARCH_DEBOUNCE_MS);
+    useEffect(() => {
+        // Only write once the debounce has caught up with the live value.
+        // Mid-flight the two disagree, and writing the stale one would stomp a
+        // param-driven search (the palette effect above) with the previous term.
+        if (debouncedSearch !== search) return;
+        if (searchParam === (search || null)) return;
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (search) next.set('search', search);
+            else next.delete('search');
+            return next;
+        }, { replace: true });
+    }, [debouncedSearch, search, searchParam, setSearchParams]);
     const [infoTransaction, setInfoTransaction] = useState<TableTransaction | null>(null);
     const [quickLookTransaction, setQuickLookTransaction] = useState<TableTransaction | null>(null);
 
@@ -446,7 +465,20 @@ export default function TransactionsPage() {
                     accountIdFilter={accountIdFilter}
                     bankAccountFilter={bankAccountFilter}
                     tagsFilter={tagsFilter}
-                    onClear={() => setSearchParams({})}
+                    onClear={() => setSearchParams((prev) => {
+                        // Clears filters only. Sort moved into the URL for
+                        // shareability, but it is view state rather than a
+                        // filter chip — carry it across so "clear" does not
+                        // silently reorder the list (it never used to).
+                        const next = new URLSearchParams();
+                        const sortKeyParam = prev.get('sort_key');
+                        const sortDirParam = prev.get('sort_dir');
+                        if (sortKeyParam && sortDirParam) {
+                            next.set('sort_key', sortKeyParam);
+                            next.set('sort_dir', sortDirParam);
+                        }
+                        return next;
+                    })}
                     onClearTags={() => {
                         setSearchParams((prev) => {
                             const next = new URLSearchParams(prev);
