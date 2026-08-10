@@ -17,6 +17,9 @@ import { ChartCard } from "@/components/statistics/ChartCard";
 import { InsightsDigestPanel } from "@/components/statistics/InsightsDigestPanel";
 import { SummaryCards } from "@/components/statistics/SummaryCards";
 import { STATISTICS_WIDGETS } from "@/components/statistics/statisticsUtils";
+import { useTabParam } from "@/hooks/useTabParam";
+
+const STATISTICS_TABS = ["overview", "categories", "recipients", "yearly", "flow", "custom"] as const;
 
 const RecipientInsightsTab = lazy(() =>
   import("@/components/statistics/RecipientInsightsTab").then((m) => ({ default: m.RecipientInsightsTab }))
@@ -64,6 +67,7 @@ export default function StatisticsPage() {
   } = useStatistics();
   const { t } = useLanguage();
   const loadingSurfaceProps = useLoadingSurfaceProps();
+  const [activeTab, setActiveTab] = useTabParam(STATISTICS_TABS, "overview");
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } =
     useWidgetVisibility("statistics", STATISTICS_WIDGETS);
 
@@ -164,7 +168,7 @@ export default function StatisticsPage() {
 
       {isVisible("summaryCards") && <SummaryCards data={data} />}
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">{t("statsPage.tab.overview")}</TabsTrigger>
           <TabsTrigger value="categories">{t("statsPage.tab.categories")}</TabsTrigger>

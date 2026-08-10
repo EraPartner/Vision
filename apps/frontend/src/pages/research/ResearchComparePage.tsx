@@ -30,6 +30,9 @@ import type {
   ScorecardSeverity,
 } from "@/types/research";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
+import { useTabParam } from "@/hooks/useTabParam";
+
+const COMPARE_TABS = ["performance", "fundamentals"] as const;
 
 const MAX_SYMBOLS = 6;
 
@@ -188,6 +191,7 @@ export default function ResearchComparePage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useTabParam(COMPARE_TABS, "performance");
   const [selectedRange, setSelectedRange] = useState(RANGES[3]); // 1Y
   const [sortMetric, setSortMetric] = useState<FundamentalsMetricKey | null>(null);
   const { searchText, setSearchText, searchResult, isFetching: isSearching, isOpen } = useSymbolSearch(
@@ -366,7 +370,7 @@ export default function ResearchComparePage() {
       {symbols.length === 0 ? (
         <EmptyState icon={GitCompareArrows} title={t('research.compare.startTitle')} description={t('research.compare.startHint')} />
       ) : (
-        <Tabs defaultValue="performance">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="performance">{t('research.compare.tabPerformance')}</TabsTrigger>
             <TabsTrigger value="fundamentals">{t('research.compare.tabFundamentals')}</TabsTrigger>
