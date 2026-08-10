@@ -40,7 +40,9 @@ export function PortfolioImportReviewPage() {
       toast.success(t("portfolioImport.toast.importSuccess", { n: res.imported, dups: res.duplicates }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
-      navigate("/portfolio");
+      // Replace, don't push: this batch is consumed, so Back must skip the
+      // review URL (it no longer previews) instead of re-inviting a commit.
+      navigate("/portfolio", { replace: true });
     },
     onError: (err: Error) => toast.error(t("importPage.toast.serverError"), { description: apiErrorToMessage(err, t) }),
   });

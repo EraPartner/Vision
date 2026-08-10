@@ -225,7 +225,9 @@ export default function ImportReviewPage() {
       // aggregations so the imported rows appear immediately instead of after
       // staleTime expires (window-focus refetch is disabled globally).
       invalidateTransactionData(queryClient);
-      navigate("/import");
+      // Replace, don't push: this batch is consumed, so Back must skip the
+      // review URL (it no longer previews) instead of re-inviting a commit.
+      navigate("/import", { replace: true });
     },
     onError: (err: Error) => {
       toast.error(t("importReview.toast.commitFailed"), { description: apiErrorToMessage(err, t) });
