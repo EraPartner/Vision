@@ -3775,6 +3775,12 @@ look-changing one.
   - `components/dashboard/NetSummaryCard.tsx:106-117` (added post-audit in 5120a7f): each segment gets `aria-label={t('dashboard.stat.income')}` / `…spending` — literally just the word. The information is the segment *width* (`incomePct`/`spendingPct`), never stated, so a screen reader hears "Income, image" with no magnitude (the raw amounts do exist as adjacent text at `:122/:125`, limiting harm).
   - Fix: compose value into the label (`"Income: €3,210 (64%)"`) or mark segments `aria-hidden` and give the whole bar one summarizing `role="img"` label, since the amounts are announced below anyway.
 
+- [ ] **`formatDateWithAppSettings` drops the locale, so its `PPP` fallback renders English month names to Dutch users** 🔽 🔎 verified-present 2026-08-10
+  - ↪ _from: Orchestration session 2026-08-10 · forecast timezone implementer noticed it in passing; verified by the orchestrator against the current tree, not probed in a running app_
+  - `apps/frontend/src/components/shared/dateUtils.ts:117-119` — `formatDateWithAppSettings(date, appDateFormat)` takes no `locale` parameter at all and calls `formatDate(date, pattern)`, whose `locale` therefore always defaults to `"en-US"` (`:17`). Its sibling `formatMonthYearWithAppSettings` (`:121-135`) *does* accept and thread a locale, so this is drift between two neighbouring helpers, not a deliberate choice.
+  - Latent rather than live: `appDateFormatToDateFnsPattern` (`:106-115`) only returns the locale-sensitive `"PPP"` on its `default:` branch, so the bug surfaces only when `appDateFormat` is unset or holds a value outside the five known patterns — the five numeric patterns are locale-free and render identically. Blast radius is every caller of the helper (the forecast chart axis/tooltip at `pages/research/PortfolioForecastPage.tsx:283,285` among them), not one page.
+  - Fix: give `formatDateWithAppSettings` the same optional `locale` parameter its sibling already has and thread it to `formatDate`; pass the app language's locale at the call sites (`appLanguageToLocale` already exists in the same module). Confirm first whether `appDateFormat` can actually be unset in practice — if it cannot, this is a latent-only tidy-up and should stay 🔽.
+
 ### 🏛️ Architecture & API
 
 - [ ] **`recipientRepository.mergeRecipients` overlaps the new `flagAliasesOf` — two near-duplicate merge writers, one missing the grandchild re-point** 🔽
