@@ -251,6 +251,25 @@ export function validateIdParam(req, res, next) {
 }
 
 /**
+ * Per-param variant of validateIdParam for sub-resource ids (`:patternId`,
+ * `:accountId`) that the fixed `:id` middleware cannot cover. Same accept set
+ * and same parsed-value re-stamp as validateIdParam — see its note on the
+ * re-stamp's type-contract deviation.
+ * @param {string} name
+ * @returns {(req: import('../types/express.js').ExpressRequest, res: import('../types/express.js').ExpressResponse, next: import('../types/express.js').ExpressNextFunction) => void}
+ */
+export function validateIntParam(name) {
+  return (req, res, next) => {
+    const result = validateId(req.params[name], name);
+    if (!result.valid) {
+      return next(new ValidationError(result.error));
+    }
+    req.params[name] = /** @type {string} */ (/** @type {unknown} */ (result.value));
+    next();
+  };
+}
+
+/**
  * Validate an array of integer IDs (e.g., excluded_category_ids).
  * @param {unknown} values
  * @param {string} [fieldName]

@@ -16,6 +16,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
+import { validateIdParam } from '../middleware/validation.js';
 import { researchAggregator } from '../services/research/researchAggregator.js';
 import { researchMappingService } from '../services/research/researchMappingService.js';
 import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
@@ -308,9 +309,8 @@ router.post('/mappings', /** @param {ExpressRequest} req @param {ExpressResponse
 });
 
 // DELETE /api/research/mappings/:id
-router.delete('/mappings/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = Number.parseInt(req.params.id, 10);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('valid mapping id required');
+router.delete('/mappings/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+  const id = parseInt(req.params.id, 10);
   // Idempotent hard delete (an already-removed mapping is not an error) →
   // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   await researchMappingService.remove(id);

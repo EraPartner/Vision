@@ -8,7 +8,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import savedChartsRepository from '../services/savedChartsService.js';
-import { validateIntArray } from '../middleware/validation.js';
+import { validateIntArray, validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
@@ -152,13 +152,6 @@ function parseChartBody(schema, body) {
   return result.data;
 }
 
-/** @param {ExpressRequest} req */
-function parseChartId(req) {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid chart id');
-  return id;
-}
-
 // Canonical collection shape `{items, total}`. Pagination is opt-in: without
 // limit/offset this still answers every saved chart (the chart picker lists them
 // all), and `total` is the row count — no COUNT round-trip needed.
@@ -176,8 +169,8 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
   res.ok(chart);
 });
 
-router.patch('/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseChartId(req);
+router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+  const id = parseInt(req.params.id, 10);
   // Only fields present in the body reach the repository — buildSetClauses
   // skips absent/undefined fields, so partial updates stay partial.
   const data = parseChartBody(updateChartSchema, req.body);
@@ -186,8 +179,8 @@ router.patch('/:id', /** @param {ExpressRequest} req @param {ExpressResponse} re
   res.ok(updated);
 });
 
-router.delete('/:id', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const id = parseChartId(req);
+router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+  const id = parseInt(req.params.id, 10);
   const deleted = await savedChartsRepository.delete(id);
   if (!deleted) throw new NotFoundError('Saved chart not found');
   res.status(204).send();
