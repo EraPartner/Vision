@@ -87,7 +87,7 @@ function renderPITBlock(pit, profile, currency) {
   // Unlike taxTables rates (fractions), the client sends bracket rates already in
   // percent units (pit.ts: `rate: br.rate * 100`) — hence isRaw.
   const rows = (pit.brackets ?? []).map(b => `<tr>
-    <td>${b.label ?? '—'}</td>
+    <td>${b.label != null ? escapeHtml(b.label) : '—'}</td>
     <td class="num">${b.rate != null ? fmtPct(b.rate, true) : '—'}</td>
     <td class="num">${b.taxableIncome != null ? fmtCurrency(b.taxableIncome, currency) : '—'}</td>
     <td class="num neg">${b.taxAmount != null ? fmtCurrency(b.taxAmount, currency) : '—'}</td>

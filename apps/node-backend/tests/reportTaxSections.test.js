@@ -209,6 +209,23 @@ describe('renderBelgianRulesSummary', () => {
   it('falls back to the placeholder when neither table nor PIT data is present', () => {
     expect(renderBelgianRulesSummary(null, ctx)).toContain('No tax table data');
   });
+
+  it('escapes a client-supplied PIT bracket label instead of injecting raw HTML', () => {
+    const maliciousData = {
+      ...rulesData,
+      precomputedPIT: {
+        ...rulesData.precomputedPIT,
+        brackets: [
+          { label: '<script>alert(1)</script>', rate: 25, taxableIncome: 16_320, taxAmount: 4080 },
+        ],
+      },
+    };
+
+    const html = renderBelgianRulesSummary(maliciousData, ctx);
+
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>alert(1)</script>');
+  });
 });
 
 describe('renderTopInvestmentsByCost', () => {
