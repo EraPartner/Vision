@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Minus } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApiRequestLog } from '@/lib/devtools/apiRequestLog';
 import { setInspectorOpen } from '@/lib/devtools/devtoolsHotkey';
@@ -44,9 +45,9 @@ export function ApiInspector() {
                 <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-foreground">API Inspector</span>
                     {inFlight.length > 0 && (
-                        <span className="text-[10px] bg-warning/15 text-warning px-1.5 py-0.5 rounded-full tabular-nums font-mono">
+                        <Badge variant="warning" size="sm" className="px-1.5 text-[10px] font-mono tabular-nums">
                             {inFlight.length} in-flight
-                        </span>
+                        </Badge>
                     )}
                     {totalCount > 0 && inFlight.length === 0 && (
                         <span className="text-[10px] text-muted-foreground font-mono tabular-nums">

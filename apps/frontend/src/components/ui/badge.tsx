@@ -23,10 +23,22 @@ const badgeVariants = cva(
                 // merge/close warning callouts already use (no new colours).
                 warning:
                     "border-amber-500/40 bg-amber-500/15 text-amber-600 hover:bg-amber-500/20 dark:text-amber-500",
+                // Neutral "what kind of thing is this" pill on a solid muted
+                // ground — the flat counterpart to `secondary`'s translucent
+                // glass tone, for dense table/inspector rows.
+                muted: "border-transparent bg-muted text-muted-foreground",
+            },
+            // The default badge is a small-caps label; `sm` is the dense pill
+            // used inside table rows and toolbars, where a count or a raw
+            // identifier has to stay legible rather than be styled as a label.
+            size: {
+                default: "",
+                sm: "px-2 py-0.5 text-xs normal-case tracking-normal",
             },
         },
         defaultVariants: {
             variant: "default",
+            size: "default",
         },
     },
 );
@@ -34,8 +46,8 @@ const badgeVariants = cva(
 export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
 }
 
-function Badge({className, variant, ...props}: BadgeProps) {
-    return <div className={cn(badgeVariants({variant}), className)} {...props} />;
+function Badge({className, variant, size, ...props}: BadgeProps) {
+    return <div className={cn(badgeVariants({variant, size}), className)} {...props} />;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

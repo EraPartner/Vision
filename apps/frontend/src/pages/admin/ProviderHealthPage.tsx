@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
 import { useLoadingSurfaceProps } from '@/lib/loadingSurface';
@@ -18,7 +19,6 @@ import { formatDateTimeStringWithAppSettings } from '@/components/shared/dateUti
 import { numberFormatToLocale } from '@/utils/currency';
 import { getProviderHealth, probeProvider } from '@/lib/api/admin';
 import type { ProviderHealth } from '@/lib/api/admin';
-import { cn } from '@/lib/utils';
 
 function StatusIcon({ failures }: { failures: number }) {
     if (failures === 0) return <CheckCircle2 className="h-4 w-4 text-success" />;
@@ -26,10 +26,12 @@ function StatusIcon({ failures }: { failures: number }) {
     return <XCircle className="h-4 w-4 text-destructive" />;
 }
 
-function statusBadgeClass(failures: number) {
-    if (failures === 0) return 'bg-success/10 text-success';
-    if (failures <= 2) return 'bg-warning/10 text-warning';
-    return 'bg-destructive/10 text-destructive';
+// Same three-step scale StatusIcon uses, expressed as the shared Badge's own
+// status tones instead of a local class string.
+function statusBadgeVariant(failures: number): 'success' | 'warning' | 'destructive' {
+    if (failures === 0) return 'success';
+    if (failures <= 2) return 'warning';
+    return 'destructive';
 }
 
 function formatTs(
@@ -66,17 +68,15 @@ function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
                     </div>
                 </TableCell>
                 <TableCell>
-                    <span className="text-xs rounded-full px-2 py-0.5 bg-muted text-muted-foreground">
-                        {provider.kind}
-                    </span>
+                    <Badge variant="muted" size="sm">{provider.kind}</Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                     {formatTs(provider.last_success_at, neverLabel, dateFormat, locale)}
                 </TableCell>
                 <TableCell>
-                    <span className={cn('text-xs rounded-full px-2 py-0.5 font-medium', statusBadgeClass(provider.consecutive_failures))}>
+                    <Badge variant={statusBadgeVariant(provider.consecutive_failures)} size="sm">
                         {provider.consecutive_failures}
-                    </span>
+                    </Badge>
                 </TableCell>
                 <TableCell>
                     {provider.last_error && provider.consecutive_failures > 0 ? (
