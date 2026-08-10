@@ -1,6 +1,7 @@
 import { Landmark, Calculator } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioTaxData } from "@/hooks/usePortfolioTaxData";
+import { useTaxYearParam } from "@/hooks/useTaxYearParam";
 import { type InvestmentSummary } from "@/types/portfolio";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,8 @@ function getPortfolioTaxWidgets(t: (key: string, vars?: Record<string, string>) 
 
 export default function PortfolioTaxPage() {
   const { t } = useLanguage();
+  // Keeps the viewed income year in `?year=` so reload/share preserves it.
+  useTaxYearParam();
   // All tax math (cost enrichment, breakdowns, TOB/TACR/Reynders/CGT/WHT
   // estimates) lives in the hook; the page only composes widgets from its output.
   const {

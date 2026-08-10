@@ -1,5 +1,6 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTaxOverviewData } from "@/hooks/useTaxOverviewData";
+import { useTaxYearParam } from "@/hooks/useTaxYearParam";
 import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
 import { HistoricalYearBannerSection } from "@/components/tax/HistoricalYearBannerSection";
 import { YearActionsMenu } from "@/components/tax/YearActionsMenu";
@@ -42,6 +43,8 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
 
 export default function TaxOverviewPage() {
   const { t } = useLanguage();
+  // Keeps the viewed income year in `?year=` so reload/share preserves it.
+  useTaxYearParam();
   // All tax math (taxable-income aggregation, portfolio-tax accumulation, chart
   // series) lives in the hook; the page only composes widgets from its output.
   const {
