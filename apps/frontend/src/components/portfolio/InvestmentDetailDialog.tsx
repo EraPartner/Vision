@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,6 +70,199 @@ const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
   tax: 'bg-muted text-muted-foreground border-border',
   appreciation: 'bg-accent/10 text-accent border-accent/20',
 };
+
+/** `space-y-2` between transaction rows, carried per row while virtualized. */
+const TXN_ROW_GAP = 8;
+/**
+ * Seed height for a transaction row (p-3 + a type/date line + one detail line).
+ * Only used until `measureElement` reports the row's real height, which it does
+ * for every row the virtual window mounts.
+ */
+const TXN_ROW_ESTIMATE = 80;
+
+type Translate = ReturnType<typeof useLanguage>['t'];
+
+/**
+ * One transaction row of the transactions tab. Extracted and memoized because
+ * the list is unbounded: without this, every dialog-level state change (a
+ * nested dialog opening, a price refetch replacing `investment`) re-ran the
+ * render of every row — Badge, date formatting and several fmt/fmtNum calls
+ * apiece. Props are value-stable per row, so a state change that doesn't touch
+ * a row re-renders none of it.
+ */
+const TransactionRow = memo(function TransactionRow({
+  txn, t, fmt, locale, dateFormat, nativeCurrency,
+  nestedEdit, editDialogOpen, onEdit, onDelete,
+}: {
+  txn: TxnRow;
+  t: Translate;
+  fmt: ReturnType<typeof useCurrencyFormatter>;
+  locale: string;
+  dateFormat: string;
+  nativeCurrency: string;
+  /** True when this dialog owns the edit dialog (no `onEditTransaction` prop). */
+  nestedEdit: boolean;
+  editDialogOpen: boolean;
+  onEdit: (txn: TxnRow, event: React.MouseEvent<HTMLElement>) => void;
+  onDelete: (txn: TxnRow) => void;
+}) {
+  const fmtNum = (val: number, decimals = 2) => getNumberFmt(locale, decimals).format(val);
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={cn("text-xs", TXN_TYPE_COLORS[txn.type as PortfolioTxnType])}
+          >
+            {getTxnTypeLabel(t, txn.type as PortfolioTxnType)}
+          </Badge>
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            {formatDateStringWithAppSettings(txn.date, dateFormat)}
+          </span>
+        </div>
+
+        {txn.units != null && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {t('invDetail.unitsAt', {
+              units: fmtNum(txn.units, 4),
+              price: fmt(txn.price_per_unit || (txn.units !== 0 ? txn.amount / txn.units : 0), txn.currency || nativeCurrency, 2),
+            })}
+          </p>
+        )}
+
+        {txn.note && (
+          <p className="text-xs text-muted-foreground mt-1 truncate">{txn.note}</p>
+        )}
+      </div>
+
+      <div className="text-right shrink-0">
+        <p className={cn(
+          "font-bold tabular-nums",
+          ['buy', 'fee', 'tax'].includes(txn.type) ? 'text-loss' : 'text-gain'
+        )}>
+          {['buy', 'fee', 'tax'].includes(txn.type) ? '-' : '+'}{fmt(txn.amount, txn.currency || nativeCurrency)}
+        </p>
+
+        {((txn.fees ?? 0) > 0 || (txn.taxes ?? 0) > 0) && (
+          <p className="text-xs text-muted-foreground">
+             {(txn.fees ?? 0) > 0 && t('invDetail.fee', { amount: fmt(txn.fees ?? 0, txn.currency || nativeCurrency) })}
+            {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && ' · '}
+            {(txn.taxes ?? 0) > 0 && t('invDetail.tax', { amount: fmt(txn.taxes ?? 0, txn.currency || nativeCurrency) })}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1">
+        {!nestedEdit ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={(event) => onEdit(txn, event)}
+            aria-label={t('aria.editTransaction')}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label={t('aria.editTransaction')}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={editDialogOpen}
+            onClick={(event) => onEdit(txn, event)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          onClick={() => onDelete(txn)}
+          aria-label={t('aria.deleteTransaction')}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Virtualized transactions list. The list is unbounded (a DCA'd dividend
+ * holding accumulates hundreds of rows over the years) and every row used to be
+ * mounted the moment the tab opened. Only the rows the 400px window can show
+ * (plus overscan) are mounted now; the scroll container, row markup, row
+ * spacing and hover behaviour are unchanged — rows stay in normal flow and the
+ * skipped ones are represented by padding on the inner wrapper, so nothing is
+ * absolutely positioned and no row can overlap its neighbour.
+ */
+function TransactionList({
+  transactions, t, fmt, locale, dateFormat, nativeCurrency,
+  nestedEdit, editTxnOpen, editTxnId, onEdit, onDelete,
+}: {
+  transactions: TxnRow[];
+  t: Translate;
+  fmt: ReturnType<typeof useCurrencyFormatter>;
+  locale: string;
+  dateFormat: string;
+  nativeCurrency: string;
+  nestedEdit: boolean;
+  editTxnOpen: boolean;
+  editTxnId: number | null;
+  onEdit: (txn: TxnRow, event: React.MouseEvent<HTMLElement>) => void;
+  onDelete: (txn: TxnRow) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: transactions.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => TXN_ROW_ESTIMATE + TXN_ROW_GAP,
+    overscan: 6,
+  });
+  const items = virtualizer.getVirtualItems();
+  const paddingTop = items.length ? items[0]!.start : 0;
+  const paddingBottom = items.length ? virtualizer.getTotalSize() - items[items.length - 1]!.end : 0;
+
+  return (
+    <div ref={scrollRef} className="max-h-[400px] overflow-y-auto pr-2">
+      <div style={{ paddingTop, paddingBottom }}>
+        {items.map((item) => {
+          const txn = transactions[item.index];
+          if (!txn) return null;
+          return (
+            <div
+              key={txn.id}
+              data-index={item.index}
+              ref={virtualizer.measureElement}
+              // The gap `space-y-2` used to draw, carried by the row itself so
+              // the virtualizer measures it as part of the row's extent.
+              style={{ paddingBottom: item.index === transactions.length - 1 ? undefined : TXN_ROW_GAP }}
+            >
+              <TransactionRow
+                txn={txn}
+                t={t}
+                fmt={fmt}
+                locale={locale}
+                dateFormat={dateFormat}
+                nativeCurrency={nativeCurrency}
+                nestedEdit={nestedEdit}
+                editDialogOpen={editTxnOpen && editTxnId === txn.id}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function InvestmentDetailDialog({
   investment, trigger,
@@ -168,15 +362,35 @@ export function InvestmentDetailDialog({
     </Button>
   );
 
-  const handleDeleteTxn = async (txnId: number, txnType: string) => {
+  // The two row callbacks are props of the memoized transaction rows, so they
+  // are kept identity-stable: `investment` and `onEditTransaction` are read
+  // through refs rather than closed over, because a price refetch replaces the
+  // `investment` object and would otherwise re-render every row.
+  const investmentRef = useRef(investment);
+  investmentRef.current = investment;
+  const onEditTransactionRef = useRef(onEditTransaction);
+  onEditTransactionRef.current = onEditTransaction;
+
+  const handleEditTxn = useCallback((txn: TxnRow, event: React.MouseEvent<HTMLElement>) => {
+    const external = onEditTransactionRef.current;
+    if (external) {
+      external(txn, investmentRef.current);
+      return;
+    }
+    nestedOpenerRef.current = event.currentTarget;
+    setEditTxnId(txn.id);
+    setEditTxnOpen(true);
+  }, []);
+
+  const handleDeleteTxn = useCallback(async (txn: TxnRow) => {
     const ok = await confirm({
       title: t('invDetail.delete.title'),
-      description: t('invDetail.delete.desc', { txType: txnType }),
+      description: t('invDetail.delete.desc', { txType: getTxnTypeLabel(t, txn.type as PortfolioTxnType) }),
       confirmLabel: t('invDetail.delete.confirm'),
       variant: 'destructive',
     });
-    if (ok) deleteTransaction(txnId);
-  };
+    if (ok) deleteTransaction(txn.id);
+  }, [confirm, deleteTransaction, t]);
 
   const openMarketLookup = () => {
     if (!investment.symbol) return;
@@ -527,98 +741,19 @@ export function InvestmentDetailDialog({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                  {investment.transactions.map((txn) => (
-                    <div
-                      key={txn.id}
-                      className="cv-auto-row flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge 
-                            variant="outline" 
-                            className={cn("text-xs", TXN_TYPE_COLORS[txn.type as PortfolioTxnType])}
-                          >
-                            {getTxnTypeLabel(t, txn.type as PortfolioTxnType)}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatDateStringWithAppSettings(txn.date, appSettings.dateFormat)}
-                          </span>
-                        </div>
-                        
-                        {txn.units != null && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {t('invDetail.unitsAt', {
-                              units: fmtNum(txn.units, 4),
-                              price: fmt(txn.price_per_unit || (txn.units !== 0 ? txn.amount / txn.units : 0), txn.currency || nativeCurrency, 2),
-                            })}
-                          </p>
-                        )}
-                        
-                        {txn.note && (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">{txn.note}</p>
-                        )}
-                      </div>
-                      
-                      <div className="text-right shrink-0">
-                        <p className={cn(
-                          "font-bold tabular-nums",
-                          ['buy', 'fee', 'tax'].includes(txn.type) ? 'text-loss' : 'text-gain'
-                        )}>
-                          {['buy', 'fee', 'tax'].includes(txn.type) ? '-' : '+'}{fmt(txn.amount, txn.currency || nativeCurrency)}
-                        </p>
-                        
-                        {((txn.fees ?? 0) > 0 || (txn.taxes ?? 0) > 0) && (
-                          <p className="text-xs text-muted-foreground">
-                             {(txn.fees ?? 0) > 0 && t('invDetail.fee', { amount: fmt(txn.fees ?? 0, txn.currency || nativeCurrency) })}
-                            {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && ' · '}
-                            {(txn.taxes ?? 0) > 0 && t('invDetail.tax', { amount: fmt(txn.taxes ?? 0, txn.currency || nativeCurrency) })}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center gap-1">
-                        {onEditTransaction ? (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                            onClick={() => onEditTransaction(txn, investment)}
-                            aria-label={t('aria.editTransaction')}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                            aria-label={t('aria.editTransaction')}
-                            type="button"
-                            aria-haspopup="dialog"
-                            aria-expanded={editTxnOpen && editTxnId === txn.id}
-                            onClick={(event) => {
-                              setEditTxnId(txn.id);
-                              openNested(setEditTxnOpen)(event);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteTxn(txn.id, getTxnTypeLabel(t, txn.type as PortfolioTxnType))}
-                          aria-label={t('aria.deleteTransaction')}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <TransactionList
+                  transactions={investment.transactions}
+                  t={t}
+                  fmt={fmt}
+                  locale={locale}
+                  dateFormat={appSettings.dateFormat}
+                  nativeCurrency={nativeCurrency}
+                  nestedEdit={!onEditTransaction}
+                  editTxnOpen={editTxnOpen}
+                  editTxnId={editTxnId}
+                  onEdit={handleEditTxn}
+                  onDelete={handleDeleteTxn}
+                />
               )}
               
               {investment.transactions.length > 0 && (

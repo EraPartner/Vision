@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
@@ -35,9 +36,21 @@ export default function RealEstatePage() {
   const fmtParts = useCurrencyPartsFormatter(targetCurrency);
   const fmt = useCurrencyFormatter(targetCurrency);
 
-  function fmtNum(val: number, decimals = 2) {
-    return new Intl.NumberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
+  // One Intl.NumberFormat per (locale, decimals) instead of one per formatted
+  // value (~50-200µs a piece) — the memoized-formatter pattern NetWorthPage
+  // uses, widened to the `decimals` argument this page's call sites pass. The
+  // cache lives inside the memo, so a locale change replaces it wholesale.
+  const fmtNum = useMemo(() => {
+    const cache = new Map<number, Intl.NumberFormat>();
+    return (val: number, decimals = 2) => {
+      let formatter = cache.get(decimals);
+      if (!formatter) {
+        formatter = new Intl.NumberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        cache.set(decimals, formatter);
+      }
+      return formatter.format(val);
+    };
+  }, [locale]);
 
   const totalValue = properties.reduce((s, p) => s + convertToTarget(p.currentValue, p.currency), 0);
   const totalCost = properties.reduce((s, p) => s + convertToTarget(p.totalBuyCost, p.currency), 0);

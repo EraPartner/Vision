@@ -9,6 +9,26 @@ import { ok, err } from "@/test/msw/handlers";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 
+// jsdom has no layout: the transactions list's scroll box measures 0px tall, so
+// the real virtualizer mounts no rows at all. Render every item instead, the
+// same stand-in VirtualDataTable's tests use, so these keep asserting the row
+// markup and behaviour rather than the virtual window.
+vi.mock("@tanstack/react-virtual", () => ({
+    useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+        getVirtualItems: () =>
+            Array.from({ length: count }, (_, i) => ({
+                key: i,
+                index: i,
+                start: i * estimateSize(),
+                end: (i + 1) * estimateSize(),
+                size: estimateSize(),
+            })),
+        getTotalSize: () => count * estimateSize(),
+        measureElement: vi.fn(),
+        scrollToIndex: vi.fn(),
+    }),
+}));
+
 const API_BASE = "http://localhost:3002";
 
 const TXN = {

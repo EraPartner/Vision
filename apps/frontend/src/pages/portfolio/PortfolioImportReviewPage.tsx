@@ -4,7 +4,8 @@
  * the user pick an existing holding or create a new one before committing.
  */
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useParams, useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -17,7 +18,115 @@ import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { apiClient } from "@/lib/api";
-import type { PortfolioPreviewGroup } from "@/lib/api/portfolioImports";
+import type { PortfolioPreviewGroup, PortfolioPreviewRow } from "@/lib/api/portfolioImports";
+
+/**
+ * Seed height of a preview row (p-2 around a single line of text-xs content
+ * plus the type Badge). Every mounted row reports its real height through
+ * `measureElement`, and the first one to do so becomes the estimate for the
+ * rows that have not been mounted yet — so the page's total height (and with
+ * it the scrollbar) does not drift as the user scrolls a long group.
+ */
+const PREVIEW_ROW_ESTIMATE = 38;
+
+/**
+ * A group's preview rows. The page has no scroll container of its own — it
+ * scrolls with the window — so this virtualizes against the window and
+ * represents the rows outside the window as padding on the same box that used
+ * to hold them all. Rows stay in normal flow (nothing absolutely positioned,
+ * so a wrapping row can never overlap its neighbour) and keep their markup,
+ * classes and separators: `divide-y` draws the separators between mounted
+ * rows, and the topmost mounted row carries the one `divide-y` cannot draw
+ * because it has no rendered predecessor.
+ *
+ * A multi-year brokerage import produces 500-2000+ rows across the groups; all
+ * of them used to be mounted at once (`content-visibility` deferred their
+ * paint, never their React/DOM cost).
+ */
+function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [rowEstimate, setRowEstimate] = useState(PREVIEW_ROW_ESTIMATE);
+  // Where this group's row box sits in the document: the window virtualizer
+  // maps the window's scroll offset onto row indexes through it. Anything above
+  // the group changing height — another group's rows settling onto their
+  // measured height — moves it, hence the document-level ResizeObserver.
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setScrollMargin((prev) => (Math.abs(prev - top) > 0.5 ? top : prev));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.documentElement);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  const virtualizer = useWindowVirtualizer({
+    count: rows.length,
+    estimateSize: () => rowEstimate,
+    overscan: 8,
+    scrollMargin,
+  });
+
+  // Adopt the first mounted row's real height as the estimate for the rest.
+  // Rows in a group are homogeneous, so this keeps the virtual total within a
+  // pixel of the real one instead of letting it converge while scrolling.
+  useLayoutEffect(() => {
+    const first = containerRef.current?.querySelector<HTMLElement>("[data-index]");
+    if (!first) return;
+    const height = first.getBoundingClientRect().height;
+    if (height > 0) setRowEstimate((prev) => (Math.abs(prev - height) > 0.5 ? height : prev));
+  }, [rows.length]);
+
+  // `estimateSize` is not part of the measurements memo's key, so the adopted
+  // estimate only takes effect once the virtualizer is told to re-measure.
+  useLayoutEffect(() => {
+    virtualizer.measure();
+  }, [rowEstimate, virtualizer]);
+
+  const items = virtualizer.getVirtualItems();
+  const paddingTop = items.length ? items[0]!.start - scrollMargin : 0;
+  const paddingBottom = items.length
+    ? virtualizer.getTotalSize() - (items[items.length - 1]!.end - scrollMargin)
+    : 0;
+
+  return (
+    <div
+      ref={containerRef}
+      className="divide-y rounded-md border text-xs"
+      style={{ paddingTop, paddingBottom }}
+    >
+      {items.map((item) => {
+        const row = rows[item.index];
+        if (!row) return null;
+        return (
+          <div
+            key={row.id}
+            data-index={item.index}
+            ref={virtualizer.measureElement}
+            className={`flex flex-wrap items-center gap-x-3 gap-y-1 p-2${item.index > 0 ? " border-t" : ""}`}
+          >
+            <span className="text-muted-foreground">{row.tx_date}</span>
+            <Badge variant="outline" className="font-normal">{row.type ?? row.type_raw}</Badge>
+            {row.units != null && <span>{row.units} @ {row.price_per_unit ?? "—"}</span>}
+            {row.amount != null && <span className="text-muted-foreground">{row.amount} {row.currency ?? ""}</span>}
+            {row.status === "error" && row.error_message && (
+              <span className="text-destructive">{row.error_message}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function PortfolioImportReviewPage() {
   const { t } = useLanguage();
@@ -153,19 +262,7 @@ export function PortfolioImportReviewPage() {
               </div>
               )}
 
-              <div className="divide-y rounded-md border text-xs">
-                {g.rows.map((row) => (
-                  <div key={row.id} className="cv-auto-row flex flex-wrap items-center gap-x-3 gap-y-1 p-2">
-                    <span className="text-muted-foreground">{row.tx_date}</span>
-                    <Badge variant="outline" className="font-normal">{row.type ?? row.type_raw}</Badge>
-                    {row.units != null && <span>{row.units} @ {row.price_per_unit ?? "—"}</span>}
-                    {row.amount != null && <span className="text-muted-foreground">{row.amount} {row.currency ?? ""}</span>}
-                    {row.status === "error" && row.error_message && (
-                      <span className="text-destructive">{row.error_message}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <PreviewRowList rows={g.rows} />
             </CardContent>
           </Card>
         );
