@@ -50,13 +50,14 @@ export function fmtCurrency(amount, currency = 'EUR') {
  *
  * @param {number} value  Raw ratio (e.g. 0.123 → "12.3%") OR plain number if isRaw=true
  * @param {boolean} [isRaw]  If true, value is already a percentage number (e.g. 12.3)
+ * @param {number} [digits]  Fraction digits; raise for sub-percent rates (TOB 0.12%) that round to 0.1% at the default.
  * @returns {string}
  */
-export function fmtPct(value, isRaw = false) {
+export function fmtPct(value, isRaw = false, digits = 1) {
   const pct = isRaw ? value : value * 100;
   const abs = Math.abs(pct);
   const sign = pct < 0 ? '-' : '+';
-  return `${sign}${abs.toFixed(1)}%`;
+  return `${sign}${abs.toFixed(digits)}%`;
 }
 
 /**
