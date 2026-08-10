@@ -204,7 +204,13 @@ export async function commitBatch({ batchId, onProgress }) {
       const spec = CASH_KIND_CATEGORIES[kind];
       if (!spec) continue;
       const { category } = await categoryRepository.createOrGet(spec);
-      if (category?.id != null) cashCategoryIds.set(kind, category.id);
+      // Skip a soft-deleted (is_active = false) category: createOrGet's
+      // ON CONFLICT DO NOTHING hands the user's hidden row straight back and
+      // nothing reactivates it, so stamping fresh ledger rows with it would
+      // file them under a category every picker and list filters out. Leaving
+      // the kind unmapped commits the row uncategorized instead — the state
+      // external deposit/withdrawal cash rows already land in.
+      if (category?.id != null && category.is_active) cashCategoryIds.set(kind, category.id);
     }
   }
 

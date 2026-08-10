@@ -10,3 +10,7 @@ export {
   REAL_ESTATE_ASSET_CLASS,
 } from './assetClasses.js';
 export { PORTFOLIO_TXN_TYPES } from './portfolioTxnTypes.js';
+export {
+  PORTFOLIO_RECURRENCE_INTERVALS,
+  PLANNED_RECURRENCE_PATTERNS,
+} from './recurrence.js';

@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useSearchParams} from "react-router";
+import { ApiErrorCode } from "@vision/types";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {toast} from "sonner";
 import {Button} from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {Plus, Loader2} from "lucide-react";
 import {useCreateTransaction} from "@/hooks/useTransactions";
 import {useRecipients} from "@/hooks/useRecipients";
 import {useCategories} from "@/hooks/useCategories";
+import {ApiClientError} from "@/lib/api/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { DatePicker } from "@/components/shared/DatePicker";
@@ -110,7 +112,11 @@ export function AddTransactionDialog() {
                     setOpen(false);
                 },
                 onError: (error: Error) => {
-                    if (error.message.includes('Duplicate')) {
+                    // Backend signals the manual-dedup hit as ConflictError (409,
+                    // ApiErrorCode.CONFLICT) — see transactionService.createManualTransaction.
+                    // Key off the machine code, not the English message text, so a
+                    // reworded message can't silently stop this branch from firing.
+                    if (error instanceof ApiClientError && error.code === ApiErrorCode.CONFLICT) {
                         toast.error(t('addTxn.duplicateError'));
                     }
                 },

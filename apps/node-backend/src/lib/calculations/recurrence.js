@@ -52,8 +52,14 @@ import {
   firstOfMonthYmd,
 } from '../timezone.js';
 import { formatDateToYmd } from '../dateFormat.js';
+import { PLANNED_RECURRENCE_PATTERNS } from '@vision/types/recurrence';
 
-const SUPPORTED_PATTERNS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+// The named cadences this module recognises, single-sourced in
+// @vision/types/recurrence alongside the portfolio vocabulary that spells the
+// same cadence 'bi-weekly'. Note this list is the *named* half of the grammar
+// only — parseRecurrenceStep additionally accepts the custom `every N days`
+// form, which is deliberately not a member.
+const SUPPORTED_PATTERNS = PLANNED_RECURRENCE_PATTERNS;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

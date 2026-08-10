@@ -13,6 +13,7 @@ import { query } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
 import { VALID_PORTFOLIO_TXN_TYPES } from '../lib/portfolioTxnTypes.js';
 import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision/types/assetClasses';
+import { PORTFOLIO_RECURRENCE_INTERVALS } from '@vision/types/recurrence';
 
 /** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
 
@@ -42,12 +43,14 @@ import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from '@vision
  * @property {string} [preloaded_asset_class]
  */
 
-// Mirrors the recurrence_interval DB enum (migration 0001) and the frontend
-// RecurrenceInterval union. An out-of-set value has no DB CHECK and otherwise
-// surfaces as a raw enum-cast 500.
-export const VALID_RECURRENCE_INTERVALS = new Set([
-  'daily', 'weekly', 'bi-weekly', 'monthly', 'quarterly', 'yearly',
-]);
+// The recurrence_interval DB enum (migration 0001) / frontend RecurrenceInterval
+// union, single-sourced in @vision/types/recurrence — note the hyphenated
+// 'bi-weekly' spelling, which is NOT the planned-transaction vocabulary. An
+// out-of-set value has no DB CHECK and otherwise surfaces as a raw enum-cast 500.
+// Widened to Set<string>: callers probe raw, untrusted values with .has().
+export const VALID_RECURRENCE_INTERVALS = new Set(
+  /** @type {readonly string[]} */ (PORTFOLIO_RECURRENCE_INTERVALS)
+);
 
 /** @type {boolean|undefined} */
 let _hasPortfolioTransactionImportBatchIdColumn;

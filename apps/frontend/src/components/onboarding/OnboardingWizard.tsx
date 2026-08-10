@@ -16,6 +16,7 @@ import {
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { VisionMark } from "@/components/shared/VisionMark";
 import { apiClient } from "@/lib/api";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
@@ -301,7 +302,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
             setImportResult({ imported: result.imported, duplicates: result.duplicates });
             toast.success(t('onboarding.toast.imported', { n: String(result.imported) }));
         } catch (err: unknown) {
-            toast.error(t('onboarding.toast.importFailed', { msg: (err as Error).message }));
+            toast.error(t('onboarding.toast.importFailed', { msg: apiErrorToMessage(err, t) }));
         } finally {
             setImporting(false);
         }
@@ -320,7 +321,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
             setCategoriesCreated(true);
             toast.success(t('onboarding.toast.categoriesCreated', { n: String(created) }));
         } catch (err: unknown) {
-            toast.error(t('onboarding.toast.categoriesFailed', { msg: (err as Error).message }));
+            toast.error(t('onboarding.toast.categoriesFailed', { msg: apiErrorToMessage(err, t) }));
         } finally {
             setCreatingCategories(false);
         }

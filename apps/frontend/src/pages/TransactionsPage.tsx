@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
@@ -433,7 +434,7 @@ export default function TransactionsPage() {
                 <PageHeader title={t('txPage.title')} icon={Receipt} />
                 <Card>
                     <CardContent className="pt-0">
-                        <PageError message={t('txPage.error', { msg: error.message })} />
+                        <PageError message={t('txPage.error', { msg: apiErrorToMessage(error, t) })} />
                     </CardContent>
                 </Card>
             </div>

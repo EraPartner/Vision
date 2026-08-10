@@ -22,6 +22,7 @@ import { plannedKeys } from "@/lib/queryKeys";
 import { ExecutionHistoryDialog } from "@/components/planned/ExecutionHistoryDialog";
 import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/components/shared/dateUtils";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
@@ -395,7 +396,7 @@ export default function PlannedPaymentsPage() {
       setFormOpen(false);
     } catch (err) {
       logger.error("Failed to save payment:", err);
-      toast.error(t('plannedPage.saveFailed', { msg: (err as Error).message }));
+      toast.error(t('plannedPage.saveFailed', { msg: apiErrorToMessage(err, t) }));
     } finally {
       setActionLoading(false);
     }

@@ -19,6 +19,7 @@ import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import {
     groupAccounts, sumConvertedBalances, computeNetCash, isPortfolioType,
     type AccountGroup,
@@ -248,7 +249,7 @@ export default function AccountsPage() {
             )}
 
             {isError && (
-                <p className="text-sm text-destructive">{(error as Error)?.message}</p>
+                <p className="text-sm text-destructive">{apiErrorToMessage(error, t)}</p>
             )}
 
             {!isLoading && !isError && accounts.length === 0 && (

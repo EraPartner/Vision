@@ -14,6 +14,7 @@ import {AddCategoryDialog} from "@/features/categories/AddCategoryDialog";
 import {cn} from "@/lib/utils";
 import {onActivateKeyDown} from "@/utils/a11y";
 import {useConfirmDialog} from "@/hooks/useConfirmDialog";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 
 type CategoryItem = {
     id: number;
@@ -116,7 +117,7 @@ export default function CategoriesPage() {
         return (
             <div className="space-y-6">
                 <PageHeader title={t('categories.title')} icon={Tags} />
-                <Card className="glass-regular"><CardContent className="pt-6"><p className="text-destructive">{t('categoriesPage.error', { msg: error.message })}</p></CardContent></Card>
+                <Card className="glass-regular"><CardContent className="pt-6"><p className="text-destructive">{t('categoriesPage.error', { msg: apiErrorToMessage(error, t) })}</p></CardContent></Card>
             </div>
         );
     }

@@ -2,6 +2,7 @@
 // DTO mapping layer. No React in here — usePlannedPayments consumes these, and
 // they are unit-tested in plannedPaymentMapper.test.ts.
 import { getCurrencyFormatDefaults } from "@/utils/currency";
+import type { PlannedRecurrencePattern } from "@vision/types/recurrence";
 import type {
   PlannedTransaction,
   PlannedTransactionCreate,
@@ -18,7 +19,10 @@ export interface PlannedPayment {
   currency: string;
   due_date: string; // ISO date
   is_recurring: boolean;
-  frequency?: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly" | "custom";
+  // The planned-transaction recurrence vocabulary (canonical list in
+  // @vision/types/recurrence — note 'biweekly', no hyphen), plus the
+  // view-model-only "custom" bucket that stands in for `every N days`.
+  frequency?: PlannedRecurrencePattern | "custom";
   is_loan?: boolean;
   loan_type?: PlannedLoanType;
   loan_principal?: number;
