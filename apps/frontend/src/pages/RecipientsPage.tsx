@@ -25,6 +25,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { parseCategoryName } from "@vision/shared-utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageError } from "@/components/shared/PageError";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 
 type TableRecipient = {
     id: number;
@@ -338,7 +339,7 @@ export default function RecipientsPage() {
                 <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
                 <Card>
                     <CardContent className="pt-0">
-                        <PageError message={t('recipientsPage.error', { msg: error.message })} />
+                        <PageError message={t('recipientsPage.error', { msg: apiErrorToMessage(error, t) })} />
                     </CardContent>
                 </Card>
             </div>
