@@ -74,6 +74,23 @@ describe('renderTaxExecutiveSummary', () => {
     // Net dividend result = 291 - 87.3.
     expect(html).toContain(eur('203.70'));
   });
+
+  it('escapes a client-supplied tax profile instead of injecting raw HTML', () => {
+    const maliciousData = {
+      ...data,
+      taxProfile: {
+        filingStatus: '<script>alert(1)</script>',
+        region: '<img src=x onerror=alert(2)>',
+      },
+    };
+
+    const html = renderTaxExecutiveSummary(maliciousData, ctx);
+
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain('&lt;img src=x onerror=alert(2)&gt;');
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x onerror=alert(2)>');
+  });
 });
 
 describe('renderTaxTypeBreakdown', () => {

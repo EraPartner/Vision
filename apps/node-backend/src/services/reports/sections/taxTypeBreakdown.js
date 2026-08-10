@@ -4,7 +4,7 @@
  * svgHorizontalBars of TOB / dividend WHT / sell taxes / fees / other; table with absolute + %.
  */
 
-import { fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
+import { escapeHtml, fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -40,7 +40,7 @@ export function renderTaxTypeBreakdown(data, { currency }) {
 
   /* eslint-disable vision-local-money/no-raw-money-arithmetic */
   const tableRows = components.map(c => `<tr>
-    <td>${c.label}</td>
+    <td>${escapeHtml(c.label)}</td>
     <td class="num neg">${fmtCurrency(c.amount, currency)}</td>
     <td class="num">${total > 0 ? fmtPct((c.amount / total) * 100, true) : '—'}</td>
   </tr>`).join('');
