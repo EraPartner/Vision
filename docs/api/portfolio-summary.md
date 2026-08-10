@@ -3,9 +3,9 @@ title: Portfolio Summary API
 type: endpoint
 status: active
 date: 2026-06-18
-updated: 2026-06-18
+updated: 2026-08-10
 tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance, net-worth, live-overlay, fx-attribution, asset-gain, fx-gain, purchase-date-rates, per-account, byAccount, adr-091, adr-100]
-description: Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain. 2026-06-18 (ADR-091/ADR-100): additive byAccount array — per-account holdings breakdown with parity guarantee.
+description: Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain. 2026-06-18 (ADR-091/ADR-100): additive byAccount array. 2026-08-10 (ADR-108): byAccount carries full per-broker P&L from the partitioned lot engine, summaries carry fullyAssigned, Σ byAccount ≡ totals parity-tested under all cost-basis methods.
 aliases: [portfolio-totals, portfolio-metrics, summary-api]
 related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/node-backend/src/routes/info/_cache.js", "apps/node-backend/src/routes/info/_liveSummary.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
 ---
@@ -106,9 +106,9 @@ Content-Type: application/json
     }
   ],
   "byAccount": [
-    { "account_id": 3, "currentValue": 90000.00, "totalInvested": 72000.00, "gainLoss": 18000.00 },
-    { "account_id": 7, "currentValue": 35000.00, "totalInvested": 28000.00, "gainLoss": 7000.00 },
-    { "account_id": null, "currentValue": 0.00, "totalInvested": 0.00, "gainLoss": 0.00 }
+    { "account_id": 3, "currentValue": 90000.00, "totalInvested": 72000.00, "realizedGain": 4000.00, "unrealizedGain": 14000.00, "gainLoss": 18000.00 },
+    { "account_id": 7, "currentValue": 35000.00, "totalInvested": 28000.00, "realizedGain": 1000.00, "unrealizedGain": 6000.00, "gainLoss": 7000.00 },
+    { "account_id": null, "currentValue": 0.00, "totalInvested": 0.00, "realizedGain": 0.00, "unrealizedGain": 0.00, "gainLoss": 0.00 }
   ]
 }
 ```
@@ -122,23 +122,32 @@ Content-Type: application/json
 | `computed_at` | string (ISO-8601) | Timestamp when this snapshot was computed; refreshes on cache invalidation |
 | `totals` | object | Aggregate portfolio metrics across all assets |
 | `summaries` | array | Per-asset-class breakdown with individual metrics |
-| `byAccount` | array | **New (ADR-091/ADR-100, 2026-06-18).** Per-account holdings breakdown. Additive — existing fields are unchanged. |
+| `byAccount` | array | **ADR-108 (2026-08-10): full per-broker P&L.** Per-account partition breakdown from the partitioned lot engine (sells consume same-account lots under the user's configured cost-basis method; corporate actions apply investment-wide). Additive — pre-existing fields are unchanged. |
 
-**byAccount[] object (one per account that holds at least one lot, plus one `null` entry for unassigned lots):**
+**byAccount[] object (one per account that holds at least one lot, plus one `null` entry for unassigned lots / instruments still in the ADR-108 transition):**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `account_id` | `number \| null` | Account identifier; `null` = unassigned lots |
+| `account_id` | `number \| null` | Account identifier; `null` = unassigned |
 | `currentValue` | number | Holdings market value for this account in target currency |
-| `totalInvested` | number | Cost basis for this account at transaction-date FX rates |
-| `gainLoss` | number | `currentValue − totalInvested` for this account |
+| `totalInvested` | number | Gross buy cost for this account at transaction-date FX rates (same grain as `totals.totalInvested`) |
+| `realizedGain` | number | **New (ADR-108).** Realized P&L from this account's own lots |
+| `unrealizedGain` | number | **New (ADR-108).** Open-position P&L for this account |
+| `gainLoss` | number | Total gain for this account (incl. income minus fee/tax rows) |
 
-**Parity invariant (locked by test, per ADR-061 discipline):**
+Each `summaries[]` entry additionally carries `fullyAssigned: boolean` (ADR-108 transition flag). While an instrument has broker-unassigned lots, its **entire** figures sit on the `account_id: null` row — read surfaces render an "assign lots" nudge instead of wrong partitions — and its global math stays the flat replay.
+
+**Parity invariant (locked by `tests/portfolioSummaryPartitionParity.db.test.js` under weighted_avg/fifo/lifo, per ADR-061 discipline):**
 ```
-Σ byAccount[].currentValue  === totals.currentValue
-Σ byAccount[].totalInvested === totals.totalInvested
-Σ byAccount[].gainLoss      === totals.totalGainLoss
+Σ byAccount[].currentValue    === totals.totalPortfolioValue
+Σ byAccount[].totalInvested   === totals.totalInvested
+Σ byAccount[].realizedGain    === totals.totalRealizedGain
+Σ byAccount[].unrealizedGain  === totals.totalUnrealizedGain
+Σ byAccount[].gainLoss        === totals.totalGainLoss
 ```
+
+> [!note] ADR-108 headline semantics on fully-assigned multi-broker instruments
+> Because the investment core **is** the partition aggregate, the global headline is not purely re-attributed in two edge data states (adversarially verified 2026-08-10): a **weighted_avg** `return_of_capital` exceeding one partition's basis share floors per partition (the flat replay floored one pooled basis; the partitioned figure matches FIFO/LIFO for the same rows), and a sell tagged to a broker holding fewer units than sold clamps to that partition's lots, so global units/value follow the tags. Assign sells alongside their lots when re-tagging.
 
 **totals object:**
 | Field | Type | Description |

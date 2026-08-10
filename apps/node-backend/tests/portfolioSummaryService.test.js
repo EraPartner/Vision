@@ -253,7 +253,7 @@ describe('getPortfolioSummary', () => {
     expect(result.totals.totalGainLoss).toBeCloseTo(sumGainLoss, 2);
   });
 
-  it('byAccount splits holdings per account and re-sums to the totals (ADR-091/ADR-093 parity)', async () => {
+  it('byAccount: an instrument with ANY unassigned lot collapses whole into the null row (ADR-108 transition rule — never wrong partitions)', async () => {
     query
       .mockResolvedValueOnce({ rows: [investmentRow({ id: 1, currency: 'EUR', current_price: 12 })] })
       .mockResolvedValueOnce({
@@ -266,16 +266,58 @@ describe('getPortfolioSummary', () => {
 
     const result = await getPortfolioSummary('EUR');
 
-    // Three groups: IBKR(10), Degiro(20), unassigned(null), sorted by value desc.
-    expect(result.byAccount.map((a) => a.account_id)).toEqual([10, 20, null]);
+    // Partially assigned → per-broker figures unavailable: everything on the
+    // unassigned row; the summary flags it so the UI can render the nudge.
+    expect(result.byAccount.map((a) => a.account_id)).toEqual([null]);
+    expect(result.summaries[0].fullyAssigned).toBe(false);
+    // Global figures stay the exact flat-replay values.
+    expect(result.byAccount[0].currentValue).toBeCloseTo(result.totals.totalPortfolioValue, 2);
+    expect(result.byAccount[0].totalInvested).toBeCloseTo(result.totals.totalInvested, 2);
+    expect(result.byAccount[0].gainLoss).toBeCloseTo(result.totals.totalGainLoss, 2);
+    expect(result.totals.totalPortfolioValue).toBe(1920); // 160 units @ 12
+  });
+
+  it('byAccount: fully-assigned lots partition per broker — sells consume SAME-account lots (ADR-108)', async () => {
+    settingsRepository.get.mockResolvedValueOnce('fifo');
+    query
+      .mockResolvedValueOnce({ rows: [investmentRow({ id: 1, currency: 'EUR', current_price: 12 })] })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, investment_id: 1, type: 'buy', amount: 1000, units: 100, currency: 'EUR', date: '2026-01-01', account_id: 10 }),
+          txnRow({ id: 2, investment_id: 1, type: 'buy', amount: 1000, units: 50, currency: 'EUR', date: '2026-02-01', account_id: 20 }),
+          txnRow({ id: 3, investment_id: 1, type: 'sell', amount: 600, units: 25, currency: 'EUR', date: '2026-03-01', account_id: 20 }),
+        ],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+
+    expect(result.summaries[0].fullyAssigned).toBe(true);
+    expect(result.byAccount.map((a) => a.account_id)).toEqual([10, 20]);
+
+    // Account 20's sell consumes account 20's own 20/unit lot — NOT account
+    // 10's older 10/unit lot that flat global FIFO would pick.
+    const acc20 = result.byAccount.find((a) => a.account_id === 20);
+    expect(acc20.realizedGain).toBe(100);   // 600 − 25×20
+    expect(acc20.unrealizedGain).toBe(-200); // 25×12 − 25×20
+    expect(acc20.currentValue).toBe(300);
+    const acc10 = result.byAccount.find((a) => a.account_id === 10);
+    expect(acc10).toMatchObject({
+      currentValue: 1200, totalInvested: 1000, realizedGain: 0, unrealizedGain: 200,
+    });
+
+    // The investment summary IS the partition sum (Σ partitions ≡ global).
+    expect(result.summaries[0].realizedGain).toBe(100); // flat FIFO would say 350
+    expect(result.totals.totalRealizedGain).toBe(100);
     const sumCV = result.byAccount.reduce((s, a) => s + a.currentValue, 0);
-    const sumGL = result.byAccount.reduce((s, a) => s + a.gainLoss, 0);
     const sumInv = result.byAccount.reduce((s, a) => s + a.totalInvested, 0);
+    const sumReal = result.byAccount.reduce((s, a) => s + a.realizedGain, 0);
+    const sumUnreal = result.byAccount.reduce((s, a) => s + a.unrealizedGain, 0);
+    const sumGL = result.byAccount.reduce((s, a) => s + a.gainLoss, 0);
     expect(sumCV).toBeCloseTo(result.totals.totalPortfolioValue, 2);
-    expect(sumGL).toBeCloseTo(result.totals.totalGainLoss, 2);
     expect(sumInv).toBeCloseTo(result.totals.totalInvested, 2);
-    // 100 units @ 12 = 1200 at the largest account.
-    expect(result.byAccount[0]).toMatchObject({ account_id: 10, currentValue: 1200 });
+    expect(sumReal).toBeCloseTo(result.totals.totalRealizedGain, 2);
+    expect(sumUnreal).toBeCloseTo(result.totals.totalUnrealizedGain, 2);
+    expect(sumGL).toBeCloseTo(result.totals.totalGainLoss, 2);
   });
 });
 

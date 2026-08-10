@@ -68,6 +68,7 @@ export async function create({ investment_id, type, date, amount, units, price_p
     type: payload.type,
     date: payload.date,
     units: payload.units,
+    accountId: payload.account_id,
   });
 
   const columns = [
@@ -192,6 +193,9 @@ export async function update(id, fields) {
     type: normalized.type,
     date: normalized.date,
     units: normalized.units,
+    // Effective post-update account: the patch's value when it touches
+    // account_id (including explicit null = unassign), else the stored one.
+    accountId: normalized.account_id,
     excludeTransactionId: id,
   });
 

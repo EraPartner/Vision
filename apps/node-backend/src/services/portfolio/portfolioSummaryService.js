@@ -13,7 +13,7 @@
 import { query } from '../../database/connection.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { buildHistoricalRateIndex, findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
-import { buildInvestmentSummaryCore } from '@vision/shared-utils/portfolio';
+import { buildInvestmentSummaryCorePartitioned } from '@vision/shared-utils/portfolio';
 import { settingsRepository } from '../../repositories/settingsRepository.js';
 import { portfolioTransactionRepository } from '../../repositories/portfolioTransactionRepository.js';
 import { todayAppDateString } from '../../lib/timezone.js';
@@ -85,7 +85,7 @@ async function resolveCostBasisMethod() {
  *   currency: string,
  *   computed_at: string,
  *   totals: ReturnType<typeof aggregateTotals>,
- *   summaries: ReturnType<typeof buildInvestmentSummary>[],
+ *   summaries: ReturnType<typeof buildInvestmentSummary>['summary'][],
  *   byAccount: ReturnType<typeof aggregateByAccount>,
  * }>}
  */
@@ -143,21 +143,16 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   const historicalIndex = await loadHistoricalRateIndex(distinctCurrencies, target);
   annotateTransactionFxMultipliers(txnRows, target, historicalIndex, multiplierByCurrency);
 
-  const summaries = investmentsResult.rows.map((inv) =>
+  const perInvestment = investmentsResult.rows.map((inv) =>
     buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target, multiplierByCurrency, {
       costBasisMethod,
       todayYmd,
     })
   );
+  const summaries = perInvestment.map((r) => r.summary);
 
   const totals = aggregateTotals(summaries);
-  const byAccount = aggregateByAccount(
-    investmentsResult.rows,
-    txnsByInvestment,
-    target,
-    multiplierByCurrency,
-    { costBasisMethod, todayYmd },
-  );
+  const byAccount = aggregateByAccount(perInvestment.flatMap((r) => r.accountContributions));
 
   return {
     currency: target,
@@ -169,50 +164,57 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
 }
 
 /**
- * Per-account holdings breakdown (ADR-091 / ADR-093 supersession): split each
- * investment's lots by account_id, run the SAME per-investment math per group,
- * and aggregate market value / cost / gain per account. By construction Σ byAccount
- * equals the per-investment totals (locked by a parity test). Unassigned lots
- * (account_id NULL) collapse into a single { account_id: null } row. Names are
- * resolved by the caller (the accounts list) — this returns ids only.
+ * One investment's contribution to a single byAccount row, in target currency
+ * (unrounded Decimals — rounding happens once per account row on emit).
  *
- * @param {RawInvestmentRow[]} investmentRows
- * @param {Map<number, AnnotatedTxRow[]>} txnsByInvestment
- * @param {string} target
- * @param {Map<string, number>} multiplierByCurrency
- * @param {{ costBasisMethod: CostBasisMethod, todayYmd: string }} opts
+ * @typedef {{
+ *   account_id: number|null,
+ *   currentValue: Decimal,
+ *   totalInvested: Decimal,
+ *   realizedGain: Decimal,
+ *   unrealizedGain: Decimal,
+ *   gainLoss: Decimal,
+ * }} AccountContribution
  */
-function aggregateByAccount(investmentRows, txnsByInvestment, target, multiplierByCurrency, opts) {
-  /** @type {Map<number|null, { account_id: number|null, currentValue: Decimal, totalInvested: Decimal, gainLoss: Decimal }>} */
+
+/**
+ * Per-account holdings + P&L breakdown (ADR-108): sum the per-(investment,
+ * account) partition contributions produced by the partitioned engine. Σ of
+ * the rows ≡ the portfolio totals BY CONSTRUCTION — for a fully-assigned
+ * instrument its investment core is the exact sum of its partition cores; for
+ * anything else the whole (flat-engine) core contributes to the unassigned
+ * (account_id null) row, per the ADR-108 transition rule: NEVER wrong
+ * partitions. `totalInvested` follows the totals' definition (gross buy cost,
+ * see aggregateTotals note). Names are resolved by the caller — ids only.
+ *
+ * @param {AccountContribution[]} contributions
+ */
+function aggregateByAccount(contributions) {
+  /** @type {Map<number|null, AccountContribution>} */
   const acc = new Map(); // account_id (or null) → aggregate
-  for (const inv of investmentRows) {
-    const txns = txnsByInvestment.get(Number(inv.id)) ?? [];
-    /** @type {Map<number|null, AnnotatedTxRow[]>} */
-    const groups = new Map();
-    for (const txn of txns) {
-      const key = txn.account_id == null ? null : Number(txn.account_id);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(txn);
-    }
-    for (const [accountId, groupTxns] of groups) {
-      const s = buildInvestmentSummary(inv, groupTxns, target, multiplierByCurrency, opts);
-      const cur = acc.get(accountId) ?? {
-        account_id: accountId,
-        currentValue: toDecimal(0),
-        totalInvested: toDecimal(0),
-        gainLoss: toDecimal(0),
-      };
-      cur.currentValue = cur.currentValue.plus(s.currentValue);
-      cur.totalInvested = cur.totalInvested.plus(s.totalBuyCost);
-      cur.gainLoss = cur.gainLoss.plus(s.gainLoss);
-      acc.set(accountId, cur);
-    }
+  for (const c of contributions) {
+    const cur = acc.get(c.account_id) ?? {
+      account_id: c.account_id,
+      currentValue: toDecimal(0),
+      totalInvested: toDecimal(0),
+      realizedGain: toDecimal(0),
+      unrealizedGain: toDecimal(0),
+      gainLoss: toDecimal(0),
+    };
+    cur.currentValue = cur.currentValue.plus(c.currentValue);
+    cur.totalInvested = cur.totalInvested.plus(c.totalInvested);
+    cur.realizedGain = cur.realizedGain.plus(c.realizedGain);
+    cur.unrealizedGain = cur.unrealizedGain.plus(c.unrealizedGain);
+    cur.gainLoss = cur.gainLoss.plus(c.gainLoss);
+    acc.set(c.account_id, cur);
   }
   return [...acc.values()]
     .map((a) => ({
       account_id: a.account_id,
       currentValue: round2(a.currentValue),
       totalInvested: round2(a.totalInvested),
+      realizedGain: round2(a.realizedGain),
+      unrealizedGain: round2(a.unrealizedGain),
       gainLoss: round2(a.gainLoss),
     }))
     .sort((x, y) => y.currentValue - x.currentValue);
@@ -288,18 +290,29 @@ function annotateTransactionFxMultipliers(txns, target, historicalIndex, multipl
  * resulting gain therefore includes the FX component, decomposed into
  * assetGain + fxGain (ADR: FX attribution).
  *
+ * ADR-108: the core is computed by the PARTITIONED engine — for an investment
+ * whose lots are fully broker-assigned it is the exact sum of its per-account
+ * partition cores (sells consume same-account lots under the configured
+ * method), otherwise the flat global replay, unchanged. The per-partition
+ * contributions feed the byAccount breakdown; `fullyAssigned` is emitted on
+ * the summary so read surfaces can render "assign lots to see per-broker
+ * figures" instead of wrong partitions.
+ *
  * @param {RawInvestmentRow} inv  raw investment row
  * @param {AnnotatedTxRow[]}  txns transaction rows for this investment (fxMultiplier-annotated)
  * @param {string} targetCurrency
  * @param {Map<string, number>} multiplierByCurrency  FX multiplier per currency
  * @param {{ costBasisMethod: CostBasisMethod, todayYmd: string }} opts
+ * @returns {{ summary: Record<string, any>, accountContributions: AccountContribution[] }}
  */
 function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency, opts) {
   const invCurrency = (inv.currency || 'EUR').toUpperCase();
   // Multiplier was resolved once per distinct currency by the caller.
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
 
-  const core = buildInvestmentSummaryCore(inv, txns, { ...opts, fxMultiplierNow: multiplier });
+  const { core, partitions, fullyAssigned } = buildInvestmentSummaryCorePartitioned(
+    inv, txns, { ...opts, fxMultiplierNow: multiplier },
+  );
   const cv = core.converted;
   /** @param {DecimalInput} v */
   const conv = (v) => multiply(v, multiplier);
@@ -325,7 +338,19 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
   const gainLossPercent = cv.gainLossPercent;
   const usedFallbackRate = txns.some((t) => t._fxFellBack === true);
 
-  return {
+  // Per-account contributions in target currency: value at today's rate,
+  // flows locked at their transaction-date rates — the same converted track
+  // the summary itself emits, so Σ contributions ≡ the summary's own fields.
+  const accountContributions = partitions.map((p) => ({
+    account_id: p.accountId,
+    currentValue: p.core.converted.currentValue,
+    totalInvested: p.core.converted.totalBuyCost,
+    realizedGain: p.core.converted.realizedGain,
+    unrealizedGain: p.core.converted.unrealizedGain,
+    gainLoss: p.core.converted.gainLoss,
+  }));
+
+  const summary = {
     // Identity passthrough — base investment fields the frontend already uses
     id: Number(inv.id),
     name: inv.name,
@@ -394,7 +419,14 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
     accruedInterest: round2(convertedAccruedInterest),
     projectedAnnualInterest: round2(convertedProjectedInterest),
     totalAppreciation: round2(convertedTotalAppreciation),
+
+    // ADR-108 transition flag: false while the instrument still has broker-
+    // unassigned lots (its per-account figures then live entirely on the
+    // byAccount null row — read surfaces show an "assign lots" nudge instead).
+    fullyAssigned,
   };
+
+  return { summary, accountContributions };
 }
 
 /**
@@ -408,7 +440,7 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
 // matches. Treat this as "gross buy cost (acquisition costs included where the
 // asset class records them per-row)"; documented here rather than re-grained to
 // avoid changing every reported invested figure.
-/** @param {ReturnType<typeof buildInvestmentSummary>[]} summaries */
+/** @param {ReturnType<typeof buildInvestmentSummary>['summary'][]} summaries */
 function aggregateTotals(summaries) {
   const acc = {
     totalPortfolioValue: addAll(summaries.map((s) => s.currentValue)),
