@@ -120,6 +120,30 @@ Progress event: `{ phase: 'committing', current, total, imported, duplicates, er
 
 ---
 
+## Brokerage cash routing and the double-count rule (WP-C2, Aug 2026)
+
+On an `is_brokerage` batch, `validate.js` stamps each row's `route` via
+`classifyBrokerageRow` ([[apps/node-backend/src/services/importPipeline/brokerageRouting.js]]):
+
+- **`route='cash'`** — external deposits/withdrawals, **and (D6, [[docs/adr/095-brokerage-account-import|ADR-095 addendum 2026-07-10]]) dividend/interest/fee/tax rows that carry no instrument reference at all** (no symbol, no name — sleeve interest, custody fees, account-level distributions). Each commits as ONE signed row in `transactions` on the batch's sleeve account: staging magnitudes are absolute, the sign comes from the row's canonical type (dividend/interest → `+`, fee/tax → `−`; deposits `+`, withdrawals `−`). D6 rows are auto-categorized by kind — `INCOME:DIVIDENDS`, `INCOME:INTEREST`, `INVESTMENTS:FEES`, `INVESTMENTS:TAXES` (created idempotently via `categoryRepository.createOrGet`); external deposits/withdrawals stay uncategorized (they are transfers, not income/expense). The payee is the broker (sleeve account `institution`, falling back to `name`).
+- **`route='portfolio'`** — buys/sells, and dividend/interest/fee/tax rows that DO name an instrument. These commit to `portfolio_transactions` only; an unresolved instrument on such a row is a correct blocking error, repairable in review (pick/create holding, then re-commit).
+
+The routing is deterministic from the row and decided at validate time; a statement row lands on **exactly one side, never both**.
+
+### The double-count rule
+
+**Ledger cash is the only cash truth.** Cash from a brokerage statement enters net worth exclusively through the `transactions` rows the import creates (the per-currency anchor+delta balance SQL, ADR-094/WP-A1). Portfolio-side `dividend`/`interest`/`fee`/`tax` rows in `portfolio_transactions` remain the **tax/stats source** (dividend-income surfaces per ADR-096, Belgian tax reporting) and **never enter net worth**: snapshot valuation is `units × price` plus the non-unit formulas, and income/dividend/fee/tax rows explicitly do not alter invested capital or value (`snapshotBuilder.js`, "income / dividends / fees / taxes: don't alter invested capital"). So an instrument-attached dividend is counted once (portfolio stats, not cash), an instrument-less one is counted once (ledger cash, not portfolio stats) — they can never both enter net worth.
+
+**Accepted trade-off** (per the ADR-095 addendum): D6 cash rows live in the ledger, not in portfolio analytics — an account-level distribution does not count toward per-instrument dividend-income surfaces or the portfolio-side tax figures; category-based ledger reporting covers it. Conversely, an instrument-attached dividend's cash does not appear in the ledger (ADR-090 synthetic legs were deleted per ADR-108) — reconciliation of the sleeve's true cash balance for trade-driven flows is WP-C4 territory.
+
+**Cash-row dedup identity:** a cash row dedups on `(account, date, signed amount, memo)` by **occurrence matching**, not existence — a statement may legitimately repeat one identity (e.g. two identical per-exchange custody fees on one date whose descriptions weren't mapped into `note`), so the i-th occurrence in a batch is a duplicate only if the ledger already held more than i matching rows before the run; both fees land on first import, and a re-import of the same statement is still a complete no-op. The legacy absolute-amount branch (recognizing pre-sign-fix positive withdrawals) applies only to untyped deposit/withdrawal rows — D6 rows match the signed amount only, so a new −10 fee never dedups against an unrelated +10 row sharing date and memo.
+
+**Rollback** treats D6 rows exactly like other cash rows: `route` travels with `committed_txn_id`, so `rollbackBatch` deletes them from `transactions` (never the portfolio table) and resets staging to `matched`.
+
+Tests: `tests/portfolioImportInstrumentlessCash.db.test.js` (full pipeline, signs, categories, rollback, non-brokerage unchanged), `tests/brokerageRouting.test.js` (D6 classification), `tests/portfolioImportCommit.test.js` (pinned cash INSERT SQL + D6 sign/category params).
+
+---
+
 ## Type Normalization
 
 **Module:** [[apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js]]

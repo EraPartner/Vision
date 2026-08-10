@@ -21,6 +21,28 @@ describe('classifyBrokerageRow (ADR-095)', () => {
     }
   });
 
+  it('D6: instrument-less dividend/interest/fee/tax route cash, signed by kind', () => {
+    // Income kinds credit the sleeve, expense kinds debit it — the sign is the
+    // whole point (staged magnitudes are absolute).
+    expect(classifyBrokerageRow({ kind: 'dividend', hasInstrument: false })).toEqual({ target: 'cash', direction: 1 });
+    expect(classifyBrokerageRow({ kind: 'interest', hasInstrument: false })).toEqual({ target: 'cash', direction: 1 });
+    expect(classifyBrokerageRow({ kind: 'fee', hasInstrument: false })).toEqual({ target: 'cash', direction: -1 });
+    expect(classifyBrokerageRow({ kind: 'tax', hasInstrument: false })).toEqual({ target: 'cash', direction: -1 });
+  });
+
+  it('D6 leaves everything else alone: instrument-bearing rows and trades stay portfolio', () => {
+    // An explicit hasInstrument: true is the pre-D6 behavior…
+    for (const kind of ['dividend', 'interest', 'fee', 'tax']) {
+      expect(classifyBrokerageRow({ kind, hasInstrument: true })).toEqual({ target: 'portfolio', portfolioTxnType: kind });
+    }
+    // …and a TRADE without an instrument is a genuine error, not a cash
+    // movement — it must keep the portfolio route where commit blocks it.
+    expect(classifyBrokerageRow({ kind: 'buy', hasInstrument: false })).toEqual({ target: 'portfolio', portfolioTxnType: 'buy' });
+    expect(classifyBrokerageRow({ kind: 'sell', hasInstrument: false })).toEqual({ target: 'portfolio', portfolioTxnType: 'sell' });
+    // External cash kinds are indifferent to the flag.
+    expect(classifyBrokerageRow({ kind: 'deposit', hasInstrument: false })).toEqual({ target: 'cash', direction: 1 });
+  });
+
   it('normalizes case/whitespace', () => {
     expect(classifyBrokerageRow({ kind: '  BUY ' })).toEqual({ target: 'portfolio', portfolioTxnType: 'buy' });
   });

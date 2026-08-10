@@ -16,6 +16,7 @@ import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
 import recipientRepository from '../../repositories/recipientRepository.js';
+import categoryRepository from '../../repositories/categoryRepository.js';
 import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
 import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
 
@@ -51,14 +52,34 @@ const COMMIT_CHUNK = 1000;
 // Staging stores cash magnitudes ABSOLUTE (adapter contract); the ledger sign
 // comes from the kind. Without this every withdrawal was credited as a
 // deposit (+500 instead of −500) — the sleeve error grew 2× per withdrawal.
+// The kind is the row's canonical `type` when validate persisted one (the D6
+// instrument-less dividend/interest/fee/tax cash rows — their type_raw may be
+// a broker synonym like "Custody Fee" the classifier's kind sets don't know),
+// falling back to `type_raw` for external deposit/withdrawal rows (which never
+// normalize to a portfolio type, so their `type` is NULL). `hasInstrument:
+// false` keeps the classifier on the D6 cash branch for the portfolio-kind
+// cash rows; it is a no-op for deposit/withdrawal kinds.
 /**
- * @param {Pick<MatchedPortfolioStagingRow, 'type_raw'|'amount'>} row
- * @returns {number} the ledger-signed cash amount (negative for withdrawals)
+ * @param {Pick<MatchedPortfolioStagingRow, 'type'|'type_raw'|'amount'>} row
+ * @returns {number} the ledger-signed cash amount (negative for
+ *   withdrawals/fees/taxes, positive for deposits/dividends/interest)
  */
 function signedCashAmount(row) {
-  const { direction } = classifyBrokerageRow({ kind: row.type_raw });
+  const { direction } = classifyBrokerageRow({ kind: row.type ?? row.type_raw, hasInstrument: false });
   return (direction ?? 1) * Math.abs(Number(row.amount));
 }
+
+// D6 auto-categorization (ADR-095 addendum: "interest income / investment
+// fees"): the ledger category for an instrument-less cash row, keyed by the
+// row's canonical type. External deposit/withdrawal cash rows stay
+// uncategorized (unchanged) — they are transfers, not income or expense.
+/** @type {Record<string, { general: string, detail: string }>} */
+const CASH_KIND_CATEGORIES = {
+  dividend: { general: 'INCOME', detail: 'DIVIDENDS' },
+  interest: { general: 'INCOME', detail: 'INTEREST' },
+  fee: { general: 'INVESTMENTS', detail: 'FEES' },
+  tax: { general: 'INVESTMENTS', detail: 'TAXES' },
+};
 
 /**
  * Run the commit phase: drain 'matched' staging rows into
@@ -121,6 +142,21 @@ export async function commitBatch({ batchId, onProgress }) {
   /** @type {Set<string>} */
   const committedHashes = new Set();
 
+  // Per-run occurrence counters for the cash-row field dedup (same lifetime
+  // and chunk-rollback caveat as committedHashes above): a statement may
+  // legitimately repeat one (date, signed amount, memo) identity — e.g. two
+  // identical per-exchange custody fees on one date — and each occurrence must
+  // land, while a RE-import of that same statement must still be a no-op. The
+  // rule: the i-th occurrence (0-based) of an identity in this batch is a
+  // duplicate iff the ledger already held more than i matching rows BEFORE
+  // this run (ledger matches minus what this run itself inserted). Fresh
+  // import: 0 pre-existing → both fees insert. Re-import: 2 pre-existing →
+  // both occurrences dedup.
+  /** @type {Map<string, number>} */
+  const cashSeenByIdentity = new Map();
+  /** @type {Map<string, number>} */
+  const cashInsertedByIdentity = new Map();
+
   // ── Cash-row recipient, hoisted to once per commit ──
   // `transactions.recipient_id` has been NOT NULL since migration 0001, with no
   // default and no supplying trigger, so every brokerage cash INSERT must carry
@@ -149,6 +185,26 @@ export async function commitBatch({ batchId, onProgress }) {
     }
     if (cashRecipientId == null) {
       cashRecipientId = await recipientRepository.getOrCreateSystemId();
+    }
+  }
+
+  // ── D6 cash-row categories, hoisted like the recipient above ──
+  // Resolved once per (kind present in this batch), OUTSIDE the chunk
+  // transactions: categories are shared state with a (general, detail) unique
+  // key, so createOrGet is idempotent and a chunk rollback must not undo it.
+  /** @type {Map<string, number>} */
+  const cashCategoryIds = new Map();
+  if (isBrokerage && batchAccountId) {
+    const cashKinds = new Set(
+      matched
+        .filter((/** @type {{route?: string, type?: string|null}} */ r) => r.route === 'cash' && r.type != null)
+        .map((/** @type {{type?: string|null}} */ r) => String(r.type)),
+    );
+    for (const kind of cashKinds) {
+      const spec = CASH_KIND_CATEGORIES[kind];
+      if (!spec) continue;
+      const { category } = await categoryRepository.createOrGet(spec);
+      if (category?.id != null) cashCategoryIds.set(kind, category.id);
     }
   }
 
@@ -190,7 +246,8 @@ export async function commitBatch({ batchId, onProgress }) {
       for (let j = 0; j < chunk.length; j++) {
         const row = chunk[j];
 
-        // ── Brokerage cash row (ADR-095): an external deposit/withdrawal → a plain
+        // ── Brokerage cash row (ADR-095): an external deposit/withdrawal, or a
+        // D6 instrument-less dividend/interest/fee/tax row → one signed plain
         // cash transaction on the sleeve (NOT a trade, no leg). ──
         if (isBrokerage && row.route === 'cash') {
           if (!batchAccountId) {
@@ -203,7 +260,12 @@ export async function commitBatch({ batchId, onProgress }) {
             await markRow(row.id, 'duplicate');
             continue;
           }
-          if (await isCashFieldDuplicate(batchAccountId, row)) {
+          const identity = cashIdentityKey(row);
+          const occurrence = cashSeenByIdentity.get(identity) ?? 0;
+          cashSeenByIdentity.set(identity, occurrence + 1);
+          const insertedThisRun = cashInsertedByIdentity.get(identity) ?? 0;
+          const ledgerMatches = await countCashFieldMatches(batchAccountId, row);
+          if (occurrence < ledgerMatches - insertedThisRun) {
             chunkDuplicates++;
             await markRow(row.id, 'duplicate');
             continue;
@@ -214,9 +276,17 @@ export async function commitBatch({ batchId, onProgress }) {
           try {
             const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
             const r = await query(
-              `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, is_active)
-               VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id`,
-              [row.tx_date, signedCashAmount(row), row.currency || 'EUR', memo, batchAccountId, cashRecipientId],
+              `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, category_id, is_active)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id`,
+              [
+                row.tx_date,
+                signedCashAmount(row),
+                row.currency || 'EUR',
+                memo,
+                batchAccountId,
+                cashRecipientId,
+                (row.type != null && cashCategoryIds.get(String(row.type))) || null,
+              ],
             );
             await query(
               `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
@@ -224,6 +294,7 @@ export async function commitBatch({ batchId, onProgress }) {
             );
             await client.query(`RELEASE SAVEPOINT ${sp}`);
             chunkImported++;
+            cashInsertedByIdentity.set(identity, insertedThisRun + 1);
             if (row.tx_hash) committedHashes.add(row.tx_hash);
           } catch (err) {
             // ROLLBACK TO SAVEPOINT before markRow: PostgreSQL poisons the whole
@@ -363,35 +434,62 @@ async function markRow(id, status, message) {
   );
 }
 
-// Field-based dedup for an external brokerage cash row, so re-importing a
-// statement is a no-op (cash rows have no tx_hash partial-unique of their own here).
+/**
+ * The cash-row dedup identity: (date, signed amount, memo) — mirrors the SQL
+ * predicate in {@link countCashFieldMatches} exactly (the account is constant
+ * per batch), so the per-batch occurrence counters below count the same thing
+ * the ledger probe counts.
+ *
+ * @param {MatchedPortfolioStagingRow} row
+ * @returns {string}
+ */
+function cashIdentityKey(row) {
+  const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
+  return `${row.tx_date}|${signedCashAmount(row)}|${memo}`;
+}
+
+// Field-based dedup probe for a brokerage cash row (cash rows have no tx_hash
+// partial-unique of their own here). Returns the COUNT of matching ledger
+// rows, not a boolean: a statement can legitimately repeat one identity (two
+// identical custody fees on one date, distinguishable only by a description
+// the user didn't map into `note`), so the caller dedups by matching ledger
+// occurrences against statement occurrences instead of collapsing them.
 /**
  * @param {number} accountId the batch's brokerage sleeve account
  * @param {MatchedPortfolioStagingRow} row
- * @returns {Promise<boolean>}
+ * @returns {Promise<number>} count of active ledger rows matching the identity
  */
-async function isCashFieldDuplicate(accountId, row) {
+async function countCashFieldMatches(accountId, row) {
   const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
   const signed = signedCashAmount(row);
-  const magnitude = Math.abs(signed);
-  const dup = await query(
-    `SELECT 1 FROM transactions
+  // The legacy magnitude leg (`amount = $4`) exists ONLY for untyped external
+  // cash rows (deposit/withdrawal): brokerage withdrawals committed before the
+  // cash-sign fix are stored positive (+500) while the post-fix insert stores
+  // −500, and a re-import must recognize both. Direction is still respected
+  // there: the memo carries the kind (WITHDRAWAL vs DEPOSIT), and a deposit's
+  // signed value equals its magnitude, so a −500 withdrawal never dedups
+  // against a +500 deposit. D6 rows (`row.type` set) have NO pre-fix legacy —
+  // for them the magnitude leg is pure false-positive surface (a new −10 fee
+  // must not dedup against an unrelated +10 row sharing date and memo), so
+  // they match the signed amount only.
+  const legacyLeg = row.type == null;
+  /** @type {(string|number|null)[]} */
+  const params = [accountId, row.tx_date, signed];
+  let amountPredicate = 'amount = $3';
+  if (legacyLeg) {
+    params.push(Math.abs(signed));
+    amountPredicate = '(amount = $3 OR amount = $4)';
+  }
+  params.push(memo);
+  const memoParam = `$${params.length}`;
+  const r = await query(
+    `SELECT COUNT(*)::int AS n FROM transactions
       WHERE account_id = $1 AND date = $2::date
-        AND (amount = $3 OR amount = $4)
-        AND COALESCE(memo, '') = COALESCE($5, '') AND is_active = true
-      LIMIT 1`,
-    // Match on magnitude, not the raw signed value, so a re-import is a no-op
-    // ACROSS the cash-sign fix: brokerage withdrawals committed before the fix
-    // are stored positive (+500), while the post-fix insert stores the signed
-    // −500. `amount = $3` catches the correctly-signed (post-fix) row and
-    // `amount = $4` catches the legacy positive magnitude (pre-fix) row.
-    // Direction is still respected: the memo carries the kind (WITHDRAWAL vs
-    // DEPOSIT), and a deposit's signed value equals its magnitude so it never
-    // reaches the opposite-signed branch — a −500 withdrawal is not deduped
-    // against a legitimate +500 deposit.
-    [accountId, row.tx_date, signed, magnitude, memo],
+        AND ${amountPredicate}
+        AND COALESCE(memo, '') = COALESCE(${memoParam}, '') AND is_active = true`,
+    params,
   );
-  return dup.rows.length > 0;
+  return Number(r.rows[0]?.n) || 0;
 }
 
 /**

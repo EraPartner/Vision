@@ -19,6 +19,10 @@ vi.mock('../src/repositories/recipientRepository.js', () => ({
   default: { createOrGet: vi.fn(), getOrCreateSystemId: vi.fn() },
 }));
 
+vi.mock('../src/repositories/categoryRepository.js', () => ({
+  default: { createOrGet: vi.fn() },
+}));
+
 vi.mock('../src/services/portfolio/fxResolve.js', () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
@@ -26,6 +30,7 @@ vi.mock('../src/services/portfolio/fxResolve.js', () => ({
 import { query } from '../src/database/connection.js';
 import portfolioTransactionRepository from '../src/repositories/portfolioTransactionRepository.js';
 import recipientRepository from '../src/repositories/recipientRepository.js';
+import categoryRepository from '../src/repositories/categoryRepository.js';
 import { autoResolveFxRateToEur } from '../src/services/portfolio/fxResolve.js';
 import { commitBatch } from '../src/services/portfolioImportPipeline/commit.js';
 
@@ -53,8 +58,8 @@ function dispatch(sql, params) {
   if (/FROM portfolio_transactions\s+WHERE investment_id/.test(sql)) {
     return { rows: fieldDuplicate ? [{ '?column?': 1 }] : [] };
   }
-  if (/SELECT 1 FROM transactions/.test(sql)) {
-    return { rows: cashDuplicate ? [{ '?column?': 1 }] : [] };
+  if (/SELECT COUNT\(\*\)::int AS n FROM transactions/.test(sql)) {
+    return { rows: [{ n: cashDuplicate ? 1 : 0 }] };
   }
   if (/INSERT INTO transactions/.test(sql)) return { rows: [{ id: 777 }] };
   if (/SET status = \$2, error_message/.test(sql)) {
@@ -91,6 +96,8 @@ beforeEach(() => {
   recipientRepository.createOrGet.mockResolvedValue({ recipient: { id: 42 }, created: false });
   recipientRepository.getOrCreateSystemId.mockReset();
   recipientRepository.getOrCreateSystemId.mockResolvedValue(99);
+  categoryRepository.createOrGet.mockReset();
+  categoryRepository.createOrGet.mockResolvedValue({ category: { id: 314 }, created: false });
   autoResolveFxRateToEur.mockReset();
   autoResolveFxRateToEur.mockResolvedValue(undefined);
 });
@@ -217,10 +224,40 @@ describe('commitBatch (portfolio)', () => {
     // Exact column list — a regression that drops recipient_id (or reorders it
     // away from its parameter) must fail here, not only on a real database.
     expect(sql).toMatch(
-      /INSERT INTO transactions \(date, amount, currency, memo, account_id, recipient_id, is_active\)\s*VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, true\)/,
+      /INSERT INTO transactions \(date, amount, currency, memo, account_id, recipient_id, category_id, is_active\)\s*VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, true\)/,
     );
-    // [date, signed amount, currency, memo, account_id, recipient_id]
-    expect(params).toEqual(['2026-01-05', 1000, 'EUR', 'wire', 7, 42]);
+    // [date, signed amount, currency, memo, account_id, recipient_id,
+    //  category_id] — external deposits stay uncategorized (transfers).
+    expect(params).toEqual(['2026-01-05', 1000, 'EUR', 'wire', 7, 42, null]);
+  });
+
+  // ── D6 (ADR-095 addendum): an instrument-less dividend/interest/fee/tax row
+  // reaches commit with route='cash' AND its canonical type — the sign comes
+  // from the type (type_raw may be a broker synonym the classifier's kind sets
+  // don't know) and the category from the kind map. ──
+  it('D6 cash row: fee lands NEGATIVE with the INVESTMENTS:FEES category resolved via createOrGet', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ id: 9, route: 'cash', type: 'fee', type_raw: 'Custody Fee', investment_id: null, amount: 2.5, note: null, tx_hash: 'hf' })];
+    const res = await commitBatch({ batchId: 5 });
+    expect(res).toMatchObject({ imported: 1, errors: 0 });
+    expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
+    expect(categoryRepository.createOrGet).toHaveBeenCalledWith({ general: 'INVESTMENTS', detail: 'FEES' });
+    const [, params] = query.mock.calls.find(([s]) => /INSERT INTO transactions/.test(s));
+    // Signed by KIND (fee debits the sleeve) even though type_raw is a synonym
+    // classifyBrokerageRow alone would send to review (defaulting to +1).
+    expect(params).toEqual(['2026-01-05', -2.5, 'EUR', 'CUSTODY FEE', 7, 42, 314]);
+  });
+
+  it('D6 cash row: dividend lands POSITIVE with INCOME:DIVIDENDS', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ id: 9, route: 'cash', type: 'dividend', type_raw: 'dividend', investment_id: null, amount: 12.34, note: null, tx_hash: 'hd' })];
+    const res = await commitBatch({ batchId: 5 });
+    expect(res).toMatchObject({ imported: 1, errors: 0 });
+    expect(categoryRepository.createOrGet).toHaveBeenCalledWith({ general: 'INCOME', detail: 'DIVIDENDS' });
+    const [, params] = query.mock.calls.find(([s]) => /INSERT INTO transactions/.test(s));
+    expect(params).toEqual(['2026-01-05', 12.34, 'EUR', 'DIVIDEND', 7, 42, 314]);
   });
 
   it('resolves the cash recipient from the sleeve account institution, trimmed, via createOrGet', async () => {
@@ -301,13 +338,29 @@ describe('commitBatch (portfolio)', () => {
     matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'withdrawal', investment_id: null, amount: 500 })];
     await commitBatch({ batchId: 5 });
 
-    const dedupCall = query.mock.calls.find(([s]) => /SELECT 1 FROM transactions/.test(s));
+    const dedupCall = query.mock.calls.find(([s]) => /AS n FROM transactions/.test(s));
     // Predicate accepts either the post-fix signed value or the legacy magnitude.
     expect(dedupCall[0]).toMatch(/amount = \$3 OR amount = \$4/);
     // params: [accountId, tx_date, signed(-500), magnitude(500), memo]
     expect(dedupCall[1][2]).toBe(-500); // signed (post-fix) branch
     expect(dedupCall[1][3]).toBe(500); // legacy positive (pre-fix) branch
     expect(dedupCall[1][4]).toBe('WITHDRAWAL'); // memo carries the kind/direction
+  });
+
+  it('D6 cash dedup matches the SIGNED amount only — no legacy magnitude leg', async () => {
+    // The magnitude leg exists for pre-sign-fix deposit/withdrawal legacy rows
+    // only. D6 kinds have no legacy: with the leg, a new −10 fee would dedup
+    // against an unrelated +10 row sharing date and memo and silently vanish.
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ id: 9, route: 'cash', type: 'fee', type_raw: 'fee', investment_id: null, amount: 10, tx_hash: 'hf' })];
+    await commitBatch({ batchId: 5 });
+
+    const dedupCall = query.mock.calls.find(([s]) => /AS n FROM transactions/.test(s));
+    expect(dedupCall[0]).toMatch(/amount = \$3/);
+    expect(dedupCall[0]).not.toMatch(/amount = \$4|OR amount/); // no magnitude branch at all
+    // params: [accountId, tx_date, signed(-10), memo] — magnitude never sent.
+    expect(dedupCall[1]).toEqual([7, '2026-01-05', -10, 'FEE']);
   });
 
   it('cash dedup does not conflate opposite directions: a deposit only matches positive amounts', async () => {
@@ -318,7 +371,7 @@ describe('commitBatch (portfolio)', () => {
     matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 500 })];
     await commitBatch({ batchId: 5 });
 
-    const dedupCall = query.mock.calls.find(([s]) => /SELECT 1 FROM transactions/.test(s));
+    const dedupCall = query.mock.calls.find(([s]) => /AS n FROM transactions/.test(s));
     expect(dedupCall[1][2]).toBe(500); // signed
     expect(dedupCall[1][3]).toBe(500); // magnitude — same, so no negative branch
     expect(dedupCall[1][4]).toBe('DEPOSIT');
