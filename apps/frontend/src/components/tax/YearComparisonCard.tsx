@@ -19,6 +19,7 @@ import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { formatPercent } from '@/utils/currency';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Select,
@@ -71,8 +72,9 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
     // 0, same rendering as the old maximumFractionDigits: 0 formatter).
     const fmtBase = useCurrencyFormatter();
     const fmtCurrency = (val: number) => fmtBase(val, undefined, 0);
+    // Unsigned 1dp — these rows are rate readouts (effective rate), not deltas.
     function fmtPercent(val: number) {
-        return `${val.toFixed(1)}%`;
+        return formatPercent(val, { digits: 1 });
     }
 
     const rows: MetricRow[] | null = useMemo(() => {
@@ -237,8 +239,7 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                                                 {row.format(Math.abs(delta))}
                                                 {pct != null && !zero && (
                                                     <span className="text-[11px] opacity-70">
-                                                        ({pct > 0 ? '+' : ''}
-                                                        {pct.toFixed(1)}%)
+                                                        ({formatPercent(pct, { digits: 1, signed: true })})
                                                     </span>
                                                 )}
                                             </span>

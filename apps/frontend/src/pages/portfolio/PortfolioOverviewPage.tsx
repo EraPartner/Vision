@@ -31,6 +31,7 @@ import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Money } from "@/components/shared/Money";
 import { parseYmd } from "@/lib/timezone";
 import { ExportDialog } from "@/components/reports/ExportDialog";
+import { formatPercent } from "@/utils/currency";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
@@ -197,7 +198,7 @@ export default function PortfolioOverviewPage() {
       // locale-correct sign (Intl signDisplay: "exceptZero").
       parts: fmtParts(totalGainLossInTarget, { signed: true }),
       icon: totalGainLossInTarget >= 0 ? TrendingUp : TrendingDown,
-      desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
+      desc: `${formatPercent(gainPercent, { digits: 1, signed: true })} ${t('networth.allTime')}`,
       cls: totalGainLossInTarget >= 0 ? "amount-gain" : "amount-loss",
       gain: totalGainLossInTarget >= 0,
       // Attribution: gain = asset performance + currency effect (FX feature).
@@ -353,7 +354,7 @@ export default function PortfolioOverviewPage() {
                       <ChartLegend
                         className="mt-2 justify-center"
                         items={allocationData.map((d, i): ChartLegendItem => ({
-                          label: `${d.name} ${totalAllocation > 0 ? ((d.value / totalAllocation) * 100).toFixed(0) : 0}%`,
+                          label: `${d.name} ${formatPercent(totalAllocation > 0 ? (d.value / totalAllocation) * 100 : 0, { digits: 0 })}`,
                           color: COLORS[i % COLORS.length],
                         }))}
                       />
@@ -422,7 +423,7 @@ export default function PortfolioOverviewPage() {
                             <div className="text-right shrink-0">
                               <p className="font-bold text-sm tabular-nums">{fmt(convertToTarget(inv.currentValue, inv.currency))}</p>
                               <p className={cn("text-xs tabular-nums font-medium", inv.totalGain >= 0 ? "amount-gain" : "amount-loss")}>
-                                {inv.totalGain >= 0 ? '+' : ''}{fmt(convertToTarget(inv.totalGain, inv.currency))} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
+                                {inv.totalGain >= 0 ? '+' : ''}{fmt(convertToTarget(inv.totalGain, inv.currency))} ({formatPercent(inv.gainLossPercent, { digits: 1, signed: true })})
                               </p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">

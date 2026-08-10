@@ -3,8 +3,8 @@ title: Exchange Rates Feature
 type: feature
 status: active
 date: 2026-04-02
-updated: 2026-06-16
-tags: [feature, exchange-rates, currency, frontend, backend, ECB, admin]
+updated: 2026-08-10
+tags: [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
 description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability. 2026-06-16 — moved from /portfolio/exchange-rates to /admin/exchange-rates (admin-mode section; it inspects the FX rate feed rather than being a per-user task). Old path redirects.
 aliases: [FX rates, currency rates, exchange rates page]
 related_code:
@@ -37,6 +37,8 @@ Located at `[[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]` (gated by `
   - EUR to Unit (1 / rate_to_eur)
   - 100 Units in EUR
 - **Fallback Rates**: Table of hardcoded fallback rates (same columns)
+
+The active tab (`live` | `fallback`) is mirrored to `?tab=` via [[docs/components/hooks#usetabparam-aug-2026|useTabParam]] (Aug 2026), so reload/Back keep the tab the user was viewing.
 
 #### Refresh Button
 Triggers `POST /api/info/exchange-rates/refresh` to fetch fresh rates from ECB.

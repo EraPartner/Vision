@@ -137,8 +137,8 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="1050">Standard: €1,050 (30% credit)</SelectItem>
-                                <SelectItem value="1350">Alternative: €1,350 (25% credit)</SelectItem>
+                                <SelectItem value="1050">{t('tax.profile.pensionScheme.standard')}</SelectItem>
+                                <SelectItem value="1350">{t('tax.profile.pensionScheme.alternative')}</SelectItem>
                             </SelectContent>
                         </Select>
                         <div className="flex items-center gap-2">

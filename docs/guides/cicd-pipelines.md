@@ -3,7 +3,7 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-07-27
+updated: 2026-08-10
 tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
 description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
@@ -143,7 +143,7 @@ pip-audit:
 
 #### 3. **verify-compose-sync** — Docker Compose Sync Check
 
-Verifies that named volumes in `docker-compose.yml` match those in `packaging/electron/resources/docker-compose.yml` (the embedded Electron compose file).
+Verifies that the named volumes **and** the compose project `name:` in `docker-compose.yml` match those in `packaging/electron/resources/docker-compose.yml` (the embedded Electron compose file).
 
 ```yaml
 verify-compose-sync:
@@ -152,15 +152,15 @@ verify-compose-sync:
   timeout-minutes: 5
   steps:
     - uses: actions/checkout@v4
-    - name: Check named volumes match between compose files
-      run: |
-        ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
-        ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
-        if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
-          echo "ERROR: Named volumes out of sync"
-          exit 1
-        fi
+    - name: Self-test the checker
+      run: node scripts/check-compose-sync.js --self-test
+    - name: Check project name and named volumes match between compose files
+      run: node scripts/check-compose-sync.js
 ```
+
+The comparison lives in **`scripts/check-compose-sync.js`** (Node stdlib only — no toolchain setup, so it also runs from `.githooks/pre-push` before `bun install`). It replaced two byte-identical inline `awk` copies, one here and one in `release.yml`'s `verify` job, which could drift apart and had no local equivalent. The awk version also never stopped at the next top-level block, so any key added after `volumes:` (e.g. a `networks:` section) would have been counted as a volume name; the script parses indentation, block scalars and comments instead. Run it locally with `bun run check-compose-sync`.
+
+`packaging/electron/resources-demo/docker-compose.yml` is deliberately **not** compared: it pins its own project name (`visiondemoapp`) to keep demo volumes isolated from real data.
 
 **Why it's critical:**
 
@@ -598,14 +598,15 @@ verify:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    - name: Check named volumes match between compose files
+    - name: Secrets scan (gitleaks, full release tree)
+      # ci.yml's gitleaks job scans a push event's COMMIT RANGE; a tag push
+      # carries no commits, so the release needs a whole-tree scan instead.
       run: |
-        ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
-        ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
-        if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
-          echo "ERROR: Named volumes out of sync"
-          exit 1
-        fi
+        curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" "https://github.com/.../gitleaks_8.30.0_linux_x64.tar.gz"
+        echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/gitleaks.tar.gz" | sha256sum -c -
+        "$RUNNER_TEMP/gitleaks" dir . --config config/gitleaks.toml --redact --no-banner
+    - name: Check project name and named volumes match between compose files
+      run: node scripts/check-compose-sync.js
     - name: Check version tag matches package.json
       run: |
         TAG="${{ github.event.inputs.tag || github.ref_name }}"
@@ -621,34 +622,53 @@ verify:
 ```
 
 **Checks:**
-1. **Compose volumes sync:** Named volumes in `docker-compose.yml` must match `packaging/electron/resources/docker-compose.yml`
-2. **Version alignment:** Tag (e.g., `v1.2.3`) must match both `package.json` and `packaging/electron/package.json`
-3. **Dependency audit:** No HIGH or CRITICAL vulnerabilities in release
+1. **Secrets scan:** gitleaks over the whole tree the tag ships (pinned version + SHA256, run before `bun install` so vendored fixtures can't flag)
+2. **Compose sync:** project name + named volumes in `docker-compose.yml` must match `packaging/electron/resources/docker-compose.yml`
+3. **Version alignment:** Tag (e.g., `v1.2.3`) must match both `package.json` and `packaging/electron/package.json`
+4. **Dependency audit:** No HIGH or CRITICAL vulnerabilities (JS + Python) in release
+5. **Lint + type-check:** frontend ESLint/`tsc`, backend ESLint, backend JSDoc `tsc --checkJs` **and** the `noImplicitAny` ratchet
+6. **Generated artifacts:** `validate-locales`, locale drift, OpenAPI type drift, endpoint-matrix count — the same four assertions as CI's `verify-generated`
+7. **Tests:** backend + frontend with coverage
+
+This job mirrors CI's quality tier on purpose: a tag can be pushed on a commit that never passed CI, so these are the only gates in that case.
 
 **Failure:** Release is blocked; must fix code and re-tag.
 
-#### 2. **docker** — Build and Push Docker Image
+#### 2. **docker** — Build, Scan, then Publish the Docker Image
 
-Builds the Docker image and pushes it to GitHub Container Registry (GHCR) with the version tag.
+Builds the multi-arch image (`linux/amd64` + `linux/arm64`, with `provenance: mode=max` and SBOM attestations), pushes it to GHCR **by digest with no tag**, gates it, and only then promotes that digest to the release tags.
 
 ```yaml
 docker:
   needs: [verify]
-  runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
-    - name: Build and push Docker image
-      run: |
-        docker build -t ghcr.io/erapartner/vision:${{ github.ref_name }} .
-        docker push ghcr.io/erapartner/vision:${{ github.ref_name }}
+    - name: Build and push by digest (untagged release candidate)
+      id: build-push
+      uses: docker/build-push-action@v7
+      with:
+        platforms: linux/amd64,linux/arm64
+        tags: ghcr.io/erapartner/vision            # repository only
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+        provenance: mode=max
+        sbom: true
+    - uses: aquasecurity/trivy-action@v0.36.0      # HIGH/CRITICAL, exit-code 1
+      with: { image-ref: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}" }
+    - run: docker pull "$IMAGE_REF"                # candidate, by digest
+    - uses: ./.github/actions/compose-up           # boot the candidate
+      with: { vision-image: "ghcr.io/erapartner/vision@${{ steps.build-push.outputs.digest }}" }
+    - run: alembic downgrade -1 && alembic upgrade head   # migration round-trip
+    - run: docker buildx imagetools create -t <semver> -t <major.minor> -t latest "$IMAGE_REF"
+    - run: <assert every promoted tag resolves to the scanned digest>
 ```
 
+**Why by digest first:** the image used to be pushed with all of its tags — including `latest` — *before* Trivy ran, so a HIGH/CRITICAL finding failed the job with the vulnerable image already serving `latest`. `push: false` + `load: true` is not an option: buildx cannot load a multi-platform index into the local docker daemon. An untagged candidate is reachable only by digest, so nothing users pull moves until the scan and the migration round-trip pass. `imagetools create` copies the index by digest, so the semver tags and `latest` point at the *same* index — attestations included — that was scanned and that the release asset names; the final step asserts exactly that.
+
 **Publishes:**
-- Image tag: `ghcr.io/erapartner/vision:v1.2.3` (or current version tag)
-- Accessible via: `docker pull ghcr.io/erapartner/vision:v1.2.3`
+- Image tags: `ghcr.io/erapartner/vision:1.2.3`, `:1.2`, and `:latest` (only when the tag is the highest release)
+- Immutable reference: `ghcr.io/erapartner/vision@sha256:…`, recorded in the `docker-image-tag.txt` release asset and consumed by the Electron updater as `APP_IMAGE_REF`
 - Used by: Electron Docker mode updates, containerized deployments
 
-**Failure:** Indicates Dockerfile issue; must fix before re-releasing.
+**Failure:** a failed scan or round-trip leaves the candidate untagged in GHCR — inert, since it cannot be reached by name.
 
 #### 3. **package-mac** — Build macOS Installer
 

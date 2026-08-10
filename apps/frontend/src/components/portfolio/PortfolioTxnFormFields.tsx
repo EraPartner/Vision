@@ -232,7 +232,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
         )}
 
         <div className={cn("space-y-2", showFeesTaxes && 'col-span-2')}>
-          <Label htmlFor={fxId}>FX rate to EUR (optional)</Label>
+          <Label htmlFor={fxId}>{t('addPortTxn.fxRate')}</Label>
           <Input
             id={fxId}
             type="text"

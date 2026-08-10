@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, Activity, Target, AlertTriangle, Sparkles, Wallet } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale, formatCurrency } from "@/utils/currency";
+import { formatCurrency, formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -65,7 +65,7 @@ export default function PortfolioForecastPage() {
   const moneyOdometer = (v: number | null | undefined) =>
     v == null || isNaN(v) ? "—" : <RollingNumber parts={fmtParts(v, { currency, decimals: 0 })} />;
   const fmtPct = (v: number | null | undefined, signed = false) =>
-    v == null || isNaN(v) ? "—" : `${signed && v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+    v == null || isNaN(v) ? "—" : formatPercent(v * 100, { digits: 1, signed });
 
   const input = useMemo(
     () => ({

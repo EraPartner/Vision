@@ -36,59 +36,59 @@ export function SuggestedDeductionsCard() {
             : table.pensionSavingsRateStandard;
         const pensionMaxCredit = pensionCeiling * pensionRate;
         if (profile.pensionEligible && !(profile.personalPensionContributions > 0)) {
-            items.push({ id: 'pension.no_amount', title: 'Pension savings', desc: t('tax.suggestions.pension.noAmount'), estimate: pensionMaxCredit });
+            items.push({ id: 'pension.no_amount', title: t('tax.suggestions.item.pension'), desc: t('tax.suggestions.pension.noAmount'), estimate: pensionMaxCredit });
         } else if (!profile.pensionEligible && profile.personalPensionContributions > 0) {
             const est = Math.min(profile.personalPensionContributions, pensionCeiling) * pensionRate;
-            items.push({ id: 'pension.not_marked', title: 'Pension savings', desc: t('tax.suggestions.pension.notMarked'), estimate: est });
+            items.push({ id: 'pension.not_marked', title: t('tax.suggestions.item.pension'), desc: t('tax.suggestions.pension.notMarked'), estimate: est });
         } else if (!profile.pensionEligible && profile.grossAnnualIncome > 0 && profile.personalPensionContributions === 0) {
-            items.push({ id: 'pension.suggest', title: 'Pension savings', desc: t('tax.suggestions.pension.suggest'), estimate: pensionMaxCredit });
+            items.push({ id: 'pension.suggest', title: t('tax.suggestions.item.pension'), desc: t('tax.suggestions.pension.suggest'), estimate: pensionMaxCredit });
         }
 
         // Life insurance
         if (profile.lifeInsuranceEligible && !(profile.lifeInsurancePremiums > 0)) {
-            items.push({ id: 'life.no_amount', title: 'Life insurance', desc: t('tax.suggestions.life.noAmount'), estimate: lifeInsuranceCap * lifeInsuranceRate });
+            items.push({ id: 'life.no_amount', title: t('tax.suggestions.item.life'), desc: t('tax.suggestions.life.noAmount'), estimate: lifeInsuranceCap * lifeInsuranceRate });
         } else if (!profile.lifeInsuranceEligible && profile.lifeInsurancePremiums > 0) {
             const est = Math.min(profile.lifeInsurancePremiums, lifeInsuranceCap) * lifeInsuranceRate;
-            items.push({ id: 'life.not_marked', title: 'Life insurance', desc: t('tax.suggestions.life.notMarked'), estimate: est });
+            items.push({ id: 'life.not_marked', title: t('tax.suggestions.item.life'), desc: t('tax.suggestions.life.notMarked'), estimate: est });
         }
 
         // Group insurance
         if (profile.employeeGroupInsuranceEligible && !((profile.employeeGroupInsuranceContributions ?? 0) > 0)) {
-            items.push({ id: 'group.no_amount', title: 'Employee group insurance', desc: t('tax.suggestions.group.noAmount'), estimate: 0 });
+            items.push({ id: 'group.no_amount', title: t('tax.suggestions.item.group'), desc: t('tax.suggestions.group.noAmount'), estimate: 0 });
         } else if (!profile.employeeGroupInsuranceEligible && (profile.employeeGroupInsuranceContributions ?? 0) > 0) {
-            items.push({ id: 'group.not_marked', title: 'Employee group insurance', desc: t('tax.suggestions.group.notMarked'), estimate: (profile.employeeGroupInsuranceContributions ?? 0) * groupInsuranceRate });
+            items.push({ id: 'group.not_marked', title: t('tax.suggestions.item.group'), desc: t('tax.suggestions.group.notMarked'), estimate: (profile.employeeGroupInsuranceContributions ?? 0) * groupInsuranceRate });
         } else if (!profile.employeeGroupInsuranceEligible && profile.employmentType === 'employee' && !((profile.employeeGroupInsuranceContributions ?? 0) > 0)) {
-            items.push({ id: 'group.suggest', title: 'Employee group insurance', desc: t('tax.suggestions.group.suggest'), estimate: 0 });
+            items.push({ id: 'group.suggest', title: t('tax.suggestions.item.group'), desc: t('tax.suggestions.group.suggest'), estimate: 0 });
         }
 
         // Charitable donations
         if (profile.charitableDonationsEligible && !(profile.charitableDonations > 0)) {
-            items.push({ id: 'donations.no_amount', title: 'Charitable donations', desc: t('tax.suggestions.donations.noAmount'), note: t('tax.suggestions.donations.note') });
+            items.push({ id: 'donations.no_amount', title: t('tax.suggestions.item.donations'), desc: t('tax.suggestions.donations.noAmount'), note: t('tax.suggestions.donations.note') });
         } else if (!profile.charitableDonationsEligible && profile.charitableDonations > 0) {
             const est = donationRate * profile.charitableDonations;
-            items.push({ id: 'donations.not_marked', title: 'Charitable donations', desc: t('tax.suggestions.donations.notMarked'), estimate: est });
+            items.push({ id: 'donations.not_marked', title: t('tax.suggestions.item.donations'), desc: t('tax.suggestions.donations.notMarked'), estimate: est });
         }
 
         // Childcare
         const childcareCap = (profile.childcareEligibleDays || 0) * childcareDailyCap;
         if (profile.childcareEligible && !(profile.childcareCosts > 0)) {
-            items.push({ id: 'childcare.no_amount', title: 'Childcare costs', desc: t('tax.suggestions.childcare.noAmount'), estimate: 0 });
+            items.push({ id: 'childcare.no_amount', title: t('tax.suggestions.item.childcare'), desc: t('tax.suggestions.childcare.noAmount'), estimate: 0 });
         } else if (!profile.childcareEligible && profile.childcareCosts > 0) {
             const est = childcareRate * Math.min(profile.childcareCosts, childcareCap);
-            items.push({ id: 'childcare.not_marked', title: 'Childcare costs', desc: t('tax.suggestions.childcare.notMarked'), estimate: est });
+            items.push({ id: 'childcare.not_marked', title: t('tax.suggestions.item.childcare'), desc: t('tax.suggestions.childcare.notMarked'), estimate: est });
         } else if (!profile.childcareEligible && profile.dependentChildren > 0 && profile.childcareEligibleDays === 0) {
             // soft suggestion — show example using 120 days
             const exampleDays = 120;
             const exampleEst = childcareRate * (exampleDays * childcareDailyCap);
-            items.push({ id: 'childcare.suggest', title: 'Childcare costs', desc: t('tax.suggestions.childcare.suggest', { days: exampleDays }), estimate: exampleEst });
+            items.push({ id: 'childcare.suggest', title: t('tax.suggestions.item.childcare'), desc: t('tax.suggestions.childcare.suggest', { days: exampleDays }), estimate: exampleEst });
         }
 
         // Domestic help
         if (profile.domesticHelpEligible && !((profile.domesticHelpCosts ?? 0) > 0)) {
-            items.push({ id: 'domestic.no_amount', title: 'Domestic help', desc: t('tax.suggestions.domestic.noAmount'), estimate: 0 });
+            items.push({ id: 'domestic.no_amount', title: t('tax.suggestions.item.domestic'), desc: t('tax.suggestions.domestic.noAmount'), estimate: 0 });
         } else if (!profile.domesticHelpEligible && (profile.domesticHelpCosts ?? 0) > 0) {
             const est = domesticHelpRate * (profile.domesticHelpCosts ?? 0);
-            items.push({ id: 'domestic.not_marked', title: 'Domestic help', desc: t('tax.suggestions.domestic.notMarked'), estimate: est });
+            items.push({ id: 'domestic.not_marked', title: t('tax.suggestions.item.domestic'), desc: t('tax.suggestions.domestic.notMarked'), estimate: est });
         }
 
         // Alimony (deduction) — estimate tax saving using marginal rate
@@ -96,7 +96,7 @@ export function SuggestedDeductionsCard() {
             const deduction = alimonyFraction * profile.alimonyPaid;
             const marginal = Math.max(0, Math.min(calculation.marginalRate, 100)) / 100;
             const estSaving = deduction * marginal;
-            items.push({ id: 'alimony.applied', title: 'Alimony paid', desc: t('tax.suggestions.alimony.applied'), estimate: estSaving });
+            items.push({ id: 'alimony.applied', title: t('tax.suggestions.item.alimony'), desc: t('tax.suggestions.alimony.applied'), estimate: estSaving });
         }
 
         return items;

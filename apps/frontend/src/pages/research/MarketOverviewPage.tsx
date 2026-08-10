@@ -7,6 +7,7 @@ import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useInvestmentsQuery } from "@/hooks/portfolio/useInvestments";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { formatPercent } from "@/utils/currency";
 
 // The overview crosses two orthogonal axes: a Region (Worldwide / USA / Europe /
 // Asia / Japan / Latin America) and a Sector (Overview + themed baskets). Region
@@ -1022,7 +1023,7 @@ export default function MarketOverviewPage() {
             </span>
             {pct != null ? (
               <span className="text-2xl font-bold tabular-nums text-foreground sm:text-3xl">
-                {up ? "+" : "−"}{Math.abs(pct).toFixed(2)}%
+                {up ? "+" : "−"}{formatPercent(Math.abs(pct), { digits: 2 })}
               </span>
             ) : (
               <span className="text-2xl font-bold tabular-nums text-muted-foreground/40 sm:text-3xl">—</span>

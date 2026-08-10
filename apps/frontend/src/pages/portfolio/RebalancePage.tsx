@@ -25,6 +25,7 @@ import { Scale, Loader2, ArrowDownToLine, Plus, Trash2, Save } from "lucide-reac
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { formatPercent } from "@/utils/currency";
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { cn } from "@/lib/utils";
@@ -94,7 +95,10 @@ export default function RebalancePage() {
   const fmt = (v: number) => fmtCurrency(v, currency, 0);
   // Show up to one decimal so fractional targets (e.g. All Weather's 7.5%) read
   // accurately and the column doesn't visibly sum to 101% from rounding.
-  const pct = (v: number) => `${(v * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+  // `minDigits: 0` preserves that "up to" behaviour; the shared formatter
+  // replaces the old browser-locale toLocaleString, which ignored the app's
+  // number-format setting (a third convention on this page).
+  const pct = (v: number) => formatPercent(v * 100, { digits: 1, minDigits: 0 });
   // t() returns the key itself when a translation is missing; fall back to the
   // raw sleeve key for asset classes outside the labelled set (e.g. `other`).
   const sleeveLabel = (sleeve: string) => {
@@ -288,7 +292,7 @@ export default function RebalancePage() {
                   <Plus className="h-4 w-4" />{t("rebalance.editor.addSleeve")}
                 </Button>
                 <span className={cn("text-sm tabular-nums", Math.round(weightTotalPct) === 100 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-500")}>
-                  {t("rebalance.editor.total")}: {weightTotalPct.toFixed(0)}%
+                  {t("rebalance.editor.total")}: {formatPercent(weightTotalPct, { digits: 0 })}
                 </span>
               </div>
               {Math.round(weightTotalPct) !== 100 && weightTotalPct > 0 && (

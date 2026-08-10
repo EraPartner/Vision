@@ -7,7 +7,7 @@ import { RollingNumber } from "@/components/shared/RollingNumber";
 import { ArrowUpRight, DollarSign, TrendingDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 import type { NetHistoryPoint } from "@/hooks/useFilteredDashboardStats";
@@ -119,7 +119,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
           </div>
           {savingsRate !== null && (
             <Badge variant="outline" className="font-semibold text-xs">
-              {t('dashboard.stat.savingsRate')}: {savingsRate.toFixed(1)}%
+              {t('dashboard.stat.savingsRate')}: {formatPercent(savingsRate, { digits: 1, locale })}
             </Badge>
           )}
         </div>

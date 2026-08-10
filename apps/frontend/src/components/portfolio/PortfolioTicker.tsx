@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api";
 import { portfolioKeys } from "@/lib/queryKeys";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { formatPercent } from "@/utils/currency";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -146,7 +147,10 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
         name: inv.name,
         up,
         priceLabel: fmt(quote.price, quote.currency || "USD"),
-        pctLabel: `${up ? "+" : ""}${changePercent.toFixed(2)}%`,
+        // 2dp kept deliberately: this is a market-quote daily move, where 2dp is
+        // the domain convention — not a portfolio holding gain/loss chip (those
+        // standardize on signed 1dp).
+        pctLabel: formatPercent(changePercent, { digits: 2, signed: true }),
       });
     }
     return out;

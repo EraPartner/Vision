@@ -4,7 +4,7 @@
  * KPI grid: total taxes, fees, net taxable result, dividend WHT, TOB, capital gains, effective rate.
  */
 
-import { fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
+import { escapeHtml, fmtCurrency, fmtPct, kpiGrid, signClass } from '../sectionHelpers.js';
 
 /**
  * @param {import('../dataFetcherTax.js').TaxReportData | null} data
@@ -55,7 +55,7 @@ export function renderTaxExecutiveSummary(data, { currency }) {
     : '';
 
   const profileHtml = taxProfile
-    ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 12px;">Tax profile: ${taxProfile.filingStatus ?? ''} · ${taxProfile.region ?? ''}</p>`
+    ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 12px;">Tax profile: ${escapeHtml(taxProfile.filingStatus ?? '')} · ${escapeHtml(taxProfile.region ?? '')}</p>`
     : '';
 
   return `

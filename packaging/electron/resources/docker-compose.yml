@@ -79,7 +79,14 @@ services:
       # refused. Remove this (and set ADMIN_AUTH_TOKEN) if you widen ports:.
       ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "true"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
-      APP_VERSION: ${APP_IMAGE_TAG:-latest}
+      # The version the backend reports (admin.js: APP_VERSION || APP_IMAGE_TAG
+      # || 'unknown'). This used to read ${APP_IMAGE_TAG:-latest}, left over
+      # from the tag-pinning mechanism APP_IMAGE_REF above replaced — nothing
+      # has ever set APP_IMAGE_TAG, so it always resolved to the literal
+      # "latest". Reading APP_VERSION instead keeps that same default while
+      # letting a value in .env actually take effect: `environment:` wins over
+      # `env_file:`, so a pin set there was previously overwritten.
+      APP_VERSION: ${APP_VERSION:-latest}
     volumes:
       - attachments_data:/app/data/attachments
       - vision_cache_data:/app/.vision-cache

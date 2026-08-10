@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
@@ -28,6 +28,7 @@ import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { useSearchParams } from "react-router";
+import { useTabParam } from "@/hooks/useTabParam";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
@@ -41,6 +42,8 @@ import { apiClient } from "@/lib/api";
 import { LOOKUP_RANGES as RANGES } from "@/lib/research/ranges";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+const MARKET_TABS = ["fundamentals", "analyst", "news"] as const;
 
 // Lower bound (epoch ms) for a range, used when serving the chart from an
 // investment's own price provider instead of Yahoo. 'max' returns 0 (all data).
@@ -143,7 +146,9 @@ export default function MarketLookupPage() {
   );
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("fundamentals");
+  // Mirrors the symbol's URL-first treatment below: a shared /research/market
+  // link reopens the same tab the sender was reading.
+  const [activeTab, setActiveTab] = useTabParam(MARKET_TABS, "fundamentals");
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
   const [searchParams, setSearchParams] = useSearchParams();
   // The selected symbol lives entirely in the URL, so a looked-up view is
@@ -348,9 +353,11 @@ export default function MarketLookupPage() {
                       )}>
                         {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                         {isPositive ? "+" : ""}{fmtPrice(quote.change, quote.currency)}
-                        <span className="text-sm">
-                          ({isPositive ? "+" : ""}{quote.changePercent?.toFixed(2)}%)
-                        </span>
+                        {quote.changePercent != null && (
+                          <span className="text-sm">
+                            ({formatPercent(quote.changePercent, { digits: 2, signed: true })})
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>

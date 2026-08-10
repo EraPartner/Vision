@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { formatDateWithAppSettings, formatDateTimeWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,9 @@ import type {
   ScorecardSeverity,
 } from "@/types/research";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
+import { useTabParam } from "@/hooks/useTabParam";
+
+const COMPARE_TABS = ["performance", "fundamentals"] as const;
 
 const MAX_SYMBOLS = 6;
 
@@ -188,6 +191,7 @@ export default function ResearchComparePage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useTabParam(COMPARE_TABS, "performance");
   const [selectedRange, setSelectedRange] = useState(RANGES[3]); // 1Y
   const [sortMetric, setSortMetric] = useState<FundamentalsMetricKey | null>(null);
   const { searchText, setSearchText, searchResult, isFetching: isSearching, isOpen } = useSymbolSearch(
@@ -196,7 +200,7 @@ export default function ResearchComparePage() {
   );
 
   const fmtPct = useCallback((val: number | null | undefined) =>
-    val == null || isNaN(val) ? "—" : `${val >= 0 ? "+" : ""}${(val * 100).toFixed(2)}%`, []);
+    val == null || isNaN(val) ? "—" : formatPercent(val * 100, { digits: 2, signed: true }), []);
   const fmtRatio = useCallback((val: number | null | undefined) =>
     val == null || isNaN(val) ? "—" : val.toFixed(2), []);
 
@@ -314,7 +318,7 @@ export default function ResearchComparePage() {
 
   const fmtMetric = useCallback((metric: FundamentalsMetric, val: number | null | undefined) => {
     if (metric.format === "largeNum") return formatCompactNumber(val);
-    if (metric.format === "pct") return val == null || isNaN(val) ? "—" : `${(val * 100).toFixed(2)}%`;
+    if (metric.format === "pct") return val == null || isNaN(val) ? "—" : formatPercent(val * 100, { digits: 2 });
     return fmtRatio(val);
   }, [fmtRatio]);
 
@@ -366,7 +370,7 @@ export default function ResearchComparePage() {
       {symbols.length === 0 ? (
         <EmptyState icon={GitCompareArrows} title={t('research.compare.startTitle')} description={t('research.compare.startHint')} />
       ) : (
-        <Tabs defaultValue="performance">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="performance">{t('research.compare.tabPerformance')}</TabsTrigger>
             <TabsTrigger value="fundamentals">{t('research.compare.tabFundamentals')}</TabsTrigger>

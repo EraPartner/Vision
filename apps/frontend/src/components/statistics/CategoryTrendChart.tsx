@@ -2,7 +2,8 @@ import { memo, useMemo } from "react";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
-import { formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
 interface CategoryTrendDatum {
@@ -16,6 +17,8 @@ interface CategoryTrendChartProps {
 }
 
 export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: CategoryTrendChartProps) {
+  const { language } = useLanguage();
+  const monthLabelLocale = appLanguageToLocale(language);
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
   // "Monthly spending for top 5 categories" — rank by EXPENSE total and plot
@@ -59,9 +62,9 @@ export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: Cat
       xAccessor={(d) => d.date}
       series={series}
       height={350}
-      xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
+      xTickFormat={(v) => formatDate(v as Date, "MMM yy", monthLabelLocale)}
       yTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
-      tooltipTitle={(d) => formatPeriodShort(d.period)}
+      tooltipTitle={(d) => formatPeriodShort(d.period, monthLabelLocale)}
       tooltipValueFormat={(v) => formatCurrency(v)}
     />
   );

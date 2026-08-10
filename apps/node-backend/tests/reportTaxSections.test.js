@@ -6,6 +6,8 @@ import { renderFeeBreakdown } from '../src/services/reports/sections/feeBreakdow
 import { renderTaxByAssetClass } from '../src/services/reports/sections/taxByAssetClass.js';
 import { renderTaxMonthlyTrend } from '../src/services/reports/sections/taxMonthlyTrend.js';
 import { renderTopInvestmentsByCost } from '../src/services/reports/sections/topInvestmentsByCost.js';
+import { renderBelgianRulesSummary } from '../src/services/reports/sections/belgianRulesSummary.js';
+import { getTaxTable } from '../src/services/reports/belgianTaxTables.js';
 
 // fmtCurrency renders "EUR<nbsp>1,234.56".
 const eur = (s) => `EUR ${s}`;
@@ -71,6 +73,23 @@ describe('renderTaxExecutiveSummary', () => {
     expect(html).toContain('30.0%');
     // Net dividend result = 291 - 87.3.
     expect(html).toContain(eur('203.70'));
+  });
+
+  it('escapes a client-supplied tax profile instead of injecting raw HTML', () => {
+    const maliciousData = {
+      ...data,
+      taxProfile: {
+        filingStatus: '<script>alert(1)</script>',
+        region: '<img src=x onerror=alert(2)>',
+      },
+    };
+
+    const html = renderTaxExecutiveSummary(maliciousData, ctx);
+
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain('&lt;img src=x onerror=alert(2)&gt;');
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x onerror=alert(2)>');
   });
 });
 
@@ -142,6 +161,87 @@ describe('renderTaxMonthlyTrend', () => {
     expect(html).toContain(eur('147.00'));
     // The old m.taxes read rendered 0.00 in every Taxes cell.
     expect(html).not.toContain(eur('0.00'));
+  });
+});
+
+describe('renderBelgianRulesSummary', () => {
+  // Two DIFFERENT unit conventions meet in this section, which is what made the
+  // rates render 100x/10,000x too large: getTaxTable ships fractions (WHT 0.30,
+  // TOB 0.0035) while the client's precomputedPIT brackets are already in percent
+  // units (pit.ts: `rate: br.rate * 100` → 25). Real values from both sources.
+  const rulesData = {
+    ...data,
+    taxYear: 2025,
+    taxTables: getTaxTable(2025),
+    taxProfile: { filingStatus: 'single' },
+    precomputedPIT: {
+      taxableIncome: 50_000,
+      totalTax: 12_345.67,
+      brackets: [
+        { label: 'Bracket 1 (25%)', rate: 25, taxableIncome: 16_320, taxAmount: 4080 },
+        { label: 'Bracket 2 (40%)', rate: 40, taxableIncome: 12_000, taxAmount: 4800 },
+        { label: 'Bracket 4 (50%)', rate: 50, taxableIncome: 6931.34, taxAmount: 3465.67 },
+      ],
+    },
+  };
+
+  it('renders backend fraction rates scaled exactly once', () => {
+    const html = renderBelgianRulesSummary(rulesData, ctx);
+
+    // dividendWHTRate 0.30 → 30.0%, not 3000.0% (double-scaled) or 0.3%.
+    expect(html).toContain('+30.0%');
+    expect(html).not.toContain('3000.0%');
+    // TOB fractions 0.0012 / 0.0035 / 0.0132 → 0.12% / 0.35% / 1.32%. The
+    // statutory rates are sub-percent, so they need two fraction digits: at the
+    // default one digit they collapse to 0.1% / 0.4% / 1.3%.
+    expect(html).toContain('+0.12%');
+    expect(html).toContain('+0.35%');
+    expect(html).toContain('+1.32%');
+    expect(html).not.toContain('+12.00%');
+    expect(html).not.toContain('+35.00%');
+    expect(html).not.toContain('+132.00%');
+  });
+
+  it('renders client PIT bracket rates without re-scaling percent units', () => {
+    const html = renderBelgianRulesSummary(rulesData, ctx);
+
+    // rate: 25 is ALREADY a percent → 25.0%, not 250000.0%.
+    expect(html).toContain('+25.0%');
+    expect(html).toContain('+40.0%');
+    expect(html).toContain('+50.0%');
+    expect(html).not.toContain('250000.0%');
+    expect(html).not.toContain('400000.0%');
+    expect(html).not.toContain('500000.0%');
+    // No rate cell anywhere in the section exceeds 100%.
+    const pctCells = [...html.matchAll(/class="num">([+-][\d.]+)%/g)].map(m => Number(m[1]));
+    expect(pctCells.length).toBeGreaterThan(0);
+    for (const p of pctCells) expect(Math.abs(p)).toBeLessThanOrEqual(100);
+
+    // Surrounding currency figures still render, so the section isn't an empty state.
+    expect(html).toContain(eur('859.00'));    // 2025 dividend exemption
+    expect(html).toContain(eur('1,600.00'));  // shares & other TOB cap
+    expect(html).toContain(eur('12,345.67')); // estimated total PIT
+  });
+
+  it('falls back to the placeholder when neither table nor PIT data is present', () => {
+    expect(renderBelgianRulesSummary(null, ctx)).toContain('No tax table data');
+  });
+
+  it('escapes a client-supplied PIT bracket label instead of injecting raw HTML', () => {
+    const maliciousData = {
+      ...rulesData,
+      precomputedPIT: {
+        ...rulesData.precomputedPIT,
+        brackets: [
+          { label: '<script>alert(1)</script>', rate: 25, taxableIncome: 16_320, taxAmount: 4080 },
+        ],
+      },
+    };
+
+    const html = renderBelgianRulesSummary(maliciousData, ctx);
+
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>alert(1)</script>');
   });
 });
 

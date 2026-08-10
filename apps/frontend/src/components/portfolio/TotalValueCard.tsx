@@ -16,6 +16,7 @@ import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } fr
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendHue, type TrendTone } from '@/components/shared/TrendHue';
 import { cn } from '@/lib/utils';
+import { formatPercent } from '@/utils/currency';
 
 const SPARK_COLOR_POSITIVE = 'hsl(var(--gain))';
 const SPARK_COLOR_NEGATIVE = 'hsl(var(--loss))';
@@ -73,9 +74,14 @@ export interface TotalValueCardProps {
   isGain?: boolean;
 }
 
-function formatPercent(pct: number, digits = 1): string {
-  const sign = pct >= 0 ? '+' : '';
-  return `${sign}${pct.toFixed(digits)}%`;
+/**
+ * Signed delta percent. Thin wrapper over the shared formatter so this file
+ * keeps its "presentational, no hooks" contract: the locale comes from the
+ * app-synced module default (same source `formatCurrency` uses when a caller
+ * passes no locale), not from a context read.
+ */
+function formatDeltaPercent(pct: number): string {
+  return formatPercent(pct, { digits: 1, signed: true });
 }
 
 function AssetSplitBars({
@@ -112,7 +118,7 @@ function AssetSplitBars({
                 <span className="truncate text-muted-foreground">{slice.name}</span>
               </div>
               <span className="tabular-nums font-medium shrink-0 ml-2">
-                {pct.toFixed(0)}%
+                {formatPercent(pct, { digits: 0 })}
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -161,7 +167,7 @@ function PerformerRow({
       </div>
       <div className={cn('text-right shrink-0 tabular-nums', tone)}>
         <p className="text-xs font-semibold leading-none">
-          {formatPercent(entry.gainLossPercent)}
+          {formatDeltaPercent(entry.gainLossPercent)}
         </p>
         <p className="text-[10px] leading-tight mt-0.5">
           {entry.gainLossInTarget >= 0 ? '+' : ''}
@@ -196,7 +202,7 @@ function Sparkline({ points, label, neutral = false }: { points: SparklinePoint[
           )}
         >
           <Trend className="h-3 w-3" aria-hidden />
-          {formatPercent(pct)}
+          {formatDeltaPercent(pct)}
         </span>
       </div>
       <ChartSparkline data={points.map((p) => p.v)} height={64} color={color} fillArea strokeWidth={2} />

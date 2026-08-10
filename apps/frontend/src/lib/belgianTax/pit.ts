@@ -534,7 +534,14 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
             if (amount <= 0) return [];
             const isTop = i === table.brackets.length - 1;
             return [{
+                // `label` stays English: this array is a calculation result, not
+                // a view model, and pit.ts has no access to `t`. Consumers that
+                // render a bracket row translate via `bracketNumber` (see
+                // ExportDialog) — the ordinal is carried explicitly because
+                // empty brackets are skipped, so a consumer's array index is not
+                // the bracket number.
                 label: `Bracket ${i + 1} (${br.rate * 100}%)`,
+                bracketNumber: i + 1,
                 amount: -amount,
                 rate: br.rate * 100,
                 bracket: isTop ? `€${br.from}+` : `€${br.from} – €${br.to}`,

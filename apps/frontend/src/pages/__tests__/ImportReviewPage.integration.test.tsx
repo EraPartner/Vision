@@ -265,7 +265,10 @@ describe("ImportReviewPage (integration)", () => {
 
         // Row detail columns become visible after expansion
         expect(await screen.findByText("AMAZON EU SARL")).toBeInTheDocument();
-        expect(await screen.findByText("2025-03-15")).toBeInTheDocument();
+        // Rendered through `formatDateStringWithAppSettings`, like every other
+        // user-facing date table — so it follows the `dateFormat` setting
+        // (default DD/MM/YYYY) instead of leaking the raw ISO `tx_date`.
+        expect(await screen.findByText("15/03/2025")).toBeInTheDocument();
     });
 
     it("shows matched pattern text inside expanded accordion group", async () => {

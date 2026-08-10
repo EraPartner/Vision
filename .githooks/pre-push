@@ -7,7 +7,7 @@
 # Skip just one: SKIP_TESTS=1 / SKIP_TYPECHECK=1 git push
 #
 # Checks: frontend typecheck . backend typecheck (+ noImplicitAny ratchet) .
-#         endpoint-matrix . locales . backend tests
+#         endpoint-matrix . locales . compose sync . backend tests
 #
 # Output is ASCII-only on purpose (see the note in pre-commit).
 
@@ -62,6 +62,10 @@ fi
 
 run "endpoint matrix" node scripts/check-endpoint-matrix.js
 run "validate locales" node scripts/validate-locales.js
+# Same checker CI (verify-compose-sync) and release.yml's verify job run. The
+# v1.0.2 data-loss class of bug is a named-volume that exists in the root compose
+# file but not in the packaged one -- catch it here, not after a push.
+run "compose sync" node scripts/check-compose-sync.js
 
 if [ "${SKIP_TESTS:-}" != "1" ]; then
   run "backend tests" sh -c 'cd apps/node-backend && bun vitest run'

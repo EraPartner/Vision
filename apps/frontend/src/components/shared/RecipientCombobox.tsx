@@ -22,6 +22,12 @@ const BASE_PAGE = { limit: 100, active: false, search: undefined } as const;
 interface RecipientComboboxProps {
     /** Put on the trigger, so a <Label htmlFor> can reach it. */
     id?: string;
+    /**
+     * Accessible name for the trigger. role="combobox" is not name-from-content,
+     * so a picker with no visible <Label htmlFor> (a per-row picker in a list,
+     * say) is nameless to assistive tech unless this is set.
+     */
+    'aria-label'?: string;
     value?: number | null;
     onSelect: (recipientId: number | null, recipientName: string | null) => void;
     disabled?: boolean;
@@ -124,7 +130,7 @@ function useSearchedRecipients(search: string): Recipient[] {
     return useMemo(() => data?.items ?? [], [data?.items]);
 }
 
-export function RecipientCombobox({ id, value, onSelect, disabled, className, portalContainer }: RecipientComboboxProps) {
+export function RecipientCombobox({ id, 'aria-label': ariaLabel, value, onSelect, disabled, className, portalContainer }: RecipientComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -138,6 +144,7 @@ export function RecipientCombobox({ id, value, onSelect, disabled, className, po
             <PopoverTrigger asChild>
                 <RecipientComboboxTrigger
                     id={id}
+                    aria-label={ariaLabel}
                     aria-expanded={open}
                     disabled={disabled}
                     className={className}
@@ -237,6 +244,7 @@ function DeferredRecipientComboboxItems({
  */
 export function DeferredRecipientCombobox({
     id,
+    'aria-label': ariaLabel,
     value,
     onSelect,
     disabled,
@@ -255,6 +263,7 @@ export function DeferredRecipientCombobox({
             <PopoverTrigger asChild>
                 <RecipientComboboxTrigger
                     id={id}
+                    aria-label={ariaLabel}
                     aria-expanded={open}
                     disabled={disabled}
                     className={className}

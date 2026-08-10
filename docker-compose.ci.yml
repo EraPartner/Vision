@@ -21,7 +21,9 @@
 # failing on a pull of an image that was never pushed anywhere.
 services:
   app:
-    # Set by .github/actions/compose-up from its `vision-image` input. The
-    # default keeps every other compose invocation in the job (`exec`, `down`,
-    # `logs` — which do not re-export the variable) resolving to the same tag.
+    # Set by .github/actions/compose-up from its `vision-image` input — a local
+    # tag in ci.yml, the pushed `…@sha256:…` release candidate in release.yml's
+    # docker job. The default keeps every other compose invocation in the job
+    # (`exec`, `down`, `logs` — which do not re-export the variable) resolving
+    # to the same reference.
     image: ${VISION_IMAGE:-vision:ci}

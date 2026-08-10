@@ -14,6 +14,9 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { exchangeRateKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
+import { useTabParam } from "@/hooks/useTabParam";
+
+const EXCHANGE_RATE_TABS = ["live", "fallback"] as const;
 
 // Hoisted out of the page component so React keeps the table subtree mounted
 // across page re-renders instead of remounting a fresh inline component type.
@@ -63,6 +66,7 @@ export default function ExchangeRatesPage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const queryClient = useQueryClient();
+    const [activeTab, setActiveTab] = useTabParam(EXCHANGE_RATE_TABS, "live");
 
     // Share the one exchange-rates cache entry — same flat key, queryFn, and
     // staleTime as useExchangeRates/useCurrencyConverter, so this page reads
@@ -186,7 +190,7 @@ export default function ExchangeRatesPage() {
                 ))}
             </div>
 
-            <Tabs defaultValue="live" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="live">
                         <Database className="h-4 w-4 mr-1.5" /> {t('exchangeRates.liveRates')}

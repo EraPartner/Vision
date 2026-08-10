@@ -3,6 +3,7 @@ import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { BelgianTaxYearTable } from "@/lib/belgianTax";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPercent } from "@/utils/currency";
 
 interface BelgianPortfolioRulesCardProps {
   totalDividendIncome: number;
@@ -88,7 +89,7 @@ export function BelgianPortfolioRulesCard({
           <div className="rounded-lg border border-border p-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="text-sm font-semibold text-foreground">{t("tax.tacrEstimate")}</p>
-              <Badge variant="outline">{`${(taxTable.securitiesAccountTaxRate * 100).toFixed(2)}%`}</Badge>
+              <Badge variant="outline">{formatPercent(taxTable.securitiesAccountTaxRate * 100, { digits: 2 })}</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">{t("tax.tacrEstimateDesc")}</p>
             <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(tacrEstimate)}</p>
@@ -99,7 +100,7 @@ export function BelgianPortfolioRulesCard({
           <div className="rounded-lg border border-border p-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="text-sm font-semibold text-foreground">{t("tax.cgtEstimate")}</p>
-              <Badge variant="outline">{`${(taxTable.capitalGainsTaxRate * 100).toFixed(0)}%`}</Badge>
+              <Badge variant="outline">{formatPercent(taxTable.capitalGainsTaxRate * 100, { digits: 0 })}</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">{t("tax.cgtEstimateDesc")}</p>
             <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(cgtEstimate)}</p>
@@ -110,7 +111,7 @@ export function BelgianPortfolioRulesCard({
           <div className="rounded-lg border border-border p-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="text-sm font-semibold text-foreground">{t("tax.reyndersEstimate")}</p>
-              <Badge variant="outline">{`${(taxTable.reyndersTaxRate * 100).toFixed(0)}%`}</Badge>
+              <Badge variant="outline">{formatPercent(taxTable.reyndersTaxRate * 100, { digits: 0 })}</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">{t("tax.reyndersEstimateDesc")}</p>
             <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(reyndersEstimate)}</p>

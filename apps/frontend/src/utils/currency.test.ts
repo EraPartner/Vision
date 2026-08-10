@@ -3,7 +3,9 @@ import {
   configureCurrencyFormatDefaults,
   formatCurrency,
   formatCurrencyCompact,
+  formatPercent,
   getCurrencyFormatDefaults,
+  numberFormatToLocale,
   parseLocaleNumber,
 } from "./currency";
 
@@ -122,6 +124,134 @@ describe("formatCurrencyCompact", () => {
   test("works with GBP locale en-US", () => {
     const result = formatCurrencyCompact(1_000_000, "GBP", "en-US", 2);
     expect(result.isCompact).toBe(true);
+  });
+});
+
+describe("formatPercent — value scale", () => {
+  // The single most dangerous mistake this helper could make is a factor of
+  // 100, so the scale convention is pinned first and explicitly.
+  test("takes PERCENT UNITS, not a fraction (12.5 means 12.5%)", () => {
+    expect(formatPercent(12.5, { locale: "en-US" })).toBe("12.5%");
+    expect(formatPercent(100, { locale: "en-US", digits: 0 })).toBe("100%");
+    // A fraction-holding call site must scale at the boundary itself; passing
+    // the raw fraction is a visible 100x error, never a silent one.
+    expect(formatPercent(0.125, { locale: "en-US", digits: 3 })).toBe("0.125%");
+    expect(formatPercent(0.125 * 100, { locale: "en-US" })).toBe("12.5%");
+  });
+
+  test("large values keep locale thousands grouping", () => {
+    expect(formatPercent(1234.5, { locale: "en-US" })).toBe("1,234.5%");
+    expect(formatPercent(1234.5, { locale: "de-DE" })).toBe("1.234,5%");
+  });
+});
+
+describe("formatPercent — locale separator (the eu/us bug this fixes)", () => {
+  test("eu number format renders a comma decimal, matching the money beside it", () => {
+    const eu = numberFormatToLocale("eu");
+    expect(formatPercent(12.5, { locale: eu })).toBe("12,5%");
+    // The money sibling on the same card, for contrast — same separator.
+    expect(formatCurrency(1234.56, "EUR", eu, 2)).toBe("1.234,56 €");
+  });
+
+  test("us number format renders a dot decimal", () => {
+    expect(formatPercent(12.5, { locale: numberFormatToLocale("us") })).toBe("12.5%");
+  });
+
+  test("ch and in formats follow their own separators", () => {
+    // de-CH groups with an apostrophe whose exact codepoint (U+0027 vs U+2019)
+    // varies by ICU version — assert the shape, not the byte.
+    expect(formatPercent(1234.5, { locale: numberFormatToLocale("ch") })).toMatch(/^1['’]234\.5%$/);
+    // en-IN uses lakh/crore grouping, not thousands.
+    expect(formatPercent(123456.5, { locale: numberFormatToLocale("in") })).toBe("1,23,456.5%");
+  });
+
+  test("the percent sign stays glued to the number in every format", () => {
+    // style:'percent' on de-DE would emit "12,5 %" (NBSP) and reflow the delta
+    // chips; the decimal+literal approach must not. No locale may introduce a
+    // space before the sign.
+    for (const setting of ["eu", "us", "ch", "in"]) {
+      expect(formatPercent(12.5, { locale: numberFormatToLocale(setting) })).not.toMatch(/[\s\u00a0\u202f]%/);
+    }
+  });
+});
+
+describe("formatPercent — sign convention (exceptZero, matching money)", () => {
+  test("signed renders + for positive and - for negative", () => {
+    expect(formatPercent(3.2, { locale: "en-US", signed: true })).toBe("+3.2%");
+    expect(formatPercent(-3.2, { locale: "en-US", signed: true })).toBe("-3.2%");
+  });
+
+  test("signed leaves zero unsigned — the same call formatCurrency makes", () => {
+    expect(formatPercent(0, { locale: "en-US", signed: true })).toBe("0.0%");
+    expect(formatCurrency(0, "EUR", "en-US", 2, true)).toBe("€0.00");
+  });
+
+  test("unsigned keeps a negative sign but never adds a plus", () => {
+    expect(formatPercent(3.2, { locale: "en-US" })).toBe("3.2%");
+    expect(formatPercent(-3.2, { locale: "en-US" })).toBe("-3.2%");
+    expect(formatPercent(0, { locale: "en-US" })).toBe("0.0%");
+  });
+
+  test("documents the inherited exceptZero pitfall: a loss rounding to zero loses its minus", () => {
+    // Deliberate, not an oversight — money does exactly this too, so a delta
+    // chip and its amount degrade together instead of disagreeing.
+    expect(formatPercent(-0.04, { locale: "en-US", signed: true })).toBe("0.0%");
+    expect(formatCurrency(-0.004, "EUR", "en-US", 2, true)).toBe("€0.00");
+    // Unsigned keeps Intl's 'auto', which does surface the negative zero.
+    expect(formatPercent(-0.04, { locale: "en-US" })).toBe("-0.0%");
+  });
+
+  test("signed negatives survive the eu separator swap", () => {
+    expect(formatPercent(-1234.56, { locale: "de-DE", signed: true, digits: 2 })).toBe("-1.234,56%");
+  });
+});
+
+describe("formatPercent — digits", () => {
+  test("defaults to 1 decimal (the gain/loss delta standard)", () => {
+    expect(formatPercent(3.25, { locale: "en-US" })).toBe("3.3%");
+    expect(formatPercent(3, { locale: "en-US" })).toBe("3.0%");
+  });
+
+  test("minDigits gives 'up to N' — trailing zeros dropped, fractions kept", () => {
+    // The rebalance weight column: "7.5%" must keep its decimal, "60%" must not
+    // grow one.
+    expect(formatPercent(60, { locale: "en-US", digits: 1, minDigits: 0 })).toBe("60%");
+    expect(formatPercent(7.5, { locale: "en-US", digits: 1, minDigits: 0 })).toBe("7.5%");
+    expect(formatPercent(7.5, { locale: "de-DE", digits: 1, minDigits: 0 })).toBe("7,5%");
+  });
+
+  test("honours an explicit digit count, padding as well as rounding", () => {
+    expect(formatPercent(3.14159, { locale: "en-US", digits: 0 })).toBe("3%");
+    expect(formatPercent(3.14159, { locale: "en-US", digits: 2 })).toBe("3.14%");
+    expect(formatPercent(3.1, { locale: "en-US", digits: 2 })).toBe("3.10%");
+    expect(formatPercent(3, { locale: "en-US", digits: 0 })).toBe("3%");
+  });
+});
+
+describe("formatPercent — defaults and degradation", () => {
+  test("falls back to the configured app locale when none is passed", () => {
+    const previous = getCurrencyFormatDefaults();
+
+    configureCurrencyFormatDefaults({ locale: "de-DE" });
+    expect(formatPercent(12.5)).toBe("12,5%");
+
+    configureCurrencyFormatDefaults({ locale: "en-US" });
+    expect(formatPercent(12.5)).toBe("12.5%");
+
+    configureCurrencyFormatDefaults(previous);
+  });
+
+  test("degrades to a bare value instead of throwing on out-of-range digits", () => {
+    // Same contract as formatCurrency: a percent readout must not take the
+    // card into the error boundary.
+    expect(() => formatPercent(12.5, { locale: "en-US", digits: -1 })).not.toThrow();
+    expect(formatPercent(12.5, { locale: "en-US", digits: -1 })).toBe("12.5%");
+    expect(formatPercent(12.5, { locale: "en-US", digits: 101 })).toBe("12.5%");
+  });
+
+  test("valid input still formats normally after a failed call (no poisoned state)", () => {
+    formatPercent(1, { locale: "en-US", digits: 101 });
+    expect(formatPercent(12.5, { locale: "en-US" })).toBe("12.5%");
   });
 });
 

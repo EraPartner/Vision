@@ -3,8 +3,8 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-06-18
-tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx]
+updated: 2026-08-10
+tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
@@ -322,6 +322,10 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 - `TaxYearSwitcher` — dropdown trigger replacing the static "Tax year" badge on both `/tax` and `/portfolio/tax`. Each item shows a chip: **Current**, **Saved**, or **Data only**. A footer action "Create profile for {year}" appears when the viewed year is historical and has no snapshot yet.
 - `HistoricalYearBanner` — shown above the page body when `isViewingHistorical`. Two modes: `snapshot` (reconstructed from the saved profile) and `estimate` (live profile applied to that year's tax tables); the estimate mode exposes a primary CTA to seed the snapshot.
 - `TaxProfileDialog` accepts an optional `targetYear` prop. When that year has a snapshot, the dialog reads/writes the snapshot and renders an amber warning banner; the snapshot's `taxYear` is locked.
+
+### URL State (year param, Aug 2026)
+
+[[docs/components/hooks#usetaxyearparam-aug-2026|useTaxYearParam]] is mounted on both `TaxOverviewPage` and `PortfolioTaxPage` and mirrors `viewedYear` into `?year=`, replacing the previous behavior where reloading either route while viewing a historical year silently snapped back to the live year (easy to miss behind `HistoricalYearBanner`, and the figures differ). On mount, an incoming `?year=` is adopted into `viewedYear` when it has a stored snapshot or falls within ±30 years of the live year; otherwise it falls back to the live year. This makes "taxes 2023" shareable/bookmarkable across both tax routes.
 
 ### Page integration notes
 

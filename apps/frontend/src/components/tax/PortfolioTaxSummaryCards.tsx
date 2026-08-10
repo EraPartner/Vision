@@ -3,6 +3,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { TaxSummaryCard } from "@/pages/portfolio/tax/TaxSummaryCard";
+import { formatPercent } from "@/utils/currency";
 
 interface PortfolioTaxSummaryCardsProps {
   totalTaxes: number;
@@ -55,7 +56,7 @@ export function PortfolioTaxSummaryCards({
     },
     {
       title: t("tax.effectiveTaxRate"),
-      value: `${effectiveTaxRate.toFixed(1)}%`,
+      value: formatPercent(effectiveTaxRate, { digits: 1 }),
       icon: AlertTriangle,
       desc: t("tax.onRealizedGains"),
       cls: effectiveTaxRate > 25 ? "text-loss" : "text-muted-foreground",

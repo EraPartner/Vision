@@ -1,9 +1,11 @@
 name: Bring up the Docker Compose stack
 description: >
   Write the stub .env, `docker compose up -d` the stack, and poll the backend
-  /health endpoint. Shared by ci.yml (docker-verify, test-live-api-contracts)
-  and e2e.yml. Callers set COMPOSE_PROJECT_NAME at the job level to isolate the
-  stack from the real `vision` project so teardown can never touch real data.
+  /health endpoint. Shared by ci.yml (docker-verify, test-live-api-contracts),
+  e2e.yml, and release.yml's `docker` job (which points it at the pushed release
+  candidate by digest). Callers set COMPOSE_PROJECT_NAME at the job level to
+  isolate the stack from the real `vision` project so teardown can never touch
+  real data.
 
   Callers that have already put an image in the local image store pass
   `vision-image`; callers that have not (e2e.yml) omit it and let compose build

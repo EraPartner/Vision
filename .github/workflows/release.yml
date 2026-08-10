@@ -3,7 +3,9 @@ name: Release
 # Triggered when a version tag is pushed, e.g. v1.2.3
 # Workflow:
 #   0. Verify: version tag matches packaging/electron/package.json + full quality gate
-#   1. Build & push multi-arch Docker image to GHCR (linux/amd64 + linux/arm64)
+#   1. Build a multi-arch image (linux/amd64 + linux/arm64), push it to GHCR by
+#      DIGEST ONLY, scan + smoke-test that candidate, and only then promote the
+#      digest to the semver tags and `latest`
 #   2. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
 #   3. Create a GitHub Release with all artifacts + SHA256 checksums
 
@@ -37,7 +39,11 @@ jobs:
   verify:
     name: Verify Release
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 40, not 30: this job now also runs the secrets scan, the backend JSDoc
+    # type-check and the generated-artifact checks that ci.yml's quality tier
+    # runs (they were missing here, so a tag pushed on a commit that never
+    # passed CI got none of them).
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
@@ -59,20 +65,35 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      # ci.yml's Secrets Scan job cannot stand in for this one: gitleaks-action
+      # scans the push event's commit RANGE, and a tag push carries no commits,
+      # so it would report "no commits to scan" and pass. This scans the whole
+      # tree the tag actually ships — and runs before `bun install`, so vendored
+      # test fixtures under node_modules can never flag. The release is pinned to
+      # a version AND its checksum, like every action SHA in this workflow.
+      - name: Secrets scan (gitleaks, full release tree)
+        env:
+          GITLEAKS_VERSION: "8.30.0"
+          GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" dir . --config config/gitleaks.toml --redact --no-banner
+
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
-      - name: Check named volumes match between compose files
-        run: |
-          ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
-          ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
-          echo "Root volumes    : $ROOT_VOLS"
-          echo "Electron volumes: $ELECTRON_VOLS"
-          if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
-            echo "ERROR: Named volumes out of sync — add missing volumes to packaging/electron/resources/docker-compose.yml before releasing"
-            exit 1
-          fi
-          echo "Compose volume sync OK."
+      # Same checker ci.yml's verify-compose-sync job and .githooks/pre-push run
+      # — the two workflows used to carry byte-identical copies of an awk
+      # one-liner that could drift apart. See scripts/check-compose-sync.js.
+      - name: Self-test the compose-sync checker
+        run: node scripts/check-compose-sync.js --self-test
+
+      - name: Check project name and named volumes match between compose files
+        run: node scripts/check-compose-sync.js
 
       - name: Check version tag matches package.json
         env:
@@ -120,8 +141,47 @@ jobs:
       - name: Generate locales
         run: CI=1 bun run generate-locales
 
+      # The four assertions of ci.yml's verify-generated job, which this gate
+      # omitted entirely: a tag cut from a commit that edited openapi.yaml or
+      # i18n/source without regenerating shipped the stale committed artifacts.
+      # `Generate locales` above already regenerated them, so the locale drift
+      # check here is a plain git diff.
+      - name: Validate locales (en/nl key parity, generated TS integrity)
+        run: bun run validate-locales
+
+      - name: Check generated locales for drift
+        run: |
+          if ! git diff --exit-code -- apps/frontend/src/locales/; then
+            echo "ERROR: apps/frontend/src/locales/*.ts are out of sync with i18n/source."
+            echo "Run 'bun run generate-locales' locally and commit the regenerated files."
+            exit 1
+          fi
+          echo "Frontend locales in sync."
+
+      - name: Regenerate OpenAPI types and check for drift
+        run: |
+          bun run generate:types
+          if ! git diff --exit-code -- apps/frontend/src/types/generated.ts; then
+            echo "ERROR: apps/frontend/src/types/generated.ts is out of sync with openapi.yaml."
+            echo "Run 'bun run generate:types' locally and commit the regenerated file."
+            exit 1
+          fi
+          echo "OpenAPI types in sync."
+
+      - name: Verify endpoint matrix count matches openapi.yaml
+        run: bun run check-endpoint-matrix
+
       - name: Type-check frontend
         run: cd apps/frontend && bun run typecheck
+
+      # ci.yml's typecheck-backend job — a required gate there, absent here.
+      # Both halves: the loose base program over all of src/, then the
+      # noImplicitAny ratchet over the paths scripts/checkjs-ratchet.js lists.
+      - name: Type-check backend (JSDoc)
+        run: cd apps/node-backend && bunx tsc -p tsconfig.check.json
+
+      - name: Type-check backend (noImplicitAny ratchet)
+        run: cd apps/node-backend && bun scripts/checkjs-ratchet.js
 
       - name: Build frontend
         run: CI=1 bun run build
@@ -142,10 +202,18 @@ jobs:
     name: Build & Push Docker Image
     needs: [verify]
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # 60, not 45: the job now also boots the pushed candidate under compose and
+    # round-trips a migration before promoting it to the release tags.
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write  # required to push to GHCR with GITHUB_TOKEN
+
+    # Isolate the smoke-test stack from the `vision` project the compose files
+    # pin via `name:`, exactly as ci.yml's docker-verify does, so the `down -v`
+    # teardown can never remove a real vision_postgres_data volume.
+    env:
+      COMPOSE_PROJECT_NAME: vision_release
 
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
@@ -198,15 +266,31 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ steps.latest_check.outputs.is_latest == 'true' }}
 
-      - name: Build and push
+      # Pushed WITHOUT any tag — `push-by-digest=true` uploads the image index
+      # and leaves it addressable only by digest. That is the whole point: the
+      # scan and the migration round-trip below run against the real published
+      # artifact, but nothing users pull (`:1.2.3`, `:1.2`, `:latest`) points at
+      # it until those gates pass. Previously every tag including `latest` moved
+      # first and the scan ran afterwards, so a HIGH/CRITICAL finding failed the
+      # job with the vulnerable image already serving `latest`.
+      #
+      # `load: true` is NOT an option here: buildx cannot load a multi-platform
+      # index into the local docker daemon, and this build is amd64+arm64 with
+      # attestations. A candidate digest in the registry is the workable shape.
+      #
+      # A candidate that fails the gates is left untagged in GHCR. That is
+      # inert — it cannot be reached by name — and untagged versions are the
+      # normal cleanup target for the registry's retention policy.
+      - name: Build and push by digest (untagged release candidate)
         id: build-push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          # Names the repository only; `push-by-digest` discards the tag part.
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # Ship an SBOM and full build provenance alongside the image so the
@@ -224,6 +308,94 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           exit-code: '1'
+
+      # The migration round-trip ci.yml's docker-verify job runs, which this
+      # pipeline had no equivalent of. `docker-entrypoint.sh` runs `alembic
+      # upgrade head` on every boot, so an irreversible migration reaches every
+      # self-hosted database — the same class of bug as the v1.0.2 volume miss.
+      # Running it here rather than in `verify` costs no extra build AND tests
+      # the exact artifact being released instead of a separately-built image.
+      - name: Pull the release candidate for the compose smoke test
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # docker-compose.yml's `app` service keeps `build: .`, and compose
+          # builds from source when the image is absent locally. Pulling first
+          # is what makes the stack run the pushed candidate.
+          docker pull "$IMAGE_REF"
+
+      - name: Bring up the release candidate stack
+        uses: ./.github/actions/compose-up
+        with:
+          vision-image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
+
+      # Same `-f` pair as the bring-up in ./.github/actions/compose-up — the
+      # stack was created from both files, so every later invocation must name
+      # both or compose resolves a different service definition.
+      - name: Verify migration reversibility (downgrade -1, upgrade head)
+        run: |
+          set -e
+          COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.ci.yml)
+          echo "Current revision before round-trip:"
+          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini current
+          echo "Downgrading one revision..."
+          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini downgrade -1
+          echo "Re-upgrading to head..."
+          "${COMPOSE[@]}" exec -T app /venv/bin/alembic -c /app/config/alembic.ini upgrade head
+          echo "Round-trip OK."
+
+      - name: Tear down the release candidate stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+
+      # Promotion: every gate above passed, so the candidate digest may now take
+      # the release tags. `imagetools create` copies the pushed index by digest
+      # — it does not rebuild or re-resolve anything — so the semver tags and
+      # `latest` end up pointing at the SAME index, attestation manifests
+      # included, that Trivy scanned and the release metadata publishes.
+      - name: Promote the scanned digest to the release tags
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            args+=(-t "$tag")
+            echo "Promoting -> $tag"
+          done <<< "$TAGS"
+          if [ ${#args[@]} -eq 0 ]; then
+            echo "ERROR: docker/metadata-action produced no tags — refusing to publish an unreachable release."
+            exit 1
+          fi
+          docker buildx imagetools create "${args[@]}" "$IMAGE_REF"
+
+      # The invariant this whole flow exists for: what users pull must be the
+      # digest that was scanned and the digest the release asset names. Assert
+      # it instead of trusting that the copy behaved.
+      - name: Verify every promoted tag resolves to the scanned digest
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build-push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          failed=0
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            got=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$tag")
+            if [ "$got" = "$DIGEST" ]; then
+              echo "OK   $tag -> $got"
+            else
+              echo "FAIL $tag -> $got (expected $DIGEST)"
+              failed=1
+            fi
+          done <<< "$TAGS"
+          if [ "$failed" != "0" ]; then
+            echo "ERROR: a release tag does not resolve to the scanned digest."
+            exit 1
+          fi
 
       # Published as a release asset (see the release job) so the image this
       # release shipped can be pulled by immutable digest rather than by the

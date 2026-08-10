@@ -39,7 +39,7 @@ export function renderBelgianRulesSummary(data, { currency }) {
     const cap = t.cap != null ? fmtCurrency(t.cap, 'EUR') : '—';
     return `<tr>
       <td>${escapeHtml(label)}</td>
-      <td class="num">${t.rate != null ? fmtPct(t.rate * 100, false) : '—'}</td>
+      <td class="num">${t.rate != null ? fmtPct(t.rate, false, 2) : '—'}</td>
       <td class="num">${cap}</td>
     </tr>`;
   }).join('');
@@ -58,7 +58,7 @@ export function renderBelgianRulesSummary(data, { currency }) {
           <table class="data-table">
             <tbody>
               <tr><td>Exemption (first-year allowance)</td><td class="num">${taxTables?.dividendExemption != null ? fmtCurrency(taxTables.dividendExemption, 'EUR') : '—'}</td></tr>
-              <tr><td>Withholding Tax Rate</td><td class="num">${taxTables?.dividendWHTRate != null ? fmtPct(taxTables.dividendWHTRate * 100, false) : '—'}</td></tr>
+              <tr><td>Withholding Tax Rate</td><td class="num">${taxTables?.dividendWHTRate != null ? fmtPct(taxTables.dividendWHTRate, false) : '—'}</td></tr>
             </tbody>
           </table>
         </div>
@@ -84,9 +84,11 @@ export function renderBelgianRulesSummary(data, { currency }) {
 function renderPITBlock(pit, profile, currency) {
   if (!pit) return '';
 
+  // Unlike taxTables rates (fractions), the client sends bracket rates already in
+  // percent units (pit.ts: `rate: br.rate * 100`) — hence isRaw.
   const rows = (pit.brackets ?? []).map(b => `<tr>
-    <td>${b.label ?? '—'}</td>
-    <td class="num">${b.rate != null ? fmtPct(b.rate * 100, false) : '—'}</td>
+    <td>${b.label != null ? escapeHtml(b.label) : '—'}</td>
+    <td class="num">${b.rate != null ? fmtPct(b.rate, true) : '—'}</td>
     <td class="num">${b.taxableIncome != null ? fmtCurrency(b.taxableIncome, currency) : '—'}</td>
     <td class="num neg">${b.taxAmount != null ? fmtCurrency(b.taxAmount, currency) : '—'}</td>
   </tr>`).join('');

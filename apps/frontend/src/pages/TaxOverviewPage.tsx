@@ -1,5 +1,7 @@
 import { useLanguage } from "@/contexts/LanguageContext";
+import { formatPercent } from "@/utils/currency";
 import { useTaxOverviewData } from "@/hooks/useTaxOverviewData";
+import { useTaxYearParam } from "@/hooks/useTaxYearParam";
 import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
 import { HistoricalYearBannerSection } from "@/components/tax/HistoricalYearBannerSection";
 import { YearActionsMenu } from "@/components/tax/YearActionsMenu";
@@ -42,6 +44,8 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
 
 export default function TaxOverviewPage() {
   const { t } = useLanguage();
+  // Keeps the viewed income year in `?year=` so reload/share preserves it.
+  useTaxYearParam();
   // All tax math (taxable-income aggregation, portfolio-tax accumulation, chart
   // series) lives in the hook; the page only composes widgets from its output.
   const {
@@ -119,9 +123,18 @@ export default function TaxOverviewPage() {
         <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
           <TaxYearSwitcher />
           <YearActionsMenu year={viewedYear} />
-          <Badge variant="outline">Region: {profile.region}</Badge>
-          <Badge variant="outline">Marginal rate: {calculation.marginalRate.toFixed(0)}%</Badge>
-          <Badge variant="outline">Effective burden: {calculation.effectiveRate.toFixed(1)}%</Badge>
+          {/* The region badge resolves the stored enum through the same
+              `tax.profile.region.*.label` keys RegionStep uses, so it reads
+              "Flanders (Vlaanderen)" rather than the raw lowercase `flanders`. */}
+          <Badge variant="outline">
+            {t('tax.overview.badge.region', { region: t(`tax.profile.region.${profile.region}.label`) })}
+          </Badge>
+          <Badge variant="outline">
+            {t('tax.overview.badge.marginalRate', { rate: formatPercent(calculation.marginalRate, { digits: 0 }) })}
+          </Badge>
+          <Badge variant="outline">
+            {t('tax.overview.badge.effectiveBurden', { rate: formatPercent(calculation.effectiveRate, { digits: 1 }) })}
+          </Badge>
         </div>
 
         <HistoricalYearBannerSection />

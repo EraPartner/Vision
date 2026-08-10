@@ -8,8 +8,10 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, Trash2, Upload, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
     listAttachments,
@@ -118,8 +120,14 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
             setDeletingId(null);
             void queryClient.invalidateQueries({ queryKey });
         },
-        onError: () => {
+        onError: (err: Error) => {
             setDeletingId(null);
+            // Resetting the spinner alone left a failed delete looking like a
+            // no-op (the row just stays). This handler also suppresses the
+            // global MutationCache backstop, so it has to speak for itself.
+            toast.error(t('txPage.deleteAttachmentError'), {
+                description: apiErrorToMessage(err, t),
+            });
         },
     });
 

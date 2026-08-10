@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { Money } from "@/components/shared/Money";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency, formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { TrendingUp, TrendingDown, Calendar } from "lucide-react";
-import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ function PerformerRow({ inv, defaultCurrency, t }: { inv: BreakdownItem; default
             </div>
             <div className="text-right shrink-0">
                 <p className={cn("text-sm font-bold", inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss")}>
-                    {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
+                    {formatPercent(inv.gainLossPercent, { digits: 1, signed: true })}
                 </p>
                 <p className="text-xs text-muted-foreground">
                     <Money amount={inv.gainLoss} currency={defaultCurrency} />
@@ -85,7 +85,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
-    const monthLabelLocale = useMemo(() => (language === "nl" ? "nl-NL" : "en-US"), [language]);
+    const monthLabelLocale = useMemo(() => appLanguageToLocale(language), [language]);
 
     const MONTH_LABELS = useMemo(() => {
         return Array.from({ length: 12 }, (_, i) =>
@@ -128,7 +128,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
         };
     }, [breakdownSummary]);
 
-    const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+    const formatPct = (value: number) => formatPercent(value, { digits: 2, signed: true });
 
     if (breakdownSummary.length === 0) return null;
 
@@ -149,7 +149,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                 <Money amount={classValue} currency={defaultCurrency} />
                             </div>
                             <div className={cn("text-sm font-medium mt-1", classGain >= 0 ? "amount-gain" : "amount-loss")}>
-                                {classGain >= 0 ? "+" : ""}<Money amount={classGain} currency={defaultCurrency} /> ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
+                                {classGain >= 0 ? "+" : ""}<Money amount={classGain} currency={defaultCurrency} /> ({formatPercent(classPct, { digits: 1, signed: true })})
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
                                 {t('portfolio.invested', { amount: formatCurrency(classInvested, defaultCurrency, locale) })}

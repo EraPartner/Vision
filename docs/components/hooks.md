@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-06-29
-last_modified: 2026-06-28
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification).
+updated: 2026-08-10
+last_modified: 2026-08-10
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`).
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -49,6 +49,8 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | `useExcludedIds(scope)` | Single source of truth for excluded category/recipient IDs (2026-05-29) | [[apps/frontend/src/hooks/useExcludedIds.ts\|useExcludedIds.ts]] |
 | `useConfirmDialog()` | Confirmation dialogs | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]] |
 | `useFormState()` | Generic typed form state with dirty tracking (Phase 4) | [[apps/frontend/src/hooks/useFormState.ts\|useFormState.ts]] |
+| `useTabParam(tabs, defaultTab, paramKey?)` | Binds page-level `<Tabs>` to a `?tab=` URL param, allow-list validated, replace-writes (Aug 2026) | [[apps/frontend/src/hooks/useTabParam.ts\|useTabParam.ts]] |
+| `useTaxYearParam()` | Mirrors `BelgianTaxProfileContext`'s `viewedYear` into `?year=` on `/tax` and `/portfolio/tax` (Aug 2026) | [[apps/frontend/src/hooks/useTaxYearParam.ts\|useTaxYearParam.ts]] |
 
 ### Utility Hooks
 
@@ -1040,6 +1042,75 @@ queryFn: async () => {
 - Reduces network traffic and improves perceived performance
 
 Code link: [[apps/frontend/src/hooks/usePortfolioPrefetch.ts]]
+
+---
+
+## useTabParam (Aug 2026)
+
+Binds a page-level `<Tabs>` to a URL search param so the active tab survives reload/Back and can be shared or bookmarked.
+
+### Purpose
+
+Uncontrolled `<Tabs defaultValue>` loses the active tab on every remount — drilling from Statistics → Categories into a transaction and pressing Back used to land back on Overview, discarding the user's analysis context. `useTabParam` fixes this by making the `Tabs` component controlled off a search param.
+
+### API
+
+```typescript
+function useTabParam<T extends string>(
+  tabs: readonly T[],
+  defaultTab: T,
+  paramKey?: string, // defaults to "tab"
+): [T, (value: string) => void];
+```
+
+- `tabs` is an allow-list; a missing or unrecognized `?tab=` value (hand-edited or stale URL) falls back to `defaultTab` instead of rendering an empty panel.
+- Writes use `{ replace: true }` — cycling through tabs does not push a history entry per click, so Back leaves the page rather than walking back through every tab visited (same pattern as `forecastMode`/`rollingDays` in `CashFlowForecastChart.tsx`).
+
+### Usage
+
+```tsx
+const TABS = ["overview", "categories", "recipients", "yearly", "flow", "custom"] as const;
+const [activeTab, setActiveTab] = useTabParam(TABS, "overview");
+
+<Tabs value={activeTab} onValueChange={setActiveTab}>
+  ...
+</Tabs>
+```
+
+### Adoption
+
+`StatisticsPage`, `ResearchComparePage`, `ExchangeRatesPage` (admin), `MarketLookupPage` — each defines its own tab-id array and default.
+
+Code link: [[apps/frontend/src/hooks/useTabParam.ts]]
+
+---
+
+## useTaxYearParam (Aug 2026)
+
+Mirrors the tax provider's `viewedYear` into a `?year=` search param on the two tax routes.
+
+### Purpose
+
+`viewedYear` (see [[docs/features/belgian-tax#historical-year-viewer-adr-058|Historical Year Viewer]]) is transient `BelgianTaxProfileContext` state — reloading `/tax` or `/portfolio/tax` while reviewing a historical year silently snapped back to the live year, easy to miss behind the historical banner even though the figures differ. Mounting this hook on those two routes makes the viewed year survive reload and makes "taxes 2023" shareable/bookmarkable.
+
+### API
+
+```typescript
+function useTaxYearParam(): void; // no return value — reads/writes context + URL as a side effect
+```
+
+- Route-scoped by design: `BelgianTaxProfileContext` wraps the whole app, so syncing at the provider level would write `?year=` onto every unrelated route. The hook is mounted directly in `TaxOverviewPage` and `PortfolioTaxPage` instead.
+- **Adoption (read `?year=` → `setViewedYear`)** runs once, after the provider has loaded its profile and snapshots. A year is accepted when it has a stored snapshot, is the live year, or falls within **±30 years** of the live year — the `TaxYearSwitcher` itself allows viewing years with no snapshot yet (it offers to create one), so membership in the available-years list is a preference, not a requirement. Anything else falls back to the live year.
+- **Mirror (`viewedYear` → `?year=`)** writes with `{ replace: true }` after adoption has run.
+
+### Usage
+
+```tsx
+// mounted once near the top of TaxOverviewPage / PortfolioTaxPage
+useTaxYearParam();
+```
+
+Code link: [[apps/frontend/src/hooks/useTaxYearParam.ts]]
 
 ---
 

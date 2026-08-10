@@ -1,5 +1,19 @@
 import { format as dateFnsFormat, parseISO as dateFnsParseISO } from "date-fns";
 
+/**
+ * Map the app language to the locale used for month/day *names*.
+ *
+ * Deliberately separate from `numberFormatToLocale`: that maps the
+ * number-format setting ('eu' -> 'de-DE') and would yield German month names.
+ * Month names follow the UI language, number shapes follow the number setting.
+ *
+ * Previously copy-pasted inline in four chart components; centralised here so
+ * the charts that still omit it have one obvious thing to reach for.
+ */
+export function appLanguageToLocale(language: string): string {
+  return language === "nl" ? "nl-NL" : "en-US";
+}
+
 export function formatDate(date: Date, pattern: string, locale = "en-US"): string {
   switch (pattern) {
     // Numeric-only patterns delegate to date-fns; the tokens are locale-free.

@@ -3,8 +3,8 @@ title: Components Documentation Index
 type: components-index
 status: active
 date: 2026-04-23
-updated: 2026-06-16
-last_modified: 2026-06-16
+updated: 2026-08-10
+last_modified: 2026-08-10
 tags: [components, index, frontend, react, design-system, phase-9, phase-13, phase-c, performance, refactor, phase-3, phase-4, export-dialog, admin, observability, dev-observability, devtools, phase-f, lazy-loading, memoization, useCallback, multi-select, export-filters, debounce, accessibility, aria-label]
 description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens. Phase F adds 4 admin pages with observability dashboards. Phase 13 adds CategoryMultiCombobox and BankAccountMultiCombobox for multi-select export filtering.
 aliases: [components, UI, frontend components, chart components, visx charts]
@@ -73,6 +73,8 @@ SORT title ASC
 | `useWidgetVisibility()` | Widget show/hide | [[docs/components/hooks\|Hooks]] |
 | `useFilteredDashboardStats()` | Dashboard data | [[docs/components/hooks\|Hooks]] |
 | `useConfirmDialog()` | Confirmation dialogs | [[docs/components/hooks\|Hooks]] |
+| `useTabParam()` | Page-level Tabs ↔ `?tab=` URL param | [[docs/components/hooks\|Hooks]] |
+| `useTaxYearParam()` | Viewed tax year ↔ `?year=` URL param | [[docs/components/hooks\|Hooks]] |
 
 ### Shared Form Inputs
 

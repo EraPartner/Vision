@@ -11,7 +11,7 @@ import {
   AreaChart, type AreaSeries,
   ChartLegend, type ChartLegendItem,
 } from "@/components/charts";
-import { formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { useRecipientPivot } from "@/hooks/useRecipientPivot";
 import { useTagPivot } from "@/hooks/useTagPivot";
@@ -45,10 +45,10 @@ interface Entity {
 
 type SeriesMeta = { key: string; label: string; color: string };
 
-function formatPeriod(period: string, bucket: 'monthly' | 'yearly'): string {
+function formatPeriod(period: string, bucket: 'monthly' | 'yearly', locale: string): string {
   try {
     if (bucket === 'yearly') return period;
-    return formatDate(parseISO(`${period}-01`), "MMM yy");
+    return formatDate(parseISO(`${period}-01`), "MMM yy", locale);
   } catch {
     return period;
   }
@@ -72,7 +72,8 @@ interface CustomChartProps {
 }
 
 export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const monthLabelLocale = appLanguageToLocale(language);
   const loadingSurfaceProps = useLoadingSurfaceProps();
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
@@ -198,12 +199,12 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
       for (const e of displayEntities) values[e.key] = e.months[period] ?? 0;
       return {
         period,
-        periodLabel: formatPeriod(period, bucket),
+        periodLabel: formatPeriod(period, bucket, monthLabelLocale),
         date: parseDate(period, bucket),
         values,
       };
     });
-  }, [allPeriods, displayEntities, bucket]);
+  }, [allPeriods, displayEntities, bucket, monthLabelLocale]);
 
   // Memoised so the chart components and legend get stable array identities
   // instead of a fresh `.map()` result on every render.
@@ -240,7 +241,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
     [t]
   );
   const yTick = (v: number) => `${currencySymbol}${(v / 1000).toFixed(0)}k`;
-  const xTickFmt = (v: unknown) => formatDate(v as Date, bucket === 'yearly' ? 'yyyy' : 'MMM yy');
+  const xTickFmt = (v: unknown) => formatDate(v as Date, bucket === 'yearly' ? 'yyyy' : 'MMM yy', monthLabelLocale);
 
   const isEmpty = seriesMeta.length === 0;
   const isLoading = (hasRecipients && recipientLoading) || (hasTags && tagLoading);

@@ -10,6 +10,7 @@ import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
 import { ResearchUnavailableNote } from "@/components/research/ResearchUnavailableNote";
 import { ScorecardPanel } from "@/components/research/ResearchScorecard";
 import type { ResearchFundamentals } from "@/types/research";
+import { formatPercent } from "@/utils/currency";
 
 interface ResearchFundamentalsTabProps {
   symbol: string;
@@ -92,7 +93,7 @@ export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamental
   const currency = f?.currency || "USD";
 
   const fmtPct = useCallback((val: number | null | undefined) =>
-    val == null || isNaN(val) ? "—" : `${(val * 100).toFixed(2)}%`, []);
+    val == null || isNaN(val) ? "—" : formatPercent(val * 100, { digits: 2 }), []);
   const fmtRatio = useCallback((val: number | null | undefined) =>
     val == null || isNaN(val) ? "—" : val.toFixed(2), []);
   const fmtPrice = useCallback((val: number | null | undefined) =>

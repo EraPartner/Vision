@@ -3,7 +3,7 @@ title: Reports API
 type: endpoint
 status: active
 date: 2026-04-27
-updated: 2026-05-29
+updated: 2026-08-10
 tags:
   - api
   - reports
@@ -323,7 +323,7 @@ Generate a tax PDF report with 7 data-backed sections (Phase 8).
 | Field | Type | Description |
 |---|---|---|
 | `taxProfile` | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian filing context; echoed into `belgianRulesSummary` |
-| `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets? }` — PIT calculation from the frontend Belgian tax engine; rendered as a bracket table in `belgianRulesSummary`. If omitted, the section renders only the static bracket/rate tables. |
+| `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets? }` — PIT calculation from the frontend Belgian tax engine; rendered as a bracket table in `belgianRulesSummary`. If omitted, the section renders only the static bracket/rate tables. **`brackets[].rate` is in PERCENT units** (`25` = 25%), unlike the server-side `belgianTaxTables.js` rates, which are fractions (`0.30` = 30%). |
 
 **Available Sections:**
 

@@ -3,9 +3,9 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-09
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier.
+updated: 2026-08-10
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass, small-viewport-robustness, badge-size-variant]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier. Aug 2026 (small-viewport robustness, PR #156): Badge gains `size` (`default`/`sm`) and `muted` variants; DialogContent caps at `max-h-[90vh] overflow-y-auto`; TabsList scrolls horizontally with a hidden scrollbar; AccordionTrigger gains a `trailing` slot for header-row controls that must not nest inside the trigger button.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -483,6 +483,10 @@ Code links: [[apps/frontend/src/lib/dialogGenie.ts]], [[apps/frontend/src/compon
 - `DialogDescription` - Description
 - `DialogFooter` - Footer with actions
 
+### Viewport Height Cap (Aug 2026)
+
+`DialogContent` applies `max-h-[90vh] overflow-y-auto` directly on the primitive, so a tall dialog on a short viewport (landscape phone, on-screen keyboard open) scrolls inside itself instead of clipping both ends and pushing the submit button out of reach. Per-dialog `max-h`/`overflow` overrides still win via `tailwind-merge` (`cn()`), so no dialog ends up with two nested scrollbars.
+
 ---
 
 ## Sonner (Liquid Glass v2 + V8 Icon Bounce)
@@ -551,6 +555,39 @@ Data table for displaying lists.
 
 ---
 
+## Badge
+
+Small status/label pill built on `class-variance-authority`.
+
+### Variants
+
+```tsx
+<Badge>Default</Badge>
+<Badge variant="secondary">Secondary</Badge>
+<Badge variant="destructive">Destructive</Badge>
+<Badge variant="outline">Outline</Badge>
+<Badge variant="warning">Warning</Badge>
+<Badge variant="success">Success</Badge>
+<Badge variant="muted">Muted</Badge>
+```
+
+`muted` (Aug 2026) is a flat neutral pill (`border-transparent bg-muted text-muted-foreground`) for dense table/inspector rows — the opaque counterpart to `secondary`'s translucent glass tone.
+
+### Sizes (Aug 2026)
+
+```tsx
+<Badge size="default">Default</Badge>
+<Badge size="sm">Small</Badge>
+```
+
+`sm` is a dense pill (`px-2 py-0.5 text-xs normal-case tracking-normal`) for table rows and toolbars, where a count or raw identifier needs to stay legible rather than styled as a small-caps label. `size` defaults to `default` (the original small-caps label style) so existing callers are unaffected.
+
+**Adoption:** `ProviderHealthPage` (row status + kind pills) and `ApiInspector` (in-flight request count) now route through `Badge` instead of ad hoc `<span>` pill markup, closing a design-system consistency gap flagged in `TODO.md`.
+
+Code link: [[apps/frontend/src/components/ui/badge.tsx]]
+
+---
+
 ## Tabs
 
 Tabbed interface for organizing content.
@@ -564,6 +601,10 @@ Tabbed interface for organizing content.
 - **Constraint**: New `Tabs` consumers must route through this wrapper (they already do, since all existing consumers use `components/ui/tabs.tsx`).
 
 Code link: [[apps/frontend/src/components/ui/tabs.tsx]]
+
+### Horizontal Scroll on Narrow Viewports (Aug 2026)
+
+`TabsList` carries `max-w-full overflow-x-auto` with the scrollbar hidden (`[scrollbar-width:none]` + `[&::-webkit-scrollbar]:hidden`). A trigger list with 5–7 tabs (e.g. Statistics' 6 tabs) now scrolls horizontally inside itself at phone widths instead of overhanging the viewport and dragging the whole page into horizontal panning. Desktop layout is unchanged — the list only becomes a scroll container once its triggers overflow the available width.
 
 ### Usage
 
@@ -581,6 +622,50 @@ Code link: [[apps/frontend/src/components/ui/tabs.tsx]]
   </TabsContent>
 </Tabs>
 ```
+
+For page-level tabs whose active value should survive reload/Back, see [[docs/components/hooks#usetabparam-aug-2026|useTabParam]] — it binds `Tabs value`/`onValueChange` to a `?tab=` URL param.
+
+---
+
+## Accordion
+
+Collapsible sections built on `@radix-ui/react-accordion`.
+
+### Usage
+
+```tsx
+<Accordion type="single" collapsible>
+  <AccordionItem value="item-1">
+    <AccordionTrigger>Section title</AccordionTrigger>
+    <AccordionContent>Section body</AccordionContent>
+  </AccordionItem>
+</Accordion>
+```
+
+### `trailing` / `headerClassName` Props (Aug 2026)
+
+`AccordionTrigger` accepts an optional `trailing` prop for interactive content (e.g. a combobox or a spinner) that belongs on the header row but must not live **inside** the trigger `<button>` — a focusable control nested inside another `<button>` is invalid HTML and unreachable for assistive tech.
+
+```tsx
+<AccordionTrigger
+  headerClassName="px-4"
+  trailing={
+    <RecipientCombobox value={value} onSelect={onSelect} />
+  }
+>
+  <span>Row label</span>
+</AccordionTrigger>
+```
+
+When `trailing` is set:
+- The `AccordionPrimitive.Header` itself becomes the flex row; the trigger shrinks to just the label, `trailing` is rendered as its sibling, and the chevron moves **outside** the trigger button so it still paints last.
+- `headerClassName` carries the row-box classes (padding, etc.) since the header now owns the row box — `className` on `AccordionTrigger` still targets the trigger button itself.
+- The chevron keeps its open/close rotation and hover color via a `group/accordion-row` class on the header (Radix mirrors `data-state` onto the header element), and forwards clicks to the trigger so the "click the chevron to toggle" affordance survives the move out of the button.
+- Omitting `trailing` renders the original unchanged markup (trigger + inline chevron, header just wraps it).
+
+**Adoption:** `ImportReviewPage`'s per-group accordion row — the recipient-override combobox is a real `<button>`-based combobox and previously lived inside the trigger with a `stopPropagation()` guard; it now rides in `trailing` instead.
+
+Code link: [[apps/frontend/src/components/ui/accordion.tsx]]
 
 ---
 

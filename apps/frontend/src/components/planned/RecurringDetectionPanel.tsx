@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, formatPercent } from "@/utils/currency";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -255,7 +255,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 </span>
                                                 <Badge variant="outline" className={cn("text-xs", lastChange.direction === "increased" ? "text-loss border-loss/30" : "text-gain border-gain/30")}>
                                                     {lastChange.direction === "increased" ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                                                    {lastChange.percentChange > 0 ? "+" : ""}{lastChange.percentChange.toFixed(1)}%
+                                                    {formatPercent(lastChange.percentChange, { digits: 1, signed: true })}
                                                 </Badge>
                                             </div>
                                             <p className="text-xs text-muted-foreground mt-1">

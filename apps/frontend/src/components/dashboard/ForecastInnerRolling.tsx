@@ -3,7 +3,7 @@ import { LineChart } from "@/components/charts";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatDate } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, formatDate } from "@/components/shared/dateUtils";
 
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
 import { mergeForViewRolling, type MergedDayDate } from "@/utils/forecastMerge";
@@ -34,7 +34,7 @@ function ForecastInnerRollingImpl({
     const { t, language } = useLanguage();
     // Month abbreviations follow the app language, not the number-format locale
     // (numberFormatToLocale maps 'eu' -> 'de-DE', which would yield German months).
-    const monthLabelLocale = language === "nl" ? "nl-NL" : "en-US";
+    const monthLabelLocale = appLanguageToLocale(language);
     const actualLabel = t("cashflow.actualToDate") ?? t("cashflow.actualThisMonth");
 
     const { rows, series } = useMemo(

@@ -77,7 +77,10 @@ export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
                 <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onRemove(tag.slug); }}
-                    className="ml-0.5 hover:opacity-70 focus:outline-none"
+                    // focus:outline-none is a utility, so it beats the global
+                    // :focus-visible ring in index.css even on keyboard focus —
+                    // restore a ring of our own rather than dropping it.
+                    className="ml-0.5 rounded-sm hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={`Remove tag ${tag.slug}`}
                 >
                     <X className="h-3 w-3" />

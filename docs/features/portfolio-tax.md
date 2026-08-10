@@ -3,8 +3,8 @@ title: Portfolio Tax Feature
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-05-29
-tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration]
+updated: 2026-08-10
+tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
 related_code:
@@ -226,7 +226,7 @@ The page relies on `usePortfolio()` for investment summaries rather than a dedic
 - [[docs/features/exchange-rates|Exchange Rates]] — Currency conversion for multi-currency investments
 - [[docs/adr/056-belgian-tax-audit-fixes-ay2026|ADR-056]] — Comprehensive audit fixes (ETF TOB defaults, Reynders routing, property tax, regional autonomy)
 - [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit: TOB shares cap fix, CGT date docs, direct-bond CGT routing, Reynders interest-portion split, year-aware suggestions, per-residence centimes override
-- [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer shared with `/tax`; `TaxYearSwitcher` + `HistoricalYearBanner` drive a transient `viewedYear` state. Existing per-year `portfolio_tax_adjustments_v1` and `portfolio_tax_classifications_v1` storage keys are reused unchanged.
+- [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer shared with `/tax`; `TaxYearSwitcher` + `HistoricalYearBanner` drive a transient `viewedYear` state. Existing per-year `portfolio_tax_adjustments_v1` and `portfolio_tax_classifications_v1` storage keys are reused unchanged. `viewedYear` is mirrored into `?year=` on this route via [[docs/components/hooks#usetaxyearparam-aug-2026|useTaxYearParam]] (Aug 2026) — see [[docs/features/belgian-tax#url-state-year-param-aug-2026|Belgian Tax: URL State]].
 - [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — Extends ADR-058 with `YearActionsMenu` (freeze/file/history/export) and `HistoricalYearBanner` filed/frozen modes shared with `/tax`. Portfolio Tax now reads via `displayCalculationForYear`, so filed years surface their as-filed numbers rather than today's live recompute.
 - [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] — Decimal.js monetary arithmetic pattern that `portfolioTax.ts` follows for frontend accumulation
 - [[docs/adr/060-may-2026-monetary-precision-and-deduplication-audit|ADR-060]] — Established `apps/frontend/src/lib/decimal.ts`; `portfolioTax.ts` Decimal usage is consistent with this frontend pattern

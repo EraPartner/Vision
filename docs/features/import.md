@@ -3,8 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-08-09
-last_modified: 2026-08-09
+updated: 2026-08-10
+last_modified: 2026-08-10
 tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078, auto-link, planned-match, account-disclosure, wp-b6, july-2026]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
@@ -238,6 +238,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - **Unresolved-recipient decision (2026-08-09):** before any chunk is planned, `commitBatch` marks every drained row whose effective recipient (`user_override_recipient_id ?? resolved_recipient_id`) is missing as `status='error'` with `error_message` `"unresolved recipient — no recipient was matched or assigned in review"`, and counts it into `rows_error`. Previously such rows were attempted against `transactions.recipient_id NOT NULL`, surfacing as a 23502 constraint error — and, post-batching (#142), demoting the row's whole chunk from the bulk-INSERT path to the per-row replay.
 - Return final counts: `{ imported, duplicates, errors }`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
+- **Post-commit navigation (Aug 2026):** on success, `ImportReviewPage` navigates to `/import` with `{ replace: true }` instead of a normal push — the reviewed batch is consumed, so Back now skips the review URL entirely rather than re-inviting a commit of an already-committed batch. Same fix applied to `PortfolioImportReviewPage` → `/portfolio` (see [[docs/features/portfolio-import#5-commit|Portfolio CSV Import: Commit]]).
 
 #### 5. **Aggregation Refresh** (post-pipeline)
 - Synchronously refresh materialized views (as of Phase 12 Bugfix Sweep)
@@ -346,6 +347,7 @@ Duplicate detection checks:
 ### 4. Category Detection (ADR-046)
 - At review time, each group surfaces its `recipient_default_category_id` plus any per-row `override_category_id`.
 - The user can change the category in the review accordion. Changes apply to all rows in the group via `POST /api/import/batches/:id/rows/:rowId/category-override`.
+- **Recipient picker as `trailing` (Aug 2026):** the per-group recipient-override combobox on the review accordion is a real `<button>`-based combobox, so it renders via `AccordionTrigger`'s `trailing` prop — a sibling of the trigger button — rather than nested inside it with a `stopPropagation()` click guard (invalid HTML previously; unreachable for assistive tech). Its accessible name is `t('importReview.recipientPickerLabel', { name })`. See [[docs/components/ui-components#trailing--headerclassname-props-aug-2026|UI Components: Accordion trailing]].
 - A "Save as recipient default" checkbox (defaults `true` when the recipient has no current default) persists the chosen category to `recipients.default_category_id` via `PATCH /api/recipients/:id`.
 - At commit, the category written into `transactions.category_id` is `COALESCE(staging.override_category_id, recipient.default_category_id, NULL)`.
 - The runtime fallback `COALESCE(t.category_id, r.default_category_id)` in `transactionRepository` is preserved for backwards compatibility with rows committed before ADR-046 (which carry `category_id = NULL`).

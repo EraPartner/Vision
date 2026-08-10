@@ -36,8 +36,11 @@ export function useWorkspace() {
   const isPortfolio = path.startsWith("/portfolio");
   const isResearch = path.startsWith("/research");
   // Workspace-agnostic top-level routes preserve whichever workspace was active
-  // (admin and the cross-workspace Accounts hub, ADR-088).
-  const isAgnostic = path.startsWith("/admin") || path.startsWith("/accounts");
+  // (admin, the cross-workspace Accounts hub per ADR-088, and AI Chat — which
+  // renders above the workspace switcher and must not rewrite the stored
+  // workspace when opened from Portfolio/Research).
+  const isAgnostic =
+    path.startsWith("/admin") || path.startsWith("/accounts") || path.startsWith("/ai-chat");
 
   let workspace: Workspace;
   if (isAgnostic) {

@@ -17,7 +17,7 @@ import {
 import { getChartColor } from '@/components/charts';
 import { cn } from '@/lib/utils';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { numberFormatToLocale } from '@/utils/currency';
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import type { ToolErrorDetail, ToolRenderAs, ToolResultPayload } from '@/types/aiChat';
 
 function formatToolError(error: ToolResultPayload['error']): string {
@@ -256,7 +256,7 @@ function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
                         innerRadius={40}
                         dataKey="value"
                         label={({ name, percent }) =>
-                            `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                            `${name} ${formatPercent((percent ?? 0) * 100, { digits: 0 })}`
                         }
                         labelLine={{ strokeWidth: 1 }}
                         isAnimationActive={false}

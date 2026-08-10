@@ -10,7 +10,8 @@ import { Plus, TrendingUp, Target, Trash2, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
@@ -20,6 +21,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api";
@@ -41,6 +43,7 @@ export default function WatchlistPage() {
   const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const { data, isLoading } = useQuery({
     queryKey: watchlistKeys.all,
@@ -60,6 +63,18 @@ export default function WatchlistPage() {
       toast.success(t('watchlist.removedSuccess'));
     },
   });
+
+  // Removal destroys the user's notes and target price with no undo, so it goes
+  // through the same confirm every other destructive surface in the app uses.
+  const handleRemove = async (item: WatchlistItem) => {
+    const ok = await confirm({
+      title: t('watchlist.removeTitle'),
+      description: t('watchlist.removeDesc', { name: item.name || item.symbol || '' }),
+      confirmLabel: t('watchlist.removeConfirm'),
+      variant: 'destructive',
+    });
+    if (ok) deleteMutation.mutate(item.id);
+  };
 
   const handleDoubleClick = (item: WatchlistItem) => {
     setSelectedItem(item);
@@ -147,7 +162,7 @@ export default function WatchlistPage() {
             const sinceAddedPct = addedPrice != null && addedPrice > 0 && currentPrice != null
               ? ((currentPrice - addedPrice) / addedPrice) * 100
               : null;
-            const addedDate = new Date(item.created_at).toLocaleDateString(locale);
+            const addedDate = formatDateStringWithAppSettings(item.created_at, appSettings.dateFormat);
 
             return (
               <Card
@@ -208,7 +223,7 @@ export default function WatchlistPage() {
                             "flex items-center text-sm gap-1 text-loss"
                           )}>
                             <TrendingUp className="h-4 w-4" />
-                            {Math.abs(priceDiff!).toFixed(1)}% {t('watchlist.aboveTarget')}
+                            {formatPercent(Math.abs(priceDiff!), { digits: 1, locale })} {t('watchlist.aboveTarget')}
                           </div>
                         ) : (
                           // At or below target: show current price
@@ -233,7 +248,7 @@ export default function WatchlistPage() {
                     <div className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-xs">
                       <span className="text-muted-foreground">{t('watchlist.sinceAdded', { date: addedDate })}</span>
                       <span className={cn('font-medium tabular-nums', sinceAddedPct >= 0 ? 'amount-gain' : 'amount-loss')}>
-                        {sinceAddedPct >= 0 ? '+' : ''}{sinceAddedPct.toFixed(1)}%
+                        {formatPercent(sinceAddedPct, { digits: 1, signed: true, locale })}
                       </span>
                     </div>
                   )}
@@ -251,7 +266,7 @@ export default function WatchlistPage() {
                       aria-label={t('aria.removeFromWatchlist')}
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteMutation.mutate(item.id);
+                        void handleRemove(item);
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -270,6 +285,7 @@ export default function WatchlistPage() {
         open={!!selectedItem}
         onOpenChange={(open) => !open && setSelectedItem(null)}
       />
+      <ConfirmDialog />
     </div>
   );
 }

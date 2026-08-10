@@ -27,6 +27,8 @@ import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatCurrency } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatPercent } from "@/utils/currency";
 import { numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +55,7 @@ function matchSourceBadge(source: MatchSource, similarity?: number | null) {
     case "fuzzy":
       return (
         <Badge variant="outline" className="text-xs border-warning/60 text-warning">
-          fuzzy {similarity != null ? (similarity * 100).toFixed(0) + "%" : ""}
+          fuzzy {similarity != null ? formatPercent(similarity * 100, { digits: 0 }) : ""}
         </Badge>
       );
     case "pattern":
@@ -84,9 +86,7 @@ function dominantMatchSource(rows: ImportStagingRow[]): MatchSource {
   return null;
 }
 
-function formatDate(raw: string): string {
-  return String(raw).slice(0, 10);
-}
+
 
 /**
  * Account identity is case/whitespace-insensitive (D1: `lower(btrim(name))`).
@@ -225,7 +225,9 @@ export default function ImportReviewPage() {
       // aggregations so the imported rows appear immediately instead of after
       // staleTime expires (window-focus refetch is disabled globally).
       invalidateTransactionData(queryClient);
-      navigate("/import");
+      // Replace, don't push: this batch is consumed, so Back must skip the
+      // review URL (it no longer previews) instead of re-inviting a commit.
+      navigate("/import", { replace: true });
     },
     onError: (err: Error) => {
       toast.error(t("importReview.toast.commitFailed"), { description: apiErrorToMessage(err, t) });
@@ -446,6 +448,9 @@ export default function ImportReviewPage() {
           const dominant = dominantMatchSource(group.rows);
           const isNew = group.recipient_id == null || dominant === "new";
           const persistCheckboxId = `persist-default-${groupKey}`;
+          const groupHeading = isNew && !effectiveName
+            ? t("importReview.newRecipient")
+            : effectiveName ?? t("importReview.unresolved");
 
           return (
             <AccordionItem
@@ -453,34 +458,38 @@ export default function ImportReviewPage() {
               value={groupKey}
               className="border border-border/60 rounded-lg overflow-hidden"
             >
-              <AccordionTrigger className="px-4 hover:no-underline">
+              {/* The recipient picker is a real <button>, so it rides in
+                  `trailing` — a sibling of the accordion trigger — instead of
+                  nested inside it (invalid HTML, and unreachable for AT). */}
+              <AccordionTrigger
+                headerClassName="px-4"
+                className="hover:no-underline"
+                trailing={
+                  <div className="flex items-center gap-2 mr-2 shrink-0">
+                    {(state.recipientSaving || state.categorySaving) && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
+                    <DeferredRecipientCombobox
+                      value={effectiveRecipientId}
+                      label={recipientLabelFor(effectiveRecipientId)}
+                      aria-label={t("importReview.recipientPickerLabel", {
+                        name: groupHeading,
+                      })}
+                      onSelect={(id, name) =>
+                        handleGroupOverride(groupKey, fallbackState, group.rows, id, name)
+                      }
+                      className="h-7 text-xs max-w-[180px]"
+                      disabled={state.recipientSaving}
+                    />
+                  </div>
+                }
+              >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   {matchSourceBadge(dominant)}
-                  <span className="font-medium text-sm truncate">
-                    {isNew && !effectiveName
-                      ? t("importReview.newRecipient")
-                      : effectiveName ?? t("importReview.unresolved")}
-                  </span>
+                  <span className="font-medium text-sm truncate">{groupHeading}</span>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {t("importReview.rowCount", { n: group.row_count })}
                   </span>
-                </div>
-                <div
-                  className="flex items-center gap-2 mr-2 shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {(state.recipientSaving || state.categorySaving) && (
-                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  )}
-                  <DeferredRecipientCombobox
-                    value={effectiveRecipientId}
-                    label={recipientLabelFor(effectiveRecipientId)}
-                    onSelect={(id, name) =>
-                      handleGroupOverride(groupKey, fallbackState, group.rows, id, name)
-                    }
-                    className="h-7 text-xs max-w-[180px]"
-                    disabled={state.recipientSaving}
-                  />
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-3">
@@ -531,7 +540,7 @@ export default function ImportReviewPage() {
                       className="flex items-center gap-3 py-1.5 text-xs border-b border-border/30 last:border-0"
                     >
                       <div className="shrink-0">{matchSourceBadge(row.match_source, row.match_similarity)}</div>
-                      <span className="text-muted-foreground shrink-0 tabular-nums">{formatDate(row.tx_date)}</span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">{formatDateStringWithAppSettings(row.tx_date, appSettings?.dateFormat ?? "YYYY-MM-DD")}</span>
                       <span className="truncate min-w-0 text-foreground/80">{row.recipient_raw}</span>
                       {row.memo && (
                         <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">{row.memo}</span>
