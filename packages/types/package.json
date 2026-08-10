@@ -25,6 +25,10 @@
     "./portfolioTxnTypes": {
       "types": "./src/portfolioTxnTypes.d.ts",
       "default": "./src/portfolioTxnTypes.js"
+    },
+    "./recurrence": {
+      "types": "./src/recurrence.d.ts",
+      "default": "./src/recurrence.js"
     }
   },
   "types": "./src/index.d.ts",

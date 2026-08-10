@@ -4,6 +4,7 @@
 import type { PortfolioTransaction } from './api';
 import type { AssetClass } from '@vision/types/assetClasses';
 import type { PortfolioTxnType as CanonicalPortfolioTxnType } from '@vision/types/portfolioTxnTypes';
+import type { RecurrenceInterval } from '@vision/types/recurrence';
 
 // Derived from the canonical runtime array in @vision/types/assetClasses, so
 // this union can no longer drift from the shared ASSET_CLASSES list.
@@ -60,7 +61,11 @@ export function getTxnTypeLabel(t: (key: string) => string, type: PortfolioTxnTy
   return t(`portfolio.txnType.${type}`) || type;
 }
 
-export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
+// Was declared here verbatim a second time (the identical union also lived in
+// ./api.ts). Both now derive from the canonical PORTFOLIO_RECURRENCE_INTERVALS
+// tuple in @vision/types/recurrence; re-exported so the portfolio dialogs keep
+// importing it from '@/types/portfolio'.
+export type { RecurrenceInterval };
 
 // Computed view model returned by usePortfolio
 export interface InvestmentSummary {

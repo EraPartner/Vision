@@ -13,6 +13,7 @@
  */
 import type { AssetClass } from '@vision/types/assetClasses';
 import type { PortfolioTxnType } from '@vision/types/portfolioTxnTypes';
+import type { RecurrenceInterval } from '@vision/types/recurrence';
 
 export interface Link {
     rel: string;
@@ -395,10 +396,12 @@ export interface PlannedTransactionExecuteRequest {
 
 // ==================== Portfolio Types ====================
 
-// AssetClass / PortfolioTxnType derive from the canonical runtime arrays in
-// @vision/types; re-exported here so existing '@/types/api' imports keep working.
-export type { AssetClass, PortfolioTxnType };
-export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
+// AssetClass / PortfolioTxnType / RecurrenceInterval derive from the canonical
+// runtime arrays in @vision/types; re-exported here so existing '@/types/api'
+// imports keep working. RecurrenceInterval is the portfolio vocabulary — the
+// hyphenated 'bi-weekly' spelling; planned transactions use a different,
+// unhyphenated one (see @vision/types/recurrence).
+export type { AssetClass, PortfolioTxnType, RecurrenceInterval };
 export type PriceProvider = 'manual' | 'binance' | 'yahoo' | 'custom' | 'kinesis';
 
 export interface Investment {
