@@ -3,7 +3,7 @@ import { LineChart } from "@/components/charts";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { appLanguageToLocale, formatDate } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, formatDate, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
 
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
 import { mergeForViewRolling, type MergedDayDate } from "@/utils/forecastMerge";
@@ -59,7 +59,7 @@ function ForecastInnerRollingImpl({
         () => [
             ...Y_REFERENCE_LINES,
             {
-                x: new Date(`${data.today}T00:00:00`),
+                x: parseLocalDateFromYmd(data.today),
                 color: "hsl(var(--muted-foreground))",
                 dashed: true,
                 label: t("cashflow.today") ?? "Today",

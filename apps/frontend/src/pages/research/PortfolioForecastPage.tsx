@@ -4,7 +4,7 @@ import { TrendingUp, Activity, Target, AlertTriangle, Sparkles, Wallet } from "l
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency, formatPercent, numberFormatToLocale } from "@/utils/currency";
-import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,7 +90,7 @@ export default function PortfolioForecastPage() {
 
   const { rows, series } = useMemo(() => {
     const points = forecast?.points ?? [];
-    const r: ForecastRow[] = points.map((p) => ({ ...p, ts: new Date(p.date).getTime() }));
+    const r: ForecastRow[] = points.map((p) => ({ ...p, ts: parseLocalDateFromYmd(p.date).getTime() }));
     const s: LineSeries<ForecastRow>[] = [
       { key: "p90", label: t("research.forecast.p90"), accessor: (d) => d.p90, color: "hsl(var(--accent))", strokeWidth: 1, dashed: true },
       { key: "p75", label: t("research.forecast.p75"), accessor: (d) => d.p75, color: "hsl(var(--accent))", strokeWidth: 1 },
