@@ -3,8 +3,8 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-06-24
-tags: [components, forms, dialogs, settings, refactor, sidebar, instant-apply, phase-3, memoization, backup, encrypt, passphrase-modal, phase-2, visual-effects-tiers, auto-adapt-display, adr-084]
+updated: 2026-08-10
+tags: [components, forms, dialogs, settings, refactor, sidebar, instant-apply, phase-3, memoization, backup, encrypt, passphrase-modal, phase-2, visual-effects-tiers, auto-adapt-display, adr-084, small-viewport-robustness]
 description: Sidebar-navigated instant-apply settings dialog. Left rail of seven sections; each section is a self-contained component reading from hooks and writing directly to the store/API. Single "Done" close button replaces the old Save/Cancel footer. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) enforce a uniform visual language. (ADR-084)
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
@@ -99,7 +99,7 @@ interface DashboardSettingsDialogProps {
 
 ### Features
 
-- **Sidebar nav**: Left rail with icon + label for each of the seven sections; highlights active section.
+- **Sidebar nav**: Left rail with icon + label for each of the seven sections; highlights active section. **Responsive (Aug 2026)**: below the `md` breakpoint the nav collapses into a horizontally-scrolling chip bar under the dialog header instead of a fixed 208px sidebar — a fixed sidebar left ~120px for every control at phone widths. `md+` layout is pixel-identical to before.
 - **Scrollable content pane**: Right area renders the active section component.
 - **Done button**: Single close action; no Save/Cancel.
 - **Section lazy-init**: React Query cache persists across section switches; transient UI state (search inputs) resets on unmount.
@@ -350,6 +350,7 @@ The old `settings.save` / `settings.cancel` strings remain in locale files (unus
 | ADR-075 addendum | 2026-06-12 | Visual-effects tier Select + auto-adapt Switch added to AppearanceTab; `tierSelection` staged state in orchestrator |
 | ADR-084 | 2026-06-18 | 5-tab Save/Cancel form → sidebar + instant-apply; `SettingsPrimitives`; section taxonomy rework; `tabs/` directory removed |
 | ADR-104 addendum | 2026-06-24 | Accessibility group added to AppearanceSection: Gain & loss colors Select (`colorblindGainLoss`) |
+| Small-viewport robustness | 2026-08-10 | Section nav collapses to a horizontal scrolling chip bar below `md`; `md+` unchanged (PR #156) |
 
 ---
 

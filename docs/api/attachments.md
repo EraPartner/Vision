@@ -5,7 +5,7 @@ method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
 date: 2026-04-24
-updated: 2026-04-25
+updated: 2026-08-10
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
@@ -192,7 +192,7 @@ The [[apps/frontend/src/components/shared/AttachmentPanel.tsx]] component handle
 - Uses TanStack Query for state management and cache invalidation
 - Shows image thumbnails with hover-reveal delete button
 - Displays loading state during upload
-- Provides user-friendly error messages
+- Provides user-friendly error messages — **delete failures** (Aug 2026) show `toast.error(t('txPage.deleteAttachmentError'))`; previously a failed delete only reset the row's spinner with no message, looking like a silent no-op
 
 ### Usage in Transactions
 The [[apps/frontend/src/features/transactions/components/TransactionInfoDialog.tsx]] integrates `AttachmentPanel` at the bottom of the transaction detail view.

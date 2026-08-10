@@ -3,8 +3,8 @@ title: Feature - Portfolio CSV Import
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-06-20
-last_modified: 2026-06-20
+updated: 2026-08-10
+last_modified: 2026-08-10
 tags: [feature, portfolio, import, csv, brokerage, trades, portfolio-import, instrument-matching, review, type-normalizer, deduplication, fx, adr-078, adr-074, adr-066, migration-0040, migration-0041, migration-0057, account-id, adr-091]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
 description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, field-based+intra-batch deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
@@ -115,6 +115,8 @@ For each valid, resolved staged row:
 - Per-row errors (oversell, missing investment after override, FX failure) are recorded as `rows_error` without aborting the batch.
 
 Progress event: `{ phase: 'committing', current, total, imported, duplicates, errors, percent }`
+
+**Post-commit navigation (Aug 2026):** on success, `PortfolioImportReviewPage` navigates to `/portfolio` with `{ replace: true }` instead of a normal push — the reviewed batch is consumed, so Back skips the review URL rather than re-inviting a commit of an already-committed batch. Same fix applied to the budgeting-side `ImportReviewPage` → `/import` (see [[docs/features/import#4-commit-commitbatch|Import Feature: Commit]]).
 
 ---
 

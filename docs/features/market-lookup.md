@@ -3,9 +3,9 @@ title: Market Lookup Feature
 type: feature
 status: active
 date: 2026-06-05
-updated: 2026-06-17
-tags: [feature, market, lookup, stocks, search, frontend, research, security-detail]
-description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the deep-link target from the Markets Overview heat-map, ResearchHomePage search/watchlist tiles, and the /research/symbol/:symbol redirect.
+updated: 2026-08-10
+tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
+description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the deep-link target from the Markets Overview heat-map, ResearchHomePage search/watchlist tiles, and the /research/symbol/:symbol redirect. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
 related_code:
   - apps/frontend/src/pages/research/MarketLookupPage.tsx
@@ -45,6 +45,7 @@ The page has two rendering paths:
    - **Fundamentals** (default) — `ResearchFundamentalsTab`: graded 0–100 health panel (`ResearchScorecard`) + grouped fundamentals fields, sourced from `GET /api/research/scorecard`.
    - **Analyst** — `ResearchAnalystTab`: consensus ratings + target price + recent analyst actions, sourced from `GET /api/research/analyst`.
    - **News** — `ResearchNewsTab`: recent news articles, sourced from `GET /api/research/news`.
+   - **URL-synced (Aug 2026)**: the active tab (`fundamentals` | `analyst` | `news`) is mirrored to `?tab=` via [[docs/components/hooks#usetabparam-aug-2026|useTabParam]], so a shared `/research/market?symbol=…&tab=analyst` link reopens the same tab the sender was reading. Writes use `{ replace: true }`.
 5. **Trading info card** — open / high / low / prev-close / volume / avg-volume + 52-week range; responsive 2–3 column grid.
 
 **Provider-asset path** (`isProviderAsset` is true — non-Yahoo holdings: Kinesis, Binance, custom JSON):
@@ -126,6 +127,7 @@ When a user selects a security from search results:
 |---|---|
 | `/research/market?symbol=AAPL` | Market Lookup page; search pre-filled with `AAPL` |
 | `/research/market?symbol=AAPL&investmentId=42` | Market Lookup; holding #42's provider pre-seeded in Map-provider dialog |
+| `/research/market?symbol=AAPL&tab=analyst` | Market Lookup; Details card opens on the Analyst tab |
 | `/research/symbol/AAPL` | `RedirectSymbolToMarket` in `App.tsx` → 301 to `/research/market?symbol=AAPL` |
 | `/research/symbol/AAPL?investmentId=42` | Same redirect; `investmentId` preserved |
 

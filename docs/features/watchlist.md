@@ -3,9 +3,9 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-06-18
-last_modified: 2026-06-18
-updated: 2026-06-18
-tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097]
+last_modified: 2026-08-10
+updated: 2026-08-10
+tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
 related_code:
@@ -107,7 +107,7 @@ Available methods:
 - `getWatchlist(params?)` — `GET /api/watchlist` with optional `limit`/`offset` pagination
 - `createWatchlistItem(data)` — `POST /api/watchlist` to add item
 - `updateWatchlistItem(id, data)` — `PATCH /api/watchlist/:id` to update (e.g., set target price)
-- `deleteWatchlistItem(id)` — `DELETE /api/watchlist/:id` to remove item
+- `deleteWatchlistItem(id)` — `DELETE /api/watchlist/:id` to remove item — **gated by a destructive confirm dialog since Aug 2026** (`useConfirmDialog`; the row's target price and notes are deleted with it and cannot be recovered). Previously the trash icon fired the mutation directly.
 - `getMarketQuotes(symbols)` — `GET /api/market/quotes?symbols=...` to fetch current prices for multiple symbols
 
 All methods are typed and integrate with React Query for caching and invalidation.

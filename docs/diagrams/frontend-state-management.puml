@@ -206,6 +206,16 @@ package "Utility Hooks" {
   class useWidgetVisibility
   class useIsMobile
   class useConfirmDialog
+  class useTabParam <<Aug 2026>> {
+    ' hooks/useTabParam.ts
+    +[activeTab, setActiveTab]
+    ' binds Tabs value/onValueChange to ?tab= (allow-list validated, replace-writes)
+  }
+  class useTaxYearParam <<Aug 2026>> {
+    ' hooks/useTaxYearParam.ts
+    ' mirrors BelgianTaxProfileContext.viewedYear <-> ?year=
+    ' mounted on /tax and /portfolio/tax only (route-scoped)
+  }
 }
 
 ' Provider Hierarchy (React Context nesting)
@@ -244,5 +254,10 @@ useFilteredDashboardStats ..> SettingsContext : uses
 
 ' WorkspaceHook consumes router
 WorkspaceHook ..> BrowserRouter : uses
+
+' Aug 2026: URL-state utility hooks
+useTabParam ..> BrowserRouter : uses (useSearchParams)
+useTaxYearParam ..> BrowserRouter : uses (useSearchParams)
+useTaxYearParam ..> BelgianTaxProfileContext : reads/writes viewedYear
 
 @enduml

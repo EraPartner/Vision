@@ -3,8 +3,9 @@ title: Research Feature
 type: feature
 status: active
 date: 2026-06-16
-updated: 2026-06-17
+updated: 2026-08-10
 tags:
+  - url-state
   - feature
   - research
   - market-data
@@ -192,7 +193,7 @@ International ticker reuse is rampant (the same string is a different instrument
 5. `POST /mappings/audit` cross-checks currency match and last-price agreement (>5% from median flagged) across mapped providers and stamps `verified_at`.
 
 > [!info] Shipped (incl. holdings pre-seed)
-> The symbol-mapping endpoints (resolve / save / list / delete over `instrument_provider_map`), the cross-provider self-audit, and the holdings pre-seed on resolve are **implemented** ([[apps/node-backend/src/services/research/researchMappingService.js]]), and the frontend confirm dialog (`ResearchMappingDialog`) consumes them (resolve → confirm/deselect → save, with an audit action, surfacing held-provider proposals as already-confirmed).
+> The symbol-mapping endpoints (resolve / save / list / delete over `instrument_provider_map`), the cross-provider self-audit, and the holdings pre-seed on resolve are **implemented** ([[apps/node-backend/src/services/research/researchMappingService.js]]), and the frontend confirm dialog (`ResearchMappingDialog`) consumes them (resolve → confirm/deselect → save, with an audit action, surfacing held-provider proposals as already-confirmed). Deleting a saved mapping (`DELETE /mappings/:id`) is irreversible and silently breaks price resolution for the asset, so it now goes through a `useConfirmDialog` destructive confirm (Aug 2026) before the row is removed — matching every other destructive surface in the app.
 
 ## Provider Adapters
 
