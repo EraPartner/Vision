@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
 import type {
   MappingKeyType, MappingProposal, MappingSaveInput, ResearchAssetClass,
@@ -51,6 +52,7 @@ export function ResearchMappingDialog({
 }: ResearchMappingDialogProps) {
   const { t } = useLanguage();
   const loadingSurfaceProps = useLoadingSurfaceProps();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
@@ -113,6 +115,19 @@ export function ResearchMappingDialog({
       toast.success(t('research.mapping.removed'));
     },
   });
+
+  // Deleting a saved mapping is irreversible and silently breaks price
+  // resolution for the asset, so it confirms first like every other
+  // destructive surface in the app.
+  const handleRemove = async (id: number, provider: string, providerSymbol: string) => {
+    const ok = await confirm({
+      title: t('research.mapping.remove'),
+      description: t('research.mapping.removeDesc', { provider, symbol: providerSymbol }),
+      confirmLabel: t('common.delete'),
+      variant: 'destructive',
+    });
+    if (ok) deleteMutation.mutate(id);
+  };
 
   const auditMutation = useMutation({
     mutationFn: () => apiClient.auditResearchMappings({ instrument_key: instrumentKey, key_type: keyType }),
@@ -255,7 +270,7 @@ export function ResearchMappingDialog({
                   <Button
                     variant="ghost" size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => deleteMutation.mutate(m.id)}
+                    onClick={() => void handleRemove(m.id, m.provider, m.provider_symbol)}
                     aria-label={t('research.mapping.remove')}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -296,6 +311,7 @@ export function ResearchMappingDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDialog />
     </Dialog>
   );
 }

@@ -411,6 +411,7 @@ export default function TableDataEditorPage() {
                                 <TableRow key={nr.tempId} className="bg-emerald-500/5">
                                     <TableCell className="w-10">
                                         <Button variant="ghost" size="icon" className="h-6 w-6"
+                                            aria-label={t('dbEditor.discardNewRow')}
                                             onClick={() => setNewRows((prev) => prev.filter((r) => r.tempId !== nr.tempId))}>
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -482,11 +483,13 @@ export default function TableDataEditorPage() {
                     <span>{t('dbEditor.rowsCount', { n: total })}</span>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 0 || hasPending}
+                            aria-label={t('dbEditor.prevPage')}
                             onClick={() => setPage((p) => Math.max(0, p - 1))}>
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <span>{t('dbEditor.pageOf', { page: page + 1, pages: pageCount })}</span>
                         <Button variant="outline" size="icon" className="h-7 w-7" disabled={page + 1 >= pageCount || hasPending}
+                            aria-label={t('dbEditor.nextPage')}
                             onClick={() => setPage((p) => p + 1)}>
                             <ChevronRight className="h-4 w-4" />
                         </Button>

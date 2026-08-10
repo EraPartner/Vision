@@ -448,6 +448,9 @@ export default function ImportReviewPage() {
           const dominant = dominantMatchSource(group.rows);
           const isNew = group.recipient_id == null || dominant === "new";
           const persistCheckboxId = `persist-default-${groupKey}`;
+          const groupHeading = isNew && !effectiveName
+            ? t("importReview.newRecipient")
+            : effectiveName ?? t("importReview.unresolved");
 
           return (
             <AccordionItem
@@ -455,34 +458,38 @@ export default function ImportReviewPage() {
               value={groupKey}
               className="border border-border/60 rounded-lg overflow-hidden"
             >
-              <AccordionTrigger className="px-4 hover:no-underline">
+              {/* The recipient picker is a real <button>, so it rides in
+                  `trailing` — a sibling of the accordion trigger — instead of
+                  nested inside it (invalid HTML, and unreachable for AT). */}
+              <AccordionTrigger
+                headerClassName="px-4"
+                className="hover:no-underline"
+                trailing={
+                  <div className="flex items-center gap-2 mr-2 shrink-0">
+                    {(state.recipientSaving || state.categorySaving) && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
+                    <DeferredRecipientCombobox
+                      value={effectiveRecipientId}
+                      label={recipientLabelFor(effectiveRecipientId)}
+                      aria-label={t("importReview.recipientPickerLabel", {
+                        name: groupHeading,
+                      })}
+                      onSelect={(id, name) =>
+                        handleGroupOverride(groupKey, fallbackState, group.rows, id, name)
+                      }
+                      className="h-7 text-xs max-w-[180px]"
+                      disabled={state.recipientSaving}
+                    />
+                  </div>
+                }
+              >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   {matchSourceBadge(dominant)}
-                  <span className="font-medium text-sm truncate">
-                    {isNew && !effectiveName
-                      ? t("importReview.newRecipient")
-                      : effectiveName ?? t("importReview.unresolved")}
-                  </span>
+                  <span className="font-medium text-sm truncate">{groupHeading}</span>
                   <span className="text-xs text-muted-foreground shrink-0">
                     {t("importReview.rowCount", { n: group.row_count })}
                   </span>
-                </div>
-                <div
-                  className="flex items-center gap-2 mr-2 shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {(state.recipientSaving || state.categorySaving) && (
-                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  )}
-                  <DeferredRecipientCombobox
-                    value={effectiveRecipientId}
-                    label={recipientLabelFor(effectiveRecipientId)}
-                    onSelect={(id, name) =>
-                      handleGroupOverride(groupKey, fallbackState, group.rows, id, name)
-                    }
-                    className="h-7 text-xs max-w-[180px]"
-                    disabled={state.recipientSaving}
-                  />
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-3">

@@ -803,6 +803,12 @@ describe("Portfolio pages (integration)", () => {
         const trashBtn = allBtns.find((btn) => !btn.textContent?.trim())!;
         await user.click(trashBtn);
 
+        // Removal is destructive and has no undo, so it confirms first
+        // (useConfirmDialog) — watchlist.removeConfirm = "Remove".
+        await user.click(
+            await screen.findByRole("button", { name: /^remove$/i }),
+        );
+
         // watchlist.removedSuccess = "Removed from watchlist"
         await vi.waitFor(() => {
             expect(toastSpy).toHaveBeenCalledWith(

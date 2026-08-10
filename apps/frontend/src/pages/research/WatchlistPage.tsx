@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api";
@@ -41,6 +42,7 @@ export default function WatchlistPage() {
   const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const { data, isLoading } = useQuery({
     queryKey: watchlistKeys.all,
@@ -60,6 +62,18 @@ export default function WatchlistPage() {
       toast.success(t('watchlist.removedSuccess'));
     },
   });
+
+  // Removal destroys the user's notes and target price with no undo, so it goes
+  // through the same confirm every other destructive surface in the app uses.
+  const handleRemove = async (item: WatchlistItem) => {
+    const ok = await confirm({
+      title: t('watchlist.removeTitle'),
+      description: t('watchlist.removeDesc', { name: item.name || item.symbol || '' }),
+      confirmLabel: t('watchlist.removeConfirm'),
+      variant: 'destructive',
+    });
+    if (ok) deleteMutation.mutate(item.id);
+  };
 
   const handleDoubleClick = (item: WatchlistItem) => {
     setSelectedItem(item);
@@ -251,7 +265,7 @@ export default function WatchlistPage() {
                       aria-label={t('aria.removeFromWatchlist')}
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteMutation.mutate(item.id);
+                        void handleRemove(item);
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -270,6 +284,7 @@ export default function WatchlistPage() {
         open={!!selectedItem}
         onOpenChange={(open) => !open && setSelectedItem(null)}
       />
+      <ConfirmDialog />
     </div>
   );
 }
