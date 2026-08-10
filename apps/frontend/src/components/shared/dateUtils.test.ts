@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   appDateFormatToDateFnsPattern,
+  appLanguageToLocale,
+  formatDate,
   formatMonthLabelWithLocale,
   formatMonthYearWithAppSettings,
   formatDateTimeStringWithAppSettings,
@@ -55,5 +57,26 @@ describe("dateUtils app settings helpers", () => {
   test("formats month-only labels via locale helper", () => {
     const sampleDate = new Date(2026, 2, 23); // March
     expect(formatMonthLabelWithLocale(sampleDate, "en-US", "short")).toBe("Mar");
+  });
+});
+
+describe("appLanguageToLocale", () => {
+  test("maps the app languages to month-name locales", () => {
+    expect(appLanguageToLocale("nl")).toBe("nl-NL");
+    expect(appLanguageToLocale("en")).toBe("en-US");
+  });
+
+  test("falls back to English for anything unknown", () => {
+    expect(appLanguageToLocale("de")).toBe("en-US");
+    expect(appLanguageToLocale("")).toBe("en-US");
+  });
+
+  test("is distinct from the number-format locale — 'eu' must not yield German months", () => {
+    // numberFormatToLocale('eu') is 'de-DE'; month names must follow the UI
+    // language instead, or the Dutch UI renders "Mrz"/"Mai" on its charts.
+    const d = new Date(2026, 4, 5); // May 2026
+    expect(formatDate(d, "MMM yyyy", appLanguageToLocale("nl"))).toBe("mei 2026");
+    expect(formatDate(d, "MMM yyyy", appLanguageToLocale("en"))).toBe("May 2026");
+    expect(formatDate(d, "MMM yyyy", "de-DE")).toBe("Mai 2026");
   });
 });

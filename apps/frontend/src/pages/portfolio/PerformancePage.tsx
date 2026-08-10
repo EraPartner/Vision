@@ -4,7 +4,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { portfolioKeys } from "@/lib/queryKeys";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency, formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -19,7 +19,7 @@ import {
     TrendingUp, TrendingDown, BarChart3, Percent,
     DollarSign, Activity,
 } from "lucide-react";
-import { formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -117,7 +117,7 @@ export default function PerformancePage() {
         "all": t('performance.period.all'),
     };
 
-    const monthLabelLocale = useMemo(() => (language === "nl" ? "nl-NL" : "en-US"), [language]);
+    const monthLabelLocale = useMemo(() => appLanguageToLocale(language), [language]);
 
     const xTickFormatter = useMemo(() => {
         if (selectedPeriod === "1m" || selectedPeriod === "3m" || selectedPeriod === "6m") {
@@ -271,7 +271,7 @@ export default function PerformancePage() {
                         size="compact"
                         className="lg:col-span-2 lg:row-span-1"
                         title={t('portfolio.totalReturn')}
-                        value={`${overallMetrics.totalReturnPct >= 0 ? "+" : ""}${overallMetrics.totalReturnPct.toFixed(2)}%`}
+                        value={formatPercent(overallMetrics.totalReturnPct, { digits: 2, signed: true })}
                         subtitle={<Money amount={overallMetrics.totalGainLoss} currency={defaultCurrency} />}
                         icon={overallMetrics.totalReturnPct >= 0 ? TrendingUp : TrendingDown}
                         trend={overallMetrics.totalReturnPct >= 0 ? "income" : "expense"}
@@ -281,7 +281,7 @@ export default function PerformancePage() {
                         size="compact"
                         className="lg:col-span-2 lg:row-span-1"
                         title={t('portfolio.annualizedReturn')}
-                        value={`${overallMetrics.annualizedReturn >= 0 ? "+" : ""}${overallMetrics.annualizedReturn.toFixed(2)}%`}
+                        value={formatPercent(overallMetrics.annualizedReturn, { digits: 2, signed: true })}
                         subtitle={t('performance.projectedYearly')}
                         icon={Activity}
                         trend={overallMetrics.annualizedReturn >= 0 ? "income" : "expense"}
@@ -291,8 +291,8 @@ export default function PerformancePage() {
                         size="compact"
                         className="lg:col-span-2 lg:row-span-1"
                         title={t('portfolio.realReturn')}
-                        value={`${overallMetrics.realReturnPct >= 0 ? "+" : ""}${overallMetrics.realReturnPct.toFixed(2)}%`}
-                        subtitle={t('performance.cumulativeInflation', { n: overallMetrics.cumulativeInflation.toFixed(1) })}
+                        value={formatPercent(overallMetrics.realReturnPct, { digits: 2, signed: true })}
+                        subtitle={t('performance.cumulativeInflation', { n: formatPercent(overallMetrics.cumulativeInflation, { digits: 1 }) })}
                         icon={Percent}
                         trend={overallMetrics.realReturnPct >= 0 ? "income" : "expense"}
                         valueClassName={overallMetrics.realReturnPct >= 0 ? "amount-gain" : "amount-loss"}
@@ -350,7 +350,7 @@ export default function PerformancePage() {
                         xIsDate={true}
                         xTickFormat={(v) => xTickFormatter.format(v as Date)}
                         yTickFormat={(v) => formatCurrency(v as number, defaultCurrency, locale)}
-                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy", monthLabelLocale)}
                         tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                         height={360}
                         margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
@@ -385,9 +385,9 @@ export default function PerformancePage() {
                         ]}
                         xIsDate={true}
                         xTickFormat={(v) => xTickFormatter.format(v as Date)}
-                        yTickFormat={(v) => `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(0)}%`}
-                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
-                        tooltipValueFormat={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}
+                        yTickFormat={(v) => formatPercent(v as number, { digits: 0, signed: true })}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy", monthLabelLocale)}
+                        tooltipValueFormat={(v) => formatPercent(v, { digits: 2, signed: true })}
                         height={320}
                         margin={{ top: 16, right: 24, bottom: 28, left: 72 }}
                     />
@@ -469,7 +469,7 @@ function TotalValueCard({
                                 {isGain ? "+" : ""}<Money amount={totalGainLoss} currency={currency} />
                             </span>{" "}
                             <span className={cn("font-medium", gainToneClass)}>
-                                ({isGain ? "+" : ""}{totalReturnPct.toFixed(2)}%)
+                                ({formatPercent(totalReturnPct, { digits: 2, signed: true })})
                             </span>
                         </span>
                     </div>
@@ -542,7 +542,7 @@ function AssetAllocationBar({ split, currency, labels }: AssetAllocationBarProps
                         key={r.key}
                         className={r.color}
                         style={{ width: `${r.pct}%` }}
-                        aria-label={`${r.label} ${r.pct.toFixed(1)}%`}
+                        aria-label={`${r.label} ${formatPercent(r.pct, { digits: 1 })}`}
                     />
                 ))}
             </div>
@@ -555,7 +555,7 @@ function AssetAllocationBar({ split, currency, labels }: AssetAllocationBarProps
                         </span>
                         <span className="text-foreground font-medium tabular-nums">
                             <Money amount={r.value} currency={currency} />{" "}
-                            <span className="text-muted-foreground font-normal">({r.pct.toFixed(1)}%)</span>
+                            <span className="text-muted-foreground font-normal">({formatPercent(r.pct, { digits: 1 })})</span>
                         </span>
                     </li>
                 ))}

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
@@ -146,7 +146,7 @@ export default function ResearchHomePage() {
                     <>
                       <p className="mt-2 text-lg font-bold tabular-nums">{numberFmt.format(quote.price)}</p>
                       <p className={cn("text-xs font-medium tabular-nums", up ? "amount-gain" : "amount-loss")}>
-                        {up ? '+' : ''}{numberFmt.format(quote.change)} ({up ? '+' : ''}{pct!.toFixed(2)}%)
+                        {up ? '+' : ''}{numberFmt.format(quote.change)} ({formatPercent(pct!, { digits: 2, signed: true })})
                       </p>
                     </>
                   ) : (
@@ -235,7 +235,7 @@ export default function ResearchHomePage() {
                             : <span className="text-sm font-semibold truncate">{item.name}</span>}
                           {pct != null && (
                             <span className={cn("ml-auto text-xs font-medium tabular-nums", up ? "amount-gain" : "amount-loss")}>
-                              {up ? '+' : ''}{pct.toFixed(2)}%
+                              {formatPercent(pct, { digits: 2, signed: true })}
                             </span>
                           )}
                         </div>

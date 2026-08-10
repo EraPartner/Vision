@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
@@ -353,9 +353,11 @@ export default function MarketLookupPage() {
                       )}>
                         {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                         {isPositive ? "+" : ""}{fmtPrice(quote.change, quote.currency)}
-                        <span className="text-sm">
-                          ({isPositive ? "+" : ""}{quote.changePercent?.toFixed(2)}%)
-                        </span>
+                        {quote.changePercent != null && (
+                          <span className="text-sm">
+                            ({formatPercent(quote.changePercent, { digits: 2, signed: true })})
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>

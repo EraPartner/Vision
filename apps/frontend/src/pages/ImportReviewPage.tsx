@@ -27,6 +27,8 @@ import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatCurrency } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatPercent } from "@/utils/currency";
 import { numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +55,7 @@ function matchSourceBadge(source: MatchSource, similarity?: number | null) {
     case "fuzzy":
       return (
         <Badge variant="outline" className="text-xs border-warning/60 text-warning">
-          fuzzy {similarity != null ? (similarity * 100).toFixed(0) + "%" : ""}
+          fuzzy {similarity != null ? formatPercent(similarity * 100, { digits: 0 }) : ""}
         </Badge>
       );
     case "pattern":
@@ -84,9 +86,7 @@ function dominantMatchSource(rows: ImportStagingRow[]): MatchSource {
   return null;
 }
 
-function formatDate(raw: string): string {
-  return String(raw).slice(0, 10);
-}
+
 
 /**
  * Account identity is case/whitespace-insensitive (D1: `lower(btrim(name))`).
@@ -540,7 +540,7 @@ export default function ImportReviewPage() {
                       className="flex items-center gap-3 py-1.5 text-xs border-b border-border/30 last:border-0"
                     >
                       <div className="shrink-0">{matchSourceBadge(row.match_source, row.match_similarity)}</div>
-                      <span className="text-muted-foreground shrink-0 tabular-nums">{formatDate(row.tx_date)}</span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">{formatDateStringWithAppSettings(row.tx_date, appSettings?.dateFormat ?? "YYYY-MM-DD")}</span>
                       <span className="truncate min-w-0 text-foreground/80">{row.recipient_raw}</span>
                       {row.memo && (
                         <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">{row.memo}</span>

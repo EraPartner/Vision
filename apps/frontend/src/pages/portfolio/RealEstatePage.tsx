@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
@@ -123,14 +123,14 @@ export default function RealEstatePage() {
           value={<RollingNumber parts={fmtParts(totalRentIncome, { signed: true })} />}
           trend="income" valueClassName="text-gain"
           subtitle={`~${fmt(estimatedMonthlyRent)}${t('realestate.perMonth')}`} />
-        <StatCard size="compact" title={t('portfolio.yield')} value={`${annualYield.toFixed(1)}%`}
+        <StatCard size="compact" title={t('portfolio.yield')} value={formatPercent(annualYield, { digits: 1 })}
           icon={Percent} subtitle={t('portfolio.annual')} />
         <StatCard size="compact" title={t('portfolio.totalReturn')}
           value={<RollingNumber parts={fmtParts(totalReturn, { signed: true })} />}
           trend={totalReturn >= 0 ? "income" : "expense"}
           valueClassName={totalReturn >= 0 ? "amount-gain" : "amount-loss"}>
           <div className="mt-1 flex items-center gap-1.5">
-            <DeltaPill value={roi} label={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} />
+            <DeltaPill value={roi} label={formatPercent(roi, { digits: 1, signed: true })} />
             <span className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</span>
           </div>
         </StatCard>
@@ -257,11 +257,11 @@ export default function RealEstatePage() {
                  <div className="flex items-center justify-between py-3 border-t border-border">
                    <div>
                      <p className="text-xs text-muted-foreground">{t('portfolio.yield')}</p>
-                     <p className="text-sm font-medium">{propertyYield.toFixed(1)}% {t('portfolio.annual')}</p>
+                     <p className="text-sm font-medium">{formatPercent(propertyYield, { digits: 1 })} {t('portfolio.annual')}</p>
                    </div>
                    <div className="flex flex-col items-end gap-1">
                      <p className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</p>
-                     <DeltaPill value={propertyROI} label={`${propertyROI >= 0 ? "+" : ""}${propertyROI.toFixed(1)}%`} />
+                     <DeltaPill value={propertyROI} label={formatPercent(propertyROI, { digits: 1, signed: true })} />
                    </div>
                  </div>
 

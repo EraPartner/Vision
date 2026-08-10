@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { BarChart, type BarSeries, type BarOverlay } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { appLanguageToLocale } from "@/components/shared/dateUtils";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
 import { computeRollingAverage } from "@/utils/rollingAverage";
@@ -22,13 +23,14 @@ interface MonthlyChartProps {
 }
 
 export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const monthLabelLocale = appLanguageToLocale(language);
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
   const [showOverlay, setShowOverlay] = useState(false);
 
   const chartData: IncomeSpendingDatum[] = useMemo(() => {
     const raw = data.monthlyData.map((m) => ({
-      period: formatPeriodShort(m.period),
+      period: formatPeriodShort(m.period, monthLabelLocale),
       income: Math.round(m.income),
       spending: Math.round(m.spending),
     }));
@@ -41,7 +43,7 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
       incomeAvg: incomeAvgs[i] !== null ? Math.round(incomeAvgs[i]!) : null,
       spendingAvg: spendingAvgs[i] !== null ? Math.round(spendingAvgs[i]!) : null,
     }));
-  }, [data.monthlyData]);
+  }, [data.monthlyData, monthLabelLocale]);
 
   const series: BarSeries<IncomeSpendingDatum>[] = useMemo(() => [
     { key: "income", label: t("statsPage.income"), accessor: (d) => d.income, color: "hsl(var(--gain))" },

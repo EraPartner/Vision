@@ -10,7 +10,8 @@ import { Plus, TrendingUp, Target, Trash2, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
@@ -161,7 +162,7 @@ export default function WatchlistPage() {
             const sinceAddedPct = addedPrice != null && addedPrice > 0 && currentPrice != null
               ? ((currentPrice - addedPrice) / addedPrice) * 100
               : null;
-            const addedDate = new Date(item.created_at).toLocaleDateString(locale);
+            const addedDate = formatDateStringWithAppSettings(item.created_at, appSettings.dateFormat);
 
             return (
               <Card
@@ -222,7 +223,7 @@ export default function WatchlistPage() {
                             "flex items-center text-sm gap-1 text-loss"
                           )}>
                             <TrendingUp className="h-4 w-4" />
-                            {Math.abs(priceDiff!).toFixed(1)}% {t('watchlist.aboveTarget')}
+                            {formatPercent(Math.abs(priceDiff!), { digits: 1, locale })} {t('watchlist.aboveTarget')}
                           </div>
                         ) : (
                           // At or below target: show current price
@@ -247,7 +248,7 @@ export default function WatchlistPage() {
                     <div className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-xs">
                       <span className="text-muted-foreground">{t('watchlist.sinceAdded', { date: addedDate })}</span>
                       <span className={cn('font-medium tabular-nums', sinceAddedPct >= 0 ? 'amount-gain' : 'amount-loss')}>
-                        {sinceAddedPct >= 0 ? '+' : ''}{sinceAddedPct.toFixed(1)}%
+                        {formatPercent(sinceAddedPct, { digits: 1, signed: true, locale })}
                       </span>
                     </div>
                   )}

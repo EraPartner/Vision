@@ -28,6 +28,7 @@ import type { WatchlistItem } from "@/types/watchlist";
 import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
+import { formatPercent } from "@/utils/currency";
 
 interface WatchlistChartDialogProps {
   item: WatchlistItem | null;
@@ -202,7 +203,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                       priceDiff > 0 ? "text-loss" : "text-gain"
                     )}>
                       {priceDiff > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                      {Math.abs(priceDiff).toFixed(2)}% {priceDiff > 0 ? t('watchlistChart.aboveTarget', { n: Math.abs(priceDiff).toFixed(0) }) : t('watchlistChart.belowTarget', { n: Math.abs(priceDiff).toFixed(0) })}
+                      {formatPercent(Math.abs(priceDiff), { digits: 2 })} {priceDiff > 0 ? t('watchlistChart.aboveTarget', { n: Math.abs(priceDiff).toFixed(0) }) : t('watchlistChart.belowTarget', { n: Math.abs(priceDiff).toFixed(0) })}
                     </div>
                   )}
                 </>

@@ -19,17 +19,22 @@ export const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey: string }> 
   { id: "yearlySummary",    labelKey: "statsPage.widget.yearlySummary",    defaultVisible: true },
 ];
 
-export function formatPeriodLabel(period: string): string {
+/**
+ * `locale` is required, not defaulted: these render month *names*, and every
+ * caller that silently omitted it printed English months in the Dutch UI. Pass
+ * `appLanguageToLocale(language)` from the component.
+ */
+export function formatPeriodLabel(period: string, locale: string): string {
   try {
-    return formatDate(parseISO(`${period}-01`), "MMM yyyy");
+    return formatDate(parseISO(`${period}-01`), "MMM yyyy", locale);
   } catch {
     return period;
   }
 }
 
-export function formatPeriodShort(period: string): string {
+export function formatPeriodShort(period: string, locale: string): string {
   try {
-    return formatDate(parseISO(`${period}-01`), "MMM yy");
+    return formatDate(parseISO(`${period}-01`), "MMM yy", locale);
   } catch {
     return period;
   }

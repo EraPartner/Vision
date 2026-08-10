@@ -10,6 +10,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { ChartTooltip } from "./ChartTooltip";
 import { getChartColor } from "./palette";
+import { formatPercent } from "@/utils/currency";
 import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -121,7 +122,7 @@ function Inner({
                                             >
                                                 {labelFormat
                                                     ? labelFormat(arc.data, pct)
-                                                    : `${(pct * 100).toFixed(0)}%`}
+                                                    : formatPercent(pct * 100, { digits: 0 })}
                                             </text>
                                         ) : null}
                                     </g>

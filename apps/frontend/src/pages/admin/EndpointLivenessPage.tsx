@@ -14,6 +14,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getRequestMetrics, getEndpointManifest } from '@/lib/api/admin';
 import type { RouteMetric, EndpointEntry } from '@/lib/api/admin';
+import { formatPercent } from "@/utils/currency";
 
 function methodBadgeClass(method: string) {
     switch (method) {
@@ -121,7 +122,7 @@ export default function EndpointLivenessPage() {
                                     <TableCell className="text-right text-sm">{row.count ?? '—'}</TableCell>
                                     <TableCell className="text-right text-sm">{row.errors ?? '—'}</TableCell>
                                     <TableCell className={cn("text-right text-sm", row.error_rate !== undefined ? errorRateBadgeClass(row.error_rate * 100) : 'text-muted-foreground')}>
-                                        {row.error_rate !== undefined ? `${(row.error_rate * 100).toFixed(1)}%` : '—'}
+                                        {row.error_rate !== undefined ? formatPercent(row.error_rate * 100, { digits: 1 }) : '—'}
                                     </TableCell>
                                     <TableCell className="text-right text-sm text-muted-foreground">
                                         {row.p50_ms !== undefined ? `${row.p50_ms}ms` : '—'}

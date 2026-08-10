@@ -21,6 +21,7 @@ import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { formatPercent } from "@/utils/currency";
 
 function daysUntil(dateStr?: string) {
   if (!dateStr) return null;
@@ -103,7 +104,7 @@ export default function SavingsPage() {
         <StatCard size="compact" title={t('portfolio.totalBalance')}
           value={<RollingNumber parts={fmtParts(totalBalance)} />}
           icon={DollarSign} valueClassName="text-primary" />
-        <StatCard size="compact" title={t('portfolio.avgInterestRate')} value={`${weightedRate.toFixed(2)}%`}
+        <StatCard size="compact" title={t('portfolio.avgInterestRate')} value={formatPercent(weightedRate, { digits: 2 })}
           icon={Percent} valueClassName="text-accent" />
         <StatCard size="compact" title={t('portfolio.interestEarned')}
           value={<RollingNumber parts={fmtParts(totalInterestEarned, { signed: true })} />}

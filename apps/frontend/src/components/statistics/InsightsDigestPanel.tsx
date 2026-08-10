@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useInsightsDigest } from "@/hooks/useInsightsDigest";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, formatPercent } from "@/utils/currency";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -177,7 +177,7 @@ export function InsightsDigestPanel() {
                                                     {increased
                                                         ? <TrendingUp className="h-3 w-3 mr-1" />
                                                         : <TrendingDown className="h-3 w-3 mr-1" />}
-                                                    {finding.percentChange > 0 ? "+" : ""}{finding.percentChange.toFixed(1)}%
+                                                    {formatPercent(finding.percentChange, { digits: 1, signed: true })}
                                                 </Badge>
                                             </div>
                                         </div>

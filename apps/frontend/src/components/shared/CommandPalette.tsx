@@ -29,7 +29,7 @@ import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { Keyboard, Calculator } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { numberFormatToLocale } from "@/utils/currency";
+import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -284,9 +284,9 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                                         </span>
                                         <span className={cn(
                                             "text-xs font-semibold",
-                                            tickerQuote.change >= 0 ? "amount-gain" : "amount-loss",
+                                            tickerQuote.changePercent >= 0 ? "amount-gain" : "amount-loss",
                                         )}>
-                                            {tickerQuote.change >= 0 ? "+" : "−"}{Math.abs(tickerQuote.changePercent).toFixed(2)}%
+                                            {formatPercent(tickerQuote.changePercent, { digits: 2, signed: true, locale })}
                                         </span>
                                     </span>
                                 </>

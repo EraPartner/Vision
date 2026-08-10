@@ -164,7 +164,17 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
               totalTax: pitCalc.totalPIT,
               brackets: pitCalc.breakdown
                 .filter((e) => e.bracket)
-                .map((e) => ({ label: e.label, rate: e.rate, taxAmount: e.amount })),
+                // Translate the bracket label here rather than shipping pit.ts's
+                // English one into the report: reuses the same
+                // `tax.pit.row.bracket{n}` keys PitBreakdownCard renders on
+                // screen, so the exported report matches the UI in both
+                // languages. Rates are identical across tax years (25/40/45/50),
+                // only the boundaries move, so the fixed-rate key text is safe.
+                .map((e) => ({
+                  label: e.bracketNumber ? t(`tax.pit.row.bracket${e.bracketNumber}`) : e.label,
+                  rate: e.rate,
+                  taxAmount: e.amount,
+                })),
             }
           : undefined;
         await downloadTaxReport({ ...baseOpts, taxProfile: resolvedTaxProfile, precomputedPIT: resolvedPIT });

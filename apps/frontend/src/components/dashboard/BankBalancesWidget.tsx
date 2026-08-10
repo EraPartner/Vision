@@ -11,7 +11,7 @@ import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
-import { formatDate, parseISO } from "@/components/shared/dateUtils";
+import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -45,7 +45,8 @@ function shortAccountName(account: string): string {
 }
 
 export function BankBalancesWidget() {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+    const monthLabelLocale = appLanguageToLocale(language);
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const navigate = useNavigate();
     const { appSettings } = useAppSettings();
@@ -324,9 +325,9 @@ export function BankBalancesWidget() {
                             // Daily datapoints (~365) now outnumber the time-scale
                             // auto-ticks, so the width-derived tick spacing is fine —
                             // no more duplicated "MMM yy" labels between sparse points.
-                            xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
+                            xTickFormat={(v) => formatDate(v as Date, "MMM yy", monthLabelLocale)}
                             yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            tooltipTitle={(d) => formatDate(d.date, "d MMM yy")}
+                            tooltipTitle={(d) => formatDate(d.date, "d MMM yy", monthLabelLocale)}
                             tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                         />
                         <ChartLegend items={legendItems} align="center" />

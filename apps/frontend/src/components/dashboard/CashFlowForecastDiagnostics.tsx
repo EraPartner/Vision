@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { getChartColor } from "@/components/charts/palette";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency, formatPercent, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { getCashflowForecastAccuracy } from "@/lib/api/aggregations";
@@ -43,7 +43,7 @@ const METHOD_COLORS: Record<string, string> = {
 
 function mapeLabel(mape: number): string {
     if (!Number.isFinite(mape) || mape > 9999) return "N/A";
-    return `${mape.toFixed(1)}%`;
+    return formatPercent(mape, { digits: 1 });
 }
 
 function RankBadge({ rank }: { rank: number }) {

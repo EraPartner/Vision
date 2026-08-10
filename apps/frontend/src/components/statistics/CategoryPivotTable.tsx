@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { appLanguageToLocale } from "@/components/shared/dateUtils";
 import { cn } from "@/lib/utils";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
@@ -107,7 +108,8 @@ export function CategoryPivotTable({
 }: CategoryPivotTableProps) {
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [valueMode, setValueMode] = useState<PivotValueMode>("absolute");
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const monthLabelLocale = appLanguageToLocale(language);
   const { formatCurrency, formatCompact } = useChartCurrencyFormatter();
   const navigate = useNavigate();
 
@@ -273,7 +275,7 @@ export function CategoryPivotTable({
                   </th>
                   {filteredPeriods.map((p) => (
                     <th key={p} className="text-right py-2 px-3 font-medium text-muted-foreground whitespace-nowrap">
-                      {formatPeriodShort(p)}
+                      {formatPeriodShort(p, monthLabelLocale)}
                     </th>
                   ))}
                   <th className="text-right py-2 px-3 font-bold text-foreground">
@@ -318,7 +320,7 @@ export function CategoryPivotTable({
                         {filteredPeriods.map((p) => {
                           const val = group.months[p] || 0;
                           const canClick = val !== 0 && groupCategoryIds.length > 0;
-                          const label = `${group.general} — ${formatPeriodShort(p)}`;
+                          const label = `${group.general} — ${formatPeriodShort(p, monthLabelLocale)}`;
                           const drill = canClick ? () => navigate(buildDrillUrl({
                             categoryIds: groupCategoryIds,
                             period: p,
@@ -371,7 +373,7 @@ export function CategoryPivotTable({
                           {filteredPeriods.map((p) => {
                             const val = getPeriodValue(cat, p, valueMode);
                             const canClick = val !== 0 && cat.categoryId != null;
-                            const label = `${cat.categoryName} — ${formatPeriodShort(p)}`;
+                            const label = `${cat.categoryName} — ${formatPeriodShort(p, monthLabelLocale)}`;
                             const drill = canClick ? () => navigate(buildDrillUrl({
                               categoryId: cat.categoryId!,
                               period: p,
@@ -425,7 +427,7 @@ export function CategoryPivotTable({
                   <td className="py-2 px-3 sticky left-0 glass-sticky-col z-10">{t("statsPage.total")}</td>
                   {filteredPeriods.map((p) => {
                     const r = formatCompact(columnTotals[p] || 0);
-                    const label = formatPeriodShort(p);
+                    const label = formatPeriodShort(p, monthLabelLocale);
                     const drill = () => navigate(buildDrillUrl({
                       period: p,
                       valueMode,

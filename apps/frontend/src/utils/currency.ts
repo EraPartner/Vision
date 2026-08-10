@@ -175,6 +175,74 @@ export function formatCurrency(
   }
 }
 
+export interface PercentFormatOptions {
+  /**
+   * Fraction digits. Defaults to 1 — the house standard for gain/loss deltas.
+   * Non-delta readouts (tax rates, allocation shares) pass their own.
+   */
+  digits?: number;
+  /**
+   * Minimum fraction digits, when a site wants "up to N" rather than a fixed N
+   * (e.g. the rebalance weight column shows "7.5%" but "60%", not "60.0%").
+   * Defaults to `digits`, i.e. a fixed count.
+   */
+  minDigits?: number;
+  /** Render an explicit sign for non-zero values. See the sign note below. */
+  signed?: boolean;
+  /** Locale override; defaults to the configured app number-format locale. */
+  locale?: string;
+}
+
+/**
+ * Format a percentage with the app's number-format locale, so a percent uses
+ * the same decimal separator as the money beside it (the `eu` setting renders
+ * "1.234,56 €" for money, so its percentages must read "12,5%", not "12.5%").
+ *
+ * VALUE SCALE — the input is in PERCENT UNITS: `12.5` renders "12,5%". That
+ * matches how every call site already holds its value, so the sweep never has
+ * to rescale a value and risk a factor-of-100 money-adjacent bug. Call sites
+ * that hold a fraction (0.125) pass `value * 100` at the boundary, exactly as
+ * they already did before their `toFixed`.
+ *
+ * WHY `decimal` + a literal "%" RATHER THAN `style: 'percent'` — the app locale
+ * here is a number-format proxy, not the user's language: `numberFormatToLocale`
+ * maps the `eu` setting to `de-DE` purely to get "1.234,56" grouping, and the
+ * app's actual languages are en/nl. `style: 'percent'` would import de-DE's
+ * German typography along with the separator and render "12,5 %" with a
+ * non-breaking space, which is wrong for both en and nl and would reflow the
+ * tight delta chips. This is the same trap ForecastInnerRolling already
+ * documents for month names ("numberFormatToLocale maps 'eu' -> 'de-DE', which
+ * would yield German months"), so percent formatting avoids it the same way:
+ * take the locale's number shape, not its unit typography. Keeping the value in
+ * percent units also removes the /100 float boundary entirely.
+ *
+ * SIGN — `signed` maps to `signDisplay: 'exceptZero'`, the same convention
+ * `formatCurrency` and `useCurrencyPartsFormatter` use for money. A gain/loss
+ * percent and the amount beside it therefore agree about what a zero looks
+ * like (both unsigned). This inherits the known `exceptZero` pitfall — a loss
+ * small enough to round to zero prints "0,0%" and loses its minus — but it
+ * inherits it *identically* to the money it sits next to, which is the point of
+ * sharing the convention. Do not switch a single site to 'always'/'auto'
+ * without moving its money sibling too.
+ */
+export function formatPercent(value: number, options: PercentFormatOptions = {}): string {
+  const { digits = 1, minDigits, signed = false, locale } = options;
+  const effectiveLocale = locale || currencyFormatDefaults.locale;
+
+  // Same degradation contract as formatCurrency: out-of-range fraction digits
+  // make the Intl.NumberFormat constructor throw RangeError, and a percent
+  // readout must never take a card into the error boundary.
+  try {
+    return `${new Intl.NumberFormat(effectiveLocale, {
+      minimumFractionDigits: minDigits ?? digits,
+      maximumFractionDigits: digits,
+      signDisplay: signed ? 'exceptZero' : 'auto',
+    }).format(value)}%`;
+  } catch {
+    return `${value}%`;
+  }
+}
+
 export interface CompactFormatResult {
   display: string;
   full: string;

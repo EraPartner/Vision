@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { formatPercent } from "@/utils/currency";
 
 export interface ScrubRange {
     startIndex: number;
@@ -49,6 +50,6 @@ export function formatScrubDelta(
     const abs = formatValue(Math.abs(delta)).replace(/^[+\-−±]\s?/, "");
     if (startValue === 0) return `Δ ${sign}${abs}`;
     const pct = (delta / Math.abs(startValue)) * 100;
-    const pctText = `${pct > 0 ? "+" : pct < 0 ? "−" : ""}${Math.abs(pct).toFixed(1)}%`;
+    const pctText = `${pct > 0 ? "+" : pct < 0 ? "−" : ""}${formatPercent(Math.abs(pct), { digits: 1 })}`;
     return `Δ ${sign}${abs} (${pctText})`;
 }

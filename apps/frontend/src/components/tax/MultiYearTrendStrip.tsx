@@ -19,6 +19,7 @@ import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
+import { formatPercent } from '@/utils/currency';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -120,7 +121,7 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
                                     {fmtCurrency(tile.totalPIT)}
                                 </span>
                                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                    {tile.effectiveRate.toFixed(1)}% {t('tax.trendStrip.effective')}
+                                    {formatPercent(tile.effectiveRate, { digits: 1 })} {t('tax.trendStrip.effective')}
                                 </span>
                                 <div className="mt-2 h-1 w-full rounded-full bg-muted">
                                     <div

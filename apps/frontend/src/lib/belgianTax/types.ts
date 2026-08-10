@@ -281,9 +281,21 @@ export interface BelgianTaxCalculation {
     /** Estimated service-voucher regional credit (after marital quotient). */
     serviceVoucherCredit: number;
     breakdown: {
+        /**
+         * English calculation-side label. Not a display string: the on-screen
+         * PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+         * that do surface a row translate it themselves.
+         */
         label: string;
         amount: number;
         rate?: number;
         bracket?: string;
+        /**
+         * 1-based bracket ordinal, present only on progressive-bracket rows.
+         * Carried explicitly because empty brackets are omitted from the array,
+         * so position does not imply the bracket number. Maps to the
+         * `tax.pit.row.bracket{n}` translation keys.
+         */
+        bracketNumber?: number;
     }[];
 }

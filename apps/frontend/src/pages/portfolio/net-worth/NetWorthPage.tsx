@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { netWorthKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { appLanguageToLocale } from "@/components/shared/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +31,7 @@ import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
+import { formatPercent } from "@/utils/currency";
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
@@ -83,7 +85,7 @@ export default function NetWorthPage() {
   const fmt = useCurrencyFormatter();
   const fmtParts = useCurrencyPartsFormatter();
 
-  const monthLabelLocale = useMemo(() => (language === 'nl' ? 'nl-NL' : 'en-US'), [language]);
+  const monthLabelLocale = useMemo(() => appLanguageToLocale(language), [language]);
   const xTickFormatter = useMemo(() => {
     if (period === '1m' || period === '3m' || period === '6m') {
       return new Intl.DateTimeFormat(monthLabelLocale, { day: 'numeric', month: 'short' });
@@ -200,7 +202,7 @@ export default function NetWorthPage() {
             allTimeChange >= 0 ? "border-gain/30 text-gain" : "border-loss/30 text-loss"
           )}>
             {allTimeChange >= 0 ? <TrendingUp className="h-3.5 w-3.5 mr-1" /> : <TrendingDown className="h-3.5 w-3.5 mr-1" />}
-            {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} {t('networth.allTime')} ({allTimePercent >= 0 ? "+" : ""}{allTimePercent.toFixed(1)}%)
+            {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} {t('networth.allTime')} ({formatPercent(allTimePercent, { digits: 1, signed: true })})
           </Badge>
         )}
       />
@@ -220,7 +222,7 @@ export default function NetWorthPage() {
             icon={Wallet}
             valueClassName="text-primary"
             trend={monthlyChange >= 0 ? "income" : "expense"}
-            subtitle={`${monthlyChange >= 0 ? "+" : ""}${fmt(monthlyChange)} (${monthlyChangePercent >= 0 ? "+" : ""}${monthlyChangePercent.toFixed(1)}%) ${t('networth.thisMonth')}`}
+            subtitle={`${monthlyChange >= 0 ? "+" : ""}${fmt(monthlyChange)} (${formatPercent(monthlyChangePercent, { digits: 1, signed: true })}) ${t('networth.thisMonth')}`}
           />
         </div>
         <div className="lg:col-span-3">
