@@ -1,6 +1,9 @@
 ---
 title: Completed-item audit — TODO.md backlog
+type: audit
 date: 2026-08-10
+tags: [audit, backlog, todo, verification]
+description: Re-verification of all 727 ticked TODO.md items against the tree — 691 fixed, 26 partial, 10 refuted, plus a whole-file commit-stamp integrity check.
 status: complete
 scope: all 727 ticked (- [x]) items in TODO.md, against main @ 899a5220
 ---
@@ -92,9 +95,9 @@ it into this audit would bury a 97-line diff inside a verdict change. See follow
 ## Follow-ups
 
 1. Re-point the 97 dangling stamps to `<mergesha> (#NN)` (mechanical; mapping already computed).
-2. Decide whether the 26 `🔎 partial-audit` items should be un-ticked — by this file's own convention
-   (`TODO.md:12`) partials are kept **open**. They are left ticked-and-flagged here rather than flipped
-   unasked.
+2. ~~Decide whether the 26 `🔎 partial-audit` items should be un-ticked.~~ **Done** — flipped to `- [ ]`
+   on 2026-08-10, per `TODO.md:12` (a partial is kept open). Ticked count 727 → 691, open 366 → 402;
+   the 691 still-ticked items are exactly the ones this audit verified as fixed.
 3. `I520` and `I161`: correct the completion notes that assert facts the code contradicts.
 4. Add a lint rule banning `repositories/*` → `services/*` imports (`I463`), and refresh the stale
    sanctioned-exception list in `docs/reference/code-patterns.md:497-524`.
