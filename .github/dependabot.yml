@@ -65,3 +65,22 @@ updates:
     groups:
       packaged-compose-deps:
         patterns: ["*"]
+
+  # docker-compose.yml image pins (postgres) — the `docker` ecosystem above only
+  # scans Dockerfiles, not compose files, so this is a separate ecosystem.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      compose-image-deps:
+        patterns: ["*"]
+
+  # Packaged-app embedded compose.yml image pins (postgres + the GHCR app image).
+  - package-ecosystem: "docker-compose"
+    directory: "/packaging/electron/resources"
+    schedule:
+      interval: "weekly"
+    groups:
+      packaged-compose-image-deps:
+        patterns: ["*"]

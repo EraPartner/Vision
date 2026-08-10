@@ -24,6 +24,14 @@ on:
 
 permissions: {}
 
+# Cancel superseded PR runs so a rapid succession of pushes to the same branch
+# doesn't queue redundant pipelines; never cancel a push to main/tags, so every
+# main commit gets a full "CI Complete" verdict (needed for bisecting a
+# regression — a cancelled run on main leaves a gap).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # Secrets scan — gitleaks on push/PR diff range
