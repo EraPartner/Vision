@@ -641,3 +641,254 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
     },
   };
 }
+
+// ── ADR-108: partitioned per-broker positions & P&L ─────────────────────────
+
+/** Transaction types that create or consume lots (whole-lot broker tagging). */
+export const LOT_TXN_TYPES = new Set(['buy', 'gift', 'sell']);
+
+/**
+ * Whether an investment's lots are fully broker-assigned (ADR-108 transition
+ * rule): every lot-bearing row (buy/gift/sell) carries a non-null account_id.
+ * Vacuously true with no lot rows — there is nothing left to assign.
+ *
+ * A NULL-account SELL also blocks full assignment: under partitioned math it
+ * could only consume from the (empty) unassigned partition, which would emit
+ * garbage partitions — exactly what the transition rule exists to prevent.
+ *
+ * @param {Array<{ type: string, account_id?: number|string|null }>} txns
+ * @returns {boolean}
+ */
+export function areLotsFullyAssigned(txns) {
+  return txns.every((t) => !LOT_TXN_TYPES.has(t.type) || t.account_id != null);
+}
+
+/** @param {{ account_id?: number|string|null }} txn @returns {number|null} */
+const partitionKeyOf = (txn) => (txn.account_id == null ? null : Number(txn.account_id));
+
+/**
+ * Split an investment's transactions into per-(investment, account) partition
+ * streams that the existing cost-basis calculators can replay UNCHANGED
+ * (ADR-108: buys/gifts create lots in their row's account, sells consume
+ * same-account lots, corporate actions apply investment-wide).
+ *
+ * Row routing:
+ *  - buy / gift / sell → their own account's partition (NULL = unassigned).
+ *  - split → rewritten per partition. The row's `units` is the new GLOBAL
+ *    post-split total, which is meaningless inside one partition, so each
+ *    partition holding units gets a synthetic split whose `units` is that
+ *    partition's own new total (global ratio × partition units; the last
+ *    holding partition takes `units − Σ others` so the totals sum exactly).
+ *  - return_of_capital → allocated across partitions proportional to units
+ *    held at that date — the same per-unit reduction the lot-based global
+ *    engine applies — with the exact-sum remainder on the last partition.
+ *  - merger / spinoff → engine no-ops today; routed to their own account's
+ *    partition verbatim so future semantics (and fees) stay in one place.
+ *  - everything else (dividend/interest/fee/tax/rent/appreciation) → its own
+ *    account's partition.
+ *
+ * Rewritten corporate-action rows carry `fees: 0` / `taxes: 0`; the original
+ * row is kept in ITS account's partition as an engine no-op (`units: 0` /
+ * `amount: 0`) so per-row fees/taxes stay counted exactly once across
+ * partitions (Σ partitions ≡ flat replay for every linear sum).
+ *
+ * Unit availability mirrors the calculators: sells consume at most what their
+ * partition holds; splits only rescale when units are actually held.
+ *
+ * @param {Array<Record<string, any>>} txns one investment's transactions
+ * @returns {Map<number|null, Array<Record<string, any>>>} partition key (account id or null) → rows
+ */
+export function partitionTxnsByAccount(txns) {
+  const ZERO = toDecimal(0);
+  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+
+  /** @type {Map<number|null, Array<Record<string, any>>>} */
+  const partitions = new Map();
+  /** @type {Map<number|null, Decimal>} */
+  const held = new Map();
+
+  /** @param {number|null} key @param {Record<string, any>} row */
+  const push = (key, row) => {
+    let rows = partitions.get(key);
+    if (!rows) {
+      rows = [];
+      partitions.set(key, rows);
+    }
+    rows.push(row);
+  };
+  const totalHeld = () => [...held.values()].reduce((sum, h) => sum.plus(h), ZERO);
+  // The fee/tax-carrying residual of a rewritten corporate action; omitted when
+  // there is nothing to carry, so rewriting cannot mint empty partitions.
+  const carriesFeesOrTaxes = (txn) =>
+    !toDecimal(txn.fees || 0).eq(0) || !toDecimal(txn.taxes || 0).eq(0);
+
+  for (const txn of sorted) {
+    const key = partitionKeyOf(txn);
+
+    if (txn.type === 'buy' || txn.type === 'gift') {
+      push(key, txn);
+      held.set(key, (held.get(key) ?? ZERO).plus(toDecimal(txn.units || 0)));
+    } else if (txn.type === 'sell') {
+      push(key, txn);
+      const before = held.get(key) ?? ZERO;
+      held.set(key, before.minus(Decimal.min(toDecimal(txn.units || 0), before)));
+    } else if (txn.type === 'split') {
+      const newGlobalUnits = toDecimal(txn.units || 0);
+      const before = totalHeld();
+      if (before.gt(0) && newGlobalUnits.gt(0)) {
+        const ratio = newGlobalUnits.dividedBy(before);
+        const holders = [...held.entries()].filter(([, h]) => h.gt(0));
+        let allocated = ZERO;
+        holders.forEach(([holderKey, holderUnits], i) => {
+          const partitionNewTotal = i === holders.length - 1
+            ? newGlobalUnits.minus(allocated)
+            : holderUnits.times(ratio);
+          allocated = allocated.plus(partitionNewTotal);
+          held.set(holderKey, partitionNewTotal);
+          push(holderKey, { ...txn, units: partitionNewTotal, fees: 0, taxes: 0 });
+        });
+      }
+      if (carriesFeesOrTaxes(txn)) push(key, { ...txn, units: 0 });
+    } else if (txn.type === 'return_of_capital') {
+      const amount = toDecimal(txn.amount || 0);
+      const unitsNow = totalHeld();
+      if (unitsNow.gt(0) && !amount.eq(0)) {
+        const holders = [...held.entries()].filter(([, h]) => h.gt(0));
+        let allocated = ZERO;
+        holders.forEach(([holderKey, holderUnits], i) => {
+          const share = i === holders.length - 1
+            ? amount.minus(allocated)
+            : amount.times(holderUnits).dividedBy(unitsNow);
+          allocated = allocated.plus(share);
+          push(holderKey, { ...txn, amount: share, fees: 0, taxes: 0 });
+        });
+      }
+      if (carriesFeesOrTaxes(txn)) push(key, { ...txn, amount: 0 });
+    } else {
+      push(key, txn);
+    }
+  }
+
+  return partitions;
+}
+
+// Every additive InvestmentSummaryCore field. avgCostBasis / gainLossPercent
+// (both tracks) are ratios and re-derived after summation instead.
+const ADDITIVE_CORE_FIELDS = [
+  'totalUnits', 'totalInvested', 'totalBuyCost', 'totalSellProceeds', 'currentValue',
+  'realizedGain', 'unrealizedGain', 'totalGain', 'gainLoss', 'totalFees', 'totalTaxes',
+  'feeTxnAmount', 'taxTxnAmount', 'totalDividends', 'totalInterestPaid', 'totalRent',
+  'totalAppreciation', 'totalIncome', 'accruedInterest', 'projectedAnnualInterest',
+];
+const ADDITIVE_CONVERTED_FIELDS = [
+  'currentValue', 'totalInvested', 'totalBuyCost', 'totalSellProceeds', 'realizedGain',
+  'unrealizedGain', 'totalGain', 'gainLoss', 'assetGain', 'fxGain', 'totalFees',
+  'totalTaxes', 'totalDividends', 'totalIncome',
+];
+
+/**
+ * Reduce per-partition cores into one investment-level core: additive fields
+ * sum; avg cost basis and return % are re-derived from the summed aggregates,
+ * exactly as the flat core derives them.
+ *
+ * @param {ReturnType<typeof buildInvestmentSummaryCore>[]} cores
+ * @returns {ReturnType<typeof buildInvestmentSummaryCore>}
+ */
+function aggregatePartitionCores(cores) {
+  const ZERO = toDecimal(0);
+  /** @type {Record<string, any>} */
+  const agg = { converted: {} };
+  for (const field of ADDITIVE_CORE_FIELDS) {
+    agg[field] = cores.reduce((sum, c) => sum.plus(c[field]), ZERO);
+  }
+  for (const field of ADDITIVE_CONVERTED_FIELDS) {
+    agg.converted[field] = cores.reduce((sum, c) => sum.plus(c.converted[field]), ZERO);
+  }
+  agg.avgCostBasis = agg.totalUnits.gt(0) ? agg.totalInvested.dividedBy(agg.totalUnits) : ZERO;
+  agg.gainLossPercent = agg.totalBuyCost.gt(0) ? agg.gainLoss.div(agg.totalBuyCost).times(100) : ZERO;
+  agg.converted.avgCostBasis = agg.totalUnits.gt(0)
+    ? agg.converted.totalInvested.dividedBy(agg.totalUnits)
+    : ZERO;
+  agg.converted.gainLossPercent = agg.converted.totalBuyCost.gt(0)
+    ? agg.converted.gainLoss.div(agg.converted.totalBuyCost).times(100)
+    : ZERO;
+  return /** @type {ReturnType<typeof buildInvestmentSummaryCore>} */ (agg);
+}
+
+/**
+ * ADR-108 partition-aware summary core. Returns the investment-level core plus
+ * the per-(investment, account) partition cores it decomposes into, and the
+ * `fullyAssigned` transition flag.
+ *
+ * Semantics by case:
+ *  - Unit-based, lots fully assigned, ≥2 partitions: each partition replays
+ *    the SAME lot engine (the user's configured method) on its own stream —
+ *    sells consume same-account lots — and the investment core is the exact
+ *    partition sum, so Σ partitions ≡ investment totals BY CONSTRUCTION.
+ *  - Unit-based, lots fully assigned, ≤1 partition: flat replay (identical by
+ *    definition — the one partition IS the whole history), attributed to the
+ *    single partition's account.
+ *  - Unit-based with unassigned lots (transition rule): flat GLOBAL replay,
+ *    unchanged legacy math; the whole investment is attributed to the
+ *    unassigned (null) partition so no wrong per-broker figures can be shown.
+ *  - Non-unit-based (no lot machinery; accrued interest is non-linear in the
+ *    transaction stream, so per-row splitting cannot sum to the global
+ *    figure): flat replay, attributed whole to its single account when every
+ *    row names the same one, else to the unassigned partition.
+ *
+ * @param {{ asset_class: string, current_price?: number|string, interest_rate?: number|string }} inv
+ * @param {Array<Record<string, any>>} txns
+ * @param {{ costBasisMethod?: CostBasisMethod, todayYmd: string, fxMultiplierNow?: number|string }} opts
+ * @returns {{
+ *   core: ReturnType<typeof buildInvestmentSummaryCore>,
+ *   partitions: Array<{ accountId: number|null, core: ReturnType<typeof buildInvestmentSummaryCore> }>,
+ *   fullyAssigned: boolean,
+ * }}
+ */
+export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
+  const isUnitBased = UNIT_BASED_CLASSES.has(inv.asset_class);
+
+  if (!isUnitBased) {
+    const core = buildInvestmentSummaryCore(inv, txns, opts);
+    const accountKeys = new Set(txns.map(partitionKeyOf));
+    const fullyAssigned = txns.length === 0
+      || (accountKeys.size === 1 && !accountKeys.has(null));
+    const accountId = txns.length > 0 && fullyAssigned ? [...accountKeys][0] : null;
+    return {
+      core,
+      partitions: txns.length > 0 ? [{ accountId, core }] : [],
+      fullyAssigned,
+    };
+  }
+
+  const fullyAssigned = areLotsFullyAssigned(txns);
+  if (!fullyAssigned) {
+    const core = buildInvestmentSummaryCore(inv, txns, opts);
+    return {
+      core,
+      partitions: txns.length > 0 ? [{ accountId: null, core }] : [],
+      fullyAssigned: false,
+    };
+  }
+
+  const streams = partitionTxnsByAccount(txns);
+  if (streams.size <= 1) {
+    const core = buildInvestmentSummaryCore(inv, txns, opts);
+    const accountId = streams.size === 1 ? [...streams.keys()][0] : null;
+    return {
+      core,
+      partitions: streams.size === 1 ? [{ accountId, core }] : [],
+      fullyAssigned: true,
+    };
+  }
+
+  const partitions = [...streams.entries()].map(([accountId, rows]) => ({
+    accountId,
+    core: buildInvestmentSummaryCore(inv, rows, opts),
+  }));
+  return {
+    core: aggregatePartitionCores(partitions.map((p) => p.core)),
+    partitions,
+    fullyAssigned: true,
+  };
+}

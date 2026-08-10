@@ -3,8 +3,8 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-06-20
-last_modified: 2026-06-28
-updated: 2026-06-28
+last_modified: 2026-08-10
+updated: 2026-08-10
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -726,17 +726,30 @@ Code links: [[apps/frontend/src/components/portfolio/PortfolioTicker.tsx]], [[ap
 > Set `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true` to restore the full surface. See
 > [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]].
 
-### Per-account breakdown in portfolio summary
+### Per-account breakdown in portfolio summary (ADR-108 partitioned P&L, 2026-08-10)
 
-`getPortfolioSummary` is extended (additively — the per-investment contract and its golden tests are untouched) with a top-level `byAccount` array. Each element is:
+`getPortfolioSummary`'s top-level `byAccount` array now carries full per-broker P&L, computed by the ADR-108 partitioned engine — the existing lot engine run per (investment, account) partition with the user's configured cost-basis method: buys/gifts create lots in their row's account, sells consume **same-account** lots, corporate actions (split, return of capital) apply investment-wide across partitions, and a re-tag (`UPDATE … SET account_id`) moves the whole lot with its basis. Each element is:
 
 ```typescript
-{ account_id: number | null, currentValue: number, totalInvested: number, gainLoss: number }
+{
+  account_id: number | null,
+  currentValue: number,
+  totalInvested: number,   // gross buy cost, same grain as totals.totalInvested
+  realizedGain: number,
+  unrealizedGain: number,
+  gainLoss: number,
+}
 ```
 
-`account_id: null` means unassigned lots (no account set). Callers resolve names from the accounts list. The parity invariant `Σ byAccount.currentValue == totals.totalPortfolioValue` is locked by a test (ADR-061 discipline). See [[docs/api/portfolio-summary|Portfolio Summary API]] for the updated response shape.
+For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.js` under all three cost-basis methods). Each summary carries a `fullyAssigned` boolean; while an instrument still has unassigned lot rows (transition rule) its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values — read surfaces render "assign lots to see per-broker figures" instead of wrong partitions. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
 
-Frontend hook: `apps/frontend/src/hooks/portfolio/useAccountPositions.ts`. `InvestmentDetailDialog` shows a "Holdings by Account" card.
+Sell validation is account-scoped on fully-assigned instruments: a sell exceeding the broker-local units is rejected with an error naming the broker (display name), even if investment-wide units would cover it; unassigned sells and instruments in transition validate globally, as before. The per-account availability replay applies splits investment-wide, mirroring the engine.
+
+Two ADR-108 semantic edges on fully-assigned multi-broker instruments (adversarially verified 2026-08-10): under **weighted_avg**, a `return_of_capital` larger than one partition's basis share now floors per partition instead of against the pooled basis, so the global invested/unrealized headline can differ from the old flat replay (the partitioned figure matches what FIFO/LIFO already reported for the same rows); and a sell tagged to a broker holding fewer units than it sold clamps to that partition's lots (partition oversell), so re-tagging lots away from an account with sells changes global units/value rather than raiding another broker's lots — assign sells alongside their lots.
+
+Callers resolve names from the accounts list. See [[docs/api/portfolio-summary|Portfolio Summary API]] for the response shape and [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] for the model.
+
+Per-broker read surfaces (hub cards, net-worth by-account table, `InvestmentDetailDialog` holdings card) arrive in WP-C5; until then the frontend's client-side summaries (`usePortfolioSummaries.ts`) still run the flat core and can disagree with the API's partitioned figures on fully-assigned multi-broker instruments.
 
 ### Edit-trade account picker
 

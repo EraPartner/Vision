@@ -320,7 +320,122 @@ async function getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactio
 }
 
 /**
- * @param {{ investmentId: any, assetClass: any, type: any, date: any, units: any, excludeTransactionId?: any }} params
+ * Whether the investment still has broker-unassigned lot rows (buy/gift/sell
+ * with `account_id IS NULL`) — the ADR-108 transition predicate. While true,
+ * sell validation stays investment-global; per-broker scoping only turns on
+ * once every lot row names its account.
+ *
+ * @param {any} investmentId
+ * @param {{ excludeTransactionId?: number }} [options]
+ * @returns {Promise<boolean>}
+ */
+async function hasUnassignedLotRows(investmentId, { excludeTransactionId } = {}) {
+  const hasExcludedTxn = Number.isInteger(excludeTransactionId) && excludeTransactionId > 0;
+  const params = [investmentId];
+  let sql = `
+    SELECT EXISTS (
+      SELECT 1 FROM portfolio_transactions
+      WHERE investment_id = $1
+        AND type IN ('buy', 'gift', 'sell')
+        AND account_id IS NULL
+  `;
+  if (hasExcludedTxn) {
+    params.push(excludeTransactionId);
+    sql += ` AND id <> $2`;
+  }
+  sql += `) AS present`;
+  const result = await query(sql, params);
+  return Boolean(result.rows[0]?.present);
+}
+
+/**
+ * Units available at ONE broker account on or before `date` — the per-account
+ * variant of getNetUnitsOnOrBeforeDate, replaying the same availability rules
+ * per (investment, account) partition (ADR-108): buys/gifts add to their own
+ * account, sells consume at most what their own account holds (mirroring the
+ * lot engine's clamp), and a `split` — an investment-wide event whose `units`
+ * is the new absolute GLOBAL total — rescales every partition by the global
+ * ratio, with the same no-phantom-units guard as the global replay
+ * (merger/spinoff/return_of_capital: no unit change).
+ *
+ * @param {any} investmentId
+ * @param {number} accountId
+ * @param {any} date
+ * @param {{ excludeTransactionId?: number }} [options]
+ * @returns {Promise<number>}
+ */
+async function getAccountUnitsOnOrBeforeDate(investmentId, accountId, date, { excludeTransactionId } = {}) {
+  if (!investmentId || !date) return 0;
+
+  const hasExcludedTxn = Number.isInteger(excludeTransactionId) && excludeTransactionId > 0;
+  const params = [investmentId, date];
+  let sql = `
+    SELECT type, COALESCE(units, 0) AS units, account_id
+    FROM portfolio_transactions
+    WHERE investment_id = $1
+      AND date <= $2::date
+  `;
+  if (hasExcludedTxn) {
+    params.push(excludeTransactionId);
+    sql += ` AND id <> $3`;
+  }
+  sql += ` ORDER BY date ASC, id ASC`;
+
+  const result = await query(sql, params);
+  const ZERO = toDecimal(0);
+  /** @type {Map<number|null, import('decimal.js').default>} */
+  const held = new Map();
+  const keyOf = (/** @type {any} */ row) => (row.account_id == null ? null : Number(row.account_id));
+  const totalHeld = () => [...held.values()].reduce((sum, h) => sum.plus(h), ZERO);
+
+  for (const row of result.rows) {
+    const units = toDecimal(row.units || 0);
+    if (row.type === 'buy' || row.type === 'gift') {
+      const key = keyOf(row);
+      held.set(key, (held.get(key) ?? ZERO).plus(units));
+    } else if (row.type === 'sell') {
+      const key = keyOf(row);
+      const before = held.get(key) ?? ZERO;
+      held.set(key, before.minus(units.gt(before) ? before : units));
+    } else if (row.type === 'split' && units.gt(0)) {
+      const before = totalHeld();
+      if (before.gt(0)) {
+        const ratio = units.dividedBy(before);
+        for (const [key, h] of held) held.set(key, h.times(ratio));
+      }
+    }
+  }
+  return toNumber(held.get(Number(accountId)) ?? ZERO);
+}
+
+/**
+ * Display label for a broker account, for user-facing validation errors.
+ * @param {number} accountId
+ * @returns {Promise<string>}
+ */
+async function getAccountLabel(accountId) {
+  try {
+    const result = await query(
+      'SELECT display_name, name FROM accounts WHERE id = $1',
+      [accountId],
+    );
+    const row = result.rows[0];
+    return row?.display_name || row?.name || `account #${accountId}`;
+  } catch {
+    return `account #${accountId}`;
+  }
+}
+
+/**
+ * Reject a sell that exceeds available units. Scope (ADR-108):
+ *  - account-scoped when the sell names a broker account AND every lot row of
+ *    the instrument is broker-assigned — you cannot sell at broker A what is
+ *    held at broker B, even if investment-wide units would cover it; the
+ *    error names the broker;
+ *  - investment-global otherwise (unassigned sell, or transition rule: the
+ *    instrument still has unassigned lots).
+ *
+ * @param {{ investmentId: any, assetClass: any, type: any, date: any, units: any, accountId?: any, excludeTransactionId?: any }} params
  */
 export async function validateSellUnitsAvailability({
   investmentId,
@@ -328,6 +443,7 @@ export async function validateSellUnitsAvailability({
   type,
   date,
   units,
+  accountId,
   excludeTransactionId,
 }) {
   if (type !== 'sell') return;
@@ -336,8 +452,27 @@ export async function validateSellUnitsAvailability({
   const sellUnits = Number(units) || 0;
   if (sellUnits <= 0) return;
 
-  const availableUnits = await getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactionId });
   const EPSILON = 1e-8;
+  const numericAccountId = accountId == null ? undefined : Number(accountId);
+  const accountScoped = Number.isInteger(numericAccountId)
+    && numericAccountId > 0
+    && !(await hasUnassignedLotRows(investmentId, { excludeTransactionId }));
+
+  if (accountScoped) {
+    const availableAtAccount = await getAccountUnitsOnOrBeforeDate(
+      investmentId, numericAccountId, date, { excludeTransactionId },
+    );
+    if (sellUnits - availableAtAccount > EPSILON) {
+      const label = await getAccountLabel(numericAccountId);
+      throw makeValidationError(
+        `sell units exceed available holdings at ${label} `
+        + `(${toNumber(roundMoney(availableAtAccount, 8))} units held there)`,
+      );
+    }
+    return;
+  }
+
+  const availableUnits = await getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactionId });
   if (sellUnits - availableUnits > EPSILON) {
     throw makeValidationError('sell units exceed available holdings');
   }

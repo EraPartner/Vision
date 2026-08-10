@@ -83,3 +83,31 @@ export function buildInvestmentSummaryCore(
     txns: PortfolioTxnLike[],
     opts: { costBasisMethod?: CostBasisMethod; todayYmd: string; fxMultiplierNow?: number | string },
 ): InvestmentSummaryCore;
+
+// ── ADR-108: partitioned per-broker positions & P&L ─────────────────────────
+
+export interface PartitionedTxnLike extends PortfolioTxnLike {
+    account_id?: number | string | null;
+}
+
+export interface InvestmentSummaryPartition {
+    accountId: number | null;
+    core: InvestmentSummaryCore;
+}
+
+export interface PartitionedInvestmentSummaryCore {
+    core: InvestmentSummaryCore;
+    partitions: InvestmentSummaryPartition[];
+    fullyAssigned: boolean;
+}
+
+export const LOT_TXN_TYPES: Set<string>;
+export function areLotsFullyAssigned(txns: PartitionedTxnLike[]): boolean;
+export function partitionTxnsByAccount(
+    txns: PartitionedTxnLike[],
+): Map<number | null, PartitionedTxnLike[]>;
+export function buildInvestmentSummaryCorePartitioned(
+    inv: { asset_class: string; current_price?: number | string | null; interest_rate?: number | string | null },
+    txns: PartitionedTxnLike[],
+    opts: { costBasisMethod?: CostBasisMethod; todayYmd: string; fxMultiplierNow?: number | string },
+): PartitionedInvestmentSummaryCore;

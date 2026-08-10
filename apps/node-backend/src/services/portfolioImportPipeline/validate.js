@@ -30,7 +30,7 @@ import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
  * `resolveAndCheck` formats it with LOCAL getters (`toYmd`) on purpose.
  *
  * @typedef {Pick<PortfolioImportStagingRow,
- *   'id'|'row_index'|'tx_date'|'type_raw'|'units'|'price_per_unit'|'amount'|'raw_data'>} PendingPortfolioStagingRow
+ *   'id'|'row_index'|'tx_date'|'type_raw'|'symbol_raw'|'name_raw'|'units'|'price_per_unit'|'amount'|'raw_data'>} PendingPortfolioStagingRow
  */
 
 const VALIDATE_CHUNK = 500;
@@ -60,7 +60,7 @@ export async function validateBatch({ batchId, onProgress }) {
   const unitBased = defaultAssetClass ? UNIT_BASED_ASSET_CLASSES.has(defaultAssetClass) : false;
 
   const { rows: pending } = await query(
-    `SELECT id, row_index, tx_date, type_raw, units, price_per_unit, amount, raw_data
+    `SELECT id, row_index, tx_date, type_raw, symbol_raw, name_raw, units, price_per_unit, amount, raw_data
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1 AND status = 'pending'
       ORDER BY row_index ASC`,
@@ -181,9 +181,11 @@ function resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage
     if (rowYmd && rowYmd > today) return { error: 'transaction date is in the future' };
   }
 
-  // Try the portfolio type first (handles aliases + the user's type_mapping). A
-  // brokerage statement's dividend/interest/fee/tax resolve here and ride a trade
-  // cash leg — only true external cash (deposit/withdrawal) takes the cash route.
+  // Try the portfolio type first (handles aliases + the user's type_mapping).
+  // Brokerage dividend/interest/fee/tax rows resolve here and route 'portfolio'
+  // when they name an instrument; instrument-less ones route 'cash' below (D6,
+  // ADR-095 addendum). External cash (deposit/withdrawal) never normalizes as a
+  // portfolio type and takes the cash route in the error branch.
   const { type, error } = normalizeType(row.type_raw, { typeMapping, defaultType });
   if (error) {
     if (isBrokerage) {
@@ -208,6 +210,23 @@ function resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage
     if (!hasUnits) return { error: 'gift requires units' };
   } else if (!hasAmount) {
     return { error: 'missing amount' };
+  }
+
+  if (isBrokerage && type) {
+    // D6 (ADR-095 addendum): an instrument-less dividend/interest/fee/tax row
+    // is a cash movement — one signed transactions row on the sleeve — instead
+    // of a portfolio row that can only ever error "unresolved instrument" at
+    // commit. Deterministic from the row itself: no symbol AND no name means
+    // there is nothing the matcher (or the user) could ever attach it to. A
+    // row that names an instrument keeps the portfolio route, where an
+    // unresolved match is a correct signal for user review. The row's
+    // canonical `type` is persisted alongside route='cash' so commit derives
+    // the ledger sign and the auto-category from the kind.
+    const hasInstrument = Boolean(
+      String(row.symbol_raw || '').trim() || String(row.name_raw || '').trim(),
+    );
+    const { target } = classifyBrokerageRow({ kind: type, hasInstrument });
+    if (target === 'cash') return { type, route: 'cash' };
   }
 
   return { type, route: isBrokerage ? 'portfolio' : undefined };
