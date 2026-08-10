@@ -41,7 +41,12 @@ const DialogContent = React.forwardRef<
         <DialogPrimitive.Content
             ref={composeRefs(ref, genieRef)}
             className={cn(
-                "glass-thick fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl p-6 shadow-glass-elevated data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
+                // max-h/overflow live on the primitive so a tall dialog on a
+                // short viewport (landscape phone, on-screen keyboard open)
+                // scrolls inside itself instead of clipping both ends and
+                // putting the submit button out of reach. Dialogs that set
+                // their own max-h/overflow still win via tailwind-merge.
+                "glass-thick fixed left-[50%] top-[50%] z-50 grid max-h-[90vh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 overflow-y-auto rounded-2xl p-6 shadow-glass-elevated data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
                 className,
             )}
             {...props}

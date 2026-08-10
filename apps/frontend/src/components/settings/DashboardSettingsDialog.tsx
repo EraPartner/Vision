@@ -86,9 +86,12 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                     <DialogDescription>{t('settings.description')}</DialogDescription>
                 </DialogHeader>
 
-                <div className="flex min-h-0 flex-1">
-                    {/* Sidebar nav */}
-                    <nav className="flex w-52 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border/60 p-2">
+                <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                    {/* Section nav: a 208px sidebar from md up, a horizontally
+                        scrolling chip bar below it — a fixed sidebar would leave
+                        ~120px for every control at phone widths. md+ layout is
+                        unchanged. */}
+                    <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 p-2 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:w-52 md:flex-col md:gap-0.5 md:overflow-y-auto md:border-b-0 md:border-r">
                         {SECTIONS.map(({ id, labelKey, icon: Icon }) => {
                             const active = activeSection === id;
                             return (
@@ -98,7 +101,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                                     onClick={() => setActiveSection(id)}
                                     aria-current={active ? 'page' : undefined}
                                     className={cn(
-                                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
+                                        'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
                                         active
                                             ? 'bg-primary/10 text-primary'
                                             : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',

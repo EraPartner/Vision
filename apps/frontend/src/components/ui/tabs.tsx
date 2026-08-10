@@ -47,7 +47,12 @@ const TabsList = React.forwardRef<
     <TabsPrimitive.List
         ref={ref}
         className={cn(
-            "inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-border/50 bg-muted/70 p-1 text-muted-foreground",
+            // max-w-full + overflow-x-auto so a 5-7-trigger list scrolls inside
+            // itself at phone widths instead of overhanging the viewport and
+            // dragging the whole page into horizontal panning. The scrollbar is
+            // hidden because the app's 10px bar would eat a quarter of the h-10
+            // row; when everything fits (desktop) nothing about the list changes.
+            "inline-flex h-10 max-w-full items-center justify-center gap-1 overflow-x-auto rounded-xl border border-border/50 bg-muted/70 p-1 text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
             className,
         )}
         {...props}
