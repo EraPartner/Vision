@@ -97,7 +97,7 @@ beforeEach(() => {
   recipientRepository.getOrCreateSystemId.mockReset();
   recipientRepository.getOrCreateSystemId.mockResolvedValue(99);
   categoryRepository.createOrGet.mockReset();
-  categoryRepository.createOrGet.mockResolvedValue({ category: { id: 314 }, created: false });
+  categoryRepository.createOrGet.mockResolvedValue({ category: { id: 314, is_active: true }, created: false });
   autoResolveFxRateToEur.mockReset();
   autoResolveFxRateToEur.mockResolvedValue(undefined);
 });
@@ -258,6 +258,20 @@ describe('commitBatch (portfolio)', () => {
     expect(categoryRepository.createOrGet).toHaveBeenCalledWith({ general: 'INCOME', detail: 'DIVIDENDS' });
     const [, params] = query.mock.calls.find(([s]) => /INSERT INTO transactions/.test(s));
     expect(params).toEqual(['2026-01-05', 12.34, 'EUR', 'DIVIDEND', 7, 42, 314]);
+  });
+
+  it('D6 cash row: a soft-deleted category is NOT stamped — the row commits uncategorized', async () => {
+    // createOrGet's ON CONFLICT DO NOTHING returns the user's soft-deleted row
+    // as-is and nothing reactivates it, so auto-categorization must skip it
+    // rather than file fresh ledger rows under a category no picker shows.
+    isBrokerage = true;
+    batchAccountId = 7;
+    categoryRepository.createOrGet.mockResolvedValue({ category: { id: 314, is_active: false }, created: false });
+    matchedRows = [row({ id: 9, route: 'cash', type: 'dividend', type_raw: 'dividend', investment_id: null, amount: 12.34, note: null, tx_hash: 'hd' })];
+    const res = await commitBatch({ batchId: 5 });
+    expect(res).toMatchObject({ imported: 1, errors: 0 });
+    const [, params] = query.mock.calls.find(([s]) => /INSERT INTO transactions/.test(s));
+    expect(params).toEqual(['2026-01-05', 12.34, 'EUR', 'DIVIDEND', 7, 42, null]);
   });
 
   it('resolves the cash recipient from the sleeve account institution, trimmed, via createOrGet', async () => {

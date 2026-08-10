@@ -21,10 +21,13 @@ import {
 } from '../src/repositories/accountBalanceSql.js';
 
 describe('COMPUTED_BALANCE_LATERAL', () => {
-  it('exposes balance, anchor_date and post_anchor_count (WP-A1 provenance)', () => {
-    expect(COMPUTED_BALANCE_LATERAL).toContain('AS balance');
+  it('exposes anchor_date and post_anchor_count (WP-A1 provenance) and NO balance', () => {
     expect(COMPUTED_BALANCE_LATERAL).toContain('AS anchor_date');
     expect(COMPUTED_BALANCE_LATERAL).toContain('AS post_anchor_count');
+    // The account-level figure summed amounts across currencies as bare
+    // numbers. It had no readers and is gone; pinned so nothing re-adds it.
+    expect(COMPUTED_BALANCE_LATERAL).not.toContain('AS balance');
+    expect(COMPUTED_BALANCE_LATERAL).not.toContain('SUM(');
   });
 
   it('keeps the one-row LEFT JOIN LATERAL contract aliased lb over account alias a', () => {
@@ -34,18 +37,17 @@ describe('COMPUTED_BALANCE_LATERAL', () => {
     expect(COMPUTED_BALANCE_LATERAL).toContain('t.account_id = a.id');
   });
 
-  it('anchors on the latest stamped active row and sums strictly-after activity', () => {
+  it('anchors on the latest stamped active row and counts strictly-after activity', () => {
     // The `balance IS NOT NULL` predicate may appear ONLY inside the anchor
     // CTE (picking the stamp) — never as a population gate on the result.
     expect(COMPUTED_BALANCE_LATERAL).toContain('WITH anchor AS');
     expect(COMPUTED_BALANCE_LATERAL).toContain('t.balance IS NOT NULL');
     expect(COMPUTED_BALANCE_LATERAL).toContain('ORDER BY t.date DESC, t.id DESC');
-    // Strictly-after tuple comparison + the no-stamp Σ(amount) fallback.
+    // Strictly-after tuple comparison + the no-stamp (count everything) fallback.
     expect(COMPUTED_BALANCE_LATERAL).toContain('(t2.date, t2.id) > (SELECT date, id FROM anchor)');
     expect(COMPUTED_BALANCE_LATERAL).toContain('NOT EXISTS (SELECT 1 FROM anchor)');
-    // The delta CTE both sums and counts the same row set, so
-    // post_anchor_count is "entries since the statement" (or total entries
-    // when nothing is stamped).
+    // The delta CTE counts that row set, so post_anchor_count is "entries
+    // since the statement" (or total entries when nothing is stamped).
     expect(COMPUTED_BALANCE_LATERAL).toContain('COUNT(*) AS post_anchor_count');
   });
 

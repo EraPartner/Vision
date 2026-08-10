@@ -3,10 +3,12 @@ import { roundToCents } from '../lib/money.js';
 /**
  * Shared SQL for an account's computed balance (ADR-094).
  *
- * `COMPUTED_BALANCE_LATERAL` is the canonical *current*-balance definition;
- * `computedBalanceByCurrencyLateral` and `computedBalanceSeriesCtes` below are
- * the two derived forms (per-currency, and the same figure as a daily series)
- * that the balance-history charts need in order to agree with it.
+ * The anchor+delta rule described below is the canonical *current*-balance
+ * definition; `computedBalanceByCurrencyLateral` and `computedBalanceSeriesCtes`
+ * below are the two forms that emit a figure from it (per-currency, and the same
+ * figure as a daily series) and that the balance-history charts need in order to
+ * agree with each other. `COMPUTED_BALANCE_LATERAL` carries the provenance half
+ * of the same rule.
  *
  * The naive "latest active transaction with a non-null balance" lateral froze
  * at the last *imported* statement balance: `transactions.balance` is only
@@ -28,8 +30,7 @@ import { roundToCents } from '../lib/money.js';
  * When nothing is stamped at all, it falls back to the full Σ(amount).
  *
  * The lateral always returns exactly one row (so a LEFT JOIN never drops the
- * account) exposing three columns. The account must be aliased `a`:
- *   - `balance`           — the anchored running balance described above.
+ * account) exposing two columns. The account must be aliased `a`:
  *   - `anchor_date`       — the stamped anchor row's date as a 'YYYY-MM-DD'
  *                           string (to_char, so pg never hands back a
  *                           local-midnight JS Date), SQL NULL when nothing is
@@ -38,19 +39,25 @@ import { roundToCents } from '../lib/money.js';
  *   - `post_anchor_count` — count of active rows strictly after the anchor;
  *                           with no stamp it is the total active-row count
  *                           (the "sum of {n} entries" case).
+ *
+ * It deliberately emits NO `balance`: at account level the delta sums
+ * `transactions.amount` across currencies as bare numbers (100 EUR + 100 USD =
+ * 200), which is why every consumer moved to the per-currency forms for the
+ * figure and reads this lateral for the provenance fields only. The FX-blind
+ * column — and the anchor/Σ terms that existed solely to produce it — are
+ * stripped rather than left dangling, so no future consumer can pick it up.
  */
 export const COMPUTED_BALANCE_LATERAL = `
   LEFT JOIN LATERAL (
     WITH anchor AS (
-      SELECT t.balance, t.date, t.id
+      SELECT t.date, t.id
       FROM transactions t
       WHERE t.account_id = a.id AND t.is_active = true AND t.balance IS NOT NULL
       ORDER BY t.date DESC, t.id DESC
       LIMIT 1
     ),
     delta AS (
-      SELECT COALESCE(SUM(t2.amount), 0) AS amount,
-             COUNT(*) AS post_anchor_count
+      SELECT COUNT(*) AS post_anchor_count
       FROM transactions t2
       WHERE t2.account_id = a.id AND t2.is_active = true
         AND (
@@ -58,9 +65,7 @@ export const COMPUTED_BALANCE_LATERAL = `
           OR (t2.date, t2.id) > (SELECT date, id FROM anchor)
         )
     )
-    SELECT COALESCE((SELECT balance FROM anchor), 0)
-         + (SELECT amount FROM delta) AS balance,
-           (SELECT to_char(date, 'YYYY-MM-DD') FROM anchor) AS anchor_date,
+    SELECT (SELECT to_char(date, 'YYYY-MM-DD') FROM anchor) AS anchor_date,
            (SELECT post_anchor_count FROM delta) AS post_anchor_count
   ) lb ON true
 `;
