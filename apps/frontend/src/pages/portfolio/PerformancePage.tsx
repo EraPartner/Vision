@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { TrendHue } from "@/components/shared/TrendHue";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -209,7 +210,7 @@ export default function PerformancePage() {
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
                 <Card className="glass-regular">
                     <CardContent className="pt-6">
-                        <p className="text-destructive">{t('common.loadError', { msg: (error as Error)?.message ?? '' })}</p>
+                        <p className="text-destructive">{t('common.loadError', { msg: apiErrorToMessage(error, t) })}</p>
                     </CardContent>
                 </Card>
             </div>

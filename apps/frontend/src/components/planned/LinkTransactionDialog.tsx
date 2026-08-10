@@ -13,6 +13,7 @@ import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { getRecipient } from "@/lib/api/recipients";
 import { cn } from "@/lib/utils";
 import type { Transaction } from "@/types/api";
@@ -144,7 +145,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
       handleClose();
     } catch (err) {
       logger.error("Failed to link/execute planned payment:", err);
-      toast.error(t('plannedPage.link.executeFailed', { msg: (err as Error).message }));
+      toast.error(t('plannedPage.link.executeFailed', { msg: apiErrorToMessage(err, t) }));
     } finally {
       setActionLoading(false);
     }

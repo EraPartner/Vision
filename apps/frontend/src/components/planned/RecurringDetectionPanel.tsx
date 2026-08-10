@@ -11,6 +11,7 @@ import {
     Calendar, Sparkles, ChevronDown, ChevronUp, Plus, X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
@@ -168,7 +169,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             queryClient.invalidateQueries({ queryKey: plannedKeys.transactionsAll });
             toast.success(t('recurring.toast.created', { name: pattern.recipientName }));
         } catch (err: unknown) {
-            toast.error(t('recurring.toast.failed', { msg: (err as Error).message }));
+            toast.error(t('recurring.toast.failed', { msg: apiErrorToMessage(err, t) }));
         }
     };
 

@@ -49,6 +49,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
 import { isPortfolioType } from "@/features/accounts/groupAccounts";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
 import { toAccountPayload, accountToFormValues } from "@/features/accounts/accountFormMapping";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
@@ -217,7 +218,7 @@ export default function AccountDetailPage() {
         return <SectionLoader />;
     }
     if (isError) {
-        return <p className="text-sm text-destructive">{(error as Error)?.message}</p>;
+        return <p className="text-sm text-destructive">{apiErrorToMessage(error, t)}</p>;
     }
     if (!account) {
         return (
@@ -452,7 +453,7 @@ export default function AccountDetailPage() {
                     ) : txLoading ? (
                         <SectionLoader />
                     ) : txIsError ? (
-                        <p className="text-sm text-destructive">{(txError as Error)?.message}</p>
+                        <p className="text-sm text-destructive">{apiErrorToMessage(txError, t)}</p>
                     ) : visibleRows.length === 0 ? (
                         <p className="py-4 text-sm text-muted-foreground">{t("accounts.detail.noTransactions")}</p>
                     ) : (
