@@ -167,21 +167,51 @@ function assertStatementBalanceHasDate(balance, date) {
 
 /**
  * A funding account must exist and cannot be the account itself (a self-funding
- * cycle). `sanitize` only checks the value is a positive integer; this verifies
- * the reference. The DB FK (fk_accounts_funding_account) backstops races, but a
- * nonexistent id would otherwise surface as a raw 23503 → 500; we 400 here.
+ * cycle), nor may it close a longer cycle (A→B→A, A→B→C→A). `sanitize` only
+ * checks the value is a positive integer; this verifies the reference. The DB FK
+ * (fk_accounts_funding_account) backstops races, but a nonexistent id would
+ * otherwise surface as a raw 23503 → 500; we 400 here.
+ *
+ * Cycle detection walks the funding chain UPWARD from the proposed parent: if it
+ * reaches `selfId`, the edge being written would close a loop. Two hazards shape
+ * the loop:
+ *  - The walk must terminate even though the stored data may ALREADY contain a
+ *    cycle (this guard did not exist before), so visited ids are tracked and the
+ *    walk stops on the first repeat rather than trusting a depth bound — a
+ *    genuinely deep chain is then never falsely rejected, and a pre-existing
+ *    loop that does not involve `selfId` is left alone for its own edit to fix.
+ *  - On create there is no self id yet, so a brand-new account cannot be anyone's
+ *    ancestor and the walk is skipped entirely.
+ *
+ * One `getById` per hop rather than a recursive CTE: funding chains are a
+ * handful of hops at most, this is a write path already doing round-trips, and
+ * it reuses the existing repository read instead of adding SQL surface.
  *
  * @param {number|null|undefined} fundingAccountId
  * @param {number|null} selfId  the account being updated (null on create)
  */
 async function assertFundingAccountValid(fundingAccountId, selfId) {
   if (fundingAccountId == null) return;
-  if (selfId != null && fundingAccountId === Number(selfId)) {
+  const self = selfId == null ? undefined : Number(selfId);
+  if (self !== undefined && fundingAccountId === self) {
     throw new ValidationError('funding_account_id cannot reference the account itself');
   }
   const funding = await accountRepository.getById(fundingAccountId);
   if (!funding) {
     throw new ValidationError(`funding_account_id ${fundingAccountId} does not reference an existing account`);
+  }
+  if (self === undefined) return;
+  const seen = new Set([fundingAccountId]);
+  let ancestorId = funding.funding_account_id == null ? undefined : Number(funding.funding_account_id);
+  while (ancestorId !== undefined) {
+    if (ancestorId === self) {
+      throw new ValidationError(`funding_account_id ${fundingAccountId} would create a funding cycle`);
+    }
+    if (seen.has(ancestorId)) return;
+    seen.add(ancestorId);
+    const ancestor = await accountRepository.getById(ancestorId);
+    if (!ancestor) return;
+    ancestorId = ancestor.funding_account_id == null ? undefined : Number(ancestor.funding_account_id);
   }
 }
 
