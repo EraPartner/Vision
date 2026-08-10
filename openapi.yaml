@@ -7541,7 +7541,7 @@ paths:
         "204":
           description: No Content (idempotent — an unknown id is not an error)
         "400":
-          description: valid mapping id required
+          description: id must be a positive integer
   # Research provider API keys (Settings, ADR-079)
   /api/research/provider-keys:
     get:

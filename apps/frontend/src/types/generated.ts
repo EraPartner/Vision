@@ -9887,7 +9887,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description valid mapping id required */
+            /** @description id must be a positive integer */
             400: {
                 headers: {
                     [name: string]: unknown;

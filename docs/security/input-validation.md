@@ -3,7 +3,7 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-05-29
+updated: 2026-08-10
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
@@ -122,15 +122,19 @@ validateIntArray(values, fieldName = 'ids')
 
 ### Pagination Validation
 
-Validates and normalizes pagination parameters.
+Validates and normalizes pagination parameters. `validatePagination(limit, offset)` was removed
+in PR #103; list routes now use the helpers in `apps/node-backend/src/lib/pagination.js`.
 
 ```javascript
-validatePagination(limit, offset)
+parseIntClamped(raw, { min = 1, max, fallback })
+parsePagination(query, { defaultLimit = 50, maxLimit })
+parseOptionalPagination(query, { defaultLimit, maxLimit })
 ```
 
 **Rules:**
-- Limit: defaults to 50, max 5000
-- Offset: defaults to 0, min 0
+- `parseIntClamped`: parses `raw`, falls back to `fallback` if not finite or below `min`, clamps to `max` if given
+- `parsePagination`: builds `{ limit, offset }` from `query.limit`/`query.offset` via `parseIntClamped` — `limit` falls back to `defaultLimit` and clamps to `maxLimit`; `offset` falls back to `0` with `min: 0`
+- `parseOptionalPagination`: returns `null` when neither `limit` nor `offset` is supplied (serve the full collection); otherwise delegates to `parsePagination`, with the limit fallback defaulting to `maxLimit` instead of a small page size
 
 ---
 
