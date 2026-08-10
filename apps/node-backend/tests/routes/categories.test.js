@@ -46,13 +46,12 @@ describe('Category Routes', () => {
   describe('GET /', () => {
     it('should return empty list for empty database', async () => {
       categoryRepository.getAll.mockResolvedValue([]);
-      categoryRepository.getCount.mockResolvedValue(0);
 
       const res = await api.get(BASE).expect(200);
 
       expect(res.body).toEqual(expect.objectContaining({
         ok: true,
-        data: expect.objectContaining({ items: [], total: 0, limit: 50, offset: 0 }),
+        data: expect.objectContaining({ items: [], total: 0 }),
       }));
     });
 
@@ -62,7 +61,6 @@ describe('Category Routes', () => {
         { id: 2, general: 'TRANSPORT', detail: 'FUEL' },
       ];
       categoryRepository.getAll.mockResolvedValue(categories);
-      categoryRepository.getCount.mockResolvedValue(2);
 
       const res = await api.get(BASE).expect(200);
 
@@ -78,6 +76,59 @@ describe('Category Routes', () => {
 
       expect(res.body.data.limit).toBe(2);
       expect(res.body.data.offset).toBe(1);
+    });
+
+    // Pagination is opt-in (parseOptionalPagination): category pickers/pages
+    // send no limit/offset and must keep getting the complete list. 60 rows
+    // pins the old silent truncation at the parsePagination default of 50.
+    it('returns the full list (more than 50 rows) and no limit/offset when neither param is sent', async () => {
+      const rows = Array.from({ length: 60 }, (_, i) => ({ id: i + 1, general: 'G', detail: `D${i + 1}` }));
+      categoryRepository.getAll.mockResolvedValue(rows);
+
+      const res = await api.get(BASE).expect(200);
+
+      expect(categoryRepository.getAll).toHaveBeenCalledWith(
+        expect.not.objectContaining({ limit: expect.anything() }),
+      );
+      expect(categoryRepository.getCount).not.toHaveBeenCalled();
+      expect(res.body.data.items).toHaveLength(60);
+      expect(res.body.data.total).toBe(60);
+      expect(res.body.data.limit).toBeUndefined();
+      expect(res.body.data.offset).toBeUndefined();
+    });
+
+    it('treats an empty limit param as absent', async () => {
+      categoryRepository.getAll.mockResolvedValue([]);
+
+      const res = await api.get(`${BASE}?limit=`).expect(200);
+
+      expect(categoryRepository.getCount).not.toHaveBeenCalled();
+      expect(res.body.data.limit).toBeUndefined();
+    });
+
+    it('pages and reports the full total when limit/offset are supplied', async () => {
+      categoryRepository.getAll.mockResolvedValue([{ id: 3, general: 'G', detail: 'D' }]);
+      categoryRepository.getCount.mockResolvedValue(12);
+
+      const res = await api.get(`${BASE}?limit=1&offset=2`).expect(200);
+
+      expect(categoryRepository.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 1, offset: 2 }),
+      );
+      expect(res.body.data.total).toBe(12);
+      expect(res.body.data.limit).toBe(1);
+      expect(res.body.data.offset).toBe(2);
+    });
+
+    it('clamps limit to the per-resource cap', async () => {
+      categoryRepository.getAll.mockResolvedValue([]);
+      categoryRepository.getCount.mockResolvedValue(0);
+
+      await api.get(`${BASE}?limit=99999`).expect(200);
+
+      expect(categoryRepository.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 1000, offset: 0 }),
+      );
     });
   });
 

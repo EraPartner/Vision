@@ -12,7 +12,7 @@ import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { ComposedChart, LineChart, getChartColor, type ComposedSeries, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -54,6 +54,7 @@ type Row = { time: number } & Record<string, number | null>;
 
 export default function ChartBuilderPage() {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
 

@@ -16,7 +16,13 @@
  * SSE events on /chat/stream:
  *   - user_message       {message}         — user row persisted
  *   - token              "delta"           — content chunk (assistant text streaming)
- *   - tool_call          {name, args}      — model requested a tool (before dispatch)
+ *   - tool_call          {name, args}      — model requested a tool (before
+ *                                            dispatch); args are the model's own
+ *                                            when already a plain object, else {}
+ *                                            — the following tool_result row
+ *                                            carries the dispatcher-coerced args
+ *                                            the tool actually received (or the
+ *                                            raw value next to the error)
  *   - tool_result        {message}         — tool row persisted (result in .tool_result)
  *   - done               {assistantMessage, usage, iterations, conversation}
  *   - error              {detail, code?}
@@ -47,6 +53,7 @@ import { ApiErrorCode } from '@vision/types/errors';
 import {
   AppError,
   NotFoundError,
+  UpstreamError,
   ValidationError,
 } from '../middleware/errorHandler.js';
 
@@ -147,21 +154,19 @@ function enforceAiChatEnabled(req, res, next) {
 }
 
 /**
- * Convert a service-layer error into a typed AppError. Preserves the
- * AiChatServiceError status + code so the envelope surfaces them unchanged.
+ * Ensure only typed AppErrors leave this router. AiChatServiceError extends
+ * AppError (services throw typed AppErrors; only the error middleware maps
+ * them to HTTP — docs/reference/service-layer.md), so it passes through
+ * untouched and needs no per-route translation. Anything untyped is wrapped
+ * as a 500 with an authored fallback message so raw internals never reach
+ * clients, even in development.
  *
  * @param {any} err Upstream error of unknown provenance (service layer, zod, Ollama client).
  * @param {string} fallbackMessage
  * @returns {never}
  */
 function rethrowAsAppError(err, fallbackMessage) {
-  if (err instanceof AiChatServiceError) {
-    throw new AppError(err.message, {
-      status: err.status,
-      code: err.code,
-      cause: err,
-    });
-  }
+  if (err instanceof AppError) throw err;
   throw new AppError(fallbackMessage, {
     status: 500,
     code: ApiErrorCode.INTERNAL_SERVER_ERROR,
@@ -244,9 +249,7 @@ router.get('/models', /** @param {ExpressRequest} req @param {ExpressResponse} r
     res.ok({ items: models, total: models.length });
   } catch (err) {
     if (err instanceof OllamaError) {
-      throw new AppError(`Ollama not reachable: ${err.message}`, {
-        status: 502,
-        code: ApiErrorCode.BAD_GATEWAY,
+      throw new UpstreamError(`Ollama not reachable: ${err.message}`, {
         details: { ollamaCode: err.code },
         cause: err,
       });

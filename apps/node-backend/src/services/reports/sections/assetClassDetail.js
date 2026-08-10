@@ -63,7 +63,7 @@ export function renderAssetClassDetail(data, { currency }) {
       const ac    = inv.assetClass ?? inv.asset_class ?? 'other';
       const label = ASSET_CLASS_LABELS[ac] ?? ac;
       if (!classMap.has(ac)) classMap.set(ac, { label, value: 0, invested: 0 });
-      classMap.get(ac).value    += Number(inv.currentValue ?? inv.current_value ?? 0);
+      classMap.get(ac).value    += Number(inv.currentValue ?? 0);
       classMap.get(ac).invested += Number(inv.totalInvested ?? inv.total_invested ?? 0);
     }
   }

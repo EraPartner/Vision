@@ -45,6 +45,7 @@ import {
   __resetPriceCache,
 } from '../src/services/priceProviderService.js';
 import { query } from '../src/database/connection.js';
+import { logger } from '../src/config/logger.js';
 import { clearHistoricalIndexCache } from '../src/services/currency/currencyConversionService.js';
 
 describe('Price Provider Service', () => {
@@ -606,6 +607,37 @@ describe('Price Provider Service', () => {
       expect(points).toEqual([
         { timestampMs: Date.UTC(2026, 0, 3, 12, 0, 0, 0), price: 104.5 },
       ]);
+    });
+
+    it('still falls back (no escape) when the provider answers non-2xx — now a typed UpstreamError, caught locally as before', async () => {
+      const fromMs = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
+      const toMs = Date.UTC(2026, 0, 20, 23, 59, 59, 999);
+
+      query.mockResolvedValue({
+        rows: [
+          { price_date: '2026-01-03', close_price: '104.5' },
+        ],
+      });
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 503 });
+
+      const points = await fetchHistoricalPrices(
+        {
+          id: 12,
+          price_provider: 'custom',
+          price_provider_history_url: 'https://example.com/history',
+          price_provider_history_path: 'points',
+          price_provider_history_ts_path: 'timestamp_ms',
+          price_provider_history_price_path: 'price',
+        },
+        { fromMs, toMs }
+      );
+
+      expect(points).toEqual([
+        { timestampMs: Date.UTC(2026, 0, 3, 12, 0, 0, 0), price: 104.5 },
+      ]);
+      // Same warn wording as before the UpstreamError conversion.
+      expect(logger.warn).toHaveBeenCalledWith('Custom history fetch error for investment 12: HTTP 503');
     });
 
     it('sanitizes isolated Kinesis spike while preserving surrounding points', async () => {

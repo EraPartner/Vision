@@ -30,7 +30,7 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
   let totalGainLoss = 0;
 
   for (const inv of breakdown) {
-    totalValue    += Number(inv.currentValue    ?? inv.current_value    ?? 0);
+    totalValue    += Number(inv.currentValue ?? 0);
     totalInvested += Number(inv.totalInvested   ?? inv.total_invested   ?? 0);
     totalGainLoss += Number(inv.gainLoss        ?? inv.gain_loss        ?? 0);
   }
@@ -63,11 +63,11 @@ export function renderPortfolioExecutiveSummary(data, { currency }) {
 
   // Top 5 holdings mini-table
   const top5 = [...breakdown]
-    .sort((a, b) => (Number(b.currentValue ?? b.current_value ?? 0)) - (Number(a.currentValue ?? a.current_value ?? 0)))
+    .sort((a, b) => (Number(b.currentValue ?? 0)) - (Number(a.currentValue ?? 0)))
     .slice(0, 5);
 
   const rows = top5.map(inv => {
-    const val = Number(inv.currentValue ?? inv.current_value ?? 0);
+    const val = Number(inv.currentValue ?? 0);
     const gl  = Number(inv.gainLoss ?? inv.gain_loss ?? 0);
     const cls = signClass(gl);
     return `<tr>

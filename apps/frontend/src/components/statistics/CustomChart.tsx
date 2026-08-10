@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Pencil, Trash2, TrendingUp } from "lucide-react";
 import {
   LineChart, type LineSeries,
@@ -73,6 +73,7 @@ interface CustomChartProps {
 
 export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartProps) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
   const bucket = savedChart.time_bucket;

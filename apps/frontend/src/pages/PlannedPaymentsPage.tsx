@@ -7,7 +7,7 @@ import { Plus, CalendarClock, Clock, Repeat, Trash2, Pencil, ToggleLeft, ToggleR
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { RecurringDetectionPanel } from "@/components/planned/RecurringDetectionPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +76,7 @@ type TableRow = PlannedPayment & { _idx: number } & Record<string, unknown>;
 
 export default function PlannedPaymentsPage() {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const { convertToTarget } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
 
@@ -479,6 +480,7 @@ export default function PlannedPaymentsPage() {
           onOpenChange={(open) => { setFormOpen(open); if (!open) setEditing(undefined); }}
           onSubmit={handleSubmit}
           initial={editing}
+          loading={actionLoading}
           key={editing?.id ?? `new-${createFormKey}`}
         />
 

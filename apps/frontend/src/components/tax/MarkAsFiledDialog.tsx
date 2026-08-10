@@ -38,8 +38,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
         e.preventDefault();
         const trimmed = reference.trim();
         markYearAsFiled(year, trimmed.length > 0 ? trimmed : undefined);
-        setReference('');
-        setOpen(false);
+        handleOpenChange(false);
     }
 
     function handleOpenChange(o: boolean) {
@@ -79,7 +78,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                    <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>
                         {t('common.cancel')}
                     </Button>
                     <Button type="submit" className="gap-1">

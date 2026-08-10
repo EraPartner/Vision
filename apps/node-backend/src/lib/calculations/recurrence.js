@@ -9,16 +9,89 @@
  * scheduled hour is near midnight in a non-UTC zone (e.g. Jan 31 23:59 +01:00
  * must roll to Feb 28 23:59 +01:00, not Mar 1 / shifted by an hour).
  *
+ * ONE grammar, TWO steppers. The pattern grammar (daily/weekly/biweekly/
+ * "every N days" + monthly/quarterly/yearly) lives ONLY in
+ * {@link parseRecurrenceStep}; both steppers dispatch off it, so adding a
+ * pattern there is the whole job — it can no longer land in one stepper and
+ * silently miss the other:
+ *
+ *   - {@link calculateNextDate} — Date-space (instant → instant). Used where an
+ *     occurrence is a stored timestamp: /execute advancing planned_date, and
+ *     {@link expandOccurrences} (cashflow forecast, AI-chat planned tools).
+ *   - {@link nextOccurrenceYmd} — string-space ('YYYY-MM-DD' → 'YYYY-MM-DD'),
+ *     with the optional {@link fastForwardYmd} jump. Used where an occurrence
+ *     is a calendar day: infoRepositoryPlanned's next-month expansion.
+ *
+ * KNOWN DIVERGENCE (pre-existing, deliberately preserved): the two steppers
+ * agree on every month-based step and on every day-based step that does not
+ * cross APP_TIMEZONE's fall-back DST transition. Across fall-back, Date-space
+ * day steps (addDaysUtc keeps the UTC time-of-day, so a start-of-day instant
+ * lands at 23:00 the previous wall-clock day) render one calendar day EARLY —
+ * and daily renders the transition day twice — while string-space steps stay
+ * calendar-exact (Oct 21 + 7 = Oct 28, never Oct 27). Migrating
+ * expandOccurrences to string space would therefore CHANGE forecast output for
+ * day-cadence rows spanning late October; that is a behavior decision, not a
+ * refactor, so it is pinned in tests (recurrenceStepper.test.js /
+ * recurrenceExpandOccurrences.test.js) rather than silently "fixed" here.
+ *
  * Contract:
+ *   parseRecurrenceStep(pattern) → { unit, amount } | undefined
  *   calculateNextDate(currentDate, recurrencePattern) → Date | null
+ *   nextOccurrenceYmd(ymd, pattern) → string | undefined
+ *   fastForwardYmd(ymd, pattern, targetYmd) → string
  *   isValidPattern(pattern) → boolean
  *   getSupportedPatterns() → string[]
  */
 
-import { toAppTz, toUtc, appDateStringToUtc, toAppDateString } from '../timezone.js';
+import {
+  toAppTz,
+  toUtc,
+  appDateStringToUtc,
+  toAppDateString,
+  addDaysYmd,
+  firstOfMonthYmd,
+} from '../timezone.js';
 import { formatDateToYmd } from '../dateFormat.js';
 
 const SUPPORTED_PATTERNS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * @typedef {object} RecurrenceStep
+ * @property {'day'|'month'} unit Day steps have a fixed length; month steps
+ *   vary per calendar month and clamp at month-end.
+ * @property {number} amount Whole steps of `unit` per occurrence (>= 1).
+ */
+
+/**
+ * THE recurrence pattern grammar — the single place a pattern is recognized.
+ *
+ * Named cadences: daily(1d) / weekly(7d) / biweekly(14d) / monthly(1m) /
+ * quarterly(3m) / yearly(12m), plus the custom "every N days" form with
+ * N >= 1 ("every 0 days" parses but is rejected: it makes no forward progress,
+ * which is an infinite loop for any caller that advances until a target date
+ * passes). Matching is case/whitespace-insensitive; anything else — including
+ * `undefined` and non-strings — is undefined (never advanced, never valid).
+ *
+ * @param {string|null|undefined} pattern
+ * @returns {RecurrenceStep|undefined}
+ */
+export function parseRecurrenceStep(pattern) {
+  const p = String(pattern || '').toLowerCase().trim();
+  if (p === 'daily') return { unit: 'day', amount: 1 };
+  if (p === 'weekly') return { unit: 'day', amount: 7 };
+  if (p === 'biweekly') return { unit: 'day', amount: 14 };
+  if (p === 'monthly') return { unit: 'month', amount: 1 };
+  if (p === 'quarterly') return { unit: 'month', amount: 3 };
+  if (p === 'yearly') return { unit: 'month', amount: 12 };
+  const match = p.match(/^every\s+(\d+)\s+days?$/);
+  if (match) {
+    const days = parseInt(match[1], 10);
+    if (days >= 1) return { unit: 'day', amount: days };
+  }
+  return undefined;
+}
 
 // Guard against infinite expansion on tiny custom intervals.
 const MAX_OCCURRENCES = 500;
@@ -64,31 +137,23 @@ function addMonthsClampedInAppTz(dateLike, monthDelta) {
 }
 
 /**
+ * Date-space stepper: the occurrence after `currentDate`, or null for a
+ * pattern {@link parseRecurrenceStep} can't advance. Day steps are UTC day
+ * arithmetic (time-of-day preserved); month steps clamp in APP_TIMEZONE
+ * wall-clock. See the module header for how this differs from the string-space
+ * twin across fall-back DST.
+ *
  * @param {string|number|Date} currentDate
  * @param {string|null|undefined} recurrencePattern
  * @returns {Date|null}
  */
 export function calculateNextDate(currentDate, recurrencePattern) {
   if (!recurrencePattern) return null;
-  const pattern = recurrencePattern.toLowerCase().trim();
-
-  if (pattern === 'daily') return addDaysUtc(currentDate, 1);
-  if (pattern === 'weekly') return addDaysUtc(currentDate, 7);
-  if (pattern === 'biweekly') return addDaysUtc(currentDate, 14);
-  if (pattern === 'monthly') return addMonthsClampedInAppTz(currentDate, 1);
-  if (pattern === 'quarterly') return addMonthsClampedInAppTz(currentDate, 3);
-  if (pattern === 'yearly') return addMonthsClampedInAppTz(currentDate, 12);
-
-  // Custom: "every N days" — N must be >= 1. "every 0 days" matches the regex
-  // but returns the same date, which is an infinite loop for any caller that
-  // advances until the date passes a target.
-  const match = pattern.match(/^every\s+(\d+)\s+days?$/);
-  if (match) {
-    const days = parseInt(match[1], 10);
-    return days >= 1 ? addDaysUtc(currentDate, days) : null;
-  }
-
-  return null;
+  const step = parseRecurrenceStep(recurrencePattern.toLowerCase().trim());
+  if (!step) return null;
+  return step.unit === 'day'
+    ? addDaysUtc(currentDate, step.amount)
+    : addMonthsClampedInAppTz(currentDate, step.amount);
 }
 
 /**
@@ -97,13 +162,95 @@ export function calculateNextDate(currentDate, recurrencePattern) {
  */
 export function isValidPattern(pattern) {
   if (!pattern) return false;
-  const normalized = pattern.toLowerCase().trim();
-  if (SUPPORTED_PATTERNS.includes(normalized)) return true;
-  // Must mirror calculateNextDate's custom grammar: "every N days", N >= 1.
-  // (The old version rejected this, so it was useless as a guard and no caller
-  // used it — a typo like "fortnightly" stored fine and then never advanced.)
-  const match = normalized.match(/^every\s+(\d+)\s+days?$/);
-  return match ? parseInt(match[1], 10) >= 1 : false;
+  // A pattern is valid iff the shared grammar can advance it — the same
+  // "every N days", N >= 1 rule calculateNextDate applies. (The old version
+  // rejected the custom form, so it was useless as a guard and no caller used
+  // it — a typo like "fortnightly" stored fine and then never advanced.)
+  return parseRecurrenceStep(pattern.toLowerCase().trim()) !== undefined;
+}
+
+/**
+ * Add `months` to a 'YYYY-MM-DD' string, clamping the day to the last day of
+ * the target month when it doesn't exist there (Jan 31 +1 month → Feb 28).
+ *
+ * String twin of addMonthsClampedInAppTz, which clamps on the APP_TIMEZONE
+ * wall-clock day — for a start-of-day occurrence that is exactly this string's
+ * day, so the landing day is identical without the Date round trip. Applied
+ * one step at a time by the walking callers, so the clamp compounds the same
+ * way sequential calculateNextDate hops do (Jan 31 → Feb 28 → Mar 28, NOT back
+ * to Mar 31).
+ *
+ * @param {string} ymd 'YYYY-MM-DD'
+ * @param {number} months
+ * @returns {string}
+ */
+function addMonthsClampedYmd(ymd, months) {
+  const day = parseInt(ymd.slice(8, 10), 10);
+  const firstOfTarget = firstOfMonthYmd(ymd, months);
+  const lastDayOfTarget = parseInt(addDaysYmd(firstOfMonthYmd(ymd, months + 1), -1).slice(8, 10), 10);
+  return `${firstOfTarget.slice(0, 8)}${String(Math.min(day, lastDayOfTarget)).padStart(2, '0')}`;
+}
+
+/**
+ * Whole days from `fromYmd` to `toYmd` (negative if `toYmd` is earlier). Pure
+ * calendar math on the parsed components — host-timezone independent.
+ *
+ * @param {string} fromYmd 'YYYY-MM-DD'
+ * @param {string} toYmd 'YYYY-MM-DD'
+ * @returns {number}
+ */
+function diffDaysYmd(fromYmd, toYmd) {
+  const [fy, fm, fd] = fromYmd.split('-').map(Number);
+  const [ty, tm, td] = toYmd.split('-').map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / MS_PER_DAY);
+}
+
+/**
+ * String-space stepper: the occurrence after `ymd` for `pattern`, or undefined
+ * for a pattern {@link parseRecurrenceStep} can't advance. Calendar-string
+ * twin of {@link calculateNextDate} — same grammar by construction (both
+ * dispatch off parseRecurrenceStep), pure ADR-009 calendar math, so an
+ * occurrence lands on the same day on every host and never drifts across DST.
+ *
+ * @param {string} ymd 'YYYY-MM-DD'
+ * @param {string|null|undefined} pattern
+ * @returns {string|undefined}
+ */
+export function nextOccurrenceYmd(ymd, pattern) {
+  const step = parseRecurrenceStep(pattern);
+  if (!step) return undefined;
+  return step.unit === 'day' ? addDaysYmd(ymd, step.amount) : addMonthsClampedYmd(ymd, step.amount);
+}
+
+/**
+ * Optional fast-forward for the string-space stepper: jump a stale day-stepped
+ * anchor to just before `targetYmd` in one hop, so a caller's bounded walk
+ * (e.g. infoRepositoryPlanned's 120-occurrence cap) can't be exhausted before
+ * the window by a fast-cadence row last advanced long ago (a daily row >120
+ * days stale used to silently vanish from the forecast that way).
+ *
+ * The jump is a whole number of steps — exactly equivalent to N sequential
+ * hops for day-based patterns, so the cadence phase is preserved — landing at
+ * least one full step BEFORE the target so the boundary occurrence is never
+ * skipped. Month-based patterns are returned unchanged (their step length
+ * varies and a bulk month jump would change the sequential month-end clamping
+ * semantics: Jan 31 → Feb 28 → Mar 28, not Jan 31 +2 months → Mar 31), as is
+ * any anchor already within one step of the target and any pattern the
+ * grammar can't advance.
+ *
+ * @param {string} ymd 'YYYY-MM-DD' anchor
+ * @param {string|null|undefined} pattern
+ * @param {string} targetYmd 'YYYY-MM-DD' the day the caller wants to reach
+ * @returns {string} the advanced anchor (or `ymd` unchanged)
+ */
+export function fastForwardYmd(ymd, pattern, targetYmd) {
+  const step = parseRecurrenceStep(pattern);
+  if (!step || step.unit !== 'day') return ymd;
+  const deficitDays = diffDaysYmd(ymd, targetYmd);
+  if (deficitDays <= step.amount) return ymd;
+  const hops = Math.floor(deficitDays / step.amount) - 1;
+  if (hops <= 0) return ymd;
+  return addDaysYmd(ymd, hops * step.amount);
 }
 
 export function getSupportedPatterns() {

@@ -699,7 +699,10 @@
  * @property {'user'|'assistant'|'tool'|'system'} role
  * @property {string|null} content
  * @property {string|null} toolName
- * @property {any} toolArgs JSONB — parsed value or null.
+ * @property {any} toolArgs JSONB — the args the tool actually received (the
+ *   dispatcher-coerced object); when coercion failed, the raw model-emitted
+ *   value (e.g. a malformed JSON string) persisted next to the error result.
+ *   Null on non-tool rows.
  * @property {any} toolResult JSONB — parsed value or null.
  * @property {'complete'|'streaming'|'aborted'|'error'} status
  * @property {Date} createdAt

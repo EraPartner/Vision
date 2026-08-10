@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
@@ -82,6 +83,10 @@ const TRANSACTION: PortfolioTransaction = {
 };
 
 describe("EditPortfolioTxnDialog", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("renders trigger button", async () => {
         // Arrange + Act
         renderWithApp(
@@ -202,12 +207,64 @@ describe("EditPortfolioTxnDialog", () => {
         // Act — open, set FX rate to 0, submit
         await user.click(await screen.findByRole("button", { name: /^edit$/i }));
         await screen.findByRole("dialog");
-        fireEvent.change(screen.getByLabelText(/fx rate to eur/i), { target: { value: "0" } });
+        const fxInput = screen.getByLabelText(/fx rate to eur/i);
+        fireEvent.change(fxInput, { target: { value: "0" } });
         await user.click(screen.getByRole("button", { name: /save/i }));
 
-        // Assert — dialog stays open and nothing was sent
+        // Assert — dialog stays open and nothing was sent; the error is inline
+        // on the field (ARIA-associated), not a detached toast.
         expect(screen.getByRole("dialog")).toBeInTheDocument();
         expect(patched).toBe(false);
+        await waitFor(() => expect(fxInput).toHaveAttribute("aria-invalid", "true"));
+        const describedBy = fxInput.getAttribute("aria-describedby");
+        expect(describedBy).toBeTruthy();
+        expect(document.getElementById(describedBy!)).toHaveTextContent(/FX rate must be above 0/i);
+        await waitFor(() => expect(fxInput).toHaveFocus());
+    });
+
+    it("renders an inline error on the amount field for a dividend with a cleared amount, without a toast", async () => {
+        // Arrange — the old presentation was one detached toast for the first
+        // failing schema rule; it is now the money forms' inline field error.
+        const toastSpy = vi.spyOn(toast, "error");
+        const dividendTxn: PortfolioTransaction = {
+            ...TRANSACTION,
+            id: 103,
+            type: "dividend",
+            amount: 25,
+            units: undefined,
+            price_per_unit: undefined,
+            fees: 0,
+            taxes: 0,
+            note: undefined,
+        };
+        let patched = false;
+        server.use(
+            http.patch(`${API_BASE}/api/investments/transactions/103`, () => {
+                patched = true;
+                return ok(dividendTxn);
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={dividendTxn} />,
+        );
+
+        // Act — open, clear the amount, submit
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        const amountInput = await screen.findByLabelText(/total amount/i);
+        await user.clear(amountInput);
+        await user.click(screen.getByRole("button", { name: /save/i }));
+
+        // Assert — inline ARIA-associated error, focus on the field, no toast
+        await waitFor(() => expect(amountInput).toHaveAttribute("aria-invalid", "true"));
+        const describedBy = amountInput.getAttribute("aria-describedby");
+        expect(describedBy).toBeTruthy();
+        expect(document.getElementById(describedBy!)).toHaveTextContent(/amount is required/i);
+        await waitFor(() => expect(amountInput).toHaveFocus());
+        expect(toastSpy).not.toHaveBeenCalled();
+        expect(patched).toBe(false);
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
     it("shows error toast on API failure and keeps dialog open", async () => {

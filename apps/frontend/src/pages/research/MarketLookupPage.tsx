@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   TrendingUp, TrendingDown, BarChart3, Activity, Clock, Star, Link2,
@@ -122,6 +122,7 @@ function fmtDate(ts: number, range: string, appDateFormat: string, locale: strin
 
 export default function MarketLookupPage() {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const fmtNum = useCallback((val: number | null | undefined, opts?: Intl.NumberFormatOptions) => {

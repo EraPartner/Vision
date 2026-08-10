@@ -615,6 +615,13 @@ export const plannedTransactionRepository = {
    * Return active, unexecuted planned transactions whose planned_date falls within
    * the next `days` days. Used by the bill-reminder endpoint.
    *
+   * The window is anchored on the APP_TIMEZONE calendar day (ADR-009), read
+   * once and bound as $2 — not Postgres `CURRENT_DATE`, whose session-zone
+   * (UTC) day lags the app day for the last hours of every UTC day, shifting
+   * both window edges. Same one-clock rule as infoRepositoryForecast.js; the
+   * lookahead binds via make_interval rather than string-concatenating a bound
+   * value into an interval literal.
+   *
    * @param {number} days - Lookahead window (1–365)
    * @returns {Promise<PlannedTransactionListRow[]>}
    */
@@ -625,11 +632,11 @@ export const plannedTransactionRepository = {
       ${PLANNED_JOINS}
       WHERE pt.is_active = true
         AND pt.is_executed = false
-        AND pt.planned_date >= CURRENT_DATE
-        AND pt.planned_date <= CURRENT_DATE + ($1 || ' days')::INTERVAL
+        AND pt.planned_date >= $2::date
+        AND pt.planned_date <= $2::date + make_interval(days => $1::int)
       ORDER BY pt.planned_date ASC
     `;
-    const result = await query(sql, [days]);
+    const result = await query(sql, [days, todayAppDateString()]);
     return result.rows;
   },
 
@@ -638,6 +645,10 @@ export const plannedTransactionRepository = {
    * before the forecast horizon (today + `months` months). Includes recurring
    * transactions that have already started (planned_date may be before today if
    * the user hasn't executed them yet).
+   *
+   * "Today" is the APP_TIMEZONE calendar day bound as $2 (ADR-009, one clock —
+   * see getDueSoon), matching the horizon math of the forecast surfaces that
+   * consume these rows.
    *
    * @param {number} months - Forecast horizon in months (1–24)
    * @returns {Promise<PlannedForecastRow[]>}
@@ -652,10 +663,10 @@ export const plannedTransactionRepository = {
       ${PLANNED_JOINS}
       WHERE pt.is_active = true
         AND pt.is_executed = false
-        AND pt.planned_date <= CURRENT_DATE + ($1 * INTERVAL '1 month')
+        AND pt.planned_date <= $2::date + make_interval(months => $1::int)
       ORDER BY pt.planned_date ASC
     `;
-    const result = await query(sql, [months]);
+    const result = await query(sql, [months, todayAppDateString()]);
     return result.rows;
   },
 

@@ -876,6 +876,63 @@ describe('InfoRepository', () => {
       }
     });
 
+    it('fast-forwards a stale biweekly row on its own phase, keeping a boundary occurrence that lands exactly on the window start', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+      try {
+        // 2025-12-03 is exactly 15 biweekly steps before the window start
+        // (2026-07-01). The shared fastForwardYmd jump lands at least one full
+        // step BEFORE the window (2026-06-17), so the occurrence that falls
+        // exactly on the boundary is never skipped — and the cadence phase
+        // (Wednesdays) is preserved through the jump.
+        query.mockResolvedValueOnce({
+          rows: [
+            { id: 1, planned_date: '2025-12-03', amount: '-30', currency: 'EUR', recipient_name: 'Cleaner', category_name: null, is_recurring: true, recurrence_pattern: 'biweekly' },
+          ],
+        });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+        expect(result.daily_data.map((d) => d.date)).toEqual(['2026-07-01', '2026-07-15', '2026-07-29']);
+        expect(result.summary.transaction_count).toBe(3);
+        expect(result.summary.total_expenses).toBe(-90);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('steps weekly calendar-exactly across the fall-back DST transition (string-space stepper, unlike expandOccurrences)', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-15T12:00:00Z')); // → October 2026 window
+      try {
+        // Europe/Brussels falls back on 2026-10-25. This call site's
+        // string-space stepper keeps Oct 21 + 7 = Oct 28; the Date-space
+        // expandOccurrences twin would render 2026-10-27 here (pinned in
+        // recurrenceExpandOccurrences.test.js) — a preserved, documented
+        // divergence between the two steppers.
+        query.mockResolvedValueOnce({
+          rows: [
+            { id: 1, planned_date: '2026-10-07', amount: '-15', currency: 'EUR', recipient_name: 'Gym', category_name: null, is_recurring: true, recurrence_pattern: 'weekly' },
+          ],
+        });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+        expect(result.daily_data.map((d) => d.date)).toEqual(['2026-10-07', '2026-10-14', '2026-10-21', '2026-10-28']);
+        expect(result.summary.transaction_count).toBe(4);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('fast-forwards a stale fast-cadence recurring row instead of dropping it (120-hop cap)', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,

@@ -19,7 +19,7 @@ import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
 
 function daysUntil(dateStr?: string) {
@@ -29,6 +29,7 @@ function daysUntil(dateStr?: string) {
 
 export default function SavingsPage() {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const { byAssetClass, deleteInvestment, isLoading, isError, error, refetch } = usePortfolio();

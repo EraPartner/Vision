@@ -3,9 +3,12 @@
  *
  * The LLM emits tool_calls with `{name, arguments}`. The dispatcher:
  *   - looks the tool up by name (rejects unknown names)
- *   - coerces `arguments` from string|object into a plain object
+ *   - coerces `arguments` from string|object into a plain object — it is
+ *     the SINGLE owner of that coercion; callers pass the raw value through
  *   - runs the tool, translating validation errors into a shape the
  *     LLM can retry with (see `formatError`)
+ *   - reports back `{args, result}` so callers persist/stream exactly what
+ *     the tool saw, never a divergent re-parse
  *
  * Individual tools own their own arg validation via `_validate.js`.
  * The dispatcher never silently drops or fabricates values.
@@ -164,32 +167,49 @@ function formatError(err) {
 /**
  * Invoke a tool by name with LLM-provided arguments.
  *
- * Returns `{ok, data, meta}` on success, `{ok: false, error}` on failure.
- * Never throws — the chat service feeds the error payload back to the
- * model so it can correct its args and retry.
+ * The dispatcher is the single coercion point: callers hand it the raw
+ * `function.arguments` value straight off the model (object, JSON string,
+ * or absent) and get back both halves of the record:
+ *
+ *   - `result` — `{ok, data, meta}` on success, `{ok: false, error}` on
+ *     failure. Never throws — the chat service feeds the error payload back
+ *     to the model so it can correct its args and retry.
+ *   - `args` — what the tool actually received (the coerced object). When
+ *     the tool never ran — unknown name, or arguments that would not
+ *     coerce — `args` is the raw value exactly as the model emitted it, so
+ *     persisting it next to the error result keeps an honest record.
  *
  * @param {string} name
  * @param {unknown} rawArgs
  * @param {import('./_validate.js').ToolContext} [context]
- * @returns {Promise<object>}
+ * @returns {Promise<{ args: unknown, result: object }>}
  */
 export async function dispatchTool(name, rawArgs, context = {}) {
   const tool = TOOLS[name];
   if (!tool) {
     return {
-      ok: false,
-      error: {
-        code: 'UNKNOWN_TOOL',
-        message: `Unknown tool: ${name}`,
-        availableTools: Object.keys(TOOLS),
+      args: rawArgs,
+      result: {
+        ok: false,
+        error: {
+          code: 'UNKNOWN_TOOL',
+          message: `Unknown tool: ${name}`,
+          availableTools: Object.keys(TOOLS),
+        },
       },
     };
   }
 
+  let args;
   try {
-    const args = coerceArguments(rawArgs);
-    return await tool.run(args, context);
+    args = coerceArguments(rawArgs);
   } catch (err) {
-    return formatError(err);
+    return { args: rawArgs, result: formatError(err) };
+  }
+
+  try {
+    return { args, result: await tool.run(args, context) };
+  } catch (err) {
+    return { args, result: formatError(err) };
   }
 }

@@ -131,6 +131,18 @@ describe('categoryRepository query helpers', () => {
     ]);
   });
 
+  // Unbounded by default (buildLimitOffset): the full-list consumers (category
+  // pickers/pages) must never be silently truncated to a default page.
+  it('emits no LIMIT/OFFSET from getAll when pagination is not requested', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await categoryRepository.getAll({ active: true });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain('LIMIT');
+    expect(params).toEqual([]);
+  });
+
   it('returns parsed count from getCount filters', async () => {
     query.mockResolvedValueOnce({ rows: [{ count: '12' }] });
 

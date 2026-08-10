@@ -3,7 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-06-01
+last_modified: 2026-08-09
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added.
 aliases: [services, service layer, business logic, backend services]
@@ -42,14 +42,19 @@ Repository Layer (SQL queries)
 > `ConflictError`, … from `middleware/errorHandler.js`); **only the error-handling middleware maps
 > those to HTTP status codes**. A service should never set a status code or shape an HTTP response.
 >
-> Two current gaps to be aware of when adding upstream integrations:
-> - The `AppError` set covers 400/401/403/404/409/429 only — there is no 502/503/504 class, so an
->   uncaught provider outage or timeout surfaces as a generic 500. Upstream services (price
->   providers, research adapters, import) still `throw new Error(...)` in places rather than a typed
->   error; those reach the handler as 500s.
-> - `AiChatServiceError` and `ToolValidationError` sit **outside** the `AppError` hierarchy and are
->   hand-translated to HTTP status codes in `routes/ai.js`. New service errors should extend
->   `AppError` (carrying `status` + `code`) so no per-route translation shim is needed.
+> Upstream failures have typed classes (2026-08-09): `UpstreamError` (502 `BAD_GATEWAY`) and
+> `UpstreamTimeoutError` (504 `GATEWAY_TIMEOUT`) in `middleware/errorHandler.js`. As 5xx errors,
+> their messages are masked in production (they routinely embed provider URLs/upstream statuses);
+> the stable `code` still reaches the client. Price-provider throws (`prices/priceProviderRegistry.js`,
+> `priceProviderService.js`) use them; research adapters and import still `throw new Error(...)`
+> in places — convert as you touch them.
+>
+> `AiChatServiceError` extends `AppError` and passes through `routes/ai.js` to the middleware
+> untranslated (no per-route shim). `ToolValidationError` (`services/aiChat/tools/_validate.js`)
+> deliberately stays **outside** `AppError`: it is an in-band tool-result error — `dispatchTool`
+> catches it and feeds `{ok: false, error}` back to the model for retry; it never maps to an HTTP
+> response. New service errors that DO represent an HTTP outcome should extend `AppError`
+> (carrying `status` + `code`).
 
 ---
 
@@ -535,19 +540,26 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ## 14. calculations/recurrence.js  _(formerly recurrenceService.js)_
 
-**File:** [[apps/node-backend/src/services/calculations/recurrence.js]]  
-**Purpose:** Calculates next occurrence dates for recurring patterns.
+**File:** [[apps/node-backend/src/lib/calculations/recurrence.js]]  
+**Purpose:** Calculates next occurrence dates for recurring patterns. **One grammar, two steppers (2026-08-09):** the pattern grammar lives only in `parseRecurrenceStep`; both the Date-space stepper (`calculateNextDate`, used by `/execute` and `expandOccurrences`) and the string-space stepper (`nextOccurrenceYmd` + `fastForwardYmd`, used by `infoRepositoryPlanned`'s next-month expansion) dispatch off it, so a new pattern is added in exactly one place.
 
 ### Exported Functions
 
 | Function | Signature | Returns |
 |----------|-----------|---------|
-| `calculateNextDate` | `(currentDate, recurrencePattern) => Date` | Next occurrence date |
-| `isValidPattern` | `(pattern) => boolean` | Pattern validity |
-| `getSupportedPatterns` | `() => string[]` | `['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly', 'every N days']` |
+| `parseRecurrenceStep` | `(pattern) => { unit: 'day'\|'month', amount } \| undefined` | The single grammar: named cadences + `every N days` (N ≥ 1) |
+| `calculateNextDate` | `(currentDate, recurrencePattern) => Date \| null` | Next occurrence (Date-space; month steps clamp in APP_TIMEZONE) |
+| `nextOccurrenceYmd` | `(ymd, pattern) => string \| undefined` | Next occurrence (string-space `YYYY-MM-DD`; pure calendar math, DST-proof) |
+| `fastForwardYmd` | `(ymd, pattern, targetYmd) => string` | Bulk-jumps a stale day-stepped anchor to ≥ 1 step before `targetYmd`; no-op for month steps |
+| `expandOccurrences` | `(row, horizonYmd, { maxOccurrences? }) => string[]` | Horizon-inclusive occurrence list, base date first, default 500-cap |
+| `isValidPattern` | `(pattern) => boolean` | Pattern validity (= `parseRecurrenceStep` succeeds) |
+| `getSupportedPatterns` | `() => string[]` | `['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']` |
+
+> [!warning] Known (preserved) stepper divergence
+> The two steppers agree except for day-based steps whose walk starts on a DST-offset (summer) anchor and crosses APP_TIMEZONE's fall-back transition: Date-space lands a calendar day early (daily repeats the transition day) while string-space stays calendar-exact. Pinned by `tests/services/recurrenceStepper.test.js` and `tests/services/recurrenceExpandOccurrences.test.js`; changing either side changes published schedules.
 
 ### Dependencies
-- None (pure utility)
+- `lib/timezone.js` (ADR-009 helpers) — otherwise pure, no IO/DB
 
 ---
 
@@ -673,9 +685,11 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ### Error Handling
 
-Maps Ollama errors to `AiChatServiceError` with HTTP status:
+Maps Ollama errors to `AiChatServiceError` with HTTP status (aiChatService.js: `ABORTED` → 499,
+every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap of `TIMEOUT` onto
+`UpstreamTimeoutError` semantics is a possible follow-up, not current behavior):
 - `OLLAMA_UNREACHABLE` → 502
-- `OLLAMA_TIMEOUT` → 504
+- `OLLAMA_TIMEOUT` → 502 (not 504 today)
 - `VALIDATION_ERROR` (tool args) → 400
 - `CONVERSATION_NOT_FOUND` → 404
 

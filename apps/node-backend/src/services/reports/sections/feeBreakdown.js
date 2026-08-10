@@ -12,14 +12,14 @@ import { escapeHtml, fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHe
  * @returns {string}
  */
 export function renderFeeBreakdown(data, { currency }) {
-  const byAssetClass = data?.byAssetClass ?? {};
+  const byAssetClass = data?.byAssetClass ?? [];
 
-  const rows = Object.entries(byAssetClass)
-    .map(([ac, vals]) => ({ label: ac, fees: vals.fees ?? 0, taxes: vals.taxes ?? 0 }))
+  const rows = byAssetClass
+    .map((b) => ({ label: b.assetClass ?? 'other', fees: b.fees ?? 0, taxes: b.taxes ?? 0 }))
     .filter(r => r.fees > 0)
     .sort((a, b) => b.fees - a.fees);
 
-  const totalFees  = (/** @type {import('../dataFetcherTax.js').LegacyTaxTotalsFallback | undefined} */ (data?.totals)?.feesTotal ?? 0);
+  const totalFees  = data?.feesTotal ?? 0;
 
   if (!rows.length && totalFees === 0) {
     return `
@@ -42,7 +42,7 @@ export function renderFeeBreakdown(data, { currency }) {
     return `<tr>
       <td>${escapeHtml(r.label)}</td>
       <td class="num neg">${fmtCurrency(r.fees, currency)}</td>
-      <td class="num">${fmtPct(share, false)}</td>
+      <td class="num">${fmtPct(share, true)}</td>
     </tr>`;
   }).join('');
 

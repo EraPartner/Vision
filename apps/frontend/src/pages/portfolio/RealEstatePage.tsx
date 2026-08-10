@@ -17,12 +17,13 @@ import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 
 export default function RealEstatePage() {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';

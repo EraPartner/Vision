@@ -9,6 +9,38 @@ vi.mock('../src/middleware/validation.js', () => ({
 
 import { getClient, query } from '../src/database/connection.js';
 import plannedTransactionRepository from '../src/repositories/plannedTransactionRepository.js';
+import { todayAppDateString } from '../src/lib/timezone.js';
+
+describe('plannedTransactionRepository.getDueSoon / getForForecast — one clock (ADR-009)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('getDueSoon anchors both window edges on the bound app date and binds the lookahead via make_interval', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await plannedTransactionRepository.getDueSoon(30);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(params).toEqual([30, todayAppDateString()]);
+    expect(sql).toContain('pt.planned_date >= $2::date');
+    expect(sql).toContain('make_interval(days => $1::int)');
+    // The two-clock split (and the string-concat interval) must not come back.
+    expect(sql).not.toContain('CURRENT_DATE');
+    expect(sql).not.toContain("|| ' days'");
+  });
+
+  it('getForForecast anchors its horizon on the same bound app date', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await plannedTransactionRepository.getForForecast(3);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(params).toEqual([3, todayAppDateString()]);
+    expect(sql).toContain('$2::date + make_interval(months => $1::int)');
+    expect(sql).not.toContain('CURRENT_DATE');
+  });
+});
 
 describe('plannedTransactionRepository.getAll', () => {
   beforeEach(() => {

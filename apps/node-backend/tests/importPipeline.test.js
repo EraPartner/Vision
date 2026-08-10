@@ -155,6 +155,19 @@ describe('matchBatch', () => {
     const result = await matchBatch({ batchId: 2 })
     expect(result.matched).toBe(0)
     expect(result.unresolved).toBe(1)
+
+    // The stamped-status contract for unresolved rows: 'matched' with a NULL
+    // resolved_recipient_id. 'matched' is the only status the review preview
+    // and the recipient-override paths accept, so this is what keeps the row
+    // visible and fixable in the review UI (prepareImport forces review when
+    // unresolved > 0). commitBatch — not a NOT NULL violation — decides a row
+    // still unassigned at commit time into 'error'.
+    const updateCall = query.mock.calls.find(
+      ([sql]) => String(sql).includes('UPDATE import_staging_rows'),
+    )
+    expect(updateCall[0]).toContain("'matched'")
+    expect(updateCall[1][0]).toEqual([2]) // staging row ids
+    expect(updateCall[1][1]).toEqual([null]) // resolved_recipient_id stays NULL
   })
 })
 
@@ -452,6 +465,79 @@ describe('commitBatch', () => {
     expect(statements.some((s) => /^SAVEPOINT sp_row_\d+$/.test(s))).toBe(true)
     expect(statements.some((s) => /^ROLLBACK TO SAVEPOINT sp_row_\d+$/.test(s))).toBe(true)
     expect(statements.some((s) => s.includes("status = 'error'"))).toBe(true)
+  })
+
+  it("decides a row with no recipient into 'error' without attempting the INSERT", async () => {
+    // Matcher resolved nothing, user assigned nothing in review. The row must
+    // be decided into 'error' up front — transactions.recipient_id is NOT
+    // NULL, so attempting it would 23502 inside the bulk INSERT and demote
+    // the whole chunk to the per-row replay.
+    setupCommit({ ...matchedRow, resolved_recipient_id: null })
+    expect(await commitBatch({ batchId: 5 })).toEqual({ imported: 0, duplicates: 0, errors: 1, autoLinkedCount: 0 })
+
+    // Decided before any chunk work: no transaction is even opened.
+    expect(mockClient.query).not.toHaveBeenCalled()
+    expect(refreshAggregations).not.toHaveBeenCalled()
+
+    const errorUpdate = poolQuery.mock.calls.find(
+      ([sql]) => String(sql).includes("status = 'error'"),
+    )
+    expect(errorUpdate[1]).toEqual([[1], expect.stringContaining('unresolved recipient')])
+    const counterUpdate = poolQuery.mock.calls.find(
+      ([sql]) => String(sql).includes('rows_error'),
+    )
+    expect(counterUpdate[1]).toEqual([5, 1])
+  })
+
+  it('commits an unresolved row once the user assigned a recipient in review', async () => {
+    // The review-UI fix path: the row stayed 'matched' with a NULL
+    // resolved_recipient_id, the user set user_override_recipient_id, and the
+    // commit honours the override instead of erroring the row.
+    setupCommit({ ...matchedRow, resolved_recipient_id: null, user_override_recipient_id: 42 })
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO transactions')) return { rows: [{ id: 100, tx_hash: null }] }
+      return { rows: [] }
+    })
+    expect(await commitBatch({ batchId: 6 })).toEqual({ imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0 })
+    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
+    expect(statements.some((s) => s.includes("status = 'error'"))).toBe(false)
+  })
+
+  it('keeps a chunk containing an unresolved row on the batched path', async () => {
+    // Post-c1d6761 regression the up-front decision closes: an unresolved row
+    // reaching the bulk INSERT used to fail the chunk to the per-row replay.
+    // With the decision made before planning, the rest of the chunk must stay
+    // on the batched path — one INSERT, no rollback, no per-row savepoints.
+    const rows = [
+      { ...matchedRow, id: 1, row_index: 0, resolved_recipient_id: null },
+      { ...matchedRow, id: 2, row_index: 1, memo: 'coffee 1', tx_hash: 'h1' },
+      { ...matchedRow, id: 3, row_index: 2, memo: 'coffee 2', tx_hash: 'h2' },
+    ]
+    poolQuery
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE status='committing'
+      .mockResolvedValueOnce({ rows }) // SELECT matched
+      .mockResolvedValueOnce({ rows: [] }) // staging error UPDATE (unresolved row)
+      .mockResolvedValueOnce({ rows: [] }) // rows_error checkpoint
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE counters
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO transactions')) {
+        return { rows: [{ id: 100, tx_hash: 'h1' }, { id: 101, tx_hash: 'h2' }] }
+      }
+      return { rows: [] }
+    })
+    expect(await commitBatch({ batchId: 12 })).toEqual({ imported: 2, duplicates: 0, errors: 1, autoLinkedCount: 0 })
+
+    const statements = mockClient.query.mock.calls.map(([sql]) => String(sql))
+    expect(statements.filter((s) => s.includes('INSERT INTO transactions'))).toHaveLength(1)
+    expect(statements.some((s) => s.includes('ROLLBACK TO SAVEPOINT'))).toBe(false)
+    expect(statements.some((s) => /^SAVEPOINT sp_row_/.test(s))).toBe(false)
+    expect(statements.filter((s) => s.includes("status = 'committed'"))).toHaveLength(1)
+
+    // The unresolved row was written 'error' on the pool, before the chunk.
+    const errorUpdate = poolQuery.mock.calls.find(
+      ([sql]) => String(sql).includes("status = 'error'"),
+    )
+    expect(errorUpdate[1][0]).toEqual([1])
   })
 
   it('rejects a non-integer staging row.id before issuing SAVEPOINT', async () => {

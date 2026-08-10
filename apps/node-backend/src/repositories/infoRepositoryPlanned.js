@@ -5,6 +5,7 @@
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { todayAppDateString, firstOfMonthYmd, addDaysYmd } from '../lib/timezone.js';
+import { nextOccurrenceYmd, fastForwardYmd } from '../lib/calculations/recurrence.js';
 import { addAll, toDecimal, toNumber } from '../lib/money.js';
 import {
   roundToCents,
@@ -13,8 +14,6 @@ import {
 } from './infoRepositoryHelpers.js';
 
 const MAX_OCCURRENCES = 120; // guard against infinite loops on tiny intervals
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,117 +32,30 @@ function plannedDateToYmd(value) {
 }
 
 /**
- * Fixed day-step for the day-based recurrence patterns, or null for the
- * month-based ones (monthly/quarterly/yearly), whose step length varies.
- *
- * @param {string|null|undefined} pattern
- * @returns {number|null}
- */
-function dayStepForPattern(pattern) {
-  const p = String(pattern || '').toLowerCase().trim();
-  if (p === 'daily') return 1;
-  if (p === 'weekly') return 7;
-  if (p === 'biweekly') return 14;
-  const match = p.match(/^every\s+(\d+)\s+days?$/);
-  if (match) {
-    const days = parseInt(match[1], 10);
-    return days >= 1 ? days : null;
-  }
-  return null;
-}
-
-/**
- * Month-step for a month-based pattern, or null for anything else.
- *
- * @param {string|null|undefined} pattern
- * @returns {number|null}
- */
-function monthStepForPattern(pattern) {
-  const p = String(pattern || '').toLowerCase().trim();
-  if (p === 'monthly') return 1;
-  if (p === 'quarterly') return 3;
-  if (p === 'yearly') return 12;
-  return null;
-}
-
-/**
- * Whole days from `fromYmd` to `toYmd` (negative if `toYmd` is earlier). Pure
- * calendar math on the parsed components — host-timezone independent.
- *
- * @param {string} fromYmd 'YYYY-MM-DD'
- * @param {string} toYmd 'YYYY-MM-DD'
- * @returns {number}
- */
-function diffDaysYmd(fromYmd, toYmd) {
-  const [fy, fm, fd] = fromYmd.split('-').map(Number);
-  const [ty, tm, td] = toYmd.split('-').map(Number);
-  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / MS_PER_DAY);
-}
-
-/**
- * Add `months` to a 'YYYY-MM-DD' string, clamping the day to the last day of
- * the target month when it doesn't exist there (Jan 31 +1 month → Feb 28).
- *
- * String twin of recurrence.js's addMonthsClampedInAppTz, which clamps on the
- * APP_TIMEZONE wall-clock day — for a start-of-day occurrence that is exactly
- * this string's day, so the landing day is identical without the Date round
- * trip. Applied one step at a time by the walk below, so the clamp compounds
- * the same way sequential calculateNextDate hops do (Jan 31 → Feb 28 → Mar 28,
- * NOT back to Mar 31).
- *
- * @param {string} ymd 'YYYY-MM-DD'
- * @param {number} months
- * @returns {string}
- */
-function addMonthsClampedYmd(ymd, months) {
-  const day = parseInt(ymd.slice(8, 10), 10);
-  const firstOfTarget = firstOfMonthYmd(ymd, months);
-  const lastDayOfTarget = parseInt(addDaysYmd(firstOfMonthYmd(ymd, months + 1), -1).slice(8, 10), 10);
-  return `${firstOfTarget.slice(0, 8)}${String(Math.min(day, lastDayOfTarget)).padStart(2, '0')}`;
-}
-
-/**
- * The occurrence after `ymd` for `pattern`, or null for a pattern that can't be
- * advanced. Calendar-string twin of calculateNextDate (same pattern grammar:
- * daily/weekly/biweekly/"every N days" + monthly/quarterly/yearly).
- *
- * @param {string} ymd 'YYYY-MM-DD'
- * @param {string} pattern
- * @returns {string|null}
- */
-function nextOccurrenceYmd(ymd, pattern) {
-  const stepDays = dayStepForPattern(pattern);
-  if (stepDays) return addDaysYmd(ymd, stepDays);
-  const stepMonths = monthStepForPattern(pattern);
-  if (stepMonths) return addMonthsClampedYmd(ymd, stepMonths);
-  return null;
-}
-
-/**
  * Walk a recurring planned transaction forward from its stored date, emitting
  * each occurrence (as a YYYY-MM-DD string in APP_TIMEZONE) that falls within
  * [startYmd, endYmd). Returns [] for a pattern that can't be advanced.
  *
- * Pure calendar-string arithmetic (ADR-009 helpers), so an occurrence lands on
- * the same day on every host. It used to walk `Date`s instead: the base was the
- * pg DATE read at SERVER-LOCAL midnight, each occurrence was rendered with
- * toAppDateString (APP_TIMEZONE) and the fast-forward compared that instant
- * against `Date.UTC(...)` of the window start — three different calendars. On a
- * host east of APP_TIMEZONE (e.g. TZ=Asia/Tokyo with the default
- * Europe/Brussels) local midnight is still the previous day in the app zone, so
- * every occurrence shifted a day back; a weekly row anchored on the 1st then
- * missed the window's first day and landed 6 days off for the whole month, and
- * a monthly row shifted onto a month-end triggered a spurious clamp cascade.
+ * The stepping itself is lib/calculations/recurrence.js's shared string-space
+ * stepper (nextOccurrenceYmd + the fastForwardYmd jump) — one grammar for
+ * every stepper, so a pattern added there lands here too. Pure calendar-string
+ * arithmetic (ADR-009 helpers), so an occurrence lands on the same day on
+ * every host. It used to walk `Date`s instead: the base was the pg DATE read
+ * at SERVER-LOCAL midnight, each occurrence was rendered with toAppDateString
+ * (APP_TIMEZONE) and the fast-forward compared that instant against
+ * `Date.UTC(...)` of the window start — three different calendars. On a host
+ * east of APP_TIMEZONE (e.g. TZ=Asia/Tokyo with the default Europe/Brussels)
+ * local midnight is still the previous day in the app zone, so every
+ * occurrence shifted a day back; a weekly row anchored on the 1st then missed
+ * the window's first day and landed 6 days off for the whole month, and a
+ * monthly row shifted onto a month-end triggered a spurious clamp cascade.
  *
  * Day-stepped patterns fast-forward to just before the window in one jump: a
  * stale fast-cadence row (e.g. daily, last advanced >120 days ago) used to
  * exhaust MAX_OCCURRENCES before reaching next month and silently vanish from
- * the forecast. The jump is a whole number of steps — exactly equivalent to N
- * sequential hops for these patterns — landing at least one step before the
- * window so the boundary occurrence is never skipped. Month-based patterns keep
- * the plain walk (120 monthly hops = 10 years, far beyond any realistic
- * staleness, and bulk month jumps would change the sequential month-end
- * clamping semantics).
+ * the forecast (see fastForwardYmd for the phase/boundary guarantees, and why
+ * month-based patterns keep the plain walk — 120 monthly hops = 10 years, far
+ * beyond any realistic staleness).
  *
  * @param {Date|string} plannedDate DATE column — a `Date` from pg.
  * @param {string} pattern
@@ -158,14 +70,7 @@ function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
   let current = plannedDateToYmd(plannedDate);
   if (!YMD_RE.test(current)) return ymds;
 
-  const stepDays = dayStepForPattern(pattern);
-  if (stepDays) {
-    const deficitDays = diffDaysYmd(current, startYmd);
-    if (deficitDays > stepDays) {
-      const hops = Math.floor(deficitDays / stepDays) - 1;
-      if (hops > 0) current = addDaysYmd(current, hops * stepDays);
-    }
-  }
+  current = fastForwardYmd(current, pattern, startYmd);
 
   for (let i = 0; i < MAX_OCCURRENCES; i++) {
     if (current >= endYmd) break;

@@ -1,8 +1,9 @@
 /**
  * Centralized error handling middleware with typed error classes.
  *
- * Routes throw typed errors (AppError, ValidationError, NotFoundError, ConflictError,
- * UnauthorizedError, ForbiddenError); middleware maps them to the unified API
+ * Routes and services throw typed errors (AppError, ValidationError, NotFoundError,
+ * ConflictError, UnauthorizedError, ForbiddenError, RateLimitedError, UpstreamError,
+ * UpstreamTimeoutError); middleware maps them to the unified API
  * envelope (see docs/adr/026-unified-api-response-envelope.md):
  *   { ok: false, error: { code, message, details? }, meta? }
  *
@@ -77,6 +78,36 @@ export class ConflictError extends AppError {
 export class RateLimitedError extends AppError {
   constructor(message = 'Rate limit exceeded', opts = {}) {
     super(message, { status: 429, code: ApiErrorCode.RATE_LIMITED, ...opts });
+  }
+}
+
+/**
+ * A third-party upstream (price provider, Ollama, research API) failed or
+ * answered garbage: non-2xx status, oversized/malformed payload, broken
+ * redirect chain. 502 tells the client the fault is a dependency, not us or
+ * their request.
+ *
+ * Masking: status ≥ 500, so the handler's existing 5xx split applies — message
+ * verbatim in development, masked in production. Deliberate: although the
+ * wording is authored by our services, it routinely embeds upstream detail
+ * (provider URLs, upstream HTTP statuses, echoed provider text — e.g.
+ * "Ollama call failed: …"), unlike the fully-authored 4xx messages. The stable
+ * `code` still reaches the client for branching; put safe extras in `details`.
+ */
+export class UpstreamError extends AppError {
+  /** @param {string} message */
+  constructor(message, opts = {}) {
+    super(message, { status: 502, code: ApiErrorCode.BAD_GATEWAY, ...opts });
+  }
+}
+
+/**
+ * An upstream call exceeded its deadline. 504 variant of UpstreamError —
+ * same production masking rationale.
+ */
+export class UpstreamTimeoutError extends AppError {
+  constructor(message = 'Upstream request timed out', opts = {}) {
+    super(message, { status: 504, code: ApiErrorCode.GATEWAY_TIMEOUT, ...opts });
   }
 }
 

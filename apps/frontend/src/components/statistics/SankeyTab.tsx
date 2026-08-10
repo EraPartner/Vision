@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
@@ -26,6 +26,7 @@ const GRAPH_KEY = "sankey";
 
 export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply, availableYears }: SankeyTabProps) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { currency } = useChartCurrencyFormatter();
   // Resolved exclusion set (settings + hidden categories) — using raw
   // settings.excluded* leaked hidden-category transactions into the flow diagram

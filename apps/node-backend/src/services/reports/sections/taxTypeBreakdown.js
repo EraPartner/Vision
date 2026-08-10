@@ -12,14 +12,12 @@ import { fmtCurrency, fmtPct, svgHorizontalBars } from '../sectionHelpers.js';
  * @returns {string}
  */
 export function renderTaxTypeBreakdown(data, { currency }) {
-  const totals = data?.totals ?? /** @type {import('../dataFetcherTax.js').LegacyTaxTotalsFallback} */ ({});
-
   const components = [
-    { label: 'TOB (Transaction Tax)',      amount: totals.tobTotal         ?? 0 },
-    { label: 'Dividend WHT',               amount: totals.dividendWHTTotal ?? 0 },
-    { label: 'Capital Gains / Sell Tax',   amount: totals.sellTaxTotal     ?? 0 },
-    { label: 'Broker / Management Fees',   amount: totals.feesTotal        ?? 0 },
-    { label: 'Other Taxes',                amount: totals.otherTaxTotal    ?? 0 },
+    { label: 'TOB (Transaction Tax)',      amount: data?.tobTotal         ?? 0 },
+    { label: 'Dividend WHT',               amount: data?.dividendWHTTotal ?? 0 },
+    { label: 'Capital Gains / Sell Tax',   amount: data?.sellTaxTotal     ?? 0 },
+    { label: 'Broker / Management Fees',   amount: data?.feesTotal        ?? 0 },
+    { label: 'Other Taxes',                amount: data?.otherTaxTotal    ?? 0 },
   ].filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
 
   if (!components.length) {
@@ -44,7 +42,7 @@ export function renderTaxTypeBreakdown(data, { currency }) {
   const tableRows = components.map(c => `<tr>
     <td>${c.label}</td>
     <td class="num neg">${fmtCurrency(c.amount, currency)}</td>
-    <td class="num">${total > 0 ? fmtPct((c.amount / total) * 100, false) : '—'}</td>
+    <td class="num">${total > 0 ? fmtPct((c.amount / total) * 100, true) : '—'}</td>
   </tr>`).join('');
   /* eslint-enable vision-local-money/no-raw-money-arithmetic */
 

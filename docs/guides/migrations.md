@@ -3,7 +3,7 @@ title: Database Migration Guide
 type: guide
 status: active
 date: 2026-04-21
-updated: 2026-08-02
+updated: 2026-08-09
 tags: [guide, database, migrations, alembic, postgresql, phase-1, destructive-ddl, ci, performance]
 description: How to create, run, and manage database migrations using Alembic
 aliases: [migration-guide, alembic-guide, database-schema, schema-changes]
@@ -20,9 +20,12 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
 |---------|--------|-------------|
 | `alembic upgrade head` | `bun run db:upgrade` | Run all pending migrations |
 | `alembic revision -m "message"` | `bun run db:revision -- "message"` | Create a new migration |
-| `alembic current` | — | Check current schema version |
-| `alembic history` | — | View full migration chain |
-| `alembic downgrade -1` | — | Rollback last migration |
+| `alembic current` | `bun run db:current` | Check current schema version |
+| `alembic history` | `bun run db:history` | View full migration chain |
+| `alembic downgrade -1` | `bun run db:downgrade` | Rollback last migration |
+
+> [!warning] Don't invoke bare `alembic` for anything that writes the version table
+> Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, which is too narrow for this chain's revision ids — a fresh database dies on revision 3 with `value too long for type character varying(32)`. The `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` scripts route through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `VARCHAR(64)` preflight first. See [[docs/reference/scripts|Scripts Reference]].
 
 ## How Migrations Work
 

@@ -252,30 +252,15 @@ async function runForecastEngine({
 
   // Ensemble: inverse-MSE weighted combination of point methods.
   try {
-    /**
-     * @type {Array<
-     *   import('../../../repositories/cashflowForecastAccuracyRepository.js').AccuracyRow
-     *   | import('./accuracyStore.js').FallbackAccuracyRow
-     * >}
-     */
+    /** @type {import('./accuracyStore.js').AccuracyRecord[]} */
     let accuracyRows = [];
     try {
       accuracyRows = await getLatestAccuracyByMethod({ userId });
     } catch {
       // DB unavailable — equal-weight fallback
     }
-    // NOTE (surfaced by typing, not fixed here — see accuracyStore.js's
-    // FallbackAccuracyRow doc comment): the real DB path returns snake_case
-    // rows (method_id/sample_days) but ensemble.computeWeights reads
-    // camelCase (methodId/sampleDays). `r.methodId` is therefore always
-    // `undefined` for DB-backed rows, `methodIds.includes(undefined)` is
-    // always false, `rows` in computeWeights ends up empty, and it always
-    // returns the equal-weight fallback Map — the persisted-accuracy
-    // weighting this pipeline exists for never actually activates outside
-    // the (differently-shaped) in-memory fallback path. Cast below preserves
-    // current behavior; see report for the fix.
     const weights = ensemble.computeWeights(
-      /** @type {Array<{methodId: string, rmse: number, sampleDays?: number}>} */ (accuracyRows),
+      accuracyRows,
       POINT_METHODS.map((m) => m.id),
     );
     const ensembleSeries = ensemble.forecast({

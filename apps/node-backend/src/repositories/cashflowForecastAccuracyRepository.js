@@ -16,7 +16,7 @@ import { query } from '../database/connection.js';
  * @property {number} rmse
  * @property {number} mape
  * @property {number} sample_days
- * @property {string} recorded_at
+ * @property {Date} recorded_at - TIMESTAMPTZ, pg default parser (see types/rows.js)
  */
 
 /**

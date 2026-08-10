@@ -8,7 +8,7 @@ import {Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown,
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/features/categories/AddCategoryDialog";
 import {cn} from "@/lib/utils";
@@ -32,6 +32,7 @@ type EditTarget = {
 
 export default function CategoriesPage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());

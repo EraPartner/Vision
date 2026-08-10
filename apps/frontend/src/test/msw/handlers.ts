@@ -348,8 +348,10 @@ export const defaultHandlers = [
     // Tags API — used by TagPicker inside dialogs/forms across the app.
     // Returning an empty list keeps async fetches from leaking past test
     // teardown and avoids "intercepted a request without a matching request
-    // handler" warnings flooding the test output.
-    http.get(`${API_BASE}/api/tags`, () => ok([])),
+    // handler" warnings flooding the test output. Real route answers the
+    // opt-in-pagination list body: `{items, total, links}` (no limit/offset
+    // when the request did not paginate — routes/tags.js).
+    http.get(`${API_BASE}/api/tags`, () => ok({ items: [], total: 0, links: [] })),
     http.get(`${API_BASE}/api/transactions`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0, links: [] }),
     ),
@@ -482,7 +484,9 @@ export const defaultHandlers = [
         }),
     ),
 
-    http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [] })),
+    // Real route answers listBody(items, total, page) — `{items, total}`
+    // (apps/node-backend/src/routes/splits.js, GET /owed).
+    http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [], total: 0 })),
 
     http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [], total: 0 })),
     http.get(`${API_BASE}/api/market/search`, () => ok({ results: [] })),
@@ -821,8 +825,10 @@ export const defaultHandlers = [
     http.post(`${API_BASE}/api/splits/:id/settle`, () =>
         ok({ ...SPLIT_STUB, is_settled: true }),
     ),
+    // Real route answers listBody(splits, total, page) — `{items, total}`, never
+    // a `total_owed` field (apps/node-backend/src/routes/splits.js, GET /owed/:id).
     http.get(`${API_BASE}/api/splits/owed/:recipientId`, () =>
-        ok({ items: [], total_owed: 0 }),
+        ok({ items: [], total: 0 }),
     ),
     http.post(`${API_BASE}/api/splits/owed/:recipientId/settle-all`, () =>
         ok({ message: "Settled", settled_count: 0 }),

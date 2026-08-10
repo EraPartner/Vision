@@ -23,6 +23,8 @@ const {
   ConflictError,
   UnauthorizedError,
   ForbiddenError,
+  UpstreamError,
+  UpstreamTimeoutError,
   createErrorHandler,
 } = await import('../src/middleware/errorHandler.js');
 
@@ -66,6 +68,21 @@ describe('typed error classes', () => {
     const e = new ConflictError('dup');
     expect(e.status).toBe(409);
     expect(e.code).toBe('CONFLICT');
+  });
+
+  it('UpstreamError is 502 / BAD_GATEWAY', () => {
+    const e = new UpstreamError('Binance API error: 503');
+    expect(e.status).toBe(502);
+    expect(e.code).toBe('BAD_GATEWAY');
+    expect(e instanceof AppError).toBe(true);
+  });
+
+  it('UpstreamTimeoutError is 504 / GATEWAY_TIMEOUT with a default message', () => {
+    const e = new UpstreamTimeoutError();
+    expect(e.status).toBe(504);
+    expect(e.code).toBe('GATEWAY_TIMEOUT');
+    expect(e.message).toBe('Upstream request timed out');
+    expect(e instanceof AppError).toBe(true);
   });
 });
 
@@ -124,6 +141,45 @@ describe('createErrorHandler', () => {
     expect(res.json).toHaveBeenCalledWith({
       ok: false,
       error: { code: 'UPSTREAM_DOWN', message: 'An internal server error occurred. Please try again later.' },
+    });
+  });
+
+  // UpstreamError/UpstreamTimeoutError deliberately follow the 5xx masking
+  // split: their wording routinely embeds upstream detail (provider URLs,
+  // upstream HTTP statuses), so production shows only the stable code.
+  it('maps UpstreamError to 502 — message verbatim in development, masked in production', () => {
+    handler = createErrorHandler(() => false);
+    handler(new UpstreamError('HTTP 503 from https://provider.example/prices'), req, res, () => {});
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: false,
+      error: { code: 'BAD_GATEWAY', message: 'HTTP 503 from https://provider.example/prices' },
+    });
+
+    const prodRes = mockRes();
+    createErrorHandler(() => true)(new UpstreamError('HTTP 503 from https://provider.example/prices'), req, prodRes, () => {});
+    expect(prodRes.status).toHaveBeenCalledWith(502);
+    expect(prodRes.json).toHaveBeenCalledWith({
+      ok: false,
+      error: { code: 'BAD_GATEWAY', message: 'An internal server error occurred. Please try again later.' },
+    });
+  });
+
+  it('maps UpstreamTimeoutError to 504 with the same masking split', () => {
+    handler = createErrorHandler(() => false);
+    handler(new UpstreamTimeoutError('Kinesis request timed out after 15000ms'), req, res, () => {});
+    expect(res.status).toHaveBeenCalledWith(504);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: false,
+      error: { code: 'GATEWAY_TIMEOUT', message: 'Kinesis request timed out after 15000ms' },
+    });
+
+    const prodRes = mockRes();
+    createErrorHandler(() => true)(new UpstreamTimeoutError('Kinesis request timed out after 15000ms'), req, prodRes, () => {});
+    expect(prodRes.status).toHaveBeenCalledWith(504);
+    expect(prodRes.json).toHaveBeenCalledWith({
+      ok: false,
+      error: { code: 'GATEWAY_TIMEOUT', message: 'An internal server error occurred. Please try again later.' },
     });
   });
 });

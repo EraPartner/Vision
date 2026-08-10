@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags, AlertTriangle } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats, useMonthlySummary } from "@/hooks/useFilteredDashboardStats";
@@ -39,6 +39,7 @@ type GraphExclusions = Record<string, boolean>;
 
 export default function DashboardPage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || 'EUR';
     const locale = numberFormatToLocale(appSettings.numberFormat);

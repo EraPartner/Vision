@@ -29,10 +29,13 @@ export function renderTaxMonthlyTrend(data, { currency }) {
     return a.month - b.month;
   });
 
+  /** @param {import('../dataFetcherTax.js').TaxMonthBucket} m */
+  const monthTaxes = (m) => (m.tob ?? 0) + (m.wht ?? 0) + (m.sell ?? 0) + (m.other ?? 0);
+
   const groups = sorted.map(m => ({
     label: fmtMonthLabel(m.year, m.month),
-    taxes: m.taxes ?? 0,
-    fees:  m.fees  ?? 0,
+    taxes: monthTaxes(m),
+    fees:  m.fees ?? 0,
   }));
 
   const seriesDefs = [
@@ -42,10 +45,11 @@ export function renderTaxMonthlyTrend(data, { currency }) {
   const chart = svgGenericGroupedBarChart(groups, seriesDefs);
 
   const tableRows = sorted.map(m => {
-    const total = (m.taxes ?? 0) + (m.fees ?? 0);
+    const taxes = monthTaxes(m);
+    const total = taxes + (m.fees ?? 0);
     return `<tr>
       <td>${fmtMonthLabel(m.year, m.month)}</td>
-      <td class="num neg">${fmtCurrency(m.taxes ?? 0, currency)}</td>
+      <td class="num neg">${fmtCurrency(taxes, currency)}</td>
       <td class="num neg">${fmtCurrency(m.fees ?? 0, currency)}</td>
       <td class="num neg">${fmtCurrency(total, currency)}</td>
     </tr>`;

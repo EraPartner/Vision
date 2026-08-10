@@ -6,7 +6,7 @@ import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { loadingSurfaceProps } from '@/lib/loadingSurface';
+import { useLoadingSurfaceProps } from '@/lib/loadingSurface';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -113,6 +113,7 @@ function AdminTokenCard() {
 
 export default function AdminOverviewPage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
 
     const { data: dbStats, isLoading: dbLoading } = useQuery({
         queryKey: adminKeys.dbStats,

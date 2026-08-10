@@ -71,4 +71,62 @@ describe('expandOccurrences', () => {
     );
     expect(out).toEqual(['2026-05-15', '2026-06-15']);
   });
+
+  it('truncates at the 500-occurrence cap BEFORE reaching the horizon for a stale daily row', () => {
+    // A daily row anchored 731 days before the horizon exhausts the default
+    // cap 232 days short of it: 500 occurrences, base first, ending
+    // 2025-05-14 << 2026-01-01. This truncation is load-bearing for callers
+    // that window the result AFTER expansion — it is exactly why
+    // infoRepositoryPlanned could not reuse this function for its next-month
+    // window and fast-forwards stale day-cadence anchors instead
+    // (fastForwardYmd). Do not "fix" it here without auditing those windows.
+    const out = expandOccurrences(
+      { planned_date: '2024-01-01', is_recurring: true, recurrence_pattern: 'daily' },
+      '2026-01-01',
+    );
+    expect(out).toHaveLength(500);
+    expect(out[0]).toBe('2024-01-01');
+    expect(out[out.length - 1]).toBe('2025-05-14');
+  });
+
+  it('honors a caller-supplied maxOccurrences cap', () => {
+    const out = expandOccurrences(
+      { planned_date: '2026-01-05', is_recurring: true, recurrence_pattern: 'weekly' },
+      '2026-12-31',
+      { maxOccurrences: 3 },
+    );
+    expect(out).toEqual(['2026-01-05', '2026-01-12', '2026-01-19']);
+  });
+
+  // PRESERVED DIVERGENCE (documented in lib/calculations/recurrence.js): this
+  // Date-space walk keeps the anchor's UTC time-of-day, so a summer-anchored
+  // day cadence crossing the fall-back DST transition (Europe/Brussels,
+  // 2026-10-25) renders every later occurrence one calendar day EARLY — unlike
+  // the string-space stepper (nextOccurrenceYmd), which infoRepositoryPlanned
+  // uses and which is calendar-exact (Oct 14 + 2 weeks = Oct 28, not Oct 27).
+  // These pins assert what forecast/AI-chat consumers get TODAY; changing them
+  // means changing published schedules, which is a decision, not a refactor.
+  it('PINS the fall-back drift: a summer-anchored weekly row lands a day early after DST ends', () => {
+    const out = expandOccurrences(
+      { planned_date: '2026-10-14', is_recurring: true, recurrence_pattern: 'weekly' },
+      '2026-11-30',
+    );
+    expect(out).toEqual([
+      '2026-10-14', '2026-10-21', '2026-10-27', '2026-11-03',
+      '2026-11-10', '2026-11-17', '2026-11-24',
+    ]);
+  });
+
+  it('PINS the fall-back drift: a summer-anchored daily row repeats the transition day and stops short of an inclusive horizon', () => {
+    const out = expandOccurrences(
+      { planned_date: '2026-10-23', is_recurring: true, recurrence_pattern: 'daily' },
+      '2026-10-28',
+    );
+    // 2026-10-25 appears twice; 2026-10-28 is missing even though the horizon
+    // is inclusive, because the drifted instant sits 23h past the horizon's
+    // start-of-day.
+    expect(out).toEqual([
+      '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-25', '2026-10-26', '2026-10-27',
+    ]);
+  });
 });

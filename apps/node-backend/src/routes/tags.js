@@ -13,7 +13,7 @@
 import { Router } from 'express';
 import tagService from '../services/tagService.js';
 import { validateIdParam } from '../middleware/validation.js';
-import { parsePagination } from '../lib/pagination.js';
+import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -22,12 +22,14 @@ import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
+// Pagination is opt-in: without limit/offset this still answers the complete
+// list (the tag pickers/filters render all of them), so no client is truncated.
 router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { active = 'true' } = req.query;
   const activeFilter = active === 'all' ? null : active !== 'false';
-  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
-  const { items, total } = await tagService.list({ active: activeFilter, limit, offset });
-  res.ok({ items, total, limit, offset, links: [] });
+  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const { items, total } = await tagService.list({ active: activeFilter, ...(page ?? {}) });
+  res.ok({ ...listBody(items, total, page), links: [] });
 });
 
 router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {

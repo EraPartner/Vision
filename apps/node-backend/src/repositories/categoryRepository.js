@@ -4,13 +4,13 @@
  */
 
 import { query } from '../database/connection.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
+import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.js';
 
 /** @typedef {import('../types/rows.js').EnrichedCategoryRow} EnrichedCategoryRow */
 
 /**
  * @typedef {object} CategoryFilters
- * @property {number} [limit]
+ * @property {number|null} [limit]
  * @property {number} [offset]
  * @property {string|null} [general]
  * @property {string|null} [detail]
@@ -20,10 +20,14 @@ import { buildSetClauses } from '../lib/sqlClauses.js';
 
 export const categoryRepository = {
   /**
+   * `limit` is optional and defaults to unbounded — the category pickers/pages
+   * render every row and have no paging, so only an explicit limit/offset
+   * narrows the list (buildLimitOffset).
+   *
    * @param {CategoryFilters} [filters]
    * @returns {Promise<EnrichedCategoryRow[]>}
    */
-  async getAll({ limit = 50, offset = 0, general = null, detail = null, search = null, active = true } = {}) {
+  async getAll({ limit = null, offset = 0, general = null, detail = null, search = null, active = true } = {}) {
     let sql = `SELECT * FROM categories WHERE 1=1`;
     const params = [];
     let paramIdx = 1;
@@ -42,12 +46,11 @@ export const categoryRepository = {
     if (search) {
       const sp = `%${search}%`;
       sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
-      paramIdx++;
       params.push(sp);
     }
 
-    sql += ` ORDER BY general, detail LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
-    params.push(limit, offset);
+    sql += ` ORDER BY general, detail`;
+    sql += buildLimitOffset(params, { limit, offset });
 
     const result = await query(sql, params);
     return result.rows.map(enrichCategory);

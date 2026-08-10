@@ -155,7 +155,7 @@ components:
 
     CategoryList:
       allOf:
-        - $ref: "#/components/schemas/PaginationFields"
+        - $ref: "#/components/schemas/OptionalPaginationFields"
         - type: object
           required: [items, links]
           properties:
@@ -268,7 +268,7 @@ components:
 
     TagList:
       allOf:
-        - $ref: "#/components/schemas/PaginationFields"
+        - $ref: "#/components/schemas/OptionalPaginationFields"
         - type: object
           required: [items]
           properties:
@@ -1226,7 +1226,9 @@ components:
     # backend has never implemented.
     Split:
       type: object
-      required: [id, transaction_id, recipient_id, amount, amount_paid, is_settled, created_at, updated_at]
+      # recipient_name/note are required + nullable: formatSplit always emits
+      # them (`row.recipient_name || null` / `row.note`), never omits them.
+      required: [id, transaction_id, recipient_id, recipient_name, amount, amount_paid, note, is_settled, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -1255,9 +1257,11 @@ components:
           format: date-time
 
     # A split_payments row (POST /api/splits/{id}/pay, GET /{id}/payments).
+    # note is required + nullable: formatPayment spreads the full row, and the
+    # column is always selected (SQL NULL → null on the wire).
     SplitPayment:
       type: object
-      required: [id, split_id, amount, paid_at, created_at]
+      required: [id, split_id, amount, note, paid_at, created_at]
       properties:
         id:
           type: integer
@@ -1492,6 +1496,52 @@ components:
           type: string
           nullable: true
 
+    # `data` of GET /api/ai/conversations/{id} and POST /api/ai/conversations
+    # (routes/ai.js — getConversationWithMessages / createEmptyConversation):
+    # one conversation row plus its full ordered message history (empty on
+    # create).
+    AiConversationDetail:
+      type: object
+      required: [conversation, messages]
+      properties:
+        conversation:
+          $ref: "#/components/schemas/AiConversation"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiMessage"
+
+    # `data` of GET /api/ai/status (routes/ai.js) — normalized Ollama
+    # reachability. Every field is always emitted; error/code/hint are null
+    # when the daemon is reachable (or no hint applies).
+    OllamaStatus:
+      type: object
+      required: [ok, baseUrl, displayUrl, modelCount, error, code, hint, defaultModel, enabled]
+      properties:
+        ok:
+          type: boolean
+        baseUrl:
+          type: string
+        # baseUrl with `host.docker.internal` rewritten to `localhost` for
+        # display in the settings UI.
+        displayUrl:
+          type: string
+        modelCount:
+          type: integer
+        error:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        hint:
+          type: string
+          nullable: true
+        defaultModel:
+          type: string
+        enabled:
+          type: boolean
+
     # ─── Portfolio Import ─────────────────────────────────────────────────────
     PortfolioImportBatch:
       type: object
@@ -1676,9 +1726,11 @@ paths:
           schema:
             type: boolean
           description: Filter by active status (omit for all)
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Tag list
+          description: Tag list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -2339,14 +2391,8 @@ paths:
       operationId: getCategories
       tags: [Categories]
       parameters:
-        - in: query
-          name: limit
-          schema:
-            type: integer
-        - in: query
-          name: offset
-          schema:
-            type: integer
+        - $ref: "#/components/parameters/OptionalLimit"
+        - $ref: "#/components/parameters/OptionalOffset"
         - in: query
           name: search
           schema:
@@ -2357,7 +2403,7 @@ paths:
             type: boolean
       responses:
         "200":
-          description: Category list
+          description: Category list (complete unless limit/offset are supplied)
           content:
             application/json:
               schema:
@@ -5211,24 +5257,22 @@ paths:
         required: true
         content:
           application/json:
+            # Flat single-split body (routes/splits.js createSplitSchema) — the
+            # nested description/shares[] shape described a split model the
+            # backend has never implemented.
             schema:
               type: object
-              required: [transaction_id, description, shares]
+              required: [transaction_id, recipient_id, amount]
               properties:
                 transaction_id:
                   type: integer
-                description:
+                recipient_id:
+                  type: integer
+                amount:
+                  type: number
+                note:
                   type: string
-                shares:
-                  type: array
-                  items:
-                    type: object
-                    required: [recipient_id, amount]
-                    properties:
-                      recipient_id:
-                        type: integer
-                      amount:
-                        type: number
+                  nullable: true
       responses:
         "201":
           description: Created split
@@ -5251,14 +5295,29 @@ paths:
         required: true
         content:
           application/json:
+            # routes/splits.js batchSplitsSchema + batchSplitRowSchema: one
+            # parent transaction, one row per recipient share. An empty splits[]
+            # or any malformed row rejects the whole request (all-or-nothing).
             schema:
               type: object
-              required: [splits]
+              required: [transaction_id, splits]
               properties:
+                transaction_id:
+                  type: integer
                 splits:
                   type: array
+                  minItems: 1
                   items:
                     type: object
+                    required: [recipient_id, amount]
+                    properties:
+                      recipient_id:
+                        type: integer
+                      amount:
+                        type: number
+                      note:
+                        type: string
+                        nullable: true
       responses:
         "201":
           description: Created splits
@@ -5580,11 +5639,17 @@ paths:
       tags: [AI]
       responses:
         "200":
-          description: Status
+          description: Status (always a success envelope — the health probe
+            never throws; unreachable is reported via `ok:false` + error/code)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OllamaStatus"
 
   /api/ai/models:
     get:
@@ -5662,16 +5727,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [conversation, messages]
-                        properties:
-                          conversation:
-                            $ref: "#/components/schemas/AiConversation"
-                          messages:
-                            type: array
-                            description: Always empty on create.
-                            items:
-                              $ref: "#/components/schemas/AiMessage"
+                        $ref: "#/components/schemas/AiConversationDetail"
 
   /api/ai/conversations/{id}:
     parameters:
@@ -5690,7 +5746,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AiConversationDetail"
     patch:
       summary: Update conversation title
       operationId: updateAiConversation

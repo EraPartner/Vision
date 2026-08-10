@@ -3,8 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-07-23
-last_modified: 2026-07-23
+updated: 2026-08-09
+last_modified: 2026-08-09
 tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078, auto-link, planned-match, account-disclosure, wp-b6, july-2026]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
@@ -226,6 +226,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Look up or create recipients
 - Look up or create categories (via recipient default or explicit mapping)
 - Resolve recipient aliases
+- **Unresolved rows stay `'matched'` (2026-08-09):** a row whose `recipient_raw` is blank or unnormalizable gets `status='matched'` with a NULL `resolved_recipient_id` — deliberately, because `'matched'` is the only staging status the review preview (`getPreviewRows`) and the recipient/category override endpoints accept, so it is what keeps the row visible and fixable on `ImportReviewPage`. `prepareImport` forces `awaiting_review` whenever `unresolved > 0`; commit decides any row still lacking a recipient into `'error'` (see phase 4).
 - Emit progress events: `{ phase: 'matching', current, total }`
 
 #### 4. **Commit** (`commitBatch`)
@@ -234,6 +235,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - **Transaction Hash Deduplication (2026-05-14):** Transaction INSERT statements now include a `tx_hash` column and use `ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` for race-safe deduplication. The `tx_hash` is computed from `date|amount|recipient|memo|bank_account` and stored in the canonical `transactions` table (via migration [[alembic/versions/0036_add_transactions_tx_hash.py]]). Intra-batch deduplication tracks committed hashes in a Set; a second row with an identical `tx_hash` in the same batch is marked `duplicate`.
 - Errors are captured and logged per row (the current pipeline does **not** write per-bank raw
   tables — the original CSV line stays in `import_staging_rows.raw_data`)
+- **Unresolved-recipient decision (2026-08-09):** before any chunk is planned, `commitBatch` marks every drained row whose effective recipient (`user_override_recipient_id ?? resolved_recipient_id`) is missing as `status='error'` with `error_message` `"unresolved recipient — no recipient was matched or assigned in review"`, and counts it into `rows_error`. Previously such rows were attempted against `transactions.recipient_id NOT NULL`, surfacing as a 23502 constraint error — and, post-batching (#142), demoting the row's whole chunk from the bulk-INSERT path to the per-row replay.
 - Return final counts: `{ imported, duplicates, errors }`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
 

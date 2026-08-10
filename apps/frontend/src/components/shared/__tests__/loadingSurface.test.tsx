@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ResearchAnalystTab } from "@/components/research/ResearchAnalystTab";
 import { renderWithApp } from "@/test/renderWithApp";
 
@@ -11,7 +11,9 @@ import { renderWithApp } from "@/test/renderWithApp";
  * The loading-surface contract (WP: skeleton a11y):
  *   - every `Skeleton` is a decorative bone, hidden from the a11y tree;
  *   - exactly ONE element per loading surface carries role="status", so a grid
- *     of twelve bones announces once instead of twelve times.
+ *     of twelve bones announces once instead of twelve times;
+ *   - the announced label comes from the locale dictionary (`common.loading`),
+ *     not a hardcoded English literal.
  */
 describe("loading surface a11y", () => {
     it("Skeleton is decorative by default", () => {
@@ -24,15 +26,17 @@ describe("loading surface a11y", () => {
         expect(bone).not.toHaveAttribute("role");
     });
 
-    it("a multi-skeleton surface exposes exactly one status and no visible bones", () => {
-        // Arrange + Act — SectionLoader is the canonical surface (3 bones)
-        const { container } = render(<SectionLoader />);
+    it("a multi-skeleton surface exposes exactly one status and no visible bones", async () => {
+        // Arrange + Act — SectionLoader is the canonical surface (3 bones);
+        // it reads the label from the dictionary, so it needs the providers.
+        const { container } = renderWithApp(<SectionLoader />);
 
         // Assert — one announcer…
         const statuses = screen.getAllByRole("status");
         expect(statuses).toHaveLength(1);
         expect(statuses[0]).toHaveAttribute("aria-busy", "true");
-        expect(statuses[0]).toHaveAccessibleName("Loading");
+        // …labelled from the locale dictionary once the async dict resolves
+        await waitFor(() => expect(statuses[0]).toHaveAccessibleName("Loading..."));
 
         // …and every bone inside it is hidden
         const bones = container.querySelectorAll(".animate-shimmer");
@@ -40,16 +44,21 @@ describe("loading surface a11y", () => {
         bones.forEach((bone) => expect(bone).toHaveAttribute("aria-hidden", "true"));
     });
 
-    it("a lone Skeleton that IS the surface announces instead of hiding", () => {
-        // Arrange + Act — loadingSurfaceProps must cancel Skeleton's aria-hidden,
-        // or the announcing element would be hidden from the a11y tree.
-        render(<Skeleton {...loadingSurfaceProps} className="h-[320px]" />);
+    it("a lone Skeleton that IS the surface announces instead of hiding", async () => {
+        // Arrange + Act — useLoadingSurfaceProps must cancel Skeleton's
+        // aria-hidden, or the announcing element would be hidden from the
+        // a11y tree.
+        function LoneSkeletonSurface() {
+            const loadingSurfaceProps = useLoadingSurfaceProps();
+            return <Skeleton {...loadingSurfaceProps} className="h-[320px]" />;
+        }
+        renderWithApp(<LoneSkeletonSurface />);
 
         // Assert
         const status = screen.getByRole("status");
         expect(status).not.toHaveAttribute("aria-hidden");
         expect(status).toHaveAttribute("aria-busy", "true");
-        expect(status).toHaveAccessibleName("Loading");
+        await waitFor(() => expect(status).toHaveAccessibleName("Loading..."));
     });
 
     it("a real loading surface announces once for all of its bones", () => {

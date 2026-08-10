@@ -771,43 +771,73 @@ describe('getDeductibles', () => {
 
 describe('dispatchTool', () => {
   it('returns UNKNOWN_TOOL for unregistered name', async () => {
-    const result = await dispatchTool('doesNotExist', {});
+    const { result } = await dispatchTool('doesNotExist', {});
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('UNKNOWN_TOOL');
     expect(result.error.availableTools).toContain('getSpendByCategory');
   });
 
   it('returns VALIDATION_ERROR when args fail validation', async () => {
-    const result = await dispatchTool('getSpendByCategory', { from: 'bad' });
+    const { args, result } = await dispatchTool('getSpendByCategory', { from: 'bad' });
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('VALIDATION_ERROR');
     expect(result.error.field).toBe('from');
+    // Coercion succeeded — `args` is the object the tool's validator saw.
+    expect(args).toEqual({ from: 'bad' });
   });
 
-  it('parses arguments from a JSON string', async () => {
+  it('parses arguments from a JSON string and returns the coerced args', async () => {
     transactionRepository.getAll.mockResolvedValueOnce([]);
 
-    const result = await dispatchTool(
+    const { args, result } = await dispatchTool(
       'getSpendByCategory',
       JSON.stringify({ from: '2025-01-01', to: '2025-01-31' }),
     );
 
     expect(result.ok).toBe(true);
+    // The single coercion point reports back exactly what the tool ran with.
+    expect(args).toEqual({ from: '2025-01-01', to: '2025-01-31' });
     expect(transactionRepository.getAll).toHaveBeenCalled();
   });
 
-  it('rejects malformed JSON argument string', async () => {
-    const result = await dispatchTool('getSpendByCategory', '{not valid json');
-    expect(result.ok).toBe(false);
-    expect(result.error.code).toBe('VALIDATION_ERROR');
+  it('rejects malformed JSON argument string — raw value returned, LLM-facing error shape pinned', async () => {
+    const { args, result } = await dispatchTool('getSpendByCategory', '{not valid json');
+    // The tool never ran; the honest record is the raw string next to the error.
+    expect(args).toBe('{not valid json');
+    // Byte-compatible retry contract: the exact `{ok:false, error:{...}}`
+    // payload the model receives (formatError over ToolValidationError).
+    // `field: null` is what ToolValidationError carries when no field is
+    // implicated — it survives JSON.stringify, so it is part of the wire shape.
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        field: null,
+        message: expect.stringMatching(/^arguments is not valid JSON: /),
+      },
+    });
+  });
+
+  it('rejects a JSON string encoding a non-object', async () => {
+    const { args, result } = await dispatchTool('getSpendByCategory', '"just a string"');
+    expect(args).toBe('"just a string"');
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        field: null,
+        message: 'arguments must be a JSON object',
+      },
+    });
   });
 
   it('treats null arguments as empty object', async () => {
     investmentRepository.getAll.mockResolvedValueOnce([]);
 
-    const result = await dispatchTool('getPortfolioHoldings', null);
+    const { args, result } = await dispatchTool('getPortfolioHoldings', null);
 
     expect(result.ok).toBe(true);
+    expect(args).toEqual({});
   });
 
   it('getToolSchemas returns OpenAI-compatible function definitions', () => {

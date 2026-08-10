@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../../config/logger.js';
+import { UpstreamError } from '../../middleware/errorHandler.js';
 import {
   KINESIS_BASE_URL,
   KINESIS_DEFAULT_TIMEFRAME,
@@ -177,7 +178,7 @@ const CUSTOM_FETCH_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — provider JSON is tin
 function _assertResponseWithinCap(res, provider) {
   const declaredLength = Number(res.headers?.get?.('content-length') || 0);
   if (declaredLength > CUSTOM_FETCH_MAX_BYTES) {
-    throw new Error(`${provider} response too large: ${declaredLength} bytes`);
+    throw new UpstreamError(`${provider} response too large: ${declaredLength} bytes`);
   }
 }
 
@@ -205,17 +206,17 @@ async function _fetchJson(url) {
 
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get('location');
-      if (!location) throw new Error(`HTTP ${res.status} redirect without Location`);
+      if (!location) throw new UpstreamError(`HTTP ${res.status} redirect without Location`);
       current = new URL(location, current).toString(); // re-validated at top of next loop
       continue;
     }
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new UpstreamError(`HTTP ${res.status}`);
 
     _assertResponseWithinCap(res, 'Custom provider');
     return res.json();
   }
-  throw new Error('Too many redirects');
+  throw new UpstreamError('Too many redirects');
 }
 
 // ─── Custom endpoint parsing ──────────────────────────────────────────────────
@@ -479,7 +480,7 @@ export const PROVIDERS = {
         headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(8_000),
       });
-      if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
+      if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
       _assertResponseWithinCap(res, 'Binance');
       const data = await res.json();
 

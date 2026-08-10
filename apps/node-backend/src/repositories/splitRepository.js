@@ -572,15 +572,29 @@ export const splitRepository = {
   /**
    * Settle a split manually (mark as fully paid regardless of payments).
    *
-   * NOTE the `RETURNING *` row carries no `recipient_name` / `amount_paid`, so
-   * the emitted `FormattedSplit` has `recipient_name: null` and `amount_paid: 0`
-   * (`toDecimal(undefined)` → 0) rather than the split's real paid total.
+   * Same re-select idiom as createSplitAtomic: a bare `RETURNING *` row has no
+   * `recipient_name`/`amount_paid` columns, so the settle response used to
+   * fabricate `recipient_name: null` and `amount_paid: 0` (`toDecimal(undefined)`
+   * → 0) even on a fully-paid split. The CTE re-selects the updated row joined
+   * to recipients plus the per-split payment aggregate so the emitted
+   * `FormattedSplit` carries the real values.
    *
    * @param {number} splitId
    * @returns {Promise<FormattedSplit|null>}
    */
   async settleSplit(splitId) {
-    const sql = `UPDATE transaction_splits SET is_settled = true WHERE id = $1 RETURNING *`;
+    const sql = `
+      WITH settled AS (
+        UPDATE transaction_splits SET is_settled = true WHERE id = $1 RETURNING *
+      )
+      SELECT settled.*, r.name AS recipient_name,
+             COALESCE(sp_agg.paid, 0) AS amount_paid
+      FROM settled
+      LEFT JOIN recipients r ON r.id = settled.recipient_id
+      LEFT JOIN LATERAL (
+        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = settled.id
+      ) sp_agg ON true
+    `;
     const result = await query(sql, [splitId]);
     return result.rows[0] ? formatSplit(result.rows[0]) : null;
   },
@@ -612,17 +626,27 @@ export const splitRepository = {
   },
 
   /**
-   * Fetch a single split row (no join). Used by route-layer validation
-   * before writes so we can pass split.amount into validatePaymentAmount.
+   * Fetch a single split row. Used by route-layer validation before writes so
+   * we can pass split.amount into validatePaymentAmount.
    *
-   * Same caveat as settleSplit: no join, so `recipient_name` is null and
-   * `amount_paid` is 0.
+   * Joined to recipients and the per-split payment aggregate (same shape as
+   * getSplitsByTransaction) so the row carries the real `recipient_name` /
+   * `amount_paid` instead of the fabricated null/0 a bare `SELECT *` produced.
    *
    * @param {number} splitId
    * @returns {Promise<FormattedSplit|null>}
    */
   async getSplitById(splitId) {
-    const sql = `SELECT * FROM transaction_splits WHERE id = $1`;
+    const sql = `
+      SELECT ts.*, r.name AS recipient_name,
+             COALESCE(sp_agg.paid, 0) AS amount_paid
+      FROM transaction_splits ts
+      LEFT JOIN recipients r ON ts.recipient_id = r.id
+      LEFT JOIN LATERAL (
+        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ts.id
+      ) sp_agg ON true
+      WHERE ts.id = $1
+    `;
     const result = await query(sql, [splitId]);
     return result.rows[0] ? formatSplit(result.rows[0]) : null;
   },

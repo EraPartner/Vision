@@ -12,13 +12,13 @@ import { escapeHtml, fmtCurrency, svgGenericGroupedBarChart } from '../sectionHe
  * @returns {string}
  */
 export function renderTaxByAssetClass(data, { currency }) {
-  const byAssetClass = data?.byAssetClass ?? {};
+  const byAssetClass = data?.byAssetClass ?? [];
 
-  const classes = Object.entries(byAssetClass)
-    .map(([label, vals]) => ({
-      label,
-      taxes: vals.taxes ?? 0,
-      fees:  vals.fees  ?? 0,
+  const classes = byAssetClass
+    .map((b) => ({
+      label: b.assetClass ?? 'other',
+      taxes: b.taxes ?? 0,
+      fees:  b.fees  ?? 0,
     }))
     .filter(c => c.taxes > 0 || c.fees > 0)
     .sort((a, b) => (b.taxes + b.fees) - (a.taxes + a.fees));

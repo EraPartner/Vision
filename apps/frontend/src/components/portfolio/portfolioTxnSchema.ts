@@ -41,6 +41,25 @@ export interface PortfolioTxnFlags {
   isGift: boolean;
 }
 
+/**
+ * The fees/taxes garbage guard both schemas apply to a NON-EMPTY field (empty
+ * means "omitted" on Add and "cleared to 0" on Edit — never an error). Exported
+ * so the dialogs' render-time inline field errors use the exact predicate the
+ * submit gate runs, and the two can never disagree.
+ */
+export function invalidOptionalMoney(value: string): boolean {
+  if (!value) return false;
+  const n = parseDecimal(value, NaN);
+  return !Number.isFinite(n) || n < 0;
+}
+
+/** Same, for the FX rate: a typed value must be strictly positive. */
+export function invalidOptionalFxRate(value: string): boolean {
+  if (!value) return false;
+  const n = parseDecimal(value, NaN);
+  return !Number.isFinite(n) || n <= 0;
+}
+
 const rawFields = z.object({
   date: z.string(),
   amount: z.string(),
@@ -96,9 +115,9 @@ export function addPortfolioTxnSchema({ isBuySell, isGift }: PortfolioTxnFlags) 
     const taxes = raw.taxes ? parseDecimal(raw.taxes, NaN) : undefined;
     const fxRateToEur = raw.fxRateToEur ? parseDecimal(raw.fxRateToEur, NaN) : undefined;
     if (
-      (fees !== undefined && (!Number.isFinite(fees) || fees < 0)) ||
-      (taxes !== undefined && (!Number.isFinite(taxes) || taxes < 0)) ||
-      (fxRateToEur !== undefined && (!Number.isFinite(fxRateToEur) || fxRateToEur <= 0))
+      invalidOptionalMoney(raw.fees) ||
+      invalidOptionalMoney(raw.taxes) ||
+      invalidOptionalFxRate(raw.fxRateToEur)
     ) {
       return fail(ctx, 'addPortTxn.error.invalidNumber');
     }
@@ -160,9 +179,9 @@ export function editPortfolioTxnSchema({ isBuySell, isGift }: PortfolioTxnFlags)
     const taxes = raw.taxes ? parseDecimal(raw.taxes, NaN) : 0;
     const fxRateToEur = raw.fxRateToEur ? parseDecimal(raw.fxRateToEur, NaN) : null;
     if (
-      !Number.isFinite(fees) || fees < 0 ||
-      !Number.isFinite(taxes) || taxes < 0 ||
-      (fxRateToEur !== null && (!Number.isFinite(fxRateToEur) || fxRateToEur <= 0))
+      invalidOptionalMoney(raw.fees) ||
+      invalidOptionalMoney(raw.taxes) ||
+      invalidOptionalFxRate(raw.fxRateToEur)
     ) {
       return fail(ctx, 'addPortTxn.error.invalidNumber');
     }

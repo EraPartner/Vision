@@ -20,6 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
+import { FieldError } from '@/components/ui/field-error';
+import { fieldErrorId, fieldErrorProps, type FieldErrorMap } from '@/hooks/useFieldErrors';
 import type { RecurrenceInterval } from '@/types/portfolio';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
@@ -71,6 +73,14 @@ interface PortfolioTxnFormFieldsProps<F extends PortfolioTxnFieldsForm> {
   lockAmountWhenGift: boolean;
   /** Add renders example placeholders; Edit renders none. */
   withPlaceholders: boolean;
+  /**
+   * Submit-revealed inline errors, keyed by the controls' DOM ids (so
+   * `${idPrefix}-amount` etc.) — the dialog's `useFieldErrors` visibleErrors.
+   * The two-of-three message keeps its existing live rendering below; when it
+   * is the revealed error, that element doubles as the ARIA error target
+   * instead of a duplicate `<FieldError>`.
+   */
+  errors?: FieldErrorMap;
 }
 
 export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
@@ -89,39 +99,57 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
   isGift,
   lockAmountWhenGift,
   withPlaceholders,
+  errors,
 }: PortfolioTxnFormFieldsProps<F>) {
   const recurrenceLabels = buildRecurrenceLabels(t);
   const lockAmount = isGift && lockAmountWhenGift;
   const amountPlaceholder = withPlaceholders
     ? (lockAmount ? '0.00' : (derivedAmount !== undefined ? derivedAmount.toFixed(4) : '0.00'))
     : undefined;
+  const dateId = `${idPrefix}-date`;
+  const unitsId = `${idPrefix}-units`;
+  const amountId = `${idPrefix}-amount`;
+  const feesId = `${idPrefix}-fees`;
+  const taxesId = `${idPrefix}-taxes`;
+  const fxId = `${idPrefix}-fx-rate-to-eur`;
+  // The live two-of-three message (below) already sits inline; when it is the
+  // field's revealed error it becomes the aria-describedby target, and the
+  // per-field <FieldError> is suppressed so the message never renders twice.
+  const twoOfThreeShown = isBuySell && !buySellIsValid;
+  const twoOfThreeTargetId = showUnits ? unitsId : amountId;
 
   return (
     <>
       <div className="grid grid-cols-2 gap-4">
         {typeField}
         <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}-date`}>{t('addPortTxn.date')}</Label>
+          <Label htmlFor={dateId}>{t('addPortTxn.date')}</Label>
           <DatePicker
+            id={dateId}
             value={form.date ? parseLocalDateFromYmd(form.date) : undefined}
             onChange={(date) => setForm((f) => ({ ...f, date: date ? toYmd(date) : '' }))}
             placeholder={t('plannedPage.link.pickDate')}
+            {...fieldErrorProps(dateId, errors?.[dateId])}
           />
+          <FieldError field={dateId} message={errors?.[dateId]} />
         </div>
 
         {showUnits && (
           <>
             <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-units`}>{t('addPortTxn.units')}</Label>
+              <Label htmlFor={unitsId}>{t('addPortTxn.units')}</Label>
               <Input
-                id={`${idPrefix}-units`}
+                id={unitsId}
                 type="text"
                 inputMode="decimal"
                 pattern="^[0-9]+([.,][0-9]+)?$"
                 placeholder={withPlaceholders ? '10' : undefined}
                 value={form.units}
                 onChange={(e) => setForm((f) => ({ ...f, units: e.target.value }))}
+                {...fieldErrorProps(unitsId, errors?.[unitsId])}
               />
+              {/* On buy/sell the only units error is two-of-three, shown live below. */}
+              <FieldError field={unitsId} message={isBuySell ? undefined : errors?.[unitsId]} />
             </div>
             <div className="space-y-2">
               <Label htmlFor={`${idPrefix}-ppu`}>{t('addPortTxn.pricePerUnit')}</Label>
@@ -139,7 +167,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
         )}
 
         <div className={cn("space-y-2", showUnits && 'col-span-2')}>
-          <Label htmlFor={`${idPrefix}-amount`}>
+          <Label htmlFor={amountId}>
             {t('addPortTxn.totalAmount', { currency })}
             {lockAmount
               ? <span className="text-muted-foreground ml-1 text-xs">= 0</span>
@@ -148,7 +176,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                 : null)}
           </Label>
           <Input
-            id={`${idPrefix}-amount`}
+            id={amountId}
             type="text"
             inputMode="decimal"
             pattern="^[0-9]+([.,][0-9]+)?$"
@@ -156,53 +184,66 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
             value={lockAmount ? '0' : form.amount}
             disabled={lockAmount}
             onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+            {...fieldErrorProps(amountId, errors?.[amountId])}
+          />
+          {/* When the amount slot holds the two-of-three error (units hidden),
+              the live message below is the error element — don't render it twice. */}
+          <FieldError
+            field={amountId}
+            message={twoOfThreeShown && !showUnits ? undefined : errors?.[amountId]}
           />
         </div>
 
-        {isBuySell && !buySellIsValid && (
-          <div className="col-span-2 text-xs text-destructive">{t('addPortTxn.error.twoOfThreeRequired')}</div>
+        {twoOfThreeShown && (
+          <div id={fieldErrorId(twoOfThreeTargetId)} className="col-span-2 text-xs text-destructive">{t('addPortTxn.error.twoOfThreeRequired')}</div>
         )}
 
         {showFeesTaxes && (
           <>
             <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-fees`}>{t('addPortTxn.fees')}</Label>
+              <Label htmlFor={feesId}>{t('addPortTxn.fees')}</Label>
               <Input
-                id={`${idPrefix}-fees`}
+                id={feesId}
                 type="text"
                 inputMode="decimal"
                 pattern="^[0-9]+([.,][0-9]+)?$"
                 placeholder={withPlaceholders ? '0.00' : undefined}
                 value={form.fees}
                 onChange={(e) => setForm((f) => ({ ...f, fees: e.target.value }))}
+                {...fieldErrorProps(feesId, errors?.[feesId])}
               />
+              <FieldError field={feesId} message={errors?.[feesId]} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-taxes`}>{t('addPortTxn.taxes')}</Label>
+              <Label htmlFor={taxesId}>{t('addPortTxn.taxes')}</Label>
               <Input
-                id={`${idPrefix}-taxes`}
+                id={taxesId}
                 type="text"
                 inputMode="decimal"
                 pattern="^[0-9]+([.,][0-9]+)?$"
                 placeholder={withPlaceholders ? '0.00' : undefined}
                 value={form.taxes}
                 onChange={(e) => setForm((f) => ({ ...f, taxes: e.target.value }))}
+                {...fieldErrorProps(taxesId, errors?.[taxesId])}
               />
+              <FieldError field={taxesId} message={errors?.[taxesId]} />
             </div>
           </>
         )}
 
         <div className={cn("space-y-2", showFeesTaxes && 'col-span-2')}>
-          <Label htmlFor={`${idPrefix}-fx-rate-to-eur`}>FX rate to EUR (optional)</Label>
+          <Label htmlFor={fxId}>FX rate to EUR (optional)</Label>
           <Input
-            id={`${idPrefix}-fx-rate-to-eur`}
+            id={fxId}
             type="text"
             inputMode="decimal"
             pattern="^[0-9]+([.,][0-9]+)?$"
             placeholder={withPlaceholders ? '1.0000000000' : undefined}
             value={form.fxRateToEur}
             onChange={(e) => setForm((f) => ({ ...f, fxRateToEur: e.target.value }))}
+            {...fieldErrorProps(fxId, errors?.[fxId])}
           />
+          <FieldError field={fxId} message={errors?.[fxId]} />
         </div>
       </div>
 

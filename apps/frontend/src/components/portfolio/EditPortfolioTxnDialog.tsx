@@ -1,5 +1,5 @@
 import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
-import { editPortfolioTxnSchema, parseNonNegative } from './portfolioTxnSchema';
+import { editPortfolioTxnSchema, invalidOptionalFxRate, invalidOptionalMoney, parseNonNegative } from './portfolioTxnSchema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -20,8 +20,18 @@ import {
   returnFocusOnClose,
   type ControlledDialogProps,
 } from '@/hooks/useDialogFormState';
+import { useFieldErrors, type FieldErrorMap } from '@/hooks/useFieldErrors';
 import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
+/** Visual order — decides which field gets focus on a blocked submit. */
+const FIELD_ORDER = [
+  'edit-txn-date',
+  'edit-txn-units',
+  'edit-txn-amount',
+  'edit-txn-fees',
+  'edit-txn-taxes',
+  'edit-txn-fx-rate-to-eur',
+] as const;
 
 function normalizeYmdInput(value?: string): string {
   if (!value) return '';
@@ -72,19 +82,14 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
   // when this instance is pointed at a different transaction, and whenever a
   // pristine dialog is reopened (picking up the values a save just persisted).
   const { form, setForm, reset, dirty } = useDialogFormState(initialForm);
-  useReseedOnIdentityChange(transaction.id, reset);
-
-  const handleOpenChange = (v: boolean) => {
-    if (v && !dirty) reset();
-    setOpen(v);
-  };
 
   const isBuySell = transaction.type === 'buy' || transaction.type === 'sell';
   const isGift = transaction.type === 'gift';
 
-  // Render-time unit math only feeds the live UI (the derived-amount hint and
-  // the inline two-of-three message); the submit gate below re-runs the same
-  // helper inside the Zod schema, so the two can never disagree.
+  // Render-time unit math only feeds the live UI (the derived-amount hint, the
+  // inline two-of-three message and the inline field errors); the submit gate
+  // below re-runs the same helper inside the Zod schema, so the two can never
+  // disagree.
   const unitMath = deriveUnitMath({
     amount: parseNonNegative(form.amount),
     units: parsePositive(form.units),
@@ -98,16 +103,51 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
   const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(transaction.type);
   const showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(transaction.type);
 
+  // The same rules editPortfolioTxnSchema enforces on submit, re-expressed per
+  // field: recomputed every render but only *shown* once a submit has been
+  // blocked (see useFieldErrors), so a corrected field clears itself. These
+  // used to surface as one detached toast for the first failing rule — the
+  // toast is gone because the message now lives on the field itself, where a
+  // screen reader is taken to it. Server errors still toast, in the hook.
+  const twoOfThreeError =
+    isBuySell && !unitMath.isConsistent ? t('addPortTxn.error.twoOfThreeRequired') : undefined;
+  const fieldErrors: FieldErrorMap = {
+    'edit-txn-date': !form.date ? t('plannedPage.link.pickDate') : undefined,
+    'edit-txn-units': isGift && unitMath.effectiveUnits === undefined
+      ? t('addPortTxn.error.unitsRequired')
+      : (showUnits ? twoOfThreeError : undefined),
+    'edit-txn-amount': !showUnits && twoOfThreeError
+      ? twoOfThreeError
+      : !isGift &&
+          (unitMath.effectiveAmount === undefined ||
+            Number.isNaN(unitMath.effectiveAmount) ||
+            unitMath.effectiveAmount <= 0)
+        ? t('addPortTxn.error.amountRequired')
+        : undefined,
+    'edit-txn-fees': invalidOptionalMoney(form.fees) ? t('addPortTxn.error.invalidNumber') : undefined,
+    'edit-txn-taxes': invalidOptionalMoney(form.taxes) ? t('addPortTxn.error.invalidNumber') : undefined,
+    'edit-txn-fx-rate-to-eur': invalidOptionalFxRate(form.fxRateToEur) ? t('addPortTxn.error.invalidNumber') : undefined,
+  };
+  const { visibleErrors, checkValid, resetErrors } = useFieldErrors(fieldErrors, FIELD_ORDER);
+
+  const resetForm = () => {
+    reset();
+    resetErrors();
+  };
+  useReseedOnIdentityChange(transaction.id, resetForm);
+
+  const handleOpenChange = (v: boolean) => {
+    if (v && !dirty) resetForm();
+    setOpen(v);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validation lives in editPortfolioTxnSchema; the first failing rule's
-    // i18n-key message becomes the same single error toast as before.
+    if (!checkValid()) return;
+    // Narrowing only — checkValid() mirrors the schema's rules field-by-field,
+    // so a blocked submit never reaches this parse.
     const parsed = editPortfolioTxnSchema({ isBuySell, isGift }).safeParse(form);
-    if (!parsed.success) {
-      toast.error(t(parsed.error.issues[0].message));
-      return;
-    }
+    if (!parsed.success) return;
 
     try {
       // account_id: a number reassigns the lot, explicit null clears it back to
@@ -132,7 +172,7 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
         recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
       } as Partial<PortfolioTransactionCreate>);
       toast.success(t('txnEdit.toast.updated', { type: getTxnTypeLabel(t, transaction.type as PortfolioTxnType) }));
-      reset();
+      resetForm();
       setOpen(false);
     } catch {
       // handled in hook
@@ -174,10 +214,11 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
             isGift={isGift}
             lockAmountWhenGift={false}
             withPlaceholders={false}
+            errors={visibleErrors}
           />
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => { reset(); setOpen(false); }}>{t('common.cancel')}</Button>
+            <Button type="button" variant="outline" onClick={() => { resetForm(); setOpen(false); }}>{t('common.cancel')}</Button>
             <Button type="submit" disabled={isUpdatingTransaction}>
               {isUpdatingTransaction && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('common.save')}

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
@@ -78,6 +78,7 @@ const METRIC_GROUPS: { titleKey: string; metrics: MetricDescriptor[] }[] = [
 
 export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamentalsTabProps) {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const fmtCurrency = useCurrencyFormatter();
 
   const { data: result, isFetching } = useQuery({

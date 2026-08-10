@@ -7,6 +7,7 @@
  */
 
 import { logger } from '../config/logger.js';
+import { UpstreamError } from '../middleware/errorHandler.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { epochMsToUtcYmd } from '../lib/dateFormat.js';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
@@ -249,7 +250,7 @@ async function _fetchBinanceKlines(binanceSymbol, startMs, endMs) {
       + `?symbol=${encodeURIComponent(binanceSymbol)}`
       + `&interval=1d&startTime=${cursor}&endTime=${end}&limit=${BINANCE_PAGE_LIMIT}`;
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
+    if (!res.ok) throw new UpstreamError(`Binance API error: ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return collected;
 
@@ -499,10 +500,10 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
         });
         const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : undefined;
         if (!location) break;
-        if (hop >= 3) throw new Error('too many redirects');
+        if (hop >= 3) throw new UpstreamError('too many redirects');
         url = new URL(location, url).toString();
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new UpstreamError(`HTTP ${res.status}`);
       const data = await res.json();
       points = normalizeHistoryPoints(parseCustomHistoryPoints(data, config));
       cacheSet(cacheKey, { points, source: 'live' });

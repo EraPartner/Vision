@@ -662,6 +662,52 @@ describeDb('importPipeline commit (real Postgres)', () => {
     expect(counters.rows_imported + counters.rows_duplicate + counters.rows_error).toBe(6);
   });
 
+  // ── unresolved recipients ─────────────────────────────────────────────────
+
+  it("decides a row with no recipient into 'error' up front, keeping its chunk on the batched path", async () => {
+    // The matcher stamps a row it could not resolve 'matched' with a NULL
+    // resolved_recipient_id (that is what keeps it fixable in review); if the
+    // user commits without assigning one, commit must DECIDE the row into
+    // 'error' rather than let it 23502 on transactions.recipient_id NOT NULL
+    // inside the bulk INSERT — which would also demote the whole chunk to the
+    // per-row replay. The decided error carries the decision's message, not a
+    // constraint-violation string, which is what this pins.
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, { recipient_raw: '', resolved_recipient_id: null });
+    await stageRow(batchId, 1, { tx_hash: 'hash-a', balance: '1000.00' });
+    await stageRow(batchId, 2, { tx_hash: 'hash-b', balance: '957.50' });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 2, duplicates: 0, errors: 1, autoLinkedCount: 0,
+    });
+
+    const staging = await stagingStatuses(batchId);
+    expect(staging.map((r) => r.status)).toEqual(['error', 'committed', 'committed']);
+    expect(staging[0].error_message).toMatch(/unresolved recipient/);
+    expect(await committedTxns(batchId)).toHaveLength(2);
+    const counters = await batchCounters(batchId);
+    expect(counters.rows_imported).toBe(2);
+    expect(counters.rows_error).toBe(1);
+  });
+
+  it('commits an unresolved row once the user assigned a recipient in review', async () => {
+    // The review-UI fix path: the unresolved row stayed 'matched', the user
+    // set user_override_recipient_id, and commit honours the override.
+    const batchId = await newBatch();
+    await stageRow(batchId, 0, {
+      resolved_recipient_id: null,
+      user_override_recipient_id: fx.otherRecipientId,
+    });
+
+    expect(await commitBatch({ batchId })).toEqual({
+      imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0,
+    });
+    const txns = await committedTxns(batchId);
+    expect(txns).toHaveLength(1);
+    expect(txns[0].recipient_id).toBe(fx.otherRecipientId);
+    expect((await stagingStatuses(batchId)).map((r) => r.status)).toEqual(['committed']);
+  });
+
   // ── written-column fidelity ───────────────────────────────────────────────
 
   it('writes the same columns the per-row insert wrote', async () => {

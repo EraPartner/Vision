@@ -9,7 +9,7 @@ import { cashflowKeys } from "@/lib/queryKeys";
 import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -46,6 +46,7 @@ function shortAccountName(account: string): string {
 
 export function BankBalancesWidget() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const navigate = useNavigate();
     const { appSettings } = useAppSettings();
 

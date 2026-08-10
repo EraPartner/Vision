@@ -82,4 +82,21 @@ describe("MarkAsFiledDialog — Enter submits the form", () => {
         expect(screen.getByTestId("filed-state")).toHaveTextContent("not-filed");
         expect(screen.getByTestId("filed-count")).toHaveTextContent("0");
     });
+
+    it("cancel discards a typed reference — reopening shows a blank field", async () => {
+        const user = userEvent.setup();
+        await renderAndOpen(user);
+
+        await user.type(screen.getByLabelText("Reference"), "SHOULD-NOT-SURVIVE");
+        await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+        await waitFor(() =>
+            expect(screen.queryByText(`Mark ${YEAR} as filed`)).not.toBeInTheDocument(),
+        );
+
+        await user.click(screen.getByRole("button", { name: /open filing/i }));
+        await screen.findByText(`Mark ${YEAR} as filed`);
+
+        expect(screen.getByLabelText("Reference")).toHaveValue("");
+    });
 });

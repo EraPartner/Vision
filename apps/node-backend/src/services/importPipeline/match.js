@@ -135,6 +135,15 @@ export async function matchBatch({ batchId, onProgress }) {
   }
 
   // --- Chunked UPDATE of staging rows ---
+  //
+  // Unresolved rows (blank or unnormalizable `recipient_raw` — phase 3 upserts
+  // a recipient for every other name) are stamped 'matched' too, with a NULL
+  // resolved_recipient_id. Deliberate: 'matched' is the only status the review
+  // preview and the recipient/category override paths accept, so it is what
+  // keeps these rows visible and fixable in the review UI — and prepareImport
+  // forces review whenever unresolved > 0. A row still lacking a recipient
+  // when the user commits is decided into 'error' by commitBatch before any
+  // insert is planned; it never reaches the NOT NULL constraint.
   let matched = 0;
   let unresolved = 0;
   let seen = 0;

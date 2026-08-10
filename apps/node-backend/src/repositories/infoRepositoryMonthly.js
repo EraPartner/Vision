@@ -1,6 +1,15 @@
 /**
  * Monthly financial summary — materialized-view fast path plus
  * live-query fallback with category/recipient exclusions.
+ *
+ * ONE CLOCK, same rule as infoRepositoryForecast.js and
+ * infoRepositoryAverageVsCurrent.js: every month-window edge here is anchored
+ * on `todayAppDateString()` — the APP_TIMEZONE calendar day (ADR-009) — read
+ * once per call and bound into the SQL as a `::date` parameter. Postgres
+ * `CURRENT_DATE` is not used: it follows the DB session's zone (UTC), so with
+ * the default APP_TIMEZONE=Europe/Brussels the two disagree on the calendar
+ * day for the couple of hours before midnight — and on a month's last day the
+ * SQL window set and the JS zero-fill key set disagreed by a whole month.
  */
 
 import { query } from '../database/connection.js';
@@ -35,6 +44,11 @@ export async function getMonthlyFinancialSummary(
   const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
   const validRecipientIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
   logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds, validRecipientIds });
+  // The single clock for this call (ADR-009). Read ONCE, bound into whichever
+  // path runs (MV filter or live generate_series) and reused for the JS
+  // zero-fill below, so the SQL month set and the JS key set can never
+  // straddle a month rollover.
+  const todayYmd = todayAppDateString();
   const includeTransfers = await getIncludeTransfers();
 
   // The MV is grained month×currency, so its fast path converts a whole month's
@@ -58,8 +72,9 @@ export async function getMonthlyFinancialSummary(
     // Upper bound matches the live path (whose generate_series ends at the
     // current month) — without it a post-dated transaction adds a future month
     // on the MV path only, so the dashboard month set changed with the code path.
-    const dateFilterClause = `WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')
-        AND month_start <= date_trunc('month', CURRENT_DATE)`;
+    // Anchored on the bound app date ($1), the same clock as the zero-fill.
+    const dateFilterClause = `WHERE month_start >= date_trunc('month', $1::date - interval '5 months')
+        AND month_start <= date_trunc('month', $1::date)`;
     const mvResult = await query(`
       SELECT month_start, month, year, currency,
              SUM(transaction_count) AS transaction_count,
@@ -70,7 +85,7 @@ export async function getMonthlyFinancialSummary(
       ${dateFilterClause}
       GROUP BY month_start, month, year, currency
       ORDER BY month_start
-    `);
+    `, [todayYmd]);
 
     const mergedRows = [];
     for (const r of mvResult.rows) {
@@ -112,10 +127,9 @@ export async function getMonthlyFinancialSummary(
     // Zero-fill months with no transactions so the MV path returns the SAME
     // 6-month set as the live path's generate_series. Without this, toggling an
     // exclusion (which switches paths) changed the dashboard's month set.
-    // Anchor on the app-timezone "today" (ADR-009), not server-local new Date()
-    // — around a month boundary a differing Node TZ generated a different
-    // key set than the SQL paths' CURRENT_DATE.
-    const todayYmd = todayAppDateString();
+    // Uses the SAME app-timezone "today" (ADR-009) bound into the SQL above —
+    // one clock reading, so the key set and the window set agree by
+    // construction, at any hour.
     for (let i = 5; i >= 0; i--) {
       const monthStart = firstOfMonthYmd(todayYmd, -i);
       const year = Number(monthStart.slice(0, 4));
@@ -154,9 +168,14 @@ export async function getMonthlyFinancialSummary(
   const params = excl.params;
   const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : '';
 
+  // The app-date anchor rides after the exclusion params; `todayParam` is its
+  // placeholder in the SQL below.
+  const todayParam = `$${params.length + 1}`;
+  params.push(todayYmd);
+
   const allTimeStart = allTime
-    ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', CURRENT_DATE))`
-    : `date_trunc('month', CURRENT_DATE - interval '5 months')`;
+    ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', ${todayParam}::date))`
+    : `date_trunc('month', ${todayParam}::date - interval '5 months')`;
 
   // Aggregate per (date, currency) in SQL instead of streaming every transaction
   // into JS. This path converts at each transaction's historical date rate
@@ -172,7 +191,7 @@ export async function getMonthlyFinancialSummary(
     WITH months AS (
       SELECT generate_series(
         ${allTimeStart},
-        date_trunc('month', CURRENT_DATE),
+        date_trunc('month', ${todayParam}::date),
         interval '1 month'
       )::date AS month_start
     ),

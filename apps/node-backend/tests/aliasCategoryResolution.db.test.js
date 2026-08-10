@@ -61,8 +61,20 @@ import {
 import splitRepository from '../src/repositories/splitRepository.js';
 import plannedTransactionRepository from '../src/repositories/plannedTransactionRepository.js';
 import { plannedRepository } from '../src/repositories/infoRepositoryPlanned.js';
+import { todayAppDateString } from '../src/lib/timezone.js';
 
 const MANAGED_VIEWS = ['mv_monthly_summary', 'mv_category_totals', 'mv_cashflow_daily'];
+
+/**
+ * The APP_TIMEZONE calendar day as a SQL date literal, resolved at call time —
+ * the very anchor the monthly and planned repositories bind into their windows
+ * (ADR-009, one clock). Fixtures for THOSE surfaces must be dated relative to
+ * this, not to Postgres `CURRENT_DATE` (the DB session's UTC day, one day
+ * behind the app day for the last hours of every UTC day). The
+ * recurring-detection fixtures below deliberately stay on `CURRENT_DATE`:
+ * recurringDetectionService still windows on it.
+ */
+const appTodaySql = () => `('${todayAppDateString()}'::date)`;
 
 const cat = {};
 const rec = {};
@@ -111,8 +123,9 @@ async function ensureAccount(name) {
 
 /**
  * `date` may be a 'YYYY-MM-DD' string or a raw SQL date expression (passed via
- * `dateSql`) — the monthly surfaces are windowed on CURRENT_DATE, so their
- * fixtures must be anchored to the database's today, not the test author's.
+ * `dateSql`) — the monthly surfaces are windowed on the app-clock today
+ * (`appTodaySql()`), so their fixtures must be anchored to that same day, not
+ * the test author's calendar (nor the DB session's `CURRENT_DATE`).
  */
 async function insertTxn({
   date = null,
@@ -199,7 +212,8 @@ function collectingRes() {
 /**
  * Insert one planned_transactions row directly (not through the repository, so
  * repository behaviour is never asserted against itself). `dateSql` is a raw
- * SQL date expression: the planned surfaces are windowed on CURRENT_DATE.
+ * SQL date expression: the planned surfaces are windowed on the app-clock
+ * today (`appTodaySql()`).
  */
 async function insertPlanned({ dateSql, amount, recipientId, categoryId = null, memo = null }) {
   const { rows } = await getTestPool().query(
@@ -263,17 +277,17 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
     async function seedCurrentMonth() {
       await seedBase();
       const aliasTxn = await insertTxn({
-        dateSql: `(date_trunc('month', CURRENT_DATE) + interval '5 days')::date`,
+        dateSql: `(date_trunc('month', ${appTodaySql()}) + interval '5 days')::date`,
         amount: '-120.00',
         recipientId: rec.electrabelAlias, // categorised ONLY via the primary's default
       });
       await insertTxn({
-        dateSql: `(date_trunc('month', CURRENT_DATE) + interval '6 days')::date`,
+        dateSql: `(date_trunc('month', ${appTodaySql()}) + interval '6 days')::date`,
         amount: '-40.00',
         recipientId: rec.aldi, // categorised via its own recipient default
       });
       await insertTxn({
-        dateSql: `(date_trunc('month', CURRENT_DATE) + interval '7 days')::date`,
+        dateSql: `(date_trunc('month', ${appTodaySql()}) + interval '7 days')::date`,
         amount: '2000.00',
         recipientId: rec.misc, // uncategorised at all three levels
       });
@@ -296,7 +310,7 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
       const { rows } = await getTestPool().query(
         `SELECT category_id, category_id_key, category_name, total_spending, total_income, transaction_count
            FROM mv_monthly_summary
-          WHERE month_start = date_trunc('month', CURRENT_DATE)::date
+          WHERE month_start = date_trunc('month', ${appTodaySql()})::date
           ORDER BY category_name`,
       );
 
@@ -322,7 +336,7 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
       await seedCurrentMonth();
       // A second month so the comparison spans more than the current one.
       await insertTxn({
-        dateSql: `(date_trunc('month', CURRENT_DATE) - interval '1 month' + interval '5 days')::date`,
+        dateSql: `(date_trunc('month', ${appTodaySql()}) - interval '1 month' + interval '5 days')::date`,
         amount: '-33.00',
         recipientId: rec.electrabelAlias,
       });
@@ -612,27 +626,29 @@ describe.skipIf(!hasTestDatabase())('3-level effective-category resolution (real
   // Planned transactions — plannedTransactionRepository + infoRepositoryPlanned
   // ───────────────────────────────────────────────────────────────────────────
   describe('planned transactions', () => {
-    // Anchored to the DB's own calendar so it lands inside every window under
-    // test: next month (getPlannedExpensesNextMonth), ≤90 days out (getDueSoon)
-    // and ≤3 months out (getForForecast).
-    const NEXT_MONTH_SQL = `(date_trunc('month', CURRENT_DATE) + interval '1 month' + interval '4 days')::date`;
+    // Anchored to the app-clock calendar (the anchor every window under test
+    // binds — ADR-009) so it lands inside all of them: next month
+    // (getPlannedExpensesNextMonth), ≤90 days out (getDueSoon) and ≤3 months
+    // out (getForForecast). Resolved per seed so a suite running across
+    // midnight stays consistent.
+    const NEXT_MONTH_SQL = () => `(date_trunc('month', ${appTodaySql()}) + interval '1 month' + interval '4 days')::date`;
 
     async function seedPlanned() {
       await seedAliasWithOwnDefault();
       const aliasPlanned = await insertPlanned({
-        dateSql: NEXT_MONTH_SQL,
+        dateSql: NEXT_MONTH_SQL(),
         amount: '-77.00',
         recipientId: rec.electrabelOwnAlias, // resolves via the ALIAS's own default
         memo: 'alias planned',
       });
       const inheritedPlanned = await insertPlanned({
-        dateSql: NEXT_MONTH_SQL,
+        dateSql: NEXT_MONTH_SQL(),
         amount: '-55.00',
         recipientId: rec.electrabelAlias, // resolves via the PRIMARY's default
         memo: 'inherited planned',
       });
       const ownPlanned = await insertPlanned({
-        dateSql: NEXT_MONTH_SQL,
+        dateSql: NEXT_MONTH_SQL(),
         amount: '-11.00',
         recipientId: rec.electrabelOwnAlias,
         categoryId: cat.Food, // own category_id wins over both defaults

@@ -8,7 +8,7 @@ import { AdminErrorState } from '@/components/shared/AdminErrorState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
-import { loadingSurfaceProps } from '@/lib/loadingSurface';
+import { useLoadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -123,6 +123,7 @@ function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
 
 export default function ProviderHealthPage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const qc = useQueryClient();
     const [probingSet, setProbingSet] = useState<Set<string>>(new Set());
 

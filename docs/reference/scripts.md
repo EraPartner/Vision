@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-07-27
+updated: 2026-08-09
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -77,13 +77,16 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 
 Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The node-backend shells out to `alembic upgrade head` on startup via `src/database/migrate.js`.
 
+Every script that *writes* the alembic version table (`db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`, and the backend workspace's `db:migrate`/`db:migrate:down`/`db:reset`) routes through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `stampBaselineIfLegacy()` preflight first. A bare `alembic` invocation auto-creates `alembic_version.version_num` as `VARCHAR(32)` — too narrow for this chain's revision ids — so a fresh database dies on revision 3 with `value too long for type character varying(32)`; the preflight creates/widens the column at `VARCHAR(64)`. The wrapper reads `DATABASE_URL` (falling back to `config/.env.local`, like `alembic/env.py`), prefers `venv/bin/alembic` when it exists (override with `ALEMBIC_BIN`), and takes an optional trailing target, e.g. `bun run db:downgrade base` or `bun run db:stamp <revision>`. Read-only/authoring scripts (`db:current`, `db:history`, `db:revision`) still call alembic directly.
+
 | Script | Command | Description |
 |--------|---------|-------------|
-| `db:upgrade` | `venv/bin/alembic -c config/alembic.ini upgrade head` | Apply all pending migrations. |
-| `db:downgrade` | `venv/bin/alembic -c config/alembic.ini downgrade -1` | Roll back the latest migration. |
+| `db:migrate` | `bun run apps/node-backend/scripts/db-migrate.js` | Apply all pending migrations via the boot-path runner (same as `db:upgrade`). Used by CI and `scripts/with-test-db.sh`. |
+| `db:upgrade` | `bun run … db-migrate.js upgrade` | Apply pending migrations (default target `head`; optional trailing target revision). |
+| `db:downgrade` | `bun run … db-migrate.js downgrade` | Roll back the latest migration (default target `-1`; optional trailing target, e.g. `base`). |
 | `db:current` | `venv/bin/alembic -c config/alembic.ini current` | Show the current migration version. |
 | `db:history` | `venv/bin/alembic -c config/alembic.ini history` | Show migration history. |
-| `db:stamp` | `venv/bin/alembic -c config/alembic.ini stamp head` | Mark DB at a revision without running migrations. |
+| `db:stamp` | `bun run … db-migrate.js stamp` | Mark DB at a revision without running migrations (default `head`; optional trailing revision). |
 | `db:revision` | `venv/bin/alembic … revision --autogenerate -m` | Create a new migration. |
 | `db:index-stats` | `bun run apps/node-backend/scripts/index-stats.js` | Dump per-index usage stats from `pg_stat_user_indexes`. |
 | `db:check-destructive` | `python3 scripts/check-destructive-migrations.py` | Static scan of `alembic/versions/` (does **not** touch the database): fails on destructive DDL in `upgrade()` — `DROP TABLE`/`DROP COLUMN`, an unreplaced view/trigger/function/type drop, or any `ALTER COLUMN … TYPE` — that carries no `# destructive-ok: <reason>` marker. Migrations auto-apply on every boot, so this is the guard against repeating the 0055 premature-drop crash. Add `--self-test` to exercise the checker's own fixtures, `--list` to inventory findings without failing. Enforced in CI by `verify-destructive-migrations`. See [[docs/guides/migrations#destructive-ddl-and-the-destructive-ok-marker\|Migration Guide]]. |
@@ -138,10 +141,10 @@ The wrappers spawn Electron from `packaging/electron/`, layering a docker-compos
 | `test:watch` | `bun vitest` | Vitest watch mode. |
 | `lint` | `eslint src/` | Backend ESLint. |
 | `lint:fix` | `eslint src/ --fix` | Backend ESLint with auto-fix. |
-| `db:migrate` | `cd ../.. && alembic upgrade head` | Backend-relative wrapper around `db:upgrade`. |
-| `db:migrate:down` | `cd ../.. && alembic downgrade -1` | Backend-relative wrapper around `db:downgrade`. |
+| `db:migrate` | `bun run scripts/db-migrate.js` | Apply all pending migrations — same wrapper (and behavior) as the root `db:migrate`/`db:upgrade`. |
+| `db:migrate:down` | `bun run scripts/db-migrate.js downgrade` | Roll back the latest migration — same wrapper as the root `db:downgrade`. |
 | `db:new-migration` | `cd ../.. && alembic revision -m` | Create a new empty revision. |
-| `db:reset` | `cd ../.. && alembic downgrade base && alembic upgrade head` | Wipe and reapply the full chain. |
+| `db:reset` | `bun run scripts/db-migrate.js reset` | Wipe (`downgrade base`) and reapply the full chain to `head`. |
 
 ## Quick reference by task
 

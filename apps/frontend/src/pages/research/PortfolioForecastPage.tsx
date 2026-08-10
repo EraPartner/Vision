@@ -12,7 +12,7 @@ import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -41,6 +41,7 @@ interface ForecastRow extends ForecastPoint {
 
 export default function PortfolioForecastPage() {
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const currency = appSettings.defaultCurrency || "EUR";

@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
-import { loadingSurfaceProps } from '@/lib/loadingSurface';
+import { useLoadingSurfaceProps } from '@/lib/loadingSurface';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -35,6 +35,7 @@ type MergedRow = EndpointEntry & Partial<RouteMetric>;
 
 export default function EndpointLivenessPage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const [filter, setFilter] = useState('');
 
     const { data: manifest, isLoading: manifestLoading } = useQuery({

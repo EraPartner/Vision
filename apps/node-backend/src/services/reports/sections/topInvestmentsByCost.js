@@ -25,17 +25,15 @@ export function renderTopInvestmentsByCost(data, { currency }) {
   }
 
   const sorted = [...byInvestment]
-    .sort((a, b) => ((b.taxes ?? 0) + (b.fees ?? 0)) - ((a.taxes ?? 0) + (a.fees ?? 0)))
+    .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
     .slice(0, 15);
 
   const tableRows = sorted.map((inv, idx) => {
-    const taxes = inv.taxes ?? 0;
     const fees  = inv.fees  ?? 0;
-    const tob   = inv.tobTotal          ?? 0;
-    const wht   = inv.dividendWHTTotal  ?? 0;
-    const sell  = inv.sellTaxTotal      ?? 0;
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    const total = taxes + fees;
+    const tob   = inv.tob   ?? 0;
+    const wht   = inv.wht   ?? 0;
+    const sell  = inv.sell  ?? 0;
+    const total = inv.total ?? 0;
     return `<tr>
       <td style="color:hsl(var(--muted));font-size:10px;">${idx + 1}</td>
       <td>${escapeHtml(inv.name ?? '—')}</td>

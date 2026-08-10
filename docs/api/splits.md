@@ -3,7 +3,7 @@ title: Splits API
 type: endpoint
 status: active
 date: 2026-04-23
-updated: 2026-05-02
+updated: 2026-08-09
 tags:
   - api
   - splits
@@ -427,15 +427,22 @@ This is a manual settlement operation (not triggered by payment reaching the ful
 |-------|------|-------------|
 | `id` | number | Split ID (positive integer) |
 
-**Response:** `200 OK`
+**Response:** `200 OK` — the full `SplitItem` shape, with the real payment
+aggregate (`amount_paid` is the sum of recorded payments, not a fabricated `0`)
+and the recipient's name:
 
 ```json
 {
   "id": 1,
   "transaction_id": 100,
   "recipient_id": 2,
+  "recipient_name": "Alice",
   "amount": 50.00,
-  "is_settled": true
+  "amount_paid": 30.00,
+  "note": null,
+  "is_settled": true,
+  "created_at": "2026-03-01T10:00:00.000Z",
+  "updated_at": "2026-03-05T10:00:00.000Z"
 }
 ```
 
@@ -447,6 +454,7 @@ This is a manual settlement operation (not triggered by payment reaching the ful
 
 Implementation notes:
 - Settles split via `settleSplit(splitId)` and returns 404 if missing ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- `settleSplit` re-selects the updated row through `recipients` and a per-split `split_payments` aggregate (same CTE re-select idiom as `createSplitAtomic`), so `recipient_name`/`amount_paid` in the response are real values — the bare `RETURNING *` it used before fabricated `recipient_name: null` / `amount_paid: 0`.
 - Records audit trail via `writeAudit()` with action='settle' and payload `{ manual: true }` ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
@@ -533,11 +541,11 @@ interface SplitItem {
 
 interface OwedDetailItem extends SplitItem {
   transaction_date: string;
-  transaction_memo: string;
+  transaction_memo?: string | null;
   transaction_amount: number;
   transaction_currency: string;
-  transaction_recipient_name?: string;
-  bank_account: string;
+  bank_account?: string | null;
+  transaction_recipient_name?: string | null;
   remaining: number;
 }
 

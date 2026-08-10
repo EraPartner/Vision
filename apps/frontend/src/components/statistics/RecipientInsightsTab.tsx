@@ -6,7 +6,7 @@ import { aggregationKeys } from "@/lib/queryKeys";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { parseISO } from "@/components/shared/dateUtils";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
@@ -41,6 +41,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   const effectiveExcludedCatIds = exclusionsApply ? excludedCategoryIds : [];
   const effectiveExcludedRecIds = exclusionsApply ? excludedRecipientIds : [];
   const { t } = useLanguage();
+  const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || "EUR";
   // Shared cached currency formatter; an optional fractionDigits override falls

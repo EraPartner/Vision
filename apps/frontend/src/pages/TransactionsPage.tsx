@@ -5,7 +5,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { loadingSurfaceProps } from "@/lib/loadingSurface";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
@@ -24,6 +24,7 @@ import type { BulkTransactionFilter } from "@/types/api";
 
 export default function TransactionsPage() {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const pageSize = appSettings.defaultPageSize;
     const loadMoreOffset = Math.min(50, Math.max(15, Math.floor(pageSize / 5)));

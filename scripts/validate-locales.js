@@ -434,19 +434,109 @@ const concatRe = /['"]([a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_]+)*\.)['"]\s*\+/g;
 let ccm;
 while ((ccm = concatRe.exec(haystack))) dynamicPrefixes.add(ccm[1]);
 
+// Exact-match index: every maximal run of key-shaped characters (letters,
+// digits, underscore, dot) in the haystack, as its own set entry. A dotted key
+// is only "referenced" if the FULL identifier it appears in equals the key —
+// e.g. `t('plannedForm.nameRequired2')` contributes the run
+// "plannedForm.nameRequired2", not also its prefix "plannedForm.nameRequired".
+// Delimiters (quotes, parens, commas, whitespace, backticks, ...) are exactly
+// what falls outside this character class, so quotes/template-literal
+// boundaries/`t('key')` calls all fall out for free — no per-key regex needed,
+// which also keeps this a single O(haystack) pass instead of O(keys × haystack).
+const KEY_CHAR_RUN_RE = /[A-Za-z0-9_.]+/g;
+const usedIdentifiers = new Set();
+let idm;
+while ((idm = KEY_CHAR_RUN_RE.exec(haystack))) usedIdentifiers.add(idm[0]);
+
 function keyIsUsed(key) {
   for (const p of dynamicPrefixes) if (key.startsWith(p)) return true;
-  if (haystack.includes(key)) return true;
+  if (usedIdentifiers.has(key)) return true;
   // Plural variants: a live `tc('x')` only mentions the base key, not x.one/x.other.
   const base = key.replace(/\.(zero|one|two|few|many|other)$/, '');
   if (base !== key) {
     for (const p of dynamicPrefixes) if (base.startsWith(p)) return true;
-    if (haystack.includes(base)) return true;
+    if (usedIdentifiers.has(base)) return true;
   }
   return false;
 }
 
-const unusedKeys = [...enKeys].filter((k) => !keyIsUsed(k));
+// Pre-existing dead keys, allowlisted rather than pruned here: fixing the
+// substring hole above (exact-match instead of `.includes()`) unmasked them —
+// they were never actually referenced, but were each a substring of some
+// other live key (e.g. `plannedForm.name` inside `plannedForm.namePlaceholder`)
+// or vice-versa, so the old substring check misread them as "used". Deleting
+// keys is out of scope for the matcher fix and is already tracked as its own
+// backlog item (TODO.md: "~589 dead i18n keys (~17% of 3,529), each with a
+// dead nl twin") — that item's pruning pass is the place to remove these, not
+// here. Confirmed dead by an independent exact-quoted-string scan of the same
+// source tree before allowlisting.
+const UNUSED_KEY_ALLOWLIST = new Set([
+  'addCat.detail',
+  'addCat.general',
+  'categories.createFailed',
+  'categories.delete',
+  'categories.deleteFailed',
+  'categories.updateFailed',
+  'common.noData',
+  'common.unknown',
+  'customChart.categories',
+  'customChart.noCategories',
+  'import.import',
+  'import.importing',
+  'import.success',
+  'import.title',
+  'insights.noData',
+  'merge.primary',
+  'merge.search',
+  'networth.daily',
+  'onboarding.feature.portfolio',
+  'onboarding.next',
+  'onboarding.skip',
+  'onboarding.step.categories',
+  'onboarding.step.import',
+  'onboarding.step.welcome',
+  'planned.title',
+  'plannedForm.amount',
+  'plannedForm.bankAccount',
+  'plannedForm.name',
+  'plannedForm.notesPlaceholder',
+  'plannedForm.save',
+  'portfolio.createInvestmentFailed',
+  'portfolio.deleteInvestmentFailed',
+  'portfolio.deleteTxnFailed',
+  'portfolio.recordTxnFailed',
+  'portfolio.refreshPricesFailed',
+  'portfolio.updateInvestmentFailed',
+  'recipients.createFailed',
+  'recipients.deleteFailed',
+  'recipients.merge',
+  'recipients.mergeFailed',
+  'recipients.unmergeFailed',
+  'recipients.updateFailed',
+  'restore.failed',
+  'settings.app.recurringDismissals',
+  'settings.save',
+  'settings.tab.app',
+  'statistics.title',
+  'statsPage.report.download',
+  'suggestions.review',
+  'table.loading',
+  'table.search',
+  'table.shownOf',
+  'tax.acrossAllInvestments',
+  'tax.brokerAndMgmtFees',
+  'tax.combinedTaxesAndFees',
+  'tax.income',
+  'transactions.bank',
+  'transactions.createFailed',
+  'transactions.deleteFailed',
+  'transactions.recipient',
+  'transactions.title',
+  'transactions.updateFailed',
+  'upcoming.viewAll',
+]);
+
+const unusedKeys = [...enKeys].filter((k) => !keyIsUsed(k) && !UNUSED_KEY_ALLOWLIST.has(k));
 
 if (process.argv.includes('--list-unused')) {
   process.stdout.write(unusedKeys.sort().join('\n') + (unusedKeys.length ? '\n' : ''));

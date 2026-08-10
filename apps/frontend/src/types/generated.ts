@@ -3073,7 +3073,7 @@ export interface components {
             description?: string;
             is_active?: boolean;
         };
-        CategoryList: components["schemas"]["PaginationFields"] & {
+        CategoryList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Category"][];
             links: components["schemas"]["Link"][];
         };
@@ -3119,7 +3119,7 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
-        TagList: components["schemas"]["PaginationFields"] & {
+        TagList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Tag"][];
         };
         TagCreate: {
@@ -3580,10 +3580,10 @@ export interface components {
             id: number;
             transaction_id: number;
             recipient_id: number;
-            recipient_name?: string | null;
+            recipient_name: string | null;
             amount: number;
             amount_paid: number;
-            note?: string | null;
+            note: string | null;
             is_settled: boolean;
             /** Format: date-time */
             created_at: string;
@@ -3594,7 +3594,7 @@ export interface components {
             id: number;
             split_id: number;
             amount: number;
-            note?: string | null;
+            note: string | null;
             /** Format: date */
             paid_at: string;
             /** Format: date-time */
@@ -3690,6 +3690,21 @@ export interface components {
             parameterSize: string | null;
             quantization: string | null;
             modifiedAt: string | null;
+        };
+        AiConversationDetail: {
+            conversation: components["schemas"]["AiConversation"];
+            messages: components["schemas"]["AiMessage"][];
+        };
+        OllamaStatus: {
+            ok: boolean;
+            baseUrl: string;
+            displayUrl: string;
+            modelCount: number;
+            error: string | null;
+            code: string | null;
+            hint: string | null;
+            defaultModel: string;
+            enabled: boolean;
         };
         PortfolioImportBatch: {
             id: string;
@@ -3794,6 +3809,10 @@ export interface operations {
             query?: {
                 /** @description Filter by active status (omit for all) */
                 is_active?: boolean;
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
             };
             header?: never;
             path?: never;
@@ -3801,7 +3820,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Tag list */
+            /** @description Tag list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4477,8 +4496,10 @@ export interface operations {
     getCategories: {
         parameters: {
             query?: {
-                limit?: number;
-                offset?: number;
+                /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
+                limit?: components["parameters"]["OptionalLimit"];
+                /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
+                offset?: components["parameters"]["OptionalOffset"];
                 search?: string;
                 is_active?: boolean;
             };
@@ -4488,7 +4509,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Category list */
+            /** @description Category list (complete unless limit/offset are supplied) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7418,11 +7439,9 @@ export interface operations {
             content: {
                 "application/json": {
                     transaction_id: number;
-                    description: string;
-                    shares: {
-                        recipient_id: number;
-                        amount: number;
-                    }[];
+                    recipient_id: number;
+                    amount: number;
+                    note?: string | null;
                 };
             };
         };
@@ -7450,7 +7469,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    splits: Record<string, never>[];
+                    transaction_id: number;
+                    splits: {
+                        recipient_id: number;
+                        amount: number;
+                        note?: string | null;
+                    }[];
                 };
             };
         };
@@ -7798,13 +7822,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Status */
+            /** @description Status (always a success envelope — the health probe never throws; unreachable is reported via `ok:false` + error/code) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["OllamaStatus"];
+                    };
                 };
             };
         };
@@ -7881,11 +7907,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            conversation: components["schemas"]["AiConversation"];
-                            /** @description Always empty on create. */
-                            messages: components["schemas"]["AiMessage"][];
-                        };
+                        data?: components["schemas"]["AiConversationDetail"];
                     };
                 };
             };
@@ -7908,7 +7930,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["AiConversationDetail"];
+                    };
                 };
             };
         };
