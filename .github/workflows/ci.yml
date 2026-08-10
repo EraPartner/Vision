@@ -552,30 +552,15 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
 
-      - name: Check named volumes match between compose files
-        run: |
-          ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
-          ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
-          echo "Root volumes    : $ROOT_VOLS"
-          echo "Electron volumes: $ELECTRON_VOLS"
-          if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
-            echo "ERROR: Named volumes out of sync — add missing volumes to packaging/electron/resources/docker-compose.yml"
-            exit 1
-          fi
-          echo "Compose volume sync OK."
+      # No setup-toolchain step on purpose: the checker is Node-stdlib-only and
+      # ubuntu-24.04 ships node, so this stays as dependency-free as the awk it
+      # replaced — and the same file backs release.yml's verify job and
+      # .githooks/pre-push, so the three copies cannot drift.
+      - name: Self-test the checker
+        run: node scripts/check-compose-sync.js --self-test
 
-      - name: Check compose project name matches between compose files
-        run: |
-          ROOT_NAME=$(awk '/^name:[[:space:]]/{print $2; exit}' docker-compose.yml)
-          ELECTRON_NAME=$(awk '/^name:[[:space:]]/{print $2; exit}' packaging/electron/resources/docker-compose.yml)
-          echo "Root name    : $ROOT_NAME"
-          echo "Electron name: $ELECTRON_NAME"
-          if [ -z "$ROOT_NAME" ] || [ "$ROOT_NAME" != "$ELECTRON_NAME" ]; then
-            echo "ERROR: compose 'name:' out of sync — both files must pin the same project name"
-            echo "(the shared vision_postgres_data volume depends on a stable project name)"
-            exit 1
-          fi
-          echo "Compose project name sync OK."
+      - name: Check project name and named volumes match between compose files
+        run: node scripts/check-compose-sync.js
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Destructive migrations — `docker-entrypoint.sh` runs `alembic upgrade head`

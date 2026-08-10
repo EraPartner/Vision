@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-09
+updated: 2026-08-10
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -60,6 +60,7 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | `lint:backend` | `bun run --filter '…-node' lint` | ESLint on the backend workspace. |
 | `typecheck` | `bun run --filter 'vision-frontend' typecheck` | TypeScript type-check of the frontend (runs: `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`). No emit; fails on type errors only. |
 | `check-endpoint-matrix` | `node scripts/check-endpoint-matrix.js` | Guards `docs/reference/api-endpoint-matrix.md` against drift from `openapi.yaml`: counts HTTP operations in the spec and compares to the `api_operation_count` frontmatter value; exits 1 on mismatch (caught in CI). |
+| `check-compose-sync` | `node scripts/check-compose-sync.js` | Guards `packaging/electron/resources/docker-compose.yml` against drifting from the root `docker-compose.yml` on the compose project `name:` and the top-level named `volumes:` — the two things that decide which volume a user's data lives in (a mismatch is the v1.0.2 data-loss bug). Node stdlib only, so it runs with nothing but a checkout. Add `--self-test` to exercise the parser's own fixtures. Enforced by CI's `verify-compose-sync`, `release.yml`'s `verify` job, and `.githooks/pre-push`. See [[docs/adr/051-docker-compose-sync-named-volumes\|ADR-051]]. |
 
 ### Testing
 
