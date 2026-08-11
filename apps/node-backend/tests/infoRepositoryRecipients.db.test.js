@@ -392,17 +392,35 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryRecipients (real
       expect(r.recipientsByYear['2024'][0].totalSpend).toBe(25);
     });
 
-    it('applies category exclusions and drops invalid recipient ids', async () => {
+    it('applies category and recipient exclusions together', async () => {
       await seedBase();
       await insertTxn({ date: '2024-01-10', amount: '-40.00', recipientId: rec.colruyt }); // Food via default
       await insertTxn({ date: '2024-01-10', amount: '-60.00', recipientId: rec.electrabel }); // Bills via default
 
       const excl = await recipientInsightsRepository.getRecipientByYear(
         'EUR',
-        [0, -1, 1.5, 'evil', rec.electrabel],
+        [rec.electrabel],
         [cat.Food],
       );
       expect(excl.recipientsByYear['2024']).toBeUndefined(); // both rows filtered out
+    });
+
+    // Previously this pinned the opposite: a malformed exclusion list had its
+    // bad entries dropped and the query ran on what survived. That is the bug
+    // 00f8281d closed — a dropped exclusion id does not 404, it silently stops
+    // excluding, so the caller gets a wider answer than it asked for and
+    // nothing surfaces. Rejecting is the contract now, matching the `:id`
+    // params, body arrays and aggregation query params.
+    it('rejects an exclusion list containing a malformed id rather than dropping it', async () => {
+      await seedBase();
+      await insertTxn({ date: '2024-01-10', amount: '-40.00', recipientId: rec.colruyt });
+      await insertTxn({ date: '2024-01-10', amount: '-60.00', recipientId: rec.electrabel });
+
+      for (const bad of [0, -1, 1.5, 'evil', '12abc', '1e3']) {
+        await expect(
+          recipientInsightsRepository.getRecipientByYear('EUR', [bad, rec.electrabel], [cat.Food]),
+        ).rejects.toThrow(/excludedRecipientIds contains invalid value/);
+      }
     });
   });
 
