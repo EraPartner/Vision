@@ -624,18 +624,47 @@ jobs:
     if: always()
     steps:
       - name: Check all gates passed
+        # Values reach the script through env, never via ${{ }} interpolation
+        # into `run:` — same convention as the rest of this workflow.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RESULTS: ${{ toJson(needs.*.result) }}
         run: |
-          results='${{ toJson(needs.*.result) }}'
+          set -euo pipefail
+
           # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the eleven
           # code jobs are gated off by `changes.outputs.code`, so they report
           # 'skipped' and this gate must still pass. `changes` and `secrets-scan`
-          # always run, so a genuine upstream break still shows as
-          # failure/cancelled. Do not tighten this to "must equal success"
-          # without also special-casing the docs-only path — that would put
-          # docs-only PRs straight back to permanently blocked.
-          if echo "$results" | grep -qE '"(failure|cancelled)"'; then
-            echo "Quality gate failed. Job results: $results"
+          # always run, so a genuine upstream break still shows as failure.
+          # Do not tighten this to "must equal success" without also
+          # special-casing the docs-only path — that would put docs-only PRs
+          # straight back to permanently blocked.
+          #
+          # 'cancelled' is tolerated too, but ONLY on a pull_request run and ONLY
+          # when nothing reports 'failure'. Reason: the `concurrency` block above
+          # sets `cancel-in-progress` for pull_request events, so pushing twice in
+          # quick succession cancels the first run's in-flight jobs BY DESIGN.
+          # Failing on that painted a red gate on runs where nothing broke (seen
+          # six times across PRs #163/#165), which trains reviewers to ignore the
+          # gate. GitHub exposes no cancellation reason to the job, so the two
+          # conditions above are the discriminator we have:
+          #   • pull_request only — a cancelled push/main run stays red, which the
+          #     concurrency block relies on ("every main commit gets a full
+          #     verdict, needed for bisecting").
+          #   • no 'failure' anywhere — a real break alongside a cancel is still
+          #     a real break.
+          # A superseded run's green is harmless because branch protection tracks
+          # the head SHA, and the push that superseded this run moved it.
+          if echo "$RESULTS" | grep -q '"failure"'; then
+            echo "Quality gate failed. Job results: $RESULTS"
             exit 1
+          fi
+          if echo "$RESULTS" | grep -q '"cancelled"'; then
+            if [ "$EVENT_NAME" != "pull_request" ]; then
+              echo "Quality gate failed: job(s) cancelled on a '$EVENT_NAME' run, where cancellation is never routine. Job results: $RESULTS"
+              exit 1
+            fi
+            echo "::warning title=Superseded run::Job(s) cancelled and nothing failed — treating this as a run superseded by a newer push (see the concurrency block). Job results: $RESULTS"
           fi
           echo "All quality gates passed."
 
@@ -847,62 +876,111 @@ jobs:
     if: always()
     steps:
       - name: Check Docker-tier stages passed
+        # Values reach the script through env, never via ${{ }} interpolation
+        # into `run:` — same convention as the rest of this workflow.
         env:
+          EVENT_NAME: ${{ github.event_name }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
+          ALL_RESULTS: ${{ toJson(needs.*.result) }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SECRETS_SCAN_RESULT: ${{ needs.secrets-scan.result }}
+          QUALITY_GATE_RESULT: ${{ needs.quality-gate.result }}
+          TRIVY_SCAN_RESULT: ${{ needs.trivy-scan.result }}
+          DOCKER_VERIFY_RESULT: ${{ needs.docker-verify.result }}
+          LIVE_CONTRACTS_RESULT: ${{ needs.test-live-api-contracts.result }}
         run: |
-          echo "changes(code):           ${{ needs.changes.result }} (code=$CODE_CHANGED)"
-          echo "secrets-scan:            ${{ needs.secrets-scan.result }}"
-          echo "quality-gate:            ${{ needs.quality-gate.result }}"
+          set -euo pipefail
+
+          echo "changes(code):           $CHANGES_RESULT (code=$CODE_CHANGED)"
+          echo "secrets-scan:            $SECRETS_SCAN_RESULT"
+          echo "quality-gate:            $QUALITY_GATE_RESULT"
+
+          # 'cancelled' is tolerated below, but ONLY on a pull_request run and
+          # ONLY when no job in this gate's `needs` reports 'failure'. Reason:
+          # the `concurrency` block at the top of this file sets
+          # `cancel-in-progress` for pull_request events, so pushing twice in
+          # quick succession cancels the first run's in-flight jobs BY DESIGN,
+          # and this gate used to paint a red required check on runs where
+          # nothing broke (seen six times across PRs #163/#165). GitHub exposes
+          # no cancellation reason to the job, so these two conditions are the
+          # discriminator we have:
+          #   • pull_request only — a cancelled push/main run stays red, which
+          #     the concurrency block relies on (every main commit needs a full
+          #     verdict for bisecting).
+          #   • no 'failure' anywhere — a real break alongside a cancel is still
+          #     a real break, and the whole Quality-Gate tier folds into
+          #     `quality-gate`'s own result, so an upstream break is visible here.
+          # A superseded run's green is harmless: branch protection tracks the
+          # head SHA, and the push that superseded this run moved it.
+          #
+          # This does NOT loosen 'skipped'. See `require` below.
+          tolerate_cancelled=false
+          if [ "$EVENT_NAME" = "pull_request" ] && ! echo "$ALL_RESULTS" | grep -q '"failure"'; then
+            tolerate_cancelled=true
+          fi
+
+          # require <job> <result> [extra allowed results...]
+          #
+          # 'success' always passes; extra allowed results are per-job (only
+          # test-live-api-contracts gets one, 'skipped', for draft PRs).
+          # 'cancelled' passes only under the tolerance computed above.
+          # Everything else — crucially 'skipped' for trivy-scan/docker-verify,
+          # which means the Docker tier was silently bypassed rather than run —
+          # is fatal.
+          require() {
+            job=$1; result=$2; shift 2
+            if [ "$result" = "success" ]; then return 0; fi
+            for allowed in "$@"; do
+              if [ "$result" = "$allowed" ]; then return 0; fi
+            done
+            if [ "$result" = "cancelled" ] && [ "$tolerate_cancelled" = "true" ]; then
+              echo "::warning title=Superseded run::'$job' was cancelled and nothing failed — treating this as a run superseded by a newer push (see the concurrency block)."
+              return 0
+            fi
+            echo "CI failed: $job result is '$result'."
+            exit 1
+          }
 
           # `changes` and `secrets-scan` run on EVERY diff, docs included — a
           # leaked credential in a markdown file must still fail CI.
-          if [ "${{ needs.changes.result }}" != "success" ]; then
-            echo "CI failed: changes did not succeed (got '${{ needs.changes.result }}')."
-            exit 1
-          fi
-          if [ "${{ needs.secrets-scan.result }}" != "success" ]; then
-            echo "CI failed: secrets-scan did not succeed (got '${{ needs.secrets-scan.result }}')."
-            exit 1
-          fi
-          if [ "${{ needs.quality-gate.result }}" != "success" ]; then
-            echo "CI failed: quality-gate did not succeed (got '${{ needs.quality-gate.result }}')."
-            exit 1
+          require changes "$CHANGES_RESULT"
+          require secrets-scan "$SECRETS_SCAN_RESULT"
+          require quality-gate "$QUALITY_GATE_RESULT"
+
+          # Reachable only when the tolerance above accepted a cancelled
+          # `changes`: the job never published its output, so the diff was never
+          # classified. Bail out explicitly instead of falling through to the
+          # docs-only branch, where an empty CODE_CHANGED would report a
+          # confident "docs-only" verdict for a run that simply never ran.
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "Superseded run: 'changes' did not complete, so the diff was never classified — no verdict to give."
+            exit 0
           fi
 
           # Documentation-only diff: the code and Docker tiers are intentionally
-          # skipped, so there is nothing further to assert. This job still runs
-          # and reports, which is the whole point — "CI Complete" is the required
-          # check and must never be left pending.
+          # skipped, so there is nothing further to assert — this early exit is
+          # why the trivy-scan/docker-verify assertions below never see the
+          # 'skipped' they would (correctly) reject on a docs-only run. This job
+          # still runs and reports, which is the whole point — "CI Complete" is
+          # the required check and must never be left pending.
           if [ "$CODE_CHANGED" != "true" ]; then
             echo "Docs-only diff — code and Docker tiers intentionally skipped."
             echo "All CI stages complete (docs-only)."
             exit 0
           fi
 
-          echo "trivy-scan:              ${{ needs.trivy-scan.result }}"
-          echo "docker-verify:           ${{ needs.docker-verify.result }}"
-          echo "test-live-api-contracts: ${{ needs.test-live-api-contracts.result }}"
+          echo "trivy-scan:              $TRIVY_SCAN_RESULT"
+          echo "docker-verify:           $DOCKER_VERIFY_RESULT"
+          echo "test-live-api-contracts: $LIVE_CONTRACTS_RESULT"
           # trivy-scan and docker-verify MUST run and succeed. A 'skipped' here
           # means the Docker tier was silently bypassed (e.g. quality-gate or
           # build-image failed upstream) — treat that as a failure, not a pass.
-          # A plain failure/cancellation grep would let a skipped required job
-          # slip through green; assert success explicitly instead.
-          if [ "${{ needs.trivy-scan.result }}" != "success" ]; then
-            echo "CI failed: trivy-scan did not succeed (got '${{ needs.trivy-scan.result }}')."
-            exit 1
-          fi
-          if [ "${{ needs.docker-verify.result }}" != "success" ]; then
-            echo "CI failed: docker-verify did not succeed (got '${{ needs.docker-verify.result }}')."
-            exit 1
-          fi
+          # A plain failure grep would let a skipped required job slip through
+          # green; `require` allows no extra results for these two, so only
+          # 'success' (or a tolerated supersede-cancel) passes.
+          require trivy-scan "$TRIVY_SCAN_RESULT"
+          require docker-verify "$DOCKER_VERIFY_RESULT"
           # test-live-api-contracts is INTENTIONALLY skipped on draft PRs
-          # (if: !github.event.pull_request.draft), so 'skipped' is allowed here;
-          # only an actual failure/cancellation is a hard error.
-          case "${{ needs.test-live-api-contracts.result }}" in
-            success|skipped) ;;
-            *)
-              echo "CI failed: test-live-api-contracts result is '${{ needs.test-live-api-contracts.result }}'."
-              exit 1
-              ;;
-          esac
+          # (if: !github.event.pull_request.draft), so 'skipped' is allowed here.
+          require test-live-api-contracts "$LIVE_CONTRACTS_RESULT" skipped
           echo "All CI stages complete."
