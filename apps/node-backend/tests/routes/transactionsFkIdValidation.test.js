@@ -11,8 +11,8 @@
  *
  * Absent and null are deliberately untouched: `recipient_id` is required on
  * POST but nullable on PATCH, `category_id` is nullable on both, and null there
- * means "clear the FK" — the inline row editor's clear action. Pinned here so a
- * later tightening cannot take that away by accident.
+ * means "clear the FK" / "uncategorized" — the inline row editor's clear
+ * action. Pinned here so a later tightening cannot take that away by accident.
  *
  * Lives in its own file rather than in transactionsValidationPins.test.js
  * because the reject matrix needs ~30 PATCHes and the route carries its own
@@ -110,14 +110,34 @@ describe('PATCH /:id — FK ids reject instead of retargeting', () => {
 
 describe('POST / — FK ids reject instead of retargeting', () => {
   // recipient_id's reject matrix lives with the other POST body pins in
-  // transactionsValidationPins.test.js. category_id is NOT pinned here on
-  // purpose: POST validates recipient_id and amount and forwards every other
-  // field raw, so category_id has no guard at all — a separate gap (an
-  // unvalidated value reaches Postgres and 500s on the cast) rather than this
-  // finding's silent retarget, and not something to close by side effect.
-  it('still creates with an absent category_id and with a digit-string one', async () => {
+  // transactionsValidationPins.test.js.
+  //
+  // category_id used to be excluded here on purpose, because POST validated
+  // recipient_id and amount and forwarded every other field raw — a *missing*
+  // guard rather than this file's loose one, so a malformed value reached
+  // Postgres and 500'd on the cast. That gap is now closed with the same
+  // nullableFkField the PATCH body uses, and the matrix below is the same one.
+  it('rejects every category_id that used to reach Postgres unvalidated', async () => {
+    for (const category_id of [...RETARGETING, '12abc', 0, -5, '']) {
+      const res = await post({ category_id });
+      expect(res.status, `expected ${JSON.stringify(category_id)} to be rejected`).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
+    expect(transactionRepository.create).not.toHaveBeenCalled();
+  });
+
+  // Absent and null both mean "uncategorized" on create and always have — the
+  // column is nullable and the POST handler never defaulted it. Pinned so the
+  // new guard cannot turn either into a 400.
+  it('still creates with an absent category_id, a null one, and a digit-string one', async () => {
     await post({}).expect(201);
+    await post({ category_id: null }).expect(201);
     await post({ category_id: '4' }).expect(201);
-    expect(transactionRepository.create).toHaveBeenCalledTimes(2);
+    expect(transactionRepository.create).toHaveBeenCalledTimes(3);
+    // The service always names category_id in the row it builds, so "absent"
+    // reaches the repository as undefined, not as a missing key.
+    expect(transactionRepository.create.mock.calls[0][0].category_id).toBeUndefined();
+    expect(transactionRepository.create.mock.calls[1][0].category_id).toBeNull();
+    expect(transactionRepository.create.mock.calls[2][0].category_id).toBe(4);
   });
 });

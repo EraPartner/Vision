@@ -3325,12 +3325,17 @@ export interface components {
             /** Format: date */
             transaction_date: string;
             bank_account: string;
+            /** Format: int32 */
             recipient_id: number;
             memo?: string;
             amount: number;
             currency?: string;
             balance?: number;
-            category_id?: number;
+            /**
+             * Format: int32
+             * @description Absent or null files the transaction uncategorized. Validated since 2026-08-11 — before that this operation forwarded the field raw and a malformed value reached Postgres as a cast error (500).
+             */
+            category_id?: number | null;
             comment?: string;
             /** @description Tag slugs to assign (replaces existing tags) */
             tags?: string[];
@@ -3340,11 +3345,13 @@ export interface components {
             /** Format: date */
             transaction_date?: string;
             bank_account?: string | null;
+            /** Format: int32 */
             recipient_id?: number | null;
             recipient_name?: string;
             memo?: string | null;
             amount?: number;
             currency?: string;
+            /** Format: int32 */
             category_id?: number | null;
             category_name?: string;
             comment?: string | null;
@@ -6834,8 +6841,9 @@ export interface operations {
     };
     getBulkPortfolioTransactions: {
         parameters: {
-            query?: {
-                investment_id?: number;
+            query: {
+                /** @description Comma-separated investment ids (`1,2,3`), the shape the frontend's `ids.join(',')` builder emits. Every element must be a positive int32; one malformed element rejects the whole request. */
+                investment_ids: string;
                 limit?: number;
                 offset?: number;
             };
@@ -6901,7 +6909,10 @@ export interface operations {
                     currency?: string;
                     /** @description Explicit EUR conversion rate; null clears it */
                     fx_rate_to_eur?: number | null;
-                    /** @description Owning account for the lot (ADR-091); null = unassigned */
+                    /**
+                     * Format: int32
+                     * @description Owning account for the lot (ADR-091); null = unassigned
+                     */
                     account_id?: number | null;
                     /** @description Free-text note; null clears it */
                     note?: string | null;
@@ -7083,6 +7094,13 @@ export interface operations {
                     recurrence_interval?: components["schemas"]["RecurrenceInterval"];
                     /** Format: date */
                     recurrence_end_date?: string;
+                    /** @description Explicit EUR conversion rate; absent/null is resolved automatically */
+                    fx_rate_to_eur?: number | null;
+                    /**
+                     * Format: int32
+                     * @description Owning account for the lot (ADR-091); absent or null leaves it unassigned. Accepted and applied by this operation all along — it was simply undocumented.
+                     */
+                    account_id?: number | null;
                 };
             };
         };

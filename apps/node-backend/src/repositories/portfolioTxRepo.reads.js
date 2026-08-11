@@ -5,6 +5,7 @@
 import { query } from '../database/connection.js';
 import { coerceNumericFields } from '../lib/money.js';
 import { toYmd } from '../utils/portfolioMath.js';
+import { validateId } from '../middleware/validation.js';
 import { buildListWhereClause } from './portfolioTxRepo.common.js';
 
 /** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
@@ -74,6 +75,33 @@ export async function getAllWithCount({ investmentId = null, type = null, limit 
 }
 
 /**
+ * Normalise an `investment_id` list for the `= ANY($1::int[])` predicates
+ * below: dedupe, and keep only real ids.
+ *
+ * Kept rather than deleted even though `getBulkTransactions` now validates the
+ * query param before it gets here, because this also does the dedupe the SQL
+ * wants and the JSDoc contract of both callers still admits strings. What
+ * changed is the element parse: it was `Number.parseInt`, which took the
+ * leading digits of anything, so `['12abc']` normalised to `[12]` and the read
+ * silently covered an investment the caller never named. Delegating to
+ * `validateId` keeps the documented string form working (`'12'` → 12) while a
+ * malformed entry is dropped instead of retargeting. Dropping, not throwing:
+ * this layer has always been a silent filter, and the throwing guard now lives
+ * at the route where a 400 can reach the caller.
+ * @param {Array<number|string>|null|undefined} investmentIds
+ * @returns {number[]}
+ */
+function normalizeInvestmentIds(investmentIds) {
+  /** @type {number[]} */
+  const ids = [];
+  for (const id of investmentIds || []) {
+    const result = validateId(id, 'investment_id');
+    if (result.valid) ids.push(result.value);
+  }
+  return Array.from(new Set(ids));
+}
+
+/**
  * @param {{
  *   investmentIds?: Array<number|string>,
  *   type?: string|null,
@@ -90,9 +118,7 @@ export async function getAllByInvestmentIds({
   limit = null,
   offset = 0,
 } = {}) {
-  const normalizedIds = Array.from(new Set((investmentIds || [])
-    .map((/** @type {any} */ id) => Number.parseInt(id, 10))
-    .filter((/** @type {number} */ id) => Number.isInteger(id) && id > 0)));
+  const normalizedIds = normalizeInvestmentIds(investmentIds);
 
   if (normalizedIds.length === 0) return [];
 
@@ -156,9 +182,7 @@ export async function getCount({ investmentId = null, investmentIds = null, type
     sql += ` AND investment_id = $${idx++}`;
     params.push(investmentId);
   } else if (Array.isArray(investmentIds) && investmentIds.length > 0) {
-    const normalizedIds = Array.from(new Set(investmentIds
-      .map((/** @type {any} */ id) => Number.parseInt(id, 10))
-      .filter((/** @type {number} */ id) => Number.isInteger(id) && id > 0)));
+    const normalizedIds = normalizeInvestmentIds(investmentIds);
     if (normalizedIds.length > 0) {
       sql += ` AND investment_id = ANY($${idx++}::int[])`;
       params.push(normalizedIds);

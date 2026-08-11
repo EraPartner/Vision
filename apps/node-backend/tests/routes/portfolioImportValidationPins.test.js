@@ -405,6 +405,33 @@ describe('normalizePortfolioParserConfig pins (POST /parsers)', () => {
 });
 
 /**
+ * `:id` on the portfolio half of the parser CRUD. The shape matrix lives in
+ * parserConfigIdValidation.test.js — this pins that THIS router carries the
+ * guard, since the two routers register the shared handlers independently and
+ * a regression could reach one and not the other. `DELETE /parsers/22abc` used
+ * to answer 204 having deleted parser 22.
+ */
+describe('parser :id shape (PATCH/DELETE /parsers/:id)', () => {
+  it('rejects a malformed id on both operations, repository untouched', async () => {
+    customParserConfigRepository.delete.mockResolvedValue(true);
+    customParserConfigRepository.update.mockResolvedValue({ id: 22, name: 'X' });
+
+    for (const id of ['22abc', '1e3', '0']) {
+      await api.delete(`${BASE}/parsers/${id}`).expect(400);
+      await api.patch(`${BASE}/parsers/${id}`).send({ name: 'X' }).expect(400);
+    }
+    expect(customParserConfigRepository.delete).not.toHaveBeenCalled();
+    expect(customParserConfigRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('still deletes on a real id', async () => {
+    customParserConfigRepository.delete.mockResolvedValue(true);
+    await api.delete(`${BASE}/parsers/22`).expect(204);
+    expect(customParserConfigRepository.delete).toHaveBeenCalledWith(22);
+  });
+});
+
+/**
  * `batch_id` wire type — the portfolio half of the same split.
  *
  * `POST /csv/custom` relays `result.batchId` from `createBatch`

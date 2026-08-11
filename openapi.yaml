@@ -708,6 +708,8 @@ components:
           type: string
         recipient_id:
           type: integer
+          format: int32
+          minimum: 1
         memo:
           type: string
         amount:
@@ -718,6 +720,13 @@ components:
           type: number
         category_id:
           type: integer
+          format: int32
+          minimum: 1
+          nullable: true
+          description: >-
+            Absent or null files the transaction uncategorized. Validated since
+            2026-08-11 — before that this operation forwarded the field raw and a
+            malformed value reached Postgres as a cast error (500).
         comment:
           type: string
         tags:
@@ -740,6 +749,8 @@ components:
           nullable: true
         recipient_id:
           type: integer
+          format: int32
+          minimum: 1
           nullable: true
         recipient_name:
           type: string
@@ -752,6 +763,8 @@ components:
           type: string
         category_id:
           type: integer
+          format: int32
+          minimum: 1
           nullable: true
         category_name:
           type: string
@@ -4743,10 +4756,18 @@ paths:
       operationId: getBulkPortfolioTransactions
       tags: [Portfolio]
       parameters:
+        # Documented as `investment_id` (singular, optional) until 2026-08-11;
+        # the route has only ever read `investment_ids`, and 400s without it.
         - in: query
-          name: investment_id
+          name: investment_ids
+          required: true
+          description: >-
+            Comma-separated investment ids (`1,2,3`), the shape the frontend's
+            `ids.join(',')` builder emits. Every element must be a positive
+            int32; one malformed element rejects the whole request.
           schema:
-            type: integer
+            type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: limit
           schema:
@@ -4811,6 +4832,8 @@ paths:
                   description: Explicit EUR conversion rate; null clears it
                 account_id:
                   type: integer
+                  format: int32
+                  minimum: 1
                   nullable: true
                   description: Owning account for the lot (ADR-091); null = unassigned
                 note:
@@ -5016,6 +5039,19 @@ paths:
                 recurrence_end_date:
                   type: string
                   format: date
+                fx_rate_to_eur:
+                  type: number
+                  nullable: true
+                  description: Explicit EUR conversion rate; absent/null is resolved automatically
+                account_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Owning account for the lot (ADR-091); absent or null leaves it
+                    unassigned. Accepted and applied by this operation all along —
+                    it was simply undocumented.
       responses:
         "201":
           description: Created transaction

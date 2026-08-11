@@ -270,7 +270,11 @@ Create a new transaction.
 
 **Required Fields:** date, bank_account, recipient_id, amount
 
-**Body FK ids are strict (changed 2026-08-11, breaking for malformed ids).** `recipient_id` must be a plain base-10 integer in 1..2,147,483,647 — the same rule the id path/query params follow. It used to be checked with `Number.isInteger(Number(value))`, which rejects `12abc` but reads `1e3` as 1000, `0x10` as 16 and `true` as 1, so a malformed id booked the transaction against a recipient the caller never named. `0` and negatives are rejected too. See [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|Input Validation]].
+**Body FK ids are strict (changed 2026-08-11, breaking for malformed ids).** `recipient_id` and `category_id` must each be a plain base-10 integer in 1..2,147,483,647 — the same rule the id path/query params follow. `0`, negatives and `''` are rejected too. See [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|Input Validation]].
+
+- `recipient_id` used to be checked with `Number.isInteger(Number(value))`, which rejects `12abc` but reads `1e3` as 1000, `0x10` as 16 and `true` as 1, so a malformed id booked the transaction against a recipient the caller never named.
+- `category_id` had **no guard at all** on this operation — the create schema validated `recipient_id` and `amount` and forwarded the rest raw. `12abc`, `1e3`, `true`, `[7]` and `''` reached Postgres as a 22P02 cast error and `0`/negatives as an FK violation, so the create path for the app's core entity answered **500** rather than 400; `0x10` was worse, landing on category 16 wherever that row exists (Postgres reads hex integer literals). It now uses the same validator as the PATCH body.
+- **`null` and an absent `category_id` both mean "uncategorized" and still answer 201** — unchanged, and pinned.
 
 **Duplicate Detection:** Automatically checks for duplicate transactions based on date, amount, recipient, and bank account. Returns 409 if duplicate found.
 

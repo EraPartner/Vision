@@ -848,9 +848,16 @@ describe('Saved custom parser routes', () => {
       expect(res.body).toEqual(errEnvelope({ code: 'CONFLICT' }));
     });
 
+    // 'abc' was the only value pinned here, and it is the one the old
+    // `parseInt`+isNaN guard happened to catch. '12abc' is the one that mattered:
+    // it resolved to parser 12. Full matrix in parserConfigIdValidation.test.js;
+    // these two keep the *real* router on the hook for wiring the guard.
     it('rejects an invalid id', async () => {
-      const res = await api.patch(`${BASE}/parsers/abc`).send({ name: 'X' }).expect(400);
-      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      for (const id of ['abc', '12abc']) {
+        const res = await api.patch(`${BASE}/parsers/${id}`).send({ name: 'X' }).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      }
+      expect(customParserConfigRepository.update).not.toHaveBeenCalled();
     });
   });
 
@@ -866,6 +873,15 @@ describe('Saved custom parser routes', () => {
 
       const res = await api.delete(`${BASE}/parsers/3`).expect(404);
       expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
+    });
+
+    // The 🔺 case: this used to answer 204 having deleted parser 12.
+    it('rejects a malformed id instead of deleting the record it truncates to', async () => {
+      customParserConfigRepository.delete.mockResolvedValue(true);
+
+      const res = await api.delete(`${BASE}/parsers/12abc`).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      expect(customParserConfigRepository.delete).not.toHaveBeenCalled();
     });
   });
 });

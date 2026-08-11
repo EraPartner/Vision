@@ -146,6 +146,9 @@ Progress percent mapping:
 
 Portfolio parser configs reuse the `custom_parser_configs` table with `kind = 'portfolio'`. The uniqueness constraint is `(name, kind)`, so a transaction parser and a portfolio parser may share the same name.
 
+> [!warning] Parser `:id` contract (2026-08-11 — breaking for malformed ids)
+> `PATCH` and `DELETE /api/portfolio/import/parsers/:id` accept **only** a plain base-10 integer in 1..2,147,483,647; anything else is `400 VALIDATION_ERROR` (`"Invalid parser config id"`) before any repository call. Both operations share `registerParserRoutes` with the [[docs/api/imports|transaction parser routes]], which had the same defect: no `validateIdParam`, and a `parseInt` guarded only by `Number.isNaN`, so `DELETE /parsers/22abc` answered **`204` having deleted parser 22**. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
+
 ### GET /api/portfolio/import/parsers
 
 List all saved portfolio parser configurations. Collection GETs use the
@@ -228,6 +231,7 @@ Update an existing saved portfolio parser. Both `name` and `config` are optional
 | Status | Meaning |
 |--------|---------|
 | `200 OK` | Parser updated |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No portfolio parser with that id |
 | `409 Conflict` | Another portfolio parser already uses the requested `name` |
 
@@ -242,6 +246,7 @@ Delete a saved portfolio parser.
 | Status | Meaning |
 |--------|---------|
 | `204 No Content` | Deleted successfully |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No portfolio parser with that id |
 
 ---

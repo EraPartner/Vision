@@ -7,7 +7,7 @@ updated: 2026-08-11
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/parserConfigRoutes.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/repositories/portfolioTxRepo.reads.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -183,7 +183,14 @@ The four scalar id filters on the same endpoints — `transaction_id`, `category
 `recipient_group_id` — go through `assertOptionalId`, joining `account_id`, which already did.
 
 **Params:** `category_ids` (`GET /api/transactions`, `GET /api/transactions/export/csv|json`),
-`account_ids` (both export endpoints).
+`account_ids` (both export endpoints), `investment_ids` (`GET /api/investments/transactions`).
+
+`investment_ids` uses the same wrapper shape in `investmentController.js`, with one deliberate
+difference: it is **required**, not optional, so absent/empty is the endpoint's pre-existing
+`400 investment_ids is required` rather than "no filter". Its repository-side twin in
+`portfolioTxRepo.reads.js` (`normalizeInvestmentIds`, feeding both `= ANY($1::int[])` predicates)
+also delegates to `validateId` now, but keeps dropping rather than throwing — that layer has
+always been a silent filter, and the throwing guard belongs where a 400 can reach the caller.
 
 > [!warning] Breaking change (2026-08-11) — the last id parsers, and the only one whose output is a file
 > These sat **upstream** of `validateInt4Ids`, so the SQL-build convergence did not close them: by
@@ -213,6 +220,20 @@ The four scalar id filters on the same endpoints — `transaction_id`, `category
 > before the request), `buildQuery` omits empty values, and nothing in the frontend sends
 > `account_ids` at all. `openapi.yaml` already typed the four scalars `integer`, so the
 > implementation moves **onto** the published contract rather than away from it.
+
+> [!warning] Breaking change (2026-08-11) — `investment_ids` joins them
+> Missed by the pass above because it lives in `investmentController.js`, not `routes/`. Same
+> `parseInt` + `filter(Number.isInteger)` shape and the same retarget: `?investment_ids=12abc`
+> returned investment **12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned
+> investment 1 — all `200`. Read-only, hence the lowest severity in the set. The identical parse ran
+> a second time in the repository, so closing only one layer would have left the other reachable
+> from any future caller; both are on `validateId` now.
+>
+> Also corrected here: `openapi.yaml` documented this operation's filter as `investment_id`
+> (singular, optional). The route has only ever read `investment_ids` and 400s without it. The spec
+> now matches, so the operation's generated query type went from optional to required — a
+> documentation fix, not a behaviour change. `useInvestments.ts` already sent
+> `investment_ids: ids.join(',')`.
 
 ---
 
@@ -456,7 +477,7 @@ router.get('/:id', validateIdParam, async (req, res) => {
 });
 ```
 
-Applied in 13 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`.
+Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`lib/parserConfigRoutes.js`, which registers the four saved-parser-config PATCH/DELETE operations on both).
 
 ### validateIntParam
 
@@ -466,7 +487,19 @@ Factory for sub-resource id params that the fixed-`:id` middleware cannot reach.
 router.delete('/:id/patterns/:patternId', validateIdParam, validateIntParam('patternId'), handler);
 ```
 
-Used for `:patternId` (`recipients.js`) and `:accountId` (`recipientBankAccounts.js`). Unlike `validateIdParam` — which no-ops when there is no `:id` on the route — `validateIntParam` rejects a missing param, since a route that declares it always has it.
+Used for `:patternId` (`recipients.js`), `:accountId` (`recipientBankAccounts.js`) and `:txnId` (`investments.js`). Unlike `validateIdParam` — which no-ops when there is no `:id` on the route — `validateIntParam` rejects a missing param, since a route that declares it always has it.
+
+> [!warning] Breaking change (2026-08-11) — the last six operations with no `:id` middleware
+> Six operations reached a repository with a hand-parsed id and no router-edge guard. All six now carry `validateIdParam`/`validateIntParam` **and** parse through `validateId`, so the guard runs twice and cannot disagree with itself.
+>
+> | Operations | Old parser | What a malformed id did |
+> |---|---|---|
+> | `PATCH`/`DELETE /api/import/parsers/:id` and `/api/portfolio/import/parsers/:id` | `parseParserId` — `parseInt` + `Number.isNaN` | `DELETE /parsers/12abc` → **204, parser 12 deleted**; `12.5` → 12; `1e3` → 1; `-1` and `0` cleared the NaN check and reached the repository |
+> | `PATCH`/`DELETE /api/investments/transactions/:txnId` | `requireTxnId` — `parseInt` + `isNaN`/`<= 0` | `DELETE /transactions/12abc` → **204, transaction 12 hard-deleted**; `1e3` → transaction 1; PATCH retargeted identically |
+>
+> Both delete paths are irreversible writes against a record the caller never named, reported as success — the reason this pair was rated highest in the family. Everything listed now returns **400 `VALIDATION_ERROR`** before any repository call.
+>
+> No shipped caller is affected: `lib/api/imports.ts`, `lib/api/portfolioImports.ts` and `lib/api/portfolio.ts` all type these ids as `number`, and every caller takes them from server-supplied rows.
 
 ### coercedIdSchema (import batch/row ids)
 
@@ -506,6 +539,7 @@ The id **route params** above are only half of what a write addresses. The other
 | `POST /api/portfolio/import/csv/custom` (+ `/csv/custom/stream`) | `account_id` | `validateId`, in `brokerageParamsSchema` |
 | `POST /api/transactions`, `PATCH /api/transactions/:id` | `recipient_id`, `category_id` | `validateId`, in the zod body schemas |
 | `POST /api/accounts`, `PATCH /api/accounts/:id` | `funding_account_id` | `validateId`, in `accountService`'s zod schema |
+| `POST /api/investments/:id/transactions`, `PATCH /api/investments/transactions/:txnId` | `account_id` | `validateId`, via `parseAccountId` (`investmentController.js`) |
 
 **Absent and `null` keep their meaning.** On the three override endpoints and the two nullable transaction FKs, `null` — and, on the override endpoints, an absent field — means *clear the override / clear the FK* and answers **200**, unchanged. Only a **present but malformed** value rejects. On the commit and upload `account_id`, absent/`null` still means *no account for this batch*.
 
@@ -517,6 +551,15 @@ The id **route params** above are only half of what a write addresses. The other
 > Also newly rejected: `0` and negatives, which used to satisfy `Number.isInteger` and reached Postgres as an FK violation (a 500), and `""`, which coerced to `0` the same way.
 >
 > No shipped caller is affected: `lib/api/imports.ts`, `lib/api/portfolioImports.ts` and the transactions/accounts clients all type these fields as `number | null`, and the review pages take the ids from server-supplied rows rather than free text. The values above are reachable only from a direct API call.
+
+> [!warning] Breaking change (2026-08-11) — the last two body FKs
+> Two sites were missed by the sweep above and are now on `validateId` too.
+>
+> **`account_id` on the portfolio-transaction writes** was a bare `Number()` with **no integer check at all** — the weakest validator in the family. `'1e3'` booked the lot against account **1000**, `'0x10'` against 16, `true` against 1, `[7]` against 7 and `' 7 '` against 7, every one a **201**; `'12abc'` reached Postgres as `NaN` and 500'd. The PATCH forwarded the field raw through the repository's update allow-list, where Postgres' own hex-literal parsing turned `'0x10'` into account 16 and the rest into cast errors.
+>
+> **`category_id` on `POST /api/transactions`** had no guard whatsoever: the create schema validated `recipient_id` and `amount` and forwarded the rest raw, so `'12abc'`, `'1e3'`, `true`, `[7]` and `''` all reached Postgres as 22P02 and `0`/negatives as an FK violation — 500s on the create path for the app's core entity, and `'0x10'` a silent write to category 16 wherever that row exists. It now uses the same `nullableFkField` as the PATCH body.
+>
+> Absent/`null` semantics are unchanged and pinned: on transaction create both mean *uncategorized*; on portfolio-transaction create both mean *no brokerage account*; on the portfolio PATCH absent means *leave alone* and `null` means *unassign*.
 
 ---
 

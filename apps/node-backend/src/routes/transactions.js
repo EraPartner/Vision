@@ -118,10 +118,22 @@ const nullableFkField = (field) => z.unknown().transform((value, ctx) => {
 // POST body: per-field guards run first; the cross-field required/amount/
 // recipient checks mirror the pre-zod handler (raw values are forwarded to the
 // repository — POST never coerced amount/recipient_id in the created row).
+// category_id uses the same nullableFkField as the PATCH body: the column is
+// nullable, so null (and absent) still mean "uncategorized" — the create path's
+// existing meaning — and only a present non-null value must be a real id.
+//
+// This one was not loose validation, it was *no* validation: the POST schema
+// checked recipient_id and amount and forwarded everything else raw, so any
+// malformed category_id reached Postgres as a cast error and 500'd on the
+// create path for the app's core entity ('12abc', '1e3', true, [7], '' — all
+// 22P02; 0 and negatives an FK violation). '0x10' was worse than a 500: PG 16
+// reads hex integer literals, so it lands on category 16 wherever that row
+// exists. Surfaced by a test written while closing the FK-body set (e0cab62c).
 const createTransactionSchema = z.looseObject({
   tags: tagsField,
   currency: currencyField(),
   bank_account: bankAccountField,
+  category_id: nullableFkField('category_id'),
 }).superRefine((data, ctx) => {
   const txDate = data.transaction_date || data.date;
   if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {

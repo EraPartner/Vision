@@ -258,6 +258,11 @@ See [[docs/testing/testing|Testing Documentation]] for envelope-aware test patte
 
 These four endpoints manage persisted named custom CSV parser configurations. See [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]] and [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature]] for full context.
 
+> [!warning] Parser `:id` contract (2026-08-11 — breaking for malformed ids)
+> `PATCH` and `DELETE /api/import/parsers/:id` accept **only** a plain base-10 integer in 1..2,147,483,647; anything else is `400 VALIDATION_ERROR` (`"Invalid parser config id"`) before any repository call. The same applies to the portfolio twin, [[docs/api/portfolio-imports|`/api/portfolio/import/parsers/:id`]].
+>
+> These were the only numeric-id routes in the app with **no `validateIdParam`**, and `parseParserId` was a `parseInt` guarded only by `Number.isNaN`. `DELETE /parsers/12abc` therefore answered **`204` having deleted parser 12** — an irreversible delete of a record the caller never named, reported as success; `12.5` hit 12, `1e3` hit 1, and `-1`/`0` cleared the NaN check and reached the repository. Both operations now carry `validateIdParam` *and* parse through `validateId`. Clients sending plain integers are unaffected — `lib/api/imports.ts` types the id `number` and takes it from server rows. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
+
 ### GET /api/import/parsers
 
 List all saved parser configurations. Collection GETs use the canonical
@@ -371,6 +376,7 @@ Update an existing saved parser. Both `name` and `config` are optional; supply o
 | Status | Meaning |
 |--------|---------|
 | `200 OK` | Parser updated; body contains the updated record |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No parser with the given `id` |
 | `409 Conflict` | Another parser already uses the requested `name` |
 
@@ -386,6 +392,7 @@ Delete a saved parser configuration.
 | Status | Meaning |
 |--------|---------|
 | `204 No Content` | Parser deleted successfully |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No parser with the given `id` |
 
 ---
