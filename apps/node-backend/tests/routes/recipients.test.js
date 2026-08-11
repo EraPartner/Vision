@@ -86,6 +86,40 @@ describe('Recipient Routes', () => {
 
       expect(res.body.data.total).toBe(2);
     });
+
+    // Same id-parser set as the planned-transactions and transactions list
+    // filters. `default_category_id` was `x ? parseInt(x) : null`, so
+    // ?default_category_id=12abc listed the recipients defaulting to category
+    // 12 — a filter nobody asked for — and ?default_category_id=abc produced a
+    // NaN that passed the repository's `!= null` guard and reached Postgres as
+    // a 22P02 500.
+    it('rejects a malformed default_category_id instead of truncating it', async () => {
+      for (const raw of ['12abc', '1e3', '12.5', '0', '-4', 'abc', 'NaN', '0x10', '2147483648', ' 5']) {
+        const res = await api.get(`${BASE}?default_category_id=${encodeURIComponent(raw)}`).expect(400);
+        expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      }
+      expect(recipientRepository.getAll).not.toHaveBeenCalled();
+    });
+
+    it('keeps absent and empty default_category_id meaning "no filter"', async () => {
+      recipientRepository.getAll.mockResolvedValue([]);
+      recipientRepository.getCount.mockResolvedValue(0);
+      for (const query of ['', '?default_category_id=']) {
+        await api.get(`${BASE}${query}`).expect(200);
+      }
+      for (const call of recipientRepository.getAll.mock.calls) {
+        expect(call[0]).toMatchObject({ defaultCategoryId: null });
+      }
+    });
+
+    it('passes a well-formed default_category_id through unchanged', async () => {
+      recipientRepository.getAll.mockResolvedValue([]);
+      recipientRepository.getCount.mockResolvedValue(0);
+      await api.get(`${BASE}?default_category_id=7`).expect(200);
+      expect(recipientRepository.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ defaultCategoryId: 7 }),
+      );
+    });
   });
 
   describe('POST /', () => {

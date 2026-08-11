@@ -260,6 +260,105 @@ validateInt4Ids(ids, fieldName)   // → number[], throws ValidationError
 
 ---
 
+### Bulk-action filter selector (`normalizeBulkFilter`)
+
+`apps/node-backend/src/services/bulkSelection.js` — the `filter` half of the `{ ids } | { filter }`
+selector shared by `POST /api/transactions/bulk-delete`, `/bulk-update` and `/bulk-export`. The
+`ids` half was made strict earlier the same day (see `validateInt4Ids` above); this is its sibling.
+
+```javascript
+normalizeBulkFilter(filter)   // → builder opts, throws ValidationError
+```
+
+**Rules:**
+- The accepted key set is closed. An unrecognised key rejects the request —
+  `` `filter` contains unknown field(s): <keys>`` — rather than being ignored
+- Each field is accepted in snake_case or camelCase, but **not both at once**: one field spelled
+  twice rejects instead of silently preferring one spelling
+- Scalar ids (`transaction_id`, `account_id`, `category_id`, `recipient_id`,
+  `recipient_group_id`) go through `assertOptionalId`; `category_ids` through `validateIntArray`;
+  dates through `assertYmd`
+- `category_ids` and `bank_accounts` must be **arrays** — a comma-separated string is rejected
+  (`tags` accepts either form, as it always has)
+- Booleans (`active`, `amount_signed`) accept a real boolean or the query-string `'true'`/`'false'`;
+  anything else rejects instead of collapsing to the default
+- `transaction_type` must be exactly `'income'` or `'expense'`; amounts must parse as finite numbers
+- Absent, `null` and empty (`''`, `[]`) mean "no filter on this field" and answer 200 — the same
+  unset convention `assertOptionalId` and the query-param parsers use. `null` matters concretely:
+  the Transactions page computes its id filters with `Number(param)`, and a `NaN` serialises to
+  `null` over JSON
+- `search` is **rejected** past 200 characters rather than truncated (see below)
+
+> [!warning] Breaking change (2026-08-11) — a skipped filter field widens a bulk DELETE
+> Every field here was applied best-effort: one that failed its type guard was **skipped**. On a
+> read that only over-returns. On `POST /bulk-delete` it means the hard delete ran against a
+> **wider** set than the caller named, answered 200 with a plausible count, and logged nothing —
+> the mirror image of the `ids` retarget closed the same day, and invisible by construction.
+>
+> Reproduced end-to-end against a real Postgres before the fix: a 4-row corpus, a filter naming 2
+> of them (`{category_ids: "<catId>"}` — a string where the array is expected), response
+> `{"deleted": 4}`. Six shapes were live. `category_ids` and `bank_accounts` failed an
+> `Array.isArray` guard; `tags` dropped an empty slug (`'rome-2020,'`); `transaction_type` failed a
+> value guard, so a capitalised `'Expense'` swept income rows in too; `amount_min`/`amount_max` were
+> parsed by `parseAmountFilter`, which returns `null` for anything unparseable, so `'25abc'` dropped
+> the bound entirely; and `active: 0` collapsed to the `active: true` default.
+>
+> Worst of all was the **unknown key**, which was not a type guard at all: nothing in the body was
+> understood, so the filter reached the SQL builder empty — "every active transaction" — and the
+> delete swept the table up to the 5000-row cap. `{account_ids: [7]}` is a real list-endpoint param
+> this normaliser never supported; `{catgeory_id: 7}` is a typo. Both deleted everything.
+>
+> Separately, the five scalar filter ids and the two dates were passed into `$n` **unvalidated**, so
+> `{recipient_id: "12abc"}` reached Postgres as a **22P02 500** and `{start_date: "banana"}` as a
+> **22007 500**. Both are 400s now.
+>
+> All three endpoints share the normaliser and were equally affected. On `bulk-export` the widen is
+> not destructive but it is a disclosure: the user keeps a file containing rows their filter excluded.
+>
+> No caller breaks. The frontend's `BulkTransactionFilter` (`types/api.ts`) already types every
+> field correctly, `JSON.stringify` drops the undefined ones, and the page sends only keys in the
+> accept-list. The whole-table selection the "select all N matching" flow sends with no filters set
+> (`{active: true}` and nothing else) is deliberately still accepted — it is a legitimate request,
+> bounded by the 5000-row cap rather than by validation.
+>
+> Two silent behaviours were deliberately **kept**, both narrowing rather than widening and both
+> shared verbatim with the list endpoint: a `search` shorter than `MIN_SEARCH_LENGTH` is ignored by
+> the SQL builder, and `bank_accounts`/`tagSlugs` are sliced to the builder's 50-element cap (the
+> same pre-existing narrowing `EXPORT_MAX_LIST_SIZE` carries on the export path). The one place this
+> section diverges from the list endpoint is `search` length: the list truncates to 200 characters,
+> which for a substring match matches *more* rows, so here it rejects instead.
+
+---
+
+### Optional id query params on the remaining list endpoints
+
+The last `parseInt`-based id parsers outside the transactions routes, converged onto
+`assertOptionalId` / `validateId` in the same pass:
+
+| Site | Param | Was |
+|---|---|---|
+| `routes/plannedTransactions.js` (`GET /`) | `category_id`, `recipient_id` | `x ? parseInt(x) : null` |
+| `routes/recipients.js` (`GET /`) | `default_category_id` | `x ? parseInt(x) : null` |
+| `routes/research.js` (`POST /mappings/resolve`) | `investment_id` | `Number.parseInt`, `undefined` on failure |
+| `routes/accounts.js` (`POST /:id/merge`) | `source_ids[]` | `parseInt` + `Number.isInteger` |
+| `routes/accounts.js` (`GET /:id/merge-preview`) | `?into=` | `Number(...)` |
+
+> [!warning] Breaking change (2026-08-11) — malformed ids on these five sites
+> Same two failure modes as everywhere else in this family. **Retarget:**
+> `?category_id=12abc` listed the planned transactions of category **12**,
+> `?default_category_id=12abc` the recipients defaulting to category 12, and
+> `investment_id: "12abc"` pre-seeded mapping proposals from holding 12. `?into=1e3` arrived at
+> `previewMerge` as a well-formed **1000**. Worst of the set is `source_ids`: a merge deletes the
+> source accounts and repoints their rows, and `parseInt('12abc')` produced the integer 12, which
+> passed the `Number.isInteger` guard the route's all-or-nothing rejection list was built on — so
+> `'12abc'` **merged and deleted account 12**, a wrong-record irreversible write.
+> **Silent drop:** `investment_id: 'abc'` became "no holding", answering 200 with an un-seeded
+> result indistinguishable from a correct one. **500:** a `NaN` from the two list filters passed the
+> repositories' `!= null` guards and reached Postgres as a 22P02.
+>
+> Absent and empty still mean "no filter" at 200 on every one of them. No shipped caller breaks: the
+> frontend types all of these `number | undefined` and its query builders omit undefined params.
+
 ### Pagination Validation
 
 Validates and normalizes pagination parameters. `validatePagination(limit, offset)` was removed

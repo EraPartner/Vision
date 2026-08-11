@@ -19,7 +19,7 @@ import { setOpeningBalance } from '../services/openingBalanceService.js';
 import { reconcileAccount } from '../services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, validateId } from '../middleware/validation.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
 
@@ -81,8 +81,13 @@ router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {E
 // anchor). No mutation, so no cache invalidation.
 router.get('/:id/merge-preview', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const sourceId = parseInt(req.params.id, 10);
-  // previewMerge validates the coerced value (positive integer, ≠ :id → 400).
-  const targetId = Number(req.query.into);
+  // Strict id parse, not `Number(...)`: previewMerge only checks that what it
+  // receives is a positive integer, so `?into=1e3` arrived as a well-formed
+  // 1000 and previewed a merge into an account nobody named. previewMerge
+  // still owns the ≠ :id and existence checks.
+  const into = validateId(req.query.into, 'into');
+  if (!into.valid) throw new ValidationError('into must be a positive integer account id');
+  const targetId = into.value;
   const result = await previewMerge(sourceId, targetId);
   res.ok({ ...result, links: [] });
 });
@@ -92,17 +97,26 @@ router.get('/:id/merge-preview', validateIdParam, /** @param {ExpressRequest} re
 //
 // All-or-nothing, like the transactions.js bulk endpoints: a non-integer entry
 // used to be silently dropped and the remaining sources merged anyway (an
-// irreversible write the client never asked for), so the whole request is now
-// rejected with a 400 naming the offending entries. Accepted values still go
-// through parseInt, so a valid body merges exactly what it did before.
+// irreversible write the client never asked for), so the whole request is
+// rejected with a 400 naming the offending entries.
+//
+// Each entry is validated as sent (validateId) rather than parsed with
+// parseInt. parseInt does not merely fail on a malformed entry, it retargets
+// it: '12abc' parsed to the integer 12, passed the Number.isInteger guard this
+// rejection list was built on, and merged account 12 — deleting it and
+// repointing its rows onto the survivor. A digit string is still accepted, so
+// a valid body merges exactly what it did before.
 router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
   const rawSourceIds = Array.isArray(req.body?.source_ids) ? req.body.source_ids : [];
-  const sourceIds = rawSourceIds.map((/** @type {any} */ x) => parseInt(x, 10));
+  /** @type {number[]} */
+  const sourceIds = [];
   /** @type {string[]} */
   const rejected = [];
-  sourceIds.forEach((/** @type {number} */ id, /** @type {number} */ index) => {
-    if (!Number.isInteger(id)) rejected.push(`source_ids[${index}] (${JSON.stringify(rawSourceIds[index])})`);
+  rawSourceIds.forEach((/** @type {any} */ raw, /** @type {number} */ index) => {
+    const result = validateId(raw, 'source_ids');
+    if (result.valid) sourceIds.push(result.value);
+    else rejected.push(`source_ids[${index}] (${JSON.stringify(raw)})`);
   });
   if (rejected.length > 0) {
     throw new ValidationError(`source_ids must contain only integers, no accounts were merged: ${rejected.join('; ')}`);

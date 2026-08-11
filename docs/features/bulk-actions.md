@@ -47,7 +47,7 @@ related_code:
 | Mode | Wire shape | Cap | Source |
 |------|-----------|-----|--------|
 | `ids` | `{ ids: number[] }` | 500 | Explicit checkbox selection from the visible/loaded rows |
-| `filter` | `{ filter: TransactionFilter }` | 5000 (matched count) | Promoted from ids-mode via "Select all N matching"; the filter mirrors the same fields the list endpoint accepts |
+| `filter` | `{ filter: BulkTransactionFilter }` | 5000 (matched count) | Promoted from ids-mode via "Select all N matching"; the filter mirrors a subset of the list endpoint's fields, and every field is validated (see [Request body shape](#request-body-shape)) |
 
 Resolver: [`apps/node-backend/src/services/bulkSelection.js`](apps/node-backend/src/services/bulkSelection.js) → `resolveBulkSelection({ ids, filter })`. Filter mode runs a `COUNT(*)` precheck and rejects when the match count exceeds `filterCap`.
 
@@ -59,7 +59,7 @@ Resolver: [`apps/node-backend/src/services/bulkSelection.js`](apps/node-backend/
 | `apps/node-backend/src/services/transactionExport.js` | Streaming CSV / NDJSON pipeline shared with the GET export endpoints |
 | `apps/node-backend/src/routes/transactions.js` | New POST routes: `/bulk-delete`, `/bulk-update`, `/bulk-export` |
 
-Every write route runs inside `withTransaction(client => …)` and ends with `scheduleRefresh()` so materialized views catch up. `validateInt4Ids` validates every id before any SQL touches the DB — a malformed entry **rejects the whole request** (400) rather than being dropped from the batch, so a bulk action never silently operates on a subset of what the caller named. A well-formed id whose row no longer exists is *not* malformed: it passes validation and simply matches no rows, so a stale selection still succeeds.
+Every write route runs inside `withTransaction(client => …)` and ends with `scheduleRefresh()` so materialized views catch up. `validateInt4Ids` validates every id before any SQL touches the DB — a malformed entry **rejects the whole request** (400) rather than being dropped from the batch, so a bulk action never silently operates on a subset of what the caller named. `normalizeBulkFilter` applies the same rule to the `filter` path: an unknown key or a malformed field rejects rather than being skipped, so a bulk action never silently operates on a *wider* set than the caller named either. A well-formed id whose row no longer exists is *not* malformed: it passes validation and simply matches no rows, so a stale selection still succeeds.
 
 ### Frontend
 
@@ -98,7 +98,14 @@ All four are rate-limited to 30 req/min per client, mirroring the existing bulk-
 { "format": "csv", "include_balance": false }
 ```
 
-Filter shape mirrors the existing `GET /api/transactions` query fields (`transaction_id`, `start_date`, `end_date`, `bank_account`, `category_id(s)`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`, `active`, `transaction_type`, `tags`).
+Filter shape mirrors a subset of the existing `GET /api/transactions` query fields. The accepted set is exactly: `transaction_id`, `start_date`, `end_date`, `account_id`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`, `active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags` — each also accepted in camelCase, but not in both spellings at once.
+
+> [!warning] The filter is validated, not best-effort
+> An unknown key, a wrong type or a malformed value **rejects the whole request** with a 400. This is stricter than the list endpoint on purpose. `normalizeBulkFilter` used to skip any field that failed its type guard, and skipping a filter on a bulk action does not narrow it — it *widens* it. `{"category_ids": "5"}` (a string where the array is expected) emitted no category clause at all, so `bulk-delete` swept every transaction the rest of the filter matched, up to the 5000 cap, and answered 200 with a plausible count. The same shape was live on `bank_accounts`, `tags`, `transaction_type`, `amount_min`/`amount_max`, and on any unrecognised key — `{"account_ids": [7]}` reached the SQL builder as an empty filter, i.e. "every active transaction".
+>
+> Absent, `null` and empty (`""`, `[]`) still mean "no filter on this field" and answer 200 — that is what keeps the whole-table "select all N matching" selection working (with no filters set the page posts `{"active": true}` and nothing else, bounded by the 5000-row cap rather than by validation). `category_ids` and `bank_accounts` must be arrays; a comma-separated string is rejected. `tags` accepts either form.
+>
+> Two deliberate non-rejections, both narrowing rather than widening and both shared with the list endpoint: a `search` shorter than 2 characters is ignored by the SQL builder, and `bank_accounts`/`tags` are sliced to the builder's 50-element cap.
 
 ### Response shape
 

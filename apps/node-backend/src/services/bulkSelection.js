@@ -14,6 +14,13 @@
 import { query as dbQuery } from '../database/connection.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from '../lib/filterBuilder.js';
+import {
+  assertMaxLength,
+  assertOptionalId,
+  assertYmd,
+  validateIntArray,
+  validateNumber,
+} from '../middleware/validation.js';
 import { EXPORT_JOINS_SQL } from './transactionExport.js';
 
 const DEFAULT_ID_CAP = 500;
@@ -29,65 +36,256 @@ const DEFAULT_FILTER_CAP = 5000;
  */
 
 /**
+ * Every field the bulk filter understands, as `[camelCase, snake_case]` pairs.
+ * Doubles as the accept-list: a key in neither column is rejected rather than
+ * ignored (see `normalizeBulkFilter`). `tags` is the wire name of `tagSlugs` —
+ * an alias pair like the rest, just not a case transform.
+ */
+const FILTER_ALIASES = [
+  ['transactionId', 'transaction_id'],
+  ['startDate', 'start_date'],
+  ['endDate', 'end_date'],
+  ['accountId', 'account_id'],
+  ['bankAccount', 'bank_account'],
+  ['bankAccounts', 'bank_accounts'],
+  ['categoryId', 'category_id'],
+  ['categoryIds', 'category_ids'],
+  ['recipientId', 'recipient_id'],
+  ['recipientGroupId', 'recipient_group_id'],
+  ['recipientName', 'recipient_name'],
+  ['search', 'search'],
+  ['active', 'active'],
+  ['transactionType', 'transaction_type'],
+  ['amountMin', 'amount_min'],
+  ['amountMax', 'amount_max'],
+  ['amountSigned', 'amount_signed'],
+  ['tagSlugs', 'tags'],
+];
+
+const KNOWN_FILTER_KEYS = new Set(FILTER_ALIASES.flat());
+
+/**
+ * "Absent" for a filter field: never sent, sent as JSON `null` (which is what a
+ * `NaN` id serialises to on the frontend), or sent empty. All three mean "no
+ * filter on this field" and answer 200 — the same unset convention
+ * `assertOptionalId` and the list endpoint's query params use. Malformed is a
+ * different case and is answered differently: `{}` is 400.
+ * @param {unknown} value
+ */
+const isUnset = (value) => value === undefined || value === null || value === '';
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {string|null}
+ */
+function optionalString(value, field) {
+  if (isUnset(value)) return null;
+  if (typeof value !== 'string') throw new ValidationError(`${field} must be a string`);
+  return value;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {string|null}
+ */
+function optionalYmd(value, field) {
+  if (isUnset(value)) return null;
+  if (typeof value !== 'string') throw new ValidationError(`${field} must be a string`);
+  return assertYmd(value, field);
+}
+
+/**
+ * Booleans arrive either as real booleans (the frontend's `BulkTransactionFilter`)
+ * or as the query-string spelling this normaliser also accepts. Anything else
+ * used to collapse to the default silently — `active: 0` read as `active: true`.
+ * @param {unknown} value
+ * @param {string} field
+ * @param {boolean} fallback
+ * @returns {boolean}
+ */
+function optionalBoolean(value, field, fallback) {
+  if (isUnset(value)) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new ValidationError(`${field} must be a boolean`);
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {number|null}
+ */
+function optionalAmount(value, field) {
+  if (isUnset(value)) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new ValidationError(`${field} must be a number`);
+  }
+  const result = validateNumber(value, { fieldName: field });
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {number[]|null}
+ */
+function optionalIdArray(value, field) {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) {
+    throw new ValidationError(`${field} must be an array of positive integers`);
+  }
+  if (value.length === 0) return null;
+  const result = validateIntArray(value, field);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {string[]|null}
+ */
+function optionalStringArray(value, field) {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw new ValidationError(`${field} must be an array of strings`);
+  if (value.length === 0) return null;
+  return value.map((entry) => {
+    if (typeof entry !== 'string' || entry.trim() === '') {
+      throw new ValidationError(`${field} contains invalid value: ${entry}`);
+    }
+    return entry.trim();
+  });
+}
+
+/**
+ * Tag slugs accept an array (the frontend's shape) or the comma-separated
+ * query-string spelling, exactly as before. An element that trims to nothing is
+ * rejected rather than filtered out: `tags: 'rome-2020,'` is malformed, and
+ * dropping it left a filter that matched more rows than the caller named.
+ * @param {unknown} value
+ * @param {string} field
+ * @returns {string[]|null}
+ */
+function optionalTagSlugs(value, field) {
+  if (isUnset(value)) return null;
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',').map((s) => s.trim().toLowerCase())
+      : undefined;
+  if (list === undefined) {
+    throw new ValidationError(`${field} must be an array of strings or a comma-separated string`);
+  }
+  if (list.length === 0) return null;
+  return list.map((entry) => {
+    if (typeof entry !== 'string' || entry.trim() === '') {
+      throw new ValidationError(`${field} contains invalid value: ${entry}`);
+    }
+    return entry;
+  });
+}
+
+/**
  * Coerce a wire filter object into the shape `buildTransactionWhere` expects.
  * Accepts both the camelCase shape used internally and the snake_case query-string
  * shape used by the frontend, so callers can forward request bodies as-is.
+ *
+ * Every field is validated, and a field that fails validation rejects the whole
+ * request. That is the point, and it is a stronger rule than the list endpoint's
+ * because the consequence is different. This filter also drives POST
+ * /bulk-delete, so a field that failed a type guard and was then *skipped* did
+ * not narrow the action, it widened it: `{category_ids: '5'}` — a string where
+ * the array was expected — emitted no category clause at all, and the delete
+ * swept every transaction the rest of the filter matched (capped at 5000),
+ * answering 200 with a plausible count. The same shape was live on
+ * `bank_accounts` (array guard), `tags`, `transaction_type` (value guard),
+ * `amount_min`/`amount_max` (unparseable → clause dropped) and on any key the
+ * normaliser did not recognise at all — `{account_ids: [7]}` reached the
+ * builder as an empty filter, i.e. "every active transaction".
+ *
+ * So: unknown keys reject, wrong types reject, malformed values reject. Absent
+ * and empty still mean "no filter on this field" and stay 200 (`[]`, `''`, and
+ * the JSON `null` a frontend `NaN` id serialises to), which is what keeps the
+ * "select all N matching" flow working — with no filters set it sends
+ * `{active: true}`, a legitimate whole-table selection that the 5000-row cap,
+ * not this function, is responsible for bounding.
+ *
+ * Two deliberate non-rejections, both narrowing rather than widening and both
+ * shared verbatim with the list endpoint: a `search` shorter than
+ * MIN_SEARCH_LENGTH is ignored by the builder, and `bankAccounts`/`tagSlugs`
+ * are sliced to the builder's 50-element cap.
  * @param {BulkFilterInput} filter
  * @returns {object}
+ * @throws {ValidationError} on an unknown key or any malformed field
  */
 export function normalizeBulkFilter(filter) {
   if (!filter || typeof filter !== 'object') return {};
+  if (Array.isArray(filter)) throw new ValidationError('`filter` must be an object');
+
+  const unknown = Object.keys(filter).filter((key) => !KNOWN_FILTER_KEYS.has(key));
+  if (unknown.length > 0) {
+    throw new ValidationError(`\`filter\` contains unknown field(s): ${unknown.join(', ')}`);
+  }
 
   /**
+   * Reads one field under either spelling. Both spellings present at once is
+   * rejected rather than resolved by precedence: they are one field, and
+   * silently keeping the camelCase value is the same silent-ignore shape as
+   * everything else here.
    * @param {string} camel
    * @param {string} snake
    * @returns {any}
    */
-  const pick = (camel, snake) => filter[camel] ?? filter[snake] ?? null;
+  const pick = (camel, snake) => {
+    if (camel === snake) return filter[camel];
+    if (filter[camel] != null && filter[snake] != null) {
+      throw new ValidationError(`Provide either \`${camel}\` or \`${snake}\`, not both`);
+    }
+    return filter[camel] ?? filter[snake];
+  };
 
-  const tagSlugs = Array.isArray(filter.tagSlugs)
-    ? filter.tagSlugs
-    : Array.isArray(filter.tags)
-      ? filter.tags
-      : typeof filter.tags === 'string' && filter.tags.length > 0
-        ? filter.tags.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
-        : null;
-
-  const categoryIds = Array.isArray(filter.categoryIds)
-    ? filter.categoryIds
-    : Array.isArray(filter.category_ids)
-      ? filter.category_ids
-      : null;
-
-  const amountSigned = filter.amountSigned === true || filter.amount_signed === true ||
-    filter.amountSigned === 'true' || filter.amount_signed === 'true';
+  const amountSigned = optionalBoolean(pick('amountSigned', 'amount_signed'), 'amount_signed', false);
 
   return {
-    transactionId: pick('transactionId', 'transaction_id'),
-    startDate: pick('startDate', 'start_date'),
-    endDate: pick('endDate', 'end_date'),
-    accountId: pick('accountId', 'account_id'),
-    bankAccount: pick('bankAccount', 'bank_account'),
-    bankAccounts: filter.bankAccounts ?? filter.bank_accounts ?? null,
-    categoryId: pick('categoryId', 'category_id'),
-    categoryIds: categoryIds && categoryIds.length > 0 ? categoryIds : null,
-    recipientId: pick('recipientId', 'recipient_id'),
-    recipientGroupId: pick('recipientGroupId', 'recipient_group_id'),
-    recipientName: pick('recipientName', 'recipient_name'),
-    search: filter.search ?? null,
-    active: filter.active !== false,
-    transactionType:
-      filter.transactionType === 'income' ||
-      filter.transactionType === 'expense' ||
-      filter.transaction_type === 'income' ||
-      filter.transaction_type === 'expense'
-        ? filter.transactionType ?? filter.transaction_type
-        : null,
-    amountMin: parseAmountFilter(filter.amountMin ?? filter.amount_min, amountSigned),
-    amountMax: parseAmountFilter(filter.amountMax ?? filter.amount_max, amountSigned),
+    transactionId: assertOptionalId(pick('transactionId', 'transaction_id'), 'transaction_id'),
+    startDate: optionalYmd(pick('startDate', 'start_date'), 'start_date'),
+    endDate: optionalYmd(pick('endDate', 'end_date'), 'end_date'),
+    accountId: assertOptionalId(pick('accountId', 'account_id'), 'account_id'),
+    bankAccount: optionalString(pick('bankAccount', 'bank_account'), 'bank_account'),
+    bankAccounts: optionalStringArray(pick('bankAccounts', 'bank_accounts'), 'bank_accounts'),
+    categoryId: assertOptionalId(pick('categoryId', 'category_id'), 'category_id'),
+    categoryIds: optionalIdArray(pick('categoryIds', 'category_ids'), 'category_ids'),
+    recipientId: assertOptionalId(pick('recipientId', 'recipient_id'), 'recipient_id'),
+    recipientGroupId: assertOptionalId(pick('recipientGroupId', 'recipient_group_id'), 'recipient_group_id'),
+    recipientName: optionalString(pick('recipientName', 'recipient_name'), 'recipient_name'),
+    // The list endpoint truncates an over-long search to 200 chars. Truncating
+    // a substring match here would *widen* the delete, so this rejects instead.
+    search: /** @type {string|null} */ (
+      assertMaxLength(optionalString(pick('search', 'search'), 'search'), 200, 'search')
+    ),
+    active: optionalBoolean(pick('active', 'active'), 'active', true),
+    transactionType: parseTransactionType(pick('transactionType', 'transaction_type')),
+    amountMin: parseAmountFilter(optionalAmount(pick('amountMin', 'amount_min'), 'amount_min'), amountSigned),
+    amountMax: parseAmountFilter(optionalAmount(pick('amountMax', 'amount_max'), 'amount_max'), amountSigned),
     amountSigned,
-    tagSlugs,
+    tagSlugs: optionalTagSlugs(pick('tagSlugs', 'tags'), 'tags'),
   };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {'income'|'expense'|null}
+ */
+function parseTransactionType(value) {
+  if (isUnset(value)) return null;
+  if (value !== 'income' && value !== 'expense') {
+    throw new ValidationError("transaction_type must be 'income' or 'expense'");
+  }
+  return value;
 }
 
 /**

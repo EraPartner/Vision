@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
 date: 2026-04-23
-updated: 2026-06-17
+updated: 2026-08-11
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
@@ -42,6 +42,14 @@ Retrieve planned transactions.
 | is_executed | boolean | null | Filter executed |
 | active | boolean | true | Filter active |
 | search | string | null | Search in memo |
+
+> [!warning] `category_id` / `recipient_id` are strict ids (changed 2026-08-11, breaking for malformed ids)
+> Both accept only a plain base-10 integer in 1..2,147,483,647; anything else — `12abc`, `12.5`,
+> `1e3`, `0x10`, `-4`, `0`, ` 5`, `NaN` — returns `400 VALIDATION_ERROR`. Absent and empty
+> (`?category_id=`) still mean *no filter* and answer `200`. These were `parseInt`, verbatim the
+> pattern removed from the transactions list endpoint: `?category_id=12abc` listed the planned
+> transactions of category **12**, and a `NaN` reached Postgres as a `22P02` 500. See
+> [[docs/security/input-validation#Optional id query params on the remaining list endpoints|Input Validation]].
 
 **Response:**
 ```json

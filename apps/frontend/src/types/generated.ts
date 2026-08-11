@@ -3240,12 +3240,40 @@ export interface components {
             removed: number;
             transactions_affected: number;
         };
-        /** @description Selects transactions to act on. Provide an explicit `ids` array or a `filter` object (same shape as GET /api/transactions query filters); exactly one is resolved server-side. */
+        /** @description Selects transactions to act on. Provide an explicit `ids` array or a `filter` object (a subset of the GET /api/transactions query filters); exactly one is resolved server-side. */
         BulkSelection: {
             ids?: number[];
-            filter?: {
-                [key: string]: unknown;
-            };
+            filter?: components["schemas"]["BulkTransactionFilter"];
+        };
+        /** @description Filter-mode selector. Every field is validated and an unknown key, a wrong type or a malformed value rejects the whole request with a 400 — these endpoints include a hard DELETE, and a filter field that was skipped rather than rejected made the action cover a WIDER set of rows than the caller named. Absent, `null` and empty (`""`, `[]`) still mean "no filter on this field". Each field also accepts its camelCase spelling, but not both spellings at once. */
+        BulkTransactionFilter: {
+            transaction_id?: number;
+            /** Format: date */
+            start_date?: string;
+            /** Format: date */
+            end_date?: string;
+            account_id?: number;
+            /** @description Substring match on the account name */
+            bank_account?: string;
+            /** @description Exact account names. Must be an array, not a comma string. */
+            bank_accounts?: string[];
+            category_id?: number;
+            /** @description Must be an array of integers, not a comma string. */
+            category_ids?: number[];
+            recipient_id?: number;
+            recipient_group_id?: number;
+            recipient_name?: string;
+            search?: string;
+            /** @description Defaults to true (active rows only) when omitted. */
+            active?: boolean;
+            /** @enum {string} */
+            transaction_type?: "income" | "expense";
+            amount_min?: number;
+            amount_max?: number;
+            /** @description Defaults to false, comparing amount_min/amount_max against |amount|; true compares against the signed amount. */
+            amount_signed?: boolean;
+            /** @description Tag slugs, as an array or a comma-separated string. */
+            tags?: string[] | string;
         };
         CustomParserConfig: {
             id: number;
@@ -5198,6 +5226,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description Invalid selector: neither/both of `ids` and `filter`, a malformed id, or an unknown/malformed filter field */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Rate limit exceeded */
             429: {
                 headers: {
@@ -5240,7 +5275,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Invalid or missing fields, or invalid FK reference */
+            /** @description Invalid or missing fields, an invalid FK reference, or an unknown/malformed filter field */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5287,7 +5322,7 @@ export interface operations {
                     "application/x-ndjson": string;
                 };
             };
-            /** @description Invalid format */
+            /** @description Invalid format, or an unknown/malformed filter field */
             400: {
                 headers: {
                     [name: string]: unknown;

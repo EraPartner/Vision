@@ -332,8 +332,8 @@ or
 ```
 
 **Request Parameters:**
-- `ids` (optional): Array of transaction IDs to delete. Max 500 entries. Ignored if `filter` is provided.
-- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `ids` (optional): Array of transaction IDs to delete. Max 500 entries. Exactly one of `ids` / `filter` must be given — sending both, or neither, is a `400`. Every element must be a plain base-10 integer in 1..2,147,483,647; one malformed element rejects the whole request.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#Bulk filter selector]] for the accepted fields and the validation rules.
 
 **Response:**
 ```json
@@ -347,7 +347,42 @@ or
 Implementation note:
 - Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]` with caps enforced up front.
 - Runs inside a `withTransaction()` to guarantee atomicity; `scheduleRefresh()` signals materialized-view refresh on success.
-- Invalid IDs are stripped before SQL execution; all remaining rows are deleted in a single `DELETE` statement.
+- Ids and filter fields are validated before any SQL runs: a malformed id or filter field rejects the whole request (400) rather than being stripped, so the delete never covers a narrower *or wider* set than the caller named. All resolved rows are deleted in a single `DELETE` statement.
+
+### Bulk filter selector
+
+The `filter` object accepted by `bulk-delete`, `bulk-update` and `bulk-export` (all three share one
+normaliser, `normalizeBulkFilter` in `[[apps/node-backend/src/services/bulkSelection.js]]`).
+
+Accepted fields — this list is closed, and each may also be given in camelCase, but not in both
+spellings at once:
+
+`transaction_id`, `start_date`, `end_date`, `account_id`, `bank_account`, `bank_accounts`,
+`category_id`, `category_ids`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`,
+`active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags`.
+
+Field semantics match [[#GET /api/transactions]], with these wire-shape differences: `category_ids`
+and `bank_accounts` must be **arrays** (the list endpoint takes comma strings; here a string is a
+`400`), `tags` accepts an array or a comma string, and `active`/`amount_signed` accept a real
+boolean as well as `'true'`/`'false'`.
+
+> [!warning] Breaking change (2026-08-11) — the filter is validated, not best-effort
+> An unknown key, a wrong type or a malformed value now returns `400 VALIDATION_ERROR`. This is
+> stricter than the list endpoint deliberately. A filter field that failed its type guard used to be
+> **skipped**, and skipping a filter on a bulk action does not narrow it — it *widens* it.
+> `{"category_ids": "5"}` emitted no category clause at all, so `bulk-delete` swept every
+> transaction the rest of the filter matched (up to the 5000 cap) and answered `200` with a
+> plausible `deleted` count. The same shape was live on `bank_accounts`, `tags`,
+> `transaction_type`, `amount_min`/`amount_max`, `active`, and on any unrecognised key —
+> `{"account_ids": [7]}` reached the SQL builder as an empty filter, i.e. *every active
+> transaction*. The five scalar filter ids and the two dates were passed into `$n` unvalidated and
+> reached Postgres as **22P02 / 22007 500s**; they are `400`s now.
+>
+> Absent, `null` and empty (`""`, `[]`) still mean *no filter on this field* and answer `200`, so
+> the whole-table "select all N matching" selection (`{"active": true}` with no other keys) keeps
+> working — it is bounded by the 5000-row cap, not by validation. Non-breaking for shipped callers:
+> the frontend's `BulkTransactionFilter` types every field correctly and sends only keys in the
+> accept-list. See [[docs/security/input-validation#Bulk-action filter selector (`normalizeBulkFilter`)|Input Validation]].
 
 ### POST /api/transactions/bulk-update
 
@@ -380,8 +415,8 @@ or
 ```
 
 **Request Parameters:**
-- `ids` (optional): Array of transaction IDs to update. Max 500 entries. Ignored if `filter` is provided.
-- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `ids` (optional): Array of transaction IDs to update. Max 500 entries. Exactly one of `ids` / `filter` must be given — sending both, or neither, is a `400`. Every element must be a plain base-10 integer in 1..2,147,483,647; one malformed element rejects the whole request.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#Bulk filter selector]] for the accepted fields and the validation rules.
 - `fields`: Object with one or more of:
   - `category_id` (integer): New category ID
   - `recipient_id` (integer): New recipient ID
@@ -432,8 +467,8 @@ or
 ```
 
 **Request Parameters:**
-- `ids` (optional): Array of transaction IDs to export. Max 500 entries. Ignored if `filter` is provided.
-- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `ids` (optional): Array of transaction IDs to export. Max 500 entries. Exactly one of `ids` / `filter` must be given — sending both, or neither, is a `400`. Every element must be a plain base-10 integer in 1..2,147,483,647; one malformed element rejects the whole request.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#Bulk filter selector]] for the accepted fields and the validation rules.
 - `format` (required): `"csv"` or `"json"` (NDJSON).
 - `include_balance` (optional, CSV only): If `true`, adds a "Running Balance" column. Ignored for JSON.
 

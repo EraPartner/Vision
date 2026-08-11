@@ -124,7 +124,14 @@ describe('Research route parameter guards', () => {
       expect(res.body.error.message).toBe("key_type must be 'isin' or 'internal'");
     });
 
-    it('POST /mappings/resolve requires query and coerces investment_id via parseInt', async () => {
+    // This test used to be named "…coerces investment_id via parseInt" and
+    // pinned `investment_id: 'abc'` → 200 with investmentId undefined. That was
+    // a description of the implementation, not of an intended contract: it is
+    // the silent-drop shape, and the parseInt behind it also had the retarget
+    // shape — '12abc' parsed to 12, so `resolve` pre-seeded its proposals from
+    // holding 12, a record nobody named, with nothing surfaced. The happy path
+    // (a digit string parses) is kept verbatim; the drop is now a 400.
+    it('POST /mappings/resolve requires query and validates investment_id strictly', async () => {
       const res = await api.post(`${BASE}/mappings/resolve`).send({ instrument_key: 'X', query: '' }).expect(400);
       expect(res.body.error.message).toBe('query required');
 
@@ -135,12 +142,28 @@ describe('Research route parameter guards', () => {
         instrumentKey: 'X', keyType: 'internal', query: 'apple', investmentId: 5,
       }));
 
-      await api.post(`${BASE}/mappings/resolve`)
-        .send({ instrument_key: 'X', query: 'apple', investment_id: 'abc' })
-        .expect(200);
-      expect(researchMappingService.resolve).toHaveBeenLastCalledWith(
-        expect.objectContaining({ investmentId: undefined }),
-      );
+      for (const investment_id of ['abc', '12abc', '1e3', '12.5', 0, -4, true, {}]) {
+        const bad = await api.post(`${BASE}/mappings/resolve`)
+          .send({ instrument_key: 'X', query: 'apple', investment_id })
+          .expect(400);
+        expect(bad.body.error.message).toBe('investment_id must be a positive integer');
+      }
+      expect(researchMappingService.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('POST /mappings/resolve keeps an absent investment_id absent', async () => {
+      // undefined, missing and JSON null all mean "no holding to seed from",
+      // which `resolve` distinguishes with `investmentId !== undefined`.
+      for (const body of [
+        { instrument_key: 'X', query: 'apple' },
+        { instrument_key: 'X', query: 'apple', investment_id: null },
+        { instrument_key: 'X', query: 'apple', investment_id: '' },
+      ]) {
+        await api.post(`${BASE}/mappings/resolve`).send(body).expect(200);
+        expect(researchMappingService.resolve).toHaveBeenLastCalledWith(
+          expect.objectContaining({ investmentId: undefined }),
+        );
+      }
     });
 
     it('POST /mappings rejects a missing or empty mappings array', async () => {

@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-08-10
+updated: 2026-08-11
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -133,7 +133,12 @@ D5: active → closed → only-if-empty deleted). The UI opens `CloseAccountDial
 ### POST /api/accounts/:id/merge
 
 Merge one or more **source** accounts into this **survivor** (`:id`). Body
-`{ source_ids: number[] }`. In one transaction (`accountMergeService`), every reference to a
+`{ source_ids: number[] }`. Every entry must be a plain base-10 integer in 1..2,147,483,647, and one
+malformed entry rejects the whole request with a `400` naming it — no accounts are merged. (Changed
+2026-08-11, breaking for malformed ids: the entries were parsed with `parseInt` and guarded by
+`Number.isInteger`, which catches an unparseable entry but not a partially-parsed one, so `'12abc'`
+became the integer 12 and **merged and deleted account 12** — an irreversible write to a record the
+caller never named.) In one transaction (`accountMergeService`), every reference to a
 source is repointed to the survivor — `transactions.account_id` + `bank_account` (set to the
 survivor's name so the dual-write trigger keeps it merged), `planned_transactions`, portfolio lots
 (`portfolio_transactions_base.account_id`, cascading to child tables, or the flat table), and any
@@ -180,7 +185,9 @@ Read-only dry-run of merging **this** account (`:id`, the source) **into**
 - `stampsInterleaved` — the same detection the merge guard uses: would the merge interleave
   stamped balance histories (and therefore clear the survivor's statement anchor)?
 
-`400` if `into` is missing/not a positive integer or equals `:id`; `404` if either account does
+`400` if `into` is missing or not a strict positive integer id (changed 2026-08-11: it was parsed
+with `Number(...)`, so `?into=1e3` arrived as a well-formed **1000** and previewed a merge into an
+account nobody named; `12abc`, `12.5`, `0x10`, ` 5 `, `0` and `-4` are now 400s too) or equals `:id`; `404` if either account does
 not exist. Intended for the merge dialog (WP-B5) to show a confirmation summary and warn before
 an interleaving merge.
 

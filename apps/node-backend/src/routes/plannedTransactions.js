@@ -15,7 +15,7 @@ import { z } from 'zod';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
-import { validateIdParam, assertYmd, validateId, assertCurrency } from '../middleware/validation.js';
+import { validateIdParam, assertYmd, assertOptionalId, validateId, assertCurrency } from '../middleware/validation.js';
 import { formatDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
@@ -387,8 +387,14 @@ router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
     startDate: assertYmd(start_date, 'start_date'),
     endDate: assertYmd(end_date, 'end_date'),
     bankAccount: bank_account || null,
-    categoryId: category_id ? parseInt(category_id, 10) : null,
-    recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
+    // Same strict id parse as the transactions list endpoint — absent/empty
+    // means "no filter" (null, 200), malformed is a 400. These were bare
+    // `x ? parseInt(x) : null`, which takes the leading digits of anything, so
+    // ?category_id=12abc listed the planned transactions of category 12 and
+    // ?recipient_id=1e3 those of recipient 1, while a NaN passed the builder's
+    // `!= null` guard and reached Postgres as a 22P02 500.
+    categoryId: assertOptionalId(category_id, 'category_id'),
+    recipientId: assertOptionalId(recipient_id, 'recipient_id'),
     isRecurring: is_recurring != null ? is_recurring === 'true' : null,
     isExecuted: is_executed != null ? is_executed === 'true' : null,
     search: search ? String(search).slice(0, 200) : null,
