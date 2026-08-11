@@ -4008,6 +4008,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description Invalid field (e.g. funding_account_id not a positive integer or not an existing account), or statement_balance set without statement_balance_date */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description An account with that name already exists */
             409: {
                 headers: {
@@ -4107,6 +4114,13 @@ export interface operations {
                         data?: components["schemas"]["Account"];
                     };
                 };
+            };
+            /** @description Invalid field (e.g. funding_account_id not a positive integer, self-referencing, not an existing account, or closing a funding cycle), or an invalid statement_balance/statement_balance_date pairing */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Account not found */
             404: {
@@ -9887,7 +9901,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description valid mapping id required */
+            /** @description id must be a positive integer */
             400: {
                 headers: {
                     [name: string]: unknown;

@@ -128,9 +128,24 @@ export default function MarketLookupPage() {
   const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const fmtNum = useCallback((val: number | null | undefined, opts?: Intl.NumberFormatOptions) => {
-    if (val == null || isNaN(val)) return "—";
-    return new Intl.NumberFormat(locale, opts).format(val);
+  // One Intl.NumberFormat per (locale, options) instead of one per formatted
+  // value: this feeds the price chart's y-axis tick formatter, so it ran at
+  // hover/redraw rate and paid the ~50-200µs constructor cost every tick. The
+  // options objects come from a handful of literal call sites, so serializing
+  // them is a stable cache key. Cache lives inside the memo — a locale change
+  // replaces it wholesale.
+  const fmtNum = useMemo(() => {
+    const cache = new Map<string, Intl.NumberFormat>();
+    return (val: number | null | undefined, opts?: Intl.NumberFormatOptions) => {
+      if (val == null || isNaN(val)) return "—";
+      const key = opts ? JSON.stringify(opts) : "";
+      let formatter = cache.get(key);
+      if (!formatter) {
+        formatter = new Intl.NumberFormat(locale, opts);
+        cache.set(key, formatter);
+      }
+      return formatter.format(val);
+    };
   }, [locale]);
   // Shared cached currency formatter; quotes pin 2 decimals regardless of the
   // showDecimalPlaces setting (unchanged behavior).

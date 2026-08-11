@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-07-22
+updated: 2026-08-10
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -62,6 +62,12 @@ DB defaults — `type='checking'`, `owner='me'`, `in_net_worth=true`, `has_cash_
 `statement_balance` requires `statement_balance_date` (400 without it; backstopped by the
 migration-0065 CHECK).
 
+`funding_account_id`, if provided, must be a positive integer referencing an existing account
+(400 `funding_account_id must be a positive integer` / 400 `funding_account_id N does not
+reference an existing account` otherwise). On create there is no self id yet, so the
+self-reference and funding-cycle checks below don't apply — a brand-new account can't be
+anyone's ancestor.
+
 ### PATCH /api/accounts/:id
 
 Partial update (`AccountUpdate`). `404` if not found, `409` on (normalized) name collision.
@@ -70,6 +76,22 @@ Explicit `null` **clears** a nullable field (`display_name`, `institution`,
 `funding_account_id`, `statement_balance`, `statement_balance_date`); an omitted key leaves the
 field untouched. The statement-balance/date pairing is validated on the merged state: setting a
 balance while the stored date is `NULL`, or clearing only the date, both return 400.
+
+**`funding_account_id` validation** (`assertFundingAccountValid`,
+`apps/node-backend/src/services/accountService.js`), all 400:
+- Not a positive integer (and not `null`): `funding_account_id must be a positive integer`.
+- Equal to the account's own id (self-funding): `funding_account_id cannot reference the account
+  itself`.
+- Doesn't reference an existing account: `funding_account_id N does not reference an existing
+  account`.
+- Would close a funding cycle: walking the funding chain upward from the proposed parent reaches
+  the account being edited (A→B→A, or a longer chain A→B→C→A) →
+  `funding_account_id N would create a funding cycle`. This check is effectively **PATCH-only**:
+  on `POST /api/accounts` there is no self id yet, so a not-yet-existing account can't be anyone's
+  ancestor and the walk is skipped entirely.
+- A same-request FK violation (23503, e.g. the referenced account is deleted in a race) is mapped
+  to 400 `funding_account_id does not reference an existing account` rather than surfacing as a
+  raw 500.
 
 Lifecycle ([[docs/adr/088-account-entity|ADR-088 addendum]], D5): `{ is_active: false }` stamps
 `closed_at` server-side (kept on redundant re-archives); `{ is_active: true }` clears it.

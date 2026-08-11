@@ -15,7 +15,7 @@ import {
 } from '../services/recipientPatternService.js';
 import { findRecipientClusters } from '../services/recipientClusterService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, validateIntParam } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 // The MVs attribute transactions to categories via a 3-level resolution
 // (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
@@ -209,16 +209,14 @@ router.post('/:id/patterns/preview', validateIdParam, /** @param {ExpressRequest
   res.ok(result);
 });
 
-router.patch('/:id/patterns/:patternId', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+router.patch('/:id/patterns/:patternId', validateIdParam, validateIntParam('patternId'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const patternId = parseInt(req.params.patternId, 10);
-  if (!Number.isInteger(patternId) || patternId <= 0) throw new ValidationError('Invalid patternId');
   await updatePattern(patternId, req.body);
   res.ok({ patternId });
 });
 
-router.delete('/:id/patterns/:patternId', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+router.delete('/:id/patterns/:patternId', validateIdParam, validateIntParam('patternId'), /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const patternId = parseInt(req.params.patternId, 10);
-  if (!Number.isInteger(patternId) || patternId <= 0) throw new ValidationError('Invalid patternId');
   await deletePattern(patternId);
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();

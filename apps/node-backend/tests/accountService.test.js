@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/repositories/accountRepository.js', () => {
   const repo = {
@@ -246,6 +246,64 @@ describe('accountService.update', () => {
     expect(accountRepository.update).toHaveBeenCalledWith(1, {
       statement_balance: null, statement_balance_date: null,
     });
+  });
+});
+
+// funding_account_id must not close a loop. Self-reference was already rejected;
+// these pin the multi-hop ancestor walk (A→B→A and longer), its termination on
+// data that is ALREADY cyclic, and that create skips the walk entirely.
+describe('accountService — funding chain cycles', () => {
+  // Mock the accounts graph: id → funding_account_id (undefined = chain ends).
+  const graph = (edges) => {
+    accountRepository.getById.mockImplementation(async (id) => (
+      id in edges ? { id: Number(id), funding_account_id: edges[id] ?? null } : undefined
+    ));
+  };
+
+  // clearAllMocks() keeps implementations, so drop the graph explicitly —
+  // otherwise it would answer getById for every later test in this file.
+  afterEach(() => accountRepository.getById.mockReset());
+
+  it('rejects a two-hop cycle (A funds B, then B funds A)', async () => {
+    graph({ 2: 1 }); // account 2 is already funded by account 1
+    await expect(
+      accountService.update(1, { funding_account_id: 2 }),
+    ).rejects.toThrow(/funding cycle/);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a longer chain closing back on the edited account (A→B→C→D→A)', async () => {
+    graph({ 2: 3, 3: 4, 4: 1 });
+    await expect(
+      accountService.update(1, { funding_account_id: 2 }),
+    ).rejects.toThrow(/funding cycle/);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a funding chain that terminates without reaching the edited account', async () => {
+    graph({ 2: 3, 3: undefined });
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { funding_account_id: 2 });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, { funding_account_id: 2 });
+  });
+
+  // The pre-existing-cycle case: this guard did not exist before, so the stored
+  // graph may already loop. The walk must stop instead of hanging the request.
+  it('terminates on a pre-existing upstream cycle that does not involve the edited account', async () => {
+    graph({ 2: 3, 3: 2 }); // 2 ↔ 3 already loop, account 1 is outside it
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { funding_account_id: 2 });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, { funding_account_id: 2 });
+    // Bounded by the visited set: id 2 (existence check) then id 3, then stop.
+    expect(accountRepository.getById).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not walk on create — a not-yet-existing account cannot be an ancestor', async () => {
+    graph({ 2: 3, 3: 2 }); // would loop forever if the walk ran
+    accountRepository.create.mockResolvedValueOnce({ id: 9 });
+    await accountService.create({ name: 'New', funding_account_id: 2 });
+    expect(accountRepository.create).toHaveBeenCalledWith({ name: 'New', funding_account_id: 2 });
+    expect(accountRepository.getById).toHaveBeenCalledTimes(1); // existence check only
   });
 });
 

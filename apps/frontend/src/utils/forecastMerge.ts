@@ -1,4 +1,5 @@
 import { getChartColor } from "@/components/charts/palette";
+import { parseLocalDateFromYmd } from "@/components/shared/dateUtils";
 import type { LineSeries } from "@/components/charts/LineChart";
 import type {
     CashflowForecastMethodsData,
@@ -210,8 +211,8 @@ export function mergeForView(
 
 /**
  * `YYYY-MM-DD` validator. The forecast API is trusted, but a malformed
- * row would otherwise propagate as `new Date('Invalid…T00:00:00Z')` →
- * `Invalid Date`, which silently corrupts the chart x-axis.
+ * row would otherwise propagate as an `Invalid Date`, which silently
+ * corrupts the chart x-axis.
  */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -244,7 +245,7 @@ export function mergeForViewRolling(
     const rows: MergedDayDate[] = allDates.map((date) => {
         const row: MergedDayDate = {
             date,
-            t: new Date(`${date}T00:00:00Z`),
+            t: parseLocalDateFromYmd(date),
             actual:
                 view === "cumulative"
                     ? (cumulativeByDate.get(date) ?? null)

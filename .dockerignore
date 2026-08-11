@@ -48,3 +48,9 @@ coverage/
 # Trims the ~1.2 GB build context sent to the daemon.
 packaging/
 docs/
+venv/
+.playwright-mcp/
+.claude/
+.obsidian/
+.github/
+TODO.md

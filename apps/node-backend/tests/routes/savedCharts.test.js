@@ -2,9 +2,9 @@
  * Saved Charts route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). All validation in savedCharts.js is inline in
- * the handlers (no route-level guard middleware — `:id` is parsed with a bare
- * `parseInt`), so this migration is mechanical: `routeHandlers[...]` calls
+ * tests/helpers/routeApp.js). Body validation in savedCharts.js is inline in
+ * the handlers (zod), while `:id` is guarded by the shared `validateIdParam`
+ * middleware, so this migration is mechanical: `routeHandlers[...]` calls
  * become supertest requests and `.rejects.toBeInstanceOf(...)` assertions
  * become status-code + envelope assertions against the real error handler.
  */

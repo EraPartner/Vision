@@ -22,7 +22,7 @@ import { validateNumber, assertMaxLength, assertCurrency } from '../middleware/v
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
-import { parsePagination } from '../lib/pagination.js';
+import { parsePagination, parseIntClamped } from '../lib/pagination.js';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -270,21 +270,32 @@ export function parseDefaultListOptions(query) {
   };
 }
 
+// Per-route ceilings, unchanged from the hand-rolled clamps they replace.
+const BULK_TRANSACTIONS_MAX_LIMIT = 200000;
+const BULK_PER_INVESTMENT_MAX_LIMIT = 5000;
+const INVESTMENT_TRANSACTIONS_MAX_LIMIT = 1000;
+
 /**
  * @param {Record<string, unknown>} query
  * @param {number[]} investmentIds
  * @returns {{ investmentIds: number[], type: string|null, perInvestmentLimit: number, limit: number|null, offset: number }}
  */
 function parseBulkTransactionsOptions(query, investmentIds) {
-  const { type, per_investment_limit = 1000, limit, offset = 0 } = query;
+  const { type, per_investment_limit, limit } = query;
+  // `limit` stays opt-in here (absent → null → no outer LIMIT), so this keeps
+  // the presence check and only borrows parsePagination's clamp. defaultLimit
+  // is 1 to preserve the previous `parseInteger(limit) || 1` fallback for
+  // garbage/zero/negative values.
+  const page = parsePagination(query, { defaultLimit: 1, maxLimit: BULK_TRANSACTIONS_MAX_LIMIT });
   return {
     investmentIds,
     type: /** @type {string|null} */ (type || null),
-    perInvestmentLimit: Math.max(1, Math.min(parseInteger(per_investment_limit) || 1000, 5000)),
-    limit: limit == null || limit === ''
-      ? null
-      : Math.max(1, Math.min(parseInteger(limit) || 1, 200000)),
-    offset: Math.max(0, parseInteger(offset) || 0),
+    perInvestmentLimit: parseIntClamped(per_investment_limit, {
+      max: BULK_PER_INVESTMENT_MAX_LIMIT,
+      fallback: 1000,
+    }),
+    limit: limit == null || limit === '' ? null : page.limit,
+    offset: page.offset,
   };
 }
 
@@ -294,12 +305,16 @@ function parseBulkTransactionsOptions(query, investmentIds) {
  * @returns {{ investmentId: number, type: string|null, limit: number, offset: number }}
  */
 function parseInvestmentTransactionsOptions(query, investmentId) {
-  const { type, limit = 200, offset = 0 } = query;
+  const { type } = query;
+  const { limit, offset } = parsePagination(query, {
+    defaultLimit: 200,
+    maxLimit: INVESTMENT_TRANSACTIONS_MAX_LIMIT,
+  });
   return {
     investmentId,
     type: /** @type {string|null} */ (type || null),
-    limit: Math.min(parseInteger(limit) || 200, 1000),
-    offset: parseInteger(offset) || 0,
+    limit,
+    offset,
   };
 }
 

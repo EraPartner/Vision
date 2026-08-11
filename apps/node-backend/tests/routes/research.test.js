@@ -157,7 +157,7 @@ describe('Research route parameter guards', () => {
       expect(res.text).toBe('');
 
       const res2 = await api.delete(`${BASE}/mappings/abc`).expect(400);
-      expect(res2.body.error.message).toBe('valid mapping id required');
+      expect(res2.body.error.message).toBe('id must be a positive integer');
     });
 
     // Idempotent: an already-removed mapping is still 204, not 404.

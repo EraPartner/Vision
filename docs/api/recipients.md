@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
 date: 2026-04-16
-updated: 2026-06-13
+updated: 2026-08-10
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -358,7 +358,7 @@ Update an existing pattern.
 
 **Error Response (400):**
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Invalid patternId" } }
+{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "patternId must be a positive integer" } }
 ```
 
 ### DELETE /api/recipients/:id/patterns/:patternId
@@ -379,7 +379,7 @@ Delete a pattern.
 
 **Error Response (400):**
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Invalid patternId" } }
+{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "patternId must be a positive integer" } }
 ```
 
 ## Recipient Bank Accounts
