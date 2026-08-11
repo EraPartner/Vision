@@ -21,6 +21,23 @@ if (typeof window !== "undefined") {
     Element.prototype.releasePointerCapture = () => {};
     window.HTMLElement.prototype.scrollIntoView = () => {};
 
+    // jsdom implements window.scrollTo but not Element.prototype.scrollTo, so
+    // any component that scrolls its own container (ChatMessageList's
+    // follow-the-stream auto-scroll) throws. jsdom does no layout, so a stub
+    // that records the requested offset is as faithful as it can get.
+    if (typeof Element.prototype.scrollTo !== "function") {
+        Element.prototype.scrollTo = function scrollTo(
+            this: Element,
+            options?: ScrollToOptions | number,
+            y?: number,
+        ) {
+            const top = typeof options === "number" ? y : options?.top;
+            const left = typeof options === "number" ? options : options?.left;
+            if (typeof top === "number") this.scrollTop = top;
+            if (typeof left === "number") this.scrollLeft = left;
+        } as typeof Element.prototype.scrollTo;
+    }
+
     // ResizeObserver polyfill — required by @visx/responsive (ParentSize) and other
     // chart libraries that use ResizeObserver. jsdom does not provide this browser API.
     if (typeof window.ResizeObserver === "undefined") {

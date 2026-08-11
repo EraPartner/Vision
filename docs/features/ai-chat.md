@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-05-04
-last_modified: 2026-05-04
+updated: 2026-08-11
+last_modified: 2026-08-11
 tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-1, phase-10]
 description: Local AI chat with background streaming via module-level store; conversations persist in URL (`?c=<id>`), sidebar shows live indicator for active streams, streams survive navigation and component unmount
 aliases: [ai-chat, ai chat, ollama-chat, natural-language-queries, financial chat, llm chat]
@@ -80,7 +80,7 @@ Backend /api/ai
 |-----------|------|-------------|
 | `AIChatPage` | Frontend Page | Page shell; hosts conversation list, message stream, composer; manages URL state (`?c=<id>`) and auto-selects active stream on mount |
 | `ChatConversationList` | Frontend Component | List conversations; on-hover action menu; shows pulsing indicator for active streams via `useStreamingConversationIds()` |
-| `ChatMessageList` | Frontend Component | Renders ordered messages; shows thinking indicator when streaming w/no content yet; handles autoscroll |
+| `ChatMessageList` | Frontend Component | Renders ordered messages; shows thinking indicator when streaming w/no content yet; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
 | `ChatBubble` | Frontend Component | User vs assistant styling |
 | `ChatComposer` | Frontend Component | Textarea, send, model selector, tools toggle (wrench icon) |
 | `ToolResultCard` | Frontend Component | Renders tool payload as table or Recharts (line/bar/pie) |

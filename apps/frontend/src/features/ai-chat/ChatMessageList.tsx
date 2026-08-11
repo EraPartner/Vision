@@ -12,6 +12,27 @@ interface ChatMessageListProps {
     assistantDraft: string;
     isStreaming: boolean;
     emptyState?: React.ReactNode;
+    /**
+     * Id of the conversation being displayed. Only used to re-pin the
+     * auto-scroll when the transcript is swapped wholesale — see
+     * `isPinnedRef` below.
+     */
+    conversationId?: string | null;
+}
+
+/**
+ * Slack, in CSS pixels, for the "is the view flush with the bottom?" test.
+ * `scrollHeight`, `scrollTop` and `clientHeight` are each rounded to integers
+ * independently while the underlying layout is fractional, so on a zoomed or
+ * HiDPI display `scrollTop + clientHeight === scrollHeight` is never reliably
+ * true even when the view *is* at the bottom. 8px absorbs that rounding with
+ * room to spare while staying well under one line of chat text (14px text at
+ * `leading-relaxed` is ~22px), so it can never swallow a deliberate scroll-up.
+ */
+const PIN_TOLERANCE_PX = 8;
+
+function isScrolledToBottom(el: HTMLElement): boolean {
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= PIN_TOLERANCE_PX;
 }
 
 export function ChatMessageList({
@@ -21,8 +42,19 @@ export function ChatMessageList({
     assistantDraft,
     isStreaming,
     emptyState,
+    conversationId,
 }: ChatMessageListProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
+    // Whether the view should keep following new content. Deliberately a ref
+    // updated from scroll events rather than something recomputed inside the
+    // streaming effect below: that effect runs *after* React has appended the
+    // new chunk, so `scrollHeight` there is already post-growth and a fresh
+    // "am I at the bottom?" reading would answer "no, I'm N px up" for a user
+    // who never moved — silently killing follow-the-stream. Scroll events only
+    // fire when the scroll position actually changes, so this ref holds the
+    // pre-mutation answer at the moment the effect needs it.
+    const isPinnedRef = useRef(true);
+    const lastScrollTopRef = useRef(0);
 
     const combined = useMemo<ChatMessage[]>(() => {
         const existing = new Set(messages.map((m) => m.id));
@@ -60,11 +92,61 @@ export function ChatMessageList({
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
+        lastScrollTopRef.current = el.scrollTop;
+        const onScroll = () => {
+            const previousTop = lastScrollTopRef.current;
+            const top = el.scrollTop;
+            lastScrollTopRef.current = top;
+            // Reaching the bottom always re-pins, however you got there.
+            if (isScrolledToBottom(el)) {
+                isPinnedRef.current = true;
+                return;
+            }
+            // Otherwise only an *upward* move un-pins. This ratchet matters:
+            // our own rAF `scrollTo` lands at the bottom on frame N, but its
+            // scroll event is not dispatched until frame N+1 — by which time a
+            // chunk that arrived in between may already have grown
+            // `scrollHeight`. A plain `isScrolledToBottom` reading there would
+            // report "not at the bottom", un-pin a user who never touched the
+            // scroller, and stop the stream from following for the rest of the
+            // answer. Content growth never moves `scrollTop` downward, so
+            // gating on direction makes that whole class of race impossible.
+            if (top < previousTop) {
+                isPinnedRef.current = false;
+            }
+        };
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, []);
+
+    // Re-pin on the two explicit "show me the newest message" intents, so the
+    // guard below can only ever suppress the mid-stream yank it exists for:
+    // switching to a different transcript, and the user sending a message
+    // (they authored the newest content, so they expect to see it). Note the
+    // `undefined` bail-out — `streamingUserMessage` drops back to null when a
+    // stream finishes, and re-pinning on *that* transition would yank a
+    // scrolled-up reader to the bottom exactly as the answer completes.
+    const streamingUserMessageId = streamingUserMessage?.id;
+    useEffect(() => {
+        if (streamingUserMessageId === undefined) return;
+        isPinnedRef.current = true;
+    }, [streamingUserMessageId]);
+
+    useEffect(() => {
+        isPinnedRef.current = true;
+    }, [conversationId]);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        // Don't yank a reader who has scrolled up mid-stream back to the
+        // bottom on every chunk.
+        if (!isPinnedRef.current) return;
         // Defer the scroll write into a rAF so we don't read scrollHeight
         // synchronously right after React mutated the container (forced reflow
         // per streamed chunk); by rAF time the layout is already up to date.
         const raf = requestAnimationFrame(() => {
-            el.scrollTop = el.scrollHeight;
+            el.scrollTo({ top: el.scrollHeight });
         });
         return () => cancelAnimationFrame(raf);
     }, [combined.length, assistantDraft, isStreaming, streamingToolContentLength]);
@@ -85,6 +167,18 @@ export function ChatMessageList({
             aria-relevant="additions"
             className="flex-1 overflow-y-auto px-4 py-6"
         >
+            {/*
+              * Deliberately no `.cv-auto-row` on the bubbles. This scroller is
+              * bottom-anchored: the resting position is the end of the
+              * transcript, so nearly every bubble sits *above* the viewport and
+              * would be skipped at the utility's fixed fallback height. On the
+              * first open of a conversation no bubble has a last-remembered
+              * size yet, so `scrollHeight` at auto-scroll time is a large
+              * underestimate and the "scroll to bottom" write lands partway up
+              * the conversation, with no later commit to correct it. The
+              * dashboard/statistics sections the utility was written for are
+              * top-anchored and below the fold, where that error is harmless.
+              */}
             <div className="mx-auto flex max-w-3xl flex-col gap-5">
                 {showEmpty && emptyState}
                 {combined.map((message) => (

@@ -218,6 +218,7 @@ export default function AIChatPage() {
                 <OllamaStatusBanner status={status} isLoading={statusLoading} />
 
                 <ChatMessageList
+                    conversationId={selectedId}
                     messages={messages}
                     streamingUserMessage={streamingUserMessage}
                     streamingToolMessages={streamingToolMessages}
