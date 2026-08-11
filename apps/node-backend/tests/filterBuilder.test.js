@@ -108,19 +108,61 @@ describe('buildTransactionWhere', () => {
 
   it('recipientGroupId resolves full primary group including parent and siblings', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ recipientGroupId: 7 });
-    expect(sql).toContain('t.recipient_id = $1');
-    expect(sql).toContain('r.primary_recipient_id = $1');
+    // All four group branches, in the same order as the pre-semi-join shape:
+    // the recipient itself, its aliases, its own primary, that primary's siblings.
+    expect(sql).toContain('t.recipient_id IN (');
+    expect(sql).toContain('id = $1');
+    expect(sql).toContain('primary_recipient_id = $1');
     expect(sql).toContain('SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL');
     expect(params).toEqual([7]);
     expect(nextParamIdx).toBe(2);
   });
 
+  it('recipientGroupId is a semi-join: t.recipient_id is the only transactions-side column', () => {
+    const { sql } = buildTransactionWhere({ recipientGroupId: 7 });
+    const groupClause = sql.slice(sql.indexOf('t.recipient_id IN ('));
+    // The pre-fix shape ORed t.recipient_id against the JOINED r.primary_recipient_id,
+    // so the predicate spanned two relations and the planner could only evaluate it
+    // as a join Filter — idx_transactions_recipient_id never got an Index Cond.
+    // Every branch must now resolve inside `recipients`.
+    expect(groupClause).not.toContain('r.primary_recipient_id');
+    expect(groupClause).not.toMatch(/\bt\.recipient_id\s*=/);
+    // `t.` may appear only as the single semi-join probe column.
+    expect(groupClause.match(/\bt\.\w+/g)).toEqual(['t.recipient_id']);
+  });
+
+  it('recipientGroupId needs no join at all — it references no aliased relation', () => {
+    const { sql } = buildTransactionWhere({ recipientGroupId: 7, active: true });
+    // Whole clause is self-contained: safe to use in a count query that joins nothing.
+    expect(sql).not.toMatch(/\br\.\w+/);
+    expect(sql).not.toMatch(/\bpr\.\w+/);
+  });
+
   it('recipientGroupId and recipientId can coexist and use sequential $-indices', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ recipientId: 3, recipientGroupId: 7 });
     expect(sql).toContain('t.recipient_id IN (SELECT id FROM recipients WHERE id = $1 OR primary_recipient_id = $1)');
-    expect(sql).toContain('t.recipient_id = $2');
+    expect(sql).toContain('id = $2');
+    expect(sql).toContain('SELECT primary_recipient_id FROM recipients WHERE id = $2 AND primary_recipient_id IS NOT NULL');
     expect(params).toEqual([3, 7]);
     expect(nextParamIdx).toBe(3);
+  });
+
+  it('recipientName is the only filter that references a join alias', () => {
+    // The invariant transactionRepository's reduced COUNT_JOINS rests on: a count
+    // query over this builder needs `r` and nothing else. If a new filter starts
+    // referencing pr/c/rc/pc/acct, this test fails and the count join set must grow.
+    const everything = {
+      transactionId: 1, startDate: '2024-01-01', endDate: '2024-12-31',
+      accountId: 2, categoryId: 3, categoryIds: [3, 4], recipientId: 5,
+      recipientGroupId: 6, search: 'coffee', active: true,
+      transactionType: 'expense', amountMin: 1, amountMax: 2, tagSlugs: ['x'],
+    };
+    const withoutName = buildTransactionWhere(everything).sql;
+    expect(withoutName).not.toMatch(/\b(r|pr|c|rc|pc|acct)\.\w+/);
+
+    const withName = buildTransactionWhere({ ...everything, recipientName: 'delh' }).sql;
+    expect(withName).toMatch(/\br\.name ILIKE/);
+    expect(withName).not.toMatch(/\b(pr|c|rc|pc|acct)\.\w+/);
   });
 
   it('search builds an indexable t.id IN (UNION ...) with a single $-slot', () => {

@@ -110,6 +110,46 @@ describe('getUncategorisedWithCount', () => {
     expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL');
   });
 
+  it('counts the total over a REDUCED join set, not the full TRANSACTION_JOINS', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
+    await transactionRepository.getUncategorisedWithCount({ recipientName: 'delh' });
+    const [sql] = query.mock.calls[0];
+    const totalCte = sql.slice(sql.indexOf('WITH total_cte AS ('), sql.indexOf('uncategorised_rows AS ('));
+
+    // `r` stays: it is the one alias buildTransactionWhere can reference
+    // (recipientName's `r.name ILIKE`), so it is load-bearing for the count.
+    expect(totalCte).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
+    expect(totalCte).toContain('r.name ILIKE');
+    // The five projection-only joins must NOT be in the count. They are LEFT
+    // JOINs onto a PRIMARY KEY, so they can neither drop nor duplicate a row —
+    // but a count selects no labels, so they are pure overhead.
+    expect(totalCte).not.toContain('LEFT JOIN recipients pr');
+    expect(totalCte).not.toContain('LEFT JOIN categories');
+    expect(totalCte).not.toContain('LEFT JOIN accounts');
+
+    // The ROW query is untouched: it still projects labels and therefore still
+    // needs pr (3-level effective category) and acct (bank_account).
+    const rowCte = sql.slice(sql.indexOf('uncategorised_rows AS ('));
+    expect(rowCte).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(rowCte).toContain('LEFT JOIN accounts acct ON t.account_id = acct.id');
+  });
+
+  it('total params and filter semantics are unchanged by the reduced join set', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
+    await transactionRepository.getUncategorisedWithCount({
+      startDate: '2024-01-01', recipientName: 'delh', search: 'coffee', active: true,
+    });
+    const [sql, params] = query.mock.calls[0];
+    const totalCte = sql.slice(sql.indexOf('WITH total_cte AS ('), sql.indexOf('uncategorised_rows AS ('));
+    // Same predicates as getCount would build, in the same $-order; the row CTE
+    // then appends its own copies of the shared filters after them.
+    expect(totalCte).toContain('t.is_active = true');
+    expect(totalCte).toContain('t.date >= $1');
+    expect(totalCte).toContain('r.name ILIKE $2');
+    expect(totalCte).toContain('t.id IN (');
+    expect(params.slice(0, 3)).toEqual(['2024-01-01', '%delh%', '%coffee%']);
+  });
+
   it('returns total 0 and empty rows when CTE yields only the null-joined total row', async () => {
     query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
     const res = await transactionRepository.getUncategorisedWithCount({});

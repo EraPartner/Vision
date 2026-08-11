@@ -258,6 +258,50 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
       expect(fullGroup.map((r) => r.id)).toEqual([T.t5, T.t2, T.t1]);
     });
 
+    // The recipientGroupId predicate was rewritten from an OR spanning
+    // `t.recipient_id` and the joined `r.primary_recipient_id` into a single
+    // semi-join over `recipients`. These pin the RESULT SET (not the SQL text)
+    // for every position a recipient can occupy in the alias hierarchy, so a
+    // silently narrowed or widened filter fails here rather than in production.
+    it('recipientGroupId resolves the same group from the primary, the alias, and a sibling', async () => {
+      const fromPrimary = await transactionRepository.getAll({ recipientGroupId: rec.delhaize });
+      const fromAlias = await transactionRepository.getAll({ recipientGroupId: rec.delhaizeAlias });
+      // Both directions see the whole Delhaize group: t1 sits on the alias,
+      // t2/t5 on the primary. t6 is inactive and stays out of both.
+      expect(fromPrimary.map((r) => r.id)).toEqual([T.t5, T.t2, T.t1]);
+      expect(fromAlias.map((r) => r.id)).toEqual([T.t5, T.t2, T.t1]);
+
+      // Second group, to prove the filter is not just "everything".
+      expect((await transactionRepository.getAll({ recipientGroupId: rec.electrabel })).map((r) => r.id))
+        .toEqual([T.t3, T.t7]);
+      expect((await transactionRepository.getAll({ recipientGroupId: rec.electrabelAlias })).map((r) => r.id))
+        .toEqual([T.t3, T.t7]);
+
+      // Standalone recipient — no primary, no aliases — matches only its own rows.
+      expect((await transactionRepository.getAll({ recipientGroupId: rec.employer })).map((r) => r.id))
+        .toEqual([T.t4]);
+    });
+
+    it('recipientGroupId excludes non-members and yields nothing for an unknown id', async () => {
+      const rows = await transactionRepository.getAll({ recipientGroupId: rec.delhaize });
+      // Cross-group rows must not leak in.
+      expect(rows.map((r) => r.id)).not.toContain(T.t3);
+      expect(rows.map((r) => r.id)).not.toContain(T.t4);
+      expect(rows.map((r) => r.id)).not.toContain(T.t7);
+      // An id no recipient has resolves to the empty set (not to "all rows").
+      expect(await transactionRepository.getAll({ recipientGroupId: 9_999_999 })).toEqual([]);
+    });
+
+    it('recipientGroupId honours inactive rows and composes with other filters', async () => {
+      const withInactive = await transactionRepository.getAll({ recipientGroupId: rec.delhaize, active: false });
+      // t5/t6 share 2024-03-02, so the t.id DESC tiebreaker puts t6 first.
+      expect(withInactive.map((r) => r.id)).toEqual([T.t6, T.t5, T.t2, T.t1]);
+      // Combined with a date bound and a count, sharing one $-parameter sequence.
+      const march = await transactionRepository.getAll({ recipientGroupId: rec.delhaize, startDate: '2024-03-01' });
+      expect(march.map((r) => r.id)).toEqual([T.t5]);
+      expect(await transactionRepository.getCount({ recipientGroupId: rec.delhaize })).toBe(3);
+    });
+
     it('sorts by amount numerically, not lexicographically', async () => {
       const rows = await transactionRepository.getAll({ sortBy: 'amount', sortDir: 'asc' });
       // A string sort would put '-120.0000' between '-18.7500' and '-30.0000'.
@@ -468,6 +512,52 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
     it('returns total 0 and no rows when nothing matches', async () => {
       const res = await transactionRepository.getUncategorisedWithCount({ recipientName: 'nobody-here' });
       expect(res).toEqual({ rows: [], total: 0 });
+    });
+
+    // The total CTE was narrowed from the full 6-way TRANSACTION_JOINS to just
+    // `LEFT JOIN recipients r`. Every join dropped is a LEFT JOIN onto a PRIMARY
+    // KEY, so none can drop or duplicate a transaction — but that is an argument,
+    // not evidence. These cases pin the NUMBER against the independently-built
+    // getCount() over the FULL join set, across every filter the endpoint takes.
+    it('total equals getCount() over the full join set, for every filter shape', async () => {
+      const shapes = [
+        {},
+        { active: false },
+        { startDate: '2024-03-01' },
+        { endDate: '2024-02-29' },
+        { startDate: '2024-02-01', endDate: '2024-03-31', active: false },
+        { accountId: acc['KBC CURRENT'] },
+        { bankAccount: 'wise' },
+        { categoryId: cat.Food },
+        { categoryId: cat.Bills },
+        { recipientId: rec.delhaize },
+        { recipientId: rec.electrabelAlias, active: false },
+        { recipientName: 'delh' },
+        { recipientName: 'Electrabel Invoicing' },
+        { recipientName: 'nobody' },
+        { search: 'DELHAIZE' },
+        { search: 'ELECTRABEL' },
+        { search: 'groceries' },
+        { search: '2024-03' },
+        { search: '-52.30' },
+        { transactionId: T.t1 },
+        { recipientName: 'delh', search: 'DELHAIZE', startDate: '2024-01-01', active: false },
+      ];
+      for (const shape of shapes) {
+        const { total } = await transactionRepository.getUncategorisedWithCount(shape);
+        const expected = await transactionRepository.getCount(shape);
+        expect(total, `total mismatch for ${JSON.stringify(shape)}`).toBe(expected);
+      }
+    });
+
+    it('the recipientName filter still narrows the total — `r` is load-bearing, not decoration', async () => {
+      // If the count had dropped `r` along with the projection joins, this filter
+      // would be a no-op (or a SQL error) and the total would stay at 6.
+      const all = await transactionRepository.getUncategorisedWithCount({});
+      expect(all.total).toBe(6);
+      const narrowed = await transactionRepository.getUncategorisedWithCount({ recipientName: 'delh' });
+      expect(narrowed.total).toBe(3); // t1 (alias), t2, t5 — t6 inactive
+      expect(narrowed.total).toBeLessThan(all.total);
     });
   });
 

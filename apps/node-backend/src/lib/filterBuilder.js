@@ -67,10 +67,14 @@ export function parseAmountFilter(value, signed = false) {
  *
  * Assumes the caller joined `transactions t` with:
  *   LEFT JOIN recipients r ON t.recipient_id = r.id
- *   LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
- *   LEFT JOIN categories c ON t.category_id = c.id
- *   LEFT JOIN categories rc ON r.default_category_id = rc.id
- *   LEFT JOIN categories pc ON pr.default_category_id = pc.id
+ *
+ * `r` is the ONLY join alias any predicate built here references, and only the
+ * `recipientName` filter references it (`r.name ILIKE`). Every other filter
+ * resolves against `t` plus self-contained subqueries, so a caller that needs
+ * no projection (a count) may join `r` alone — see the reduced join set used by
+ * transactionRepository's uncategorised total. Callers that also project
+ * recipient/category/account labels still join `pr`/`c`/`rc`/`pc`/`acct`, but
+ * this builder does not require them.
  *
  * @param {object} opts
  * @param {number|null} [opts.transactionId]
@@ -247,11 +251,21 @@ export function buildTransactionWhere(opts = {}) {
     // the recipient's own primary (if it is an alias), and siblings under that primary.
     // The two subqueries return NULL when the recipient has no primary, making those
     // branches no-ops (NULL = anything is false in SQL).
-    clauses.push(`(
-      t.recipient_id = $${p}
-      OR r.primary_recipient_id = $${p}
-      OR t.recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
-      OR r.primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
+    //
+    // Shaped as a semi-join for the same reason as recipientId above: the four
+    // branches used to OR `t.recipient_id` against the joined `r.primary_recipient_id`,
+    // so the predicate spanned two relations and the planner could only evaluate it as
+    // a join Filter — no BitmapOr, no Index Cond on idx_transactions_recipient_id.
+    // Every branch resolves inside `recipients` here, leaving `t.recipient_id` as the
+    // only transactions-side column. The branch set is unchanged: `r` is joined on
+    // `t.recipient_id = r.id`, so `r.primary_recipient_id` for a row is exactly the
+    // `primary_recipient_id` of the recipient whose id equals `t.recipient_id`.
+    clauses.push(`t.recipient_id IN (
+      SELECT id FROM recipients
+      WHERE id = $${p}
+         OR primary_recipient_id = $${p}
+         OR id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
+         OR primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
     )`);
     p++;
     params.push(recipientGroupId);
