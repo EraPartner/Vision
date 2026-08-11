@@ -58,6 +58,7 @@ import {
 } from '../src/services/aiChat/tools/tax.js';
 import { DEDUCTION_TYPES } from '../src/services/tax/deductionClassifier.js';
 import { dispatchTool, getToolSchemas, getToolNames } from '../src/services/aiChat/tools/index.js';
+import { parsePositiveInt, ToolValidationError } from '../src/services/aiChat/tools/_validate.js';
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -897,4 +898,89 @@ describe('tool write-method denylist', () => {
       ).toBe(false);
     });
   }
+});
+
+describe('parsePositiveInt — the AI-chat tools\' id/bound parser', () => {
+  // Was `parseInt`, the fourth copy of the truncation the :id params, the body
+  // arrays and the import batch ids all lost. Here it is the worst of the four:
+  // the caller is a model, so a truncated `categoryId` did not 404 or surface
+  // anywhere — the tool answered about the wrong record and the model had no
+  // signal to correct itself. Shape is now validateId's; min/max stay the
+  // caller's own bounds.
+  const ID_OPTS = { min: 1, max: Number.MAX_SAFE_INTEGER };
+
+  it('accepts a plain digit string or an integer number', () => {
+    expect(parsePositiveInt('12', 'categoryId', ID_OPTS)).toBe(12);
+    expect(parsePositiveInt('007', 'categoryId', ID_OPTS)).toBe(7);
+    expect(parsePositiveInt(12, 'categoryId', ID_OPTS)).toBe(12);
+  });
+
+  it('returns the default when the value is absent', () => {
+    expect(parsePositiveInt(undefined, 'limit', { defaultValue: 20 })).toBe(20);
+    expect(parsePositiveInt(null, 'limit', { defaultValue: 20 })).toBe(20);
+    expect(parsePositiveInt(undefined, 'categoryId', ID_OPTS)).toBe(null);
+  });
+
+  it('rejects everything validateId rejects — no more leading-digit truncation', () => {
+    for (const value of [
+      '12abc',   // was 12 — the headline case
+      '12.9',    // was 12
+      ' 12 ',    // was 12
+      '1e3',     // was 1
+      '0x10',
+      '+5',
+      '12,5',
+      '1_0',
+      '',
+      'abc',
+      '١٢',
+      12.9,
+      true,
+      [12],
+      {},
+    ]) {
+      expect(
+        () => parsePositiveInt(value, 'categoryId', ID_OPTS),
+        `expected ${JSON.stringify(value)} to be rejected`,
+      ).toThrow(ToolValidationError);
+    }
+  });
+
+  it('still enforces the caller\'s own min/max, separately from the shape', () => {
+    expect(() => parsePositiveInt(1000, 'limit', { min: 1, max: 500 }))
+      .toThrow(/limit must be an integer between 1 and 500/);
+    expect(() => parsePositiveInt(1999, 'year', { min: 2000, max: 2100 }))
+      .toThrow(/year must be an integer between 2000 and 2100/);
+    expect(parsePositiveInt(2024, 'year', { min: 2000, max: 2100 })).toBe(2024);
+    expect(parsePositiveInt(2, 'minOccurrences', { min: 2, max: 20 })).toBe(2);
+  });
+
+  it('names the field and echoes what it received, so the model can correct itself', () => {
+    let caught;
+    try {
+      parsePositiveInt('12.9', 'categoryId', ID_OPTS);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ToolValidationError);
+    expect(caught.field).toBe('categoryId');
+    expect(caught.message).toContain('categoryId must be an integer');
+    expect(caught.message).toContain('"12.9"');
+  });
+
+  it('a malformed id reaches the model as a VALIDATION_ERROR, not a wrong-record answer', async () => {
+    transactionRepository.getAll.mockResolvedValueOnce([]);
+
+    const { result } = await dispatchTool('getTransactionsInRange', {
+      from: '2025-01-01',
+      to: '2025-01-31',
+      categoryId: '12abc',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('VALIDATION_ERROR');
+    expect(result.error.field).toBe('categoryId');
+    // The old parse would have answered 200 about category 12.
+    expect(transactionRepository.getAll).not.toHaveBeenCalled();
+  });
 });

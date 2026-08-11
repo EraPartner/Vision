@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-06-26
-last_modified: 2026-06-26
+updated: 2026-08-11
+last_modified: 2026-08-11
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -52,6 +52,13 @@ related_code:
 
 > [!info] Phase 9 Migration Complete
 > Legacy `/api/info/*` endpoints were removed in Phase 9. All aggregation requests now route through `/api/aggregations/*`.
+
+> [!warning] Id query params (2026-08-11 — breaking for malformed ids)
+> Every `integer[]` query param below (`excluded_category_ids[]`, `excluded_recipient_ids[]`, `recipient_ids[]`, `tag_ids[]`) accepts **only** a plain base-10 integer in 1..2,147,483,647 per element, repeated once per id (`?excluded_category_ids=5&excluded_category_ids=9`). One bad element rejects the whole request with **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`) — no aggregation is computed.
+>
+> **Absent or empty is unchanged and is not an error:** omitting the param, or sending `?excluded_category_ids=`, still means "no filter" and answers 200 with the unfiltered dataset. An empty list and a list with a bad element are deliberately different cases.
+>
+> This changed on 2026-08-11: the parser was `.map(Number).filter(Number.isFinite)`, so a bad element was **dropped**, not rejected. `?excluded_category_ids=12abc` yielded `[]` and switched the exclusion off entirely — the endpoint answered 200 with a *different dataset than the caller asked for* and nothing surfaced, while `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named. Clients sending plain integers are unaffected. `mc_percentiles[]` is **not** an id param and keeps the lenient parser. Full accept set: [[docs/security/input-validation#Repeatable ID Query Params (aggregations)|Input Validation]].
 
 ## Endpoint Details
 

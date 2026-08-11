@@ -8,6 +8,8 @@
  * dispatcher can feed the error back to the model for retry.
  */
 
+import { validateId } from '../../../middleware/validation.js';
+
 /**
  * Per-turn context threaded through every tool's `run(args, context)` by
  * `dispatchTool` (see ./index.js). `cache` is the per-turn memoization Map
@@ -65,6 +67,20 @@ export function requireDate(value, field) {
 }
 
 /**
+ * Bounded positive integer — the tools' `limit`/`topN`/`year` knobs *and* their
+ * `categoryId`/`recipientId`/`plannedId` arguments.
+ *
+ * Shape is `validateId`'s, so an id the model emits here is parsed by exactly
+ * the same rule as one arriving on a route: a plain base-10 digit string or an
+ * integer number, nothing else. It used to be `parseInt`, which took the
+ * leading digits of anything — `"12abc"` and `"12.9"` both became 12, so a
+ * malformed id operated on the wrong record instead of erroring. That failure
+ * mode is worse here than anywhere else in the codebase: the caller is a model,
+ * so an error it can read is something it can correct, while a silently wrong
+ * record is something nothing in the loop notices.
+ *
+ * `min`/`max` are the caller's own bounds and stay separate from the shape
+ * check — `year` starts at 2000, `minOccurrences` at 2.
  * @param {unknown} value
  * @param {string} field
  * @param {{ min?: number, max?: number, defaultValue?: number|null }} [opts]
@@ -72,17 +88,19 @@ export function requireDate(value, field) {
  */
 export function parsePositiveInt(value, field, { min = 1, max = 1000, defaultValue = null } = {}) {
   if (value == null) return defaultValue;
-  // Non-string branch is passed through as-is (no coercion) — matches
-  // original runtime behavior: a non-numeric non-string value fails the
-  // isInteger check below rather than being silently Number()-coerced first.
-  const n = typeof value === 'string' ? parseInt(value, 10) : /** @type {number} */ (value);
-  if (!Number.isInteger(n) || n < min || n > max) {
+  const result = validateId(value, field, max);
+  if (!result.valid || result.value < min) {
+    // The received value is echoed because the message is fed straight back to
+    // the model (dispatchTool's formatError): "must be an integer between 1 and
+    // 500" alone does not tell it what was wrong with "12.9".
+    let received;
+    try { received = JSON.stringify(value); } catch { received = String(value); }
     throw new ToolValidationError(
-      `${field} must be an integer between ${min} and ${max}`,
+      `${field} must be an integer between ${min} and ${max} — received ${received.slice(0, 60)}`,
       field,
     );
   }
-  return n;
+  return result.value;
 }
 
 /**

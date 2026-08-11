@@ -654,7 +654,7 @@ export default router;
 |---------|------|
 | **List envelope** | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope|ADR-026]] |
 | **Parallel fetch** | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1 |
-| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Both accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `assertOptionalId` for optional query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params. Add a call, not a fifth parser ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
+| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Both accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser — and never *filter* a bad id out of a list, since that answers with a silently different dataset ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`) |
 | **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
 | **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]) |
@@ -1107,29 +1107,40 @@ router.get('/forecast', async (req, res) => {
 });
 ```
 
-### Pattern: `parseNumericArrayQueryParam()`
+### Pattern: `parseIdArrayQueryParam()`
 
-Extracts and validates arrays of numeric query parameters (e.g., multi-select filters):
+Repeatable **id** query params (`?excluded_category_ids=5&excluded_category_ids=9`). A thin
+throwing wrapper around `validateIntArray`, so query ids, body ids and `:id` path params share
+one accept set:
 
 ```js
-function parseNumericArrayQueryParam(raw) {
-  if (!raw) return [];
-  const values = Array.isArray(raw) ? raw : [raw];
-  return values
-    .map((v) => Number(v))
-    .filter((n) => Number.isFinite(n));
+function parseIdArrayQueryParam(raw, field) {
+  if (raw == null || raw === '') return [];      // absent/empty = no filter, not an error
+  const result = validateIntArray(raw, field);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
 }
 
 // Usage in route handlers
 router.get('/monthly-summary', async (req, res) => {
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   res.ok({ data, meta });
 });
 ```
+
+> [!warning] Never filter bad ids out of a list — reject the request
+> This was `.map(Number).filter(Number.isFinite)` until 2026-08-11, which **dropped** the bad
+> element: `?excluded_category_ids=12abc` became `[]`, so the exclusion silently switched off and
+> the endpoint answered with a different dataset than the caller asked for — no error anywhere.
+> A dropped element is worse than a rejected request, because nothing surfaces. Keep the
+> empty/absent case (`[]`, a legitimate "no filter") distinct from the malformed case (400).
+
+The lenient numeric form survives for `mc_percentiles` only — distribution percentiles in 0..100,
+where fractional values are legitimate and a bad one costs a chart band, not a row set.
 
 ### Key Rules
 
@@ -1139,13 +1150,14 @@ router.get('/monthly-summary', async (req, res) => {
 | Non-finite check | Reject NaN, Infinity, undefined parse results |
 | Bounds enforcement | Apply min (default 1) and max bounds; use `fallback` if out of range |
 | String arrays | Handle both single `?param=val` and multi `?param=val1&param=val2` |
-| Array filtering | Remove non-finite values, keep empty array if no matches |
+| Array filtering | **Ids: never filter.** One bad element rejects the request (`parseIdArrayQueryParam`); a dropped id silently changes the answer. Non-id numeric arrays (`mc_percentiles`) still drop non-finite values |
 | Type narrowing | Results are always `number | number[]` or fallback type, never string |
 
 ### When to Use
 
 - **Single integer param** — `parseIntClamped()` with max bounds
-- **Array of integers** — `parseNumericArrayQueryParam()` for filter arrays
+- **Array of ids** — `parseIdArrayQueryParam()`, which delegates to `validateIntArray`/`validateId` and 400s on a bad element
+- **Array of non-id numbers** — `parseNumericArrayQueryParam()` (only `mc_percentiles` qualifies)
 - **Currency strings** — Direct upper-casing and regex validation (3-letter ISO code)
 - **Boolean flags** — `=== 'true' || === '1'` string comparison (no parsing needed)
 - **Dates** — Treat as ISO strings, validate with Date constructor or date lib
@@ -1601,8 +1613,8 @@ Routes use `res.ok({ data, meta })` to nest the aggregation envelope inside the 
 router.get('/monthly-summary', async (req, res) => {
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   // Nest domain envelope inside transport envelope
   res.ok({ data, meta });

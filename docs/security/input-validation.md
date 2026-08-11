@@ -7,7 +7,7 @@ updated: 2026-08-11
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -22,7 +22,7 @@ The validation middleware (`validation.js`) provides centralized input validatio
 
 ### ID Validation
 
-Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `validateIdParam`/`validateIntParam`, `splits.js`'s `validatedIdField` and `importBatchIds.js`'s `coercedIdSchema` all delegate to it rather than re-deriving a shape rule.
+Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `validateIdParam`/`validateIntParam`, `splits.js`'s `validatedIdField`, `importBatchIds.js`'s `coercedIdSchema`, `aggregations.js`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
 
 ```javascript
 validateId(value, fieldName = 'id', max = MAX_INT32_ID)
@@ -122,12 +122,37 @@ validateIntArray(values, fieldName = 'ids')
 - **Every element goes through `validateId`**, so the per-element accept set is exactly the one documented above (plain base-10 digit string or integer `number`, 1..2,147,483,647)
 - One bad element rejects the **whole** array — `ValidationError` with `"<field> contains invalid value: <value>"`. No partial or filtered set ever reaches the query
 
-**Call sites:** `routes/savedCharts.js` (`categoryIds`, `recipientIds`, `tagIds`), `routes/settings.js` (`dashboard_settings.excludedCategoryIds` / `.excludedRecipientIds`).
+**Call sites — bodies:** `routes/savedCharts.js` (`categoryIds`, `recipientIds`, `tagIds`), `routes/settings.js` (`dashboard_settings.excludedCategoryIds` / `.excludedRecipientIds`).
+**Call sites — query strings:** `routes/aggregations.js` via `parseIdArrayQueryParam` (see below).
 
 > [!warning] Breaking change (2026-08-11) — `["12abc"]` no longer becomes `[12]`
 > The element parse was `parseInt`, the same truncation the `:id` params lost the same day, and here it was worse. These arrays feed **exclusion and filter sets**, not a single-record lookup, so a truncated element did not 404 — it quietly changed which rows an aggregation or saved chart covered, and no error surfaced to anyone. `["12abc"]` silently became category `[12]`; `["12.5"]` and `["1e3"]` likewise became `[12]` and `[1]`.
 >
 > Malformed elements now return **400 `VALIDATION_ERROR`**. Clients sending plain integers are unaffected — the frontend types all four fields `number[]` (`lib/api/types.ts`, `stores/settingsStore.ts`), so no shipped caller is affected.
+
+---
+
+### Repeatable ID Query Params (aggregations)
+
+The aggregation endpoints take their id lists in the query string, one occurrence per id (`?excluded_category_ids=5&excluded_category_ids=9`). They go through `parseIdArrayQueryParam` in `routes/aggregations.js`, a thin throwing wrapper around `validateIntArray` — so the per-element accept set is the same one documented under [[docs/security/input-validation#ID Validation|ID Validation]], not a second rule.
+
+```javascript
+parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids')
+```
+
+**Rules:**
+- Absent, or present-but-empty (`?excluded_category_ids=`), returns `[]` — "no filter", answered `200`. This is the same unset convention `assertOptionalId` uses, and it is what every shipped caller sends when its list is empty (the frontend query builders skip the param entirely rather than emitting an empty one)
+- Any other value must satisfy `validateIntArray`; one bad element raises `ValidationError` → **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`) before any aggregation is computed
+- An empty list and a list containing a bad element are deliberately **different** cases with different answers
+
+**Params:** `excluded_category_ids`, `excluded_recipient_ids` (8 endpoints: `monthly-summary`, `recipient-insights`, `cashflow-comparison`, `cashflow-forecast-methods`, `cashflow-forecast-rolling`, `sankey`, `category-pivot`, `recipient-by-year`), plus `excluded_recipient_ids` + `recipient_ids` on `recipient-pivot` and `tag_ids` on `tag-pivot`.
+
+`mc_percentiles` deliberately keeps the older lenient numeric parser: percentiles are distribution parameters in 0..100, not record ids, so fractional values are legitimate and a bad one costs a chart band rather than a wrong row set.
+
+> [!warning] Breaking change (2026-08-11) — a malformed id is now a 400 instead of a silently different answer
+> This parser was `.map(Number).filter(Number.isFinite)`, which **dropped** bad elements instead of rejecting them. `?excluded_category_ids=12abc` yielded `[]`, so the exclusion was switched off entirely and the endpoint answered with a *different dataset than the user asked for* — no error, no log line, a plausible-looking number on the dashboard. Meanwhile `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named, and `"1.5"`/`"-1"` reached the SQL builder to be dropped a second time by `validateInt4Ids`.
+>
+> Worse than the body-array case above, which at least refused the request. Both paths now behave identically. Non-breaking for every shipped caller: the frontend builds these params from `number[]` state with `String(id)` and omits the param when the list is empty, so no legitimate request shape changes.
 
 ---
 
@@ -262,6 +287,25 @@ The one intended difference from a plain `validateId` call is the **upper bound*
 > Not affected: an integral id above `int32` (e.g. `2147483648`) is a legal `BIGSERIAL` row and still reaches the repository, 404ing if absent. `"1e300"`, previously let through to that same downstream 404, is now a 400 — it names no batch in any notation the API accepts.
 >
 > No shipped caller is affected: `lib/api/imports.ts` and `lib/api/portfolioImports.ts` type `batchId`/`rowId` as `number`, and `ImportReviewPage.tsx` normalizes the `:batchId` route param with `Number()` before building the URL, so a hand-typed `/import/12.0/review` was already requesting batch `12` on the wire.
+
+---
+
+### parsePositiveInt (AI-chat tool arguments)
+
+The AI-chat tools' arguments arrive as JSON emitted by the model, not from a browser, and are validated by hand-rolled helpers in `services/aiChat/tools/_validate.js` (no zod — see `parseDate`, `parseEnum`, `parsePositiveInt`). Each throws `ToolValidationError`, which `dispatchTool` turns into `{ ok: false, error: { code: 'VALIDATION_ERROR', field, message } }` and feeds back to the model so it can correct its arguments and retry.
+
+```javascript
+parsePositiveInt(value, field, { min = 1, max = 1000, defaultValue = null })
+```
+
+**Rules:**
+- `null`/`undefined` returns `defaultValue` (the tools' optional knobs)
+- Shape is **`validateId`'s** — a plain base-10 digit string or an integer `number`, nothing else — so an id the model emits is parsed exactly like one arriving on a route
+- `min`/`max` are the caller's own bounds and are checked separately from the shape: `limit` 1..500, `topN` 1..20, `year` 2000..2100, `minOccurrences` 2..20, and the id arguments (`categoryId`, `recipientId`, `plannedId`) 1..`Number.MAX_SAFE_INTEGER`
+- The error message names the field, the bounds **and the received value** — the reader is a model deciding what to send next, so `"categoryId must be an integer between 1 and 9007199254740991 — received \"12.9\""` is actionable where the bounds alone are not
+
+> [!warning] Breaking change (2026-08-11) — the fourth id parser converged
+> This was `parseInt`, so `parsePositiveInt("12abc")` returned **12** and `"12.9"` returned **12**. On `categoryId`/`recipientId`/`plannedId` that meant a malformed id operated on the **wrong record** and returned a plausible answer. That is a worse failure here than anywhere else in the codebase: the caller is a model, so a rejection is something it can read and correct, while a silently wrong record is something nothing in the loop notices. `"12abc"`, `"12.9"`, `" 12 "` and `"1e3"` now all raise `ToolValidationError`.
 
 ---
 

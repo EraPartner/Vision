@@ -37,6 +37,7 @@ import { computeTagPivot } from '../services/calculations/aggregation/tagPivot.j
 import { getTargetCurrency, parseBoolQueryParam } from './info/_queryParams.js';
 import { parseIntClamped } from '../lib/pagination.js';
 import { ValidationError } from '../middleware/errorHandler.js';
+import { validateIntArray } from '../middleware/validation.js';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -45,7 +46,46 @@ import { ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
-/** @param {any} raw */
+/**
+ * Repeatable *id* query param (`excluded_category_ids`, `excluded_recipient_ids`,
+ * `recipient_ids`, `tag_ids`) — one element per occurrence, as the frontend's
+ * `qp.append(...)` builders emit.
+ *
+ * Delegates to `validateIntArray`, so the accepted element shapes are exactly
+ * the body arrays' and the `:id` params': a plain base-10 digit string or an
+ * integer number, 1..2^31-1. A bad element rejects the whole request.
+ *
+ * That last part is the point. This used to be `.map(Number).filter(isFinite)`,
+ * which *dropped* the bad element instead of rejecting it: `?excluded_category_ids=12abc`
+ * silently switched the exclusion off entirely and answered with a different
+ * dataset than the caller asked for, while `0x10` decoded to 16 and `1e3` to
+ * 1000 — excluding a category nobody named. Nothing surfaced either way, which
+ * is strictly worse than the 400 the body path already returns.
+ *
+ * Absent or empty (`?excluded_category_ids=`) still means "no exclusions" and
+ * stays a 200 — the same unset convention `assertOptionalId` uses, and what
+ * every current caller sends when its list is empty (the builders skip the
+ * param entirely). An empty list and a list with a bad element are different
+ * cases and are answered differently.
+ * @param {any} raw
+ * @param {string} field
+ * @returns {number[]}
+ */
+function parseIdArrayQueryParam(raw, field) {
+  if (raw == null || raw === '') return [];
+  const result = validateIntArray(raw, field);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
+}
+
+/**
+ * Repeatable *numeric* query param. Only `mc_percentiles` uses it: those are
+ * distribution percentiles (0..100), not record ids, so they deliberately do
+ * NOT go through the id parser above — a fractional percentile is legitimate,
+ * and a bad one costs a band on a chart rather than a wrong row set.
+ * @param {any} raw
+ * @returns {number[]}
+ */
 function parseNumericArrayQueryParam(raw) {
   if (!raw) return [];
   const values = Array.isArray(raw) ? raw : [raw];
@@ -58,8 +98,8 @@ router.get('/monthly-summary', /** @param {ExpressRequest} req @param {ExpressRe
   const allTime = req.query.all_time === 'true' || req.query.all_time === '1';
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
     allTime,
   });
   res.ok({ data, meta });
@@ -75,8 +115,8 @@ router.get('/category-breakdown', /** @param {ExpressRequest} req @param {Expres
 router.get('/recipient-insights', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeRecipientInsights({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   res.ok({ data, meta });
 });
@@ -84,8 +124,8 @@ router.get('/recipient-insights', /** @param {ExpressRequest} req @param {Expres
 router.get('/cashflow-comparison', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeCashflowComparison({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   res.ok({ data, meta });
 });
@@ -126,8 +166,8 @@ router.get('/cashflow-forecast-methods', /** @param {ExpressRequest} req @param 
 
   const { data, meta } = await computeCashflowForecastMethods({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
     includePlanned,
     historyMonths,
     mcPaths,
@@ -156,8 +196,8 @@ router.get('/cashflow-forecast-rolling', /** @param {ExpressRequest} req @param 
 
   const { data, meta } = await computeCashflowForecastRolling({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
     includePlanned,
     historyMonths,
     daysBack,
@@ -207,8 +247,8 @@ router.get('/sankey', /** @param {ExpressRequest} req @param {ExpressResponse} r
   const { data, meta } = await computeSankeyFlow({
     targetCurrency,
     year,
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   res.ok({ data, meta });
 });
@@ -216,8 +256,8 @@ router.get('/sankey', /** @param {ExpressRequest} req @param {ExpressResponse} r
 router.get('/category-pivot', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeCategoryPivot({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   res.ok({ data, meta });
 });
@@ -225,8 +265,8 @@ router.get('/category-pivot', /** @param {ExpressRequest} req @param {ExpressRes
 router.get('/recipient-by-year', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { data, meta } = await computeRecipientByYear({
     targetCurrency: getTargetCurrency(req),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
   });
   res.ok({ data, meta });
 });
@@ -235,10 +275,10 @@ router.get('/recipient-pivot', /** @param {ExpressRequest} req @param {ExpressRe
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
   const startDate = req.query.start || null;
   const endDate = req.query.end || null;
-  const recipientIds = parseNumericArrayQueryParam(req.query.recipient_ids);
+  const recipientIds = parseIdArrayQueryParam(req.query.recipient_ids, 'recipient_ids');
   const { data, meta } = await computeRecipientPivot({
     targetCurrency: getTargetCurrency(req),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
     bucket,
     startDate,
     endDate,
@@ -251,7 +291,7 @@ router.get('/tag-pivot', /** @param {ExpressRequest} req @param {ExpressResponse
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
   const startDate = req.query.start || null;
   const endDate = req.query.end || null;
-  const tagIds = parseNumericArrayQueryParam(req.query.tag_ids);
+  const tagIds = parseIdArrayQueryParam(req.query.tag_ids, 'tag_ids');
   const allTags = req.query.all === 'true' || req.query.all_tags === 'true';
   const { data, meta } = await computeTagPivot({
     targetCurrency: getTargetCurrency(req),
