@@ -99,15 +99,20 @@ const currencyField = ({ rejectEmpty = false } = {}) => z.unknown().transform((v
 // but a present non-null value must be a positive integer — a non-integer here
 // otherwise reached the DB as an FK type error and surfaced as a 500. The
 // coerced integer replaces the raw input.
+//
+// validateId, not `Number()`: the old coercion rejected '12abc' but read '1e3'
+// as 1000, '0x10' as 16, true as 1 and [7] as 7, so the PATCH re-pointed the
+// transaction at a recipient/category the caller never named — a silent
+// mis-attribution in the ledger rather than a 400.
 /** @param {string} field */
 const nullableFkField = (field) => z.unknown().transform((value, ctx) => {
   if (value === null) return null;
-  const idNum = Number(value);
-  if (!Number.isInteger(idNum) || idNum <= 0) {
+  const parsed = validateId(value, field);
+  if (!parsed.valid) {
     ctx.addIssue({ code: 'custom', message: `${field} must be a positive integer` });
     return z.NEVER;
   }
-  return idNum;
+  return parsed.value;
 }).optional();
 
 // POST body: per-field guards run first; the cross-field required/amount/
@@ -130,9 +135,10 @@ const createTransactionSchema = z.looseObject({
     ctx.addIssue({ code: 'custom', message: 'amount must be a non-zero finite number within range' });
   }
   // Validate recipient_id is a positive integer up front — a non-integer here
-  // otherwise reached the DB as an FK type error and surfaced as a 500.
-  const recipientIdNum = Number(data.recipient_id);
-  if (!Number.isInteger(recipientIdNum) || recipientIdNum <= 0) {
+  // otherwise reached the DB as an FK type error and surfaced as a 500. Same
+  // strict accept set as the PATCH field above: `Number()` would have booked
+  // a '1e3' against recipient 1000 instead of rejecting it.
+  if (!validateId(data.recipient_id, 'recipient_id').valid) {
     ctx.addIssue({ code: 'custom', message: 'recipient_id must be a positive integer' });
   }
 });

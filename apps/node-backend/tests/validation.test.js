@@ -9,7 +9,7 @@ import {
   sanitizeUpdateFields, validateIntArray, validateIdParam, validateIntParam,
   assertOptionalId, MAX_INT32_ID, MAX_SAFE_ID,
 } from '../src/middleware/validation.js';
-import { coercedIdSchema } from '../src/lib/importBatchIds.js';
+import { coercedIdSchema, parseOverrideId } from '../src/lib/importBatchIds.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
 
 // validateIdParam is unit-tested as a plain middleware function
@@ -285,6 +285,39 @@ describe('Validation Middleware', () => {
       // value — '9007199254740993' would address record …992.
       expect(parse('9007199254740993').success).toBe(false);
       expect(parse('99999999999999999999').success).toBe(false);
+    });
+  });
+
+  // The import routers' body override ids (recipient/category/investment).
+  // Unlike the batch/row ids above these are int4 FKs, so the default bound
+  // applies; the null passthrough is the "clear the override" contract.
+  describe('parseOverrideId', () => {
+    it('agrees with validateId on every non-null shape, at the int4 bound', () => {
+      const shapes = [
+        '1', '42', '00005', '2147483647', '2147483648',
+        '12abc', '12.5', '5.0', '1e3', '1e300', '0x10', '0o17', '0b11',
+        '+5', '-5', '', '   ', ' 5 ', 'Infinity', 'NaN', '0', '١٢',
+        42, 5.7, 0, -3, true, false, [], ['5'], {}, NaN,
+      ];
+      for (const v of shapes) {
+        const strict = validateId(v, 'field');
+        if (strict.valid) {
+          expect(parseOverrideId(v, 'field'), `disagreed on ${JSON.stringify(v)}`).toBe(strict.value);
+        } else {
+          expect(() => parseOverrideId(v, 'field'), `expected ${JSON.stringify(v)} to throw`)
+            .toThrow(ValidationError);
+        }
+      }
+    });
+
+    it('passes null and an absent value through as null (clear the override)', () => {
+      expect(parseOverrideId(null, 'recipient_id')).toBeNull();
+      expect(parseOverrideId(undefined, 'recipient_id')).toBeNull();
+    });
+
+    it('names the field in the error', () => {
+      expect(() => parseOverrideId('1e3', 'investment_id'))
+        .toThrow('investment_id must be a positive integer or null');
     });
   });
 

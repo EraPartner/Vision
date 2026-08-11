@@ -87,7 +87,9 @@ import { runImportPipeline, commitImport } from '../../src/services/importPipeli
 // function, run here over the mocked pg connection.
 import { createBatch } from '../../src/services/importPipeline/stage.js';
 import { importRecipientsCSV } from '../../src/services/dataImportService.js';
-import { getBatch, getPreviewRows, overrideRecipient } from '../../src/repositories/importBatchRepository.js';
+import {
+  getBatch, getPreviewRows, overrideRecipient, overrideCategory, categoryExists,
+} from '../../src/repositories/importBatchRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
 
@@ -209,6 +211,76 @@ describe('batch-id shape pins (validateId, bounded to MAX_SAFE_ID)', () => {
     ]) {
       await api.post(`${BASE}/batches/${seg(id)}/rows/${seg(rowId)}/override`).send({}).expect(400);
       await api.post(`${BASE}/batches/${seg(id)}/rows/${seg(rowId)}/category-override`).send({}).expect(400);
+    }
+  });
+});
+
+/**
+ * Override-body id shape (`recipient_id`, `category_id`).
+ *
+ * The route ids above were converged first; these two lagged behind on
+ * `Number.isInteger(Number(x))`, which rejects '12abc' but reads '1e3' as 1000,
+ * '0x10' as 16, `true` as 1 and `[7]` as 7. That is not a failed validation, it
+ * is a retarget — and this is the review step of an import, so the staging row
+ * committed a transaction attributed to a recipient or category the user never
+ * picked. Zero and negatives were accepted too and reached Postgres as an FK
+ * violation.
+ */
+describe('override-body id shape (parseOverrideId)', () => {
+  const RETARGETING = ['1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0'];
+  const MALFORMED = ['12abc', 'abc', '1.5', '0', '-1', '', {}, '9007199254740993'];
+
+  it('rejects every value that used to resolve to a different recipient', async () => {
+    for (const recipient_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/override`)
+        .send({ recipient_id })
+        .expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(recipient_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(overrideRecipient).not.toHaveBeenCalled();
+  });
+
+  it('rejects every value that used to resolve to a different category, before the existence check', async () => {
+    for (const category_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/category-override`)
+        .send({ category_id })
+        .expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(category_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    // The "does this category exist?" guard never saw a coerced id: '0x10'
+    // named category 16, which exists, so the guard passed and the write went
+    // through.
+    expect(categoryExists).not.toHaveBeenCalled();
+    expect(overrideCategory).not.toHaveBeenCalled();
+  });
+
+  it('still accepts a digit string or an integer, and clears on null or an absent field', async () => {
+    overrideRecipient.mockResolvedValue(1);
+    overrideCategory.mockResolvedValue(1);
+    categoryExists.mockResolvedValue(true);
+
+    for (const recipient_id of [7, '7', '007']) {
+      await api.post(`${BASE}/batches/5/rows/6/override`).send({ recipient_id }).expect(200);
+      expect(overrideRecipient).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, recipientId: 7 });
+    }
+
+    // Absent and explicit null both mean "clear the override", at 200 — the
+    // shipped clear-the-selection flow, unchanged.
+    for (const body of [{}, { recipient_id: null }]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/override`).send(body).expect(200);
+      expect(overrideRecipient).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, recipientId: null });
+      expect(res.body.data.user_override_recipient_id).toBeNull();
+    }
+
+    await api.post(`${BASE}/batches/5/rows/6/category-override`).send({ category_id: '12' }).expect(200);
+    expect(categoryExists).toHaveBeenLastCalledWith(12);
+    expect(overrideCategory).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, categoryId: 12 });
+
+    for (const body of [{}, { category_id: null }]) {
+      await api.post(`${BASE}/batches/5/rows/6/category-override`).send(body).expect(200);
+      expect(overrideCategory).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, categoryId: null });
     }
   });
 });

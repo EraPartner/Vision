@@ -118,10 +118,19 @@ describe('POST / — validation pins', () => {
     );
   });
 
-  it('rejects non-positive-integer recipient ids', async () => {
-    for (const recipient_id of [1.5, 'abc', -1, '2.5']) {
+  // The reject list used to stop at the values a `Number()` coercion fails on.
+  // The ones it silently *accepts* are the harmful half: '1e3' booked the
+  // transaction against recipient 1000, '0x10' against 16, `true` against 1 and
+  // `[7]` against 7 — a ledger row attributed to someone the caller never named,
+  // 201 and all. The intent of this pin was always "a positive integer".
+  it('rejects non-positive-integer recipient ids, including the retargeting forms', async () => {
+    for (const recipient_id of [
+      1.5, 'abc', -1, '2.5', 0, '12abc',
+      '1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0',
+    ]) {
       await expectValidationError(post({ ...validPostBody(), recipient_id }));
     }
+    expect(transactionRepository.create).not.toHaveBeenCalled();
   });
 
   it('passes an accepted numeric-string recipient_id through RAW', async () => {
@@ -244,6 +253,10 @@ describe('PATCH /:id — validation pins', () => {
       expect.objectContaining({ recipient_id: 7, category_id: 3 }),
     );
   });
+
+  // The retargeting half of this contract ('1e3' → recipient 1000) lives in
+  // tests/routes/transactionsFkIdValidation.test.js: it needs more PATCHes than
+  // this file has left under the route's own 30/min rate limiter.
 
   it('strips read-only keys (id, created_at, links) before the repository', async () => {
     await patch({ id: 99, created_at: 'x', links: ['a'], memo: 'ok' }).expect(200);

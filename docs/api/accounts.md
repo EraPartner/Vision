@@ -79,7 +79,11 @@ balance while the stored date is `NULL`, or clearing only the date, both return 
 
 **`funding_account_id` validation** (`assertFundingAccountValid`,
 `apps/node-backend/src/services/accountService.js`), all 400:
-- Not a positive integer (and not `null`): `funding_account_id must be a positive integer`.
+- Not a positive integer (and not `null`): `funding_account_id must be a positive integer`. The
+  shape rule is `validateId`'s — a plain base-10 integer in 1..2,147,483,647 (changed 2026-08-11,
+  breaking for malformed ids). It was `Number.isInteger(Number(value))`, which rejects `12abc` but
+  reads `1e3` as 1000 and `0x10` as 16, so the existence check below saw a real, *different*
+  account and passed it.
 - Equal to the account's own id (self-funding): `funding_account_id cannot reference the account
   itself`.
 - Doesn't reference an existing account: `funding_account_id N does not reference an existing

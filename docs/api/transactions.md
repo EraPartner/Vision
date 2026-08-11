@@ -270,6 +270,8 @@ Create a new transaction.
 
 **Required Fields:** date, bank_account, recipient_id, amount
 
+**Body FK ids are strict (changed 2026-08-11, breaking for malformed ids).** `recipient_id` must be a plain base-10 integer in 1..2,147,483,647 — the same rule the id path/query params follow. It used to be checked with `Number.isInteger(Number(value))`, which rejects `12abc` but reads `1e3` as 1000, `0x10` as 16 and `true` as 1, so a malformed id booked the transaction against a recipient the caller never named. `0` and negatives are rejected too. See [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|Input Validation]].
+
 **Duplicate Detection:** Automatically checks for duplicate transactions based on date, amount, recipient, and bank account. Returns 409 if duplicate found.
 
 **Response:** Created transaction with 201 status.
@@ -290,6 +292,7 @@ Update an existing transaction.
 **Special Handling:**
 - `recipient_name`: Resolves to recipient_id automatically
 - `category_name`: Resolves to category_id using "GENERAL:DETAIL" format
+- `recipient_id` / `category_id`: `null` clears the column (both are nullable) and an absent key leaves it unchanged, but a present value must be a plain base-10 integer in 1..2,147,483,647 (changed 2026-08-11, breaking for malformed ids — `1e3` used to re-attribute the transaction to recipient 1000 rather than 400)
 
 Implementation notes:
 - Internal PATCH flow now delegates to extracted helpers for payload normalization and name→id resolution (`normalizeTransactionPatchFields`, `resolveRecipientNameToId`, `resolveCategoryNameToId`, `parseRouteId`) while preserving status codes and response messages.

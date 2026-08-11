@@ -7,7 +7,7 @@ updated: 2026-08-11
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -490,6 +490,33 @@ The one intended difference from a plain `validateId` call is the **upper bound*
 > Not affected: an integral id above `int32` (e.g. `2147483648`) is a legal `BIGSERIAL` row and still reaches the repository, 404ing if absent. `"1e300"`, previously let through to that same downstream 404, is now a 400 — it names no batch in any notation the API accepts.
 >
 > No shipped caller is affected: `lib/api/imports.ts` and `lib/api/portfolioImports.ts` type `batchId`/`rowId` as `number`, and `ImportReviewPage.tsx` normalizes the `:batchId` route param with `Number()` before building the URL, so a hand-typed `/import/12.0/review` was already requesting batch `12` on the wire.
+
+---
+
+### FK ids in write bodies (`parseOverrideId` and the zod FK fields)
+
+The id **route params** above are only half of what a write addresses. The other half is the FK id carried in the request **body** — the recipient/category an import row is re-attributed to, the investment a portfolio row is linked to, the brokerage account a batch lands on, the recipient/category a transaction is booked against, and an account's `funding_account_id`. All of these are now parsed with **`validateId`**, so the body and the URL agree on what an id is.
+
+| Site | Field | Parser |
+|---|---|---|
+| `POST /api/import/batches/:id/rows/:rowId/override` | `recipient_id` | `parseOverrideId` (`lib/importBatchIds.js`) |
+| `POST /api/import/batches/:id/rows/:rowId/category-override` | `category_id` | `parseOverrideId` |
+| `POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override` | `investment_id` | `parseOverrideId` |
+| `POST /api/portfolio/import/batches/:id/commit` | `account_id` | `validateId`, inline |
+| `POST /api/portfolio/import/csv/custom` (+ `/csv/custom/stream`) | `account_id` | `validateId`, in `brokerageParamsSchema` |
+| `POST /api/transactions`, `PATCH /api/transactions/:id` | `recipient_id`, `category_id` | `validateId`, in the zod body schemas |
+| `POST /api/accounts`, `PATCH /api/accounts/:id` | `funding_account_id` | `validateId`, in `accountService`'s zod schema |
+
+**Absent and `null` keep their meaning.** On the three override endpoints and the two nullable transaction FKs, `null` — and, on the override endpoints, an absent field — means *clear the override / clear the FK* and answers **200**, unchanged. Only a **present but malformed** value rejects. On the commit and upload `account_id`, absent/`null` still means *no account for this batch*.
+
+> [!warning] Breaking change (2026-08-11) — the seventh id-parser set converged
+> These sites validated with `Number.isInteger(Number(value))`. That is a different sub-shape from the `parseInt` sites above and it looked sound, because it correctly rejects `"12abc"`. What it **accepts** is the problem: `Number("1e3")` is 1000, `Number("0x10")` is 16, `Number("0o17")` is 15, `Number(true)` is 1 and `Number([7])` is 7. A malformed value therefore did not fail validation — it named a **different, perfectly real record**, and every one of these sites is a **write**.
+>
+> The consequence is worse than on a read. An import staging row committed a transaction attributed to a recipient or category the user never picked; a portfolio row committed a lot against another instrument; the commit-time `account_id` is stamped on the batch, so *every* lot it commits inherited an account nobody named; and `PATCH /api/transactions/:id` re-attributed an existing ledger entry. The existence checks these sites run (`categoryExists`, `accountService.get`, `assertFundingAccountValid`) offered no protection, because they only ever saw the value **after** coercion — a retargeted id is a real id and passes them.
+>
+> Also newly rejected: `0` and negatives, which used to satisfy `Number.isInteger` and reached Postgres as an FK violation (a 500), and `""`, which coerced to `0` the same way.
+>
+> No shipped caller is affected: `lib/api/imports.ts`, `lib/api/portfolioImports.ts` and the transactions/accounts clients all type these fields as `number | null`, and the review pages take the ids from server-supplied rows rather than free text. The values above are reachable only from a direct API call.
 
 ---
 

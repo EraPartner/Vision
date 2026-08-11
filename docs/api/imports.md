@@ -425,20 +425,24 @@ Returns staging rows grouped by effective recipient with match-source badges and
 
 Set or clear the recipient override on a single staging row.
 
-**Body:** `{ "recipient_id": number \| null }`
+**Body:** `{ "recipient_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than recipient 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]).
 
 **Response:** `{ "row_id": number, "user_override_recipient_id": number | null }`
+
+**Errors:**
+- `400` — malformed batch id, row id or `recipient_id`
+- `404` — staging row not in batch or not in `matched` status
 
 ### POST /api/import/batches/:id/rows/:rowId/category-override
 
 Set or clear the per-row category override (ADR-046). Validated against `categories(id)`. The committed transaction's category is `COALESCE(staging.override_category_id, recipient.default_category_id, NULL)`.
 
-**Body:** `{ "category_id": number \| null }`
+**Body:** `{ "category_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer, validated with `validateId` before the existence check: the check only ever saw the coerced value, so `"0x10"` used to pass it as the real category 16.
 
 **Response:** `{ "row_id": number, "override_category_id": number | null }`
 
 **Errors:**
-- `400` — non-integer / unknown `category_id`
+- `400` — malformed / unknown `category_id`, or a malformed batch or row id
 - `404` — staging row not in batch or not in `matched` status
 
 ### POST /api/import/batches/:id/commit

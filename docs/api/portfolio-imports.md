@@ -317,12 +317,14 @@ or
 
 When `create_new: true`, a new investment record is created from the row's `symbol` / `name` / `default_asset_class` and linked to the row. All other rows with the same raw symbol/name in this batch are also resolved to the new investment.
 
+`investment_id: null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than a link to investment 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]).
+
 **Responses:**
 
 | Status | Meaning |
 |--------|---------|
 | `200 OK` | Override applied; body contains the updated row |
-| `400 Bad Request` | Neither `investment_id` nor `create_new` supplied, or `create_new` validation failed |
+| `400 Bad Request` | Malformed batch id, row id or `investment_id`, or `create_new` validation failed |
 | `404 Not Found` | Batch or staging row not found |
 
 ---
@@ -338,7 +340,10 @@ Commit a reviewed batch. Honours all investment overrides. Runs FX resolution fo
 ```
 
 When `account_id` is provided, all committed `portfolio_transactions` inherit it — they belong to
-the specified brokerage account. Omit to leave lots unassigned (legacy behaviour).
+the specified brokerage account. Omit (or send `null`) to leave lots unassigned (legacy behaviour).
+Because the whole batch inherits it, the value is validated with `validateId` before the account
+existence check rather than coerced: `"1e3"` used to arrive as the real account 1000, pass the
+existence check and stamp every committed lot with it. Malformed values now return **400**.
 Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not yet applied).
 
 > [!warning] Unresolved rows are skipped

@@ -6459,7 +6459,7 @@ paths:
         schema:
           type: string
     post:
-      summary: Override transaction data for a staged row
+      summary: Override the matched recipient for a staged row
       operationId: overrideImportRow
       tags: [Import]
       requestBody:
@@ -6468,6 +6468,18 @@ paths:
           application/json:
             schema:
               type: object
+              properties:
+                recipient_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Recipient to attribute the staged row to. `null` — or an
+                    absent field — clears the override. A present value must be
+                    a positive integer; a malformed one is rejected rather than
+                    coerced, because a coerced id names a different recipient
+                    and the batch then commits the transaction against it.
       responses:
         "200":
           description: Row updated
@@ -6475,6 +6487,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed batch id, row id or recipient_id
+        "404":
+          description: Row not found in this batch, or not in matched status
 
   /api/import/batches/{id}/rows/{rowId}/category-override:
     parameters:
@@ -6498,10 +6514,18 @@ paths:
           application/json:
             schema:
               type: object
-              required: [category_id]
               properties:
                 category_id:
                   type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Category to attribute the staged row to. `null` — or an
+                    absent field — clears the override. A present value must be
+                    a positive integer that exists; a malformed one is rejected
+                    rather than coerced, since a coerced id names a different
+                    category and passes the existence check.
       responses:
         "200":
           description: Category overridden
@@ -6509,6 +6533,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed batch id, row id or category_id, or an unknown category
+        "404":
+          description: Row not found in this batch, or not in matched status
 
   /api/import/batches/{id}/commit:
     parameters:
@@ -6594,6 +6622,19 @@ paths:
                 type_mapping:
                   type: string
                   description: JSON object mapping raw CSV type strings to canonical portfolio_txn_type values
+                is_brokerage:
+                  type: boolean
+                  description: Brokerage fan-out (ADR-095) — cash rows land on a ledger account
+                account_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  description: >-
+                    Sleeve account every row of this import lands on. Required
+                    when is_brokerage is true, ignored otherwise. Must be a
+                    positive integer; a malformed value is rejected rather than
+                    coerced, since a coerced id files the whole CSV against an
+                    account the uploader never named.
       responses:
         "201":
           description: All rows matched — batch committed immediately
@@ -6885,7 +6926,15 @@ paths:
               properties:
                 investment_id:
                   type: integer
-                  description: ID of an existing investment to link this row to
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Existing investment to link this row to. `null` — or an
+                    absent field — clears the override. A present value must be
+                    a positive integer; a malformed one is rejected rather than
+                    coerced, because a coerced id names a different instrument
+                    and the committed lot records it.
                 create_new:
                   type: boolean
                   description: When true, a new investment record is created from the row's symbol/name/asset_class and linked
@@ -6897,7 +6946,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
         "400":
-          description: Neither investment_id nor create_new supplied, or create_new validation failed
+          description: Malformed batch id, row id or investment_id, or create_new validation failed
         "404":
           description: Batch or staging row not found
 
@@ -6912,6 +6961,26 @@ paths:
       summary: Commit a reviewed portfolio import batch — writes portfolio_transactions to DB
       operationId: commitPortfolioImportBatch
       tags: [PortfolioImport]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Brokerage sleeve account (ADR-095) stamped on the batch, so
+                    every lot it commits inherits it. `null` — or an absent
+                    field — leaves the batch without one. A present value must
+                    be a positive integer naming an existing account; a
+                    malformed one is rejected rather than coerced, since a
+                    coerced id names a different account and passes the
+                    existence check.
       responses:
         "200":
           description: Commit result with row counts
@@ -6919,6 +6988,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed batch id or account_id, or the batch is not in a reviewable state
+        "404":
+          description: Batch not found, or account_id names no account
         "409":
           description: Batch is not in awaiting_review or matched status
 

@@ -80,7 +80,8 @@ import { runPortfolioImportPipeline, commitPortfolioImport } from '../../src/ser
 // boundary function, run here over the mocked pg connection.
 import { createBatch } from '../../src/services/portfolioImportPipeline/stage.js';
 import { query as dbQuery } from '../../src/database/connection.js';
-import { getBatch, overrideInvestment } from '../../src/services/portfolioImportBatchService.js';
+import { getBatch, overrideInvestment, setBatchAccount } from '../../src/services/portfolioImportBatchService.js';
+import accountService from '../../src/services/accountService.js';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
 
 const { default: portfolioImportRouter } = await import('../../src/routes/portfolioImportRoutes.js');
@@ -178,6 +179,78 @@ describe('batch-id shape pins (validateId, bounded to MAX_SAFE_ID)', () => {
   });
 });
 
+/**
+ * Override/commit body ids (`investment_id`, `account_id`).
+ *
+ * Same defect as the transaction importer's recipient/category overrides:
+ * `Number.isInteger(Number(x))` rejects '12abc' but reads '1e3' as 1000, '0x10'
+ * as 16, `true` as 1 and `[7]` as 7 — so the row was not rejected, it was
+ * pointed at a different instrument, and the committed lot recorded holdings
+ * the user never matched. The commit-time `account_id` is worse per request: it
+ * is stamped on the batch, so every lot the batch commits inherits it, and the
+ * `accountService.get` existence check only ever saw the already-coerced value,
+ * so a retargeted-but-real account passed it.
+ */
+describe('override/commit body id shape', () => {
+  const RETARGETING = ['1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0'];
+  const MALFORMED = ['12abc', 'abc', '1.5', '0', '-1', '', {}];
+
+  it('rejects every investment_id that used to resolve to a different instrument', async () => {
+    for (const investment_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/investment-override`)
+        .send({ investment_id })
+        .expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(investment_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(overrideInvestment).not.toHaveBeenCalled();
+  });
+
+  it('still accepts an investment_id digit string or integer, and clears on null or absent', async () => {
+    overrideInvestment.mockResolvedValue(1);
+
+    for (const investment_id of [7, '7', '007']) {
+      await api.post(`${BASE}/batches/5/rows/6/investment-override`).send({ investment_id }).expect(200);
+      expect(overrideInvestment).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, investmentId: 7 });
+    }
+
+    for (const body of [{}, { investment_id: null }]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/investment-override`).send(body).expect(200);
+      expect(overrideInvestment).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, investmentId: null });
+      expect(res.body.data.user_override_investment_id).toBeNull();
+    }
+  });
+
+  it('rejects a commit account_id that used to stamp the batch with another account', async () => {
+    getBatch.mockResolvedValue({ id: 5, status: 'awaiting_review' });
+
+    for (const account_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/commit`).send({ account_id }).expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(account_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(accountService.get).not.toHaveBeenCalled();
+    expect(setBatchAccount).not.toHaveBeenCalled();
+    expect(commitPortfolioImport).not.toHaveBeenCalled();
+  });
+
+  it('still accepts a commit account_id, and absent/null still means "no batch account"', async () => {
+    getBatch.mockResolvedValue({ id: 5, status: 'awaiting_review' });
+    accountService.get.mockResolvedValue({ id: 7 });
+    commitPortfolioImport.mockResolvedValue({ imported: 1, duplicates: 0, errors: 0 });
+
+    await api.post(`${BASE}/batches/5/commit`).send({ account_id: '7' }).expect(200);
+    expect(accountService.get).toHaveBeenCalledWith(7);
+    expect(setBatchAccount).toHaveBeenCalledWith(5, 7);
+
+    for (const body of [{}, { account_id: null }]) {
+      setBatchAccount.mockClear();
+      await api.post(`${BASE}/batches/5/commit`).send(body).expect(200);
+      expect(setBatchAccount).not.toHaveBeenCalled();
+    }
+  });
+});
+
 describe('parseBrokerageParams pins (POST /csv/custom)', () => {
   it("coerces multipart strings: is_brokerage 'true'/'false', account_id '7'", async () => {
     await runCustom({ ...minimalQuery, is_brokerage: 'true', account_id: '7' }).expect(201);
@@ -203,10 +276,21 @@ describe('parseBrokerageParams pins (POST /csv/custom)', () => {
     );
   });
 
+  // The reject list used to stop at 'abc'/'7.5'/'-1'/'0'. Those are the cases a
+  // `Number()` coercion happens to fail; the ones it *passes* were the dangerous
+  // half and went untested — '1e3' set up the whole CSV to land on account 1000
+  // and '0x10' on account 16, neither of which the uploader named. The intent
+  // ("a positive integer") was right; the implementation under it was not.
   it('rejects non-integer account ids and a brokerage import without an account', async () => {
-    for (const account_id of ['abc', '7.5', '-1', '0']) {
+    for (const account_id of ['abc', '7.5', '-1', '0', '1e3', '0x10', '0o17', '+7', ' 7 ', '7.0', '12abc']) {
       const res = await runCustom({ ...minimalQuery, account_id }).expect(400);
-      expect(res.body.error.message).toContain('account_id must be a positive integer');
+      expect(res.body.error.message, `expected ${JSON.stringify(account_id)} to be rejected`)
+        .toContain('account_id must be a positive integer');
+    }
+    for (const account_id of [true, [7], {}]) {
+      const res = await runCustom(minimalQuery, { account_id }).expect(400);
+      expect(res.body.error.message, `expected ${JSON.stringify(account_id)} to be rejected`)
+        .toContain('account_id must be a positive integer');
     }
     const res = await runCustom({ ...minimalQuery, is_brokerage: 'true' }).expect(400);
     expect(res.body.error.message).toMatch(/brokerage import requires account_id/);

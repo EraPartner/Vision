@@ -1,7 +1,8 @@
 /**
- * Shared coerced id schema for the import-batch route params (transaction +
- * portfolio import routers). Both routers copy-pasted the same guard at ~5
- * sites each; this is the single source of truth so they cannot drift.
+ * Shared id parsing for the two import routers (transaction + portfolio): the
+ * coerced batch/row route params, and the optional FK id carried in an
+ * override request body. Both routers copy-pasted the same guards at ~5 sites
+ * each; this is the single source of truth so they cannot drift.
  *
  * The accept set is `validateId`'s, not a second one: this delegates to the
  * middleware validator so there is a single definition of a valid id rather
@@ -62,4 +63,34 @@ export function parseBatchRowIdParams(req) {
   const row = coercedIdSchema.safeParse(req.params.rowId);
   if (!batch.success || !row.success) throw new ValidationError('Invalid batch or row id');
   return { batchId: batch.data, rowId: row.data };
+}
+
+/**
+ * Parse the optional FK id a review-override body carries (recipient, category,
+ * investment). `null`/absent keeps its meaning — clear the override — and a
+ * present value must be a real id.
+ *
+ * The accept set is `validateId`'s, for the same reason the route params use
+ * it. The guard here used to be `Number.isInteger(Number(value))`, which
+ * rejects `'12abc'` but takes `'1e3'` as 1000, `'0x10'` as 16, `true` as 1 and
+ * `[7]` as 7 — so a malformed value did not fail, it pointed the override at a
+ * *different* record than the caller named. These are writes on the commit
+ * path, so the staging row then committed a transaction attributed to a
+ * recipient/category/investment the user never chose. Zero and negatives now
+ * reject too; they matched no row and reached Postgres as an FK violation.
+ *
+ * The referenced columns are all `INTEGER`, so the default `int4` bound
+ * applies — unlike the batch/row ids above.
+ *
+ * @param {unknown} value
+ * @param {string} fieldName
+ * @returns {number|null}
+ */
+export function parseOverrideId(value, fieldName) {
+  if (value === undefined || value === null) return null;
+  const result = validateId(value, fieldName);
+  if (!result.valid) {
+    throw new ValidationError(`${fieldName} must be a positive integer or null`);
+  }
+  return result.value;
 }

@@ -12,7 +12,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
-import { parseBatchIdParam, parseBatchRowIdParams } from '../lib/importBatchIds.js';
+import { parseBatchIdParam, parseBatchRowIdParams, parseOverrideId } from '../lib/importBatchIds.js';
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
@@ -550,11 +550,9 @@ router.post('/batches/:id/rows/:rowId/override', /** @param {ExpressRequest} req
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
   const { recipient_id } = req.body;
-  if (recipient_id !== null && recipient_id !== undefined && !Number.isInteger(Number(recipient_id))) {
-    throw new ValidationError('recipient_id must be an integer or null');
-  }
-
-  const effectiveRecipientId = recipient_id != null ? Number(recipient_id) : null;
+  // null/absent clears the override; anything else must be a real recipient id
+  // (parseOverrideId, not Number() — see lib/importBatchIds.js).
+  const effectiveRecipientId = parseOverrideId(recipient_id, 'recipient_id');
 
   const rowCount = await overrideRecipient({
     batchId,
@@ -577,11 +575,7 @@ router.post('/batches/:id/rows/:rowId/category-override', /** @param {ExpressReq
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
   const { category_id } = req.body;
-  if (category_id !== null && category_id !== undefined && !Number.isInteger(Number(category_id))) {
-    throw new ValidationError('category_id must be an integer or null');
-  }
-
-  const effectiveCategoryId = category_id != null ? Number(category_id) : null;
+  const effectiveCategoryId = parseOverrideId(category_id, 'category_id');
 
   if (effectiveCategoryId !== null && !(await categoryExists(effectiveCategoryId))) {
     throw new ValidationError(`Category ${effectiveCategoryId} not found`);

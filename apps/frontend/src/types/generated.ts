@@ -2230,7 +2230,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Override transaction data for a staged row */
+        /** Override the matched recipient for a staged row */
         post: operations["overrideImportRow"];
         delete?: never;
         options?: never;
@@ -8523,7 +8523,13 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": {
+                    /**
+                     * Format: int32
+                     * @description Recipient to attribute the staged row to. `null` — or an absent field — clears the override. A present value must be a positive integer; a malformed one is rejected rather than coerced, because a coerced id names a different recipient and the batch then commits the transaction against it.
+                     */
+                    recipient_id?: number | null;
+                };
             };
         };
         responses: {
@@ -8535,6 +8541,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Malformed batch id, row id or recipient_id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Row not found in this batch, or not in matched status */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8551,7 +8571,11 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    category_id: number;
+                    /**
+                     * Format: int32
+                     * @description Category to attribute the staged row to. `null` — or an absent field — clears the override. A present value must be a positive integer that exists; a malformed one is rejected rather than coerced, since a coerced id names a different category and passes the existence check.
+                     */
+                    category_id?: number | null;
                 };
             };
         };
@@ -8564,6 +8588,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Malformed batch id, row id or category_id, or an unknown category */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Row not found in this batch, or not in matched status */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8629,6 +8667,13 @@ export interface operations {
                     default_type?: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest";
                     /** @description JSON object mapping raw CSV type strings to canonical portfolio_txn_type values */
                     type_mapping?: string;
+                    /** @description Brokerage fan-out (ADR-095) — cash rows land on a ledger account */
+                    is_brokerage?: boolean;
+                    /**
+                     * Format: int32
+                     * @description Sleeve account every row of this import lands on. Required when is_brokerage is true, ignored otherwise. Must be a positive integer; a malformed value is rejected rather than coerced, since a coerced id files the whole CSV against an account the uploader never named.
+                     */
+                    account_id?: number;
                 };
             };
         };
@@ -8941,8 +8986,11 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description ID of an existing investment to link this row to */
-                    investment_id?: number;
+                    /**
+                     * Format: int32
+                     * @description Existing investment to link this row to. `null` — or an absent field — clears the override. A present value must be a positive integer; a malformed one is rejected rather than coerced, because a coerced id names a different instrument and the committed lot records it.
+                     */
+                    investment_id?: number | null;
                     /** @description When true, a new investment record is created from the row's symbol/name/asset_class and linked */
                     create_new?: boolean;
                 };
@@ -8958,7 +9006,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Neither investment_id nor create_new supplied, or create_new validation failed */
+            /** @description Malformed batch id, row id or investment_id, or create_new validation failed */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8983,7 +9031,17 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: int32
+                     * @description Brokerage sleeve account (ADR-095) stamped on the batch, so every lot it commits inherits it. `null` — or an absent field — leaves the batch without one. A present value must be a positive integer naming an existing account; a malformed one is rejected rather than coerced, since a coerced id names a different account and passes the existence check.
+                     */
+                    account_id?: number | null;
+                };
+            };
+        };
         responses: {
             /** @description Commit result with row counts */
             200: {
@@ -8993,6 +9051,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Malformed batch id or account_id, or the batch is not in a reviewable state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Batch not found, or account_id names no account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Batch is not in awaiting_review or matched status */
             409: {
