@@ -25,7 +25,7 @@ import {
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { validateIdParam, assertYmd, assertOptionalId, assertCurrency, assertMaxLength, MAX_MONEY_VALUE } from '../middleware/validation.js';
+import { validateIdParam, validateId, assertYmd, assertOptionalId, assertCurrency, assertMaxLength, validateIntArray, MAX_MONEY_VALUE } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import {
   scheduleReconcile,
@@ -220,6 +220,45 @@ function parseTransactionBody(schema, body) {
   return result.data;
 }
 
+/**
+ * Comma-separated *id* list query param (`category_ids` on the list and export
+ * endpoints, `account_ids` on the export endpoints) — `?category_ids=1,2,3`, the
+ * shape the frontend's `ids.join(',')` builders emit. Repeated occurrences work
+ * too: Express hands back an array and `String([...])` re-joins it with commas.
+ *
+ * Delegates to `validateIntArray`, so the accepted element shapes are exactly
+ * the `:id` params', the body arrays' and the aggregation query params': a plain
+ * base-10 digit string or an integer number, 1..2^31-1. No trimming — ` 2` is a
+ * malformed id here as everywhere else. A bad element rejects the whole request.
+ *
+ * Rejecting is the point. This was `.split(',').map(parseInt).filter(isFinite &&
+ * > 0)`, which had both failure modes and surfaced neither. A partly-bad list
+ * *retargeted*: `?category_ids=5,12abc` filtered by categories 5 **and 12**, and
+ * `?account_ids=12abc` exported account 12 — a record nobody named. An entirely
+ * bad list *vanished*: `?account_ids=abc` produced an empty list, the caller
+ * mapped that back to "no filter", and `GET /export/csv` streamed **every
+ * account's transactions** into a file the user keeps, with a 200 and a
+ * plausible-looking CSV.
+ *
+ * Absent or empty (`?category_ids=`) still means "no filter" and stays 200 —
+ * the same unset convention `assertOptionalId` and `parseIdArrayQueryParam` use.
+ * The emptiness test is applied to the JOINED string so every encoding of "sent
+ * but empty" (`''`, `[]`, `['']`) lands on it. An empty list and a list with a
+ * bad element are different cases and are answered differently: `?ids=` is 200,
+ * `?ids=5,` is 400.
+ * @param {any} raw
+ * @param {string} field
+ * @returns {number[]|null} null when the param is absent/empty
+ */
+function parseIdListQueryParam(raw, field) {
+  if (raw == null) return null;
+  const joined = String(raw);
+  if (joined === '') return null;
+  const result = validateIntArray(joined.split(','), field);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
+}
+
 // `query` is req.query — an Express querystring object whose values are
 // string|string[]|undefined at runtime; typed `any` here (as the rest of this
 // file's req.query reads always have been) rather than modelling every key.
@@ -238,9 +277,7 @@ function parseTransactionListQuery(query) {
   } = query;
   const { limit, offset } = parsePagination(query, { maxLimit: 5000 });
 
-  const parsedCategoryIds = category_ids
-    ? String(category_ids).split(',').map((id) => parseInt(id, 10)).filter((id) => Number.isFinite(id) && id > 0)
-    : null;
+  const parsedCategoryIds = parseIdListQueryParam(category_ids, 'category_ids');
 
   const parsedTagSlugs = tags
     ? String(tags).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
@@ -256,17 +293,25 @@ function parseTransactionListQuery(query) {
   return {
     limit,
     offset,
-    transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
+    // Every scalar id here goes through assertOptionalId — absent/empty means
+    // "no filter" (null, 200), anything malformed is a 400. These were bare
+    // `x ? parseInt(x) : null`, which took the leading digits of anything:
+    // ?category_id=12abc filtered by category 12, ?recipient_group_id=1e3 by
+    // group 1, ?transaction_id=0 and ?recipient_id=-4 reached the SQL builder
+    // as ids no row can have, and a NaN (which is what the Transactions page
+    // sends for a hand-edited URL) passed the `!= null` guard and reached
+    // Postgres as a 22P02 500.
+    transactionId: assertOptionalId(transaction_id, 'transaction_id'),
     startDate: assertYmd(start_date, 'start_date'),
     endDate: assertYmd(end_date, 'end_date'),
     // account_id is the preferred account filter (ADR-088 — reads key on the
     // FK); bank_account stays as a substring escape hatch.
     accountId: assertOptionalId(account_id, 'account_id'),
     bankAccount: bank_account || null,
-    categoryId: category_id ? parseInt(category_id, 10) : null,
-    categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,
-    recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
-    recipientGroupId: recipient_group_id ? parseInt(recipient_group_id, 10) : null,
+    categoryId: assertOptionalId(category_id, 'category_id'),
+    categoryIds: parsedCategoryIds,
+    recipientId: assertOptionalId(recipient_id, 'recipient_id'),
+    recipientGroupId: assertOptionalId(recipient_group_id, 'recipient_group_id'),
     recipientName: recipient_name || null,
     search: search ? String(search).slice(0, 200) : null,
     active: active !== 'false',
@@ -298,13 +343,12 @@ function parseTransactionListQuery(query) {
 function buildExportFilters(query) {
   const opts = parseTransactionListQuery(query);
 
-  const accountIds = query.account_ids
-    ? String(query.account_ids)
-        .split(',')
-        .map((s) => parseInt(s, 10))
-        .filter((n) => Number.isFinite(n) && n > 0)
-        .slice(0, EXPORT_MAX_LIST_SIZE)
-    : null;
+  // Validated in full BEFORE the cap is applied, so a malformed id past
+  // EXPORT_MAX_LIST_SIZE still rejects rather than being sliced away unseen.
+  // The cap itself is unchanged (it silently truncates an over-long list — a
+  // separate, pre-existing narrowing, shared with bank_accounts below).
+  const accountIds = parseIdListQueryParam(query.account_ids, 'account_ids')
+    ?.slice(0, EXPORT_MAX_LIST_SIZE) ?? null;
 
   const bankAccounts = query.bank_accounts
     ? String(query.bank_accounts)
@@ -381,11 +425,17 @@ router.get('/transfer-suggestions', /** @param {ExpressRequest} req @param {Expr
 
 // POST /api/transactions/transfers — manually confirm a transfer pair (sticky)
 router.post('/transfers', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const aId = parseInt(req.body?.aId, 10);
-  const bId = parseInt(req.body?.bId, 10);
-  if (!Number.isInteger(aId) || !Number.isInteger(bId) || aId === bId) {
+  // Same strict id parse as everywhere else. This was a bare parseInt guarded
+  // only by Number.isInteger, so `aId: "12abc"` marked transaction 12 as a
+  // transfer — a wrong-record *write*, not a wrong-record read — and an id past
+  // int4 (99999999999) passed the guard and 500'd at the column.
+  const a = validateId(req.body?.aId, 'aId');
+  const b = validateId(req.body?.bId, 'bId');
+  if (!a.valid || !b.valid || a.value === b.value) {
     throw new ValidationError('aId and bId must be two distinct transaction ids');
   }
+  const aId = a.value;
+  const bId = b.value;
   await markTransfer(aId, bId);
   scheduleReconcile();
   res.ok({ ok: true });

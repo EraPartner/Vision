@@ -4354,7 +4354,7 @@ export interface operations {
                 tags?: string;
                 /** @description Fetch a single transaction by id (exact match) */
                 transaction_id?: number;
-                /** @description Comma-separated category ids — OR filter */
+                /** @description Comma-separated category ids — OR filter. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR (the parser used to truncate/drop it). An absent or empty value means no filter. */
                 category_ids?: string;
                 /** @description Filter by primary (grouped) recipient id */
                 recipient_group_id?: number;
@@ -5428,7 +5428,7 @@ export interface operations {
                 end_date?: string;
                 /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
                 account_id?: number;
-                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
                 include_balance?: boolean;
@@ -5459,7 +5459,7 @@ export interface operations {
                 end_date?: string;
                 /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
                 account_id?: number;
-                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
                 /** @description Comma-separated tag slugs — OR filter */

@@ -2205,6 +2205,8 @@ paths:
           description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: bank_account
           schema:
@@ -2213,10 +2215,14 @@ paths:
           name: category_id
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: recipient_id
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: search
           schema:
@@ -2240,16 +2246,24 @@ paths:
           description: Fetch a single transaction by id (exact match)
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: category_ids
-          description: Comma-separated category ids — OR filter
+          description: >-
+            Comma-separated category ids — OR filter. Every element must be a plain base-10
+            integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR
+            (the parser used to truncate/drop it). An absent or empty value means no filter.
           schema:
             type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: recipient_group_id
           description: Filter by primary (grouped) recipient id
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: recipient_name
           description: Filter by recipient display name (substring)
@@ -3249,11 +3263,18 @@ paths:
           description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: account_ids
-          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          description: >-
+            Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts.
+            Every element must be a plain base-10 integer in 1..2147483647; a malformed element
+            returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the
+            export to every account. Capped at 50 entries after validation.
           schema:
             type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: bank_account
           schema:
@@ -3296,11 +3317,18 @@ paths:
           description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: account_ids
-          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          description: >-
+            Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts.
+            Every element must be a plain base-10 integer in 1..2147483647; a malformed element
+            returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the
+            export to every account. Capped at 50 entries after validation.
           schema:
             type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: bank_account
           schema:

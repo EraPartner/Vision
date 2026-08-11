@@ -7,7 +7,7 @@ updated: 2026-08-11
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -153,6 +153,66 @@ parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids')
 > This parser was `.map(Number).filter(Number.isFinite)`, which **dropped** bad elements instead of rejecting them. `?excluded_category_ids=12abc` yielded `[]`, so the exclusion was switched off entirely and the endpoint answered with a *different dataset than the user asked for* — no error, no log line, a plausible-looking number on the dashboard. Meanwhile `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named, and `"1.5"`/`"-1"` reached the SQL builder to be dropped a second time by `validateInt4Ids`.
 >
 > Worse than the body-array case above, which at least refused the request. Both paths now behave identically. Non-breaking for every shipped caller: the frontend builds these params from `number[]` state with `String(id)` and omits the param when the list is empty, so no legitimate request shape changes.
+
+---
+
+### Comma-separated ID Query Params (transactions list + export)
+
+The transactions list and the two streamed export endpoints take their id lists comma-separated
+(`?category_ids=5,7,12`, `?account_ids=3,9`) rather than one occurrence per id, because that is the
+shape their `ids.join(',')` frontend builders emit. They go through `parseIdListQueryParam` in
+`routes/transactions.js` — a thin throwing wrapper around `validateIntArray`, so the per-element
+accept set is the same one under [[docs/security/input-validation#ID Validation|ID Validation]],
+not a third rule. Repeated occurrences work too: Express hands back an array and `String([...])`
+re-joins it with commas.
+
+```javascript
+parseIdListQueryParam(req.query.account_ids, 'account_ids')   // → number[] | null
+```
+
+**Rules:**
+- Absent, or present-but-empty (`?category_ids=`), returns `null` — "no filter", answered `200`
+- Any other value is split on `,` and every element must satisfy `validateId`; one bad element
+  raises `ValidationError` → **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`)
+  before any row is read. A trailing comma is therefore a 400, not a shrug
+- No trimming — ` 5` is a malformed id here, exactly as in the path params
+- `account_ids` is validated in full **before** `EXPORT_MAX_LIST_SIZE` (50) caps it, so a malformed
+  id past the cap still rejects rather than being sliced away unseen
+
+The four scalar id filters on the same endpoints — `transaction_id`, `category_id`, `recipient_id`,
+`recipient_group_id` — go through `assertOptionalId`, joining `account_id`, which already did.
+
+**Params:** `category_ids` (`GET /api/transactions`, `GET /api/transactions/export/csv|json`),
+`account_ids` (both export endpoints).
+
+> [!warning] Breaking change (2026-08-11) — the last id parsers, and the only one whose output is a file
+> These sat **upstream** of `validateInt4Ids`, so the SQL-build convergence did not close them: by
+> the time the builder saw the value it was already a clean integer.
+>
+> The list parse was `.split(',').map(parseInt).filter(isFinite && > 0)` and had *both* failure
+> modes. **Retarget:** `?category_ids=5,12abc` filtered by categories 5 **and 12**, and
+> `?account_ids=12abc` exported account 12 — a record nobody named. **Widen:** an all-bad list
+> parsed to `[]`, which the caller mapped back to "no filter", so `?account_ids=abc` emitted no
+> account predicate at all and `GET /export/csv` streamed **every account's transactions** into the
+> downloaded file, 200 and all. A silently widened export is the worst outcome in this family: the
+> file looks right, the user keeps it, and nothing is logged.
+>
+> The four scalars were bare `parseInt`: `?category_id=12abc` filtered by category 12,
+> `?recipient_group_id=1e3` by group 1, and `?transaction_id=0` / `?recipient_id=-4` reached the SQL
+> builder as ids no row can have. A `NaN` — which is what the Transactions page sends for a
+> hand-edited URL, since it parses these params with a bare `Number()` — passed the builder's
+> `!= null` guard and reached Postgres as a **22P02 500**; it is now a 400.
+>
+> `POST /api/transactions/transfers` is converged in the same pass. Its `aId`/`bId` were bare
+> `parseInt` guarded only by `Number.isInteger`, so `"12abc"` stamped transaction **12** as one leg
+> of a transfer pair — a wrong-record *write*, not a wrong-record read — and an id past int4 passed
+> the guard and 500'd at the column.
+>
+> Non-breaking for shipped callers: the Transactions page and the Imports Export card build these
+> params with `ids.join(',')` from `number[]` state (dropping malformed URL elements client-side
+> before the request), `buildQuery` omits empty values, and nothing in the frontend sends
+> `account_ids` at all. `openapi.yaml` already typed the four scalars `integer`, so the
+> implementation moves **onto** the published contract rather than away from it.
 
 ---
 
