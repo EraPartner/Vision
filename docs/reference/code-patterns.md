@@ -1414,7 +1414,7 @@ Every builder returns `{ sql, params, nextParamIdx }`:
 
 | Function | Purpose |
 |----------|---------|
-| `validateInt4Ids(ids)` | Validate array of PostgreSQL INT4 IDs; returns filtered array |
+| `validateInt4Ids(ids, fieldName?)` | Validate a list of PostgreSQL INT4 IDs. **Rejects, does not filter** — throws `ValidationError` if any element is not a plain digit string or integer number in `1..2^31-1`. Nullish input means "no ids" and returns `[]` |
 | `buildTransactionWhere(opts)` | Build full transaction WHERE clause with all filters; includes `recipientGroupId` support (Phase Q) |
 
 ### Recipient Group Resolution (Phase Q)

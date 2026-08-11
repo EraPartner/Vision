@@ -25,8 +25,10 @@ import {
   sweepExpiredCacheEntries,
   loadHistoricalPointsFromDatabase,
   saveHistoricalPointsToDatabase,
+  loadLatestHistoricalPointByInvestmentIds,
   PRICE_CACHE_TTL_MS,
 } from '../src/services/prices/priceCache.js';
+import { ValidationError } from '../src/middleware/errorHandler.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -369,5 +371,40 @@ describe('saveHistoricalPointsToDatabase', () => {
     await expect(
       saveHistoricalPointsToDatabase(1, [{ timestampMs: Date.UTC(2025, 0, 1), price: 100 }], 's'),
     ).rejects.toThrow('something else');
+  });
+});
+
+describe('loadLatestHistoricalPointByInvestmentIds', () => {
+  it('binds a deduped id list and maps rows by investment', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ investment_id: 7, price_date: '2026-01-02', close_price: '12.5' }],
+    });
+
+    const byId = await loadLatestHistoricalPointByInvestmentIds([7, 7, 9]);
+
+    expect(query.mock.calls[0][1]).toEqual([[7, 9]]);
+    expect(byId.get(7)).toMatchObject({ price: 12.5 });
+  });
+
+  it('returns an empty map without querying for an absent or empty list', async () => {
+    expect((await loadLatestHistoricalPointByInvestmentIds([])).size).toBe(0);
+    expect((await loadLatestHistoricalPointByInvestmentIds(undefined)).size).toBe(0);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  // Was `.map(Number).filter(Number.isFinite)`, which both dropped and
+  // mis-accepted. The only caller passes `inv.id` off investment rows, so a
+  // malformed id here means a real bug rather than bad user input — but a
+  // dropped id silently returned no fallback price for that investment, which
+  // surfaces as an unpriced holding in a valuation rather than as an error.
+  // Number.isFinite also let 1.5 through to the `::int[]` cast below.
+  it('rejects a malformed id instead of dropping it or passing a float to the int cast', async () => {
+    for (const ids of [[7, 'evil'], [1.5], [0], [-1], ['1e3'], [null]]) {
+      await expect(
+        loadLatestHistoricalPointByInvestmentIds(ids),
+        `expected ${JSON.stringify(ids)} to be rejected`,
+      ).rejects.toThrow(ValidationError);
+    }
+    expect(query).not.toHaveBeenCalled();
   });
 });

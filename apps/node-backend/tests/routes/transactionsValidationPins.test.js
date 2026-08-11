@@ -280,11 +280,31 @@ describe('POST /bulk-tag — validation pins', () => {
     expect(res.body.error.message).toMatch(/at least one/i);
   });
 
-  it('rejects when transaction_ids contains no int4-valid ids', async () => {
+  // Was: expected the generic 'no valid IDs' this route reached only after
+  // every element had been silently discarded. Each element is now validated as
+  // sent, so the first bad one is named and echoed back.
+  it('rejects when transaction_ids contains a non-int4 id', async () => {
     const res = await expectValidationError(bulkTag({
       transaction_ids: ['abc', 0, -2, 2 ** 31], add_slugs: ['x'],
     }));
-    expect(res.body.error.message).toContain('no valid IDs');
+    expect(res.body.error.message).toBe('transaction_ids contains invalid value: abc');
+  });
+
+  // A partly-valid list is rejected too — it used to be silently truncated to
+  // its valid members, tagging fewer transactions than the caller asked for
+  // with a 200 and a count that looked plausible.
+  it('rejects a partly-valid transaction_ids list rather than tagging a subset', async () => {
+    const res = await expectValidationError(bulkTag({
+      transaction_ids: [1, 2.5, 3], add_slugs: ['x'],
+    }));
+    expect(res.body.error.message).toBe('transaction_ids contains invalid value: 2.5');
+  });
+
+  // The retarget: '1e3' used to reach Number() and tag transaction 1000.
+  it('never coerces a transaction id into a different record id', async () => {
+    for (const bad of ['1e3', '0x10', true, [7]]) {
+      await expectValidationError(bulkTag({ transaction_ids: [bad], add_slugs: ['x'] }));
+    }
   });
 });
 

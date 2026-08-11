@@ -31,7 +31,9 @@ import { removeAttachmentFilesBestEffort } from './attachmentCleanup.js';
  * @returns {Promise<{ added: number, removed: number, transactions_affected: number }>}
  */
 export async function bulkTagTransactions({ transactionIds, addSlugs, removeSlugs }) {
-  const txIds = validateInt4Ids(transactionIds.map(Number));
+  // Validated as sent — see the note in bulkSelection.js: the `.map(Number)`
+  // that used to sit here turned '1e3' into id 1000 and true into id 1.
+  const txIds = validateInt4Ids(transactionIds, 'transaction_ids');
   if (txIds.length === 0) {
     throw new ValidationError('transaction_ids contains no valid IDs');
   }

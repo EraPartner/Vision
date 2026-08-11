@@ -7,7 +7,7 @@ updated: 2026-08-11
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -153,6 +153,50 @@ parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids')
 > This parser was `.map(Number).filter(Number.isFinite)`, which **dropped** bad elements instead of rejecting them. `?excluded_category_ids=12abc` yielded `[]`, so the exclusion was switched off entirely and the endpoint answered with a *different dataset than the user asked for* — no error, no log line, a plausible-looking number on the dashboard. Meanwhile `"0x10"` decoded to 16 and `"1e3"` to 1000, excluding a category nobody named, and `"1.5"`/`"-1"` reached the SQL builder to be dropped a second time by `validateInt4Ids`.
 >
 > Worse than the body-array case above, which at least refused the request. Both paths now behave identically. Non-breaking for every shipped caller: the frontend builds these params from `number[]` state with `String(id)` and omits the param when the list is empty, so no legitimate request shape changes.
+
+---
+
+### SQL-build-time id lists (`validateInt4Ids`)
+
+`apps/node-backend/src/lib/filterBuilder.js` — the last layer before an id becomes a `$n`
+placeholder. Used by `buildTransactionWhere` (`accountIds`, `categoryIds`),
+`buildExclusionClauses` (`excludedCategoryIds`, `excludedRecipientIds`),
+`resolveBulkSelection`, `bulkTagTransactions`, and the price-history batch loader.
+
+```javascript
+validateInt4Ids(ids, fieldName)   // → number[], throws ValidationError
+```
+
+**Rules:**
+- Delegates to `validateIntArray` → `validateId`, so the accepted element shapes are identical to
+  the `:id` params', the body arrays' and the aggregation query params': a plain base-10 digit
+  string or an integer number, `1..2147483647` **inclusive**
+- One bad element rejects the whole list — `"<field> contains invalid value: <value>"`
+- Nullish input means "no ids" and yields `[]`; callers skip the clause (the unset convention)
+
+> [!warning] Breaking change (2026-08-11) — this layer dropped ids instead of rejecting them
+> `validateInt4Ids` was `ids.filter(id => Number.isInteger(id) && id > 0 && id < MAX_INT4)`.
+> A dropped id does not 404 here — it changes **which rows the query covers**. An exclusion list
+> that lost one element quietly stopped excluding that category; one that lost every element
+> emitted no predicate at all and answered with the full dataset while the caller believed its
+> exclusions applied. This is also what dropped `1.5`/`-1` a *second* time on the aggregation
+> path, masking the query-param bug above.
+>
+> Two callers additionally ran `.map(Number)` **before** the filter, which did not drop bad
+> entries but **retargeted** them: `"1e3"` became id 1000, `"0x10"` became 16, `[7]` became 7 and
+> `true` became 1. `resolveBulkSelection` feeds `POST /api/transactions/bulk-delete`, whose `ids`
+> is read straight off `req.body` with no route-layer id validation — so a malformed id could
+> **hard-delete a record the client never named**, returning 200 with a plausible count. The
+> `.map(Number)` is gone; elements are validated as sent.
+>
+> Forgiveness was considered for the bulk paths and rejected: staleness is not what this filter
+> catches. An id whose row was deleted in another tab is a valid integer — it passes validation
+> and matches nothing in the `id = ANY(...)`, so a stale selection still succeeds. Only malformed
+> input is rejected, and the frontend holds `number[]` straight from the API.
+>
+> The bound was also off by one: `id < 2147483647` rejected a legal int4 id at the ceiling that
+> every route-layer validator accepts, so `?excluded_category_ids=2147483647` returned 200 and
+> silently applied no exclusion. Now `<= 2147483647`, matching `validateId`.
 
 ---
 

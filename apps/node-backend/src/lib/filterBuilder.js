@@ -24,7 +24,9 @@
  * callers can append further predicates.
  */
 
-const MAX_INT4 = 2147483647;
+import { validateIntArray } from '../middleware/validation.js';
+import { ValidationError } from '../middleware/errorHandler.js';
+
 const MAX_LIST_SIZE = 50;
 // Free-text search terms shorter than this (after trimming) are ignored: a
 // 1-character term matches nearly every row while still paying the full cost
@@ -32,15 +34,34 @@ const MAX_LIST_SIZE = 50;
 export const MIN_SEARCH_LENGTH = 2;
 
 /**
- * Keep only safe PostgreSQL INT4 ids. Drops null, undefined, non-integer, non-positive,
- * and out-of-range values. Returns an array (possibly empty) — callers decide how to
- * treat empty lists (typically: skip the clause).
+ * Validate a list of PostgreSQL INT4 ids for use in a generated SQL clause.
+ *
+ * Rejects the whole list — it does NOT drop elements. Dropping was the bug: at
+ * SQL-build time a discarded id does not 404, it silently changes which rows
+ * the query covers. An exclusion list that loses an element quietly stops
+ * excluding that category; one that loses every element emits no clause at all
+ * and answers with the full dataset. A bulk selection that loses an element
+ * writes to a smaller set than the caller named. Nothing surfaced either way.
+ *
+ * Delegates to validateIntArray (hence validateId), so the accepted element
+ * shapes are exactly the `:id` params', the body arrays' and the aggregation
+ * query params': a plain base-10 digit string or an integer number, 1..2^31-1.
+ * That also fixes an off-by-one this filter used to carry on its own — it
+ * bounded ids with `id < 2147483647`, so a legal int4 id at the ceiling was
+ * accepted by every route-layer validator and then dropped here.
+ *
+ * Nullish input means "no ids" and yields `[]` (the unset convention
+ * assertOptionalId and parseIdArrayQueryParam use); callers skip the clause.
  * @param {unknown} ids
+ * @param {string} [fieldName]
  * @returns {number[]}
+ * @throws {ValidationError} when any element is not a valid int4 id
  */
-export function validateInt4Ids(ids) {
-  if (!Array.isArray(ids)) return [];
-  return ids.filter((id) => Number.isInteger(id) && id > 0 && id < MAX_INT4);
+export function validateInt4Ids(ids, fieldName = 'ids') {
+  if (ids === undefined || ids === null) return [];
+  const result = validateIntArray(ids, fieldName);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
 }
 
 /**
@@ -159,7 +180,7 @@ export function buildTransactionWhere(opts = {}) {
     clauses.push(`t.account_id = $${p++}`);
     params.push(accountId);
   } else if (Array.isArray(accountIds) && accountIds.length > 0) {
-    const safe = validateInt4Ids(accountIds);
+    const safe = validateInt4Ids(accountIds, 'accountIds');
     if (safe.length > 0) {
       const placeholders = safe.map(() => `$${p++}`).join(', ');
       clauses.push(`t.account_id IN (${placeholders})`);
@@ -202,7 +223,7 @@ export function buildTransactionWhere(opts = {}) {
     )`);
     params.push(categoryId);
   } else if (Array.isArray(categoryIds) && categoryIds.length > 0) {
-    const safe = validateInt4Ids(categoryIds);
+    const safe = validateInt4Ids(categoryIds, 'categoryIds');
     if (safe.length > 0) {
       // Same effective-category expansion as the single-value branch above,
       // with each leaf comparing against the id list. The placeholder slots are
@@ -373,8 +394,8 @@ export function buildTransactionWhere(opts = {}) {
 export function buildExclusionClauses(opts = {}) {
   const { excludedCategoryIds = [], excludedRecipientIds = [], startParamIdx = 1 } = opts;
 
-  const safeCats = validateInt4Ids(excludedCategoryIds);
-  const safeRecs = validateInt4Ids(excludedRecipientIds);
+  const safeCats = validateInt4Ids(excludedCategoryIds, 'excludedCategoryIds');
+  const safeRecs = validateInt4Ids(excludedRecipientIds, 'excludedRecipientIds');
 
   const clauses = [];
   const params = [];

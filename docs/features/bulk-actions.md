@@ -3,6 +3,7 @@ title: Bulk Transaction Actions
 type: feature
 status: active
 date: 2026-05-08
+updated: 2026-08-11
 tags: [feature, transactions, bulk, productivity]
 description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, and tag operations across many transactions in one atomic call.
 aliases: [bulk-actions, bulk-delete, bulk-update, bulk-export]
@@ -58,7 +59,7 @@ Resolver: [`apps/node-backend/src/services/bulkSelection.js`](apps/node-backend/
 | `apps/node-backend/src/services/transactionExport.js` | Streaming CSV / NDJSON pipeline shared with the GET export endpoints |
 | `apps/node-backend/src/routes/transactions.js` | New POST routes: `/bulk-delete`, `/bulk-update`, `/bulk-export` |
 
-Every write route runs inside `withTransaction(client => …)` and ends with `scheduleRefresh()` so materialized views catch up. `validateInt4Ids` strips invalid integers before any SQL touches the DB.
+Every write route runs inside `withTransaction(client => …)` and ends with `scheduleRefresh()` so materialized views catch up. `validateInt4Ids` validates every id before any SQL touches the DB — a malformed entry **rejects the whole request** (400) rather than being dropped from the batch, so a bulk action never silently operates on a subset of what the caller named. A well-formed id whose row no longer exists is *not* malformed: it passes validation and simply matches no rows, so a stale selection still succeeds.
 
 ### Frontend
 

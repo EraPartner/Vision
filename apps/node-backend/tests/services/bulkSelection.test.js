@@ -9,6 +9,7 @@ vi.mock('../../src/database/connection.js', () => mockConnection({ getClient: vi
 const { resolveBulkSelection, normalizeBulkFilter, BULK_SELECTION_DEFAULTS } =
   await import('../../src/services/bulkSelection.js');
 const { query: dbQuery } = await import('../../src/database/connection.js');
+const { ValidationError } = await import('../../src/middleware/errorHandler.js');
 
 describe('resolveBulkSelection — input validation', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -40,7 +41,7 @@ describe('resolveBulkSelection — input validation', () => {
 
   it('throws when ids contains no valid integers', async () => {
     await expect(resolveBulkSelection({ ids: ['abc', null, -5, 0] })).rejects.toThrow(
-      /no valid integer ids/i,
+      /ids contains invalid value: abc/,
     );
   });
 });
@@ -54,9 +55,46 @@ describe('resolveBulkSelection — id mode happy path', () => {
     expect(dbQuery).not.toHaveBeenCalled();
   });
 
-  it('drops invalid ids while preserving valid ones', async () => {
-    const result = await resolveBulkSelection({ ids: [1, 'abc', 2, -5, 3] });
-    expect(result).toEqual([1, 2, 3]);
+  // This test used to assert `{ ids: [1, 'abc', 2, -5, 3] }` resolved to
+  // [1, 2, 3] — a partial batch, silently. It was weighed as a possible
+  // statement of intent ("a bulk action should tolerate one stale id in a long
+  // selection") and rejected as one, for two reasons.
+  //
+  // First, staleness is not what this filter catches. An id whose row was
+  // deleted in another tab is a perfectly valid integer: it passes validation
+  // untouched and simply matches nothing in the `id = ANY(...)`. The tolerance
+  // a long selection actually needs is already there, at the SQL layer, and is
+  // unchanged by this. What was being dropped is *malformed* input, which a
+  // stale selection never produces — the frontend holds `number[]` from the API.
+  //
+  // Second, the drop was not even the whole bug. `.map(Number)` ran first, so
+  // bad entries were not dropped but RETARGETED — see the test below.
+  it('rejects a malformed id list instead of silently acting on part of it', async () => {
+    await expect(resolveBulkSelection({ ids: [1, 'abc', 2, -5, 3] }))
+      .rejects.toThrow(ValidationError);
+    expect(dbQuery).not.toHaveBeenCalled();
+  });
+
+  // The reason forgiveness was the wrong answer here. resolveBulkSelection
+  // feeds bulk-delete, so `{ ids: ['1e3'] }` used to become id 1000 and hard-
+  // delete a row the client never named; `[[7]]` became 7 and `[true]` became
+  // 1. Silent, unlogged, irreversible — strictly worse than the drop it hid
+  // behind. A digit string is still a legal id, so real clients are unaffected.
+  it('never coerces a non-id into a different record id', async () => {
+    for (const ids of [['1e3'], ['0x10'], ['0o17'], ['0b11'], [[7]], [true], [' 5 '], ['5.0']]) {
+      await expect(resolveBulkSelection({ ids }), `expected ${JSON.stringify(ids)} to be rejected`)
+        .rejects.toThrow(ValidationError);
+    }
+    expect(dbQuery).not.toHaveBeenCalled();
+
+    expect(await resolveBulkSelection({ ids: ['1', '2'] })).toEqual([1, 2]);
+  });
+
+  // A stale-but-well-formed id is exactly the case forgiveness was meant to
+  // cover, and it still sails through — it resolves and matches no rows later.
+  it('passes a well-formed id through even when its row no longer exists', async () => {
+    expect(await resolveBulkSelection({ ids: [1, 999999, 3] })).toEqual([1, 999999, 3]);
+    expect(dbQuery).not.toHaveBeenCalled();
   });
 });
 

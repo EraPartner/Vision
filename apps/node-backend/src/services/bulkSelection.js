@@ -124,11 +124,18 @@ export async function resolveBulkSelection(selector = {}, opts = {}) {
     if (ids.length > idCap) {
       throw new ValidationError(`\`ids\` must contain at most ${idCap} entries (received ${ids.length})`);
     }
-    const safe = validateInt4Ids(ids.map(Number));
-    if (safe.length === 0) {
-      throw new ValidationError('`ids` contains no valid integer IDs');
-    }
-    return safe;
+    // No `.map(Number)` in front of the validator: it did not merely drop bad
+    // entries, it retargeted them. Number('1e3') is 1000 and Number('0x10') is
+    // 16, both of which then passed as ids, so a bulk DELETE could hard-delete
+    // a row the client never named. Number([7]) is 7 and Number(true) is 1 for
+    // the same reason. Each element is validated as sent instead.
+    //
+    // Rejecting rather than skipping is safe for a stale selection: staleness
+    // is not what this filter catches. An id whose row was deleted in another
+    // tab is still a valid integer — it passes validation and simply matches
+    // nothing in the `id = ANY(...)` below. Only malformed input is rejected,
+    // and the frontend holds `number[]` straight from the API.
+    return validateInt4Ids(ids, 'ids');
   }
 
   const normalized = normalizeBulkFilter(filter);

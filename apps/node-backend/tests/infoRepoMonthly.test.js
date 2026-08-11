@@ -176,20 +176,33 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     expect(params).toEqual([1, 99, todayAppDateString()]);
   });
 
-  it('drops invalid IDs from exclusion lists', async () => {
+  // Was: the malformed lists below were asserted to bind as [99, 5, …] — every
+  // bad element dropped, the summary quietly computed over a different set of
+  // transactions than the caller asked to exclude. Rejecting surfaces it.
+  // 2147483647 was in the dropped set only because of the old exclusive
+  // `< MAX_INT4` bound; it is a legal int4 id and is kept now.
+  it('rejects malformed exclusion lists instead of dropping the bad ids', async () => {
     mvAvailable.mockResolvedValue(true);
-    query.mockResolvedValueOnce({ rows: [] });
-    convertRowsToEur.mockResolvedValueOnce([]);
 
-    await getMonthlyFinancialSummary(
+    await expect(getMonthlyFinancialSummary(
       [0, -1, 1.5, 'evil', 2147483647, 99],
       'EUR',
       [null, undefined, 5],
       false,
-    );
+    )).rejects.toThrow(/excludedCategoryIds contains invalid value/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('binds an exclusion id at the int4 ceiling instead of dropping it', async () => {
+    mvAvailable.mockResolvedValue(true);
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([]);
+
+    await getMonthlyFinancialSummary([2147483647, 99], 'EUR', [5], false);
 
     const [, params] = query.mock.calls[0];
-    expect(params).toEqual([99, 5, todayAppDateString()]);
+    expect(params).toEqual([2147483647, 99, 5, todayAppDateString()]);
   });
 
   it('uses earliest-transaction date when allTime=true', async () => {
