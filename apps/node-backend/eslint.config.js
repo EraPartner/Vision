@@ -1,10 +1,16 @@
 /**
  * ESLint flat config for the node-backend.
  *
- * Key rule: routes must not import repositories or the database layer
- * directly. All data access must flow through the services layer (ADR-067).
- * Sole documented exemption: routes/admin.js, whose table-stats/VACUUM
- * endpoints are legitimately DB-level (inline eslint-disable there).
+ * Two layering rules, one per boundary of `routes → services → repositories`:
+ *   - routes must not import repositories or the database layer directly. All
+ *     data access must flow through the services layer (ADR-067). Sole
+ *     documented exemption: routes/admin.js, whose table-stats/VACUUM endpoints
+ *     are legitimately DB-level (inline eslint-disable there).
+ *   - repositories must not import services (the inverse edge). The sanctioned
+ *     exceptions are enumerated in SANCTIONED_REPO_SERVICE_IMPORTS below, which
+ *     is the machine-readable twin of the callout in
+ *     docs/reference/code-patterns.md ("Layering: repositories must not import
+ *     services"). Keep the two in sync.
  */
 
 import js from '@eslint/js';
@@ -58,6 +64,110 @@ const noRepoDirectFromRoute = {
           });
         }
       },
+    };
+  },
+};
+
+/**
+ * no-service-import-from-repo
+ *
+ * The inverse of no-repo-direct-from-route: disallows importing from
+ * `../services/` inside files under `src/repositories/`, which inverts the
+ * `routes → services → repositories` layering (ADR-067). A repository that
+ * reaches into a service can pull in DB/logger/provider-health state — and, in
+ * the worst case, a service that opens its own transaction.
+ *
+ * A closed allowlist carries the sanctioned exceptions documented in
+ * docs/reference/code-patterns.md. It is keyed by repository basename and pins
+ * BOTH the service module and the exact binding names, so the rule fires on a
+ * new repository importing a service, on a sanctioned repository importing a
+ * different service, and on a sanctioned repository widening its import to a
+ * binding the exception does not cover. Do not add entries: the documented
+ * rule is that any pure helper a repository needs belongs in `lib/`.
+ */
+const SANCTIONED_REPO_SERVICE_IMPORTS = {
+  // The `info*` read-repositories aggregate rows and currency-convert them as
+  // part of producing API-shaped results — effectively read-services.
+  'infoRepositoryAverageVsCurrent.js': ['convertRowsToEur'],
+  'infoRepositoryHelpers.js': ['convertRowsToEur'],
+  'infoRepositoryMonthly.js': ['convertRowsToEur'],
+  'infoRepositoryPlanned.js': ['convertRowsToEur'],
+  'infoRepositoryRecipients.js': ['convertRowsToEur'],
+  'infoRepositoryStatistics.js': ['convertRowsToEur'],
+  'infoRepositoryTags.js': ['convertRowsToEur'],
+  // accountRepository.getAll folds an account's per-currency balance partitions
+  // into the account currency (ADR-094 / WP-A1) — the same read-service shape.
+  'accountRepository.js': ['loadCurrentRates', 'convertWithRates'],
+};
+
+const SANCTIONED_SERVICE_MODULE = 'services/currency/currencyConversionService.js';
+
+const noServiceImportFromRepo = {
+  meta: {
+    type: 'suggestion',
+    docs: {
+      description:
+        'Repositories must not import services; pure helpers belong in lib/. A closed allowlist carries the sanctioned exceptions.',
+      url: null,
+    },
+    messages: {
+      noService:
+        "Repository file imports '{{source}}' from the services layer, inverting the " +
+        'routes→services→repositories layering (ADR-067). Move the helper to lib/, or lift the ' +
+        'call into the service that calls this repository.',
+      notSanctionedModule:
+        "Repository file '{{file}}' has a sanctioned service exception for '" +
+        SANCTIONED_SERVICE_MODULE +
+        "' only, but imports '{{source}}'. The exception does not extend to other services.",
+      notSanctionedBinding:
+        "Repository file '{{file}}' imports '{{name}}', which its sanctioned service exception " +
+        'does not cover (allowed: {{allowed}}). Widen the exception in ' +
+        'docs/reference/code-patterns.md and eslint.config.js together, or move the helper to lib/.',
+    },
+    schema: [],
+  },
+  create(context) {
+    const file = (context.filename ?? context.getFilename()).replace(/\\/g, '/');
+    const basename = file.slice(file.lastIndexOf('/') + 1);
+    const allowed = SANCTIONED_REPO_SERVICE_IMPORTS[basename];
+    // `export … from '../services/…'` re-exports reach the service layer exactly
+    // like an import does, so both node kinds go through the same check.
+    const check = (node) => {
+      const src = node.source?.value;
+      if (typeof src !== 'string' || !src.includes('services/')) return;
+      if (!allowed) {
+        context.report({ node, messageId: 'noService', data: { source: src } });
+        return;
+      }
+      if (!src.endsWith(SANCTIONED_SERVICE_MODULE)) {
+        context.report({
+          node,
+          messageId: 'notSanctionedModule',
+          data: { file: basename, source: src },
+        });
+        return;
+      }
+      // `export * from` names nothing, so it can never be pinned to the allowed
+      // bindings — it re-exports the whole stateful service surface.
+      if (node.type === 'ExportAllDeclaration') {
+        context.report({ node, messageId: 'noService', data: { source: src } });
+        return;
+      }
+      for (const spec of node.specifiers ?? []) {
+        const name = spec.type === 'ImportSpecifier' ? spec.imported.name : spec.local.name;
+        if (!allowed.includes(name)) {
+          context.report({
+            node: spec,
+            messageId: 'notSanctionedBinding',
+            data: { file: basename, name, allowed: allowed.join(', ') },
+          });
+        }
+      }
+    };
+    return {
+      ImportDeclaration: check,
+      ExportNamedDeclaration: check,
+      ExportAllDeclaration: check,
     };
   },
 };
@@ -132,6 +242,17 @@ export default [
     rules: {
       // All routes now go through the services layer; enforce the boundary.
       'vision-local/no-repo-direct-from-route': 'error',
+    },
+  },
+
+  // Repo→service enforcement (the inverse edge) — repositories only.
+  {
+    files: ['src/repositories/**/*.js'],
+    plugins: {
+      'vision-local': { rules: { 'no-service-import-from-repo': noServiceImportFromRepo } },
+    },
+    rules: {
+      'vision-local/no-service-import-from-repo': 'error',
     },
   },
 

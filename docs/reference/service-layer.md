@@ -3,9 +3,9 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-08-09
-tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, thin-seams, adr-067]
-description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added.
+last_modified: 2026-08-11
+tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
+description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the eight sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -958,6 +958,20 @@ import { insertTransaction } from '../repositories/transactionRepository.js';
 ```
 
 The lint rule inspects the resolved import path: any file under `src/routes/` importing from `src/repositories/` triggers the error. Services may still import repositories freely.
+
+---
+
+## Repository → Service Boundary (Enforced, August 2026)
+
+The inverse edge is now guarded too. `vision-local/no-service-import-from-repo` (an **ERROR** on `src/repositories/**/*.js`) fires when a repository imports from `services/`, which would let the data-access layer pull in service state — a rate cache, a logger, provider health, or a service that opens its own `withTransaction`.
+
+```javascript
+// repositories/tagRepository.js
+// ESLint ERROR — no-service-import-from-repo
+import { convertToCurrency } from '../services/currency/currencyConversionService.js';
+```
+
+The rule carries a **closed allowlist** (`SANCTIONED_REPO_SERVICE_IMPORTS` in `eslint.config.js`) pinning both the service module and the exact binding names, so it also fires when a sanctioned repository reaches for a *different* service or *widens* its import. The eight sanctioned importers and the reasoning behind each are documented in [[docs/reference/code-patterns|Code Patterns → Layering: repositories must not import services]]; the allowlist and that callout must be edited together. Do not add entries — put the helper in `lib/`, or lift the call into the service that calls the repository.
 
 ---
 
