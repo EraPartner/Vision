@@ -19,7 +19,7 @@
  *   minus all DROP TABLE ... across all upgrade() blocks
  *   minus Alembic internals (alembic_version)
  *
- * Last verified against: 0080_drop_agg_recipient_totals
+ * Last verified against: 0090_constraint_index_naming
  */
 export const BACKUP_COVERED_TABLES = Object.freeze([
   'accounts',

@@ -1,6 +1,6 @@
 /**
- * Cross-workspace API (ADR-098) — cash-aware rebalancing and the unified tax
- * view, both composing Budgeting + Portfolio data.
+ * Cross-workspace API (ADR-098) — cash-aware rebalancing composing Budgeting
+ * + Portfolio data. (The unified-tax surface was removed in ADR-102.)
  */
 import { apiRequest } from '@/lib/api/client';
 
