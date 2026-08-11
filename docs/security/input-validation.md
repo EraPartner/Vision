@@ -7,7 +7,7 @@ updated: 2026-08-11
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -22,15 +22,15 @@ The validation middleware (`validation.js`) provides centralized input validatio
 
 ### ID Validation
 
-Validates that an ID parameter is a positive 32-bit integer.
+Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `validateIdParam`/`validateIntParam`, `splits.js`'s `validatedIdField` and `importBatchIds.js`'s `coercedIdSchema` all delegate to it rather than re-deriving a shape rule.
 
 ```javascript
-validateId(value, fieldName = 'id')
+validateId(value, fieldName = 'id', max = MAX_INT32_ID)
 ```
 
 **Rules — the accept set is exhaustive and deliberately strict:**
 - A plain base-10 digit string (`"42"`; leading zeros allowed, `"00005"` → `5`), **or** an actual integer `number` (route middleware re-stamps `req.params` with the parsed integer, and JSON bodies send real numbers)
-- Range 1 to 2,147,483,647 (`int4` — the width of every serial PK in the schema)
+- Range 1 to `max`, which defaults to `MAX_INT32_ID` = 2,147,483,647 (`int4` — the width of every `SERIAL` PK these routes address). `max` is not a general knob: it exists only so the `BIGSERIAL`-backed import batch/row ids can share this one definition of *shape* without inheriting an `int4` ceiling their column does not have (see [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|coercedIdSchema]])
 - **Everything else is rejected**: trailing garbage (`"12abc"`, `"5px"`), decimals (`"12.5"`), exponent/hex/octal/binary literals (`"1e3"`, `"0x10"`, `"0o17"`, `"0b11"`), signs (`"+5"`, `"-5"`), separators (`"12,5"`, `"1_0"`), whitespace-padded values (`" 5 "`), the empty string, `"Infinity"`/`"NaN"`, non-ASCII digits, booleans, arrays and objects
 
 > [!warning] Breaking change (2026-08-11) — `"12abc"` no longer resolves to id 12
@@ -111,15 +111,23 @@ validateDateString(value, fieldName = 'date')
 
 ### Array Validation
 
-Validates arrays of integer IDs.
+Validates arrays of integer IDs (chart filter lists, dashboard exclusion lists).
 
 ```javascript
 validateIntArray(values, fieldName = 'ids')
 ```
 
 **Rules:**
-- Each element must be a positive integer
-- Works with single values or arrays
+- A scalar is wrapped into a one-element array; an empty array is valid
+- **Every element goes through `validateId`**, so the per-element accept set is exactly the one documented above (plain base-10 digit string or integer `number`, 1..2,147,483,647)
+- One bad element rejects the **whole** array — `ValidationError` with `"<field> contains invalid value: <value>"`. No partial or filtered set ever reaches the query
+
+**Call sites:** `routes/savedCharts.js` (`categoryIds`, `recipientIds`, `tagIds`), `routes/settings.js` (`dashboard_settings.excludedCategoryIds` / `.excludedRecipientIds`).
+
+> [!warning] Breaking change (2026-08-11) — `["12abc"]` no longer becomes `[12]`
+> The element parse was `parseInt`, the same truncation the `:id` params lost the same day, and here it was worse. These arrays feed **exclusion and filter sets**, not a single-record lookup, so a truncated element did not 404 — it quietly changed which rows an aggregation or saved chart covered, and no error surfaced to anyone. `["12abc"]` silently became category `[12]`; `["12.5"]` and `["1e3"]` likewise became `[12]` and `[1]`.
+>
+> Malformed elements now return **400 `VALIDATION_ERROR`**. Clients sending plain integers are unaffected — the frontend types all four fields `number[]` (`lib/api/types.ts`, `stores/settingsStore.ts`), so no shipped caller is affected.
 
 ---
 
@@ -232,8 +240,28 @@ router.delete('/:id/patterns/:patternId', validateIdParam, validateIntParam('pat
 
 Used for `:patternId` (`recipients.js`) and `:accountId` (`recipientBankAccounts.js`). Unlike `validateIdParam` — which no-ops when there is no `:id` on the route — `validateIntParam` rejects a missing param, since a route that declares it always has it.
 
-> [!note] Two id validators still coexist
-> `validateId` covers the routers above. The import pipeline's batch/row ids use `coercedIdSchema` (`lib/importBatchIds.js`) instead, which is `Number()`-based. After the 2026-08-11 tightening they agree on the cases that matter — both reject `"12abc"`, `"12.5"`, `0`, negatives and the empty string — but `coercedIdSchema` is still looser on: exponent/hex/octal/binary literals (`"1e3"` → 1000, `"0x10"` → 16, `"0o17"` → 15, `"0b11"` → 3), `"+5"`, whitespace-padded values (`" 5 "`, `"\n7\n"`), `"12.0"` → 12, and it has **no `int32` cap** (`"2147483648"` and `"1e300"` pass through to a downstream 404 or a Postgres range error rather than a 400). Unifying them is tracked separately.
+### coercedIdSchema (import batch/row ids)
+
+The import pipelines' batch and row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) are parsed by the zod adapter `coercedIdSchema` in `lib/importBatchIds.js`, via `parseBatchIdParam(req)` and `parseBatchRowIdParams(req)`. It **delegates to `validateId`**, so there is one definition of a valid id rather than two kept in step by hand.
+
+```javascript
+const id = parseBatchIdParam(req);                  // req.params.id
+const { batchId, rowId } = parseBatchRowIdParams(req); // req.params.id + req.params.rowId
+```
+
+The one intended difference from a plain `validateId` call is the **upper bound**:
+
+| Validator | Bound | Why |
+|---|---|---|
+| `validateId` (default) | `MAX_INT32_ID` = 2,147,483,647 | every id it guards is an `int4` `SERIAL` PK (`categories`, `recipients`, `tags`, `transactions`, …) |
+| `coercedIdSchema` | `MAX_SAFE_ID` = `Number.MAX_SAFE_INTEGER` | `import_batches.id`, `import_staging_rows.id` and the portfolio pair are **`BIGSERIAL`** — an `int4` ceiling would be narrower than the column. `2^53` is the real limit because the id crosses the wire as a JSON number, and above it the digit string and the parsed number stop being the same value (`"9007199254740993"` would address record …992) |
+
+> [!warning] Breaking change (2026-08-11) — the two validators converged
+> `coercedIdSchema` was a bare `Number()` coercion. It already agreed with `validateId` on the obvious cases (`"12abc"`, `"12.5"`, `0`, negatives, `""` all rejected), but it silently addressed a **different batch** on `"1e3"` → 1000, `"0x10"` → 16, `"0o17"` → 15, `"0b11"` → 3 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "`, `"\n7\n"` and `"12.0"`. All of these now return **400 `VALIDATION_ERROR`**.
+>
+> Not affected: an integral id above `int32` (e.g. `2147483648`) is a legal `BIGSERIAL` row and still reaches the repository, 404ing if absent. `"1e300"`, previously let through to that same downstream 404, is now a 400 — it names no batch in any notation the API accepts.
+>
+> No shipped caller is affected: `lib/api/imports.ts` and `lib/api/portfolioImports.ts` type `batchId`/`rowId` as `number`, and `ImportReviewPage.tsx` normalizes the `:batchId` route param with `Number()` before building the URL, so a hand-typed `/import/12.0/review` was already requesting batch `12` on the wire.
 
 ---
 

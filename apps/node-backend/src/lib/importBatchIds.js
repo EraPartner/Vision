@@ -3,16 +3,24 @@
  * portfolio import routers). Both routers copy-pasted the same guard at ~5
  * sites each; this is the single source of truth so they cannot drift.
  *
- * The accept set matches the pre-zod guard exactly: Number() coercion, then
- * Number.isInteger(n) && n > 0 — so '12.0', ' 12 ', and '0x10' coerce, while
- * '12.5', '12abc', 0, and negatives reject. Deliberately NOT
- * z.coerce.number().int().positive(): zod's .int() also rejects unsafe
- * integers (e.g. '1e300'), which the old guard let through to a downstream
- * 404 — that would change the wire from 404 to 400.
+ * The accept set is `validateId`'s, not a second one: this delegates to the
+ * middleware validator so there is a single definition of a valid id rather
+ * than two kept in step by hand. It used to be a bare `Number()` coercion,
+ * which agreed with validateId on the obvious cases ('12abc', '12.5', 0,
+ * negatives all rejected) but silently addressed a *different* record on
+ * '1e3' (1000), '0x10' (16), '0o17' (15), '0b11' (3) and
+ * '9007199254740993' (…992), and also took '+5', ' 12 ' and '12.0'.
+ *
+ * The one deliberate difference from a plain `validateId` call is the bound.
+ * `import_batches.id` / `import_staging_rows.id` (and the portfolio pair) are
+ * BIGSERIAL, so validateId's default int4 ceiling would be narrower than the
+ * column; MAX_SAFE_ID is the honest limit, since the id crosses the wire as a
+ * JSON number (services/importPipeline/stage.js createBatch).
  */
 
 import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
+import { validateId, MAX_SAFE_ID } from '../middleware/validation.js';
 
 /**
  * The slice of an Express `Request` these parsers read. Structural, not
@@ -25,12 +33,12 @@ import { ValidationError } from '../middleware/errorHandler.js';
  */
 
 export const coercedIdSchema = z.unknown().transform((value, ctx) => {
-  const id = Number(value);
-  if (!Number.isInteger(id) || id <= 0) {
+  const result = validateId(value, 'id', MAX_SAFE_ID);
+  if (!result.valid) {
     ctx.addIssue({ code: 'custom', message: 'must be a positive integer' });
     return z.NEVER;
   }
-  return id;
+  return result.value;
 });
 
 /**

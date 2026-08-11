@@ -83,9 +83,11 @@ const themeSettingsSchema = z.looseObject({
   }).optional(),
 });
 
-// Shares validateIntArray with the query-param routes so accepted shapes stay
-// identical (scalar wrapped to array, parseInt coercion, 1..2^31-1 bounds); the
-// coerced ints replace the raw input in the stored value, as before.
+// Shares validateIntArray with savedCharts.js's chart filter lists so accepted
+// shapes stay identical (scalar wrapped to array, then validateId per element:
+// a plain digit string or integer number, 1..2^31-1 — no trailing garbage,
+// decimals or exponents); the coerced ints replace the raw input in the stored
+// value, as before.
 /** @param {string} field */
 const intArrayField = (field) => z.unknown().transform((value, ctx) => {
   const result = validateIntArray(value, field);

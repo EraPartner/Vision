@@ -5,7 +5,7 @@ method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
 date: 2026-06-18
-updated: 2026-06-18
+updated: 2026-08-11
 last_modified: 2026-06-18
 tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078, account-id, adr-091, migration-0057]
 status: active
@@ -275,6 +275,11 @@ Rollback a batch. Deletes all `portfolio_transactions` committed by this batch a
 ## Review Endpoints
 
 When the pipeline detects unresolved instruments (symbol not found in `investments`) it leaves the batch in `awaiting_review` and the SSE stream emits a `review_required` event. These endpoints let the client inspect, assign instruments, and commit.
+
+> [!warning] Batch/row id contract (2026-08-11 — breaking for malformed ids)
+> Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGSERIAL`, so the ceiling is *not* `int32`). Anything else returns `400 VALIDATION_ERROR`.
+>
+> These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId` (`lib/importBatchIds.js`, shared with the transaction import router). Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
 
 ### GET /api/portfolio/import/batches/:id/preview
 

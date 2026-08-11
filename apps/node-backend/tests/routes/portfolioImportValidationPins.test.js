@@ -110,15 +110,38 @@ beforeEach(() => {
   customParserConfigRepository.create.mockResolvedValue({ id: 1 });
 });
 
-describe('batch-id coercion pins', () => {
-  it("accepts '12.0' / ' 12 ' via Number() coercion", async () => {
+describe('batch-id shape pins (validateId, bounded to MAX_SAFE_ID)', () => {
+  // Mirror of the transaction-import block: this pinned the raw `Number()`
+  // coercion ('12.0' and ' 12 ' → 12) that the zod swap preserved, not an
+  // intended contract. coercedIdSchema delegates to validateId now, so the
+  // portfolio router shares the one definition of a valid id.
+  it("rejects '12.0' / ' 12 ' instead of coercing them to a batch", async () => {
     getBatch.mockResolvedValue({ id: 12, status: 'complete' });
 
-    await api.get(`${BASE}/batches/${seg('12.0')}`).expect(200);
-    expect(getBatch).toHaveBeenLastCalledWith(12);
+    for (const id of ['12.0', ' 12 ', '0x10', '1e3', '+12']) {
+      const res = await api.get(`${BASE}/batches/${seg(id)}`).expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(getBatch).not.toHaveBeenCalled();
 
-    await api.get(`${BASE}/batches/${seg(' 12 ')}`).expect(200);
+    await api.get(`${BASE}/batches/12`).expect(200);
     expect(getBatch).toHaveBeenLastCalledWith(12);
+  });
+
+  // portfolio_import_batches.id is BIGSERIAL too (0040_add_portfolio_import_
+  // staging.py), so the bound is MAX_SAFE_ID rather than validateId's int32
+  // default — an id past int32 is a legal row and still reaches the repository.
+  it('accepts an integral id past int32 and 404s it, but rejects one past 2^53', async () => {
+    getBatch.mockResolvedValue(undefined);
+
+    await api.get(`${BASE}/batches/2147483648`).expect(404);
+    expect(getBatch).toHaveBeenCalledWith(2147483648);
+
+    getBatch.mockClear();
+    const res = await api.get(`${BASE}/batches/9007199254740993`).expect(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(getBatch).not.toHaveBeenCalled();
   });
 
   it('rejects fractional/garbage ids on the commit and override sites', async () => {
@@ -131,14 +154,27 @@ describe('batch-id coercion pins', () => {
     expect(getBatch).not.toHaveBeenCalled();
   });
 
-  it('coerces both ids on the investment-override site', async () => {
+  it('validates both ids on the investment-override site', async () => {
     overrideInvestment.mockResolvedValue(1);
 
-    await api.post(`${BASE}/batches/${seg('5.0')}/rows/${seg(' 6 ')}/investment-override`)
+    // Was '5.0' / ' 6 ' → 5 / 6. Both forms reject now; the happy path is the
+    // plain digit string, and each id is checked independently.
+    await api.post(`${BASE}/batches/5/rows/6/investment-override`)
       .send({ investment_id: null })
       .expect(200);
 
     expect(overrideInvestment).toHaveBeenCalledWith({ batchId: 5, rowId: 6, investmentId: null });
+
+    for (const { id, rowId } of [
+      { id: '5.0', rowId: '6' },
+      { id: '5', rowId: ' 6 ' },
+      { id: '0x10', rowId: '6' },
+      { id: '5', rowId: '0' },
+    ]) {
+      const res = await api.post(`${BASE}/batches/${seg(id)}/rows/${seg(rowId)}/investment-override`)
+        .send({}).expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
   });
 });
 

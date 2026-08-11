@@ -7,8 +7,9 @@ import {
   validateId, sanitizeString, validateNumber,
   validateDateString,
   sanitizeUpdateFields, validateIntArray, validateIdParam, validateIntParam,
-  assertOptionalId,
+  assertOptionalId, MAX_INT32_ID, MAX_SAFE_ID,
 } from '../src/middleware/validation.js';
+import { coercedIdSchema } from '../src/lib/importBatchIds.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
 
 // validateIdParam is unit-tested as a plain middleware function
@@ -204,6 +205,86 @@ describe('Validation Middleware', () => {
     it('should reject invalid values', () => {
       expect(validateIntArray([1, 'abc', 3]).valid).toBe(false);
       expect(validateIntArray([0]).valid).toBe(false);
+    });
+
+    // Each element goes through validateId, so this is the same accept set the
+    // routes enforce — pinned here rather than left implied, because these
+    // arrays are exclusion/filter sets, not record lookups. The element parse
+    // was `parseInt`, so `["12abc"]` became `[12]`: no 404, no error, just a
+    // different set of rows in the aggregation than the client asked for.
+    // If one of these flips, the API's accept set changed.
+    it('accepts only plain base-10 positive integers per element', () => {
+      expect(validateIntArray(['1', '00005', 2147483647]).value).toEqual([1, 5, 2147483647]);
+
+      const rejected = [
+        '12abc',      // trailing garbage — the headline case
+        '5px',
+        '12.5',       // decimals: parseInt truncated to 12
+        '5.0',
+        '1e3',        // exponent: parseInt gave 1, Number() gives 1000
+        '0x10', '0o17', '0b11',
+        '+5', '-5', '12,5', '1_0',
+        '', '   ', ' 5 ', '\n7\n',
+        'Infinity', 'NaN',
+        '0', '2147483648', '999999999999',
+        '١٢',
+        5.7, true, false, [], {}, null, undefined, NaN,
+      ];
+      for (const bad of rejected) {
+        expect(validateIntArray([1, bad]).valid, `expected ${JSON.stringify(bad)} to be rejected`)
+          .toBe(false);
+      }
+    });
+
+    // A single bad element rejects the whole array — no partial/filtered set
+    // reaches the query, which is what made the old truncation invisible.
+    it('rejects the whole array on one bad element and names the value', () => {
+      const result = validateIntArray([1, '12abc', 3], 'excludedCategoryIds');
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('excludedCategoryIds contains invalid value: 12abc');
+      expect(result.value).toBeUndefined();
+    });
+
+    it('accepts an empty array and a scalar digit string', () => {
+      expect(validateIntArray([])).toEqual({ valid: true, value: [] });
+      expect(validateIntArray('7')).toEqual({ valid: true, value: [7] });
+    });
+  });
+
+  // Finding: the repo carried two canonical id validators with disagreeing
+  // accept sets. coercedIdSchema (import batch/row ids) now delegates to
+  // validateId, so the shape rule has one definition; the only intended
+  // difference is the bound, because import_batches.id is BIGSERIAL while
+  // every id validateId guards by default is int4.
+  describe('coercedIdSchema agrees with validateId', () => {
+    const parse = (v) => coercedIdSchema.safeParse(v);
+
+    it('agrees with validateId on every shape', () => {
+      const shapes = [
+        '1', '42', '00005', '2147483647',
+        '12abc', '5px', '12.5', '5.0', '12.0', '1e3', '1e300',
+        '0x10', '0o17', '0b11', '+5', '-5', '12,5', '1_0',
+        '', '   ', ' 5 ', '\n7\n', 'Infinity', 'NaN', '0', '١٢',
+        42, 5.7, 0, -3, true, false, [], ['5'], {}, null, undefined, NaN,
+      ];
+      for (const v of shapes) {
+        const strict = validateId(v, 'id', MAX_SAFE_ID);
+        const coerced = parse(v);
+        expect(coerced.success, `disagreed on ${JSON.stringify(v)}`).toBe(strict.valid);
+        if (strict.valid) expect(coerced.data).toBe(strict.value);
+      }
+    });
+
+    it('is bounded to MAX_SAFE_ID, not int32, because batch ids are BIGSERIAL', () => {
+      // Above int4 is a legal BIGSERIAL row, so it must parse rather than 400.
+      expect(parse(String(MAX_INT32_ID + 1)).data).toBe(2147483648);
+      expect(validateId(String(MAX_INT32_ID + 1)).valid).toBe(false);
+
+      expect(parse(String(MAX_SAFE_ID)).data).toBe(MAX_SAFE_ID);
+      // Past 2^53 the digit string and the parsed number stop being the same
+      // value — '9007199254740993' would address record …992.
+      expect(parse('9007199254740993').success).toBe(false);
+      expect(parse('99999999999999999999').success).toBe(false);
     });
   });
 

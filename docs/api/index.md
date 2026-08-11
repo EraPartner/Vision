@@ -23,7 +23,9 @@ aliases: [API, endpoints, REST]
 > [!warning] Path-param id contract (2026-08-11 — breaking for malformed ids)
 > Every integer path param (`:id`, `:patternId`, `:accountId`, `:txnId`) accepts **only** a plain base-10 integer in 1..2,147,483,647. Anything else — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "`, `"+5"`, `0`, negatives — returns `400 VALIDATION_ERROR` with `"<field> must be a positive integer"`.
 >
-> This changed on 2026-08-11: the shared validator was `parseInt`-based, so it took the leading digits of anything and `"12abc"` silently resolved to id **12**, acting on a record the client never named. Clients sending well-formed ids are unaffected. Import batch/row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) use a separate validator and are unchanged. Full accept set: [[docs/security/input-validation#ID Validation|Input Validation]].
+> This changed on 2026-08-11: the shared validator was `parseInt`-based, so it took the leading digits of anything and `"12abc"` silently resolved to id **12**, acting on a record the client never named. Clients sending well-formed ids are unaffected.
+>
+> A same-day follow-up extended this to the two remaining id parsers: **body id arrays** (`validateIntArray` — `categoryIds`/`recipientIds`/`tagIds` on saved charts, `excludedCategoryIds`/`excludedRecipientIds` on dashboard settings), where `["12abc"]` used to become `[12]` and silently change which rows an aggregation covered; and **import batch/row ids** (`/api/import/batches/*`, `/api/portfolio/import/batches/*`), where a bare `Number()` took `"0x10"` as batch 16 and `"1e3"` as batch 1000. Both now delegate to the same validator — the import ids keep a `Number.MAX_SAFE_INTEGER` ceiling rather than `int32`, since those PKs are `BIGSERIAL`. Full accept set: [[docs/security/input-validation#ID Validation|Input Validation]].
 
 > [!tip] Quick Navigation
 > - **OpenAPI Spec:** See `openapi.yaml` for formal specifications
