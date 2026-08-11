@@ -150,14 +150,24 @@ describe('Research route parameter guards', () => {
       }
     });
 
-    it('DELETE /mappings/:id keeps parseInt id coercion and answers 204', async () => {
+    // This used to pin `DELETE /mappings/12abc` → 204 (removing mapping 12).
+    // That was a behaviour-preservation pin for the parseInt-based validateId,
+    // not an intended contract: openapi.yaml types this param `integer`, and
+    // deleting record 12 because the client asked for "12abc" is a silent hit
+    // on a record nobody named. validateId is now a strict digit-string parse,
+    // so trailing garbage is a 400 like any other malformed id.
+    it('DELETE /mappings/:id rejects a trailing-garbage id instead of coercing it', async () => {
       researchMappingService.remove.mockResolvedValue(true);
-      const res = await api.delete(`${BASE}/mappings/12abc`).expect(204);
-      expect(researchMappingService.remove).toHaveBeenCalledWith(12);
-      expect(res.text).toBe('');
+      const res = await api.delete(`${BASE}/mappings/12abc`).expect(400);
+      expect(res.body.error.message).toBe('id must be a positive integer');
+      expect(researchMappingService.remove).not.toHaveBeenCalled();
 
       const res2 = await api.delete(`${BASE}/mappings/abc`).expect(400);
       expect(res2.body.error.message).toBe('id must be a positive integer');
+
+      const res3 = await api.delete(`${BASE}/mappings/12`).expect(204);
+      expect(researchMappingService.remove).toHaveBeenCalledWith(12);
+      expect(res3.text).toBe('');
     });
 
     // Idempotent: an already-removed mapping is still 204, not 404.

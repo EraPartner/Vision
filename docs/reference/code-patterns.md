@@ -654,7 +654,7 @@ export default router;
 |---------|------|
 | **List envelope** | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope|ADR-026]] |
 | **Parallel fetch** | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1 |
-| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params |
+| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Both accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt`: it takes the leading digits of anything and silently addresses the wrong record ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`) |
 | **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
 | **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]) |

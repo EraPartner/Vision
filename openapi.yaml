@@ -1770,6 +1770,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update tag color or active status
       operationId: updateTag
@@ -1899,6 +1901,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get one account
       operationId: getAccount
@@ -1964,6 +1968,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Survivor account id (sources merge into this one)
     post:
       summary: Merge source accounts into this (survivor) account
@@ -2000,6 +2006,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Source account id (the account that would be merged away)
     get:
       summary: Preview merging this account into another (read-only)
@@ -2072,6 +2080,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Account to anchor
     post:
       summary: Set the opening-balance anchor for an account
@@ -2120,6 +2130,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Account to reconcile
     post:
       summary: Reconcile an account's drift
@@ -2337,6 +2349,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get transaction
       operationId: getTransaction
@@ -2458,6 +2472,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get category
       operationId: getCategory
@@ -2579,6 +2595,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get recipient
       operationId: getRecipient
@@ -2936,6 +2954,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update saved chart
       operationId: updateSavedChart
@@ -3333,6 +3353,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Assign category to transactions
       operationId: assignCategory
@@ -3378,6 +3400,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Merge recipient into another
       operationId: mergeRecipient
@@ -3407,6 +3431,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Unmerge recipient
       operationId: unmergeRecipient
@@ -3426,6 +3452,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List recipient aliases (merged-in names)
       operationId: getRecipientAliases
@@ -3445,6 +3473,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List auto-assign patterns for recipient
       operationId: getRecipientPatterns
@@ -3499,6 +3529,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Preview pattern match count
       operationId: previewRecipientPattern
@@ -3530,11 +3562,15 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
       - in: path
         name: patternId
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update pattern
       operationId: updateRecipientPattern
@@ -3572,6 +3608,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List bank accounts for recipient
       operationId: getRecipientBankAccounts
@@ -3630,11 +3668,15 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
       - in: path
         name: accountId
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update bank account
       operationId: updateRecipientBankAccount
@@ -3678,11 +3720,15 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
       - in: path
         name: accountId
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Set bank account as primary
       operationId: setRecipientBankAccountPrimary
@@ -3846,6 +3892,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get planned transaction
       operationId: getPlannedTransaction
@@ -3932,6 +3980,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Execute planned transaction (creates real transaction)
       operationId: executePlannedTransaction
@@ -4623,6 +4673,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update portfolio transaction
       operationId: updatePortfolioTransaction
@@ -4697,6 +4749,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get investment
       operationId: getInvestment
@@ -4763,6 +4817,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get price history for investment
       operationId: getInvestmentPriceHistory
@@ -4793,6 +4849,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List transactions for investment
       operationId: getInvestmentTransactions
@@ -4876,6 +4934,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get investment summary (current value, P&L, units)
       operationId: getInvestmentSummary
@@ -5097,6 +5157,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get watchlist item
       operationId: getWatchlistItem
@@ -5178,6 +5240,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get owed detail for recipient
       operationId: getSplitOwedByRecipient
@@ -5213,6 +5277,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Export owed splits as CSV
       operationId: exportSplitsOwedCsv
@@ -5232,6 +5298,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get splits for a transaction
       operationId: getSplitsByTransaction
@@ -5342,6 +5410,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     delete:
       summary: Delete split
       operationId: deleteSplit
@@ -5357,6 +5427,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Record a payment against a split share
       operationId: paySplit
@@ -5394,6 +5466,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List payments for a split
       operationId: getSplitPayments
@@ -5429,6 +5503,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Mark split as fully settled
       operationId: settleSplit
@@ -5448,6 +5524,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Settle all open splits for a recipient
       operationId: settleAllSplitsForRecipient
@@ -5468,6 +5546,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List attachments for a transaction
       operationId: getTransactionAttachments
@@ -5532,6 +5612,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Download attachment file
       operationId: downloadAttachment
@@ -5552,6 +5634,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     delete:
       summary: Delete attachment
       operationId: deleteAttachment
@@ -6117,6 +6201,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update a saved custom CSV parser config
       operationId: updateCustomParser
@@ -6539,6 +6625,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update a saved portfolio parser config
       operationId: updatePortfolioParser
@@ -7541,6 +7629,8 @@ paths:
           required: true
           schema:
             type: integer
+            format: int32
+            minimum: 1
       responses:
         "204":
           description: No Content (idempotent — an unknown id is not an error)

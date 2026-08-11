@@ -3,7 +3,7 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-06-28
+updated: 2026-08-11
 last_modified: 2026-06-19
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
@@ -30,6 +30,8 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 > **Phase 9 Update (April 2026):** Aggregation shadow mode validation complete. Shadow divergence admin endpoints (`GET /api/admin/shadow-divergences/summary`, `GET /api/admin/shadow-divergences`) removed. `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` aggregation routes removed from wiring (see [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]]), though `info.js` persists for unrelated endpoints (portfolio-performance, net-worth, exchange-rates, inflation-rates).
 >
 > **2026-04-29 Security Update:** CodeQL + Dependabot remediation (ADR-042): `attachmentRateLimiter` (60 req/min) added to all attachment endpoints; `spaRateLimiter` (600 req/min) added to SPA fallback route. See [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042]] for full details.
+>
+> **2026-08-11 — path-param id validation tightened (BREAKING, no route changes; operation count unchanged at 212):** every integer `:id` / `:patternId` / `:accountId` / `:txnId` path param now accepts **only** a plain base-10 integer in 1..2³¹−1. Previously `validateId` used `parseInt`, so `"12abc"` and `"12.5"` resolved to id **12** and `"1e3"` to id **1** — a malformed id silently addressed a record the client never named (e.g. `DELETE /api/research/mappings/12abc` deleted mapping 12). Such requests now return **400 `VALIDATION_ERROR`** (`"<field> must be a positive integer"`) instead of acting on a coerced id. Affects the 13 routers on `validateIdParam`/`validateIntParam`: Accounts, Attachments, Categories, Investments, Planned Transactions, Recipients (+ Recipient Bank Accounts), Research (`DELETE /mappings/:id`), Saved Charts, Splits, Tags, Transactions, Watchlist. Breaking **only** for clients that were sending malformed ids — a plain integer behaves exactly as before, and `openapi.yaml` already typed these params `integer` (now annotated `format: int32, minimum: 1`), so the implementation moved *onto* the published contract rather than away from it. Import batch/row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) are unaffected — they use a separate validator that already rejected `"12abc"`. See [[docs/security/input-validation#ID Validation|Input Validation]].
 
 ## Accounts (9 endpoints)
 

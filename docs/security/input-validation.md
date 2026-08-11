@@ -3,7 +3,7 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-08-10
+updated: 2026-08-11
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
@@ -28,9 +28,17 @@ Validates that an ID parameter is a positive 32-bit integer.
 validateId(value, fieldName = 'id')
 ```
 
-**Rules:**
-- Must be a positive integer (1 to 2,147,483,647)
-- Cannot be NaN
+**Rules — the accept set is exhaustive and deliberately strict:**
+- A plain base-10 digit string (`"42"`; leading zeros allowed, `"00005"` → `5`), **or** an actual integer `number` (route middleware re-stamps `req.params` with the parsed integer, and JSON bodies send real numbers)
+- Range 1 to 2,147,483,647 (`int4` — the width of every serial PK in the schema)
+- **Everything else is rejected**: trailing garbage (`"12abc"`, `"5px"`), decimals (`"12.5"`), exponent/hex/octal/binary literals (`"1e3"`, `"0x10"`, `"0o17"`, `"0b11"`), signs (`"+5"`, `"-5"`), separators (`"12,5"`, `"1_0"`), whitespace-padded values (`" 5 "`), the empty string, `"Infinity"`/`"NaN"`, non-ASCII digits, booleans, arrays and objects
+
+> [!warning] Breaking change (2026-08-11) — `"12abc"` no longer resolves to id 12
+> `validateId` was `parseInt`-based, so it took the *leading digits of anything*: `DELETE /api/research/mappings/12abc` deleted mapping **12**, `"12.5"` resolved to 12 and `"1e3"` to 1. A malformed id silently addressed a record the client never named, instead of failing. It is now a strict digit-string parse, and all such inputs return **400 `VALIDATION_ERROR`**.
+>
+> Note that a bare `Number()` would *not* have been a correct fix: it accepts `"0x10"` as 16, turns `"1e3"` into 1000 (a *different* wrong record) and leaves `"12.5"` a non-integer that reaches Postgres.
+>
+> This tightens **every** route behind `validateIdParam` / `validateIntParam` / `assertOptionalId` and the `validatedIdField` zod adapter in `splits.js`. It only narrows what is accepted: every id that a well-behaved client sends (a plain integer) behaves exactly as before, and `openapi.yaml` already typed these params `integer` — the implementation now conforms to the published contract rather than deviating from it.
 
 **Returns:**
 ```javascript
@@ -70,25 +78,20 @@ validateNumber(value, { min = -Infinity, max = Infinity, fieldName = 'value' })
 
 ---
 
-### Integer ID Validation in Query Parameters (2026-04-26)
+### Integer ID Validation in Query Parameters
 
-Dynamic query parameters that reference IDs (e.g., `category_id`) are validated using `Number.isFinite()` after `parseInt()` to ensure they convert to valid integers. This prevents NaN from being passed to the database layer.
+Optional query parameters that reference IDs (e.g. `?account_id=`) go through `assertOptionalId`, the throwing wrapper around `validateId` — so they share the strict accept set documented above rather than a hand-rolled `parseInt` check.
 
-**Example:** Transaction export filter
 ```javascript
-if (category_id) {
-  const catId = parseInt(category_id, 10);
-  if (!Number.isFinite(catId)) throw new ValidationError('category_id must be an integer');
-  filterClauses.push(`t.category_id = $${paramIdx++}`);
-  params.push(catId);
-}
+const accountId = assertOptionalId(req.query.account_id, 'account_id');
 ```
 
 **Rules:**
-- `parseInt()` converts string to number
-- `Number.isFinite()` rejects NaN and non-finite values
-- Raises `ValidationError` if conversion fails
-- Query parameter is rejected before being passed to database
+- Absent or empty (`undefined` / `null` / `''`) returns `null`, so the caller can treat the filter as unset
+- Anything else must satisfy `validateId`; otherwise a `ValidationError` (400) is raised **before** the value reaches the database layer
+- This is what keeps `?account_id=abc` a 400 rather than a `NaN` parameter that Postgres rejects with `22P02` as a 500
+
+**Call sites:** `routes/transactions.js` (export filters), `routes/info/statistics.js`.
 
 ---
 
@@ -216,6 +219,21 @@ router.get('/:id', validateIdParam, async (req, res) => {
   // req.params.id is now a validated integer
 });
 ```
+
+Applied in 13 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`.
+
+### validateIntParam
+
+Factory for sub-resource id params that the fixed-`:id` middleware cannot reach. Same accept set, same parsed-value re-stamp:
+
+```javascript
+router.delete('/:id/patterns/:patternId', validateIdParam, validateIntParam('patternId'), handler);
+```
+
+Used for `:patternId` (`recipients.js`) and `:accountId` (`recipientBankAccounts.js`). Unlike `validateIdParam` — which no-ops when there is no `:id` on the route — `validateIntParam` rejects a missing param, since a route that declares it always has it.
+
+> [!note] Two id validators still coexist
+> `validateId` covers the routers above. The import pipeline's batch/row ids use `coercedIdSchema` (`lib/importBatchIds.js`) instead, which is `Number()`-based. After the 2026-08-11 tightening they agree on the cases that matter — both reject `"12abc"`, `"12.5"`, `0`, negatives and the empty string — but `coercedIdSchema` is still looser on: exponent/hex/octal/binary literals (`"1e3"` → 1000, `"0x10"` → 16, `"0o17"` → 15, `"0b11"` → 3), `"+5"`, whitespace-padded values (`" 5 "`, `"\n7\n"`), `"12.0"` → 12, and it has **no `int32` cap** (`"2147483648"` and `"1e300"` pass through to a downstream 404 or a Postgres range error rather than a 400). Unifying them is tracked separately.
 
 ---
 

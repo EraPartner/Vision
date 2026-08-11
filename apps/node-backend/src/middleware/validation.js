@@ -86,14 +86,30 @@ export function sanitizeUpdateFields(resourceType, fields) {
 }
 
 /**
- * Validate that an ID parameter is a positive integer.
+ * Validate that an ID parameter is a positive 32-bit integer.
+ *
+ * Strict by design: the only accepted forms are a plain base-10 digit string
+ * (`"42"`, leading zeros allowed) and an actual integer `number` — the latter
+ * because validateIdParam/validateIntParam re-stamp req.params with the parsed
+ * number, so a re-validated param arrives here as a number.
+ *
+ * This used to be `parseInt`, which takes the leading digits of anything: it
+ * resolved `"12abc"` and `"12.5"` to id 12 and `"1e3"` to id 1 — a silent hit
+ * on the wrong record instead of a 400. A bare `Number()` is not the fix
+ * either; it accepts `"0x10"` (16), `"1e3"` (1000, a *different* wrong record)
+ * and `"12.5"`, which stays 12.5 and reaches Postgres as a non-integer id.
+ * Everything else — signs, whitespace padding, exponent/hex/octal/binary
+ * literals, separators, empty string, arrays, booleans — is rejected.
  * @param {unknown} value
  * @param {string} [fieldName]
  * @returns {FieldValidationResult}
  */
 export function validateId(value, fieldName = 'id') {
-  const num = parseInt(/** @type {string} */ (value), 10);
-  if (isNaN(num) || num < 1 || num > 2147483647) {
+  /** @type {number} */
+  let num = NaN;
+  if (typeof value === 'number') num = value;
+  else if (typeof value === 'string' && /^\d+$/.test(value)) num = Number(value);
+  if (!Number.isInteger(num) || num < 1 || num > 2147483647) {
     return { valid: false, error: `${fieldName} must be a positive integer` };
   }
   return { valid: true, value: num };

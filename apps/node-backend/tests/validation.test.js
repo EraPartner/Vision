@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   validateId, sanitizeString, validateNumber,
   validateDateString,
-  sanitizeUpdateFields, validateIntArray, validateIdParam,
+  sanitizeUpdateFields, validateIntArray, validateIdParam, validateIntParam,
   assertOptionalId,
 } from '../src/middleware/validation.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
@@ -34,6 +34,62 @@ describe('Validation Middleware', () => {
       expect(validateId('abc').valid).toBe(false);
       expect(validateId('').valid).toBe(false);
       expect(validateId('999999999999').valid).toBe(false);
+    });
+
+    // The accept set is the contract, so it is pinned exhaustively rather than
+    // left implied by the routes. validateId was `parseInt`-based, which took
+    // the leading digits of anything — "12abc"/"12.5" resolved to id 12 and
+    // "1e3" to id 1, silently addressing a record the client never named.
+    // A bare Number() is not the fix either: it takes "0x10" as 16, "1e3" as
+    // 1000 and leaves "12.5" a non-integer that reaches Postgres. Hence a
+    // strict digit-string parse. If one of these flips, the API's accept set
+    // changed — that is a breaking contract change, not a test to relax.
+    it('accepts only a plain base-10 positive integer within int32', () => {
+      for (const ok of ['1', '42', '00005', '2147483647']) {
+        expect(validateId(ok).valid, `expected ${JSON.stringify(ok)} to be accepted`).toBe(true);
+      }
+      expect(validateId('00005').value).toBe(5);
+
+      const rejected = [
+        '12abc',      // trailing garbage — the headline case
+        '5px',
+        '12.5',       // decimals: parseInt truncated, Number() kept 12.5
+        '5.0',
+        '1e3',        // exponent: parseInt gave 1, Number() gives 1000
+        '0x10',       // hex / octal / binary literals
+        '0o17',
+        '0b11',
+        '+5',         // signs and separators
+        '-5',
+        '12,5',
+        '1_0',
+        '',           // empty / whitespace-only (Number() maps both to 0)
+        '   ',
+        ' 5 ',        // whitespace-padded
+        '\n7\n',
+        'Infinity',
+        'NaN',
+        '0',          // out of range
+        '2147483648',
+        '999999999999',
+        '١٢', // non-ASCII digits
+      ];
+      for (const bad of rejected) {
+        expect(validateId(bad).valid, `expected ${JSON.stringify(bad)} to be rejected`).toBe(false);
+      }
+    });
+
+    it('accepts an integer number but not a float, boolean, array or object', () => {
+      // Numbers matter because validateIdParam re-stamps req.params with the
+      // parsed integer, and because JSON bodies (splits.js) send real numbers.
+      expect(validateId(42)).toEqual({ valid: true, value: 42 });
+      for (const bad of [5.7, NaN, Infinity, -Infinity, 0, -3, true, false, [], ['5'], {}, null, undefined]) {
+        expect(validateId(bad).valid, `expected ${String(bad)} to be rejected`).toBe(false);
+      }
+    });
+
+    it('names the offending field in the error', () => {
+      expect(validateId('12abc', 'patternId').error).toBe('patternId must be a positive integer');
     });
   });
 
@@ -186,6 +242,65 @@ describe('Validation Middleware', () => {
       expect(req.params.id).toBe(123);
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
+    });
+
+    // The whole point of the finding: a coercible-looking id must 400, not
+    // resolve to the record its leading digits happen to name.
+    it('rejects loosely-coercible ids rather than truncating them to a record', () => {
+      for (const id of ['12abc', '12.5', '1e3', '0x10', ' 5 ', '+5']) {
+        const req = { params: { id } };
+        const next = vi.fn();
+        validateIdParam(req, mockResponse(), next);
+        expect(next.mock.calls[0][0], `expected ${JSON.stringify(id)} to be rejected`)
+          .toBeInstanceOf(ValidationError);
+        expect(req.params.id).toBe(id);
+      }
+    });
+
+    // validateIdParam re-stamps req.params.id as a number, so a second pass
+    // over an already-validated request (nested/stacked guards) must not 400.
+    it('is idempotent over an already-parsed numeric param', () => {
+      const req = { params: { id: 123 } };
+      const next = vi.fn();
+      validateIdParam(req, mockResponse(), next);
+      expect(next).toHaveBeenCalledWith();
+      expect(req.params.id).toBe(123);
+    });
+  });
+
+  describe('validateIntParam', () => {
+    it('validates the named sub-resource param with the same accept set', () => {
+      const guard = validateIntParam('patternId');
+
+      const good = { params: { id: 1, patternId: '7' } };
+      const next = vi.fn();
+      guard(good, mockResponse(), next);
+      expect(good.params.patternId).toBe(7);
+      expect(next).toHaveBeenCalledWith();
+
+      for (const patternId of ['12abc', '12.5', '1e3', '0', '-1', '', '2147483648']) {
+        const bad = { params: { id: 1, patternId } };
+        const badNext = vi.fn();
+        guard(bad, mockResponse(), badNext);
+        expect(badNext.mock.calls[0][0], `expected ${JSON.stringify(patternId)} to be rejected`)
+          .toBeInstanceOf(ValidationError);
+        expect(badNext.mock.calls[0][0].message).toBe('patternId must be a positive integer');
+      }
+    });
+
+    it('rejects a missing param instead of passing undefined through', () => {
+      const next = vi.fn();
+      validateIntParam('accountId')({ params: {} }, mockResponse(), next);
+      expect(next.mock.calls[0][0]).toBeInstanceOf(ValidationError);
+    });
+  });
+
+  describe('assertOptionalId — strict accept set', () => {
+    it('throws for loosely-coercible query ids', () => {
+      for (const v of ['12abc', '12.5', '1e3', ' 5 ']) {
+        expect(() => assertOptionalId(v, 'account_id'), `expected ${JSON.stringify(v)} to throw`)
+          .toThrow(ValidationError);
+      }
     });
   });
 });

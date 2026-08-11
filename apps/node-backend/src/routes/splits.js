@@ -73,9 +73,9 @@ function buildOwedExportFilename(recipientId) {
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
 
-// Reuses validateId so the accepted id shapes stay identical (parseInt
-// coercion: '12abc' → 12; 1..2^31-1 bounds); the coerced integer replaces the
-// raw input.
+// Reuses validateId so the accepted id shapes stay identical to the route
+// layer's (a plain digit string or integer number, 1..2^31-1 — no trailing
+// garbage, decimals or exponents); the coerced integer replaces the raw input.
 /** @param {string} field */
 const validatedIdField = (field) => z.unknown().transform((value, ctx) => {
   const result = validateId(value, field);

@@ -3,7 +3,7 @@ title: Research API
 type: endpoint
 status: active
 date: 2026-06-16
-updated: 2026-06-17
+updated: 2026-08-11
 tags:
   - api
   - research
@@ -622,6 +622,11 @@ Persist user-confirmed mappings (upsert one row per provider, default `status=co
 
 Delete one stored mapping. **Response:** `204 No Content` — empty body, and idempotent: an id with
 no stored mapping is not an error.
+
+`:id` must be a plain positive integer; anything else is `400 VALIDATION_ERROR` (`"id must be a
+positive integer"`). Idempotency covers *unknown* ids, not *malformed* ones. **Changed 2026-08-11:**
+`DELETE /mappings/12abc` used to coerce to id 12 and delete that mapping — it now rejects. See
+[[docs/security/input-validation#ID Validation|Input Validation]].
 
 ### POST /api/research/mappings/audit
 
