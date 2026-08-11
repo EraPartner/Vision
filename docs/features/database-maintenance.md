@@ -275,6 +275,7 @@ Full endpoint documentation: [[docs/api/admin|Admin API]].
 - [[docs/adr/101-db-data-editor|ADR-101: Admin DB data editor]]
 - [[docs/features/settings|Settings & Administration]]
 - [[docs/performance/index|Performance Optimization]]
+- [[docs/reference/data-model#db_editor_audit (June 2026, migration 0059)|Data Model — db_editor_audit]] — schema reference for the audit table
 
 ## Related Code
 

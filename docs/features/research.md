@@ -302,3 +302,4 @@ All content `<Card>` elements on the four Research detail pages use `glass-regul
 - [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] — held-asset storage model (unchanged; storage boundary preserved)
 - [[docs/adr/034-admin-environment|ADR-034]] — `providerHealthService` used for capability routing
 - [[docs/integrations/belgian-inflation|Integration: Belgian Inflation Service]] — the existing Eurostat JSON-stat parser that informed the `eurostatAdapter` design (firewall: the inflation service itself is not modified)
+- [[docs/reference/data-model#provider_api_keys (June 2026, ADR-079, migration 0043)|Data Model — provider_api_keys, instrument_provider_map, provider_quota]] — schema reference for the three persistence tables backing this feature
