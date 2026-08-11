@@ -14,6 +14,10 @@
  * The pool is memoised per-process so repeated imports don't leak connections.
  * Closing is handled in the vitest `afterAll` hook at call-site; the helper
  * exposes `closeTestPool()` for that purpose.
+ *
+ * A run that skipped for want of a database is not a complete run, so
+ * `dbSkipBanner.js` shouts about it after the summary — importing this file is
+ * what marks a module as DB-backed for that count.
  */
 
 import pg from 'pg';

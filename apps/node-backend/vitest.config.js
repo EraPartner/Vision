@@ -1,6 +1,37 @@
 import { defineConfig } from 'vitest/config';
 
+import { createDbSkipBannerReporter } from './tests/setup/dbSkipBanner.js';
+
+// Append the DB-skip banner reporter instead of declaring `test.reporters`.
+// Declaring that key would replace vitest's own choice of default reporter
+// (`default` / `agent`, plus `github-actions` under Actions), so the banner
+// would silently cost us CI annotations. `configureVitest` runs after the
+// config is resolved and before the reporters are constructed, which is the
+// one window where the resolved list can still be extended.
+//
+// The banner is the guard against trusting a DB-less run, so a guard that
+// quietly fails to attach is worse than none: shout if the list is not there.
+function dbSkipBannerPlugin() {
+  return {
+    name: 'vision:db-skip-banner',
+    configureVitest({ vitest }) {
+      const reporters = vitest?.config?.reporters;
+      if (!Array.isArray(reporters)) {
+        process.stdout.write(
+          '[db-skip-banner] could not attach to vitest reporters -- ' +
+            'DB-backed skips will NOT be announced. Fix tests/setup/dbSkipBanner.js.\n',
+        );
+        return;
+      }
+      // The hook runs once per project; one banner is enough.
+      if (reporters.some((r) => r?.isDbSkipBanner)) return;
+      reporters.push(createDbSkipBannerReporter());
+    },
+  };
+}
+
 export default defineConfig({
+  plugins: [dbSkipBannerPlugin()],
   test: {
     globals: true,
     environment: 'node',
