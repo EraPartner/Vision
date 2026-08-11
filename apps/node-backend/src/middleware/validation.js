@@ -86,14 +86,50 @@ export function sanitizeUpdateFields(resourceType, fields) {
 }
 
 /**
+ * Upper bound for ids backed by an `int4` (`SERIAL`) primary key — which is
+ * every id `validateId` guards by default.
+ */
+export const MAX_INT32_ID = 2147483647;
+
+/**
+ * Upper bound for ids backed by an `int8` (`BIGSERIAL`) primary key — the
+ * import batch/row tables. Capped at `Number.MAX_SAFE_INTEGER` rather than
+ * `2^63-1` because the id crosses the wire as a JSON number: above 2^53 the
+ * digit string and the parsed number stop being the same value, so
+ * `"9007199254740993"` would silently address record …992.
+ */
+export const MAX_SAFE_ID = Number.MAX_SAFE_INTEGER;
+
+/**
  * Validate that an ID parameter is a positive integer.
+ *
+ * Strict by design: the only accepted forms are a plain base-10 digit string
+ * (`"42"`, leading zeros allowed) and an actual integer `number` — the latter
+ * because validateIdParam/validateIntParam re-stamp req.params with the parsed
+ * number, so a re-validated param arrives here as a number.
+ *
+ * This used to be `parseInt`, which takes the leading digits of anything: it
+ * resolved `"12abc"` and `"12.5"` to id 12 and `"1e3"` to id 1 — a silent hit
+ * on the wrong record instead of a 400. A bare `Number()` is not the fix
+ * either; it accepts `"0x10"` (16), `"1e3"` (1000, a *different* wrong record)
+ * and `"12.5"`, which stays 12.5 and reaches Postgres as a non-integer id.
+ * Everything else — signs, whitespace padding, exponent/hex/octal/binary
+ * literals, separators, empty string, arrays, booleans — is rejected.
+ *
+ * `max` exists only so the `int8`-backed import batch/row ids can share this
+ * one definition of *shape* without inheriting an `int4` ceiling their column
+ * does not have; it is not a general knob. See MAX_SAFE_ID.
  * @param {unknown} value
  * @param {string} [fieldName]
+ * @param {number} [max]
  * @returns {FieldValidationResult}
  */
-export function validateId(value, fieldName = 'id') {
-  const num = parseInt(/** @type {string} */ (value), 10);
-  if (isNaN(num) || num < 1 || num > 2147483647) {
+export function validateId(value, fieldName = 'id', max = MAX_INT32_ID) {
+  /** @type {number} */
+  let num = NaN;
+  if (typeof value === 'number') num = value;
+  else if (typeof value === 'string' && /^\d+$/.test(value)) num = Number(value);
+  if (!Number.isInteger(num) || num < 1 || num > max) {
     return { valid: false, error: `${fieldName} must be a positive integer` };
   }
   return { valid: true, value: num };
@@ -270,7 +306,15 @@ export function validateIntParam(name) {
 }
 
 /**
- * Validate an array of integer IDs (e.g., excluded_category_ids).
+ * Validate an array of integer IDs (e.g., excluded_category_ids). A scalar is
+ * wrapped into a one-element array; every element must satisfy validateId, so
+ * the accepted id shapes are identical to the route layer's.
+ *
+ * Per-element delegation matters more here than on a path param. These arrays
+ * feed exclusion and filter sets, not a single-record lookup, so the old
+ * `parseInt` element parse did not 404 on a bad value — `["12abc"]` became
+ * `[12]` and quietly changed which rows an aggregation covered, with no error
+ * surfaced to anyone.
  * @param {unknown} values
  * @param {string} [fieldName]
  * @returns {FieldValidationResult}
@@ -281,11 +325,11 @@ export function validateIntArray(values, fieldName = 'ids') {
   /** @type {number[]} */
   const result = [];
   for (const v of list) {
-    const num = parseInt(/** @type {string} */ (v), 10);
-    if (isNaN(num) || num < 1 || num > 2147483647) {
+    const element = validateId(v, fieldName);
+    if (!element.valid) {
       return { valid: false, error: `${fieldName} contains invalid value: ${v}` };
     }
-    result.push(num);
+    result.push(element.value);
   }
   return { valid: true, value: result };
 }

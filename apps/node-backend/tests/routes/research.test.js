@@ -124,7 +124,14 @@ describe('Research route parameter guards', () => {
       expect(res.body.error.message).toBe("key_type must be 'isin' or 'internal'");
     });
 
-    it('POST /mappings/resolve requires query and coerces investment_id via parseInt', async () => {
+    // This test used to be named "…coerces investment_id via parseInt" and
+    // pinned `investment_id: 'abc'` → 200 with investmentId undefined. That was
+    // a description of the implementation, not of an intended contract: it is
+    // the silent-drop shape, and the parseInt behind it also had the retarget
+    // shape — '12abc' parsed to 12, so `resolve` pre-seeded its proposals from
+    // holding 12, a record nobody named, with nothing surfaced. The happy path
+    // (a digit string parses) is kept verbatim; the drop is now a 400.
+    it('POST /mappings/resolve requires query and validates investment_id strictly', async () => {
       const res = await api.post(`${BASE}/mappings/resolve`).send({ instrument_key: 'X', query: '' }).expect(400);
       expect(res.body.error.message).toBe('query required');
 
@@ -135,12 +142,28 @@ describe('Research route parameter guards', () => {
         instrumentKey: 'X', keyType: 'internal', query: 'apple', investmentId: 5,
       }));
 
-      await api.post(`${BASE}/mappings/resolve`)
-        .send({ instrument_key: 'X', query: 'apple', investment_id: 'abc' })
-        .expect(200);
-      expect(researchMappingService.resolve).toHaveBeenLastCalledWith(
-        expect.objectContaining({ investmentId: undefined }),
-      );
+      for (const investment_id of ['abc', '12abc', '1e3', '12.5', 0, -4, true, {}]) {
+        const bad = await api.post(`${BASE}/mappings/resolve`)
+          .send({ instrument_key: 'X', query: 'apple', investment_id })
+          .expect(400);
+        expect(bad.body.error.message).toBe('investment_id must be a positive integer');
+      }
+      expect(researchMappingService.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('POST /mappings/resolve keeps an absent investment_id absent', async () => {
+      // undefined, missing and JSON null all mean "no holding to seed from",
+      // which `resolve` distinguishes with `investmentId !== undefined`.
+      for (const body of [
+        { instrument_key: 'X', query: 'apple' },
+        { instrument_key: 'X', query: 'apple', investment_id: null },
+        { instrument_key: 'X', query: 'apple', investment_id: '' },
+      ]) {
+        await api.post(`${BASE}/mappings/resolve`).send(body).expect(200);
+        expect(researchMappingService.resolve).toHaveBeenLastCalledWith(
+          expect.objectContaining({ investmentId: undefined }),
+        );
+      }
     });
 
     it('POST /mappings rejects a missing or empty mappings array', async () => {
@@ -150,14 +173,24 @@ describe('Research route parameter guards', () => {
       }
     });
 
-    it('DELETE /mappings/:id keeps parseInt id coercion and answers 204', async () => {
+    // This used to pin `DELETE /mappings/12abc` → 204 (removing mapping 12).
+    // That was a behaviour-preservation pin for the parseInt-based validateId,
+    // not an intended contract: openapi.yaml types this param `integer`, and
+    // deleting record 12 because the client asked for "12abc" is a silent hit
+    // on a record nobody named. validateId is now a strict digit-string parse,
+    // so trailing garbage is a 400 like any other malformed id.
+    it('DELETE /mappings/:id rejects a trailing-garbage id instead of coercing it', async () => {
       researchMappingService.remove.mockResolvedValue(true);
-      const res = await api.delete(`${BASE}/mappings/12abc`).expect(204);
-      expect(researchMappingService.remove).toHaveBeenCalledWith(12);
-      expect(res.text).toBe('');
+      const res = await api.delete(`${BASE}/mappings/12abc`).expect(400);
+      expect(res.body.error.message).toBe('id must be a positive integer');
+      expect(researchMappingService.remove).not.toHaveBeenCalled();
 
       const res2 = await api.delete(`${BASE}/mappings/abc`).expect(400);
       expect(res2.body.error.message).toBe('id must be a positive integer');
+
+      const res3 = await api.delete(`${BASE}/mappings/12`).expect(204);
+      expect(researchMappingService.remove).toHaveBeenCalledWith(12);
+      expect(res3.text).toBe('');
     });
 
     // Idempotent: an already-removed mapping is still 204, not 404.

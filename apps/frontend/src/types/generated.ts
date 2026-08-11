@@ -2230,7 +2230,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Override transaction data for a staged row */
+        /** Override the matched recipient for a staged row */
         post: operations["overrideImportRow"];
         delete?: never;
         options?: never;
@@ -3240,12 +3240,40 @@ export interface components {
             removed: number;
             transactions_affected: number;
         };
-        /** @description Selects transactions to act on. Provide an explicit `ids` array or a `filter` object (same shape as GET /api/transactions query filters); exactly one is resolved server-side. */
+        /** @description Selects transactions to act on. Provide an explicit `ids` array or a `filter` object (a subset of the GET /api/transactions query filters); exactly one is resolved server-side. */
         BulkSelection: {
             ids?: number[];
-            filter?: {
-                [key: string]: unknown;
-            };
+            filter?: components["schemas"]["BulkTransactionFilter"];
+        };
+        /** @description Filter-mode selector. Every field is validated and an unknown key, a wrong type or a malformed value rejects the whole request with a 400 — these endpoints include a hard DELETE, and a filter field that was skipped rather than rejected made the action cover a WIDER set of rows than the caller named. Absent, `null` and empty (`""`, `[]`) still mean "no filter on this field". Each field also accepts its camelCase spelling, but not both spellings at once. */
+        BulkTransactionFilter: {
+            transaction_id?: number;
+            /** Format: date */
+            start_date?: string;
+            /** Format: date */
+            end_date?: string;
+            account_id?: number;
+            /** @description Substring match on the account name */
+            bank_account?: string;
+            /** @description Exact account names. Must be an array, not a comma string. */
+            bank_accounts?: string[];
+            category_id?: number;
+            /** @description Must be an array of integers, not a comma string. */
+            category_ids?: number[];
+            recipient_id?: number;
+            recipient_group_id?: number;
+            recipient_name?: string;
+            search?: string;
+            /** @description Defaults to true (active rows only) when omitted. */
+            active?: boolean;
+            /** @enum {string} */
+            transaction_type?: "income" | "expense";
+            amount_min?: number;
+            amount_max?: number;
+            /** @description Defaults to false, comparing amount_min/amount_max against |amount|; true compares against the signed amount. */
+            amount_signed?: boolean;
+            /** @description Tag slugs, as an array or a comma-separated string. */
+            tags?: string[] | string;
         };
         CustomParserConfig: {
             id: number;
@@ -3297,12 +3325,17 @@ export interface components {
             /** Format: date */
             transaction_date: string;
             bank_account: string;
+            /** Format: int32 */
             recipient_id: number;
             memo?: string;
             amount: number;
             currency?: string;
             balance?: number;
-            category_id?: number;
+            /**
+             * Format: int32
+             * @description Absent or null files the transaction uncategorized. Validated since 2026-08-11 — before that this operation forwarded the field raw and a malformed value reached Postgres as a cast error (500).
+             */
+            category_id?: number | null;
             comment?: string;
             /** @description Tag slugs to assign (replaces existing tags) */
             tags?: string[];
@@ -3312,11 +3345,13 @@ export interface components {
             /** Format: date */
             transaction_date?: string;
             bank_account?: string | null;
+            /** Format: int32 */
             recipient_id?: number | null;
             recipient_name?: string;
             memo?: string | null;
             amount?: number;
             currency?: string;
+            /** Format: int32 */
             category_id?: number | null;
             category_name?: string;
             comment?: string | null;
@@ -4354,7 +4389,7 @@ export interface operations {
                 tags?: string;
                 /** @description Fetch a single transaction by id (exact match) */
                 transaction_id?: number;
-                /** @description Comma-separated category ids — OR filter */
+                /** @description Comma-separated category ids — OR filter. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR (the parser used to truncate/drop it). An absent or empty value means no filter. */
                 category_ids?: string;
                 /** @description Filter by primary (grouped) recipient id */
                 recipient_group_id?: number;
@@ -5198,6 +5233,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description Invalid selector: neither/both of `ids` and `filter`, a malformed id, or an unknown/malformed filter field */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Rate limit exceeded */
             429: {
                 headers: {
@@ -5240,7 +5282,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Invalid or missing fields, or invalid FK reference */
+            /** @description Invalid or missing fields, an invalid FK reference, or an unknown/malformed filter field */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5287,7 +5329,7 @@ export interface operations {
                     "application/x-ndjson": string;
                 };
             };
-            /** @description Invalid format */
+            /** @description Invalid format, or an unknown/malformed filter field */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5428,7 +5470,7 @@ export interface operations {
                 end_date?: string;
                 /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
                 account_id?: number;
-                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
                 include_balance?: boolean;
@@ -5459,7 +5501,7 @@ export interface operations {
                 end_date?: string;
                 /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
                 account_id?: number;
-                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
                 /** @description Comma-separated tag slugs — OR filter */
@@ -6799,8 +6841,9 @@ export interface operations {
     };
     getBulkPortfolioTransactions: {
         parameters: {
-            query?: {
-                investment_id?: number;
+            query: {
+                /** @description Comma-separated investment ids (`1,2,3`), the shape the frontend's `ids.join(',')` builder emits. Every element must be a positive int32; one malformed element rejects the whole request. */
+                investment_ids: string;
                 limit?: number;
                 offset?: number;
             };
@@ -6866,7 +6909,10 @@ export interface operations {
                     currency?: string;
                     /** @description Explicit EUR conversion rate; null clears it */
                     fx_rate_to_eur?: number | null;
-                    /** @description Owning account for the lot (ADR-091); null = unassigned */
+                    /**
+                     * Format: int32
+                     * @description Owning account for the lot (ADR-091); null = unassigned
+                     */
                     account_id?: number | null;
                     /** @description Free-text note; null clears it */
                     note?: string | null;
@@ -7048,6 +7094,13 @@ export interface operations {
                     recurrence_interval?: components["schemas"]["RecurrenceInterval"];
                     /** Format: date */
                     recurrence_end_date?: string;
+                    /** @description Explicit EUR conversion rate; absent/null is resolved automatically */
+                    fx_rate_to_eur?: number | null;
+                    /**
+                     * Format: int32
+                     * @description Owning account for the lot (ADR-091); absent or null leaves it unassigned. Accepted and applied by this operation all along — it was simply undocumented.
+                     */
+                    account_id?: number | null;
                 };
             };
         };
@@ -8488,7 +8541,13 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": {
+                    /**
+                     * Format: int32
+                     * @description Recipient to attribute the staged row to. `null` — or an absent field — clears the override. A present value must be a positive integer; a malformed one is rejected rather than coerced, because a coerced id names a different recipient and the batch then commits the transaction against it.
+                     */
+                    recipient_id?: number | null;
+                };
             };
         };
         responses: {
@@ -8500,6 +8559,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Malformed batch id, row id or recipient_id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Row not found in this batch, or not in matched status */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8516,7 +8589,11 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    category_id: number;
+                    /**
+                     * Format: int32
+                     * @description Category to attribute the staged row to. `null` — or an absent field — clears the override. A present value must be a positive integer that exists; a malformed one is rejected rather than coerced, since a coerced id names a different category and passes the existence check.
+                     */
+                    category_id?: number | null;
                 };
             };
         };
@@ -8529,6 +8606,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Malformed batch id, row id or category_id, or an unknown category */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Row not found in this batch, or not in matched status */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8594,6 +8685,13 @@ export interface operations {
                     default_type?: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest";
                     /** @description JSON object mapping raw CSV type strings to canonical portfolio_txn_type values */
                     type_mapping?: string;
+                    /** @description Brokerage fan-out (ADR-095) — cash rows land on a ledger account */
+                    is_brokerage?: boolean;
+                    /**
+                     * Format: int32
+                     * @description Sleeve account every row of this import lands on. Required when is_brokerage is true, ignored otherwise. Must be a positive integer; a malformed value is rejected rather than coerced, since a coerced id files the whole CSV against an account the uploader never named.
+                     */
+                    account_id?: number;
                 };
             };
         };
@@ -8906,8 +9004,11 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description ID of an existing investment to link this row to */
-                    investment_id?: number;
+                    /**
+                     * Format: int32
+                     * @description Existing investment to link this row to. `null` — or an absent field — clears the override. A present value must be a positive integer; a malformed one is rejected rather than coerced, because a coerced id names a different instrument and the committed lot records it.
+                     */
+                    investment_id?: number | null;
                     /** @description When true, a new investment record is created from the row's symbol/name/asset_class and linked */
                     create_new?: boolean;
                 };
@@ -8923,7 +9024,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Neither investment_id nor create_new supplied, or create_new validation failed */
+            /** @description Malformed batch id, row id or investment_id, or create_new validation failed */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8948,7 +9049,17 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: int32
+                     * @description Brokerage sleeve account (ADR-095) stamped on the batch, so every lot it commits inherits it. `null` — or an absent field — leaves the batch without one. A present value must be a positive integer naming an existing account; a malformed one is rejected rather than coerced, since a coerced id names a different account and passes the existence check.
+                     */
+                    account_id?: number | null;
+                };
+            };
+        };
         responses: {
             /** @description Commit result with row counts */
             200: {
@@ -8958,6 +9069,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Malformed batch id or account_id, or the batch is not in a reviewable state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Batch not found, or account_id names no account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Batch is not in awaiting_review or matched status */
             409: {

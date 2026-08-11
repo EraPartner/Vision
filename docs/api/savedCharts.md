@@ -3,6 +3,7 @@ title: Saved Charts API
 type: endpoint
 status: active
 date: 2026-06-26
+updated: 2026-08-11
 tags:
   - api
   - charts
@@ -140,6 +141,8 @@ Delete a saved chart configuration.
 - **categoryIds**: array of positive integers
 - **recipientIds**: array of positive integers
 - **tagIds**: array of positive integers (tag IDs from the `tags` table)
+  - All three go through `validateIntArray`, which validates each element with the shared `validateId`: a plain base-10 integer in 1..2,147,483,647. A scalar is wrapped into a one-element array; **one bad element rejects the whole request** with `400 VALIDATION_ERROR` (`"<field> contains invalid value: <value>"`).
+  - **Changed 2026-08-11:** elements were parsed with `parseInt`, so `categoryIds: ["12abc"]` was silently accepted as category `[12]` — a chart quietly filtered on a category nobody named. `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "`, `"+5"` and `0` now all reject. Plain integers are unaffected. See [[docs/security/input-validation#Array Validation|Input Validation]].
 - **allCategories / allRecipients / allTags**: boolean (default `false`)
 - **dateRangeStart / dateRangeEnd**: ISO date string `YYYY-MM-DD` or `null`
 - **Combination constraint**: `(line, stacked)`, `(line, grouped)`, `(area, grouped)`, `(line, ranked)`, and `(area, ranked)` are rejected with 400; `ranked` is only valid with `bar`

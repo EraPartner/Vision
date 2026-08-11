@@ -103,6 +103,18 @@ const TRANSACTION_JOINS = `
 // invariant (sync trigger + rename propagation keep string == accounts.name).
 const ACCOUNT_LABEL_SQL = 'acct.name AS bank_account';
 
+// Reduced join set for count-only queries over a buildTransactionWhere clause.
+// `r` is the sole join alias that builder's predicates reference (recipientName's
+// `r.name ILIKE`); the other five aliases in TRANSACTION_JOINS exist purely to
+// project labels, which a count does not select. Dropping them cannot change
+// count(*): all six are LEFT JOINs onto the target's PRIMARY KEY (recipients.id,
+// categories.id, accounts.id), so each matches at most one row and none can drop
+// or duplicate a transaction. Keeping `r` means a filter that DOES reference an
+// unjoined alias fails loudly at the database rather than silently miscounting.
+const COUNT_JOINS = `
+  LEFT JOIN recipients r ON t.recipient_id = r.id
+`;
+
 // Effective category = own → recipient default → primary-recipient default
 // (3-level, alias-aware). Requires TRANSACTION_JOINS. Shared so the single-row
 // getById/create paths resolve categories identically to the list paths — an
@@ -459,7 +471,7 @@ export const transactionRepository = {
       WITH total_cte AS (
         SELECT count(*)::int AS total
         FROM transactions t
-        ${TRANSACTION_JOINS}
+        ${COUNT_JOINS}
         WHERE ${totalWhere}
       ),
       uncategorised_rows AS (

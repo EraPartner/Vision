@@ -3,9 +3,9 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-08-10
+updated: 2026-08-11
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
 ---
 
@@ -654,7 +654,7 @@ export default router;
 |---------|------|
 | **List envelope** | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope|ADR-026]] |
 | **Parallel fetch** | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1 |
-| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params |
+| **ID validation** | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Both accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser — and never *filter* a bad id out of a list, since that answers with a silently different dataset ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`) |
 | **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
 | **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]) |
@@ -1107,29 +1107,40 @@ router.get('/forecast', async (req, res) => {
 });
 ```
 
-### Pattern: `parseNumericArrayQueryParam()`
+### Pattern: `parseIdArrayQueryParam()`
 
-Extracts and validates arrays of numeric query parameters (e.g., multi-select filters):
+Repeatable **id** query params (`?excluded_category_ids=5&excluded_category_ids=9`). A thin
+throwing wrapper around `validateIntArray`, so query ids, body ids and `:id` path params share
+one accept set:
 
 ```js
-function parseNumericArrayQueryParam(raw) {
-  if (!raw) return [];
-  const values = Array.isArray(raw) ? raw : [raw];
-  return values
-    .map((v) => Number(v))
-    .filter((n) => Number.isFinite(n));
+function parseIdArrayQueryParam(raw, field) {
+  if (raw == null || raw === '') return [];      // absent/empty = no filter, not an error
+  const result = validateIntArray(raw, field);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
 }
 
 // Usage in route handlers
 router.get('/monthly-summary', async (req, res) => {
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   res.ok({ data, meta });
 });
 ```
+
+> [!warning] Never filter bad ids out of a list — reject the request
+> This was `.map(Number).filter(Number.isFinite)` until 2026-08-11, which **dropped** the bad
+> element: `?excluded_category_ids=12abc` became `[]`, so the exclusion silently switched off and
+> the endpoint answered with a different dataset than the caller asked for — no error anywhere.
+> A dropped element is worse than a rejected request, because nothing surfaces. Keep the
+> empty/absent case (`[]`, a legitimate "no filter") distinct from the malformed case (400).
+
+The lenient numeric form survives for `mc_percentiles` only — distribution percentiles in 0..100,
+where fractional values are legitimate and a bad one costs a chart band, not a row set.
 
 ### Key Rules
 
@@ -1139,13 +1150,14 @@ router.get('/monthly-summary', async (req, res) => {
 | Non-finite check | Reject NaN, Infinity, undefined parse results |
 | Bounds enforcement | Apply min (default 1) and max bounds; use `fallback` if out of range |
 | String arrays | Handle both single `?param=val` and multi `?param=val1&param=val2` |
-| Array filtering | Remove non-finite values, keep empty array if no matches |
+| Array filtering | **Ids: never filter.** One bad element rejects the request (`parseIdArrayQueryParam`); a dropped id silently changes the answer. Non-id numeric arrays (`mc_percentiles`) still drop non-finite values |
 | Type narrowing | Results are always `number | number[]` or fallback type, never string |
 
 ### When to Use
 
 - **Single integer param** — `parseIntClamped()` with max bounds
-- **Array of integers** — `parseNumericArrayQueryParam()` for filter arrays
+- **Array of ids** — `parseIdArrayQueryParam()`, which delegates to `validateIntArray`/`validateId` and 400s on a bad element
+- **Array of non-id numbers** — `parseNumericArrayQueryParam()` (only `mc_percentiles` qualifies)
 - **Currency strings** — Direct upper-casing and regex validation (3-letter ISO code)
 - **Boolean flags** — `=== 'true' || === '1'` string comparison (no parsing needed)
 - **Dates** — Treat as ISO strings, validate with Date constructor or date lib
@@ -1402,25 +1414,28 @@ Every builder returns `{ sql, params, nextParamIdx }`:
 
 | Function | Purpose |
 |----------|---------|
-| `validateInt4Ids(ids)` | Validate array of PostgreSQL INT4 IDs; returns filtered array |
+| `validateInt4Ids(ids, fieldName?)` | Validate a list of PostgreSQL INT4 IDs. **Rejects, does not filter** — throws `ValidationError` if any element is not a plain digit string or integer number in `1..2^31-1`. Nullish input means "no ids" and returns `[]` |
 | `buildTransactionWhere(opts)` | Build full transaction WHERE clause with all filters; includes `recipientGroupId` support (Phase Q) |
 
 ### Recipient Group Resolution (Phase Q)
 
-`recipientGroupId` resolves a complete primary-recipient group using a four-part SQL predicate with scalar subqueries:
+`recipientGroupId` resolves a complete primary-recipient group with a four-branch **semi-join** — the same indexable shape as `recipientId`, so `t.recipient_id` is the only transactions-side column in the predicate:
 
 ```sql
-(
-  t.recipient_id = $N                    -- Match the recipient itself
-  OR r.primary_recipient_id = $N         -- Match any aliases under it
-  OR t.recipient_id = (
-    SELECT primary_recipient_id FROM recipients WHERE id = $N AND primary_recipient_id IS NOT NULL
-  )                                       -- Match the recipient's own primary (if alias)
-  OR r.primary_recipient_id = (
-    SELECT primary_recipient_id FROM recipients WHERE id = $N AND primary_recipient_id IS NOT NULL
-  )                                       -- Match siblings under that primary
+t.recipient_id IN (
+  SELECT id FROM recipients
+  WHERE id = $N                          -- Match the recipient itself
+     OR primary_recipient_id = $N        -- Match any aliases under it
+     OR id = (
+       SELECT primary_recipient_id FROM recipients WHERE id = $N AND primary_recipient_id IS NOT NULL
+     )                                   -- Match the recipient's own primary (if alias)
+     OR primary_recipient_id = (
+       SELECT primary_recipient_id FROM recipients WHERE id = $N AND primary_recipient_id IS NOT NULL
+     )                                   -- Match siblings under that primary
 )
 ```
+
+The branch set is unchanged from the earlier shape, which ORed `t.recipient_id` against the **joined** `r.primary_recipient_id`. Because `r` is joined on `t.recipient_id = r.id`, `r.primary_recipient_id` is by definition the `primary_recipient_id` of the recipient whose id equals `t.recipient_id` — so every branch can be resolved inside `recipients` without changing which rows match. The old shape spanned two relations, which the planner could only evaluate as a join Filter (no `Index Cond` on `idx_transactions_recipient_id`, no BitmapOr); the semi-join restores index probing and lets the count-only callers join nothing at all.
 
 **Use case:** `RecentRecipientTransactionsTable` in `OwesPage` queries `recipient_group_id` to show all transactions for a recipient and linked aliases in a unified view, enabling discovery of the full transaction history even when linked recipients are involved.
 
@@ -1598,8 +1613,8 @@ Routes use `res.ok({ data, meta })` to nest the aggregation envelope inside the 
 router.get('/monthly-summary', async (req, res) => {
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
-    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseIdArrayQueryParam(req.query.excluded_category_ids, 'excluded_category_ids'),
+    excludedRecipientIds: parseIdArrayQueryParam(req.query.excluded_recipient_ids, 'excluded_recipient_ids'),
   });
   // Nest domain envelope inside transport envelope
   res.ok({ data, meta });

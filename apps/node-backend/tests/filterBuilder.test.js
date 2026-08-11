@@ -14,6 +14,7 @@ import {
   parseAmountFilter,
   validateInt4Ids,
 } from '../src/lib/filterBuilder.js';
+import { ValidationError } from '../src/middleware/errorHandler.js';
 
 describe('parseAmountFilter', () => {
   it('returns null for missing or unparseable input', () => {
@@ -40,15 +41,84 @@ describe('validateInt4Ids', () => {
     expect(validateInt4Ids([1, 42, 2147483646])).toEqual([1, 42, 2147483646]);
   });
 
-  it('drops null, undefined, non-integer, zero, negative, and overflow', () => {
-    const raw = [null, undefined, '5', 1.5, 0, -1, 2147483647, NaN, 7];
-    expect(validateInt4Ids(raw)).toEqual([7]);
+  // This block used to pin the opposite contract: `[null, undefined, '5', 1.5,
+  // 0, -1, 2147483647, NaN, 7]` was expected to come back as `[7]`. That test
+  // documented what `ids.filter(...)` happened to do — it was never a statement
+  // that dropping is right. At SQL-build time a dropped id does not 404; it
+  // changes which rows the query covers, with nothing surfaced to anyone. If
+  // one of these flips back to a drop, that is a silent wrong-answer bug.
+  it('rejects the whole list when any element is not a valid int4 id', () => {
+    const rejected = [
+      [1, 'abc', 2, -5, 3], // the shape bulk selection used to accept as [1,2,3]
+      ['12abc'],            // trailing garbage
+      [1.5],                // decimals
+      ['5.0'],
+      ['1e3'],              // exponent — Number() would have made this id 1000
+      ['0x10'],             // hex / octal / binary
+      ['0o17'],
+      ['0b11'],
+      [' 5 '],              // whitespace padding
+      ['+5'],               // signs and separators
+      ['-5'],
+      ['1_0'],
+      [''],                 // empty / blank
+      ['   '],
+      [0],                  // out of range
+      [-1],
+      [2147483648],
+      [null],               // wrong types — Number() mapped these to 0/1/7
+      [undefined],
+      [NaN],
+      [Infinity],
+      [true],
+      [false],
+      [[7]],
+      [{}],
+      ['١٢'],              // non-ASCII digits
+    ];
+    for (const ids of rejected) {
+      expect(() => validateInt4Ids(ids), `expected ${JSON.stringify(ids)} to be rejected`)
+        .toThrow(ValidationError);
+    }
   });
 
-  it('returns empty array for non-array input', () => {
+  // The off-by-one this filter used to carry on its own: it bounded ids with
+  // `id < 2147483647`, while every route-layer validator accepts `<= 2147483647`.
+  // A legal int4 id at the ceiling therefore passed validation at the edge and
+  // was then dropped here — reachable today via ?excluded_category_ids=2147483647,
+  // which 200s and silently applies no exclusion for it.
+  it('accepts an id at the int4 ceiling and rejects the first value past it', () => {
+    expect(validateInt4Ids([2147483647])).toEqual([2147483647]);
+    expect(() => validateInt4Ids([2147483648])).toThrow(ValidationError);
+  });
+
+  // Shape parity with validateId, which the route layer already uses: a plain
+  // base-10 digit string is a legal id, so a client sending stringified ids is
+  // not broken by the tightening.
+  it('accepts plain digit strings and normalises them to numbers', () => {
+    expect(validateInt4Ids(['5', '00007', '2147483647'])).toEqual([5, 7, 2147483647]);
+  });
+
+  // Absent is not the same case as malformed, and is answered differently —
+  // the same unset convention assertOptionalId and parseIdArrayQueryParam use.
+  // Callers read [] as "no ids" and skip the clause entirely.
+  it('treats nullish input as "no ids" rather than an error', () => {
     expect(validateInt4Ids(null)).toEqual([]);
     expect(validateInt4Ids(undefined)).toEqual([]);
-    expect(validateInt4Ids('42')).toEqual([]);
+    expect(validateInt4Ids([])).toEqual([]);
+  });
+
+  // Scalar-wrapping is inherited from validateIntArray, where it exists because
+  // a repeatable query param arrives as a scalar when sent once.
+  it('wraps a lone scalar id into a list', () => {
+    expect(validateInt4Ids('42')).toEqual([42]);
+    expect(validateInt4Ids(42)).toEqual([42]);
+    expect(() => validateInt4Ids('4.2')).toThrow(ValidationError);
+  });
+
+  it('names the offending field and echoes the received value', () => {
+    expect(() => validateInt4Ids([1, 'evil'], 'excludedCategoryIds'))
+      .toThrow('excludedCategoryIds contains invalid value: evil');
   });
 });
 
@@ -108,19 +178,61 @@ describe('buildTransactionWhere', () => {
 
   it('recipientGroupId resolves full primary group including parent and siblings', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ recipientGroupId: 7 });
-    expect(sql).toContain('t.recipient_id = $1');
-    expect(sql).toContain('r.primary_recipient_id = $1');
+    // All four group branches, in the same order as the pre-semi-join shape:
+    // the recipient itself, its aliases, its own primary, that primary's siblings.
+    expect(sql).toContain('t.recipient_id IN (');
+    expect(sql).toContain('id = $1');
+    expect(sql).toContain('primary_recipient_id = $1');
     expect(sql).toContain('SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL');
     expect(params).toEqual([7]);
     expect(nextParamIdx).toBe(2);
   });
 
+  it('recipientGroupId is a semi-join: t.recipient_id is the only transactions-side column', () => {
+    const { sql } = buildTransactionWhere({ recipientGroupId: 7 });
+    const groupClause = sql.slice(sql.indexOf('t.recipient_id IN ('));
+    // The pre-fix shape ORed t.recipient_id against the JOINED r.primary_recipient_id,
+    // so the predicate spanned two relations and the planner could only evaluate it
+    // as a join Filter — idx_transactions_recipient_id never got an Index Cond.
+    // Every branch must now resolve inside `recipients`.
+    expect(groupClause).not.toContain('r.primary_recipient_id');
+    expect(groupClause).not.toMatch(/\bt\.recipient_id\s*=/);
+    // `t.` may appear only as the single semi-join probe column.
+    expect(groupClause.match(/\bt\.\w+/g)).toEqual(['t.recipient_id']);
+  });
+
+  it('recipientGroupId needs no join at all — it references no aliased relation', () => {
+    const { sql } = buildTransactionWhere({ recipientGroupId: 7, active: true });
+    // Whole clause is self-contained: safe to use in a count query that joins nothing.
+    expect(sql).not.toMatch(/\br\.\w+/);
+    expect(sql).not.toMatch(/\bpr\.\w+/);
+  });
+
   it('recipientGroupId and recipientId can coexist and use sequential $-indices', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ recipientId: 3, recipientGroupId: 7 });
     expect(sql).toContain('t.recipient_id IN (SELECT id FROM recipients WHERE id = $1 OR primary_recipient_id = $1)');
-    expect(sql).toContain('t.recipient_id = $2');
+    expect(sql).toContain('id = $2');
+    expect(sql).toContain('SELECT primary_recipient_id FROM recipients WHERE id = $2 AND primary_recipient_id IS NOT NULL');
     expect(params).toEqual([3, 7]);
     expect(nextParamIdx).toBe(3);
+  });
+
+  it('recipientName is the only filter that references a join alias', () => {
+    // The invariant transactionRepository's reduced COUNT_JOINS rests on: a count
+    // query over this builder needs `r` and nothing else. If a new filter starts
+    // referencing pr/c/rc/pc/acct, this test fails and the count join set must grow.
+    const everything = {
+      transactionId: 1, startDate: '2024-01-01', endDate: '2024-12-31',
+      accountId: 2, categoryId: 3, categoryIds: [3, 4], recipientId: 5,
+      recipientGroupId: 6, search: 'coffee', active: true,
+      transactionType: 'expense', amountMin: 1, amountMax: 2, tagSlugs: ['x'],
+    };
+    const withoutName = buildTransactionWhere(everything).sql;
+    expect(withoutName).not.toMatch(/\b(r|pr|c|rc|pc|acct)\.\w+/);
+
+    const withName = buildTransactionWhere({ ...everything, recipientName: 'delh' }).sql;
+    expect(withName).toMatch(/\br\.name ILIKE/);
+    expect(withName).not.toMatch(/\b(pr|c|rc|pc|acct)\.\w+/);
   });
 
   it('search builds an indexable t.id IN (UNION ...) with a single $-slot', () => {
@@ -220,13 +332,30 @@ describe('buildExclusionClauses', () => {
     expect(result.joinSql).toContain('LEFT JOIN recipients pr');
   });
 
-  it('drops invalid ids and only emits the clause if valid ids remain', () => {
-    const result = buildExclusionClauses({
+  // Was: the same input asserted whereSql === '' and params === []. That is the
+  // worst version of the silent drop — every excluded id is discarded, no
+  // predicate is emitted at all, and the caller gets the FULL dataset back
+  // while believing its exclusions were applied. It now rejects.
+  it('rejects a malformed exclusion list instead of emitting no predicate', () => {
+    expect(() => buildExclusionClauses({
       excludedCategoryIds: [null, 0, 'oops', 2147483647],
       excludedRecipientIds: [-1, NaN],
-    });
-    expect(result.whereSql).toBe('');
-    expect(result.params).toEqual([]);
+    })).toThrow(ValidationError);
+
+    expect(() => buildExclusionClauses({ excludedCategoryIds: [1, 'oops'] }))
+      .toThrow('excludedCategoryIds contains invalid value: oops');
+    expect(() => buildExclusionClauses({ excludedRecipientIds: [1, -1] }))
+      .toThrow('excludedRecipientIds contains invalid value: -1');
+  });
+
+  // The id at the ceiling was in the rejected list above only because of the
+  // old exclusive `< MAX_INT4` bound. It is a legal int4 id and now excludes.
+  it('excludes an id at the int4 ceiling instead of dropping it', () => {
+    const result = buildExclusionClauses({ excludedCategoryIds: [2147483647] });
+    expect(result.whereSql).toBe(
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1)',
+    );
+    expect(result.params).toEqual([2147483647]);
   });
 
   it('builds NOT IN predicate for categories using the same COALESCE chain', () => {
@@ -312,10 +441,20 @@ describe('buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)'
     expect(nextParamIdx).toBe(2);
   });
 
-  it('builds an IN clause for accountIds and drops invalid ids', () => {
-    const { sql, params } = buildTransactionWhere({ accountIds: [3, -1, 9, 0.5], active: false });
+  it('builds an IN clause for accountIds', () => {
+    const { sql, params } = buildTransactionWhere({ accountIds: [3, 9], active: false });
     expect(sql).toContain('t.account_id IN ($1, $2)');
     expect(params).toEqual([3, 9]);
+  });
+
+  // Was: `[3, -1, 9, 0.5]` asserted to narrow to `[3, 9]`. A dropped account id
+  // widens the export/list result to accounts the caller did not ask for, which
+  // is a wrong answer rather than a smaller one.
+  it('rejects a malformed accountIds element instead of narrowing the IN list', () => {
+    for (const accountIds of [[3, -1, 9, 0.5], [0], ['12abc'], [2147483648]]) {
+      expect(() => buildTransactionWhere({ accountIds, active: false }))
+        .toThrow(ValidationError);
+    }
   });
 
   it('accountId wins over accountIds; the bank-name filter still composes', () => {
@@ -412,10 +551,13 @@ describe('buildTransactionWhere — categoryIds (plural IN clause)', () => {
     expect(nextParamIdx).toBe(4);
   });
 
-  it('drops invalid ids silently and skips clause when nothing remains', () => {
-    const { sql, params } = buildTransactionWhere({ categoryIds: [0, -1, null, 1.5], active: false });
-    expect(sql).not.toContain('t.category_id IN');
-    expect(params).toHaveLength(0);
+  // Was: `[0, -1, null, 1.5]` asserted to emit no clause at all — the filter
+  // silently became "all categories". The test name even said "silently".
+  it('rejects malformed categoryIds instead of silently skipping the clause', () => {
+    for (const categoryIds of [[0, -1, null, 1.5], [1, 'evil'], ['1e3'], [2147483648]]) {
+      expect(() => buildTransactionWhere({ categoryIds, active: false }))
+        .toThrow(ValidationError);
+    }
   });
 
   it('categoryId (singular) takes precedence over categoryIds', () => {

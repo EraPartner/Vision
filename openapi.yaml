@@ -543,7 +543,7 @@ components:
       type: object
       description: >-
         Selects transactions to act on. Provide an explicit `ids` array or a
-        `filter` object (same shape as GET /api/transactions query filters);
+        `filter` object (a subset of the GET /api/transactions query filters);
         exactly one is resolved server-side.
       properties:
         ids:
@@ -551,8 +551,76 @@ components:
           items:
             type: integer
         filter:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/BulkTransactionFilter"
+
+    BulkTransactionFilter:
+      type: object
+      description: >-
+        Filter-mode selector. Every field is validated and an unknown key, a
+        wrong type or a malformed value rejects the whole request with a 400 —
+        these endpoints include a hard DELETE, and a filter field that was
+        skipped rather than rejected made the action cover a WIDER set of rows
+        than the caller named. Absent, `null` and empty (`""`, `[]`) still mean
+        "no filter on this field". Each field also accepts its camelCase
+        spelling, but not both spellings at once.
+      additionalProperties: false
+      properties:
+        transaction_id:
+          type: integer
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        account_id:
+          type: integer
+        bank_account:
+          type: string
+          description: Substring match on the account name
+        bank_accounts:
+          type: array
+          description: Exact account names. Must be an array, not a comma string.
+          items:
+            type: string
+        category_id:
+          type: integer
+        category_ids:
+          type: array
+          description: Must be an array of integers, not a comma string.
+          items:
+            type: integer
+        recipient_id:
+          type: integer
+        recipient_group_id:
+          type: integer
+        recipient_name:
+          type: string
+        search:
+          type: string
+          maxLength: 200
+        active:
+          type: boolean
+          description: Defaults to true (active rows only) when omitted.
+        transaction_type:
+          type: string
+          enum: [income, expense]
+        amount_min:
+          type: number
+        amount_max:
+          type: number
+        amount_signed:
+          type: boolean
+          description: >-
+            Defaults to false, comparing amount_min/amount_max against
+            |amount|; true compares against the signed amount.
+        tags:
+          description: Tag slugs, as an array or a comma-separated string.
+          oneOf:
+            - type: array
+              items:
+                type: string
+            - type: string
 
     CustomParserConfig:
       type: object
@@ -640,6 +708,8 @@ components:
           type: string
         recipient_id:
           type: integer
+          format: int32
+          minimum: 1
         memo:
           type: string
         amount:
@@ -650,6 +720,13 @@ components:
           type: number
         category_id:
           type: integer
+          format: int32
+          minimum: 1
+          nullable: true
+          description: >-
+            Absent or null files the transaction uncategorized. Validated since
+            2026-08-11 — before that this operation forwarded the field raw and a
+            malformed value reached Postgres as a cast error (500).
         comment:
           type: string
         tags:
@@ -672,6 +749,8 @@ components:
           nullable: true
         recipient_id:
           type: integer
+          format: int32
+          minimum: 1
           nullable: true
         recipient_name:
           type: string
@@ -684,6 +763,8 @@ components:
           type: string
         category_id:
           type: integer
+          format: int32
+          minimum: 1
           nullable: true
         category_name:
           type: string
@@ -1770,6 +1851,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update tag color or active status
       operationId: updateTag
@@ -1899,6 +1982,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get one account
       operationId: getAccount
@@ -1964,6 +2049,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Survivor account id (sources merge into this one)
     post:
       summary: Merge source accounts into this (survivor) account
@@ -2000,6 +2087,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Source account id (the account that would be merged away)
     get:
       summary: Preview merging this account into another (read-only)
@@ -2072,6 +2161,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Account to anchor
     post:
       summary: Set the opening-balance anchor for an account
@@ -2120,6 +2211,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
         description: Account to reconcile
     post:
       summary: Reconcile an account's drift
@@ -2193,6 +2286,8 @@ paths:
           description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: bank_account
           schema:
@@ -2201,10 +2296,14 @@ paths:
           name: category_id
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: recipient_id
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: search
           schema:
@@ -2228,16 +2327,24 @@ paths:
           description: Fetch a single transaction by id (exact match)
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: category_ids
-          description: Comma-separated category ids — OR filter
+          description: >-
+            Comma-separated category ids — OR filter. Every element must be a plain base-10
+            integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR
+            (the parser used to truncate/drop it). An absent or empty value means no filter.
           schema:
             type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: recipient_group_id
           description: Filter by primary (grouped) recipient id
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: recipient_name
           description: Filter by recipient display name (substring)
@@ -2337,6 +2444,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get transaction
       operationId: getTransaction
@@ -2458,6 +2567,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get category
       operationId: getCategory
@@ -2579,6 +2690,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get recipient
       operationId: getRecipient
@@ -2936,6 +3049,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update saved chart
       operationId: updateSavedChart
@@ -3033,6 +3148,10 @@ paths:
                         properties:
                           deleted:
                             type: integer
+        "400":
+          description: >-
+            Invalid selector: neither/both of `ids` and `filter`, a malformed
+            id, or an unknown/malformed filter field
         "429":
           description: Rate limit exceeded
 
@@ -3078,7 +3197,9 @@ paths:
                           updated:
                             type: integer
         "400":
-          description: Invalid or missing fields, or invalid FK reference
+          description: >-
+            Invalid or missing fields, an invalid FK reference, or an
+            unknown/malformed filter field
         "429":
           description: Rate limit exceeded
 
@@ -3114,7 +3235,7 @@ paths:
               schema:
                 type: string
         "400":
-          description: Invalid format
+          description: Invalid format, or an unknown/malformed filter field
         "429":
           description: Rate limit exceeded
 
@@ -3229,11 +3350,18 @@ paths:
           description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: account_ids
-          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          description: >-
+            Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts.
+            Every element must be a plain base-10 integer in 1..2147483647; a malformed element
+            returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the
+            export to every account. Capped at 50 entries after validation.
           schema:
             type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: bank_account
           schema:
@@ -3276,11 +3404,18 @@ paths:
           description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
           schema:
             type: integer
+            format: int32
+            minimum: 1
         - in: query
           name: account_ids
-          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          description: >-
+            Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts.
+            Every element must be a plain base-10 integer in 1..2147483647; a malformed element
+            returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the
+            export to every account. Capped at 50 entries after validation.
           schema:
             type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: bank_account
           schema:
@@ -3333,6 +3468,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Assign category to transactions
       operationId: assignCategory
@@ -3378,6 +3515,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Merge recipient into another
       operationId: mergeRecipient
@@ -3407,6 +3546,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Unmerge recipient
       operationId: unmergeRecipient
@@ -3426,6 +3567,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List recipient aliases (merged-in names)
       operationId: getRecipientAliases
@@ -3445,6 +3588,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List auto-assign patterns for recipient
       operationId: getRecipientPatterns
@@ -3499,6 +3644,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Preview pattern match count
       operationId: previewRecipientPattern
@@ -3530,11 +3677,15 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
       - in: path
         name: patternId
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update pattern
       operationId: updateRecipientPattern
@@ -3572,6 +3723,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List bank accounts for recipient
       operationId: getRecipientBankAccounts
@@ -3630,11 +3783,15 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
       - in: path
         name: accountId
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update bank account
       operationId: updateRecipientBankAccount
@@ -3678,11 +3835,15 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
       - in: path
         name: accountId
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Set bank account as primary
       operationId: setRecipientBankAccountPrimary
@@ -3846,6 +4007,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get planned transaction
       operationId: getPlannedTransaction
@@ -3932,6 +4095,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Execute planned transaction (creates real transaction)
       operationId: executePlannedTransaction
@@ -4591,10 +4756,18 @@ paths:
       operationId: getBulkPortfolioTransactions
       tags: [Portfolio]
       parameters:
+        # Documented as `investment_id` (singular, optional) until 2026-08-11;
+        # the route has only ever read `investment_ids`, and 400s without it.
         - in: query
-          name: investment_id
+          name: investment_ids
+          required: true
+          description: >-
+            Comma-separated investment ids (`1,2,3`), the shape the frontend's
+            `ids.join(',')` builder emits. Every element must be a positive
+            int32; one malformed element rejects the whole request.
           schema:
-            type: integer
+            type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: limit
           schema:
@@ -4623,6 +4796,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update portfolio transaction
       operationId: updatePortfolioTransaction
@@ -4657,6 +4832,8 @@ paths:
                   description: Explicit EUR conversion rate; null clears it
                 account_id:
                   type: integer
+                  format: int32
+                  minimum: 1
                   nullable: true
                   description: Owning account for the lot (ADR-091); null = unassigned
                 note:
@@ -4697,6 +4874,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get investment
       operationId: getInvestment
@@ -4763,6 +4942,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get price history for investment
       operationId: getInvestmentPriceHistory
@@ -4793,6 +4974,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List transactions for investment
       operationId: getInvestmentTransactions
@@ -4856,6 +5039,19 @@ paths:
                 recurrence_end_date:
                   type: string
                   format: date
+                fx_rate_to_eur:
+                  type: number
+                  nullable: true
+                  description: Explicit EUR conversion rate; absent/null is resolved automatically
+                account_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Owning account for the lot (ADR-091); absent or null leaves it
+                    unassigned. Accepted and applied by this operation all along —
+                    it was simply undocumented.
       responses:
         "201":
           description: Created transaction
@@ -4876,6 +5072,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get investment summary (current value, P&L, units)
       operationId: getInvestmentSummary
@@ -5097,6 +5295,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get watchlist item
       operationId: getWatchlistItem
@@ -5178,6 +5378,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get owed detail for recipient
       operationId: getSplitOwedByRecipient
@@ -5213,6 +5415,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Export owed splits as CSV
       operationId: exportSplitsOwedCsv
@@ -5232,6 +5436,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Get splits for a transaction
       operationId: getSplitsByTransaction
@@ -5342,6 +5548,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     delete:
       summary: Delete split
       operationId: deleteSplit
@@ -5357,6 +5565,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Record a payment against a split share
       operationId: paySplit
@@ -5394,6 +5604,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List payments for a split
       operationId: getSplitPayments
@@ -5429,6 +5641,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Mark split as fully settled
       operationId: settleSplit
@@ -5448,6 +5662,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     post:
       summary: Settle all open splits for a recipient
       operationId: settleAllSplitsForRecipient
@@ -5468,6 +5684,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: List attachments for a transaction
       operationId: getTransactionAttachments
@@ -5532,6 +5750,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     get:
       summary: Download attachment file
       operationId: downloadAttachment
@@ -5552,6 +5772,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     delete:
       summary: Delete attachment
       operationId: deleteAttachment
@@ -6117,6 +6339,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update a saved custom CSV parser config
       operationId: updateCustomParser
@@ -6271,7 +6495,7 @@ paths:
         schema:
           type: string
     post:
-      summary: Override transaction data for a staged row
+      summary: Override the matched recipient for a staged row
       operationId: overrideImportRow
       tags: [Import]
       requestBody:
@@ -6280,6 +6504,18 @@ paths:
           application/json:
             schema:
               type: object
+              properties:
+                recipient_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Recipient to attribute the staged row to. `null` — or an
+                    absent field — clears the override. A present value must be
+                    a positive integer; a malformed one is rejected rather than
+                    coerced, because a coerced id names a different recipient
+                    and the batch then commits the transaction against it.
       responses:
         "200":
           description: Row updated
@@ -6287,6 +6523,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed batch id, row id or recipient_id
+        "404":
+          description: Row not found in this batch, or not in matched status
 
   /api/import/batches/{id}/rows/{rowId}/category-override:
     parameters:
@@ -6310,10 +6550,18 @@ paths:
           application/json:
             schema:
               type: object
-              required: [category_id]
               properties:
                 category_id:
                   type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Category to attribute the staged row to. `null` — or an
+                    absent field — clears the override. A present value must be
+                    a positive integer that exists; a malformed one is rejected
+                    rather than coerced, since a coerced id names a different
+                    category and passes the existence check.
       responses:
         "200":
           description: Category overridden
@@ -6321,6 +6569,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed batch id, row id or category_id, or an unknown category
+        "404":
+          description: Row not found in this batch, or not in matched status
 
   /api/import/batches/{id}/commit:
     parameters:
@@ -6406,6 +6658,19 @@ paths:
                 type_mapping:
                   type: string
                   description: JSON object mapping raw CSV type strings to canonical portfolio_txn_type values
+                is_brokerage:
+                  type: boolean
+                  description: Brokerage fan-out (ADR-095) — cash rows land on a ledger account
+                account_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  description: >-
+                    Sleeve account every row of this import lands on. Required
+                    when is_brokerage is true, ignored otherwise. Must be a
+                    positive integer; a malformed value is rejected rather than
+                    coerced, since a coerced id files the whole CSV against an
+                    account the uploader never named.
       responses:
         "201":
           description: All rows matched — batch committed immediately
@@ -6539,6 +6804,8 @@ paths:
         required: true
         schema:
           type: integer
+          format: int32
+          minimum: 1
     patch:
       summary: Update a saved portfolio parser config
       operationId: updatePortfolioParser
@@ -6695,7 +6962,15 @@ paths:
               properties:
                 investment_id:
                   type: integer
-                  description: ID of an existing investment to link this row to
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Existing investment to link this row to. `null` — or an
+                    absent field — clears the override. A present value must be
+                    a positive integer; a malformed one is rejected rather than
+                    coerced, because a coerced id names a different instrument
+                    and the committed lot records it.
                 create_new:
                   type: boolean
                   description: When true, a new investment record is created from the row's symbol/name/asset_class and linked
@@ -6707,7 +6982,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
         "400":
-          description: Neither investment_id nor create_new supplied, or create_new validation failed
+          description: Malformed batch id, row id or investment_id, or create_new validation failed
         "404":
           description: Batch or staging row not found
 
@@ -6722,6 +6997,26 @@ paths:
       summary: Commit a reviewed portfolio import batch — writes portfolio_transactions to DB
       operationId: commitPortfolioImportBatch
       tags: [PortfolioImport]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  nullable: true
+                  description: >-
+                    Brokerage sleeve account (ADR-095) stamped on the batch, so
+                    every lot it commits inherits it. `null` — or an absent
+                    field — leaves the batch without one. A present value must
+                    be a positive integer naming an existing account; a
+                    malformed one is rejected rather than coerced, since a
+                    coerced id names a different account and passes the
+                    existence check.
       responses:
         "200":
           description: Commit result with row counts
@@ -6729,6 +7024,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed batch id or account_id, or the batch is not in a reviewable state
+        "404":
+          description: Batch not found, or account_id names no account
         "409":
           description: Batch is not in awaiting_review or matched status
 
@@ -7541,6 +7840,8 @@ paths:
           required: true
           schema:
             type: integer
+            format: int32
+            minimum: 1
       responses:
         "204":
           description: No Content (idempotent — an unknown id is not an error)

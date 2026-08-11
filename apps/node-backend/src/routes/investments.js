@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, validateIntParam } from '../middleware/validation.js';
 import {
   listInvestments,
   createInvestment,
@@ -40,8 +40,11 @@ router.get('/:id',               validateIdParam, getInvestment);
 router.patch('/:id',             validateIdParam, updateInvestment);
 router.delete('/:id',            validateIdParam, deleteInvestment);
 
-// Portfolio transactions (no investment ID in path)
-router.delete('/transactions/:txnId', deleteTransaction);
-router.patch('/transactions/:txnId',  updateTransaction);
+// Portfolio transactions (no investment ID in path). `:txnId` is not `:id`, so
+// the fixed validateIdParam cannot cover it — these were the only two routes in
+// the file with no id guard at all, and DELETE /transactions/12abc therefore
+// returned 204 having hard-deleted transaction 12.
+router.delete('/transactions/:txnId', validateIntParam('txnId'), deleteTransaction);
+router.patch('/transactions/:txnId',  validateIntParam('txnId'), updateTransaction);
 
 export default router;

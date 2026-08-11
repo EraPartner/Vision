@@ -5,7 +5,7 @@ method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
 date: 2026-04-26
-updated: 2026-08-09
+updated: 2026-08-11
 last_modified: 2026-08-09
 tags: [api, import, csv, bank, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
 status: active
@@ -258,6 +258,11 @@ See [[docs/testing/testing|Testing Documentation]] for envelope-aware test patte
 
 These four endpoints manage persisted named custom CSV parser configurations. See [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]] and [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature]] for full context.
 
+> [!warning] Parser `:id` contract (2026-08-11 — breaking for malformed ids)
+> `PATCH` and `DELETE /api/import/parsers/:id` accept **only** a plain base-10 integer in 1..2,147,483,647; anything else is `400 VALIDATION_ERROR` (`"Invalid parser config id"`) before any repository call. The same applies to the portfolio twin, [[docs/api/portfolio-imports|`/api/portfolio/import/parsers/:id`]].
+>
+> These were the only numeric-id routes in the app with **no `validateIdParam`**, and `parseParserId` was a `parseInt` guarded only by `Number.isNaN`. `DELETE /parsers/12abc` therefore answered **`204` having deleted parser 12** — an irreversible delete of a record the caller never named, reported as success; `12.5` hit 12, `1e3` hit 1, and `-1`/`0` cleared the NaN check and reached the repository. Both operations now carry `validateIdParam` *and* parse through `validateId`. Clients sending plain integers are unaffected — `lib/api/imports.ts` types the id `number` and takes it from server rows. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
+
 ### GET /api/import/parsers
 
 List all saved parser configurations. Collection GETs use the canonical
@@ -371,6 +376,7 @@ Update an existing saved parser. Both `name` and `config` are optional; supply o
 | Status | Meaning |
 |--------|---------|
 | `200 OK` | Parser updated; body contains the updated record |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No parser with the given `id` |
 | `409 Conflict` | Another parser already uses the requested `name` |
 
@@ -386,6 +392,7 @@ Delete a saved parser configuration.
 | Status | Meaning |
 |--------|---------|
 | `204 No Content` | Parser deleted successfully |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No parser with the given `id` |
 
 ---
@@ -393,6 +400,11 @@ Delete a saved parser configuration.
 ## Review Endpoints
 
 When the pipeline detects fuzzy / pattern / new recipient resolutions it leaves the batch in `awaiting_review` status and the streaming endpoint emits a `review_required` SSE event with the `batch_id` so the frontend can navigate to the review page. The review endpoints below let the client inspect, override, and commit the staged batch.
+
+> [!warning] Batch/row id contract (2026-08-11 — breaking for malformed ids)
+> Every `:id` and `:rowId` on `/api/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`Number.MAX_SAFE_INTEGER` — `import_batches.id` and `import_staging_rows.id` are `BIGSERIAL`, so the ceiling is *not* `int32`). Anything else returns `400 VALIDATION_ERROR` (`"Invalid batch id"` / `"Invalid batch or row id"`).
+>
+> These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000, `"0o17"` → 15, `"0b11"` → 3 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId`, so these routes and the `:id` path params enforce one accept set. An integral id above `int32` is still a legal row and 404s if absent; `"1e300"`, previously let through to that same 404, is now a 400. Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
 
 ### GET /api/import/batches/:id/preview
 
@@ -420,20 +432,24 @@ Returns staging rows grouped by effective recipient with match-source badges and
 
 Set or clear the recipient override on a single staging row.
 
-**Body:** `{ "recipient_id": number \| null }`
+**Body:** `{ "recipient_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than recipient 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]).
 
 **Response:** `{ "row_id": number, "user_override_recipient_id": number | null }`
+
+**Errors:**
+- `400` — malformed batch id, row id or `recipient_id`
+- `404` — staging row not in batch or not in `matched` status
 
 ### POST /api/import/batches/:id/rows/:rowId/category-override
 
 Set or clear the per-row category override (ADR-046). Validated against `categories(id)`. The committed transaction's category is `COALESCE(staging.override_category_id, recipient.default_category_id, NULL)`.
 
-**Body:** `{ "category_id": number \| null }`
+**Body:** `{ "category_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer, validated with `validateId` before the existence check: the check only ever saw the coerced value, so `"0x10"` used to pass it as the real category 16.
 
 **Response:** `{ "row_id": number, "override_category_id": number | null }`
 
 **Errors:**
-- `400` — non-integer / unknown `category_id`
+- `400` — malformed / unknown `category_id`, or a malformed batch or row id
 - `404` — staging row not in batch or not in `matched` status
 
 ### POST /api/import/batches/:id/commit

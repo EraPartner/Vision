@@ -16,7 +16,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertOptionalId } from '../middleware/validation.js';
 import { researchAggregator } from '../services/research/researchAggregator.js';
 import { researchMappingService } from '../services/research/researchMappingService.js';
 import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
@@ -254,15 +254,21 @@ const keyType = (value) => parseResearchParam(keyTypeSchema, value);
 const requireInstrumentKey = (value) => parseResearchParam(instrumentKeySchema, value);
 
 /**
- * Coerce an optional id to a positive integer; undefined when absent or invalid.
+ * Optional id: undefined when absent or empty, the parsed integer when valid,
+ * a 400 when malformed.
+ *
+ * This was a `Number.parseInt` parse that answered `undefined` on failure and
+ * had both of that shape's failure modes. `investment_id: '12abc'` did not
+ * fail — parseInt takes the leading digits — so `resolve` pre-seeded its
+ * proposals from holding 12, a record nobody named; and `'abc'` silently
+ * became "no holding", answering 200 with an un-seeded result the caller
+ * cannot tell from a correct one. `assertOptionalId` keeps absent meaning
+ * absent and rejects the rest, matching every other id in the codebase.
  * @param {unknown} value
+ * @returns {number|undefined}
  */
-function positiveInt(value) {
-  // Number.parseInt coerces a non-string argument via String(...) at runtime;
-  // String(value) here makes that coercion explicit for the type checker
-  // without changing what gets parsed.
-  const n = Number.parseInt(String(value), 10);
-  return Number.isInteger(n) && n > 0 ? n : undefined;
+function optionalInvestmentId(value) {
+  return assertOptionalId(value, 'investment_id') ?? undefined;
 }
 
 // GET /api/research/mappings?instrument_key=US0378331005&key_type=isin
@@ -284,7 +290,7 @@ router.post('/mappings/resolve', /** @param {ExpressRequest} req @param {Express
     keyType: keyType(key_type),
     assetClass: single(asset_class) || undefined,
     query: q,
-    investmentId: positiveInt(investment_id),
+    investmentId: optionalInvestmentId(investment_id),
   });
   res.ok(result);
 });

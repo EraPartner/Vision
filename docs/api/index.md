@@ -3,7 +3,7 @@ title: API Documentation Index
 type: api-index
 status: active
 date: 2026-04-24
-updated: 2026-06-16
+updated: 2026-08-11
 tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9, phase-f, admin, observability, ing, bnp, supported-adapters, portfolio-import, adr-078, research, adr-079, multi-provider]
 description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 9 aggregation shadow cutover complete; May 12 2026: ING and BNP Paribas Fortis adapters added (8 total banks supported); June 15 2026: Portfolio CSV Import (ADR-078) adds 12 endpoints under /api/portfolio/import; June 16 2026: Research aggregation (ADR-079) adds 6 endpoints under /api/research
 aliases: [API, endpoints, REST]
@@ -19,6 +19,13 @@ aliases: [API, endpoints, REST]
 > **Phase 2.4 Update:** OpenAPI 3.0.3 specification now available at `openapi.yaml` (project root) — the authoritative source for all API contracts, request/response schemas, and type generation.
 >
 > **Phase 9 Update (April 2026):** Aggregation shadow mode validation complete. `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` aggregation routes and shadow divergence admin endpoints removed. See [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]] and [[docs/adr/016-aggregation-shadow-mode|ADR-016]] for details.
+
+> [!warning] Path-param id contract (2026-08-11 — breaking for malformed ids)
+> Every integer path param (`:id`, `:patternId`, `:accountId`, `:txnId`) accepts **only** a plain base-10 integer in 1..2,147,483,647. Anything else — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "`, `"+5"`, `0`, negatives — returns `400 VALIDATION_ERROR` with `"<field> must be a positive integer"`.
+>
+> This changed on 2026-08-11: the shared validator was `parseInt`-based, so it took the leading digits of anything and `"12abc"` silently resolved to id **12**, acting on a record the client never named. Clients sending well-formed ids are unaffected.
+>
+> Same-day follow-ups extended this to the four remaining id parsers: **body id arrays** (`validateIntArray` — `categoryIds`/`recipientIds`/`tagIds` on saved charts, `excludedCategoryIds`/`excludedRecipientIds` on dashboard settings), where `["12abc"]` used to become `[12]` and silently change which rows an aggregation covered; and **import batch/row ids** (`/api/import/batches/*`, `/api/portfolio/import/batches/*`), where a bare `Number()` took `"0x10"` as batch 16 and `"1e3"` as batch 1000. Both now delegate to the same validator — the import ids keep a `Number.MAX_SAFE_INTEGER` ceiling rather than `int32`, since those PKs are `BIGSERIAL`. The last two followed: the aggregations' **repeatable id query params** (`?excluded_category_ids=`, `?excluded_recipient_ids=`, `?recipient_ids=`, `?tag_ids=`), which used to *drop* a malformed element and silently answer with a different dataset, and the **AI-chat tools'** `parsePositiveInt`. Finally the **transactions list/export query params** — `transaction_id`, `category_id`, `recipient_id`, `recipient_group_id` and the comma-separated `category_ids` / `account_ids` — which sat *upstream* of the SQL builder and so survived all of the above: `?category_ids=5,12abc` filtered by categories 5 and 12, while `?account_ids=abc` dropped the account filter entirely and made `GET /api/transactions/export/csv` stream **every account** into the downloaded file. `POST /api/transactions/transfers` (`aId`/`bId`) is converged in the same pass. An absent or empty query param still means "no filter" and still answers 200. Full accept set: [[docs/security/input-validation#ID Validation|Input Validation]].
 
 > [!tip] Quick Navigation
 > - **OpenAPI Spec:** See `openapi.yaml` for formal specifications

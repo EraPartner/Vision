@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-05-04
-last_modified: 2026-05-04
+updated: 2026-08-11
+last_modified: 2026-08-11
 tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-1, phase-10]
 description: Local AI chat with background streaming via module-level store; conversations persist in URL (`?c=<id>`), sidebar shows live indicator for active streams, streams survive navigation and component unmount
 aliases: [ai-chat, ai chat, ollama-chat, natural-language-queries, financial chat, llm chat]
@@ -80,7 +80,7 @@ Backend /api/ai
 |-----------|------|-------------|
 | `AIChatPage` | Frontend Page | Page shell; hosts conversation list, message stream, composer; manages URL state (`?c=<id>`) and auto-selects active stream on mount |
 | `ChatConversationList` | Frontend Component | List conversations; on-hover action menu; shows pulsing indicator for active streams via `useStreamingConversationIds()` |
-| `ChatMessageList` | Frontend Component | Renders ordered messages; shows thinking indicator when streaming w/no content yet; handles autoscroll |
+| `ChatMessageList` | Frontend Component | Renders ordered messages; shows thinking indicator when streaming w/no content yet; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
 | `ChatBubble` | Frontend Component | User vs assistant styling |
 | `ChatComposer` | Frontend Component | Textarea, send, model selector, tools toggle (wrench icon) |
 | `ToolResultCard` | Frontend Component | Renders tool payload as table or Recharts (line/bar/pie) |
@@ -120,7 +120,7 @@ Index: `ai_messages(conversation_id, created_at)` for ordered retrieval.
 
 ## Tool Registry (30 tools across 6 domains)
 
-Tools are declared with JSON Schema params. Backend validates args via Zod before dispatch. Results capped at 500 rows by default. Each tool returns `{ok, data, meta, renderAs}` where `renderAs ∈ {"table", "line", "bar", "pie"}` drives the `ToolResultCard` rendering.
+Tools are declared with JSON Schema params. Backend validates args before dispatch with the hand-rolled helpers in `services/aiChat/tools/_validate.js` (`parseDate`, `parseEnum`, `parsePositiveInt`) — not Zod, despite what this page said before 2026-08-11. `parsePositiveInt` delegates to the shared `validateId` (see [[docs/security/input-validation#parsePositiveInt (AI-chat tool arguments)|Input Validation]]), so a malformed `categoryId`/`recipientId`/`plannedId` is an error the model can correct rather than a silent hit on the wrong record. Results capped at 500 rows by default. Each tool returns `{ok, data, meta, renderAs}` where `renderAs ∈ {"table", "line", "bar", "pie"}` drives the `ToolResultCard` rendering.
 
 ### Expenses (11 tools)
 
@@ -221,7 +221,7 @@ Tools are declared with JSON Schema params. Backend validates args via Zod befor
 - **Model not pulled** — Ollama returns 404 on chat request; surface "Model not installed. Run `ollama pull <model>` or pick another." in the banner.
 - **Context window overflow** — service trims history to last N turns + tool-result summaries; adds a `system` note when truncation happens.
 - **LLM picks an unknown tool name** — dispatcher returns a structured error back to the LLM as a `tool` message; LLM retries or apologizes.
-- **LLM emits invalid args** — Zod rejection returned as `tool` error; LLM retries with corrected args (up to 2 retries before giving up).
+- **LLM emits invalid args** — `ToolValidationError` returned as a `tool` error `{code: 'VALIDATION_ERROR', field, message}` naming the field and the received value; LLM retries with corrected args (up to 2 retries before giving up).
 - **User aborts mid-stream** — clicking "Stop" calls `cancel()` on the store, which aborts the fetch via stored controller; server-side `res.on('close')` handler detects the abort and marks the assistant message as aborted in the DB; client discards partial preview and clears streaming flag.
 - **Rate limit tripped** — 429 with `Retry-After`; composer shows cooldown hint.
 - **Long tool result** — capped to 500 rows; LLM informed in `tool_result.meta.truncated = true` so it can mention the cap.
@@ -250,7 +250,7 @@ Enable via browser DevTools (Console tab) or server-side log aggregation.
 - **Read-only tool registry** — enforced by **CI denylist check** verifying no tool calls write methods (`create()`, `update()`, `delete()`, etc.) or imports the Postgres pool directly.
 - **Parameterized queries only** — tools go through existing repositories; no dynamic SQL built from LLM output.
 - **Audit log** — every `tool_call` + `tool_result` persisted in `ai_messages`.
-- **Input validation** — Zod on both chat message body and tool args.
+- **Input validation** — Zod on the chat message body; `tools/_validate.js` on tool args, with ids on the shared `validateId` accept set.
 - **Rate limiting** — 30 req/min on `/api/ai/chat`.
 - **Message length limit** — 4000 characters enforced both in frontend (`ChatComposer.tsx`) and backend (routes/ai.js).
 - **Tools opt-out** — frontend `useTools` toggle allows users to disable tool-calling per-message; when `false`, backend skips tool schemas and returns text-only responses.

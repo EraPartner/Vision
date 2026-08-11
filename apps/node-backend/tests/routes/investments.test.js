@@ -514,9 +514,18 @@ describe('Investment Routes', () => {
       expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
+    // 'abc' was the only value pinned, and it is the one the old isNaN guard
+    // happened to catch. '12abc' is the 🔺 case: it hard-deleted transaction 12
+    // and answered 204. Full matrix in investmentsIdValidation.test.js.
     it('should throw ValidationError for invalid ID', async () => {
-      const res = await api.delete(`${BASE}/transactions/abc`).expect(400);
-      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      portfolioTransactionRepository.getById.mockResolvedValue({ id: 12, investment_id: 10 });
+      portfolioTransactionRepository.hardDelete.mockResolvedValue(true);
+
+      for (const id of ['abc', '12abc']) {
+        const res = await api.delete(`${BASE}/transactions/${id}`).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      }
+      expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
     });
 
     it('should handle errors', async () => {
@@ -547,8 +556,11 @@ describe('Investment Routes', () => {
     });
 
     it('should throw ValidationError for invalid ID', async () => {
-      const res = await api.patch(`${BASE}/transactions/abc`).send({ amount: 1200 }).expect(400);
-      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      for (const id of ['abc', '12abc']) {
+        const res = await api.patch(`${BASE}/transactions/${id}`).send({ amount: 1200 }).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      }
+      expect(portfolioTransactionRepository.update).not.toHaveBeenCalled();
     });
 
     it('should handle errors', async () => {

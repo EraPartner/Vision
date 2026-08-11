@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import accountRepository from '../repositories/accountRepository.js';
 import { NotFoundError, ValidationError, ConflictError } from '../middleware/errorHandler.js';
-import { assertCurrency, validateNumber } from '../middleware/validation.js';
+import { assertCurrency, validateNumber, validateId } from '../middleware/validation.js';
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
 export const ACCOUNT_TYPES = ['checking', 'savings', 'brokerage', 'crypto_exchange', 'wallet', 'pension', 'liability'];
@@ -66,17 +66,21 @@ const enumField = (key, allowed) =>
 /** @param {string} key */
 const boolField = (key) => z.boolean({ error: `${key} must be a boolean` }).optional();
 
-// FK reference: null clears; otherwise Number() coercion + positive-integer
-// check (the async existence check runs after parsing, see
-// assertFundingAccountValid).
+// FK reference: null clears; otherwise the shared strict id parse (the async
+// existence check runs after parsing, see assertFundingAccountValid).
+//
+// validateId rather than `Number()`: the existence check only ever sees the
+// coerced value, so '1e3' arrived as the real account 1000 and the account was
+// funded from one the caller never named ('0x10' → 16, true → 1, [7] → 7 the
+// same way). '7' and 7 still parse exactly as before.
 const fundingAccountIdField = z.unknown().transform((value, ctx) => {
   if (value === null) return null;
-  const fid = Number(value);
-  if (!Number.isInteger(fid) || fid <= 0) {
+  const parsed = validateId(value, 'funding_account_id');
+  if (!parsed.valid) {
     ctx.addIssue({ code: 'custom', message: 'funding_account_id must be a positive integer' });
     return z.NEVER;
   }
-  return fid;
+  return parsed.value;
 }).optional();
 
 // Statement balance: null clears; otherwise Number() coercion bounded like the

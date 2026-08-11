@@ -51,6 +51,27 @@ describe('POST /bulk-delete — input validation', () => {
   it('returns 400 when ids exceeds 500 entries', async () => {
     await bulkDelete({ ids: Array.from({ length: 501 }, (_, i) => i + 1) }).expect(400);
   });
+
+  // The worst reachable form of the silent-drop class, on the one endpoint
+  // where the damage is irreversible. `ids` is read straight off req.body here
+  // — no route-layer id validation stands in front of it — and the resolver
+  // ran `.map(Number)` before filtering, so '1e3' became id 1000, '0x10' became
+  // 16, [7] became 7 and true became 1. A hard DELETE then hit a row the client
+  // never named, with a 200 and a plausible-looking count. Nothing logged it.
+  it('rejects a coercible non-id instead of hard-deleting a different record', async () => {
+    for (const bad of ['1e3', '0x10', '0o17', '0b11', [7], true, ' 5 ', '5.0']) {
+      await bulkDelete({ ids: [bad] }).expect(400);
+    }
+    expect(getClient).not.toHaveBeenCalled();
+  });
+
+  // A partly-valid list used to delete its valid members and silently ignore
+  // the rest, so the caller could not tell a full delete from a partial one.
+  it('rejects a partly-valid id list rather than deleting a subset', async () => {
+    const res = await bulkDelete({ ids: [1, 'abc', 2] }).expect(400);
+    expect(res.body.error.message).toBe('ids contains invalid value: abc');
+    expect(getClient).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /bulk-delete — id-mode success', () => {

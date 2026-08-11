@@ -15,7 +15,7 @@ import {
 } from '../services/recipientPatternService.js';
 import { findRecipientClusters } from '../services/recipientClusterService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, validateIntParam } from '../middleware/validation.js';
+import { validateIdParam, validateIntParam, assertOptionalId } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 // The MVs attribute transactions to categories via a 3-level resolution
 // (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
@@ -48,7 +48,11 @@ router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
     limit,
     offset,
     name: name || null,
-    defaultCategoryId: default_category_id ? parseInt(default_category_id, 10) : null,
+    // Same strict id parse as every other id query param: absent/empty is "no
+    // filter" (null, 200), malformed is a 400. `parseInt` truncated instead —
+    // ?default_category_id=12abc listed the recipients defaulting to category
+    // 12 — and a NaN reached Postgres as a 22P02 500.
+    defaultCategoryId: assertOptionalId(default_category_id, 'default_category_id'),
     search: search ? String(search).slice(0, 200) : null,
     active: active !== 'false',
     uncategorized: uncategorized === 'true',

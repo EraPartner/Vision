@@ -3,7 +3,7 @@ title: Repository Layer Reference
 type: reference
 status: active
 date: 2026-04-23
-updated: 2026-06-18
+updated: 2026-08-11
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
@@ -76,9 +76,10 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 ### Key Query Patterns
 
 - **Dynamic WHERE Building:** Constructs filter clauses from `opts.filters` object (date range, category, recipient, amount, bank account, currency, hidden status)
-- **Pagination:** `LIMIT/OFFSET` with `COUNT(*) OVER()` for total
+- **Pagination:** `LIMIT/OFFSET`, with the total as a **separate count query** issued in parallel with the row query (`getAllWithCount`). `COUNT(*) OVER ()` was removed: the window function forced the planner to materialize and sort the whole filtered join before `LIMIT` on every page. Same `WHERE`, so the total is unchanged.
+- **Count join sets:** `getUncategorisedWithCount`'s total CTE counts over a **reduced** join set (`LEFT JOIN recipients r` only) rather than the full 6-way `TRANSACTION_JOINS` the row query uses for its labels. `r` is the one alias `buildTransactionWhere` can reference (`recipientName`'s `r.name ILIKE`); the other five are projection-only and a count selects no labels. All six are `LEFT JOIN`s onto a **primary key**, so dropping the unreferenced ones can neither drop nor duplicate a row — the count is identical.
 - **Soft Delete:** Uses `hidden` boolean flag, not `DELETE`
-- **Recipient Group Filtering (Phase Q):** Supports `recipientGroupId` via `filterBuilder` to resolve full primary-recipient groups with scalar subqueries; enables linked-recipient transaction discovery in OwesPage
+- **Recipient Group Filtering (Phase Q):** Supports `recipientGroupId` via `filterBuilder` to resolve full primary-recipient groups with an indexable semi-join on `recipients`; enables linked-recipient transaction discovery in OwesPage
 
 ### Dependencies
 - `connection.js`

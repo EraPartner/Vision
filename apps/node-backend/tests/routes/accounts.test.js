@@ -44,7 +44,7 @@ vi.mock('../../src/services/info/cache.js', () => ({
 }));
 
 import accountService from '../../src/services/accountService.js';
-import { mergeAccounts } from '../../src/services/accountMergeService.js';
+import { mergeAccounts, previewMerge } from '../../src/services/accountMergeService.js';
 import { setOpeningBalance } from '../../src/services/openingBalanceService.js';
 import { reconcileAccount } from '../../src/services/reconcileService.js';
 import { scheduleAggregationRefresh } from '../../src/services/aggregationRefresh.js';
@@ -138,6 +138,43 @@ describe('POST /:id/merge — source_ids are rejected, not filtered', () => {
     mergeAccounts.mockResolvedValue({ into: 1, merged: [] });
     await api.post(`${BASE}/1/merge`).send({}).expect(200);
     expect(mergeAccounts).toHaveBeenCalledWith(1, []);
+  });
+
+  // The rejection list above was built on `parseInt(x, 10)` + Number.isInteger,
+  // which catches an entry parseInt cannot parse at all but NOT one it parses
+  // partially: '12abc' became the integer 12, passed the guard, and merged
+  // account 12 — deleting it and repointing its rows onto the survivor. Same
+  // retarget the bulk id lists carried (00f8281d) and the transfers body
+  // carried (ae79ec1f), on an equally irreversible write.
+  it('rejects an entry parseInt would have retargeted to a different account', async () => {
+    for (const bad of ['12abc', '1e3', '0x10', '12.5', '5.0', ' 5 ', '-4', '0', '2147483648', true, [7]]) {
+      const res = await api.post(`${BASE}/1/merge`).send({ source_ids: [2, bad] }).expect(400);
+      expect(res.body.error.message).toMatch(/source_ids\[1\]/);
+    }
+    expect(mergeAccounts).not.toHaveBeenCalled();
+  });
+});
+
+// Read-only sibling of the merge body above: `?into=` was parsed with
+// `Number(...)` and previewMerge only checks that what it receives is a
+// positive integer, so `?into=1e3` arrived as a well-formed 1000 and previewed
+// a merge into an account nobody named.
+describe('GET /:id/merge-preview — ?into= is a strict id', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rejects a coercible non-id rather than previewing a different account', async () => {
+    for (const raw of ['1e3', '0x10', '12abc', '12.5', ' 5 ', '0', '-4', 'abc', '', '2147483648']) {
+      const res = await api.get(`${BASE}/1/merge-preview?into=${encodeURIComponent(raw)}`).expect(400);
+      expect(res.body.error.message).toBe('into must be a positive integer account id');
+    }
+    await api.get(`${BASE}/1/merge-preview`).expect(400);
+    expect(previewMerge).not.toHaveBeenCalled();
+  });
+
+  it('passes a well-formed ?into= through unchanged', async () => {
+    previewMerge.mockResolvedValue({ into: 2 });
+    await api.get(`${BASE}/1/merge-preview?into=2`).expect(200);
+    expect(previewMerge).toHaveBeenCalledWith(1, 2);
   });
 });
 

@@ -87,7 +87,9 @@ import { runImportPipeline, commitImport } from '../../src/services/importPipeli
 // function, run here over the mocked pg connection.
 import { createBatch } from '../../src/services/importPipeline/stage.js';
 import { importRecipientsCSV } from '../../src/services/dataImportService.js';
-import { getBatch, getPreviewRows, overrideRecipient } from '../../src/repositories/importBatchRepository.js';
+import {
+  getBatch, getPreviewRows, overrideRecipient, overrideCategory, categoryExists,
+} from '../../src/repositories/importBatchRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
 
@@ -113,27 +115,63 @@ beforeEach(() => {
   customParserConfigRepository.create.mockResolvedValue({ id: 1 });
 });
 
-describe('batch-id coercion pins (Number() then integer > 0)', () => {
-  it("accepts '12.0', ' 12 ' and '0x10' exactly like Number() coercion", async () => {
+describe('batch-id shape pins (validateId, bounded to MAX_SAFE_ID)', () => {
+  // This block used to pin the raw `Number()` coercion these routes ran on:
+  // '12.0' → 12, ' 12 ' → 12, '0x10' → **16**. That was a behaviour-preserving
+  // pin written during the zod swap (see the describe title it carried,
+  // "Number() then integer > 0"), recording what Number() happened to do
+  // rather than a contract worth keeping — and the '0x10' case is the same
+  // wrong-record class the :id params lost in 060ef194: the client named no
+  // batch 16, yet batch 16 is what it got. coercedIdSchema now delegates to
+  // validateId, so only a plain digit string parses.
+  it("rejects '12.0', ' 12 ' and '0x10' instead of coercing them to a batch", async () => {
     getBatch.mockResolvedValue({ id: 12, status: 'complete' });
 
-    await api.get(`${BASE}/batches/${seg('12.0')}`).expect(200);
-    expect(getBatch).toHaveBeenLastCalledWith(12);
+    for (const id of ['12.0', ' 12 ', '0x10', '0o17', '0b11', '1e3', '+12']) {
+      const res = await api.get(`${BASE}/batches/${seg(id)}`).expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(getBatch).not.toHaveBeenCalled();
 
-    await api.get(`${BASE}/batches/${seg(' 12 ')}`).expect(200);
+    await api.get(`${BASE}/batches/12`).expect(200);
     expect(getBatch).toHaveBeenLastCalledWith(12);
-
-    await api.get(`${BASE}/batches/${seg('0x10')}`).expect(200);
-    expect(getBatch).toHaveBeenLastCalledWith(16);
   });
 
-  it('does NOT 400 an absurdly large integral id — it 404s downstream', async () => {
+  // The bound is MAX_SAFE_ID, not validateId's default int32 ceiling:
+  // import_batches.id is BIGSERIAL (0001_initial_database_schema.py), so
+  // capping at 2^31-1 would reject ids the column can legitimately hold. Above
+  // 2^53 the digit string and the parsed number stop being the same value, so
+  // that is where it has to stop — '9007199254740993' would otherwise address
+  // record …992.
+  it('accepts an integral id past int32 and 404s it, but rejects one past 2^53', async () => {
     getBatch.mockResolvedValue(undefined);
 
-    const res = await api.get(`${BASE}/batches/1e300`).expect(404);
-
+    const res = await api.get(`${BASE}/batches/2147483648`).expect(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
-    expect(getBatch).toHaveBeenCalledWith(1e300);
+    expect(getBatch).toHaveBeenCalledWith(2147483648);
+
+    getBatch.mockClear();
+    for (const id of ['9007199254740993', '99999999999999999999']) {
+      const tooBig = await api.get(`${BASE}/batches/${id}`).expect(400);
+      expect(tooBig.body.error.code).toBe('VALIDATION_ERROR');
+    }
+    expect(getBatch).not.toHaveBeenCalled();
+  });
+
+  // '1e300' used to be let through to a downstream 404 on purpose, to keep the
+  // pre-zod wire unchanged (the old lib/importBatchIds.js header said so). That
+  // reasoning was about not moving 404→400 during a mechanical swap, not about
+  // 404 being the right answer: '1e300' names no batch in any notation this
+  // API accepts, and it is the same exponent form that made '1e3' resolve to
+  // batch 1000. It is now a 400 like every other malformed id.
+  it('400s an exponent-notation id rather than 404ing it downstream', async () => {
+    getBatch.mockResolvedValue(undefined);
+
+    const res = await api.get(`${BASE}/batches/1e300`).expect(400);
+
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(getBatch).not.toHaveBeenCalled();
   });
 
   it('rejects fractional, trailing-garbage, zero, and negative ids on every site', async () => {
@@ -156,7 +194,9 @@ describe('batch-id coercion pins (Number() then integer > 0)', () => {
   it('row-override sites validate both ids and coerce them', async () => {
     overrideRecipient.mockResolvedValue(1);
 
-    await api.post(`${BASE}/batches/5/rows/${seg(' 6 ')}/override`)
+    // Was ' 6 ' → rowId 6 (whitespace padding survived Number()); the padded
+    // form is rejected now, so the happy path uses the plain digit string.
+    await api.post(`${BASE}/batches/5/rows/6/override`)
       .send({ recipient_id: null })
       .expect(200);
     expect(overrideRecipient).toHaveBeenCalledWith({ batchId: 5, rowId: 6, recipientId: null });
@@ -165,9 +205,82 @@ describe('batch-id coercion pins (Number() then integer > 0)', () => {
       { id: '5', rowId: '0' },
       { id: 'abc', rowId: '6' },
       { id: '5.5', rowId: '6' },
+      { id: '5', rowId: ' 6 ' },
+      { id: '5.0', rowId: '6' },
+      { id: '0x10', rowId: '6' },
     ]) {
       await api.post(`${BASE}/batches/${seg(id)}/rows/${seg(rowId)}/override`).send({}).expect(400);
       await api.post(`${BASE}/batches/${seg(id)}/rows/${seg(rowId)}/category-override`).send({}).expect(400);
+    }
+  });
+});
+
+/**
+ * Override-body id shape (`recipient_id`, `category_id`).
+ *
+ * The route ids above were converged first; these two lagged behind on
+ * `Number.isInteger(Number(x))`, which rejects '12abc' but reads '1e3' as 1000,
+ * '0x10' as 16, `true` as 1 and `[7]` as 7. That is not a failed validation, it
+ * is a retarget — and this is the review step of an import, so the staging row
+ * committed a transaction attributed to a recipient or category the user never
+ * picked. Zero and negatives were accepted too and reached Postgres as an FK
+ * violation.
+ */
+describe('override-body id shape (parseOverrideId)', () => {
+  const RETARGETING = ['1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0'];
+  const MALFORMED = ['12abc', 'abc', '1.5', '0', '-1', '', {}, '9007199254740993'];
+
+  it('rejects every value that used to resolve to a different recipient', async () => {
+    for (const recipient_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/override`)
+        .send({ recipient_id })
+        .expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(recipient_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(overrideRecipient).not.toHaveBeenCalled();
+  });
+
+  it('rejects every value that used to resolve to a different category, before the existence check', async () => {
+    for (const category_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/category-override`)
+        .send({ category_id })
+        .expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(category_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    // The "does this category exist?" guard never saw a coerced id: '0x10'
+    // named category 16, which exists, so the guard passed and the write went
+    // through.
+    expect(categoryExists).not.toHaveBeenCalled();
+    expect(overrideCategory).not.toHaveBeenCalled();
+  });
+
+  it('still accepts a digit string or an integer, and clears on null or an absent field', async () => {
+    overrideRecipient.mockResolvedValue(1);
+    overrideCategory.mockResolvedValue(1);
+    categoryExists.mockResolvedValue(true);
+
+    for (const recipient_id of [7, '7', '007']) {
+      await api.post(`${BASE}/batches/5/rows/6/override`).send({ recipient_id }).expect(200);
+      expect(overrideRecipient).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, recipientId: 7 });
+    }
+
+    // Absent and explicit null both mean "clear the override", at 200 — the
+    // shipped clear-the-selection flow, unchanged.
+    for (const body of [{}, { recipient_id: null }]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/override`).send(body).expect(200);
+      expect(overrideRecipient).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, recipientId: null });
+      expect(res.body.data.user_override_recipient_id).toBeNull();
+    }
+
+    await api.post(`${BASE}/batches/5/rows/6/category-override`).send({ category_id: '12' }).expect(200);
+    expect(categoryExists).toHaveBeenLastCalledWith(12);
+    expect(overrideCategory).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, categoryId: 12 });
+
+    for (const body of [{}, { category_id: null }]) {
+      await api.post(`${BASE}/batches/5/rows/6/category-override`).send(body).expect(200);
+      expect(overrideCategory).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, categoryId: null });
     }
   });
 });

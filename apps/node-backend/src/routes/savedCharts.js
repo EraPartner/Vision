@@ -51,9 +51,11 @@ const timeBucketField = enumField('timeBucket', /** @type {[string, ...string[]]
 /** @param {string} field */
 const boolField = (field) => z.boolean({ error: `"${field}" must be a boolean` });
 
-// Shares validateIntArray with the query-param routes so accepted shapes stay
-// identical (scalar wrapped to array, parseInt coercion, 1..2^31-1 bounds); the
-// coerced ints replace the raw input in the value handed to the repository.
+// Shares validateIntArray with settings.js's dashboard exclusion lists so
+// accepted shapes stay identical (scalar wrapped to array, then validateId per
+// element: a plain digit string or integer number, 1..2^31-1 — no trailing
+// garbage, decimals or exponents); the coerced ints replace the raw input in
+// the value handed to the repository.
 /** @param {string} field */
 const intArrayField = (field) => z.unknown().transform((value, ctx) => {
   const result = validateIntArray(value, field);

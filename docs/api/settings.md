@@ -5,7 +5,7 @@ method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
 date: 2026-06-19
-updated: 2026-06-19
+updated: 2026-08-11
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -69,7 +69,8 @@ Storage behavior:
 ```
 
 **Validation notes for `dashboard_settings`:**
-- `excludedCategoryIds` and `excludedRecipientIds` must be arrays of positive integers
+- `excludedCategoryIds` and `excludedRecipientIds` must be arrays of positive integers — each element is validated by the shared `validateId` (a plain base-10 integer in 1..2,147,483,647), and one bad element rejects the whole request with `400 VALIDATION_ERROR` (`"<field> contains invalid value: <value>"`)
+  - **Changed 2026-08-11:** elements were parsed with `parseInt`, so `excludedCategoryIds: ["12abc"]` was silently stored as `[12]` — the dashboard then excluded a category the user never chose, with no error shown. `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "`, `"+5"` and `0` now all reject. Plain integers are unaffected. See [[docs/security/input-validation#Array Validation|Input Validation]].
 - `excludeHiddenCategories` must be boolean
 - `exclusionScope` must be one of `everywhere`, `dashboard`, `statistics`
 - If `value` is missing from request body, endpoint returns `400` with `Missing "value" in request body`

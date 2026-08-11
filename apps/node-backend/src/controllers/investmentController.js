@@ -18,7 +18,7 @@ import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js'
 import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateNumber, assertMaxLength, assertCurrency } from '../middleware/validation.js';
+import { validateNumber, assertMaxLength, assertCurrency, validateId, validateIntArray } from '../middleware/validation.js';
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
@@ -187,11 +187,25 @@ export function parseRequestId(req) {
 }
 
 /**
+ * Parse `:txnId` for the two portfolio-transaction routes.
+ *
+ * Delegates to `validateId`, so the accept set is every other id param's: a
+ * plain base-10 digit string or an integer number, 1..2^31-1. `routes/
+ * investments.js` also puts `validateIntParam('txnId')` in front of both
+ * routes, which re-stamps the param with the parsed number — hence the number
+ * branch in `validateId` — so this is the second of two identical checks.
+ *
+ * It was `parseInt` guarded by `isNaN`/`<= 0`, which takes the leading digits
+ * of anything: `DELETE /investments/transactions/12abc` returned **204 having
+ * hard-deleted transaction 12**, and `1e3` deleted transaction 1. PATCH on the
+ * same path retargeted identically.
  * @param {ExpressRequest} req
  * @returns {number}
  */
 export function parseTxnRequestId(req) {
-  return parseInteger(req.params.txnId);
+  const result = validateId(req.params.txnId, 'transaction ID');
+  if (!result.valid) throw new ValidationError('Invalid transaction ID');
+  return result.value;
 }
 
 /**
@@ -199,11 +213,30 @@ export function parseTxnRequestId(req) {
  * @returns {number}
  */
 export function requireTxnId(req) {
-  const txnId = parseTxnRequestId(req);
-  if (isNaN(txnId) || txnId <= 0) {
-    throw new ValidationError('Invalid transaction ID');
-  }
-  return txnId;
+  return parseTxnRequestId(req);
+}
+
+/**
+ * Parse a non-null `account_id` from a portfolio-transaction write body.
+ *
+ * Callers own the absent/null case, because the two routes disagree on what it
+ * means: on create, absent *and* explicit null both mean "no brokerage
+ * account" (undefined, so the column default applies); on PATCH, absent means
+ * "leave alone" and an explicit null means "unassign" (portfolioTxRepo.writes
+ * .js). Both meanings are preserved.
+ *
+ * `validateId`, not `Number()`: the bare coercion took `'1e3'` as account
+ * 1000, `'0x10'` as 16, `true` as 1, `[7]` as 7 and `' 7 '` as 7 — all 201,
+ * with the lot booked against an account nobody named — and `'12abc'` reached
+ * Postgres as NaN for a 500. Zero, negatives and the empty string now reject
+ * as 400 instead of 500ing at the FK.
+ * @param {unknown} value
+ * @returns {number}
+ */
+function parseAccountId(value) {
+  const result = validateId(value, 'account_id');
+  if (!result.valid) throw new ValidationError('account_id must be a positive integer');
+  return result.value;
 }
 
 /**
@@ -222,14 +255,31 @@ function translateRepoError(err) {
 }
 
 /**
+ * Comma-separated `investment_ids` query param on GET /api/investments/
+ * transactions — `?investment_ids=1,2,3`, the shape the frontend's
+ * `ids.join(',')` builder emits. Repeated occurrences work too: Express hands
+ * back an array and `String([...])` re-joins it with commas.
+ *
+ * Delegates to `validateIntArray` (hence `validateId`), so the accepted element
+ * shapes are exactly the `:id` params' and the other id-list query params': a
+ * plain base-10 digit string or an integer number, 1..2^31-1. A bad element
+ * rejects the whole request rather than being dropped.
+ *
+ * The dropping was the bug. This was `.split(',').map(parseInt).filter(isInteger
+ * && > 0)`, so a partly-bad list *retargeted*: `?investment_ids=5,12abc` read
+ * investments 5 **and 12**, `12abc` alone read investment 12, and `1e3` read
+ * investment 1 — a different record than the caller named, returned as a 200.
+ *
+ * The param is required here (the caller 400s on absent/empty before this
+ * runs), so unlike `assertOptionalId` there is no "absent means no filter"
+ * case to preserve.
  * @param {unknown} rawInvestmentIds
  * @returns {number[]}
  */
 function parseInvestmentIdsQuery(rawInvestmentIds) {
-  return String(rawInvestmentIds)
-    .split(',')
-    .map((value) => parseInteger(value))
-    .filter((value) => Number.isInteger(value) && value > 0);
+  const result = validateIntArray(String(rawInvestmentIds).split(','), 'investment_ids');
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
 }
 
 /**
@@ -613,7 +663,7 @@ export async function createTransaction(req, res) {
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
       currency: effectiveCurrency, note, is_recurring,
       recurrence_interval, recurrence_end_date, fx_rate_to_eur,
-      account_id: account_id != null ? Number(account_id) : undefined,
+      account_id: account_id != null ? parseAccountId(account_id) : undefined,
       preloaded_asset_class: inv.asset_class,
     });
   } catch (err) {
@@ -665,6 +715,15 @@ export async function updateTransaction(req, res) {
       throw new ValidationError('currency cannot be cleared');
     }
     fields.currency = assertCurrency(fields.currency);
+  }
+
+  // account_id is on the repository's update allow-list, so PATCH forwarded it
+  // raw: `'0x10'` reached Postgres, which reads hex integer literals, and
+  // silently moved the lot to account 16; the other malformed forms 500'd on
+  // the cast. Null keeps its "unassign" meaning, absent still means "leave
+  // alone" — only a present non-null value is validated.
+  if (fields.account_id !== undefined && fields.account_id !== null) {
+    fields.account_id = parseAccountId(fields.account_id);
   }
 
   // A date or currency change invalidates the stamped FX rate — recompute it

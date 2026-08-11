@@ -8,6 +8,7 @@
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { epochMsToUtcYmd } from '../../lib/dateFormat.js';
+import { validateInt4Ids } from '../../lib/filterBuilder.js';
 
 /**
  * @typedef {import('../../types/rows.js').AssetPriceHistoryRow} AssetPriceHistoryRow
@@ -252,11 +253,19 @@ export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, t
  * the single most-recent persisted point per investment. One query for the
  * whole set instead of one per investment.
  *
+ * Ids are validated, not filtered. The previous `.map(Number).filter(isFinite)`
+ * both dropped and mis-accepted: a dropped id silently returned no fallback
+ * price for that investment (the valuation shows it unpriced rather than
+ * failing), while `Number.isFinite` let a non-integer like 1.5 through to the
+ * `::int[]` cast below. The only caller feeds `inv.id` off investment rows, so
+ * nothing malformed reaches this today; a throw here means a real bug, and the
+ * caller already downgrades it to a logged warning rather than a failed load.
+ *
  * @param {number[]} investmentIds
  * @returns {Promise<Map<number, { timestampMs: number, price: number }>>}
  */
 export async function loadLatestHistoricalPointByInvestmentIds(investmentIds) {
-  const ids = [...new Set((investmentIds || []).map(Number).filter(Number.isFinite))];
+  const ids = [...new Set(validateInt4Ids(investmentIds, 'investmentIds'))];
   if (ids.length === 0) return new Map();
 
   try {

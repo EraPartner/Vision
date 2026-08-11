@@ -14,7 +14,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { logger } from '../config/logger.js';
-import { parseBatchIdParam, parseBatchRowIdParams } from '../lib/importBatchIds.js';
+import { parseBatchIdParam, parseBatchRowIdParams, parseOverrideId } from '../lib/importBatchIds.js';
+import { validateId } from '../middleware/validation.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
 import { streamImport } from '../lib/importProgress.js';
@@ -81,14 +82,17 @@ function parseImportInput(schema, input) {
 // brokerage is on (cash rows need a ledger account to land on).
 const brokerageParamsSchema = z.looseObject({
   is_brokerage: z.unknown().optional().transform((value) => value === true || value === 'true'),
+  // validateId, not Number(): every row this import stages lands on the named
+  // account, so an accepted-but-retargeted id ('1e3' → 1000, '0x10' → 16,
+  // true → 1) files a whole CSV against an account the user never picked.
   account_id: z.unknown().optional().transform((value, ctx) => {
     if (value == null || value === '') return undefined;
-    const accountId = Number(value);
-    if (!Number.isInteger(accountId) || accountId <= 0) {
+    const parsed = validateId(value, 'account_id');
+    if (!parsed.valid) {
       ctx.addIssue({ code: 'custom', message: 'account_id must be a positive integer' });
       return z.NEVER;
     }
-    return accountId;
+    return parsed.value;
   }),
 }).superRefine((data, ctx) => {
   if (data.is_brokerage && data.account_id == null) {
@@ -473,10 +477,9 @@ router.post('/batches/:id/rows/:rowId/investment-override', /** @param {ExpressR
   }
 
   const { investment_id } = req.body;
-  if (investment_id !== null && investment_id !== undefined && !Number.isInteger(Number(investment_id))) {
-    throw new ValidationError('investment_id must be an integer or null');
-  }
-  const effectiveId = investment_id != null ? Number(investment_id) : null;
+  // null/absent clears the override; anything else must be a real investment id
+  // (parseOverrideId, not Number() — see lib/importBatchIds.js).
+  const effectiveId = parseOverrideId(investment_id, 'investment_id');
 
   const rowCount = await overrideInvestment({ batchId, rowId, investmentId: effectiveId });
   if (rowCount === 0) {
@@ -501,10 +504,12 @@ router.post('/batches/:id/commit', /** @param {ExpressRequest} req @param {Expre
   // (ADR-091). Validate it exists, then store on the batch so commit stamps it.
   const { account_id } = req.body ?? {};
   if (account_id !== undefined && account_id !== null) {
-    const accountId = Number(account_id);
-    if (!Number.isInteger(accountId) || accountId <= 0) {
-      throw new ValidationError('account_id must be a positive integer');
-    }
+    // validateId, not Number(): the existence check below only sees what the
+    // coercion produced, so '1e3' passed it as the perfectly real account 1000
+    // and every lot committed from this batch was stamped with it.
+    const parsed = validateId(account_id, 'account_id');
+    if (!parsed.valid) throw new ValidationError('account_id must be a positive integer');
+    const accountId = parsed.value;
     await accountService.get(accountId); // throws NotFoundError if missing
     await setBatchAccount(batchId, accountId);
   }

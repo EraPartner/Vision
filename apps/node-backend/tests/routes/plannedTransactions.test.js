@@ -90,6 +90,44 @@ describe('Planned Transaction Routes', () => {
       expect(res.body.data.total).toBe(1);
     });
 
+    // Sixth set of the id-parser convergence. `category_id` / `recipient_id`
+    // were `x ? parseInt(x) : null` — verbatim the pattern removed from the
+    // transactions list endpoint in ae79ec1f — so parseInt took the leading
+    // digits of anything: ?category_id=12abc listed the planned transactions of
+    // category 12, a filter the caller never asked for, and ?recipient_id=abc
+    // produced a NaN that passed the repository's `!= null` guard and reached
+    // Postgres as a 22P02 500. Both are 400s now.
+    it('rejects a malformed category_id / recipient_id instead of truncating it', async () => {
+      for (const query of [
+        'category_id=12abc', 'category_id=1e3', 'category_id=12.5', 'category_id=0',
+        'category_id=-4', 'category_id=abc', 'category_id=NaN', 'category_id=0x10',
+        'category_id=2147483648', 'category_id= 5',
+        'recipient_id=12abc', 'recipient_id=abc', 'recipient_id=0', 'recipient_id=1e3',
+      ]) {
+        const res = await api.get(`${BASE}/?${query}`).expect(400);
+        expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      }
+      expect(plannedTransactionRepository.getAll).not.toHaveBeenCalled();
+    });
+
+    it('keeps absent and empty meaning "no filter"', async () => {
+      plannedTransactionRepository.getAll.mockResolvedValue({ items: [], total: 0 });
+      for (const query of ['', 'category_id=', 'recipient_id=', 'category_id=&recipient_id=']) {
+        await api.get(`${BASE}/?${query}`).expect(200);
+      }
+      for (const call of plannedTransactionRepository.getAll.mock.calls) {
+        expect(call[0]).toMatchObject({ categoryId: null, recipientId: null });
+      }
+    });
+
+    it('passes a well-formed id through unchanged', async () => {
+      plannedTransactionRepository.getAll.mockResolvedValue({ items: [], total: 0 });
+      await api.get(`${BASE}/?category_id=7&recipient_id=99`).expect(200);
+      expect(plannedTransactionRepository.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ categoryId: 7, recipientId: 99 }),
+      );
+    });
+
     it('should respect pagination', async () => {
       plannedTransactionRepository.getAll.mockResolvedValue({ items: [], total: 10 });
 

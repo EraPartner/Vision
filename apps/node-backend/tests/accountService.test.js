@@ -346,17 +346,26 @@ describe('accountService — sanitize pins (create)', () => {
     expect(accountRepository.create).not.toHaveBeenCalled();
   });
 
-  it('coerces a numeric-string funding_account_id and rejects zero/fractional ids', async () => {
+  // The reject half of this pin only listed values a `Number()` coercion fails
+  // on. The forms it accepts were the damaging ones and went untested: '1e3'
+  // arrived as the real account 1000, so assertFundingAccountValid's existence
+  // check passed and the account was funded from one nobody named.
+  it('coerces a numeric-string funding_account_id and rejects zero/fractional/retargeting ids', async () => {
     accountRepository.getById.mockResolvedValueOnce({ id: 7 });
     accountRepository.create.mockResolvedValueOnce({ id: 1 });
     await accountService.create({ name: 'A', funding_account_id: '7' });
     expect(accountRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ funding_account_id: 7 }),
     );
-    await expect(accountService.create({ name: 'A', funding_account_id: 0 }))
-      .rejects.toThrow(ValidationError);
-    await expect(accountService.create({ name: 'A', funding_account_id: 1.5 }))
-      .rejects.toThrow(ValidationError);
+    for (const funding_account_id of [
+      0, 1.5, -1, 'abc', '12abc',
+      '1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0',
+    ]) {
+      await expect(
+        accountService.create({ name: 'A', funding_account_id }),
+        `expected ${JSON.stringify(funding_account_id)} to be rejected`,
+      ).rejects.toThrow(ValidationError);
+    }
   });
 
   it('rejects non-string and whitespace-only names', async () => {

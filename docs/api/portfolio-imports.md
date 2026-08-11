@@ -5,7 +5,7 @@ method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
 date: 2026-06-18
-updated: 2026-06-18
+updated: 2026-08-11
 last_modified: 2026-06-18
 tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078, account-id, adr-091, migration-0057]
 status: active
@@ -146,6 +146,9 @@ Progress percent mapping:
 
 Portfolio parser configs reuse the `custom_parser_configs` table with `kind = 'portfolio'`. The uniqueness constraint is `(name, kind)`, so a transaction parser and a portfolio parser may share the same name.
 
+> [!warning] Parser `:id` contract (2026-08-11 — breaking for malformed ids)
+> `PATCH` and `DELETE /api/portfolio/import/parsers/:id` accept **only** a plain base-10 integer in 1..2,147,483,647; anything else is `400 VALIDATION_ERROR` (`"Invalid parser config id"`) before any repository call. Both operations share `registerParserRoutes` with the [[docs/api/imports|transaction parser routes]], which had the same defect: no `validateIdParam`, and a `parseInt` guarded only by `Number.isNaN`, so `DELETE /parsers/22abc` answered **`204` having deleted parser 22**. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
+
 ### GET /api/portfolio/import/parsers
 
 List all saved portfolio parser configurations. Collection GETs use the
@@ -228,6 +231,7 @@ Update an existing saved portfolio parser. Both `name` and `config` are optional
 | Status | Meaning |
 |--------|---------|
 | `200 OK` | Parser updated |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No portfolio parser with that id |
 | `409 Conflict` | Another portfolio parser already uses the requested `name` |
 
@@ -242,6 +246,7 @@ Delete a saved portfolio parser.
 | Status | Meaning |
 |--------|---------|
 | `204 No Content` | Deleted successfully |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above) |
 | `404 Not Found` | No portfolio parser with that id |
 
 ---
@@ -275,6 +280,11 @@ Rollback a batch. Deletes all `portfolio_transactions` committed by this batch a
 ## Review Endpoints
 
 When the pipeline detects unresolved instruments (symbol not found in `investments`) it leaves the batch in `awaiting_review` and the SSE stream emits a `review_required` event. These endpoints let the client inspect, assign instruments, and commit.
+
+> [!warning] Batch/row id contract (2026-08-11 — breaking for malformed ids)
+> Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGSERIAL`, so the ceiling is *not* `int32`). Anything else returns `400 VALIDATION_ERROR`.
+>
+> These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId` (`lib/importBatchIds.js`, shared with the transaction import router). Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
 
 ### GET /api/portfolio/import/batches/:id/preview
 
@@ -312,12 +322,14 @@ or
 
 When `create_new: true`, a new investment record is created from the row's `symbol` / `name` / `default_asset_class` and linked to the row. All other rows with the same raw symbol/name in this batch are also resolved to the new investment.
 
+`investment_id: null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than a link to investment 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]).
+
 **Responses:**
 
 | Status | Meaning |
 |--------|---------|
 | `200 OK` | Override applied; body contains the updated row |
-| `400 Bad Request` | Neither `investment_id` nor `create_new` supplied, or `create_new` validation failed |
+| `400 Bad Request` | Malformed batch id, row id or `investment_id`, or `create_new` validation failed |
 | `404 Not Found` | Batch or staging row not found |
 
 ---
@@ -333,7 +345,10 @@ Commit a reviewed batch. Honours all investment overrides. Runs FX resolution fo
 ```
 
 When `account_id` is provided, all committed `portfolio_transactions` inherit it — they belong to
-the specified brokerage account. Omit to leave lots unassigned (legacy behaviour).
+the specified brokerage account. Omit (or send `null`) to leave lots unassigned (legacy behaviour).
+Because the whole batch inherits it, the value is validated with `validateId` before the account
+existence check rather than coerced: `"1e3"` used to arrive as the real account 1000, pass the
+existence check and stamp every committed lot with it. Malformed values now return **400**.
 Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not yet applied).
 
 > [!warning] Unresolved rows are skipped

@@ -5,7 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-06-24
+last_modified: 2026-08-11
+updated: 2026-08-11
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -285,7 +286,7 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `investment_ids` | string | required | Comma-separated investment IDs (e.g. `1,2,5`) |
+| `investment_ids` | string | required | Comma-separated investment IDs (e.g. `1,2,5`). Every element must be a plain base-10 integer in 1..2,147,483,647 — one malformed element rejects the whole request |
 | `type` | string | null | Optional transaction type filter |
 | `per_investment_limit` | integer | 1000 | Max rows per investment (clamped 1..5000) |
 | `limit` | integer | null | Optional global cap after per-investment limiting (clamped 1..200000) |
@@ -296,6 +297,11 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 - Final result is globally ordered by `date DESC, id DESC`.
 - `total` is computed with the same `investment_ids` + `type` filter (before global `limit/offset`).
 - Route cache key for bulk transactions now includes `limit` to prevent collisions between requests that differ only by limit value.
+
+> [!warning] `investment_ids` contract (2026-08-11 — breaking for malformed ids)
+> A malformed element is now a `400 VALIDATION_ERROR` (`"investment_ids contains invalid value: <value>"`). It used to be `parseInt` + `filter(Number.isInteger)`, which took the leading digits of anything: `?investment_ids=12abc` returned **investment 12**'s transactions, `5,12abc` returned 5 **and** 12, and `1e3` returned investment 1 — a `200` describing a holding the caller never named. The identical parse ran again inside `portfolioTxRepo.reads.js`; that layer now delegates to `validateId` too, but keeps dropping rather than throwing. Absent or empty is unchanged: this param is required, so it is still `400 investment_ids is required`.
+>
+> `openapi.yaml` documented this filter as `investment_id` (singular, optional) until 2026-08-11; the route has only ever read `investment_ids`. The spec now matches the implementation. `useInvestments.ts` already sent the plural form. Full accept set: [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 
 **Response:**
 ```json
@@ -363,6 +369,7 @@ Create a portfolio transaction.
 | note | string | No | Transaction note |
 | is_recurring | boolean | No | Whether this transaction is recurring |
 | recurrence_interval | string | No | Recurrence pattern: daily, weekly, bi-weekly, monthly, quarterly, yearly |
+| account_id | integer \| null | No | Owning account for the lot (ADR-091). Absent or `null` leaves it unassigned. Accepted here all along — undocumented until 2026-08-11 |
 | recurrence_end_date | string | No | End date for recurring transactions (YYYY-MM-DD) |
 
 **Required Fields:** type, date (additional type-specific validation below)
@@ -406,11 +413,20 @@ Create-path compatibility:
 
 Update a portfolio transaction by transaction ID.
 
+> [!warning] `:txnId` and `account_id` contract (2026-08-11 — breaking for malformed ids)
+> Applies to `PATCH` and `DELETE /api/investments/transactions/:txnId` and to `POST /api/investments/:id/transactions`.
+>
+> **`:txnId`** now accepts only a plain base-10 integer in 1..2,147,483,647 (`400 VALIDATION_ERROR` — `"Invalid transaction ID"` — otherwise). These two were the only routes in `routes/investments.js` with **no id middleware at all**, and `requireTxnId` was a `parseInt` guarded by `isNaN`/`<= 0`: `DELETE /transactions/12abc` answered **`204` having hard-deleted transaction 12**, `1e3` deleted transaction 1, and `PATCH` retargeted the same way. Both routes now carry `validateIntParam('txnId')` as well.
+>
+> **`account_id`** on both write bodies now goes through `validateId`. It was a bare `Number()` with no integer check whatsoever — `'1e3'` booked the lot against account **1000**, `'0x10'` against 16, `true` against 1 and `[7]` against 7, all `201`, while `'12abc'` reached Postgres as `NaN` and 500'd. `PATCH` forwarded the field raw through the repository allow-list, where Postgres' hex-literal parsing turned `'0x10'` into account 16. `0`, negatives and `''` now 400 instead of 500ing at the FK.
+>
+> Null/absent semantics are unchanged: on create both mean *no account*; on `PATCH`, `null` unassigns and an absent key leaves the column alone. No shipped caller breaks — `lib/api/portfolio.ts` types `txnId` and `account_id` as `number`, and `EditPortfolioTxnDialog` takes the account id from the account picker's server rows. Full accept set: [[docs/security/input-validation#validateIntParam|Input Validation]].
+
 Update endpoint notes:
 - Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
 - Repository update logic keeps inheritance compatibility fallback behavior for non-updatable `portfolio_transactions` views ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - Transaction `type` is immutable on edit; attempts to change it return `400` with `VALIDATION_ERROR`.
-- **Account reassignment:** `account_id` (integer) or `null` can be included in the PATCH body to reassign or unassign a lot's account without changing any other fields. This is how `EditPortfolioTxnDialog`'s account selector persists its change.
+- **Account reassignment:** `account_id` (integer) or `null` can be included in the PATCH body to reassign or unassign a lot's account without changing any other fields. An absent key leaves the column alone. This is how `EditPortfolioTxnDialog`'s account selector persists its change.
 - Unit-based buy/sell updates enforce the same 2-of-3 pricing rule as create: when changing pricing fields, client must send at least 2 of `amount`, `units`, `price_per_unit`, and backend computes the missing value.
 - If all 3 pricing fields are sent on update and inconsistent, request is rejected with `400` (with the same precision normalization and compatibility tolerance handling as create).
 - Optional `fx_rate_to_eur` is supported on update payloads as well, including UI edit flow ([[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).

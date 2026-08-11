@@ -80,7 +80,8 @@ import { runPortfolioImportPipeline, commitPortfolioImport } from '../../src/ser
 // boundary function, run here over the mocked pg connection.
 import { createBatch } from '../../src/services/portfolioImportPipeline/stage.js';
 import { query as dbQuery } from '../../src/database/connection.js';
-import { getBatch, overrideInvestment } from '../../src/services/portfolioImportBatchService.js';
+import { getBatch, overrideInvestment, setBatchAccount } from '../../src/services/portfolioImportBatchService.js';
+import accountService from '../../src/services/accountService.js';
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
 
 const { default: portfolioImportRouter } = await import('../../src/routes/portfolioImportRoutes.js');
@@ -110,15 +111,38 @@ beforeEach(() => {
   customParserConfigRepository.create.mockResolvedValue({ id: 1 });
 });
 
-describe('batch-id coercion pins', () => {
-  it("accepts '12.0' / ' 12 ' via Number() coercion", async () => {
+describe('batch-id shape pins (validateId, bounded to MAX_SAFE_ID)', () => {
+  // Mirror of the transaction-import block: this pinned the raw `Number()`
+  // coercion ('12.0' and ' 12 ' → 12) that the zod swap preserved, not an
+  // intended contract. coercedIdSchema delegates to validateId now, so the
+  // portfolio router shares the one definition of a valid id.
+  it("rejects '12.0' / ' 12 ' instead of coercing them to a batch", async () => {
     getBatch.mockResolvedValue({ id: 12, status: 'complete' });
 
-    await api.get(`${BASE}/batches/${seg('12.0')}`).expect(200);
-    expect(getBatch).toHaveBeenLastCalledWith(12);
+    for (const id of ['12.0', ' 12 ', '0x10', '1e3', '+12']) {
+      const res = await api.get(`${BASE}/batches/${seg(id)}`).expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(getBatch).not.toHaveBeenCalled();
 
-    await api.get(`${BASE}/batches/${seg(' 12 ')}`).expect(200);
+    await api.get(`${BASE}/batches/12`).expect(200);
     expect(getBatch).toHaveBeenLastCalledWith(12);
+  });
+
+  // portfolio_import_batches.id is BIGSERIAL too (0040_add_portfolio_import_
+  // staging.py), so the bound is MAX_SAFE_ID rather than validateId's int32
+  // default — an id past int32 is a legal row and still reaches the repository.
+  it('accepts an integral id past int32 and 404s it, but rejects one past 2^53', async () => {
+    getBatch.mockResolvedValue(undefined);
+
+    await api.get(`${BASE}/batches/2147483648`).expect(404);
+    expect(getBatch).toHaveBeenCalledWith(2147483648);
+
+    getBatch.mockClear();
+    const res = await api.get(`${BASE}/batches/9007199254740993`).expect(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(getBatch).not.toHaveBeenCalled();
   });
 
   it('rejects fractional/garbage ids on the commit and override sites', async () => {
@@ -131,14 +155,99 @@ describe('batch-id coercion pins', () => {
     expect(getBatch).not.toHaveBeenCalled();
   });
 
-  it('coerces both ids on the investment-override site', async () => {
+  it('validates both ids on the investment-override site', async () => {
     overrideInvestment.mockResolvedValue(1);
 
-    await api.post(`${BASE}/batches/${seg('5.0')}/rows/${seg(' 6 ')}/investment-override`)
+    // Was '5.0' / ' 6 ' → 5 / 6. Both forms reject now; the happy path is the
+    // plain digit string, and each id is checked independently.
+    await api.post(`${BASE}/batches/5/rows/6/investment-override`)
       .send({ investment_id: null })
       .expect(200);
 
     expect(overrideInvestment).toHaveBeenCalledWith({ batchId: 5, rowId: 6, investmentId: null });
+
+    for (const { id, rowId } of [
+      { id: '5.0', rowId: '6' },
+      { id: '5', rowId: ' 6 ' },
+      { id: '0x10', rowId: '6' },
+      { id: '5', rowId: '0' },
+    ]) {
+      const res = await api.post(`${BASE}/batches/${seg(id)}/rows/${seg(rowId)}/investment-override`)
+        .send({}).expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
+  });
+});
+
+/**
+ * Override/commit body ids (`investment_id`, `account_id`).
+ *
+ * Same defect as the transaction importer's recipient/category overrides:
+ * `Number.isInteger(Number(x))` rejects '12abc' but reads '1e3' as 1000, '0x10'
+ * as 16, `true` as 1 and `[7]` as 7 — so the row was not rejected, it was
+ * pointed at a different instrument, and the committed lot recorded holdings
+ * the user never matched. The commit-time `account_id` is worse per request: it
+ * is stamped on the batch, so every lot the batch commits inherits it, and the
+ * `accountService.get` existence check only ever saw the already-coerced value,
+ * so a retargeted-but-real account passed it.
+ */
+describe('override/commit body id shape', () => {
+  const RETARGETING = ['1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0'];
+  const MALFORMED = ['12abc', 'abc', '1.5', '0', '-1', '', {}];
+
+  it('rejects every investment_id that used to resolve to a different instrument', async () => {
+    for (const investment_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/investment-override`)
+        .send({ investment_id })
+        .expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(investment_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(overrideInvestment).not.toHaveBeenCalled();
+  });
+
+  it('still accepts an investment_id digit string or integer, and clears on null or absent', async () => {
+    overrideInvestment.mockResolvedValue(1);
+
+    for (const investment_id of [7, '7', '007']) {
+      await api.post(`${BASE}/batches/5/rows/6/investment-override`).send({ investment_id }).expect(200);
+      expect(overrideInvestment).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, investmentId: 7 });
+    }
+
+    for (const body of [{}, { investment_id: null }]) {
+      const res = await api.post(`${BASE}/batches/5/rows/6/investment-override`).send(body).expect(200);
+      expect(overrideInvestment).toHaveBeenLastCalledWith({ batchId: 5, rowId: 6, investmentId: null });
+      expect(res.body.data.user_override_investment_id).toBeNull();
+    }
+  });
+
+  it('rejects a commit account_id that used to stamp the batch with another account', async () => {
+    getBatch.mockResolvedValue({ id: 5, status: 'awaiting_review' });
+
+    for (const account_id of [...RETARGETING, ...MALFORMED]) {
+      const res = await api.post(`${BASE}/batches/5/commit`).send({ account_id }).expect(400);
+      expect(res.body.error.code, `expected ${JSON.stringify(account_id)} to be rejected`)
+        .toBe('VALIDATION_ERROR');
+    }
+    expect(accountService.get).not.toHaveBeenCalled();
+    expect(setBatchAccount).not.toHaveBeenCalled();
+    expect(commitPortfolioImport).not.toHaveBeenCalled();
+  });
+
+  it('still accepts a commit account_id, and absent/null still means "no batch account"', async () => {
+    getBatch.mockResolvedValue({ id: 5, status: 'awaiting_review' });
+    accountService.get.mockResolvedValue({ id: 7 });
+    commitPortfolioImport.mockResolvedValue({ imported: 1, duplicates: 0, errors: 0 });
+
+    await api.post(`${BASE}/batches/5/commit`).send({ account_id: '7' }).expect(200);
+    expect(accountService.get).toHaveBeenCalledWith(7);
+    expect(setBatchAccount).toHaveBeenCalledWith(5, 7);
+
+    for (const body of [{}, { account_id: null }]) {
+      setBatchAccount.mockClear();
+      await api.post(`${BASE}/batches/5/commit`).send(body).expect(200);
+      expect(setBatchAccount).not.toHaveBeenCalled();
+    }
   });
 });
 
@@ -167,10 +276,21 @@ describe('parseBrokerageParams pins (POST /csv/custom)', () => {
     );
   });
 
+  // The reject list used to stop at 'abc'/'7.5'/'-1'/'0'. Those are the cases a
+  // `Number()` coercion happens to fail; the ones it *passes* were the dangerous
+  // half and went untested — '1e3' set up the whole CSV to land on account 1000
+  // and '0x10' on account 16, neither of which the uploader named. The intent
+  // ("a positive integer") was right; the implementation under it was not.
   it('rejects non-integer account ids and a brokerage import without an account', async () => {
-    for (const account_id of ['abc', '7.5', '-1', '0']) {
+    for (const account_id of ['abc', '7.5', '-1', '0', '1e3', '0x10', '0o17', '+7', ' 7 ', '7.0', '12abc']) {
       const res = await runCustom({ ...minimalQuery, account_id }).expect(400);
-      expect(res.body.error.message).toContain('account_id must be a positive integer');
+      expect(res.body.error.message, `expected ${JSON.stringify(account_id)} to be rejected`)
+        .toContain('account_id must be a positive integer');
+    }
+    for (const account_id of [true, [7], {}]) {
+      const res = await runCustom(minimalQuery, { account_id }).expect(400);
+      expect(res.body.error.message, `expected ${JSON.stringify(account_id)} to be rejected`)
+        .toContain('account_id must be a positive integer');
     }
     const res = await runCustom({ ...minimalQuery, is_brokerage: 'true' }).expect(400);
     expect(res.body.error.message).toMatch(/brokerage import requires account_id/);
@@ -281,6 +401,33 @@ describe('normalizePortfolioParserConfig pins (POST /parsers)', () => {
       const res = await create(config).expect(400);
       expect(res.body.error.message).toContain('Missing or invalid "config"');
     }
+  });
+});
+
+/**
+ * `:id` on the portfolio half of the parser CRUD. The shape matrix lives in
+ * parserConfigIdValidation.test.js — this pins that THIS router carries the
+ * guard, since the two routers register the shared handlers independently and
+ * a regression could reach one and not the other. `DELETE /parsers/22abc` used
+ * to answer 204 having deleted parser 22.
+ */
+describe('parser :id shape (PATCH/DELETE /parsers/:id)', () => {
+  it('rejects a malformed id on both operations, repository untouched', async () => {
+    customParserConfigRepository.delete.mockResolvedValue(true);
+    customParserConfigRepository.update.mockResolvedValue({ id: 22, name: 'X' });
+
+    for (const id of ['22abc', '1e3', '0']) {
+      await api.delete(`${BASE}/parsers/${id}`).expect(400);
+      await api.patch(`${BASE}/parsers/${id}`).send({ name: 'X' }).expect(400);
+    }
+    expect(customParserConfigRepository.delete).not.toHaveBeenCalled();
+    expect(customParserConfigRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('still deletes on a real id', async () => {
+    customParserConfigRepository.delete.mockResolvedValue(true);
+    await api.delete(`${BASE}/parsers/22`).expect(204);
+    expect(customParserConfigRepository.delete).toHaveBeenCalledWith(22);
   });
 });
 

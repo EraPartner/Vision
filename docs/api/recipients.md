@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
 date: 2026-04-16
-updated: 2026-08-10
+updated: 2026-08-11
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -37,6 +37,15 @@ Retrieve a list of recipients.
 | uncategorized | boolean | null | Filter recipients without default category |
 | sort_by | string | name | Sort field (name, created_at, updated_at) |
 | sort_dir | string | asc | Sort direction (asc, desc) |
+
+> [!warning] `default_category_id` is a strict id (changed 2026-08-11, breaking for malformed ids)
+> It accepts only a plain base-10 integer in 1..2,147,483,647; anything else — `12abc`, `12.5`,
+> `1e3`, `0x10`, `-4`, `0`, ` 5`, `NaN` — returns `400 VALIDATION_ERROR`. Absent and empty
+> (`?default_category_id=`) still mean *no filter* and answer `200`. This was `parseInt`, which
+> takes the leading digits of anything, so `?default_category_id=12abc` listed the recipients
+> defaulting to category **12** — a filter the caller never asked for — and a `NaN` reached
+> Postgres as a `22P02` 500. See
+> [[docs/security/input-validation#Optional id query params on the remaining list endpoints|Input Validation]].
 
 **Response:**
 ```json

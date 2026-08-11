@@ -264,8 +264,13 @@ describe('Splits Routes', () => {
       expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
 
-    // Pins for the zod swap (ZOD-08): normalization keeps parseInt-style id
-    // coercion ('12abc' → 12) and finite (even non-positive) amounts.
+    // Pins for the zod swap (ZOD-08): normalization keeps finite (even
+    // non-positive) amounts. The id half of this pin ('12abc' → 12) was
+    // dropped when validateId became a strict digit-string parse — it recorded
+    // what parseInt happened to do, not a contract worth keeping, and a batch
+    // row silently splitting to recipient 12 because the client sent "12abc"
+    // is a wrong-record write. Trailing garbage now rejects the whole batch,
+    // consistent with the all-or-nothing rule the row schema already applies.
     it('throws ValidationError for a non-integer batch transaction_id', async () => {
       const res = await api.post(`${BASE}/batch`).send({
         transaction_id: 'abc', splits: [{ recipient_id: 2, amount: 10 }],
@@ -274,14 +279,14 @@ describe('Splits Routes', () => {
       expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
 
-    it('normalizes rows with parseInt id coercion and Number amount coercion', async () => {
+    it('normalizes rows with strict id coercion and Number amount coercion', async () => {
       splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
       splitRepository.writeAudit.mockResolvedValue();
 
       await api.post(`${BASE}/batch`).send({
         transaction_id: 1,
         splits: [
-          { recipient_id: '12abc', amount: '5', note: 'n' },
+          { recipient_id: '12', amount: '5', note: 'n' },
           { recipient_id: 3, amount: 0 }, // finite non-positive amounts survive normalization
         ],
       }).expect(201);
@@ -293,6 +298,18 @@ describe('Splits Routes', () => {
           { recipient_id: 3, amount: 0, note: undefined },
         ],
       });
+    });
+
+    it('rejects the whole batch when a row id carries trailing garbage', async () => {
+      const res = await api.post(`${BASE}/batch`).send({
+        transaction_id: 1,
+        splits: [
+          { recipient_id: '12abc', amount: '5' },
+          { recipient_id: 3, amount: 10 },
+        ],
+      }).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
 
     it('rejects the batch on null and non-object rows instead of dropping them', async () => {

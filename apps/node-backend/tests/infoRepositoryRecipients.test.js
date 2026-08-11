@@ -163,10 +163,10 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
     expect(r.recipientsByYear['2025'][0].totalSpend).toBe(100);
   });
 
-  it('drops invalid recipient ids from exclusion list before binding', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientByYear('EUR', [
+  // Was: asserted to bind as [7, 99] — the excluded recipients silently came
+  // back into the result. See the note in filterBuilder.test.js.
+  it('rejects malformed recipient exclusion ids instead of dropping them', async () => {
+    await expect(recipientInsightsRepository.getRecipientByYear('EUR', [
       0,
       -1,
       2147483647,
@@ -174,9 +174,17 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
       'string',
       7,
       99,
-    ]);
+    ])).rejects.toThrow(/excludedRecipientIds contains invalid value/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('binds a recipient exclusion id at the int4 ceiling instead of dropping it', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([]);
+    await recipientInsightsRepository.getRecipientByYear('EUR', [2147483647, 7]);
     const [, params] = query.mock.calls[0];
-    expect(params).toEqual([7, 99]);
+    expect(params).toEqual([2147483647, 7]);
   });
 
   it('omits the NOT IN clause when no valid ids', async () => {

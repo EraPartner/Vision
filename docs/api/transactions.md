@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-04-24
-updated: 2026-06-28
+updated: 2026-08-11
 last_modified: 2026-06-28
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
@@ -65,8 +65,9 @@ Notes:
 - `amount_exact` sets both bounds to the same value and takes precedence when `amount_min`/`amount_max` are also supplied.
 - `search` now additionally matches `CAST(t.date AS TEXT)` (e.g., typing `2026-01` surfaces all January 2026 rows) and active tag slugs on the row via an EXISTS subquery over `transaction_tags`/`tags` (2026-06-28, [[apps/node-backend/src/services/filterBuilder.js]]).
 - `recipient_id` matches the transaction recipient directly and any aliases under it (single direction). Use `recipient_group_id` to include the full primary-recipient group (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).
-- `recipient_group_id` resolves the complete primary-recipient group via scalar subqueries: matches the recipient itself, any aliases under it, the recipient's own primary (if it is an alias), and all other aliases under that primary. Ignores `recipient_id` when both are provided (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).
+- `recipient_group_id` resolves the complete primary-recipient group via an indexable semi-join on `recipients`: matches the recipient itself, any aliases under it, the recipient's own primary (if it is an alias), and all other aliases under that primary. Ignores `recipient_id` when both are provided (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).
 - `category_ids` accepts comma-separated integers (e.g., `category_ids=5,7,12`). Ignored if `category_id` is set. Enables pivot table drillthrough to multiple category groups (Phase 13) ([[apps/node-backend/src/services/filterBuilder.js]]).
+- **Id params are strict (changed 2026-08-11, breaking for malformed ids).** `transaction_id`, `category_id`, `recipient_id`, `recipient_group_id` and `account_id` accept only a plain base-10 integer in 1..2,147,483,647; every element of `category_ids` must satisfy the same rule. Anything else — `12abc`, `12.5`, `1e3`, `0x10`, `+5`, `-4`, `0`, ` 5 `, `NaN` — returns `400 VALIDATION_ERROR`. Absent and empty (`?category_id=`, `?category_ids=`) still mean *no filter* and answer `200`. See the warning under [[docs/api/transactions#GET /api/transactions/export/csv|the export endpoints]] and [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 - `transaction_type` filters by amount sign: `income` (positive amounts) or `expense` (negative amounts). Used by pivot table drillthrough to isolate income-only or expense-only views (Phase 13) ([[apps/node-backend/src/services/filterBuilder.js]]).
 - `include_balance=true` computes a `balance` field via SQL window function `SUM(amount) OVER (ORDER BY date ASC)` instead of JavaScript post-processing ([[apps/node-backend/src/routes/transactions.js]]).
 - Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.js]]).
@@ -118,9 +119,12 @@ Export transactions to CSV format using chunked streaming.
 | end_date | string | null | Filter by end date (YYYY-MM-DD) |
 | bank_account | string | null | Filter by single bank account (legacy; ignored if `bank_accounts` is set) |
 | bank_accounts | string | null | Filter by multiple bank accounts (comma-separated IBANs, e.g., `BE12...,BE34...`). Takes precedence over `bank_account` (Phase 13) |
+| account_id | integer | null | Preferred single-account filter (exact FK match, ADR-088); `bank_account` is the legacy substring escape hatch |
+| account_ids | string | null | Preferred multi-account filter (comma-separated ids, e.g., `3,9`). Ignored when `account_id` is set; takes precedence over `bank_accounts` |
 | category_id | integer | null | Filter by single category ID (legacy; ignored if `category_ids` is set) |
 | category_ids | string | null | Filter by multiple category IDs (comma-separated integers, e.g., `5,7,12`). Takes precedence over `category_id`. Throws `ValidationError` if any value is not an integer (Phase 13) |
 | recipient_id | integer | null | Filter by recipient ID (matches recipient directly and aliases under it, one direction) (Phase 13) |
+| recipient_group_id | integer | null | Filter by full recipient group (Phase Q) |
 | recipient_name | string | null | Filter by recipient name (Phase 13) |
 | transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
 | search | string | null | Filter by memo/comment/date/tag text (Phase 13 + 2026-06-28 extension) |
@@ -129,9 +133,16 @@ Export transactions to CSV format using chunked streaming.
 | include_balance | boolean | false | Add a "Running Balance" column computed via JavaScript accumulator across chunks |
 
 **Filter Capping (Phase 13):**
-- `bank_accounts` is capped at 50 entries; excess entries are silently ignored
-- `category_ids` is capped at 50 entries; excess entries are silently ignored
-- Trailing/leading whitespace is trimmed from bank accounts before filtering
+- `bank_accounts` and `account_ids` are capped at 50 entries; excess entries are silently ignored. `account_ids` is validated in full *before* the cap applies, so a malformed id past the 50th still rejects
+- `category_ids` is **not** capped (the "capped at 50" claim here was wrong: neither the route nor `buildTransactionWhere` slices it — only `bank_accounts`, `account_ids` and `tagSlugs` are capped)
+- Trailing/leading whitespace is trimmed from bank accounts before filtering. It is **not** trimmed from ids — ` 5` is a malformed id
+
+> [!warning] Id params are strict (changed 2026-08-11 — breaking for malformed ids, wire-visible on this endpoint)
+> `account_ids`, `category_ids`, `transaction_id`, `category_id`, `recipient_id`, `recipient_group_id` and `account_id` accept only plain base-10 integers in 1..2,147,483,647. Anything else returns `400 VALIDATION_ERROR` before a single row is read.
+>
+> This was `parseInt(...).filter(isFinite && > 0)`, and both of its failure modes reached the exported file. **Retarget:** `?account_ids=12abc` exported account **12** — a record nobody named — and `?account_ids=3,12abc,9` exported accounts 3, 12 and 9. **Widen:** `?account_ids=abc` produced an empty list, which the caller mapped back to "no filter", so the endpoint emitted *no account predicate at all* and streamed **every account's transactions** into the downloaded file, with a 200 and a plausible-looking CSV. Nothing was logged either way, and the user keeps the file.
+>
+> Absent and empty (`?account_ids=`) still mean *no account filter* and answer 200 — unchanged. Non-breaking for shipped callers: the Transactions page and the Imports Export card build these params with `ids.join(',')` from `number[]` state and omit the param when the list is empty; nothing in the frontend sends `account_ids` at all.
 
 **Response:** CSV file download with headers (default):
 ```
@@ -173,9 +184,12 @@ Export transactions to NDJSON (newline-delimited JSON) format using chunked stre
 | end_date | string | null | Filter by end date (YYYY-MM-DD) |
 | bank_account | string | null | Filter by single bank account (legacy; ignored if `bank_accounts` is set) |
 | bank_accounts | string | null | Filter by multiple bank accounts (comma-separated IBANs). Takes precedence over `bank_account` (Phase 13) |
+| account_id | integer | null | Preferred single-account filter (exact FK match, ADR-088) |
+| account_ids | string | null | Preferred multi-account filter (comma-separated ids). Ignored when `account_id` is set; takes precedence over `bank_accounts` |
 | category_id | integer | null | Filter by single category ID (legacy; ignored if `category_ids` is set) |
 | category_ids | string | null | Filter by multiple category IDs (comma-separated integers). Takes precedence over `category_id`. Throws `ValidationError` if any value is not an integer (Phase 13) |
 | recipient_id | integer | null | Filter by recipient ID (matches recipient directly and aliases under it, one direction) (Phase 13) |
+| recipient_group_id | integer | null | Filter by full recipient group (Phase Q) |
 | recipient_name | string | null | Filter by recipient name (Phase 13) |
 | transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
 | search | string | null | Filter by memo/comment/date/tag text (Phase 13 + 2026-06-28 extension) |
@@ -183,9 +197,11 @@ Export transactions to NDJSON (newline-delimited JSON) format using chunked stre
 | amount_max | number | null | Inclusive upper bound on `ABS(amount)` (2026-06-28, additive, non-breaking) |
 
 **Filter Capping (Phase 13):**
-- `bank_accounts` is capped at 50 entries; excess entries are silently ignored
-- `category_ids` is capped at 50 entries; excess entries are silently ignored
-- Trailing/leading whitespace is trimmed from bank accounts before filtering
+- `bank_accounts` and `account_ids` are capped at 50 entries; excess entries are silently ignored (`account_ids` is validated in full first)
+- `category_ids` is **not** capped — see the CSV section above
+- Trailing/leading whitespace is trimmed from bank accounts before filtering, but never from ids
+
+Both export endpoints share `buildExportFilters`, so the strict id-param contract described under [[docs/api/transactions#GET /api/transactions/export/csv|GET /export/csv]] applies here identically.
 
 **Response:** NDJSON file download (one JSON object per line):
 ```
@@ -254,6 +270,12 @@ Create a new transaction.
 
 **Required Fields:** date, bank_account, recipient_id, amount
 
+**Body FK ids are strict (changed 2026-08-11, breaking for malformed ids).** `recipient_id` and `category_id` must each be a plain base-10 integer in 1..2,147,483,647 — the same rule the id path/query params follow. `0`, negatives and `''` are rejected too. See [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|Input Validation]].
+
+- `recipient_id` used to be checked with `Number.isInteger(Number(value))`, which rejects `12abc` but reads `1e3` as 1000, `0x10` as 16 and `true` as 1, so a malformed id booked the transaction against a recipient the caller never named.
+- `category_id` had **no guard at all** on this operation — the create schema validated `recipient_id` and `amount` and forwarded the rest raw. `12abc`, `1e3`, `true`, `[7]` and `''` reached Postgres as a 22P02 cast error and `0`/negatives as an FK violation, so the create path for the app's core entity answered **500** rather than 400; `0x10` was worse, landing on category 16 wherever that row exists (Postgres reads hex integer literals). It now uses the same validator as the PATCH body.
+- **`null` and an absent `category_id` both mean "uncategorized" and still answer 201** — unchanged, and pinned.
+
 **Duplicate Detection:** Automatically checks for duplicate transactions based on date, amount, recipient, and bank account. Returns 409 if duplicate found.
 
 **Response:** Created transaction with 201 status.
@@ -274,6 +296,7 @@ Update an existing transaction.
 **Special Handling:**
 - `recipient_name`: Resolves to recipient_id automatically
 - `category_name`: Resolves to category_id using "GENERAL:DETAIL" format
+- `recipient_id` / `category_id`: `null` clears the column (both are nullable) and an absent key leaves it unchanged, but a present value must be a plain base-10 integer in 1..2,147,483,647 (changed 2026-08-11, breaking for malformed ids — `1e3` used to re-attribute the transaction to recipient 1000 rather than 400)
 
 Implementation notes:
 - Internal PATCH flow now delegates to extracted helpers for payload normalization and name→id resolution (`normalizeTransactionPatchFields`, `resolveRecipientNameToId`, `resolveCategoryNameToId`, `parseRouteId`) while preserving status codes and response messages.
@@ -316,8 +339,8 @@ or
 ```
 
 **Request Parameters:**
-- `ids` (optional): Array of transaction IDs to delete. Max 500 entries. Ignored if `filter` is provided.
-- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `ids` (optional): Array of transaction IDs to delete. Max 500 entries. Exactly one of `ids` / `filter` must be given — sending both, or neither, is a `400`. Every element must be a plain base-10 integer in 1..2,147,483,647; one malformed element rejects the whole request.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#Bulk filter selector]] for the accepted fields and the validation rules.
 
 **Response:**
 ```json
@@ -331,7 +354,42 @@ or
 Implementation note:
 - Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]` with caps enforced up front.
 - Runs inside a `withTransaction()` to guarantee atomicity; `scheduleRefresh()` signals materialized-view refresh on success.
-- Invalid IDs are stripped before SQL execution; all remaining rows are deleted in a single `DELETE` statement.
+- Ids and filter fields are validated before any SQL runs: a malformed id or filter field rejects the whole request (400) rather than being stripped, so the delete never covers a narrower *or wider* set than the caller named. All resolved rows are deleted in a single `DELETE` statement.
+
+### Bulk filter selector
+
+The `filter` object accepted by `bulk-delete`, `bulk-update` and `bulk-export` (all three share one
+normaliser, `normalizeBulkFilter` in `[[apps/node-backend/src/services/bulkSelection.js]]`).
+
+Accepted fields — this list is closed, and each may also be given in camelCase, but not in both
+spellings at once:
+
+`transaction_id`, `start_date`, `end_date`, `account_id`, `bank_account`, `bank_accounts`,
+`category_id`, `category_ids`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`,
+`active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags`.
+
+Field semantics match [[#GET /api/transactions]], with these wire-shape differences: `category_ids`
+and `bank_accounts` must be **arrays** (the list endpoint takes comma strings; here a string is a
+`400`), `tags` accepts an array or a comma string, and `active`/`amount_signed` accept a real
+boolean as well as `'true'`/`'false'`.
+
+> [!warning] Breaking change (2026-08-11) — the filter is validated, not best-effort
+> An unknown key, a wrong type or a malformed value now returns `400 VALIDATION_ERROR`. This is
+> stricter than the list endpoint deliberately. A filter field that failed its type guard used to be
+> **skipped**, and skipping a filter on a bulk action does not narrow it — it *widens* it.
+> `{"category_ids": "5"}` emitted no category clause at all, so `bulk-delete` swept every
+> transaction the rest of the filter matched (up to the 5000 cap) and answered `200` with a
+> plausible `deleted` count. The same shape was live on `bank_accounts`, `tags`,
+> `transaction_type`, `amount_min`/`amount_max`, `active`, and on any unrecognised key —
+> `{"account_ids": [7]}` reached the SQL builder as an empty filter, i.e. *every active
+> transaction*. The five scalar filter ids and the two dates were passed into `$n` unvalidated and
+> reached Postgres as **22P02 / 22007 500s**; they are `400`s now.
+>
+> Absent, `null` and empty (`""`, `[]`) still mean *no filter on this field* and answer `200`, so
+> the whole-table "select all N matching" selection (`{"active": true}` with no other keys) keeps
+> working — it is bounded by the 5000-row cap, not by validation. Non-breaking for shipped callers:
+> the frontend's `BulkTransactionFilter` types every field correctly and sends only keys in the
+> accept-list. See [[docs/security/input-validation#Bulk-action filter selector (`normalizeBulkFilter`)|Input Validation]].
 
 ### POST /api/transactions/bulk-update
 
@@ -364,8 +422,8 @@ or
 ```
 
 **Request Parameters:**
-- `ids` (optional): Array of transaction IDs to update. Max 500 entries. Ignored if `filter` is provided.
-- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `ids` (optional): Array of transaction IDs to update. Max 500 entries. Exactly one of `ids` / `filter` must be given — sending both, or neither, is a `400`. Every element must be a plain base-10 integer in 1..2,147,483,647; one malformed element rejects the whole request.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#Bulk filter selector]] for the accepted fields and the validation rules.
 - `fields`: Object with one or more of:
   - `category_id` (integer): New category ID
   - `recipient_id` (integer): New recipient ID
@@ -416,8 +474,8 @@ or
 ```
 
 **Request Parameters:**
-- `ids` (optional): Array of transaction IDs to export. Max 500 entries. Ignored if `filter` is provided.
-- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `ids` (optional): Array of transaction IDs to export. Max 500 entries. Exactly one of `ids` / `filter` must be given — sending both, or neither, is a `400`. Every element must be a plain base-10 integer in 1..2,147,483,647; one malformed element rejects the whole request.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#Bulk filter selector]] for the accepted fields and the validation rules.
 - `format` (required): `"csv"` or `"json"` (NDJSON).
 - `include_balance` (optional, CSV only): If `true`, adds a "Running Balance" column. Ignored for JSON.
 
