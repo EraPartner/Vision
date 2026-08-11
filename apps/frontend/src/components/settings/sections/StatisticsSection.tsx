@@ -13,7 +13,8 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSettings, type ExclusionScope } from '@/contexts/SettingsContext';
 import { apiClient } from '@/lib/api';
-import { categoryKeys, recipientKeys, settingKeys } from '@/lib/queryKeys';
+import { useAllCategories } from '@/hooks/useCategories';
+import { recipientKeys, settingKeys } from '@/lib/queryKeys';
 import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
 
 export const StatisticsSection = memo(function StatisticsSection() {
@@ -23,11 +24,9 @@ export const StatisticsSection = memo(function StatisticsSection() {
     const [categorySearch, setCategorySearch] = useState('');
     const [recipientSearch, setRecipientSearch] = useState('');
 
-    const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
-        queryKey: categoryKeys.allList,
-        queryFn: () => apiClient.getCategories({ limit: 1000 }),
-        staleTime: 60000,
-    });
+    // Shared with useExcludedIds' hidden-category resolution — one cache entry,
+    // one request (see useAllCategories).
+    const { data: categoriesData, isLoading: categoriesLoading } = useAllCategories();
     const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
         queryKey: recipientKeys.allList,
         queryFn: () => apiClient.getRecipients({ limit: 1000 }),
@@ -39,7 +38,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
         staleTime: 60000,
     });
 
-    const categories = categoriesData?.items ?? [];
+    const categories = categoriesData ?? [];
     const recipients = recipientsData?.items ?? [];
     const isLoading = categoriesLoading || recipientsLoading;
 

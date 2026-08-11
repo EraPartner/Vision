@@ -3,6 +3,7 @@ title: React Query Keys Reference
 type: reference
 status: active
 date: 2026-03-31
+updated: 2026-08-11
 tags: [reference, react-query, caching, frontend]
 description: Complete reference of all React Query keys used in the Vision frontend
 aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
@@ -47,10 +48,10 @@ aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
 | Query Key | Variables | Used By | Description |
 |-----------|-----------|---------|-------------|
 | `['categories', params]` | `{ active, search, ... }` | `useCategories()` | Paginated category list |
-| `['categories', 'all']` | — | `DashboardPage` | All categories |
-| `['categories', 'all-for-stats']` | — | `useStatistics()` | All categories for statistics |
+| `['categories', 'all']` | — | `useAllCategories()` — i.e. `useExcludedIds()` + Settings → Statistics exclusion picker | Full list (`limit: CATEGORY_FETCH_LIMIT`). ONE entry: 2026-08-11 folded the duplicate `['categories', 'all-for-exclusions']` into this key |
+| `['categories', 'all-for-tax-profile']` | — | `IncomeSourcesStep` | Active categories only (`limit: 500, active: true`) — a different payload, so a separate entry |
 
-**Invalidation:** Mutations invalidate `['categories']`.
+**Invalidation:** Mutations invalidate `['categories']`, which covers every key above.
 
 ### Recipients
 

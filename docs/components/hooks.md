@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-08-10
-last_modified: 2026-08-10
+updated: 2026-08-11
+last_modified: 2026-08-11
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`).
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification). Aug 2026 (PR #156): adds useTabParam (page-level Tabs ↔ `?tab=`) and useTaxYearParam (BelgianTaxProfileContext viewedYear ↔ `?year=`). 2026-08-11: the full category list is unified behind useAllCategories under one key (`['categories','all']`) — useExcludedIds and the Settings exclusion picker no longer keep two cache entries; useOllamaStatus polls adaptively (30s healthy, 2min unreachable, stopped when AI chat is disabled server-side).
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -31,6 +31,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `useTransactions()` | Transaction CRUD | [[apps/frontend/src/hooks/useTransactions.ts\|useTransactions.ts]] |
 | `useCategories()` | Category management | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]] |
+| `useAllCategories(enabled?)` | The full category list as ONE shared cache entry (`['categories','all']`) — used by `useExcludedIds` and the Settings → Statistics exclusion picker; adopts the boot preload (2026-08-11) | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]] |
 | `useRecipients()` | Recipient management | [[apps/frontend/src/hooks/useRecipients.ts\|useRecipients.ts]] |
 | `useBankAccounts()` | Distinct bank account IBANs (Phase 13) | [[apps/frontend/src/hooks/useBankAccounts.ts\|useBankAccounts.ts]] |
 | `usePortfolio()` | Investment portfolio | [[apps/frontend/src/hooks/usePortfolio.ts\|usePortfolio.ts]] |
@@ -530,7 +531,7 @@ const {
 
 ### Behavior
 
-- Calls `apiClient.getCategories({ limit: CATEGORY_FETCH_LIMIT })` (limit: 1000) under the stable cache key `['categories', 'all-for-exclusions']`. One shared query instance — no duplication.
+- Delegates the fetch to `useAllCategories` (`hooks/useCategories.ts`), which calls `apiClient.getCategories({ limit: CATEGORY_FETCH_LIMIT })` (limit: 1000) under the stable cache key `['categories', 'all']`. That is the single full-list cache entry for the whole app: the Settings → Statistics exclusion picker reads the same key, so the two surfaces share one request instead of holding two copies (the old `['categories', 'all-for-exclusions']` twin key is gone).
 - The category fetch is skipped entirely when `settings.excludeHiddenCategories` is false or when `exclusionsApply` is false (no wasted request).
 - If the category list hits the 1000-item cap, a `console.warn` is emitted rather than silently truncating (the exclusion set is still uniform across screens).
 - Returned arrays are de-duplicated and sorted ascending; a stable `EMPTY` reference (`[]`) is reused when exclusions do not apply, maintaining memoization stability for downstream `useMemo`/`useCallback` dependencies.

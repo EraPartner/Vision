@@ -5,7 +5,7 @@ import { createQueryWrapper, createLanguageQueryWrapper } from "@/test/queryWrap
 import { apiClient } from "@/lib/api";
 import { useBankAccounts } from "@/hooks/useBankAccounts";
 import { useSavedCharts, useCreateSavedChart, useUpdateSavedChart, useDeleteSavedChart } from "@/hooks/useSavedCharts";
-import { useOllamaStatus, useOllamaModels } from "@/hooks/useOllamaStatus";
+import { useOllamaStatus, useOllamaModels, nextOllamaPollInterval } from "@/hooks/useOllamaStatus";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import type { SavedChart } from "@/lib/api";
 
@@ -120,6 +120,44 @@ describe("useOllamaStatus", () => {
         const { result } = renderHook(() => useOllamaStatus(), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data?.ok).toBe(true);
+    });
+});
+
+describe("nextOllamaPollInterval", () => {
+    const STATUS = {
+        baseUrl: "http://localhost:11434",
+        defaultModel: "llama3",
+    };
+
+    it("keeps the 30s cadence while Ollama is reachable", () => {
+        expect(
+            nextOllamaPollInterval({ status: "success", data: { ...STATUS, ok: true, enabled: true } }),
+        ).toBe(30_000);
+    });
+
+    it("polls at the healthy cadence before the first answer arrives", () => {
+        expect(nextOllamaPollInterval({ status: "pending", data: undefined })).toBe(30_000);
+    });
+
+    it("backs off while Ollama is unreachable", () => {
+        expect(
+            nextOllamaPollInterval({ status: "success", data: { ...STATUS, ok: false, enabled: true } }),
+        ).toBe(120_000);
+    });
+
+    it("backs off when the status request itself fails", () => {
+        expect(nextOllamaPollInterval({ status: "error", data: undefined })).toBe(120_000);
+    });
+
+    it("stops polling entirely when AI chat is disabled server-side", () => {
+        expect(
+            nextOllamaPollInterval({ status: "success", data: { ...STATUS, ok: true, enabled: false } }),
+        ).toBe(false);
+        // `data` outlives an errored refetch — a disabled integration must not
+        // fall back to the every-2-minutes branch on the strength of one failure.
+        expect(
+            nextOllamaPollInterval({ status: "error", data: { ...STATUS, ok: false, enabled: false } }),
+        ).toBe(false);
     });
 });
 
