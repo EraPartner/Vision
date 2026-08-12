@@ -189,6 +189,104 @@ describe('sanitizeSnapshotSpikes', () => {
   })
 })
 
+describe('sanitizeSnapshotSpikes decomposition invariant', () => {
+  // snapshotBuilder builds every row as
+  //   value = stocks_etfs_value + crypto_value + metals_value + cash_value
+  // (unit-priced stock/etf/crypto/metals + the non-unit savings/bond/real_estate
+  // bucket). Rows below satisfy it exactly, as the day walk's output does.
+  const decompositionError = (row) =>
+    row.value - (row.stocks_etfs_value + row.crypto_value + row.metals_value + row.cash_value)
+
+  it('keeps Σ components == value on a price needle where cash moves across the needle', () => {
+    const snapshots = [
+      { value: 18000, stocks_etfs_value: 5000, crypto_value: 2000, metals_value: 1000, cash_value: 10000 },
+      // Bad crypto tick (2000 → 20000) on the same day a 15k deposit sits in savings.
+      { value: 51000, stocks_etfs_value: 5000, crypto_value: 20000, metals_value: 1000, cash_value: 25000 },
+      { value: 18360, stocks_etfs_value: 5100, crypto_value: 2040, metals_value: 1020, cash_value: 10200 },
+    ]
+    for (const row of snapshots) expect(decompositionError(row)).toBeCloseTo(0, 6)
+
+    const result = sanitizeSnapshotSpikes(snapshots)
+
+    // The needle is gone from the market legs...
+    expect(result[1].crypto_value).toBeCloseTo(Math.sqrt(2000 * 2040), 2)
+    // ...cash is never invented — the real balance survives...
+    expect(result[1].cash_value).toBe(25000)
+    // ...and the row still decomposes.
+    expect(decompositionError(result[1])).toBeCloseTo(0, 2)
+  })
+
+  it('does not fabricate a loss day when a one-day cash transit trips needle detection', () => {
+    // No market movement at all: a 50k deposit lands and leaves the next day.
+    // Detection runs on TOTAL value, so it fires; smoothing `value` while
+    // `invested` stays at 68000 would persist a 50k loss that never happened.
+    const snapshots = [
+      { value: 18000, invested: 18000, stocks_etfs_value: 5000, crypto_value: 2000, metals_value: 1000, cash_value: 10000 },
+      { value: 68000, invested: 68000, stocks_etfs_value: 5000, crypto_value: 2000, metals_value: 1000, cash_value: 60000 },
+      { value: 18000, invested: 18000, stocks_etfs_value: 5000, crypto_value: 2000, metals_value: 1000, cash_value: 10000 },
+    ]
+
+    const result = sanitizeSnapshotSpikes(snapshots)
+
+    expect(result[1].cash_value).toBe(60000)
+    expect(result[1].value).toBeCloseTo(68000, 2)
+    expect(result[1].value - result[1].invested).toBeCloseTo(0, 2)
+  })
+
+  it('keeps value_fx_neutral == value for an all-EUR portfolio across a needle', () => {
+    // With no foreign-currency holdings, snapshotBuilder produces
+    // value_fx_neutral == value on every single day by construction, and
+    // PerformancePage gates the FX-attribution line on ANY day differing by
+    // more than 0.01. Reconciling `value` to Σ legs while value_fx_neutral kept
+    // its own geometric mean would hand a EUR-only user a phantom FX effect.
+    const snapshots = [
+      { value: 18000, value_fx_neutral: 18000, stocks_etfs_value: 5000, crypto_value: 2000, metals_value: 1000, cash_value: 10000 },
+      { value: 86000, value_fx_neutral: 86000, stocks_etfs_value: 5000, crypto_value: 20000, metals_value: 1000, cash_value: 60000 },
+      { value: 18360, value_fx_neutral: 18360, stocks_etfs_value: 5100, crypto_value: 2040, metals_value: 1020, cash_value: 10200 },
+    ]
+
+    const result = sanitizeSnapshotSpikes(snapshots)
+
+    // Exactly equal, not merely under the 0.01 gate — the ratio is 1 by
+    // construction here, so there is no rounding slack to spend.
+    for (const [i, row] of result.entries()) {
+      expect(row.value_fx_neutral, `row ${i} shows a phantom FX effect`).toBe(row.value)
+    }
+  })
+
+  it('preserves the real FX ratio of the market legs across a needle', () => {
+    // 4% cumulative currency effect on the market legs, no effect on cash
+    // (non-unit values accrue at txn-date rates — snapshotBuilder:677-679 adds
+    // the same cash figure to both totals). The ratio must survive smoothing
+    // rather than being flattened to 1.
+    const marketRatio = 0.96
+    const row = (stocks, crypto, metals, cash) => ({
+      value: stocks + crypto + metals + cash,
+      value_fx_neutral: (stocks + crypto + metals) * marketRatio + cash,
+      stocks_etfs_value: stocks,
+      crypto_value: crypto,
+      metals_value: metals,
+      cash_value: cash,
+    })
+    const snapshots = [row(5000, 2000, 1000, 10000), row(5000, 20000, 1000, 10000), row(5100, 2040, 1020, 10000)]
+
+    const result = sanitizeSnapshotSpikes(snapshots)
+
+    const smoothed = result[1]
+    const recoveredRatio = (smoothed.value_fx_neutral - smoothed.cash_value) / (smoothed.value - smoothed.cash_value)
+    expect(recoveredRatio).toBeCloseTo(marketRatio, 6)
+  })
+
+  it('falls back to the geometric mean when the input rows do not decompose', () => {
+    // Legacy/partial rows (e.g. written before the component columns existed):
+    // there is no trustworthy decomposition to reconcile to, so the historical
+    // needle rule must stand rather than invent a total from partial legs.
+    const snapshots = [{ value: 100 }, { value: 500 }, { value: 102 }]
+    const result = sanitizeSnapshotSpikes(snapshots)
+    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 2)
+  })
+})
+
 describe('UTC day-walk DST safety', () => {
   it('produces correct days across European spring-forward boundary (2024-03-31)', () => {
     // European DST springs forward on 2024-03-31 at 02:00 — that day is only 23h locally.

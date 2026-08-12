@@ -494,7 +494,7 @@ export default entityRepository;
 | Dynamic updates | Build `SET` clauses from `Object.entries()`, skip `undefined` |
 | SQL injection | Use parameterized queries only, never string concatenation |
 
-### Layering: repositories must not import services — with one sanctioned exception
+### Layering: repositories must not import services — with a closed list of sanctioned exceptions
 
 The intended layering is `routes → services → repositories`, with pure, framework-free helpers in
 `lib/` importable from any layer. Pure helpers that used to sit under `services/` were relocated to
@@ -503,24 +503,46 @@ The intended layering is `routes → services → repositories`, with pure, fram
 `lib/calculations/recurrence.js`, and the `VALID_PORTFOLIO_TXN_TYPES` const
 (`lib/portfolioTxnTypes.js`).
 
-> [!note] Accepted exception — `info*` read-repositories may import currency conversion + snapshot computation
-> Two repository→service imports remain by design and are **sanctioned exceptions**, not bugs:
+**Enforced mechanically** since 2026-08-11 by `vision-local/no-service-import-from-repo`
+([[apps/node-backend/eslint.config.js|eslint.config.js]]), the mirror of
+`vision-local/no-repo-direct-from-route`. Its `SANCTIONED_REPO_SERVICE_IMPORTS` allowlist is the
+machine-readable twin of the callout below and pins **both** the service module and the exact
+binding names, so it fires on a new repository importing a service, on a sanctioned repository
+importing a *different* service, and on a sanctioned repository *widening* its binding list. The
+two lists must be edited together.
+
+> [!note] Accepted exception — eight read-repositories may import currency conversion
+> Every current repository→service import goes to
+> [[apps/node-backend/src/services/currency/currencyConversionService.js|currencyConversionService.js]]
+> and is a **sanctioned exception**, not a bug:
 >
-> - Eight `repositories/info*` files import `convertRowsToEur` / `convertToCurrency` from
->   [[apps/node-backend/src/services/currency/currencyConversionService.js|currencyConversionService.js]].
-> - [[apps/node-backend/src/repositories/infoRepositoryNetWorth.js|infoRepositoryNetWorth.js]] imports
->   `computeDailySnapshots` from
->   [[apps/node-backend/src/services/portfolio/snapshotBuilder.js|snapshotBuilder.js]] (which itself
->   runs `withTransaction` and reads other repositories).
+> - Seven `repositories/info*` files import `convertRowsToEur` —
+>   `infoRepositoryAverageVsCurrent.js`, `infoRepositoryHelpers.js`, `infoRepositoryMonthly.js`,
+>   `infoRepositoryPlanned.js`, `infoRepositoryRecipients.js`, `infoRepositoryStatistics.js`,
+>   `infoRepositoryTags.js`.
+> - [[apps/node-backend/src/repositories/accountRepository.js|accountRepository.js]] imports
+>   `loadCurrentRates` + `convertWithRates` (added 2026-08 with the per-currency balance
+>   partitions, ADR-094 / WP-A1; sanctioned retroactively 2026-08-11).
 >
-> **Rationale:** these info "repositories" are effectively read-services — they aggregate rows and
-> currency-convert them as part of producing API-shaped results. Currency conversion is stateful
-> (in-memory rate cache, ECB/er-api fetch, DB fallback, provider-health recording), so it cannot
-> move to `lib/`; and lifting the conversion calls up into the info service layer would change the
-> seam every info query result flows through — a behaviour-risk refactor deferred until the info
-> read-path is restructured. Until then, `repositories/info*` may import currency conversion and
-> snapshot computation from the service layer. Do **not** extend this exception to other
-> repositories: any other pure helper a repository needs belongs in `lib/`.
+> **Rationale:** these "repositories" are effectively read-services — they aggregate rows and
+> currency-convert them as part of producing API-shaped results. `accountRepository.getAll` is the
+> same shape: it folds an account's per-currency `balance_parts` into the account currency to emit
+> `computed_balance`. Currency conversion is stateful (in-memory rate cache, ECB/er-api fetch, DB
+> fallback, provider-health recording), so it cannot move to `lib/` — and `convertWithRates`, the
+> pure half, cannot be split out usefully while its rate table still comes from `loadCurrentRates`.
+>
+> Lifting the fold up into `accountService.list` was considered and rejected: it would change the
+> return shape of `accountRepository.getAll`, which **25 call sites across four DB-backed test
+> files** (`multiCurrencyBalances.db.test.js`, `systemRecipientRows.db.test.js`,
+> `revolutMultiCurrency.db.test.js`, `portfolioImportInstrumentlessCash.db.test.js`) assert on
+> directly for `computed_balance` / `drift` / `reconcilable_balance`. Those files self-skip without
+> `TEST_DATABASE_URL`, so the rewrite could not be verified where it matters — a money path is the
+> wrong place to blind-edit assertions. Revisit only alongside a `bun run test:db` run: the lift
+> itself is small (the `result.rows.map` fold moves into `accountService.list`, which is
+> `getAll`'s only production caller), it is the test surface that carries the risk.
+>
+> Do **not** extend this exception. Any other helper a repository needs belongs in `lib/`, or the
+> call belongs in the service that calls the repository.
 
 ---
 

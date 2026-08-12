@@ -3,10 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-06-25
-last_modified: 2026-06-25
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger.
+updated: 2026-08-11
+last_modified: 2026-08-11
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062, db-editor-audit, migration-0059, adr-101, provider-api-keys, instrument-provider-map, provider-quota, migration-0042, migration-0043, adr-079, cashflow-forecast-accuracy, cashflow-forecast-mc, cashflow-forecast-mc-rolling, migration-0012, migration-0013, migration-0016, materialized-views, mv-monthly-summary, mv-category-totals, mv-cashflow-daily]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger. 2026-08-11: added the previously-undocumented db_editor_audit (ADR-101, migration 0059), provider_api_keys/instrument_provider_map/provider_quota (ADR-079, migrations 0042/0043), and cashflow_forecast_accuracy/_mc/_mc_rolling (migrations 0012/0013/0016) tables, plus the three live runtime materialized views (mv_monthly_summary, mv_category_totals, mv_cashflow_daily — NOT four; mv_bank_balances was dropped for good in migration 0082).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -571,6 +571,89 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 ---
 
+### db_editor_audit (June 2026, migration 0059)
+
+**Purpose:** Audit log for the admin DB data-editor (ADR-101). Every committed insert/update/delete made through the JetBrains-style raw table editor is recorded here — table, operation, before/after row images, and the exact SQL executed — inside the same transaction as the mutation, so the audit trail is atomic with the change.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique audit entry identifier |
+| `table_name` | TEXT | NOT NULL | Table the change was applied to |
+| `op` | TEXT | NOT NULL, CHECK (`op IN ('insert', 'update', 'delete')`) | Operation type |
+| `pk_json` | JSONB | NULLABLE | Primary key of the affected row |
+| `before_json` | JSONB | NULLABLE | Row image before the change (NULL on insert) |
+| `after_json` | JSONB | NULLABLE | Row image after the change (NULL on delete) |
+| `statement` | TEXT | NOT NULL | The SQL statement that was executed |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the change was committed |
+
+**Indexes:** `idx_db_editor_audit_table_time` on `(table_name, created_at DESC)` — renamed from `db_editor_audit_table_time_idx` by migration 0090. Its CHECK constraint (`db_editor_audit_op_check`) was left as-is by 0090 (already named per convention).
+
+**Note:** The table is itself browsable (and editable) through the data editor — an edit to `db_editor_audit` writes its own audit row.
+
+**Related:** [[docs/features/database-maintenance|Database Maintenance UI]], [[docs/api/admin|Admin API]], [[docs/adr/101-db-data-editor|ADR-101]], migration [[alembic/versions/0059_db_editor_audit.py|0059]]
+
+---
+
+### provider_api_keys (June 2026, ADR-079, migration 0043)
+
+**Purpose:** User-managed API keys for the multi-provider Research section, settable from the in-app Settings UI instead of (or as an override to) the environment / root `.env` (ADR-080). Key resolution prefers a stored value over the env var.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `provider` | TEXT | PK | Provider identifier |
+| `api_key` | TEXT | NOT NULL | Stored key, plaintext (single-user self-hosted threat model, same as `.env`); masked in API responses and never returned in full to the frontend |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification; maintained by the shared `update_updated_at_column()` trigger |
+
+**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.js`) — user-configured data worth preserving.
+
+**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]], migration [[alembic/versions/0043_add_provider_api_keys.py|0043]]
+
+---
+
+### instrument_provider_map (June 2026, ADR-079, migration 0042)
+
+**Purpose:** User-confirmed cross-provider symbol map — the anchor against silent wrong-instrument merges when resolving the same instrument across multiple research providers. One row per `(instrument_key, key_type, provider)`.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `instrument_key` | TEXT | NOT NULL | ISIN for stocks/ETFs/bonds (`key_type='isin'`) or a Vision-internal id for crypto/metals/custom (`key_type='internal'`) |
+| `key_type` | TEXT | NOT NULL, DEFAULT `'isin'`, CHECK (`key_type IN ('isin', 'internal')`) | Kind of `instrument_key` |
+| `provider` | TEXT | NOT NULL | Research provider name |
+| `provider_symbol` | TEXT | NULLABLE | Symbol as known to that provider |
+| `resolved_name` | TEXT | NULLABLE | Instrument name captured from the provider's search result |
+| `exchange` | TEXT | NULLABLE | Exchange captured from the provider's search result |
+| `currency` | TEXT | NULLABLE | Currency captured from the provider's search result (feeds the cross-provider currency self-audit) |
+| `status` | TEXT | NOT NULL, DEFAULT `'auto'`, CHECK (`status IN ('confirmed', 'auto', 'failed')`) | `confirmed` = user-verified; `auto` = system-proposed; `failed` = remembered failed lookup (avoids re-searching every visit) |
+| `verified_at` | TIMESTAMPTZ | NULLABLE | Last successful cross-provider sanity check |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification; maintained by the shared `update_updated_at_column()` trigger |
+
+**Constraints:** `ck_instrument_provider_map_key_type`, `ck_instrument_provider_map_status` — renamed `chk_instrument_provider_map_key_type` / `chk_instrument_provider_map_status` by migration 0090.
+
+**Indexes:** Unique `uq_instrument_provider_map_key_provider` on `(instrument_key, key_type, provider)`; `idx_instrument_provider_map_provider_symbol` on `(provider, provider_symbol)` for reverse lookup / self-audit — renamed from `ix_instrument_provider_map_provider_symbol` by migration 0090.
+
+**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], migration [[alembic/versions/0042_add_research_provider_mapping_and_quota.py|0042]]
+
+---
+
+### provider_quota (June 2026, ADR-079, migration 0042)
+
+**Purpose:** Per-provider, per-UTC-day request counters for the research quota governor. The governor's per-minute buckets live in memory only; the per-day counters persist here so a frequently-restarted backend cannot blow a small daily cap (e.g. Alpha Vantage's ~25/day).
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `provider` | TEXT | PK (part 1) | Provider identifier |
+| `window_date` | DATE | PK (part 2) | UTC day the counter applies to |
+| `count` | INTEGER | NOT NULL, DEFAULT 0, CHECK (`count >= 0`) | Requests made so far that day |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification; maintained by the shared `update_updated_at_column()` trigger |
+
+**Constraint:** `PRIMARY KEY (provider, window_date)` is the `ON CONFLICT` upsert target for the governor's `spend()` path. `ck_provider_quota_count_nonneg` renamed `chk_provider_quota_count_nonneg` by migration 0090.
+
+**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], migration [[alembic/versions/0042_add_research_provider_mapping_and_quota.py|0042]]
+
+---
+
 ### RecipientMatchPattern
 
 **Purpose:** User-editable patterns bound to a recipient for import pipeline matching. The pattern phase runs before fuzzy matching, normalizing variable bank descriptions (embedded dates, references) to a canonical recipient.
@@ -614,6 +697,76 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 **Indexes:** `idx_asset_price_history_investment_date`, `idx_asset_price_history_date`
 
 **Related:** [[docs/features/portfolio|Portfolio Feature]], migration [[alembic/versions/0001_initial_database_schema.py|0001]], FK added [[alembic/versions/0026_asset_price_history_fk.py|0026]]
+
+---
+
+### cashflow_forecast_accuracy (migration 0012)
+
+**Purpose:** Per-method backtest accuracy persistence for the cash-flow forecast feature (Phase 10). Each nightly backtest run upserts one row per `(user_id, method_id, as_of_month)`; the ensemble method's inverse-MSE weighting reads from this table.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `user_id` | TEXT | NOT NULL, DEFAULT `'anonymous'` | Owning user |
+| `method_id` | TEXT | NOT NULL | Forecast method identifier |
+| `as_of_month` | TEXT | NOT NULL | Month the backtest was evaluated as-of |
+| `mae` | DOUBLE PRECISION | NULLABLE | Mean absolute error |
+| `rmse` | DOUBLE PRECISION | NULLABLE | Root mean squared error |
+| `mape` | DOUBLE PRECISION | NULLABLE | Mean absolute percentage error |
+| `sample_days` | INTEGER | NULLABLE | Number of days in the backtest sample |
+| `recorded_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the row was recorded |
+
+**Constraint:** Unique `uq_cfa_user_method_month` on `(user_id, method_id, as_of_month)`
+
+**Indexes:** `idx_cfa_user_method` on `(user_id, method_id)`, `idx_cfa_as_of_month` on `(as_of_month)`
+
+**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration [[alembic/versions/0012_cashflow_forecast_accuracy.py|0012]]
+
+---
+
+### cashflow_forecast_mc (migration 0013)
+
+**Purpose:** Nightly-precomputed (and lazy-cached) Monte Carlo + point-estimate forecast payloads keyed by `(user_id, month, filter_hash)`, so daytime requests can skip the expensive MC simulation. Rows are upserted on every fresh compute; expiry (~6 hours) is enforced by the application layer, not the DB.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `user_id` | TEXT | NOT NULL, DEFAULT `'anonymous'` | Owning user |
+| `month` | TEXT | NOT NULL | Forecast month |
+| `filter_hash` | TEXT | NOT NULL | Hash of the request's filter parameters |
+| `mc_paths` | INTEGER | NOT NULL, DEFAULT 1000 | Number of Monte Carlo simulation paths |
+| `payload` | JSONB | NOT NULL | Cached forecast response payload |
+| `computed_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the payload was computed |
+
+**Constraint:** `UNIQUE (user_id, month, filter_hash)` (unnamed/auto-generated — not touched by migration 0090's renaming pass)
+
+**Indexes:** `idx_cfmc_user_month` on `(user_id, month)`
+
+**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration [[alembic/versions/0013_cashflow_forecast_mc.py|0013]]
+
+---
+
+### cashflow_forecast_mc_rolling (migration 0016)
+
+**Purpose:** Monte Carlo cache for the rolling-window forecast view (as opposed to the calendar-month view above), keyed by `(user_id, today_iso, days_back, days_forward, filter_hash)`. Row expires after ~6 hours (application-layer TTL).
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `user_id` | TEXT | NOT NULL, DEFAULT `'anonymous'` | Owning user |
+| `today_iso` | TEXT | NOT NULL | The "today" the rolling window was computed from |
+| `days_back` | INTEGER | NOT NULL | Days of history included |
+| `days_forward` | INTEGER | NOT NULL | Days of forecast included |
+| `filter_hash` | TEXT | NOT NULL | Hash of the request's filter parameters |
+| `mc_paths` | INTEGER | NOT NULL, DEFAULT 1000 | Number of Monte Carlo simulation paths |
+| `payload` | JSONB | NOT NULL | Cached forecast response payload |
+| `computed_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the payload was computed |
+
+**Constraint:** `UNIQUE (user_id, today_iso, days_back, days_forward, filter_hash)` (unnamed/auto-generated)
+
+**Indexes:** `idx_cfmcr_user_today` on `(user_id, today_iso)`
+
+**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration [[alembic/versions/0016_cashflow_forecast_mc_rolling.py|0016]]
 
 ---
 
@@ -664,6 +817,8 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 > - **Trigger-maintained Tables** (updated automatically via row-level triggers)
 >
 > Migration 0035 (`add_recipient_aggregations`) added `mv_recipient_monthly` and `agg_recipient_totals`. **Both have since been dropped** — see the two sections below — because the recipient-insight endpoints run live scans instead. The only trigger-maintained aggregate still live is `agg_split_outstanding`.
+>
+> Separately, three **runtime-managed** materialized views — `mv_monthly_summary`, `mv_category_totals`, `mv_cashflow_daily` — predate migration 0035 (the `0001` baseline explicitly excludes them: "Materialized views — managed at runtime by `apps/node-backend/src/services/materializedViewService.js`"). No Alembic migration creates them; migrations 0045/0084/0085 instead **drop** them to force a same-boot rebuild whenever their SQL definition changes, because `CREATE MATERIALIZED VIEW IF NOT EXISTS` never redefines an existing view. A fourth, `mv_bank_balances`, existed on this same runtime-managed lifecycle but was dropped for good in migration 0082 (zero readers) and is no longer created by `materializedViewService.js` — **only three runtime MVs are live today**, not four. See the three sections below.
 >
 > See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the design rationale.
 
@@ -727,6 +882,82 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 **Call-site pattern:** No application code calls refresh; triggers keep this in sync.
 
 **Related:** [[docs/adr/010-phase1-aggregation-strategy|ADR-010]]
+
+---
+
+### mv_monthly_summary (Materialized View — live)
+
+**Purpose:** Monthly income/spending/net totals per currency and effective category, backing the fast path in `getMonthlyFinancialSummary()`. Not created by an Alembic migration — created (`CREATE MATERIALIZED VIEW IF NOT EXISTS`) and refreshed by `materializedViewService.js` from the post-`listen` startup warmup; migrations 0045/0084/0085 instead drop it (forcing a same-boot rebuild) whenever its SQL definition changes.
+
+**Scope:** Last 12 months
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `month_start` | DATE | First day of the month |
+| `month` | INTEGER | Month 1–12 |
+| `year` | INTEGER | Year |
+| `currency` | — | Transaction currency |
+| `transaction_count` | BIGINT | Count of transactions |
+| `total_income` | NUMERIC | Sum of amounts ≥ 0 |
+| `total_spending` | NUMERIC | Sum of amounts < 0 |
+| `net_amount` | NUMERIC | `total_income + total_spending` |
+| `category_id` | INTEGER | Effective category id (3-level resolution: own → recipient default → primary recipient's default); NULL when uncategorised |
+| `category_id_key` | INTEGER | `COALESCE(category_id, -1)` — the grouping/unique-index key (UNCATEGORISED = -1) |
+| `category_name` | TEXT | `GENERAL:DETAIL` or `'UNCATEGORISED'` |
+
+**Filter:** `t.is_active = true AND t.is_transfer = false AND t.date >= date_trunc('month', CURRENT_DATE) - interval '12 months'`
+
+**Indexes:** Unique `mv_monthly_summary_idx` on `(month_start, currency, category_id_key)` — required for `REFRESH ... CONCURRENTLY`. Runtime-created (not Alembic-managed DDL), so outside migration 0090's index-renaming pass — keeps the `_idx` suffix.
+
+**Maintenance:** Debounced refresh (5s / 10s max wait) via `materializedViewService.scheduleRefresh()`, orchestrated by `aggregationRefresh.js`. The 3-level effective-category definition dates from migration 0085 (drop-and-rebuild).
+
+**Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.js]]
+
+---
+
+### mv_category_totals (Materialized View — live)
+
+**Purpose:** All-time category totals backing `getCategoryBreakdown()` / `getCategoryPivot()`. Same runtime-managed lifecycle as `mv_monthly_summary`; migrations 0045/0084 drop it to force a same-boot rebuild when its definition changes.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `category_id` | INTEGER | Effective category id (3-level resolution); `-1` for uncategorised |
+| `name` | TEXT | `GENERAL:DETAIL` or `'UNCATEGORISED'` |
+| `count` | BIGINT | Count of transactions |
+| `total` | NUMERIC | Sum of amounts |
+| `currency` | — | Transaction currency |
+
+**Filter:** `t.is_active = true AND t.is_transfer = false`
+
+**Indexes:** Unique `mv_category_totals_idx` on `(category_id, currency)`. Runtime-created, outside migration 0090's index-renaming pass.
+
+**Maintenance:** Same debounced-refresh orchestration as `mv_monthly_summary`. The 3-level effective-category definition dates from migration 0084 (drop-and-rebuild).
+
+**Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.js]]
+
+---
+
+### mv_cashflow_daily (Materialized View — live)
+
+**Purpose:** Daily net cashflow for spending-trend / cashflow charts. Same runtime-managed lifecycle as the two views above.
+
+**Scope:** Last 7 months (6 complete + current)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `date` | DATE | Transaction date |
+| `day_of_month` | INTEGER | Day 1–31 |
+| `month_start` | DATE | First day of the month |
+| `currency` | — | Transaction currency |
+| `net` | NUMERIC | Sum of amounts for that date/currency |
+
+**Filter:** `t.is_active = true AND t.is_transfer = false AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'`
+
+**Indexes:** Unique `mv_cashflow_daily_idx` on `(date, currency)`. Runtime-created, outside migration 0090's index-renaming pass.
+
+**Maintenance:** Same debounced-refresh orchestration; transfers excluded since migration 0045.
+
+**Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.js]]
 
 ---
 

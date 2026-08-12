@@ -4,10 +4,12 @@
 # cheap-to-run CI jobs so failures surface locally instead of after a push.
 #
 # Bypass:        git push --no-verify     or     SKIP_HOOKS=1 git push
-# Skip just one: SKIP_TESTS=1 / SKIP_TYPECHECK=1 git push
+# Skip just one: SKIP_TESTS=1 / SKIP_TYPECHECK=1 / SKIP_DB_TESTS=1 git push
 #
 # Checks: frontend typecheck . backend typecheck (+ noImplicitAny ratchet) .
-#         endpoint-matrix . locales . compose sync . backend tests
+#         endpoint-matrix . locales . compose sync . backend tests .
+#         DB-backed backend tests (only when the push touches that surface, and
+#         only when docker + alembic are here -- otherwise it warns and passes)
 #
 # Output is ASCII-only on purpose (see the note in pre-commit).
 
@@ -24,12 +26,19 @@ cd "$REPO_ROOT" || exit 1
 # Don't run the gate for branch deletions (local sha is all zeros). Reading the
 # ref list from stdin would block when the hook is invoked interactively, so only
 # consume it when stdin is a pipe.
+push_head=""
+push_base=""
 if [ ! -t 0 ]; then
   pushing=0
-  while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  while read -r _local_ref local_sha _remote_ref remote_sha; do
     case "${local_sha:-}" in
       "" ) ;;                 # no local ref
-      *[!0]* ) pushing=1 ;;   # a real (non-zero) sha -> actual content to push
+      *[!0]* )                # a real (non-zero) sha -> actual content to push
+        pushing=1
+        push_head="$local_sha"
+        # All-zero remote sha = new branch; there is no remote side to diff.
+        case "${remote_sha:-}" in *[!0]* ) push_base="$remote_sha" ;; esac
+        ;;
     esac
   done
   [ "$pushing" -eq 1 ] || { echo "[pre-push] only deletions -- nothing to check."; exit 0; }
@@ -71,10 +80,71 @@ if [ "${SKIP_TESTS:-}" != "1" ]; then
   run "backend tests" sh -c 'cd apps/node-backend && bun vitest run'
 fi
 
+# --- DB-backed suites -------------------------------------------------------
+# The run above self-skips every case behind tests/setup/db.js (it prints a
+# banner saying how many). When the push itself changes that surface, the
+# skipped cases are precisely the ones at risk -- so run them for real against
+# the throwaway Postgres `bun run test:db` spins up.
+#
+# This must never turn "no database here" into a failed push: without docker or
+# the alembic toolchain it degrades to a loud warning and lets the push through.
+# Skip it outright with SKIP_DB_TESTS=1.
+
+# Files whose change means the DB-backed cases must actually be exercised. The
+# trigger is deliberately narrow (the test surface and the schema, not their
+# whole import closure -- that closure is a third of apps/node-backend/src/,
+# which would put a container spin-up in front of most backend pushes).
+DB_SURFACE_RE='(\.db\.test\.js$|^apps/node-backend/tests/setup/db\.js$|^alembic/versions/)'
+
+db_toolchain_ready() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker info >/dev/null 2>&1 || return 1
+  [ -n "${ALEMBIC_BIN:-}" ] && command -v "$ALEMBIC_BIN" >/dev/null 2>&1 && return 0
+  [ -x venv/bin/alembic ] && return 0
+  command -v alembic >/dev/null 2>&1
+}
+
+# Echo the range this push actually adds, or nothing when it cannot be resolved.
+push_range() {
+  _head=${push_head:-HEAD}
+  if [ -n "$push_base" ] && git rev-parse --verify --quiet "$push_base^{commit}" >/dev/null 2>&1; then
+    echo "$push_base..$_head"
+    return 0
+  fi
+  for _ref in '@{upstream}' origin/HEAD origin/main origin/master; do
+    if _base=$(git merge-base "$_ref" "$_head" 2>/dev/null); then
+      echo "$_base..$_head"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [ "${SKIP_TESTS:-}" != "1" ] && [ "${SKIP_DB_TESTS:-}" != "1" ]; then
+  if range=$(push_range); then
+    if git diff --name-only "$range" 2>/dev/null | grep -Eq "$DB_SURFACE_RE"; then
+      if db_toolchain_ready; then
+        run "backend tests (DB-backed, real postgres)" bun run test:db
+      else
+        echo ""
+        echo "[pre-push] WARNING: this push changes DB-backed test surface, but the"
+        echo "[pre-push]          DB-backed cases were SKIPPED -- docker and/or the alembic"
+        echo "[pre-push]          toolchain are not available here, so 'bun run test:db'"
+        echo "[pre-push]          cannot run. CI WILL run them. Exercise them on a machine"
+        echo "[pre-push]          with docker before trusting this push."
+        echo ""
+      fi
+    fi
+  else
+    echo "[pre-push] note: could not resolve the pushed commit range -- the DB-backed"
+    echo "[pre-push]       check did not run. 'bun run test:db' exercises it by hand."
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo ""
   echo "[pre-push] FAIL: gate failed -- fix the issues above, or bypass with: git push --no-verify"
-  echo "[pre-push]   (skip individual steps with SKIP_TESTS=1 / SKIP_TYPECHECK=1)"
+  echo "[pre-push]   (skip individual steps with SKIP_TESTS=1 / SKIP_TYPECHECK=1 / SKIP_DB_TESTS=1)"
   exit 1
 fi
 echo "[pre-push] OK: all checks passed."

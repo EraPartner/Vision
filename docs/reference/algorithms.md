@@ -3,7 +3,7 @@ title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
 date: 2026-04-02
-updated: 2026-05-31
+updated: 2026-08-11
 tags: [algorithms, computer-science, performance, data-structures, snapshot-valuation, fixed-income, real-estate, accrued-interest]
 description: Formal documentation of all algorithms used in Vision — LTTB downsampling, deduplication hashing, recurring pattern detection, currency conversion, portfolio snapshot valuation, and more
 aliases: [algorithms, data structures, CS, computational methods]
@@ -406,6 +406,63 @@ For each day i (not first or last):
   2. If spike detected:
      value[i] = geometric_mean(value[i-1], value[i+1])
 ```
+
+##### Decomposition reconciliation
+
+Every portfolio snapshot row is built so that
+
+```
+value == stocks_etfs_value + crypto_value + metals_value + cash_value
+```
+
+(unit-priced legs plus the non-unit savings/bond/real-estate bucket). Smoothing
+each leg with its own geometric mean does **not** preserve that sum, so
+`sanitizeSnapshotSpikes` passes the decomposition as `sumFields`: on a detected
+needle the price-feed legs are smoothed, then `value` is reconciled to the sum
+of the legs rather than to `geometric_mean(value[i-1], value[i+1])`.
+
+`cash_value` is in `sumFields` but **not** in `extraFields` — it is replayed from
+the ledger plus deterministic interest accrual rather than from a daily price
+series, so it does not carry price-feed needles and is passed through untouched.
+Smoothing it would invent a balance the user never held, and because detection
+runs on the *total*, a genuine one-day cash transit (deposit in, withdrawal out)
+trips the needle rule; preserving the cash leg makes that day reconcile back to
+its real total instead of persisting a loss that never happened.
+
+(`cash_value` is not perfectly price-independent: a non-unit investment with no
+transactions at all falls back to `current_price` converted at the day's FX rate,
+and `investmentRepository.updatePrice` / `updatePricesBulk` carry no
+`asset_class` filter, so a provider refresh can move that fallback. It is a
+single re-valuation rather than a per-day series, and smoothing it would still
+invent a balance.)
+
+#### FX-neutral parallel total
+
+`value_fx_neutral` is not a leg of the sum — it is the same portfolio valued at
+purchase-date FX, and it shares the *identical* `cash_value` figure (the day walk
+adds `fixedIncomeValue` to both totals). It is declared as a `parallelTotal` with
+`sharedFields: ['cash_value']` and rebuilt from the reconciled `value` at the FX
+ratio its neighbors show:
+
+```
+ratio    = geometric mean of (value_fx_neutral - cash) / (value - cash)
+           over the neighbours that hold anything outside cash
+new_fxn  = (reconciled_value - cash) × ratio + cash
+```
+
+This matters because an all-EUR portfolio has `value_fx_neutral == value` on
+every day by construction, and `PerformancePage` lights up the FX-attribution
+line when *any* day's two totals differ by more than 0.01. Reconciling `value`
+while leaving `value_fx_neutral` on its own geometric mean would show a currency
+effect to a user holding no foreign currency. A price needle scales a position's
+converted and FX-neutral values by the same factor, so the ratio itself never
+needles and is safe to interpolate. When neither neighbour holds anything outside
+cash the ratio is indeterminate but moot — the non-cash part reconciles to zero —
+and a factor of 1 keeps an all-cash portfolio's two totals exactly equal.
+
+Rows that do not decompose in the input (legacy/partial series, or the
+`/portfolio-performance` route helper which passes no `sumFields`) fall back to
+the plain geometric-mean rule.
 
 #### Parity Invariant (2026-05-18)
 

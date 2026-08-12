@@ -3,9 +3,9 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-09
-last-updated: 2026-08-09
-last_updated_timestamp: 2026-08-09T00:00:00Z
+updated: 2026-08-11
+last-updated: 2026-08-11
+last_updated_timestamp: 2026-08-11T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -91,6 +91,25 @@ VISION_TEST_DB_KEEP=1 bun run test:db
 ```
 
 Requires Docker and the Python Alembic toolchain (`pip install -r config/requirements.txt`) — migrations are Alembic even though the backend is Node. If `TEST_DATABASE_URL` is already exported the script uses that database as-is and starts no container.
+
+#### The skip banner
+
+A plain `bun run test` exits 0 while omitting several hundred DB-backed cases, and vitest's `N passed | M skipped` line reads as routine. To stop a partial run being mistaken for a complete one, `tests/setup/dbSkipBanner.js` prints a banner **after** the summary whenever DB-backed cases were skipped for want of a database:
+
+```
+==============================================================================
+  INCOMPLETE RUN -- 378 DB-backed tests across 27 files were SKIPPED
+==============================================================================
+  ...
+  Run "bun run test:db" before trusting this result.
+==============================================================================
+```
+
+- Counts are derived from the run, never hardcoded; a module counts as DB-backed when its source imports `tests/setup/db.js` (so `tests/services/aggregationRefresh.test.js` is included despite not being named `*.db.test.js`).
+- Silent when `TEST_DATABASE_URL` is set, so `bun run test:db` and CI stay clean.
+- Attached in `vitest.config.js` through a `configureVitest` plugin hook that *appends* to the resolved reporter list rather than declaring `test.reporters` — declaring that key would replace vitest's own default choice (`default` / `agent`, plus `github-actions` under Actions). It therefore fires for every entry point that uses the config: `bun run test`, a bare `bun vitest run`, and the pre-push hook.
+
+The pre-push gate also runs `bun run test:db` when the push touches a `*.db.test.js` file, `tests/setup/db.js`, or `alembic/versions/**` — and degrades to a loud warning (never a failed push) when Docker or Alembic are unavailable. Skip it with `SKIP_DB_TESTS=1`.
 
 ### Frontend Tests
 

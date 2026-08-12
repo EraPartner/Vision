@@ -55,10 +55,16 @@ export const recipientKeys = {
 export const categoryKeys = {
     all: ['categories'] as const,
     list: (params?: object) => ['categories', params] as const,
-    /** Settings → Statistics exclusion picker (full list snapshot). */
+    /**
+     * Full-list snapshot (`limit: CATEGORY_FETCH_LIMIT`) shared by every
+     * "all categories" surface — the Settings → Statistics exclusion picker
+     * and useExcludedIds' hidden-category resolution both read this ONE entry
+     * via `useAllCategories`. It previously had a twin
+     * (`['categories','all-for-exclusions']`) holding the identical payload;
+     * do not reintroduce a second key — consumers derive their own shape from
+     * the shared `Category[]` instead.
+     */
     allList: ['categories', 'all'] as const,
-    /** useExcludedIds hidden-category resolution (full list snapshot). */
-    allForExclusions: ['categories', 'all-for-exclusions'] as const,
 };
 
 export const tagKeys = {

@@ -25,6 +25,7 @@ import {
     startCategoriesPreload,
 } from "@/lib/categoriesPreload";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
+import { useAllCategories } from "@/hooks/useCategories";
 import { categoryKeys } from "@/lib/queryKeys";
 
 const API_BASE = "http://localhost:3002";
@@ -124,11 +125,30 @@ describe("useExcludedIds boot path", () => {
         await waitFor(() => expect(result.current.isReady).toBe(true));
         expect(categories.count).toBe(1);
 
-        await queryClient.invalidateQueries({ queryKey: categoryKeys.allForExclusions });
+        await queryClient.invalidateQueries({ queryKey: categoryKeys.allList });
 
         // A replayed boot snapshot here would silently outlive a category being
         // hidden/unhidden, keeping money totals on a stale exclusion set.
         await waitFor(() => expect(categories.count).toBe(2));
+    });
+
+    it("shares one cache entry with the other full-list consumers", async () => {
+        const categories = countCategoryRequests();
+
+        // The Settings → Statistics exclusion picker reads the same list through
+        // useAllCategories. It used to key its copy under
+        // ['categories','all-for-exclusions']'s twin ['categories','all'], so
+        // visiting both surfaces fetched the identical payload twice.
+        const { result } = renderHook(
+            () => ({ excluded: useExcludedIds("dashboard"), picker: useAllCategories() }),
+            { wrapper },
+        );
+
+        await waitFor(() => expect(result.current.excluded.isReady).toBe(true));
+        await waitFor(() => expect(result.current.picker.data).toBeDefined());
+
+        expect(categories.count).toBe(1);
+        expect(result.current.picker.data?.map((c) => c.id)).toEqual([1, 42]);
     });
 
     it("stays not-ready while settings are still the store defaults", async () => {
@@ -150,7 +170,7 @@ describe("useExcludedIds boot path", () => {
         // user's own excluded category 9, under a query key that hydration then
         // changes, forcing a second round trip.
         await waitFor(() =>
-            expect(queryClient.getQueryData(categoryKeys.allForExclusions)).toBeDefined(),
+            expect(queryClient.getQueryData(categoryKeys.allList)).toBeDefined(),
         );
         expect(result.current.isReady).toBe(false);
 

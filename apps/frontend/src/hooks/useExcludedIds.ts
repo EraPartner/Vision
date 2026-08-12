@@ -1,11 +1,6 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { categoryKeys } from '@/lib/queryKeys';
-import {
-  CATEGORY_FETCH_LIMIT,
-  fetchCategoriesForExclusions,
-  takeStartedCategoriesPreload,
-} from '@/lib/categoriesPreload';
+import { CATEGORY_FETCH_LIMIT } from '@/lib/categoriesPreload';
+import { useAllCategories } from '@/hooks/useCategories';
 import { useSettings } from '@/contexts/SettingsContext';
 
 /**
@@ -52,18 +47,9 @@ export function useExcludedIds(scope: ExclusionScopeName): ExcludedIds {
   // Only fetch the category list when hidden-category resolution is actually needed.
   const needsHidden = exclusionsApply && settings.excludeHiddenCategories;
 
-  const categoriesQuery = useQuery({
-    queryKey: categoryKeys.allForExclusions,
-    queryFn: async () => {
-      // The boot preload (main.tsx) has this request in flight — or already
-      // answered — before React mounts. Adopt it for the first fetch; it is
-      // taken once, so every later refetch goes to the network.
-      const preloaded = await takeStartedCategoriesPreload();
-      return preloaded ?? (await fetchCategoriesForExclusions());
-    },
-    enabled: needsHidden,
-    staleTime: 60_000,
-  });
+  // Shared full-list cache entry (one key for the whole app — see
+  // useAllCategories); it adopts the boot preload for its first fetch.
+  const categoriesQuery = useAllCategories(needsHidden);
 
   const hiddenCategoryIds = useMemo(() => {
     if (!needsHidden || !categoriesQuery.data) return EMPTY;

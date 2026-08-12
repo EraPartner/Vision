@@ -548,6 +548,7 @@ Plan for this when reviewing the forecast. Use [[docs/features/exchange-rates|Ex
 - [[docs/features/aggregations|Aggregations]] — Server-computed stats and metrics
 - [[docs/api/aggregations|Aggregations API]] — Technical endpoint reference (includes Phase 10 endpoint schema)
 - [[docs/features/exchange-rates|Exchange Rates]] — FX conversion for multi-currency scenarios
+- [[docs/reference/data-model#cashflow_forecast_accuracy (migration 0012)|Data Model — cashflow_forecast_accuracy/_mc/_mc_rolling]] — schema reference for the three persistence tables
 
 ## Roadmap
 

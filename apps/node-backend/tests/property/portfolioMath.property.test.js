@@ -376,4 +376,86 @@ describe('property: sanitizeSnapshotSpikes', () => {
     expect(result[0].value).toBe(1000);
     expect(result[2].value).toBe(1020);
   });
+
+  it('preserves value == Σ(stocks, crypto, metals, cash) on realistic rows', () => {
+    // The fixtures above omit cash_value and never make the legs add up to
+    // `value`, which is exactly how the cash gap stayed invisible. These rows
+    // are built the way snapshotBuilder builds them, with needles injected.
+    const rng2 = seeded(0xCA5F1073);
+    const round = (v) => Math.round(v * 100) / 100;
+    // Without these an identity sanitizer would pass every assertion below.
+    const seen = { smoothed: 0, peaks: 0, troughs: 0, emptyLeg: 0, allEur: 0, cashPreserved: 0 };
+    for (let trial = 0; trial < 400; trial++) {
+      const len = 5 + Math.floor(rng2() * 15);
+      // A portfolio that holds nothing in a class is the common case, not an
+      // edge case — an empty leg drives smoothedMean's arithmetic fallback.
+      const heldLegs = [rng2() < 0.9, rng2() < 0.6, rng2() < 0.5];
+      // 4 legs, so needles land on cash and on every market class, not just
+      // stocks; troughs as well as peaks; and consecutive needle days.
+      const fxRatio = rng2() < 0.5 ? 1 : randBetween(rng2, 0.85, 1.15);
+      const snapshots = [];
+      for (let i = 0; i < len; i++) {
+        const needle = rng2() < 0.3;
+        const needleLeg = Math.floor(rng2() * 4);
+        const factor = rng2() < 0.5 ? randBetween(rng2, 4, 10) : randBetween(rng2, 0.05, 0.2);
+        const scale = (leg) => (needle && needleLeg === leg ? factor : 1);
+        const stocks = heldLegs[0] ? round(randBetween(rng2, 1000, 5000) * scale(0)) : 0;
+        const crypto = heldLegs[1] ? round(randBetween(rng2, 100, 2000) * scale(1)) : 0;
+        const metals = heldLegs[2] ? round(randBetween(rng2, 50, 800) * scale(2)) : 0;
+        const cash = round(randBetween(rng2, 500, 9000) * scale(3));
+        snapshots.push({
+          value: round(stocks + crypto + metals + cash),
+          value_fx_neutral: round((stocks + crypto + metals) * fxRatio + cash),
+          stocks_etfs_value: stocks,
+          crypto_value: crypto,
+          metals_value: metals,
+          cash_value: cash,
+        });
+      }
+      const result = sanitizeSnapshotSpikes(snapshots);
+      if (fxRatio === 1) seen.allEur += 1;
+      if (!heldLegs[0] || !heldLegs[1] || !heldLegs[2]) seen.emptyLeg += 1;
+      for (let i = 0; i < len; i++) {
+        const row = result[i];
+        const sum = row.stocks_etfs_value + row.crypto_value + row.metals_value + row.cash_value;
+        expect(
+          Math.abs(row.value - sum),
+          `trial ${trial} index ${i}: value ${row.value} != Σ legs ${sum}`,
+        ).toBeLessThanOrEqual(0.05);
+        // An all-EUR series (fxRatio 1) must never grow a currency effect:
+        // PerformancePage lights up the FX line on any day over 0.01 apart.
+        if (fxRatio === 1) {
+          expect(
+            Math.abs(row.value_fx_neutral - row.value),
+            `trial ${trial} index ${i}: phantom FX effect on an all-EUR series`,
+          ).toBeLessThanOrEqual(0.01);
+        }
+        // The ledger leg is never rewritten, on any day, in any series.
+        expect(row.cash_value, `trial ${trial} index ${i}: cash_value rewritten`).toBe(snapshots[i].cash_value);
+        seen.cashPreserved += 1;
+        if (row.value !== snapshots[i].value) {
+          seen.smoothed += 1;
+          if (snapshots[i].value > result[i - 1].value) seen.peaks += 1;
+          else seen.troughs += 1;
+        }
+      }
+    }
+    // Coverage floors: the generator must actually reach the branches it claims.
+    expect(seen.smoothed, 'no needle was ever smoothed').toBeGreaterThan(50);
+    expect(seen.peaks, 'localNeedlePeak never exercised').toBeGreaterThan(10);
+    expect(seen.troughs, 'localNeedleTrough never exercised').toBeGreaterThan(10);
+    expect(seen.emptyLeg, 'a zero-holding asset class was never generated').toBeGreaterThan(20);
+    expect(seen.allEur, 'an all-EUR series was never generated').toBeGreaterThan(20);
+    expect(seen.cashPreserved, 'no rows were checked').toBeGreaterThan(1000);
+  });
+
+  it('never rewrites cash_value — a ledger figure is not a price feed', () => {
+    const snapshots = [
+      { value: 11000, stocks_etfs_value: 1000, crypto_value: 0, metals_value: 0, cash_value: 10000 },
+      { value: 61000, stocks_etfs_value: 1000, crypto_value: 0, metals_value: 0, cash_value: 60000 },
+      { value: 11000, stocks_etfs_value: 1000, crypto_value: 0, metals_value: 0, cash_value: 10000 },
+    ];
+    const result = sanitizeSnapshotSpikes(snapshots);
+    expect(result[1].cash_value).toBe(60000);
+  });
 });
