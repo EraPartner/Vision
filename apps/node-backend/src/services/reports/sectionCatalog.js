@@ -12,7 +12,7 @@
  *
  * Array order is canonical: sections render in this order when a request omits
  * `sections`, and the frontend export dialog lists them in this order
- * (apps/frontend/src/components/reports/reportSections.ts mirrors the IDs).
+ * (apps/frontend/src/features/reports/reportSections.ts mirrors the IDs).
  * `default: true` marks sections rendered when the request omits `sections`.
  */
 
