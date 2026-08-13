@@ -126,9 +126,84 @@ forwarded (see "Git" below), so `~/.ssh` and a `*-gh-token` are no longer needed
 | `~/.claude-sandbox/stage/vision` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
 | (container fs) | `/home/dev/.claude.json` | regular file | Container's writable global config, seeded from `…/claude.json` in the stage |
 | `vision-pgdata` | `/var/lib/postgresql` | named volume | Postgres data dir |
+| `vision-venv` | `/workspaces/Vision/venv` | named volume | Container's Python venv (alembic) |
+| `vision-nm-root` | `/workspaces/Vision/node_modules` | named volume | Container's JS deps (root) |
+| `vision-nm-frontend` | `/workspaces/Vision/apps/frontend/node_modules` | named volume | Container's JS deps (workspace) |
+| `vision-nm-backend` | `/workspaces/Vision/apps/node-backend/node_modules` | named volume | Container's JS deps (workspace) |
+| `vision-nm-shared` | `/workspaces/Vision/packages/shared-utils/node_modules` | named volume | Container's JS deps (workspace) |
+| `vision-nm-types` | `/workspaces/Vision/packages/types/node_modules` | named volume | Container's JS deps (workspace) |
+| `vision-nm-electron` | `/workspaces/Vision/packaging/electron/node_modules` | named volume | Shields the host's Electron deps (never installed in here) |
 
 The Vision repo is bind-mounted at `/workspaces/Vision`, so edits appear
-on the host immediately. The Claude config is **not** live-shared (that
+on the host immediately.
+
+### Dependency volumes (`node_modules/` + `./venv`)
+
+**Your host's `node_modules/` and `./venv` are never touched by the container,
+and vice versa.** Both trees hold platform-specific artifacts — native `.node`
+binaries (esbuild, rollup, lightningcss, tailwind-oxide) and a venv whose
+`bin/python` symlinks a specific CPython — so a single shared copy on the bind
+mount cannot serve both a macOS host and a Linux container. Sharing one meant
+every host↔container switch broke the other side's dev loop (`bun run dev`
+failing on a wrong-platform binary, `bun run db:upgrade` dying with "cannot
+execute binary file") until a full reinstall.
+
+Each tree is therefore shadowed by its own native named volume, mounted at the
+*same in-repo path*. Nothing in the repo changes shape: inside the container
+`./venv/bin/alembic`, `node_modules/.bin`, `$ALEMBIC_BIN` and `bun run db:*` all
+resolve exactly as they do on the host — they just resolve into container-private
+storage. Run `.devcontainer/bin/doctor` to confirm the isolation is live (it
+fails if a stale container is still sharing the host's trees).
+
+> **Activating this on an existing container.** Volumes are attached at container
+> **create** time, and `perms-fix.sh` is baked into the image — so a container
+> created before this change keeps sharing the host's trees (doctor says so).
+> Recreate it once:
+> ```sh
+> VISION_REBUILD=1 vision-claude --dangerously-skip-permissions
+> ```
+> Your host's `node_modules/` and `./venv` are left exactly as they are; the
+> container builds its own from scratch on that first boot.
+
+Consequences worth knowing:
+
+- **Dependency changes do not cross the boundary.** After a `bun install` on the
+  host (or a `git pull` that moves `bun.lock`), run `bun install` **inside** the
+  container too — `post-start.sh` prints a warning when `bun.lock` is newer than
+  the container's `node_modules`. Same in reverse. `post-create.sh` only installs
+  on first create.
+- **Volumes outlive the container.** `container rm` / `VISION_REBUILD=1` keeps
+  them, which is what makes rebuilds fast. Reset a corrupted or stale one:
+
+  ```sh
+  # Easiest: reinstall from INSIDE the container — no volume surgery needed.
+  bun install
+  rm -rf venv/* && python3 -m venv venv && venv/bin/pip install -r config/requirements.txt
+  ```
+
+  To wipe a volume outright instead, remove the container first (a volume in use
+  can't be deleted), then delete the volume with the runtime's volume subcommand
+  (`container volume ls` lists them; the delete verb differs between
+  apple/container releases — check `container volume --help`):
+
+  ```sh
+  container rm -f vision-dev
+  container volume ls | grep vision-        # vision-venv, vision-nm-*
+  # …delete the ones you want, then:
+  vision-claude --dangerously-skip-permissions   # post-create repopulates them
+  ```
+
+  Note `rm -rf venv` (without the `/*`) fails with "Device or resource busy" —
+  these paths are mountpoints, so clear their *contents*, never the directory.
+- **Adding a workspace to `package.json` needs a matching volume** in
+  `.devcontainer/bin/claude` (`dep_volume …`), otherwise that workspace's
+  `node_modules/` falls back to the shared bind mount and reintroduces the
+  clobber. `perms-fix.sh` derives its chown list from `/proc/self/mountinfo`, so
+  it needs no edit.
+
+### Claude config
+
+The Claude config is **not** live-shared (that
 corrupts `~/.claude.json` under concurrent writes, and a raw bind would
 expose host secrets): the container gets its own writable copy seeded
 from the sanitized stage, refreshed read-only on each start. No `gh`/git

@@ -62,6 +62,22 @@ command -v safe-chain >/dev/null && pass "safe-chain present (package installs a
   || fail "safe-chain MISSING — npm/bun/pip installs are NOT supply-chain screened"
 [[ -x /workspaces/Vision/venv/bin/python ]] && pass "python venv present (./venv)" || echo "  note ./venv not built yet (post-create builds it)"
 
+# Dependency isolation: node_modules/ and ./venv must be named-volume mountpoints,
+# not the host's bind-mounted trees. Without them, installing in here overwrites the
+# host's macOS native binaries / venv with Linux ones (and the host's next install
+# does the reverse), so every switch breaks the other side. Volumes are attached at
+# CREATE time only, so a container started before this was added still shares them.
+_unmounted=()
+for _d in venv node_modules apps/frontend/node_modules apps/node-backend/node_modules; do
+  awk -v p="/workspaces/Vision/$_d" '$5 == p { f = 1 } END { exit !f }' /proc/self/mountinfo 2>/dev/null \
+    || _unmounted+=("$_d")
+done
+if (( ${#_unmounted[@]} == 0 )); then
+  pass "dependency trees isolated from the host (node_modules/ + ./venv on named volumes)"
+else
+  fail "dependency trees NOT isolated (${_unmounted[*]}) — installs here rewrite the HOST's; REBUILD: VISION_REBUILD=1 vision-claude"
+fi
+
 # Tokens forwarded?
 [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]] && pass "CLAUDE_CODE_OAUTH_TOKEN present" \
   || echo "  note CLAUDE_CODE_OAUTH_TOKEN not set in this shell (the wrapper forwards it to claude only)"

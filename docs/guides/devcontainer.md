@@ -2,7 +2,7 @@
 title: Devcontainer Guide
 type: guide
 status: active
-date: 2026-06-24
+date: 2026-08-13
 tags: [guide, devcontainer, apple-container, security, claude-code, development, postgres, egress]
 description: How to use the Vision devcontainer (Apple's container runtime) for isolated development with Claude Code --dangerously-skip-permissions mode. Covers the vision-claude launcher, squid SNI egress policy, persistence, and known limitations.
 aliases: [devcontainer-guide, devcontainer, dev-container, claude-code-container]
@@ -131,6 +131,16 @@ Named `apple/container` volumes preserve state across container rebuilds:
 |---|---|---|
 | `vision-claude` | `/home/dev/.claude` | Claude Code config + session history |
 | `vision-pgdata` | `/var/lib/postgresql` | Postgres data directory |
+| `vision-venv` | `/workspaces/Vision/venv` | Container's Python venv (alembic) |
+| `vision-nm-root` | `/workspaces/Vision/node_modules` | Container's JS dependencies (root) |
+| `vision-nm-frontend`, `vision-nm-backend`, `vision-nm-shared`, `vision-nm-types` | `<workspace>/node_modules` | Container's JS dependencies (per bun workspace) |
+| `vision-nm-electron` | `/workspaces/Vision/packaging/electron/node_modules` | Shields the host's Electron deps (never installed in-container) |
+
+### Dependency isolation (`node_modules/` + `./venv`)
+
+`node_modules/` and `./venv` hold platform-specific artifacts — native `.node` binaries (esbuild, rollup, lightningcss, tailwind-oxide) and a venv whose `bin/python` symlinks a specific CPython. Sharing one copy over the bind mount meant an install on either side overwrote the other's binaries, so every host↔container switch broke the other side's dev loop (`bun run db:upgrade` failing with "cannot execute binary file") until a full reinstall. Each tree is now shadowed by its own named volume mounted at the **same in-repo path**, so `./venv/bin/alembic`, `node_modules/.bin`, `$ALEMBIC_BIN` and `bun run db:*` resolve identically on both sides — just into container-private storage. `.devcontainer/bin/doctor` fails if a stale container is still sharing the host's trees.
+
+Because the trees are separate, **dependency changes do not cross the boundary**: after a host-side `bun install` (or a `git pull` that moves `bun.lock`), run `bun install` inside the container too — `post-start.sh` warns when `bun.lock` is newer than the container's `node_modules`. The volumes survive `VISION_REBUILD=1`; reset instructions are in [`.devcontainer/README.md`](../../.devcontainer/README.md).
 
 The workspace directory (`/workspaces/Vision`) is a bind mount, so edits appear on the host immediately. The repo's `.git` is bind-mounted **read-only** and no git credential is forwarded, so git inside the container is read-only — commit and push from your host (see [Git](#git-read-only-inside)).
 

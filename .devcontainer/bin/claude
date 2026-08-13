@@ -54,6 +54,38 @@ container build -t "$IMAGE" "$DC" >/dev/null
 # `container build`. Set SANDBOX_KEEP_BUILDER=1 to leave it up (rapid rebuilds).
 [[ -n "${SANDBOX_KEEP_BUILDER:-}" ]] || container builder stop >/dev/null 2>&1 || true
 
+# --- 2b) Container-local dependency trees ------------------------------------
+# `node_modules/` and `./venv` hold PLATFORM-SPECIFIC artifacts: prebuilt native
+# binaries (esbuild / rollup / lightningcss / tailwind-oxide `.node` files) and a
+# venv whose bin/python is a symlink to the host's CPython. The workspace is
+# bind-mounted read-write, so installing inside the container would overwrite the
+# host's macOS trees with Linux ones — after which `bun run dev` / `bun run
+# db:upgrade` on the HOST die until a full reinstall (and the next container boot
+# undoes the repair). Shadow each tree with its own native named volume: the
+# container gets private Linux trees at the SAME in-repo paths (so `node_modules/
+# .bin`, `venv/bin/alembic` and $ALEMBIC_BIN below all stay correct inside), while
+# the host's copies on disk are never touched by the container at all.
+#
+# Volumes are attached at CREATE time only and OUTLIVE `container rm`, so they
+# persist across rebuilds — see "Dependency volumes" in .devcontainer/README.md
+# for the reset commands. First boot mounts them EMPTY (apple/container does not
+# seed a volume from the image) and post-create.sh populates them.
+DEP_MOUNTS=()
+dep_volume() { # <volume-name> <workspace-relative-dir>
+  # Pre-create the mount target on the host so the runtime never has to
+  # materialize a missing directory inside the bind mount. Empty node_modules
+  # dirs are inert for host-side resolution (lookup just walks up) and gitignored.
+  mkdir -p "$PROJECT_ROOT/$2" 2>/dev/null || true
+  DEP_MOUNTS+=(-v "$1:/workspaces/Vision/$2")
+}
+dep_volume vision-venv        venv
+dep_volume vision-nm-root     node_modules
+dep_volume vision-nm-frontend apps/frontend/node_modules
+dep_volume vision-nm-backend  apps/node-backend/node_modules
+dep_volume vision-nm-shared   packages/shared-utils/node_modules
+dep_volume vision-nm-types    packages/types/node_modules
+dep_volume vision-nm-electron packaging/electron/node_modules
+
 # --- 3) Idempotent run: reuse running / start stopped / else create ----------
 if [[ "${VISION_REBUILD:-0}" == 1 ]]; then
   container rm -f "$NAME" >/dev/null 2>&1 || true
@@ -95,6 +127,7 @@ else
     -e NO_PROXY=localhost,127.0.0.1,::1 \
     -e no_proxy=localhost,127.0.0.1,::1 \
     -v "$PROJECT_ROOT:/workspaces/Vision" \
+    ${DEP_MOUNTS[@]+"${DEP_MOUNTS[@]}"} \
     ${GIT_RO_MOUNTS[@]+"${GIT_RO_MOUNTS[@]}"} \
     -v "$DC:/workspaces/Vision/.devcontainer:ro" \
     -v vision-claude:/home/dev/.claude \
