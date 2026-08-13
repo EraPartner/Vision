@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { StatCard } from "@/features/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,11 @@ import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary"
 import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
-import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
-import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
-import { StalePriceIndicator } from "@/components/portfolio/StalePriceIndicator";
-import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
+import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
+import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
+import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
+import { StalePriceIndicator } from "@/features/portfolio/StalePriceIndicator";
+import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -28,9 +28,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { ExportDialog } from "@/components/reports/ExportDialog";
+import { ExportDialog } from "@/features/reports/ExportDialog";
 import { DeltaPill } from "@/components/shared/DeltaPill";
-import { FxPnlCell } from "@/components/portfolio/FxPnlCell";
+import { FxPnlCell } from "@/features/portfolio/FxPnlCell";
 import { fmtPct } from "@/utils/percent";
 
 interface StocksPageProps {

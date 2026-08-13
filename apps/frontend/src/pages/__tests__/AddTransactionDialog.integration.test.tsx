@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
-import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
+import { AddTransactionDialog } from "@/features/transactions/components/AddTransactionDialog";
 import { todayYmd } from "@/lib/timezone";
 
 const API_BASE = "http://localhost:3002";

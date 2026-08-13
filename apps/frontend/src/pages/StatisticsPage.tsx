@@ -7,52 +7,52 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Import } from "lucide-react";
-import { ExportDialog } from "@/components/reports/ExportDialog";
+import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { ChartCard } from "@/components/statistics/ChartCard";
-import { InsightsDigestPanel } from "@/components/statistics/InsightsDigestPanel";
-import { SummaryCards } from "@/components/statistics/SummaryCards";
-import { STATISTICS_WIDGETS } from "@/components/statistics/statisticsUtils";
+import { ChartCard } from "@/features/statistics/ChartCard";
+import { InsightsDigestPanel } from "@/features/statistics/InsightsDigestPanel";
+import { SummaryCards } from "@/features/statistics/SummaryCards";
+import { STATISTICS_WIDGETS } from "@/features/statistics/statisticsUtils";
 import { useTabParam } from "@/hooks/useTabParam";
 
 const STATISTICS_TABS = ["overview", "categories", "recipients", "yearly", "flow", "custom"] as const;
 
 const RecipientInsightsTab = lazy(() =>
-  import("@/components/statistics/RecipientInsightsTab").then((m) => ({ default: m.RecipientInsightsTab }))
+  import("@/features/statistics/RecipientInsightsTab").then((m) => ({ default: m.RecipientInsightsTab }))
 );
 const MonthlyChart = lazy(() =>
-  import("@/components/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
+  import("@/features/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
 );
 const NetTrendChart = lazy(() =>
-  import("@/components/statistics/NetTrendChart").then((m) => ({ default: m.NetTrendChart }))
+  import("@/features/statistics/NetTrendChart").then((m) => ({ default: m.NetTrendChart }))
 );
 const YearlyComparisonChart = lazy(() =>
-  import("@/components/statistics/YearlyComparisonChart").then((m) => ({ default: m.YearlyComparisonChart }))
+  import("@/features/statistics/YearlyComparisonChart").then((m) => ({ default: m.YearlyComparisonChart }))
 );
 const TopRecipientsChart = lazy(() =>
-  import("@/components/statistics/TopRecipientsChart").then((m) => ({ default: m.TopRecipientsChart }))
+  import("@/features/statistics/TopRecipientsChart").then((m) => ({ default: m.TopRecipientsChart }))
 );
 const CategoryPieChart = lazy(() =>
-  import("@/components/statistics/CategoryPieChart").then((m) => ({ default: m.CategoryPieChart }))
+  import("@/features/statistics/CategoryPieChart").then((m) => ({ default: m.CategoryPieChart }))
 );
 const CategoryTrendChart = lazy(() =>
-  import("@/components/statistics/CategoryTrendChart").then((m) => ({ default: m.CategoryTrendChart }))
+  import("@/features/statistics/CategoryTrendChart").then((m) => ({ default: m.CategoryTrendChart }))
 );
 const CategoryPivotTable = lazy(() =>
-  import("@/components/statistics/CategoryPivotTable").then((m) => ({ default: m.CategoryPivotTable }))
+  import("@/features/statistics/CategoryPivotTable").then((m) => ({ default: m.CategoryPivotTable }))
 );
 const YearlySummaryTable = lazy(() =>
-  import("@/components/statistics/YearlySummaryTable").then((m) => ({ default: m.YearlySummaryTable }))
+  import("@/features/statistics/YearlySummaryTable").then((m) => ({ default: m.YearlySummaryTable }))
 );
 const SavedChartsSection = lazy(() =>
-  import("@/components/statistics/SavedChartsSection").then((m) => ({ default: m.SavedChartsSection }))
+  import("@/features/statistics/SavedChartsSection").then((m) => ({ default: m.SavedChartsSection }))
 );
 const SankeyTab = lazy(() =>
-  import("@/components/statistics/SankeyTab").then((m) => ({ default: m.SankeyTab }))
+  import("@/features/statistics/SankeyTab").then((m) => ({ default: m.SankeyTab }))
 );
 
 const ChartSkeleton = () => {

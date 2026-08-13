@@ -1,14 +1,14 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { StatCard } from "@/features/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Button } from "@/components/ui/button";
 import { Building2, Trash2, Eye, TrendingUp, DollarSign, Home, MapPin, Percent } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
-import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
+import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
+import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
+import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";

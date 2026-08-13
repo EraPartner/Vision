@@ -1,13 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { StatCard } from "@/features/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PiggyBank, Shield, Trash2, Eye, Percent, TrendingUp, Calendar, DollarSign } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
-import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
+import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
+import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
+import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";

@@ -10,7 +10,7 @@ import { useSearchParams } from "react-router";
  * land on Overview, discarding the user's analysis context.
  *
  * Writes use `{ replace: true }` (same as the `forecastMode`/`rollingDays`
- * pattern in `components/dashboard/CashFlowForecastChart.tsx`) so flipping
+ * pattern in `features/dashboard/CashFlowForecastChart.tsx`) so flipping
  * through tabs does not push an entry per click onto the history stack — Back
  * still leaves the page rather than walking back through every tab visited.
  *

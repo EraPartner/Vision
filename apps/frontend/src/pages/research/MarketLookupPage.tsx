@@ -25,17 +25,17 @@ import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
-import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
-import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
+import { AddInvestmentFromMarketDialog } from "@/features/portfolio/AddInvestmentFromMarketDialog";
+import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog";
 import { useSearchParams } from "react-router";
 import { useTabParam } from "@/hooks/useTabParam";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
-import { ResearchFundamentalsTab } from "@/components/research/ResearchFundamentalsTab";
-import { ResearchAnalystTab } from "@/components/research/ResearchAnalystTab";
-import { ResearchNewsTab } from "@/components/research/ResearchNewsTab";
-import { ResearchMappingDialog } from "@/components/research/ResearchMappingDialog";
+import { ResearchFundamentalsTab } from "@/features/research/ResearchFundamentalsTab";
+import { ResearchAnalystTab } from "@/features/research/ResearchAnalystTab";
+import { ResearchNewsTab } from "@/features/research/ResearchNewsTab";
+import { ResearchMappingDialog } from "@/features/research/ResearchMappingDialog";
 
 import { apiClient } from "@/lib/api";
 

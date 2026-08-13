@@ -23,7 +23,7 @@ import { appLanguageToLocale, formatDate, parseISO } from "@/components/shared/d
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
-import PerformanceBreakdown from "@/components/portfolio/PerformanceBreakdown";
+import PerformanceBreakdown from "@/features/portfolio/PerformanceBreakdown";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -31,7 +31,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { TrendHue } from "@/components/shared/TrendHue";
 import { CardSheen } from "@/components/shared/CardSheen";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { StatCard } from "@/features/dashboard/StatCard";
 
 const CHART_KEYS = {
     invested: 'invested',

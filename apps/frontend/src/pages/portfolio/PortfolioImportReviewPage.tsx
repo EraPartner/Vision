@@ -13,7 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { InvestmentCombobox } from "@/components/portfolio/InvestmentCombobox";
+import { InvestmentCombobox } from "@/features/portfolio/InvestmentCombobox";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
 import { SectionLoader } from "@/components/shared/SectionLoader";

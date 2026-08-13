@@ -17,8 +17,8 @@ import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
-import { ResearchUnavailableNote } from "@/components/research/ResearchUnavailableNote";
+import { PortfolioNewsFeed } from "@/features/portfolio/PortfolioNewsFeed";
+import { ResearchUnavailableNote } from "@/features/research/ResearchUnavailableNote";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 

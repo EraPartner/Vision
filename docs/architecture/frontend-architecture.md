@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-06-29
+updated: 2026-08-13
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -24,28 +24,37 @@ This document contains UML diagrams for the React frontend application.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
 
-## Feature Folder Organization (Phase 6 — partially migrated)
+## Feature Folder Organization (Phase 6 — migration complete)
 
-Some dialog and form components are organized by feature in the `apps/frontend/src/features/` folder:
+Feature-specific components are organized by feature in the `apps/frontend/src/features/` folder.
+Sixteen feature folders exist today:
 
-- **`features/recipients/`** — Recipient management dialogs (AddRecipientDialog, MergeRecipientsDialog)
-- **`features/categories/`** — Category management dialogs (AddCategoryDialog)
+`accounts`, `ai-chat`, `categories`, `dashboard`, `imports`, `onboarding`, `planned`, `portfolio`,
+`recipients`, `reports`, `research`, `settings`, `splits`, `statistics`, `tax`, `transactions`.
 
-Seven feature folders exist today (`accounts`, `ai-chat`, `categories`, `imports`, `portfolio`,
-`recipients`, `transactions`).
+`apps/frontend/src/components/` now holds only genuinely shared surface: `components/ui/` (Radix
+primitives), `components/shared/`, `components/charts/`, `components/layout/`,
+`components/notifications/`, `components/devtools/`, `components/auth/`.
 
-> [!warning] The migration is incomplete — both conventions coexist
-> Only part of the codebase has moved. Roughly ten equally feature-shaped directories still live
-> under `components/` (e.g. `portfolio`, `tax`, `statistics`, `settings`, `dashboard`, `planned`,
-> `research`, `splits`, `reports`, `onboarding`), and `portfolio` is currently split-brained —
-> `features/portfolio/` holds a single file (`MoveHoldingDialog.tsx`) while `components/portfolio/`
-> holds the rest. A few `components/* → features/*` imports also invert the intended layering
-> (e.g. `components/portfolio/InvestmentDetailDialog.tsx` imports `@/features/portfolio/…`). When
-> adding a component, follow the target rule below rather than assuming everything already lives in
-> `features/`.
+> [!important] The `features/` → `components/` edge is one-way
+> A feature may import shared components; a shared component must not import a feature. This is
+> enforced by the custom `vision-local/no-feature-import-from-component` ESLint rule in
+> `apps/frontend/eslint.config.js`, which is scoped to `src/components/**` and errors on any
+> `import`, `export … from` or lazy `import()` reaching `@/features/…`.
+>
+> The rule carries a **closed allowlist** of two sanctioned exceptions, which is the
+> machine-readable twin of this callout — keep the two in sync, and prefer moving the component
+> into the feature over widening the list:
+> - `components/layout/AppLayout.tsx` — the app shell / composition root, which mounts
+>   `@/features/settings/DashboardSettingsDialog` and `@/features/onboarding/OnboardingWizard` over
+>   every page. It is `components/`-shaped only because there is no `app/` directory.
+> - `components/shared/__tests__/loadingSurface.test.tsx` — a test of the *shared* loading-surface
+>   contract that uses `@/features/research/ResearchAnalystTab` as its worked example. Test-only:
+>   never bundled into the app.
 
-The intended end state: feature-specific dialogs/forms live in `features/`, and `components/` holds
-only genuinely shared primitives (`components/ui/`, `components/shared/`, `components/layout/`).
+When adding a component, put it in `features/<feature>/` unless it is reused by unrelated features
+*and* carries no feature-specific domain logic — in which case it belongs in `components/shared/`
+(or `components/ui/` for a design-system primitive).
 
 ## Technology Stack
 

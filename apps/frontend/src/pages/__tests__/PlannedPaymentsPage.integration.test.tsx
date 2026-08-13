@@ -7,7 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import PlannedPaymentsPage from "@/pages/PlannedPaymentsPage";
-import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
+import PlannedPaymentForm from "@/features/planned/PlannedPaymentForm";
 import { todayYmd } from "@/lib/timezone";
 
 // The table virtualizes rows via @tanstack/react-virtual, which renders nothing

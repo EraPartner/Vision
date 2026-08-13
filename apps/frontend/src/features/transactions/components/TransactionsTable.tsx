@@ -12,7 +12,7 @@ import {
 import { VirtualDataTable, type VirtualTableServerMode } from "@/components/shared/VirtualDataTable";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
-import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDialog";
+import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog";
 import { TagChip } from "@/components/shared/TagInput";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Copy, Eye, Filter, Import, Info, Pencil, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
