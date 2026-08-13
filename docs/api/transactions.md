@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-04-24
-updated: 2026-08-11
+updated: 2026-08-13
 last_modified: 2026-06-28
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
@@ -73,6 +73,7 @@ Notes:
 - Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.js]]).
 - Non-`uncategorised` list requests now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips; filters, totals, and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 - `uncategorised=true` list requests now use a dedicated single-round-trip repository path (`getUncategorisedWithCount`) instead of route-level dual queries; uncategorised row filtering and historical total-count semantics are preserved ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
+- **`uncategorised=true` honours the full filter set (fixed 2026-08-13).** `recipient_group_id`, `tags`, `transaction_type`, `amount_min`, `amount_max` (and `amount_signed`) were parsed by the route but dropped by `getUncategorisedWithCount`, so both the listed rows and `total` were computed over a wider set than the request named — a tag- or amount-filtered queue answered with every uncategorised row and an unfiltered count. All of them now narrow **both** halves, built by the same `buildTransactionWhere` the main list uses. Two consequences worth knowing: `recipient_id` now resolves aliases on the rows as it always did on the total (the queue and its count can no longer disagree), and `category_ids` joins `category_id`/`search`/`transaction_id` as **total-only** — a category filter cannot narrow a set defined by having no effective category. The queue itself is unchanged: active rows whose 3-level effective category is NULL, regardless of `active=false` ([[apps/node-backend/src/repositories/transactionRepository.js]]).
 
 **Response:**
 ```json

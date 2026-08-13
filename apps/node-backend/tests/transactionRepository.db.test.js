@@ -550,6 +550,125 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
       }
     });
 
+    // Six filters the route (parseTransactionListQuery) has always passed were
+    // dropped on the floor by this function's destructure, so the uncategorised
+    // queue and its total were computed over a WIDER set than the user asked
+    // for. The extra corpus below exists so each case can be answered by rows
+    // that differ from a sibling in exactly ONE dimension — a filter that is
+    // still ignored cannot pass any of these by accident.
+    describe('the route-supplied filters narrow rows AND total', () => {
+      const U = {};
+      let bakery;
+
+      beforeEach(async () => {
+        const { rows } = await getTestPool().query(
+          "INSERT INTO recipients (name, normalized_name) VALUES ('Bakery', 'bakery') RETURNING id",
+        );
+        bakery = rows[0].id;
+        // Bakery has no default category and no primary, so all three rows are
+        // uncategorised — they differ only in amount/sign, and none is tagged.
+        U.small = await insertTxn({ date: '2024-03-05', amount: '-5.00', recipientId: bakery, memo: 'BAKERY SMALL' });
+        U.big = await insertTxn({ date: '2024-03-06', amount: '-300.00', recipientId: bakery, memo: 'BAKERY BIG' });
+        U.income = await insertTxn({ date: '2024-03-07', amount: '900.00', recipientId: bakery, memo: 'BAKERY REFUND' });
+      });
+
+      it('baseline: four uncategorised rows, total over all nine active rows', async () => {
+        const { rows, total } = await transactionRepository.getUncategorisedWithCount({});
+        expect(rows.map((r) => r.id)).toEqual([U.income, U.big, U.small, T.t1]);
+        expect(total).toBe(9);
+      });
+
+      it('amountMin narrows both halves (magnitude by default)', async () => {
+        const { rows, total } = await transactionRepository.getUncategorisedWithCount({ amountMin: 100 });
+        expect(rows.map((r) => r.id)).toEqual([U.income, U.big]); // |900|, |−300|
+        expect(total).toBe(4); // t3 (−120), t4 (2500), U.big, U.income
+      });
+
+      it('amountMax narrows both halves', async () => {
+        const { rows, total } = await transactionRepository.getUncategorisedWithCount({ amountMax: 20 });
+        expect(rows.map((r) => r.id)).toEqual([U.small]); // |−5.00|
+        expect(total).toBe(2); // t2 (−18.75), U.small
+      });
+
+      it('amountMin+amountMax bracket a range, and amountSigned flips to the signed amount', async () => {
+        const bracket = await transactionRepository.getUncategorisedWithCount({ amountMin: 40, amountMax: 100 });
+        expect(bracket.rows.map((r) => r.id)).toEqual([T.t1]); // |−52.30|
+        expect(bracket.total).toBe(2); // t1, t5 (−45.10)
+
+        // Same bound, signed: −52.30 is no longer ≥ 40, only the +900 row is.
+        const signed = await transactionRepository.getUncategorisedWithCount({ amountMin: 40, amountSigned: true });
+        expect(signed.rows.map((r) => r.id)).toEqual([U.income]);
+        expect(signed.total).toBe(2); // t4 (2500), U.income
+      });
+
+      it('transactionType narrows both halves', async () => {
+        const income = await transactionRepository.getUncategorisedWithCount({ transactionType: 'income' });
+        expect(income.rows.map((r) => r.id)).toEqual([U.income]);
+        expect(income.total).toBe(2); // t4, U.income
+
+        const expense = await transactionRepository.getUncategorisedWithCount({ transactionType: 'expense' });
+        expect(expense.rows.map((r) => r.id)).toEqual([U.big, U.small, T.t1]);
+        expect(expense.total).toBe(7); // every active row except t4 and U.income
+      });
+
+      it('tagSlugs narrows both halves, via ACTIVE tags only', async () => {
+        const groceries = await transactionRepository.getUncategorisedWithCount({ tagSlugs: ['groceries'] });
+        expect(groceries.rows.map((r) => r.id)).toEqual([T.t1]); // the only tagged uncategorised row
+        expect(groceries.total).toBe(2); // t1, t2
+
+        // `archived` exists on t1 but is an inactive tag — it must match nothing.
+        const archived = await transactionRepository.getUncategorisedWithCount({ tagSlugs: ['archived'] });
+        expect(archived).toEqual({ rows: [], total: 0 });
+      });
+
+      it('recipientGroupId narrows both halves and resolves the whole primary group', async () => {
+        const viaPrimary = await transactionRepository.getUncategorisedWithCount({ recipientGroupId: rec.delhaize });
+        expect(viaPrimary.rows.map((r) => r.id)).toEqual([T.t1]); // t1 hangs off the ALIAS
+        expect(viaPrimary.total).toBe(3); // t1, t2, t5
+
+        // Asking by the alias resolves the same group (primary + siblings).
+        const viaAlias = await transactionRepository.getUncategorisedWithCount({ recipientGroupId: rec.delhaizeAlias });
+        expect(viaAlias.rows.map((r) => r.id)).toEqual([T.t1]);
+        expect(viaAlias.total).toBe(3);
+
+        // A recipient outside that group selects the Bakery rows instead.
+        const outside = await transactionRepository.getUncategorisedWithCount({ recipientGroupId: bakery });
+        expect(outside.rows.map((r) => r.id)).toEqual([U.income, U.big, U.small]);
+        expect(outside.total).toBe(3);
+      });
+
+      it('recipientId resolves aliases on the rows exactly as it always did on the total', async () => {
+        // Both halves now build this predicate with the same builder, so the
+        // queue can no longer be empty while the total counts three. The rows
+        // used to compare `t.recipient_id = $` verbatim, which missed t1 (it
+        // hangs off the ALIAS of the recipient asked for).
+        const { rows, total } = await transactionRepository.getUncategorisedWithCount({ recipientId: rec.delhaize });
+        expect(rows.map((r) => r.id)).toEqual([T.t1]);
+        expect(total).toBe(3); // t1, t2, t5
+      });
+
+      it('categoryIds narrows the TOTAL only — a category filter cannot narrow a set defined by having none', async () => {
+        const { rows, total } = await transactionRepository.getUncategorisedWithCount({
+          categoryIds: [cat.Food, cat.Salary],
+        });
+        expect(total).toBe(3); // t2, t4, t5 — same as getAllWithCount's categoryIds case
+        // Deliberate, pre-existing asymmetry (shared with the singular
+        // categoryId): applying it to the rows would empty the queue by
+        // construction, so the queue keeps its full uncategorised row set.
+        expect(rows.map((r) => r.id)).toEqual([U.income, U.big, U.small, T.t1]);
+      });
+
+      it('combining filters intersects them on both halves', async () => {
+        const { rows, total } = await transactionRepository.getUncategorisedWithCount({
+          transactionType: 'expense',
+          amountMin: 100,
+          startDate: '2024-03-01',
+        });
+        expect(rows.map((r) => r.id)).toEqual([U.big]);
+        expect(total).toBe(2); // t3 (−120, 2024-03-01), U.big
+      });
+    });
+
     it('the recipientName filter still narrows the total — `r` is load-bearing, not decoration', async () => {
       // If the count had dropped `r` along with the projection joins, this filter
       // would be a no-op (or a SQL error) and the total would stay at 6.
