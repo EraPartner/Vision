@@ -7,7 +7,8 @@
 # Skip just one: SKIP_TESTS=1 / SKIP_TYPECHECK=1 / SKIP_DB_TESTS=1 git push
 #
 # Checks: frontend typecheck . backend typecheck (+ noImplicitAny ratchet) .
-#         endpoint-matrix . locales . compose sync . backend tests .
+#         endpoint-matrix . locales . compose sync . TODO.md stamps .
+#         backend tests .
 #         DB-backed backend tests (only when the push touches that surface, and
 #         only when docker + alembic are here -- otherwise it warns and passes)
 #
@@ -75,6 +76,15 @@ run "validate locales" node scripts/validate-locales.js
 # v1.0.2 data-loss class of bug is a named-volume that exists in the root compose
 # file but not in the packaged one -- catch it here, not after a push.
 run "compose sync" node scripts/check-compose-sync.js
+# TODO.md's `- [x] ... · <sha>` stamps must still resolve on main. Every SHA
+# copied off the branch you are pushing dies in the squash, so this is the last
+# moment a stamp can be corrected before it becomes archaeology. Offline, ~0.2 s.
+# Self-skips (exit 0) on a shallow clone, where ancestry answers would be false.
+if command -v python3 >/dev/null 2>&1; then
+  run "todo stamps" python3 scripts/check-todo-stamps.py
+else
+  echo "[pre-push] note: python3 not found -- TODO.md stamp check skipped (CI runs it)."
+fi
 
 if [ "${SKIP_TESTS:-}" != "1" ]; then
   run "backend tests" sh -c 'cd apps/node-backend && bun vitest run'

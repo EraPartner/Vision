@@ -61,7 +61,8 @@
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts",
     "check-endpoint-matrix": "node scripts/check-endpoint-matrix.js",
     "check-compose-sync": "node scripts/check-compose-sync.js",
-    "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run check-compose-sync && bun run db:check-destructive && bun run test && bun run test:frontend"
+    "check-todo-stamps": "python3 scripts/check-todo-stamps.py",
+    "check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run check-compose-sync && bun run check-todo-stamps && bun run db:check-destructive && bun run test && bun run test:frontend"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",

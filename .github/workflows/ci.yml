@@ -600,6 +600,47 @@ jobs:
         run: python3 scripts/check-destructive-migrations.py
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # TODO.md stamp integrity — a `- [x]` in TODO.md is only proof of work if its
+  # `· <sha>` still resolves, and a squash-merge kills every SHA copied off the
+  # branch it was written on. That convention was swept clean twice (#147, and
+  # again on 2026-08-13 for 83 SHAs) and rotted back both times, which is why it
+  # is a gate now rather than a third sweep.
+  #
+  # Deliberately NOT gated on `changes.outputs.code`: TODO.md is a ROOT-level
+  # *.md, so the `changes` job classifies a TODO-only diff as docs and sets
+  # code='false' — gating on it would skip this check on precisely the PRs that
+  # touch the file it guards. The check is ~0.2 s, so running it always is free.
+  # ─────────────────────────────────────────────────────────────────────────────
+  verify-todo-stamps:
+    name: Verify TODO Stamp Integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          # Ancestry answers on a shallow clone are FALSE, not merely incomplete
+          # (TODO.md's own ⚠️ records a sweep corrupted by exactly that). The
+          # checker refuses to run shallow, and --require-full-history below
+          # turns that refusal into a failure so a broken checkout cannot pass
+          # this job silently.
+          fetch-depth: 0
+
+      - name: Fetch main for ancestry checks
+        run: git fetch --no-tags --prune origin +refs/heads/main:refs/remotes/origin/main
+
+      # No setup-python step on purpose: the checker is stdlib-only and needs no
+      # network or token — "has PR #NN landed?" is answered from main's own
+      # subject lines, not the API. Same dependency-free stance as the two jobs
+      # above.
+      - name: Self-test the checker
+        run: python3 scripts/check-todo-stamps.py --self-test
+
+      - name: Check TODO.md stamp SHAs resolve on main
+        run: python3 scripts/check-todo-stamps.py --require-full-history
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Quality Gate — all quality checks must pass before Docker builds run.
   # Prevents wasting expensive Docker build time on broken commits.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -621,6 +662,7 @@ jobs:
       - test-backend
       - verify-compose-sync
       - verify-destructive-migrations
+      - verify-todo-stamps
     if: always()
     steps:
       - name: Check all gates passed

@@ -3,8 +3,8 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-11
-tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl]
+updated: 2026-08-13
+tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
 ---
@@ -61,6 +61,27 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | `typecheck` | `bun run --filter 'vision-frontend' typecheck` | TypeScript type-check of the frontend (runs: `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`). No emit; fails on type errors only. |
 | `check-endpoint-matrix` | `node scripts/check-endpoint-matrix.js` | Guards `docs/reference/api-endpoint-matrix.md` against drift from `openapi.yaml`: counts HTTP operations in the spec and compares to the `api_operation_count` frontmatter value; exits 1 on mismatch (caught in CI). |
 | `check-compose-sync` | `node scripts/check-compose-sync.js` | Guards `packaging/electron/resources/docker-compose.yml` against drifting from the root `docker-compose.yml` on the compose project `name:` and the top-level named `volumes:` — the two things that decide which volume a user's data lives in (a mismatch is the v1.0.2 data-loss bug). Node stdlib only, so it runs with nothing but a checkout. Add `--self-test` to exercise the parser's own fixtures. Enforced by CI's `verify-compose-sync`, `release.yml`'s `verify` job, and `.githooks/pre-push`. See [[docs/adr/051-docker-compose-sync-named-volumes\|ADR-051]]. |
+| `check-todo-stamps` | `python3 scripts/check-todo-stamps.py` | Guards `TODO.md`'s commit stamps against pre-squash rot: every `· <sha>` and `partial-<sha>` token must be reachable from `origin/main`, because a `- [x]` is only proof if the next reader's `git show <sha>` works. See the table below for the five verdicts and the flags. Python stdlib only, **fully offline**, ~0.2 s. Enforced by CI's `verify-todo-stamps` and `.githooks/pre-push`. |
+
+#### How `check-todo-stamps` classifies a stamp
+
+A SHA copied off the branch it was written on dies the moment that branch squash-merges. The convention in `TODO.md`'s *Status markers* section (stamp with the merge commit, and carry the `(#NN)` regardless) exists to make that recoverable; the convention was swept clean in `711279a` (#147) and rotted straight back, then swept again on 2026-08-13 for **83** SHAs. This checker is the guard that replaces a third sweep.
+
+| Verdict | Meaning | Effect |
+|---------|---------|--------|
+| `OK` | The SHA is reachable from the base branch. | — |
+| `ROT` | Not on the base branch, but its `(#NN)` **has** a squash-merge commit there — the branch SHA died in that squash. | **exit 1**; the error names the exact merge commit to re-point at |
+| `OPEN` | Not on the base branch and its `(#NN)` has **no** merge commit there, i.e. that PR has not landed. Stamping before the merge exists is explicitly permitted. | reported, never fails |
+| `PENDING` | Not on the base branch, no `(#NN)`, but reachable from `HEAD` — a stamp made on the current branch that has not been given its PR number yet. | warning; fatal under `--strict` |
+| `ORPHAN` | On neither the base branch nor `HEAD`, and no `(#NN)` to recover it from. | **exit 1** |
+
+> [!info] No network, no token
+> "Has PR #NN landed?" is answered from the base branch itself — a landed PR leaves a squash commit whose **subject line** ends in `(#NN)` (matching the subject matters: commit *bodies* cite PR numbers too, so `git log --grep` over-matches). That offline proxy is what separates `ROT` from `OPEN`, so CI needs no API call, no token and no extra permissions, and the verdict is deterministic. `--verify-open` optionally upgrades the proxy to a GitHub API confirmation and **degrades gracefully** — with no network, no token, or any API error it prints a notice, keeps the offline verdicts, and leaves the exit code unchanged.
+
+> [!warning] Shallow clones
+> Ancestry answers on a shallow clone are *false*, not merely incomplete (see the ⚠️ at the top of `TODO.md`: the 2026-08-05 sweep was corrupted by exactly this). On a shallow repository the checker prints a loud warning and **exits 0** rather than emit invented verdicts — so the pre-push hook never blocks a shallow working copy. `--require-full-history` turns that into a hard failure; CI passes it, because CI checks out with `fetch-depth: 0` and a shallow checkout there means the workflow is broken.
+
+Flags: `--list` (inventory every token, always exit 0) · `--strict` (`PENDING` becomes fatal) · `--self-test` (fixture suite over a fake git resolver, run by CI before the real scan) · `--require-full-history` · `--verify-open` · `--file <path>` · `--base <ref>`.
 
 ### Testing
 
@@ -163,6 +184,7 @@ bun run dev           # Optional: frontend + backend dev servers without docker
 bun run lint && bun run lint:backend
 bun run test:all
 bun run validate-locales
+bun run check-todo-stamps   # if you ticked anything in TODO.md: does its `· <sha>` resolve on main?
 ```
 
 ### Adding a migration
