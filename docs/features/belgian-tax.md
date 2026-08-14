@@ -3,8 +3,8 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-08-10
-tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state]
+updated: 2026-08-13
+tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
@@ -320,8 +320,17 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 ### UI surfaces
 
 - `TaxYearSwitcher` — dropdown trigger replacing the static "Tax year" badge on both `/tax` and `/portfolio/tax`. Each item shows a chip: **Current**, **Saved**, or **Data only**. A footer action "Create profile for {year}" appears when the viewed year is historical and has no snapshot yet.
-- `HistoricalYearBanner` — shown above the page body when `isViewingHistorical`. Two modes: `snapshot` (reconstructed from the saved profile) and `estimate` (live profile applied to that year's tax tables); the estimate mode exposes a primary CTA to seed the snapshot.
+- `HistoricalYearBanner` — shown above the page body when `isViewingHistorical` (via `HistoricalYearBannerSection`, still the composition used by `/portfolio/tax`). Two modes: `snapshot` (reconstructed from the saved profile) and `estimate` (live profile applied to that year's tax tables); the estimate mode exposes a primary CTA to seed the snapshot. On `/tax` this banner is no longer a separate element — `TaxFilingMasthead` renders the same modes and actions inline (see below).
 - `TaxProfileDialog` accepts an optional `targetYear` prop. When that year has a snapshot, the dialog reads/writes the snapshot and renders an amber warning banner; the snapshot's `taxYear` is locked.
+
+### Overview-page composition — filing-year masthead + computation flow (Aug 2026)
+
+`/tax` is composed as the document it models — a Belgian assessment notice (*aanslagbiljet*) — rather than as a generic KPI dashboard:
+
+- **`TaxFilingMasthead`** (`features/tax/TaxFilingMasthead.tsx`) is the page's document head. It states the income year once, large (Fraunces, `glass-elevated` per ADR-105), with the filing status beside it (`live` / `estimate` / `snapshot` / `frozen` / `filed`, resolved by the same `resolveHistoricalBannerMode`), the region and marginal rate as meta, and the **effective burden as the single hero figure**. It absorbs the three outline badges the page used to render (`tax.overview.badge.*`, removed) and, on historical years, the `HistoricalYearBanner` text plus its "Create profile for {year}" / "Back to {year}" actions. `TaxYearSwitcher` and `YearActionsMenu` live inside it, so the year's identity reads as one thing.
+- **`TaxComputationFlow`** (`features/tax/TaxComputationFlow.tsx`) replaces the seven same-weight stat tiles (`TaxOverviewSummaryCards`, removed) with one connected downward ledger: gross income → deductions → taxable income → federal PIT after reductions → municipal surcharge → total PIT → social security & property tax → total burden → net take-home, closed by a "beyond personal income tax" coda (portfolio taxes, total incl. portfolio, total incl. property estimate). Signed operation rows only restate relations `computeBelgianPIT` holds exactly; the bracket/exemption step is prose, because the regional autonomy factor makes it not a plain subtraction — `PitBreakdownCard` itemises it directly below.
+
+Both components are pure presentation over `useTaxOverviewData`'s output: every figure is a pass-through read of `BelgianTaxCalculation`, and no value changed with the recomposition. The `summaryCards` widget id is unchanged (persisted visibility survives); only its label moved to "Computation Flow".
 
 ### URL State (year param, Aug 2026)
 

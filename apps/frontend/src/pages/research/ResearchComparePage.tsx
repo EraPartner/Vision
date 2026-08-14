@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
-import { ScorecardGradeBadge } from "@/components/research/ResearchScorecard";
+import { ProvenanceBadge } from "@/features/research/ProvenanceBadge";
+import { ScorecardGradeBadge } from "@/features/research/ResearchScorecard";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import type {

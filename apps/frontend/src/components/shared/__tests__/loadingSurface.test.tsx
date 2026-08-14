@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { ResearchAnalystTab } from "@/components/research/ResearchAnalystTab";
+import { ResearchAnalystTab } from "@/features/research/ResearchAnalystTab";
 import { renderWithApp } from "@/test/renderWithApp";
 
 /**

@@ -1,34 +1,30 @@
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatPercent } from "@/utils/currency";
 import { useTaxOverviewData } from "@/hooks/useTaxOverviewData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
-import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
-import { HistoricalYearBannerSection } from "@/components/tax/HistoricalYearBannerSection";
-import { YearActionsMenu } from "@/components/tax/YearActionsMenu";
-import { MultiYearTrendStrip } from "@/components/tax/MultiYearTrendStrip";
-import { YearComparisonCard } from "@/components/tax/YearComparisonCard";
-import { TaxDisclaimerBanner } from "@/components/tax/TaxDisclaimerBanner";
-import { TaxOverviewSummaryCards } from "@/components/tax/TaxOverviewSummaryCards";
-import { PitBreakdownCard } from "@/components/tax/PitBreakdownCard";
-import { TaxRulesCard } from "@/components/tax/TaxRulesCard";
-import { MonthlyIncomeTaxCard } from "@/components/tax/MonthlyIncomeTaxCard";
-import { TaxCurrentInputsCard } from "@/components/tax/TaxCurrentInputsCard";
-import { YearlyTaxChartCard } from "@/components/tax/YearlyTaxChartCard";
-import { TaxAutomationCard } from "@/components/tax/TaxAutomationCard";
-import { TaxNoProfileCard } from "@/components/tax/TaxNoProfileCard";
+import { TaxFilingMasthead } from "@/features/tax/TaxFilingMasthead";
+import { MultiYearTrendStrip } from "@/features/tax/MultiYearTrendStrip";
+import { YearComparisonCard } from "@/features/tax/YearComparisonCard";
+import { TaxDisclaimerBanner } from "@/features/tax/TaxDisclaimerBanner";
+import { TaxComputationFlow } from "@/features/tax/TaxComputationFlow";
+import { PitBreakdownCard } from "@/features/tax/PitBreakdownCard";
+import { TaxRulesCard } from "@/features/tax/TaxRulesCard";
+import { MonthlyIncomeTaxCard } from "@/features/tax/MonthlyIncomeTaxCard";
+import { TaxCurrentInputsCard } from "@/features/tax/TaxCurrentInputsCard";
+import { YearlyTaxChartCard } from "@/features/tax/YearlyTaxChartCard";
+import { TaxAutomationCard } from "@/features/tax/TaxAutomationCard";
+import { TaxNoProfileCard } from "@/features/tax/TaxNoProfileCard";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Landmark, SlidersHorizontal } from "lucide-react";
-import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
-import SuggestedDeductionsCard from "@/components/tax/SuggestedDeductionsCard";
-import DeductionCandidatesCard from "@/components/tax/DeductionCandidatesCard";
+import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
+import SuggestedDeductionsCard from "@/features/tax/SuggestedDeductionsCard";
+import DeductionCandidatesCard from "@/features/tax/DeductionCandidatesCard";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
-import { ExportDialog } from "@/components/reports/ExportDialog";
+import { ExportDialog } from "@/features/reports/ExportDialog";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
@@ -120,24 +116,10 @@ export default function TaxOverviewPage() {
             </>
           )}
         />
-        <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
-          <TaxYearSwitcher />
-          <YearActionsMenu year={viewedYear} />
-          {/* The region badge resolves the stored enum through the same
-              `tax.profile.region.*.label` keys RegionStep uses, so it reads
-              "Flanders (Vlaanderen)" rather than the raw lowercase `flanders`. */}
-          <Badge variant="outline">
-            {t('tax.overview.badge.region', { region: t(`tax.profile.region.${profile.region}.label`) })}
-          </Badge>
-          <Badge variant="outline">
-            {t('tax.overview.badge.marginalRate', { rate: formatPercent(calculation.marginalRate, { digits: 0 }) })}
-          </Badge>
-          <Badge variant="outline">
-            {t('tax.overview.badge.effectiveBurden', { rate: formatPercent(calculation.effectiveRate, { digits: 1 }) })}
-          </Badge>
-        </div>
-
-        <HistoricalYearBannerSection />
+        {/* The year is a document, not a filter: its identity, state, region,
+            rates and historical-year notice read as one masthead instead of a
+            badge row plus a separate banner. */}
+        <TaxFilingMasthead profile={profile} calculation={calculation} />
 
         {isVisible("trendStrip") && <MultiYearTrendStrip />}
 
@@ -153,7 +135,7 @@ export default function TaxOverviewPage() {
         ) : (
           <>
             {isVisible("summaryCards") && (
-              <TaxOverviewSummaryCards
+              <TaxComputationFlow
                 calculation={calculation}
                 portfolioTaxesForYear={portfolioTaxesForYear}
                 totalTaxIncludingPortfolio={totalTaxIncludingPortfolio}

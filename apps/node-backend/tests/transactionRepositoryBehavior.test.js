@@ -150,6 +150,41 @@ describe('getUncategorisedWithCount', () => {
     expect(params.slice(0, 3)).toEqual(['2024-01-01', '%delh%', '%coffee%']);
   });
 
+  it('forwards the full route filter set to BOTH halves, params ordered total → rows → limit/offset', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
+    await transactionRepository.getUncategorisedWithCount({
+      recipientGroupId: 7, transactionType: 'expense', amountMin: 10, amountMax: 100, tagSlugs: ['groceries'],
+    });
+    const [sql, params] = query.mock.calls[0];
+    const totalCte = sql.slice(sql.indexOf('WITH total_cte AS ('), sql.indexOf('uncategorised_rows AS ('));
+    const rowCte = sql.slice(sql.indexOf('uncategorised_rows AS ('));
+
+    // These six used to be dropped by the destructure, so neither half applied them.
+    for (const half of [totalCte, rowCte]) {
+      expect(half).toContain('t.amount < 0'); // transactionType: expense
+      expect(half).toContain('ABS(t.amount) >=');
+      expect(half).toContain('ABS(t.amount) <=');
+      expect(half).toContain('FROM transaction_tags tt'); // tagSlugs EXISTS
+      expect(half).toMatch(/primary_recipient_id = \$\d+/); // recipientGroupId group resolve
+    }
+    // Each half allocates its own placeholders; limit/offset come last.
+    expect(params).toEqual([10, 100, 7, ['groceries'], 10, 100, 7, ['groceries'], 50, 0]);
+  });
+
+  it('keeps the total-only filters out of the row half (documented asymmetry)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
+    await transactionRepository.getUncategorisedWithCount({
+      categoryIds: [3], search: 'coffee', transactionId: 5, active: false,
+    });
+    const [sql] = query.mock.calls[0];
+    const rowCte = sql.slice(sql.indexOf('uncategorised_rows AS ('));
+    expect(rowCte).not.toContain('t.category_id IN (');
+    expect(rowCte).not.toContain('t.id IN (');
+    // The queue is an active-rows worklist regardless of the `active` param.
+    expect(rowCte).toContain('t.is_active = true');
+    expect(rowCte).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL');
+  });
+
   it('returns total 0 and empty rows when CTE yields only the null-joined total row', async () => {
     query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
     const res = await transactionRepository.getUncategorisedWithCount({});

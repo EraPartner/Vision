@@ -113,12 +113,28 @@ describe("TaxOverviewPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Region badge", async () => {
+    // The three outline badges (region / marginal rate / effective burden) are now
+    // the masthead's meta strip: the label and its value are separate elements
+    // instead of one "Region: X" string.
+    it("shows the region in the filing masthead", async () => {
         renderWithApp(<TaxOverviewPage />);
+        expect(await screen.findByText(/^region$/i)).toBeInTheDocument();
         // Default profile region = "flanders"
+        expect(await screen.findByText(/flanders/i)).toBeInTheDocument();
+    });
+
+    it("shows the viewed year as the masthead heading", async () => {
+        renderWithApp(<TaxOverviewPage />);
         expect(
-            await screen.findByText(/region:/i),
+            await screen.findByRole("heading", { level: 2, name: /^\d{4}$/ }),
         ).toBeInTheDocument();
+    });
+
+    it("shows the effective burden as the masthead hero figure", async () => {
+        renderWithApp(<TaxOverviewPage />);
+        expect(await screen.findByText(/^effective burden$/i)).toBeInTheDocument();
+        // Live year, so the masthead reads as a live estimate rather than a filed year.
+        expect(await screen.findByText(/^live estimate$/i)).toBeInTheDocument();
     });
 
     it("shows Export PDF button", async () => {

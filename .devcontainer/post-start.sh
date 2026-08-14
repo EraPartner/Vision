@@ -47,6 +47,22 @@ if [[ -d "$MEM_SEED" ]]; then
   rsync -a --delete --ignore-errors "$MEM_SEED/" "$MEM_DIR/" 2>/dev/null || true
 fi
 
+# --- Dependency-volume health (advisory, never fatal) --------------------------
+# node_modules/ lives in a named volume that OUTLIVES the container, and
+# post-create.sh only runs on first create. So a dependency change made on the
+# host — or an interrupted first install — leaves the container's tree stale or
+# empty with nothing to repair it automatically. Say so, with the one-line fix,
+# instead of letting it surface as a confusing missing-module error.
+NM=/workspaces/Vision/node_modules
+NM_REF="$NM"
+if [[ -d "$NM/.bun" ]]; then NM_REF="$NM/.bun"; fi
+if [[ ! -d "$NM" ]] || [[ -z "$(ls -A "$NM" 2>/dev/null || true)" ]]; then
+  echo "[post-start] ⚠ node_modules is empty in this container — run:  bun install" >&2
+elif [[ /workspaces/Vision/bun.lock -nt "$NM_REF" ]]; then
+  echo "[post-start] ⚠ bun.lock is newer than this container's node_modules (deps changed on the" >&2
+  echo "[post-start]   host, or in another container) — run:  bun install" >&2
+fi
+
 # Refuse to proceed if the egress firewall didn't verify. The entrypoint writes
 # this sentinel only after confirming default-deny is active; its absence means
 # the lock may be open. Egress is fail-closed regardless (init-firewall.sh sets

@@ -389,9 +389,17 @@ export const transactionRepository = {
    * Get uncategorised transactions plus total in a single round-trip.
    *
    * Important behavior note:
-   * - `rows` preserve uncategorised filtering semantics from getUncategorised().
-   * - `total` preserves historical route semantics from getCount(), which may include
-   *   additional filters such as search/category that are not applied to uncategorised rows.
+   * - `rows` preserve uncategorised filtering semantics: the queue is always the
+   *   ACTIVE rows whose full 3-level effective category is NULL (see
+   *   getUncategorised), narrowed by every filter the caller set.
+   * - `total` preserves historical route semantics from getCount(): it counts over
+   *   the same filters WITHOUT the uncategorised predicate, so it may include rows
+   *   the queue does not list.
+   * - The four total-only filters are `transactionId`, `categoryId`, `categoryIds`
+   *   and `search`: a category filter cannot narrow a set defined by having no
+   *   effective category, and search/transactionId stay total-only for the same
+   *   historical reason. Every other filter is applied to BOTH halves, through the
+   *   same builder the main list uses, so the two can never disagree.
    *
    * @param {TransactionFilters} [filters]
    * @returns {Promise<{ rows: EnrichedTransactionRow[], total: number }>}
@@ -405,10 +413,17 @@ export const transactionRepository = {
     accountId = null,
     bankAccount = null,
     categoryId = null,
+    categoryIds = null,
     recipientId = null,
+    recipientGroupId = null,
     recipientName = null,
     search = null,
     active = true,
+    transactionType = null,
+    amountMin = null,
+    amountMax = null,
+    amountSigned = false,
+    tagSlugs = null,
   } = {}) {
     const {
       sql: totalWhere,
@@ -421,50 +436,53 @@ export const transactionRepository = {
       accountId,
       bankAccount,
       categoryId,
+      categoryIds,
       recipientId,
+      recipientGroupId,
       recipientName,
       search,
       active,
+      transactionType,
+      amountMin,
+      amountMax,
+      amountSigned,
+      tagSlugs,
     });
 
-    const params = [...totalParams];
-    let paramIdx = totalNextParam;
+    // Row filters go through the SAME builder as the total and as the main list
+    // (getAllWithCount), so a filter both halves apply cannot be expressed two
+    // ways. `active` is pinned true rather than forwarded: the queue is an
+    // active-rows worklist, exactly as getUncategorised.
+    const {
+      sql: rowsWhere,
+      params: rowsParams,
+      nextParamIdx: rowsNextParam,
+    } = buildTransactionWhere({
+      startDate,
+      endDate,
+      accountId,
+      bankAccount,
+      recipientId,
+      recipientGroupId,
+      recipientName,
+      active: true,
+      transactionType,
+      amountMin,
+      amountMax,
+      amountSigned,
+      tagSlugs,
+      startParamIdx: totalNextParam,
+    });
+
+    const params = [...totalParams, ...rowsParams];
 
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
     // the pr join added to the uncategorised_rows CTE below.
-    let uncategorisedWhere = `
-      t.is_active = true
-      AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
-    `;
+    const uncategorisedWhere = `${rowsWhere}
+      AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL`;
 
-    if (startDate) {
-      uncategorisedWhere += ` AND t.date >= $${paramIdx++}`;
-      params.push(startDate);
-    }
-    if (endDate) {
-      uncategorisedWhere += ` AND t.date <= $${paramIdx++}`;
-      params.push(endDate);
-    }
-    if (accountId != null) {
-      uncategorisedWhere += ` AND t.account_id = $${paramIdx++}`;
-      params.push(accountId);
-    }
-    if (bankAccount) {
-      // Bank filter via the FK (ADR-088) — see getUncategorised.
-      uncategorisedWhere += ` AND t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`;
-      params.push(`%${bankAccount}%`);
-    }
-    if (recipientId != null) {
-      uncategorisedWhere += ` AND t.recipient_id = $${paramIdx++}`;
-      params.push(recipientId);
-    }
-    if (recipientName) {
-      uncategorisedWhere += ` AND r.name ILIKE $${paramIdx++}`;
-      params.push(`%${recipientName}%`);
-    }
-
-    const limitParam = paramIdx;
-    const offsetParam = paramIdx + 1;
+    const limitParam = rowsNextParam;
+    const offsetParam = rowsNextParam + 1;
     params.push(limit, offset);
 
     const sql = `

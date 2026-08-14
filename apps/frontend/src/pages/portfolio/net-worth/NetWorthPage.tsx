@@ -14,7 +14,7 @@ import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank, CreditCard } fro
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { StatCard } from "@/features/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { CHART_PERIODS, filterByPeriod, type ChartPeriod } from "@/components/charts";
 import {
@@ -25,7 +25,7 @@ import {
 import { NetWorthChart } from "./NetWorthChart";
 import { SnapshotDataTable } from "./SnapshotDataTable";
 import { useNetWorthTableData } from "./useNetWorthTableData";
-import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
+import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";

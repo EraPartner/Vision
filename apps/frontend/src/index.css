@@ -854,10 +854,23 @@
         will-change: transform;
     }
 
-    /* One decorative corner-orb motif for hero/KPI cards (ADR-105).
-       See <CardSheen/>. Reads --glass-highlight (not raw white) so it adapts to
-       light/dark and theme variants; opacity is dialed back in dark so the orb
-       stays a whisper rather than a smear. */
+    /* One decorative corner-orb motif for hero/KPI cards (ADR-105), in two
+       deliberate tiers. See <CardSheen/>. Both are token-driven (never raw
+       white), so they adapt to light/dark and every theme variant.
+
+       TIER POLICY — which card gets which:
+       - `.card-sheen` (default, tier="default"): the KPI/widget tier. Every
+         stat tile, chart card and panel header orb. 8rem, reads
+         --glass-highlight, so it reads as a light sheen in both modes with the
+         opacity dialed back in dark to keep it a whisper rather than a smear.
+       - `.card-sheen-hero` (tier="hero"): reserved for a page's single hero
+         tile — today only the dashboard's NetSummaryCard. 12rem (1.5× the
+         diameter) so the corner carries the weight the hero number needs, and
+         reads --background rather than --glass-highlight, which deliberately
+         inverts the tone by mode: a pale wash in light, a dark vignette in dark
+         that sinks the corner behind the hero figure instead of lighting it.
+         Not drift — do not "unify" it onto the default tier.
+       Plain content cards get neither. */
     .card-sheen {
         pointer-events: none;
         position: absolute;
@@ -879,6 +892,27 @@
         background-image: linear-gradient(
             to bottom right,
             hsl(var(--glass-highlight) / 0.12),
+            transparent
+        );
+    }
+
+    /* Hero tier. --background flips with the mode on its own, so this needs no
+       `.dark` companion — that single token IS the tone inversion described
+       above. Kept as its own class rather than a modifier on `.card-sheen` so
+       the `.dark .card-sheen` rule can never leak into it. */
+    .card-sheen-hero {
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 12rem;
+        width: 12rem;
+        margin-top: -6rem;
+        margin-right: -6rem;
+        border-radius: 9999px;
+        background-image: linear-gradient(
+            to bottom right,
+            hsl(var(--background) / 0.4),
             transparent
         );
     }

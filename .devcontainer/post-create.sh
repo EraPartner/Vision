@@ -62,11 +62,19 @@ else
   echo "[post-create]   supply-chain screened. \`.devcontainer/bin/doctor\` will flag this." >&2
 fi
 
-# Python venv for alembic. The repo's scripts expect ./venv. A host-side (macOS)
-# venv has Linux-invalid symlinks — rebuild if broken. .gitignore covers venv/.
+# Python venv for alembic. The repo's scripts hardcode ./venv (package.json
+# db:current/db:history/db:revision, and $ALEMBIC_BIN), so the path must stay
+# ./venv inside the container. The launcher mounts the `vision-venv` named volume
+# there, so this builds a Linux venv in container-private storage and the host's
+# own ./venv on disk is untouched. .gitignore covers venv/.
 if [[ ! -x ./venv/bin/python ]] || ! ./venv/bin/python -c '' 2>/dev/null; then
-  echo "[post-create] Rebuilding Python venv (host symlinks invalid in container)..."
-  rm -rf ./venv
+  echo "[post-create] Building the container's Python venv..."
+  # Clear the CONTENTS, never the directory: ./venv is a volume mountpoint and
+  # `rm -rf ./venv` fails EBUSY on it, which would abort this script under set -e.
+  # (Without the volume it is a plain dir and this is equivalent to rm -rf ./venv.)
+  if [[ -d ./venv ]]; then
+    find ./venv -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  fi
   python3 -m venv venv
 fi
 # pip honors HTTPS_PROXY → squid → pypi.org / files.pythonhosted.org.
@@ -94,6 +102,12 @@ fi
 # --frozen-lockfile is the reproducible install: it builds strictly from
 # bun.lock and fails loudly on a stale lock (matching the pinned base image /
 # SHA-pinned bun / devcontainer-lock).
+#
+# Every node_modules/ in the tree (root + each workspace) is a named-volume
+# mountpoint, so this installs Linux binaries into container-private storage and
+# the host's macOS trees are left alone. On first boot the volumes mount EMPTY,
+# which is exactly what this install expects; on a rebuild they are already
+# populated and this is a fast no-op re-verify.
 echo "[post-create] bun install --frozen-lockfile..."
 bun install --frozen-lockfile
 

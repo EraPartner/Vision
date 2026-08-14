@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
+import { AddTransactionDialog } from "@/features/transactions/components/AddTransactionDialog";
 
 interface TableActionsProps {
     showAll: boolean;

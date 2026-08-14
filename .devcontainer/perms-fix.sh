@@ -27,4 +27,20 @@ fix_dir_owner /home/dev/.claude       dev
 fix_dir_owner /home/dev/.config       dev
 fix_dir_owner /var/lib/postgresql     postgres
 
+# Dependency volumes (`node_modules/`, `./venv`) are mounted INSIDE the
+# bind-mounted workspace so the container's Linux trees never touch the host's.
+# They come up root:root and empty like any fresh volume, so `dev` could not
+# install into them.
+#
+# The list is DERIVED from /proc/self/mountinfo rather than hardcoded, so adding
+# a workspace in bin/claude can't silently leave a volume unwritable — and, more
+# importantly, it is gated on the path actually BEING a mountpoint. With an older
+# launcher (no volumes attached) these paths are plain bind-mounted workspace,
+# and a chown -R there would rewrite the ownership of the user's own files on the
+# host. No mount, no chown.
+while read -r mp; do
+  fix_dir_owner "$mp" dev
+done < <(awk '$5 ~ "^/workspaces/Vision/" && ($5 ~ /\/node_modules$/ || $5 ~ /\/venv$/) { print $5 }' \
+           /proc/self/mountinfo 2>/dev/null)
+
 exit 0

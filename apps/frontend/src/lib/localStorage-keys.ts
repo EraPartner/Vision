@@ -3,9 +3,9 @@
  *
  * Single source of truth imported by:
  *   - contexts/ThemeContext.tsx          (theme, variant)
- *   - components/settings/sections/BackupSection.tsx  (passphrase reminder)
+ *   - features/settings/sections/BackupSection.tsx  (passphrase reminder)
  *   - components/notifications/UpcomingPaymentsNotification.tsx
- *   - components/planned/RecurringDetectionPanel.tsx
+ *   - features/planned/RecurringDetectionPanel.tsx
  *   - packaging/electron/backup/bundle.js  (snapshot on export)
  *
  * ADDING A KEY? Add it here first, then update BackupSection's snapshot logic.

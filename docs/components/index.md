@@ -28,7 +28,7 @@ aliases: [components, UI, frontend components, chart components, visx charts]
 | [[docs/components/ui-components\|UI Components]] | Base UI components (Radix-based) with performance-optimized design tokens | Button, Card, Dialog, Table, etc. |
 | [[docs/components/charts\|Chart Primitives]] | visx + d3 charts with design-token styling | AreaChart, BarChart, PieChart, LineChart, Sparkline |
 | [[docs/components/dashboard\|Dashboard]] | Dashboard widgets and stat cards | StatCard, MonthlyTrends, CategoryPie, BankBalances |
-| [[docs/components/statistics\|Statistics]] | Analytics page sub-components | ChartCard, SummaryCards, CategoryPieChart, CategoryPivotTable |
+| [[docs/components/statistics\|Statistics]] | Analytics page sub-components | ChartCard, MonthlyRhythm, CategoryPieChart, CategoryPivotTable |
 | [[docs/components/form-dialogs\|Form Dialogs]] | Add/edit data dialogs with optimized glass surfaces | Transaction, Category, Recipient, Investment, Settings |
 | [[docs/components/dashboard-settings-dialog\|Settings Dialog]] | Multi-tab settings with thin orchestrator pattern (Phase 3) | General, Dashboard, App, Backup, Appearance tabs |
 | [[docs/components/export-dialog\|Export Dialog]] | PDF report export configuration (Phase 4) | Report type, period, sections, currency selection |

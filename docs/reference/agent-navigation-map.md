@@ -3,7 +3,7 @@ title: AI Agent Codebase Navigation Map
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-05-29
+updated: 2026-08-13
 tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1, phase-c, phase-e, bulk-actions]
 description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task. Updated for Phase C import pipeline consolidation, Phase E component decomposition, and bulk transaction actions.
 aliases: [agent navigation, codebase map, file map, navigation guide]
@@ -71,8 +71,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 |-------|-------|
 | Frontend Page | [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]] |
 | Hook | [[apps/frontend/src/hooks/usePlannedPayments.ts]] |
-| Form | [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]] |
-| Recurring Detection | [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]] |
+| Form | [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]] |
+| Recurring Detection | [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]] |
 | Backend Route | [[apps/node-backend/src/routes/plannedTransactions.js]] |
 | Backend Repository | [[apps/node-backend/src/repositories/plannedTransactionRepository.js]] |
 | Backend Service | [[apps/node-backend/src/services/calculations/recurrence.js]], [[apps/node-backend/src/services/recurringDetectionService.js]] |
@@ -93,7 +93,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Net Worth Page | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
 | Watchlist Page | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] |
 | Hook | [[apps/frontend/src/hooks/usePortfolio.ts]] |
-| Dialogs | [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]] |
+| Dialogs | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]] |
 | Backend Route | [[apps/node-backend/src/routes/investments.js]] |
 | Backend Repository | [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]] |
 | Backend Services | [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] |
@@ -105,7 +105,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Layer | Files |
 |-------|-------|
 | Frontend Page | [[apps/frontend/src/pages/OwesPage.tsx]] |
-| Dialog | [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]] |
+| Dialog | [[apps/frontend/src/features/splits/SplitTransactionDialog.tsx]] |
 | Hook | [[apps/frontend/src/hooks/useSplits.ts]] |
 | Backend Route | [[apps/node-backend/src/routes/splits.js]] |
 | Backend Repository | [[apps/node-backend/src/repositories/splitRepository.js]] |
@@ -143,7 +143,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Layer | Files |
 |-------|-------|
 | Frontend Page | [[apps/frontend/src/pages/TaxOverviewPage.tsx]] |
-| Components | [[apps/frontend/src/components/tax/TaxProfileDialog.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]] |
+| Components | [[apps/frontend/src/features/tax/TaxProfileDialog.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]] |
 | Context | [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]] |
 | Backend Service | [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/services/calculations/loanSchedule.js]] |
 | Feature Doc | [[docs/features/belgian-tax]] |
@@ -154,8 +154,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Layer | Files |
 |-------|-------|
 | Frontend Page | [[apps/frontend/src/pages/DashboardPage.tsx]] |
-| Components | [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]] |
-| Settings Dialog | [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]] |
+| Components | [[apps/frontend/src/features/dashboard/StatCard.tsx]], [[apps/frontend/src/features/dashboard/MonthlySpendingChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]] |
+| Settings Dialog | [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]] |
 | Hook | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]] |
 | Backend Service | [[apps/node-backend/src/services/materializedViewService.js]] |
 
@@ -163,7 +163,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 
 | Layer | Files |
 |-------|-------|
-| Component | [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]] |
+| Component | [[apps/frontend/src/features/onboarding/OnboardingWizard.tsx]] |
 | Feature Doc | [[docs/features/onboarding]] |
 
 ---

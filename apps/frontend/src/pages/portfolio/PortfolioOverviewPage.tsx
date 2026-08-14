@@ -8,13 +8,13 @@ import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, 
 import { DonutChart, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
-import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
-import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
-import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
-import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
-import { TotalValueCard, type SparklinePoint } from "@/components/portfolio/TotalValueCard";
-import { PortfolioTicker } from "@/components/portfolio/PortfolioTicker";
+import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
+import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
+import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
+import { PortfolioNewsFeed } from "@/features/portfolio/PortfolioNewsFeed";
+import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
+import { TotalValueCard, type SparklinePoint } from "@/features/portfolio/TotalValueCard";
+import { PortfolioTicker } from "@/features/portfolio/PortfolioTicker";
 import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
@@ -26,11 +26,11 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { StatCard } from "@/features/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Money } from "@/components/shared/Money";
 import { parseYmd } from "@/lib/timezone";
-import { ExportDialog } from "@/components/reports/ExportDialog";
+import { ExportDialog } from "@/features/reports/ExportDialog";
 import { formatPercent } from "@/utils/currency";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {

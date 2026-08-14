@@ -10,7 +10,7 @@
  *    HTML render graph into the coverage denominator.)
  *
  * 2. Guards the frontend mirror: the export dialog's hand-maintained lists in
- *    apps/frontend/src/components/reports/reportSections.ts must offer exactly
+ *    apps/frontend/src/features/reports/reportSections.ts must offer exactly
  *    the backend's section IDs in the backend's order. generateReport silently
  *    drops unknown IDs (`requested.filter(id => id in renderers)`), so a
  *    FE↔BE typo silently omits a section from the PDF — this test turns that
@@ -28,7 +28,7 @@ import {
   FINANCIAL_SECTIONS,
   PORTFOLIO_SECTIONS,
   TAX_SECTIONS,
-} from '../../frontend/src/components/reports/reportSections.ts';
+} from '../../frontend/src/features/reports/reportSections.ts';
 
 const CASES = [
   { type: 'financial', backend: FINANCIAL_SECTION_CATALOG, frontend: FINANCIAL_SECTIONS },

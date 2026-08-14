@@ -18,8 +18,8 @@ import ExchangeRatesPage from "@/pages/admin/ExchangeRatesPage";
 import WatchlistPage from "@/pages/research/WatchlistPage";
 import PortfolioTaxPage from "@/pages/portfolio/tax/PortfolioTaxPage";
 import MarketLookupPage from "@/pages/research/MarketLookupPage";
-import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
+import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
+import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 
 const API_BASE = "http://localhost:3002";

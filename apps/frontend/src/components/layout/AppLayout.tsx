@@ -10,13 +10,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
+import { DashboardSettingsDialog } from "@/features/settings/DashboardSettingsDialog";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
 import { FxStatusBanner } from "@/components/notifications/FxStatusBanner";
 import { UpdateNotification } from "@/components/notifications/UpdateNotification";
-import { OnboardingWizard, useOnboarding } from "@/components/onboarding/OnboardingWizard";
+import { OnboardingWizard, useOnboarding } from "@/features/onboarding/OnboardingWizard";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { CommandPalette } from "@/components/shared/CommandPalette";
 import { PageTitleProvider, usePageTitle } from "@/contexts/PageTitleContext";

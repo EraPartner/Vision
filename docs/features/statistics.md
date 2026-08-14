@@ -3,17 +3,17 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-06-11
-last_modified: 2026-06-11
+updated: 2026-08-14
+last_modified: 2026-08-14
 tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-13, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo, drillthrough, exclusion-filters, recipient-insights]
 description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export. Phase 13 adds pivot table drillthrough to filtered transaction list and multi-select export filters. June 2026: all-years Top Recipients chart now honours exclusion filters (bug fix).
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
-  - apps/frontend/src/components/statistics/
+  - apps/frontend/src/features/statistics/
   - apps/frontend/src/hooks/useStatistics.ts
   - apps/frontend/src/hooks/useChartCurrencyFormatter.ts
-  - apps/frontend/src/components/statistics/statisticsUtils.ts
+  - apps/frontend/src/features/statistics/statisticsUtils.ts
   - apps/frontend/src/hooks/useSavedCharts.ts
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/repositories/infoRepository.js
@@ -56,7 +56,7 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 | Component | Lines | Purpose | Tabs |
 |-----------|-------|---------|------|
 | `ChartCard.tsx` | 48 | Card wrapper with ExclusionToggle and render-prop children | All |
-| `SummaryCards.tsx` | 72 | 4-card KPI grid (income, spending, net, months tracked) | Overview |
+| `MonthlyRhythm.tsx` | — | Page-opening lede: scrubbable per-month net strip + typical-month figures + strongest/toughest/in-the-black facts (replaced `SummaryCards`, whose income/spending/net tiles restated the dashboard hero and whose 4th tile, "Months tracked", was filler) | Above the tabs |
 | `MonthlyChart.tsx` | 42 | Monthly income/spending bar chart | Overview |
 | `NetTrendChart.tsx` | 44 | Net balance area chart over time | Overview |
 | `CategoryPieChart.tsx` | 64 | Category spending donut chart (top 10, year-filterable) | Categories |
@@ -255,7 +255,7 @@ const MonthlyChart = lazy(() =>
 
 This pattern:
 - **Reduces initial bundle**: Defers loading chart logic until the tab is opened
-- **Improves TTI**: Initial page render shows only SummaryCards (inline), other tabs load on-demand
+- **Improves TTI**: Initial page render shows only the `MonthlyRhythm` lede (inline), other tabs load on-demand
 - **Maintains UX**: Skeleton fallbacks provide loading feedback
 - **9 components lazy-loaded**: MonthlyChart, NetTrendChart, CategoryPieChart, CategoryTrendChart, TopRecipientsChart, YearlyComparisonChart, RecipientInsightsTab, SankeyTab, SavedChartsSection
 
