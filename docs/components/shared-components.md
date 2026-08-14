@@ -3,10 +3,10 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-06-29
-last_modified: 2026-06-24
-tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards.
+updated: 2026-08-14
+last_modified: 2026-08-14
+tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-14: CardSheen documented and given a second `hero` tier — the corner-orb motif is now a two-tier system with a stated policy for which card tier gets which sheen.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -24,6 +24,7 @@ related_code:
   - apps/frontend/src/components/shared/SymbolSearchBox.tsx
   - apps/frontend/src/components/shared/SymbolSearchResultItem.tsx
   - apps/frontend/src/components/shared/TrendHue.tsx
+  - apps/frontend/src/components/shared/CardSheen.tsx
   - apps/frontend/src/components/notifications/UpdateNotification.tsx
   - apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx
   - apps/frontend/src/utils/a11y.ts
@@ -541,6 +542,50 @@ The following rule applies across all summary/stat cards:
 > [!info] The gain/loss BORDER that previously appeared on `PerformancePage` CompactReturnCard and TotalValueCard (via `liquid-glass-trend-up/down` CSS classes) was removed in this pass. The hue is retained via `<TrendHue>`; the border is gone for cross-app consistency. The `glass-trend-up / glass-trend-down / liquid-glass-trend-up / liquid-glass-trend-down` classes have been deleted from `index.css` as they are now orphaned.
 
 Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
+
+---
+
+## CardSheen
+
+**Path:** `[[apps/frontend/src/components/shared/CardSheen.tsx]]` (paint lives in `.card-sheen` / `.card-sheen-hero`, `apps/frontend/src/index.css`)
+
+Single shared overlay for the decorative corner orb — the soft round highlight bleeding out of a card's top-right corner. Introduced 2026-07-11 to replace ten copy-pasted gradient divs in three drifting dialects (some hard-coding raw `white`); the last hand-rolled instance (`NetSummaryCard`) was folded in 2026-08-14 by adding the `hero` tier below.
+
+Rendered as an `aria-hidden`, `pointer-events: none` absolutely-positioned child of the card. Both tiers read theme tokens, never raw white, so they follow light/dark and every theme variant.
+
+### Props
+
+```typescript
+interface CardSheenProps {
+  /** Which sheen tier — see the tier policy below. Defaults to "default". */
+  tier?: "default" | "hero";
+  /** Subtle grow-on-hover, matching the KPI-tile treatment (needs a `group` parent). */
+  animated?: boolean;
+  className?: string;
+}
+```
+
+`tier` is a `cva` variant, matching the `variant` idiom on [[docs/components/ui-components|Card]] — the tier names a place in the elevation hierarchy rather than exposing size/colour knobs at the call site.
+
+### Tier policy (2026-08-14)
+
+Two tiers, deliberately — not drift. Plain content cards get neither (ADR-105 reserves the motif for the hero/KPI tier).
+
+| `tier` | Class | Size / offset | Token | Reads as |
+|---|---|---|---|---|
+| `default` | `.card-sheen` | 8rem, `-4rem` | `--glass-highlight` @ 0.5 (0.12 in dark) | Light sheen in both modes. The KPI/widget tier: stat tiles, chart cards, panel headers. |
+| `hero` | `.card-sheen-hero` | 12rem, `-6rem` | `--background` @ 0.4 | Tone **inverts** by mode — pale wash in light, dark vignette in dark, sinking the corner behind the hero figure. Reserved for a page's single hero tile. |
+
+`--background` flips with the mode by itself, so `.card-sheen-hero` needs no `.dark` companion; it is a standalone class rather than a modifier on `.card-sheen` so the `.dark .card-sheen` rule can never leak into it.
+
+### Consumers
+
+| Component | Tier |
+|---|---|
+| `NetSummaryCard` (dashboard hero tile) | `hero`, `animated` — the only `hero` call site |
+| `StatCard`, `MonthlyRhythm`, `NextSevenDaysStrip` | `default`, `animated` |
+| `MonthlyTrendsChart`, `CashFlowForecastChart`, `CategoryPieChart` (×2), `BankBalancesWidget`, `VirtualDataTable` | `default` |
+| `PerformancePage` | `default` with a `className="h-40 w-40 -mt-20 -mr-20"` size override |
 
 ---
 
