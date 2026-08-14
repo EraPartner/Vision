@@ -3461,7 +3461,7 @@ function HeadlineCard({ amount }: { amount: number }) {
 
 Apply compact formatting to headline / summary slots only:
 - Dashboard: `NetSummaryCard`, `BankBalancesWidget`, `StatCard` (income/spending/net cards)
-- Statistics: `SummaryCards`, `YearlySummaryTable`, `CategoryPivotTable` (grand-total row/column only)
+- Statistics: `MonthlyRhythm`, `YearlySummaryTable`, `CategoryPivotTable` (grand-total row/column only)
 
 **Out of scope:** portfolio cards, transactions table rows, per-cell values inside `CategoryPivotTable` body (preserve full precision there).
 

@@ -3,7 +3,7 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-06-25
+updated: 2026-08-14
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders on all pages including the dashboard (no per-route stand-down). June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
@@ -654,9 +654,39 @@ After the VirtualDataTable migration the column widths were adjusted so the tabl
 
 The category column's absence of `defaultWidth` is intentional — VirtualDataTable treats columns without a `defaultWidth` as the auto-fill column.
 
-### PlannedPaymentsPage — "Est. Monthly" Summary Card (June 2026)
+### PlannedPaymentsPage — the next-7-days strip (August 2026)
 
-The summary bar at the top of `PlannedPaymentsPage` contains an **Est. Monthly** card whose value is computed by the `totalMonthly` `useMemo` in [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]].
+The page opens with `features/planned/NextSevenDaysStrip.tsx`: eight day columns —
+today through today+7 — with every active payment due in that window sitting on
+the day it falls (name + signed amount). Clicking an item opens it for editing,
+the same target as the row's pencil action.
+
+It replaced a four-tile stat row (`Pending` / `Executed` / `Est. Monthly` /
+`Due this week`). Three of those were row counts a bills page has no use for;
+the fourth, **Est. Monthly**, survives as the strip's single side figure.
+
+**Window semantics** live in `features/planned/nextSevenDays.ts`
+(`bucketNextSevenDays`, unit-tested in `features/planned/__tests__/nextSevenDays.test.ts`)
+and are lifted verbatim from the "Due this week" tile they replaced:
+
+- only `is_active` rows count (executed rows stay in, marked with a check);
+- the due date is parsed by splitting `YYYY-MM-DD` into a **local** midnight
+  `Date` — never `new Date(str)`, which is UTC midnight and shifts the calendar
+  day east of UTC;
+- the window is `0 <= differenceInDays(due, today) <= 7`, i.e. eight columns.
+
+The header also shows the window's net total, converted with the same
+`useCurrencyConverter` instance that sums Est. Monthly. When nothing is due, the
+day rail still renders (the eight days are visibly clear) with an explicit
+"Nothing due in the next 7 days" note beneath it.
+
+The `Pending` and `Executed` counts are gone on purpose: the table below is the
+list of pending items, each row carries its own executed state, and the
+Execution History dialog is the place to read execution counts.
+
+#### "Est. Monthly" (June 2026)
+
+Its value is computed by the `totalMonthly` `useMemo` in [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]] and passed to the strip as `estimatedMonthly`.
 
 **Semantics (current, as of 2026-06-17): net monthly figure.**
 

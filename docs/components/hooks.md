@@ -769,7 +769,7 @@ All Statistics page sub-components:
 - `CategoryTrendChart`
 - `TopRecipientsChart`
 - `YearlyComparisonChart`
-- `SummaryCards`
+- `MonthlyRhythm`
 - `YearlySummaryTable`
 
 ---

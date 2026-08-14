@@ -3,15 +3,15 @@ import { safeHref } from "@/utils/safeHref";
 import { useQueryClient } from "@tanstack/react-query";
 import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
-import { Plus, CalendarClock, Clock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History } from "lucide-react";
+import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { StatCard } from "@/features/dashboard/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { RecurringDetectionPanel } from "@/features/planned/RecurringDetectionPanel";
+import { NextSevenDaysStrip } from "@/features/planned/NextSevenDaysStrip";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -140,25 +140,10 @@ export default function PlannedPaymentsPage() {
       }, 0);
   }, [payments, convertToTarget]);
 
-  const upcoming = useMemo(() => {
-    const today = new Date();
-    const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-
-    return payments
-      .filter((p) => p.is_active)
-      .filter((p) => {
-        if (!p.due_date || typeof p.due_date !== "string") return false;
-        const datePart = p.due_date.includes('T') ? p.due_date.split('T')[0] : p.due_date;
-        const [year, month, day] = datePart.split('-').map(Number);
-        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return false;
-        const normalizedDue = new Date(year, month - 1, day, 0, 0, 0, 0);
-        const days = differenceInDays(normalizedDue, normalizedToday);
-        return days >= 0 && days <= 7;
-      }).length;
-  }, [payments]);
-
-  const executed = useMemo(() => payments.filter((p) => p.is_executed).length, [payments]);
-  const pending = useMemo(() => payments.filter((p) => p.is_active && !p.is_executed).length, [payments]);
+  // The "due in the next 7 days" window now lives in NextSevenDaysStrip
+  // (bucketNextSevenDays), which carries the same is_active filter, the same
+  // local-midnight Y-M-D parse and the same 0…7-day span the old "Due this
+  // week" tile used.
 
   const columns = [
     {
@@ -406,14 +391,28 @@ export default function PlannedPaymentsPage() {
     return (
       <div {...loadingSurfaceProps} className="space-y-8">
         <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="glass-regular border-none shadow-md">
-              <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
-              <CardContent><Skeleton className="h-8 w-20" /></CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Mirrors NextSevenDaysStrip: caption row + est-monthly side figure,
+            then the eight day columns — the shape the page actually settles
+            into, not a four-tile row it no longer has. */}
+        <Card className="glass-elevated">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-4 w-56" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20 ml-auto" />
+                <Skeleton className="h-7 w-24 ml-auto" />
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className="h-[6.5rem] w-full rounded-[0.625rem]" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
         <Skeleton className="h-[300px] w-full rounded-xl" />
       </div>
     );
@@ -457,12 +456,12 @@ export default function PlannedPaymentsPage() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title={t('plannedPage.pending')} value={String(pending)} icon={Clock} />
-          <StatCard title={t('plannedPage.executed')} value={String(executed)} icon={CheckCircle2} valueClassName="text-accent" />
-          <StatCard title={t('plannedPage.estMonthly')} value={<Money amount={totalMonthly} signed />} icon={Repeat} />
-          <StatCard title={t('plannedPage.dueThisWeek')} value={String(upcoming)} icon={CalendarClock} />
-        </div>
+        <NextSevenDaysStrip
+          payments={payments}
+          estimatedMonthly={totalMonthly}
+          convertAmount={convertToTarget}
+          onSelect={(payment) => { setEditing(payment); setFormOpen(true); }}
+        />
 
         <MatchSuggestionsBanner onReview={handleReviewSuggestion} />
 

@@ -15,7 +15,7 @@ import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ChartCard } from "@/features/statistics/ChartCard";
 import { InsightsDigestPanel } from "@/features/statistics/InsightsDigestPanel";
-import { SummaryCards } from "@/features/statistics/SummaryCards";
+import { MonthlyRhythm } from "@/features/statistics/MonthlyRhythm";
 import { STATISTICS_WIDGETS } from "@/features/statistics/statisticsUtils";
 import { useTabParam } from "@/hooks/useTabParam";
 
@@ -91,15 +91,26 @@ export default function StatisticsPage() {
     return (
       <div {...loadingSurfaceProps} className="space-y-6">
         <PageHeader title={t("statsPage.title")} icon={BarChart3} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="glass-regular">
-              <CardContent className="pt-6">
-                <Skeleton className="h-20 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Mirrors MonthlyRhythm's anatomy (headline column + bar strip, then a
+            three-fact footer) so the page never settles into a shape it never
+            promised while loading. */}
+        <Card className="glass-elevated">
+          <CardContent className="p-6 space-y-6">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-10">
+              <div className="space-y-3">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-11 w-44" />
+                <Skeleton className="h-4 w-36" />
+              </div>
+              <Skeleton className="h-32 w-full" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
         <Skeleton className="h-[400px] w-full" />
       </div>
     );
@@ -164,9 +175,12 @@ export default function StatisticsPage() {
         </div>
       </div>
 
-      <InsightsDigestPanel />
+      {/* The monthly-trends lede opens the page — it is what the page is about.
+          The insights digest follows it rather than preceding it, so the first
+          thing under the H1 is this page's own story. */}
+      {isVisible("summaryCards") && <MonthlyRhythm data={data} />}
 
-      {isVisible("summaryCards") && <SummaryCards data={data} />}
+      <InsightsDigestPanel />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>

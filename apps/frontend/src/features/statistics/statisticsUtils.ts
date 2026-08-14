@@ -8,7 +8,10 @@ import type { WidgetDefinition } from "@/hooks/useWidgetVisibility";
 export type PivotValueMode = "absolute" | "net" | "income" | "expense";
 
 export const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey: string }> = [
-  { id: "summaryCards",     labelKey: "statsPage.widget.summaryCards",     defaultVisible: true },
+  // id kept as "summaryCards" on purpose: it is the persisted key in the
+  // widget_visibility setting, so renaming it would silently un-hide the page
+  // opening for anyone who had hidden it. The widget itself is MonthlyRhythm.
+  { id: "summaryCards",     labelKey: "statsPage.widget.monthlyRhythm",    defaultVisible: true },
   { id: "monthly",          labelKey: "statsPage.widget.monthly",          defaultVisible: true },
   { id: "netTrend",         labelKey: "statsPage.widget.netTrend",         defaultVisible: true },
   { id: "categoryPie",      labelKey: "statsPage.widget.categoryPie",      defaultVisible: true },

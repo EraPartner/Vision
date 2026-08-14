@@ -135,7 +135,7 @@ package "Statistics (April 2026 Refactoring)" {
     +Render-prop children
   }
   
-  class SummaryCards
+  class MonthlyRhythm
   class MonthlyChart
   class NetTrendChart
   class CategoryPieChart
@@ -148,7 +148,7 @@ package "Statistics (April 2026 Refactoring)" {
   class SavedChartsSection
   
   StatisticsPage --> ChartCard
-  StatisticsPage --> SummaryCards
+  StatisticsPage --> MonthlyRhythm
   StatisticsPage --> MonthlyChart
   StatisticsPage --> NetTrendChart
   StatisticsPage --> CategoryPieChart

@@ -3,12 +3,12 @@ title: Statistics Components
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-04-28
+updated: 2026-08-14
 tags: [components, statistics, charts, frontend, refactoring, lazy-loading, memoization, performance, phase-13, drillthrough]
 description: Statistics page sub-components and shared utilities for composable analytics widgets with lazy-loading per tab and component memoization. Phase 13 adds pivot table drillthrough to transactions page.
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
-  - apps/frontend/src/components/statistics/
+  - apps/frontend/src/features/statistics/
   - apps/frontend/src/hooks/useChartCurrencyFormatter.ts
 aliases: [statistics components, stats components, analytics components]
 ---
@@ -43,7 +43,7 @@ function StatisticsPage() {
   
   return (
     <Tabs>
-      {isVisible("summaryCards") && <SummaryCards ... />}
+      {isVisible("summaryCards") && <MonthlyRhythm data={data} />}
       {isVisible("monthly") && (
         <Suspense fallback={<ChartSkeleton />}>
           <ChartCard {...chartCardProps}><MonthlyChart /></ChartCard>
@@ -103,34 +103,45 @@ interface ChartCardProps {
 
 ---
 
-### SummaryCards
+### MonthlyRhythm
 
-**File:** `SummaryCards.tsx` (72 lines)  
-**Purpose:** 4-card KPI grid (income, spending, net, months tracked)
+**File:** `MonthlyRhythm.tsx`  
+**Purpose:** The page's opening lede — the *shape* of the months. Replaced
+`SummaryCards`, whose first three tiles restated the dashboard hero row (total
+income / total spending / net) and whose fourth ("Months tracked") was page
+metadata minted to complete a four-up grid.
 
 **Props:**
 
 ```typescript
-interface SummaryCardsProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+interface MonthlyRhythmProps {
+  data: StatisticsData;
 }
 ```
 
-**Cards:**
+**Anatomy:**
 
-| Card | Value | Format |
-|------|-------|--------|
-| Income | `totalIncome` | Currency |
-| Spending | `totalSpending` | Currency |
-| Net | `totalIncome - totalSpending` | Currency |
-| Months Tracked | `allPeriods.length` | Count |
+| Slot | Value | Notes |
+|------|-------|-------|
+| Headline | `monthlyData[i].net` for the scrubbed month (latest by default) | Compact + `RollingNumber`; `DeltaPill` vs the month before |
+| Typical month in / out | `averageMonthlyIncome` / `averageMonthlySpending` | Exact (`Money`) |
+| Bar strip | `monthlyData[].net`, above/below a zero baseline | Pointer hover + ←/→ · Home/End · Escape via `useChartKeyboardNav` |
+| Strongest / Toughest month | max / min `net` with its period label | Exact (`Money`) |
+| Months in the black | count of `net >= 0` over `monthlyData.length` | — |
+
+Only the hero abbreviates; every detail figure renders exact.
 
 **Usage:**
 
 ```tsx
-<SummaryCards data={data} isLoading={isLoading} />
+{isVisible("summaryCards") && <MonthlyRhythm data={data} />}
 ```
+
+> [!note] Widget id
+> The widget id stays `summaryCards` — it is the persisted key in the
+> `widget_visibility` setting, so renaming it would silently un-hide the page
+> opening for anyone who had hidden it. Only its label key changed
+> (`statsPage.widget.monthlyRhythm`).
 
 ---
 
@@ -716,7 +727,7 @@ The Statistics page is organized into 4 tabs:
 
 ### Overview Tab
 
-- `SummaryCards` — 4 KPI cards
+- `MonthlyRhythm` — monthly-trends lede (page opening, above the tabs)
 - `MonthlyChart` — Monthly income vs spending
 - `NetTrendChart` — Net balance trend
 
