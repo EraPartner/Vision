@@ -26,8 +26,8 @@ dist/
 *~
 
 # Agent/Dev Tools
-# Shareable Claude config is tracked so cloud sessions and routines pick it up
-# (they start from a fresh clone). Host-specific bits live in CLAUDE.local.md.
+# Shareable coding-agent config is tracked so fresh clones receive it.
+# Host-specific bits live in CLAUDE.local.md and AGENTS.local.md.
 .obsidian/
 .claude/*
 !.claude/skills/
@@ -35,7 +35,7 @@ dist/
 !.claude/rules/
 !.claude/settings.json
 .opencode/
-AGENTS.*
+AGENTS.local.md
 CLAUDE.*
 !CLAUDE.md
 .playwright-mcp

@@ -2,7 +2,7 @@
 
 Run before proposing, committing, or pushing a change. Encodes the review knowledge that
 otherwise lives in the maintainer's head so review catches issues automatically — the *why*
-behind each item is in `CLAUDE.md` (Conventions, Verification, Security) and `docs/`.
+behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `docs/`.
 
 ## Secrets & safety
 
@@ -31,7 +31,7 @@ behind each item is in `CLAUDE.md` (Conventions, Verification, Security) and `do
 
 - [ ] `bun run lint` and `bun run lint:backend` — ESLint clean (frontend + backend).
 - [ ] `bun run typecheck` (frontend strict) and `cd apps/node-backend && bunx tsc -p tsconfig.check.json`.
-- [ ] `bun run test` (backend vitest) and `bun run test:frontend` — scale depth to risk per CLAUDE.md.
+- [ ] `bun run test` (backend vitest) and `bun run test:frontend` — scale depth to risk per AGENTS.md.
 - [ ] `bun run validate-locales` and `bun run check-endpoint-matrix` pass.
 - [ ] High-risk (security / migration / destructive) also: `bun run build`. One-shot: `bun run check`.
 - [ ] CI (workflow **CI**, required check **CI Complete**) expected green; `.githooks/pre-push`
@@ -42,5 +42,5 @@ behind each item is in `CLAUDE.md` (Conventions, Verification, Security) and `do
 - [ ] Signed commit (SSH Secure Enclave key; `commit.gpgsign`/`tag.gpgsign` on) — don't bypass hooks.
 - [ ] Conventional Commit message `type(scope): subject` (enforced by `.githooks/commit-msg`);
       commit to `main` directly (no feature branch).
-- [ ] Behavior changed → affected `docs/` pages updated (via `vision-kb-updater`); scope kept tight,
+- [ ] Behavior changed → affected `docs/` pages updated (via `update-vision-docs`); scope kept tight,
       follow-ups logged rather than folded in.

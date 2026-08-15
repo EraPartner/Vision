@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vision DB Migrations"
+  short_description: "Create and verify safe Vision schema migrations"
+  default_prompt: "Use $db-migrations to implement this Vision database schema change safely."

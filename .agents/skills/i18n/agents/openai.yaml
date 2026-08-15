@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vision i18n"
+  short_description: "Update and validate Vision locale content"
+  default_prompt: "Use $i18n to update these Vision translations and validate locale parity."

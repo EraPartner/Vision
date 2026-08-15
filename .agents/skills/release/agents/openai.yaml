@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vision Release"
+  short_description: "Build and verify Vision desktop releases"
+  default_prompt: "Use $release to prepare and verify this Vision release."

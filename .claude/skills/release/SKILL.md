@@ -4,27 +4,8 @@ description: Vision release and packaging — building the Electron .dmg, versio
 disable-model-invocation: true
 ---
 
-# Release / packaging
+# Vision release workflow
 
-Vision ships as an Electron `.dmg` (Apple Silicon); the shell starts and supervises a Docker stack
-(Postgres + backend). Release image: `ghcr.io/erapartner/vision`.
-
-```bash
-npm run dist                 # frontend build, then electron-builder in packaging/electron/
-bun run electron:dev | electron:prod | electron:clean
-bun run docker:dev | docker:clean | docker:logs
-```
-
-## Critical sync rules (caused real data loss before — v1.0.2)
-
-- **`packaging/electron/resources/docker-compose.yml` is baked into the packaged `.app` and MUST
-  mirror the root `docker-compose.yml`.** Any named volume added to root must be added there too —
-  omitting the attachments volume caused the v1.0.2 data-loss bug. Check this on EVERY compose edit.
-- **Version bump touches two files:** root `package.json` and `packaging/electron/package.json`
-  must match.
-- **Electron security posture:** on any electron/runtime change keep `contextIsolation` on,
-  `nodeIntegration` off, `sandbox` on.
-
-Compose files: `docker-compose.yml` (prod-mode local dev) · `docker-compose.dev.yml` (hot-reload) ·
-`docker-compose.clean.yml` (clean-slate rebuild) · `packaging/electron/resources/docker-compose.yml`
-(packaged copy — keep in sync per above).
+The portable workflow in `.agents/skills/release/SKILL.md` is canonical. Read it in full, then
+follow it using Claude Code's available tools. Do not maintain a second copy of the release
+procedure here.
