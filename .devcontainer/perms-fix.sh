@@ -24,6 +24,7 @@ fix_dir_owner() {
 # the image-side directory perms. Repair to dev / postgres ownership so the
 # respective users can write.
 fix_dir_owner /home/dev/.claude       dev
+fix_dir_owner /home/dev/.codex        dev
 fix_dir_owner /home/dev/.config       dev
 fix_dir_owner /var/lib/postgresql     postgres
 

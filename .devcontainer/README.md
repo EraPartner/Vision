@@ -32,6 +32,10 @@ running), replays the post-create (once) / post-start (every start)
 lifecycle as `dev`, forwards the Claude token from the Keychain, and auto-syncs
 `~/.claude` back to the host on session exit.
 
+Codex uses `.devcontainer/bin/codex` or `vision-codex`. It shares the image and
+security controls, but uses a separate container and private `~/.codex` volume.
+The first interactive launch performs device-code login; host Codex state is not mounted.
+
 The fish function `vision-claude` (in `~/.config/fish/functions/`) walks up from
 `$PWD` to the repo (matching `.devcontainer/Dockerfile`), falls back to
 `$VISION_HOME`, then runs that launcher. Use it anywhere:
