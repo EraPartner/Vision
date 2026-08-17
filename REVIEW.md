@@ -42,5 +42,5 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 - [ ] Signed commit (SSH Secure Enclave key; `commit.gpgsign`/`tag.gpgsign` on) — don't bypass hooks.
 - [ ] Conventional Commit message `type(scope): subject` (enforced by `.githooks/commit-msg`);
       commit to `main` directly (no feature branch).
-- [ ] Behavior changed → affected `docs/` pages updated (via `update-vision-docs`); scope kept tight,
-      follow-ups logged rather than folded in.
+- [ ] Documentation impact evaluated after implementation; affected pages updated via
+      `update-vision-docs`, or the completion report explains why no update was required.

@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-08-15
-last_modified: 2026-08-15
+updated: 2026-08-17
+last_modified: 2026-08-17
 tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip, dev-observability, devtools, api-inspector, devcontainer, claude-code-permissions]
 description: "Main entry point to Vision project documentation for developers and coding agents."
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -66,7 +66,7 @@ LIMIT 5
 > 3. **Update relevant docs** - Keep API, features, and guides docs in sync with code
 > 4. **Use templates** - Start new documents from templates in `docs/templates/`
 > 5. **Use wiki-links** - Link to code with `[[apps/node-backend/src/routes/file.js]]` format
-> 6. **Search first** - Use `obsidian_simple_search` to find existing docs
+> 6. **Search first** - Use repository search to find existing docs
 
 **Start here:** [[AGENTS.md]] → [[docs/guides/ai-agent-kb-usage|AI Agent KB Usage]] → [[docs/guides/kb-maintenance|KB Maintenance]]
 

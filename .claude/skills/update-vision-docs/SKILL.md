@@ -1,6 +1,6 @@
 ---
 name: update-vision-docs
-description: Synchronize the Vision Obsidian knowledge base, PlantUML diagrams, and interactive flow visualizer with implementation changes. Use after behavior, API, architecture, schema, integration, security, workflow, package, route, service, repository, page, hook, store, provider, or other project knowledge changes that affect docs/.
+description: Evaluate documentation impact from completed Vision implementation diffs and synchronize the Obsidian knowledge base, PlantUML diagrams, and flow visualizer. Use when a change may alter documented behavior, APIs, architecture, schema, environment or configuration, integrations, security, workflows, packaging, public interfaces, or code locations, and when the user asks to review or update docs. Do not invoke for clearly docs-neutral formatting, tests-only work, generated outputs, or internal refactors unless they expose stale documentation.
 ---
 
 # Update Vision documentation
@@ -10,5 +10,6 @@ before making documentation changes, then follow it using Claude Code's availabl
 skills.
 
 For a substantial documentation update, delegate the documentation-only work to the
-`vision-kb-updater` subagent after the implementation diff is ready. Review its output before
-committing. For a small documentation correction, apply the portable workflow directly.
+`vision-kb-updater` subagent after the implementation diff is stable. Review its output before
+final verification and commit. For a small documentation correction, apply the portable workflow
+directly.

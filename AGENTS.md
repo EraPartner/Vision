@@ -66,9 +66,23 @@ and documentation synchronization.
 
 ## Required synchronization
 
-- Before any direct `docs/` edit, read `docs/AGENTS.md`. Update affected pages with behavior
-  changes and use the `update-vision-docs` skill for non-trivial changes.
-- API change: update the route documentation and endpoint matrix; state whether it is breaking.
+Use this documentation sequence:
+
+1. Before implementation, find the relevant intent, contract, and architecture docs.
+2. After the implementation diff is stable, but before final verification and commit, evaluate its
+   documentation impact. Use the `update-vision-docs` skill whenever a documented surface may have
+   changed. Read `docs/AGENTS.md` before editing anything under `docs/`.
+3. Update affected docs in the same change. If no update is required, state why in the completion
+   report instead of creating a placeholder note.
+
+Documentation is required when a change alters user-visible behavior, an API or schema contract,
+configuration or environment behavior, architecture or ownership, an integration, a security
+property, packaging or operations, or a documented public interface or code location. It is
+usually not required for tests-only changes, formatting, comments, generated-output refreshes, or
+internal refactors that preserve behavior, contracts, architecture, and documented paths.
+
+- API change: update `openapi.yaml`, the route documentation, and the endpoint matrix; regenerate
+  derived types and state whether the change is breaking.
 - Localization change: use the `i18n` skill and finish with `bun run validate-locales`.
 - Schema change: use the `db-migrations` skill; create a migration and rollback plan, but do not
   apply it to user data without approval.
@@ -103,5 +117,8 @@ Finish with changed files, checks run, skipped checks, residual risk, and follow
 
 Commit directly to `main`; do not create a branch unless the user asks.
 
-At the end of a substantial work session, summarize the work as an Obsidian note in `docs/` for
-the project vault. Follow `docs/AGENTS.md` and use the `update-vision-docs` skill for the note.
+Create a session note only when a substantial session produces durable context not already captured
+in an ADR, feature, reference, or guide. Examples include a multi-stage investigation, a cross-module
+delivery, or operational findings needed for later work. Do not create session notes for review-only
+work, routine fixes or refactors, formatting, generated-output refreshes, or documentation-only
+maintenance unless the user asks for one.

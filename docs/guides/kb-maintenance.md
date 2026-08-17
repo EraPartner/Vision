@@ -2,140 +2,84 @@
 title: KB Maintenance Guide
 type: guide
 status: active
-date: 2026-03-31
+date: 2026-08-17
 tags: [guide, maintenance, kb-sync, documentation, workflow]
-description: How to keep the Vision knowledge base in sync with code changes after every commit
-aliases: [kb maintenance, update docs, sync docs, documentation workflow, post-commit]
+description: Decide when implementation changes require Vision knowledge-base updates and synchronize affected docs before commit.
+aliases: [kb maintenance, update docs, sync docs, documentation workflow]
 ---
 
 # KB Maintenance Guide
 
 > [!abstract] Purpose
-> This guide ensures the knowledge base stays synchronized with the codebase. Every code change should trigger a documentation update.
+> Keep the knowledge base accurate without creating documentation churn for changes that do not
+> alter documented facts.
 
-## When to Update the KB
+## Timing
 
-| Code Change | Update These Docs |
-|-------------|-------------------|
-| New API endpoint | Create/update `docs/api/<resource>.md`, update `docs/api/index.md` |
-| New database table/column | Update `docs/adr/002-database-schema.md`, update `docs/diagrams/backend-database-schema.puml` |
-| New migration | Add to `docs/reference/migration-dependencies.md`, add migration reference to relevant feature docs |
-| New frontend page | Update `docs/features/views.md`, `docs/reference/frontend-routes.md`, `docs/architecture/frontend-architecture.md` |
-| New React component | Update relevant `docs/components/*.md` file |
-| New hook | Update `docs/components/hooks.md` |
-| New service | Update `docs/architecture/backend-architecture.md`, create/update integration doc |
-| New env var | Update `docs/reference/environment-variables.md` |
-| New React Query key | Update `docs/reference/react-query-keys.md` |
-| Changed error response | Update `docs/reference/error-codes.md` |
-| Changed rate limit | Update `docs/reference/error-codes.md`, relevant API doc |
-| New bank adapter | Update `docs/integrations/bank-adapters.md` |
-| New price provider | Update `docs/integrations/price-providers.md` |
+1. **Before implementation:** find the relevant feature, contract, architecture decision, and code
+   convention documents.
+2. **After the implementation diff is stable:** evaluate documentation impact against the actual
+   code change.
+3. **Before final verification and commit:** update every affected document, diagram, index, and
+   generated contract surface in the same change.
+4. **At completion:** report which docs changed. If none changed, record the reason.
 
-## Maintenance Checklist
+## Decision table
 
-After every code change, run through this checklist:
+| Update required | Usually no update required |
+|---|---|
+| User-visible behavior or workflow changed | Tests or fixtures only |
+| API contract or rate limit changed | Formatting, comments, or lint-only edits |
+| Schema, environment, configuration, security, packaging, or operations changed | Generated-output refresh with unchanged source behavior |
+| Architecture, ownership, dependency, integration, or end-to-end flow changed | Internal refactor preserving behavior, contracts, architecture, and documented paths |
+| Documented interface, component role, or code location changed | Dependency update with no documented compatibility, security, or build effect |
+| Existing docs are inaccurate or describe a removed limitation | Bug fix restoring behavior that docs already describe accurately |
 
-### 1. Identify What Changed
-```bash
-# See modified files
-git diff --name-only HEAD~1..HEAD
+When uncertain, search the vault for changed symbols, paths, endpoints, configuration keys, and
+workflow names. Do not create a placeholder document solely to prove that documentation was
+considered.
 
-# See recent commits
-git log --oneline -5
-```
+## Routing
 
-### 2. Update Relevant Docs
-For each modified file, ask:
-- **Is this an API change?** → Update API doc
-- **Is this a schema change?** → Update ADR-002 and PUML diagram
-- **Is this a new feature?** → Update/create feature doc
-- **Is this a new component?** → Update component doc
-- **Is this a new service?** → Update architecture doc
+| Change | Synchronize |
+|---|---|
+| API | `openapi.yaml`, route page under `docs/api/`, endpoint matrix, generated types |
+| Behavior | Relevant feature, integration, guide, security, performance, testing, or troubleshooting page |
+| Schema | Data-model reference, migration documentation, diagrams, and a new ADR when warranted |
+| Environment or configuration | Environment reference and affected setup, deployment, or troubleshooting guide |
+| Component, hook, service, or repository | Existing docs only when interface, role, ownership, relationship, or location changed |
+| Architecture or end-to-end flow | Relevant PlantUML and `docs/flow-visualizer.html` |
+| New document | Relevant index or map-of-content note plus reciprocal related links |
 
-### 3. Update Frontmatter
-```yaml
-# Always update the date when modifying a doc
-date: 2026-03-31
-```
+Do not rewrite accepted Architecture Decision Records (ADRs). Add a new ADR that supersedes the
+old decision.
 
-### 4. Update Code Links
-Add `[[path/to/file.js]]` links to any new or modified files:
-```markdown
-Code links: [[apps/node-backend/src/services/newService.js]]
-```
+## Diagram threshold
 
-### 5. Update Diagrams (if architecture changed)
-- Backend changes → `docs/diagrams/backend-*.puml`
-- Frontend changes → `docs/diagrams/frontend-*.puml`
-- System changes → `docs/diagrams/system-architecture.puml`
+Update diagrams only for structural changes: added, removed, renamed, or moved components; changed
+ownership; changed load-bearing dependencies; or changed workflow hops and payloads. A logic edit
+inside an existing component does not by itself require a diagram update.
 
-### 6. Update Index Files
-If you created a new doc, add it to the relevant index:
-- New API doc → `docs/api/index.md`
-- New feature doc → `docs/features/index.md`
-- New component doc → `docs/components/index.md`
-- New guide → `docs/guides/index.md`
+## Completion checklist
 
-## Automated Checks
+- [ ] Documentation impact was evaluated after implementation.
+- [ ] Updated claims match code and tests rather than intended future behavior.
+- [ ] Changed notes have current frontmatter dates and valid wikilinks.
+- [ ] New or heavily changed notes have index and reciprocal related links.
+- [ ] API, diagram, and flow-visualizer surfaces were synchronized when applicable.
+- [ ] Validation and any skipped checks are reported.
+- [ ] If no docs changed, the completion report gives a specific reason.
 
-Run these checks periodically to catch drift:
+## Session notes
 
-### Check for Missing Frontmatter
-```bash
-# Find docs missing tags
-rg -l "^---" docs/ | while read f; do head -10 "$f" | grep -q "tags:" || echo "MISSING TAGS: $f"; done
-```
-
-### Check for Broken Wiki-Links
-```bash
-# Find wiki-links to non-existent component docs
-rg '\[\[docs/components/[a-z-]+\|' docs/ | while read line; do
-  link=$(echo "$line" | grep -o '\[\[docs/components/[^|]*')
-  file="${link#[[}.md"
-  [ ! -f "$file" ] && echo "BROKEN: $line"
-done
-```
-
-### Check for Stale Terminology
-```bash
-# Find deprecated provider names
-rg "CoinGecko|Kraken" docs/ --exclude="glossary.md" --exclude="tag-taxonomy.md"
-```
-
-### Check for Orphan Docs
-```bash
-# Find docs not referenced by any other doc
-rg -l "^---" docs/ | while read f; do
-  name=$(basename "$f" .md)
-  count=$(rg -l "$name" docs/ | wc -l)
-  [ "$count" -le 1 ] && echo "ORPHAN: $f (referenced $count times)"
-done
-```
-
-## Common Patterns
-
-### Adding a New API Endpoint
-1. Create `docs/api/<resource>.md` using template from `docs/api/transactions.md`
-2. Add to `docs/api/index.md` quick reference table
-3. Add curl/apiClient examples
-4. Add to `docs/reference/error-codes.md` if new error type
-5. Update `docs/reference/code-patterns.md` if new pattern
-
-### Adding a New Database Table
-1. Add table definition to `docs/adr/002-database-schema.md`
-2. Add to `docs/diagrams/backend-database-schema.puml`
-3. Add migration reference to relevant feature docs
-4. Update `docs/reference/migration-dependencies.md`
-5. Update `docs/reference/database-triggers.md` if new triggers
-
-### Adding a New Frontend Page
-1. Add to `docs/features/views.md`
-2. Add to `docs/reference/frontend-routes.md`
-3. Update `docs/architecture/frontend-architecture.md` routes diagram
-4. Add to `docs/components/index.md` if new components
+Create a session note only for durable context not captured better in an ADR, feature, reference,
+or guide. Examples include multi-stage investigations, cross-module deliveries, and operational
+findings needed for future work. Skip session notes for routine fixes, review-only work, internal
+refactors, formatting, generated-output refreshes, and documentation-only maintenance unless the
+user asks for one.
 
 ## Related
 
+- [[AGENTS.md|Repository agent guidance]]
 - [[docs/guides/ai-agent-kb-usage|AI Agent KB Usage Guide]]
-- [[docs/tag-taxonomy|Tag Taxonomy]]
 - [[docs/guides/contributing|Contributing Guide]]

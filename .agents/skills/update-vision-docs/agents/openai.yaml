@@ -1,4 +1,4 @@
 interface:
   display_name: "Update Vision Docs"
-  short_description: "Keep the Vision knowledge base synchronized"
-  default_prompt: "Use $update-vision-docs to synchronize Vision documentation with these code changes."
+  short_description: "Evaluate and synchronize Vision documentation"
+  default_prompt: "Use $update-vision-docs to evaluate this implementation diff and synchronize only affected Vision documentation."

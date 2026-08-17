@@ -2,7 +2,7 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-04-24
+date: 2026-08-17
 tags: [guide, contributing, development, workflow, code-standards, typescript, error-handling, type-safety]
 description: How to contribute to Vision — development workflow, code standards, testing, and type-safe TypeScript patterns
 aliases: [contributing-guide, development-workflow, code-standards, pull-requests, typescript-standards, error-handling-guide]
@@ -328,7 +328,7 @@ When working with AI agents on this project:
 1. **Read AGENTS.md** - Contains project-specific guidelines
 2. **Check knowledge base** - Use [[docs/index]]
 3. **Run tests** - Verify changes work
-4. **Update docs** - Keep documentation in sync
+4. **Evaluate docs impact** - Update docs only when a documented surface changed
 
 See [[AGENTS.md]] for more details on working with AI agents.
 
@@ -339,7 +339,7 @@ Before submitting a PR, verify:
 - [ ] Code follows style guidelines
 - [ ] Tests pass locally
 - [ ] No linting errors
-- [ ] Documentation updated
+- [ ] Documentation impact evaluated; affected docs updated or a no-update reason recorded
 - [ ] No console.log/debug code left
 - [ ] Error handling implemented
 - [ ] Related docs linked in PR
@@ -364,6 +364,8 @@ Include:
 
 ## Related
 
+- [[docs/guides/ai-agent-kb-usage|AI Agent KB Usage Guide]]
+- [[docs/guides/kb-maintenance|KB Maintenance Guide]]
 - [[docs/guides/setup|Setup Guide]]
 - [[docs/guides/deployment|Deployment Guide]]
 - [[docs/adr/index|Architecture Decisions]]

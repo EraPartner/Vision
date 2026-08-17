@@ -2,144 +2,59 @@
 title: AI Agent KB Usage Guide
 type: guide
 status: active
-date: 2026-03-31
-tags: [guide, ai-agent, mcp, obsidian, usage]
-description: How AI agents should use the Obsidian MCP tools to effectively navigate and update the Vision knowledge base
-aliases: [ai agent guide, mcp usage, obsidian mcp, agent instructions, how to use kb]
+date: 2026-08-17
+tags: [guide, ai-agent, obsidian, usage, documentation, model-agnostic]
+description: Model-agnostic workflow for coding agents to find, evaluate, and update the Vision knowledge base.
+aliases: [ai agent guide, agent instructions, how to use kb]
 ---
 
 # AI Agent KB Usage Guide
 
 > [!abstract] Purpose
-> This guide tells AI agents how to use the Obsidian MCP tools to navigate, search, and update the Vision knowledge base effectively.
+> Give any coding agent the same repository-first workflow for reading and maintaining the Vision
+> knowledge base.
 
-## MCP Tools Available
+## Before implementation
 
-| Tool | Purpose | When to Use |
-|------|---------|-------------|
-| `obsidian_simple_search` | Full-text search across all docs | Finding docs by keyword or concept |
-| `obsidian_complex_search` | Query by tags, paths, frontmatter | Finding docs by type, tag, or date |
-| `obsidian_list_files_in_dir` | List files in a directory | Discovering what docs exist in a section |
-| `obsidian_get_file_contents` | Read a specific doc | Getting detailed information from a known doc |
-| `obsidian_patch_content` | Insert content into a doc | Updating existing docs |
-| `obsidian_append_content` | Add content to end of doc | Adding to lists or creating new sections |
-| `obsidian_delete_file` | Remove a doc | Cleaning up obsolete docs |
+1. Read [[AGENTS.md|the repository guidance]] and any closer `AGENTS.md` file.
+2. Search `docs/` for the feature, endpoint, schema, integration, workflow, and code paths in scope.
+3. Read relevant accepted ADRs. Treat them as historical decisions; never rewrite them.
+4. Compare documentation intent with current code behavior and call out conflicts.
 
-## Workflow: Before Making Code Changes
+Use available repository search and file tools. `rg` and `rg --files` are the portable defaults.
+Obsidian-aware tools may be used when available, but the workflow must not depend on a specific
+model, plugin, or host application.
 
-1. **Search for existing docs** — Don't assume something doesn't exist
-   ```
-   obsidian_simple_search: "planned transactions"
-   obsidian_complex_search: {"glob": ["docs/api/*.md", {"var": "path"}]}
-   ```
+## After implementation
 
-2. **Read relevant ADRs** — Understand architectural decisions
-   ```
-   obsidian_list_files_in_dir: "docs/adr"
-   obsidian_get_file_contents: "docs/adr/002-database-schema.md"
-   ```
+Wait until the implementation diff is stable, then use the decision gate in
+[[docs/guides/kb-maintenance|KB Maintenance Guide]] before final verification and commit.
 
-3. **Check API docs** — Verify endpoints don't already exist
-   ```
-   obsidian_simple_search: "POST /api/transactions"
-   ```
+- Update docs when behavior, contracts, architecture, configuration, security, integrations,
+  packaging, operations, public interfaces, or documented paths changed.
+- Skip docs-neutral tests, formatting, generated outputs, and behavior-preserving internal
+  refactors.
+- When no update is required, record the reason in the completion report.
 
-4. **Read code patterns** — Follow project conventions
-   ```
-   obsidian_get_file_contents: "docs/reference/code-patterns.md"
-   ```
+Use the `update-vision-docs` skill for changes that may affect a documented surface.
 
-## Workflow: After Making Code Changes
+## Editing Obsidian Markdown
 
-1. **Identify what changed** — List modified files
-2. **Update relevant docs** — Use `obsidian_patch_content` to update sections
-3. **Update frontmatter dates** — Set `date: YYYY-MM-DD` to today
-4. **Update diagrams** — If architecture changed, update PUML files
-5. **Add code links** — Use `[[path/to/file.js]]` format
-6. **Update index files** — If new docs added, update the relevant index
+- Preserve YAML frontmatter, wikilinks, embeds, callouts, and Dataview queries.
+- Update the date of every changed content page.
+- Use `[[path/to/note|label]]` for vault links and `[[path/to/code.js]]` for code links.
+- Link new or heavily changed notes from an index and at least one related note.
+- Prefer updating an existing canonical page over creating a duplicate.
 
-## Search Strategies
+## Completion
 
-### Find docs by type
-```
-obsidian_complex_search: {"and": [{"glob": ["docs/*.md", {"var": "path"}]}, {"=": [{"var": "type"}, "endpoint"]}]}
-```
-
-### Find recently updated docs
-```
-obsidian_complex_search: {"and": [{"glob": ["docs/*.md", {"var": "path"}]}, {">=": [{"var": "date"}, "2026-03-01"]}]}
-```
-
-### Find docs by tag
-```
-obsidian_complex_search: {"and": [{"glob": ["docs/*.md", {"var": "path"}]}, {"=": [{"var": "tags"}, "feature"]}]}
-```
-
-### Find all API docs
-```
-obsidian_list_files_in_dir: "docs/api"
-```
-
-### Find docs mentioning a specific file
-```
-obsidian_simple_search: "transactionRepository.js"
-```
-
-## Updating Docs
-
-### Update a section
-```
-obsidian_patch_content:
-  filepath: "docs/api/transactions.md"
-  operation: "replace"
-  target_type: "heading"
-  target: "Endpoints"
-  content: "New content here"
-```
-
-### Add to a list
-```
-obsidian_append_content:
-  filepath: "docs/api/index.md"
-  content: "- [[docs/api/new-endpoint|New Endpoint]]"
-```
-
-### Update frontmatter date
-```
-obsidian_patch_content:
-  filepath: "docs/api/transactions.md"
-  operation: "replace"
-  target_type: "frontmatter"
-  target: "date"
-  content: "2026-03-31"
-```
-
-## Common Mistakes to Avoid
-
-| Mistake | Correct Approach |
-|---------|-----------------|
-| Creating a doc that already exists | Always search first with `obsidian_simple_search` |
-| Using absolute paths in wiki-links | Use `[[docs/api/file]]` format, not full paths |
-| Forgetting to update frontmatter date | Always update `date:` when modifying a doc |
-| Breaking wiki-links | Verify the target file exists before linking |
-| Not checking ADRs before decisions | Read `docs/adr/` before making architectural changes |
-| Updating only one related doc | Check for cross-references in index files |
-
-## Key Docs to Always Check
-
-| When... | Check... |
-|---------|----------|
-| Adding a new API endpoint | [[docs/api/index\|API Index]], [[docs/reference/error-codes\|Error Codes]] |
-| Adding a new page | [[docs/reference/frontend-routes\|Frontend Routes]], [[docs/features/views\|Views]] |
-| Changing database schema | [[docs/adr/002-database-schema\|Database Schema]], [[docs/reference/migration-dependencies\|Migration Dependencies]] |
-| Adding a new service | [[docs/reference/code-patterns\|Code Patterns]], [[docs/architecture/backend-architecture\|Backend Architecture]] |
-| Adding a new component | [[docs/components/index\|Components Index]], [[docs/reference/code-patterns\|Code Patterns]] |
-| Changing env vars | [[docs/reference/environment-variables\|Environment Variables]] |
+Report documents changed, diagram or flow-visualizer impact, graph and frontmatter checks,
+validation, skipped checks, and remaining gaps. Confirm documentation claims against code and
+tests; never present planned behavior as implemented.
 
 ## Related
 
-- [[docs/tag-taxonomy\|Tag Taxonomy]] - Controlled vocabulary for tagging
-- [[docs/glossary\|Glossary]] - Key terms and disambiguation
-- [[docs/guides/how-to-add-api-endpoint\|How to Add an API Endpoint]]
-- [[docs/guides/how-to-add-react-component\|How to Add a React Component]]
-- [[docs/guides/how-to-add-new-page\|How to Add a New Page]]
+- [[docs/index|Vision Knowledge Base]]
+- [[docs/guides/kb-maintenance|KB Maintenance Guide]]
+- [[docs/guides/contributing|Contributing Guide]]
+- [[docs/adr/index|Architecture Decision Records]]
