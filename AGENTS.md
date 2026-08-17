@@ -122,3 +122,10 @@ in an ADR, feature, reference, or guide. Examples include a multi-stage investig
 delivery, or operational findings needed for later work. Do not create session notes for review-only
 work, routine fixes or refactors, formatting, generated-output refreshes, or documentation-only
 maintenance unless the user asks for one.
+
+## Cloud sessions
+
+Run `bash .codex/cloud/setup.sh` as the Codex cloud environment setup command. Use only disposable,
+non-production database credentials in cloud environment variables. Cloud sessions cannot validate
+the macOS Electron package, host Demo app, Apple Container isolation, or hardware-backed signing;
+report those checks as skipped and leave them for a local session.
