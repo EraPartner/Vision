@@ -10,5 +10,5 @@ and verification rules there instead of duplicating them in this file.
 - Path-scoped compatibility rules live in `.claude/rules/`. The canonical nested guidance remains
   in `docs/AGENTS.md` and `packaging/AGENTS.md`.
 - Host-specific Claude setup belongs in the gitignored `CLAUDE.local.md`.
-- The optional dev container currently supports Claude Code only. Codex synchronization is deferred
-  and documented in the gitignored `AGENTS.local.md`.
+- The optional dev container supports both Claude Code and Codex through separate launchers and
+  isolated provider state. See `.devcontainer/README.md` for login and lifecycle details.

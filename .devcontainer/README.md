@@ -1,9 +1,8 @@
 # Vision devcontainer
 
-Hardened dev environment for working on Vision with the Claude CLI in
-`--dangerously-skip-permissions` mode. The entire dev stack — Postgres,
-backend, frontend — runs natively inside this container, so there is no
-Docker-in-Docker.
+Hardened dev environment for working on Vision with Claude Code or OpenAI
+Codex. The entire dev stack — Postgres, backend, frontend — runs natively
+inside this container, so there is no Docker-in-Docker.
 
 ## What's inside
 
