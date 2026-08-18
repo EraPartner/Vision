@@ -25,7 +25,7 @@
 
 set -eu
 
-REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+REPO_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$REPO_ROOT"
 
 CONTAINER=${VISION_TEST_DB_CONTAINER:-vision-test-db}
@@ -41,6 +41,13 @@ fi
 if ! command -v docker >/dev/null 2>&1; then
   echo "[test-db] docker not found. Install it, or export TEST_DATABASE_URL yourself" >&2
   echo "[test-db] to point at an already-migrated Postgres." >&2
+  exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  echo "[test-db] Docker CLI found, but the daemon is unavailable." >&2
+  echo "[test-db] Export TEST_DATABASE_URL for an already-migrated Postgres." >&2
+  echo "[test-db] In Codex cloud, configure and run .codex/cloud/setup.sh." >&2
   exit 1
 fi
 

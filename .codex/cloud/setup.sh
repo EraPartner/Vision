@@ -43,5 +43,14 @@ python3 -m venv venv
 venv/bin/python -m pip install -r config/requirements.txt
 PUPPETEER_SKIP_DOWNLOAD=true bun install --frozen-lockfile
 
+if docker info >/dev/null 2>&1; then
+  printf '%s\n' \
+    'Docker daemon available. bun run test:db will use a disposable Postgres container.'
+else
+  printf '%s\n' \
+    'Docker CLI installed, but no Docker daemon is available. Provisioning native PostgreSQL 18.'
+  bash "$script_dir/provision-test-db.sh"
+fi
+
 printf '%s\n' \
-  'Vision cloud setup complete. Docker daemon, database, and macOS checks require separate setup.'
+  'Vision cloud setup complete. macOS-only checks still require a local session.'

@@ -3,9 +3,9 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-11
-last-updated: 2026-08-11
-last_updated_timestamp: 2026-08-11T00:00:00Z
+updated: 2026-08-17
+last-updated: 2026-08-17
+last_updated_timestamp: 2026-08-17T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -90,7 +90,7 @@ bun run test:db tests/services/transferReconciliation.db.test.js
 VISION_TEST_DB_KEEP=1 bun run test:db
 ```
 
-Requires Docker and the Python Alembic toolchain (`pip install -r config/requirements.txt`) — migrations are Alembic even though the backend is Node. If `TEST_DATABASE_URL` is already exported the script uses that database as-is and starts no container.
+Requires Docker and the Python Alembic toolchain (`pip install -r config/requirements.txt`) — migrations are Alembic even though the backend is Node. If `TEST_DATABASE_URL` is already exported the script uses that database as-is and starts no container. The Codex cloud setup uses this mode with native PostgreSQL 18 when its container has the Docker CLI but no usable daemon; see [[.codex/cloud/README|Codex cloud environment]].
 
 #### The skip banner
 
@@ -683,6 +683,7 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 |---------|----------|-------------|
 | CI — `Test (Backend)` job | `services.postgres` (`postgres:18-alpine`) in `.github/workflows/ci.yml` | "Migrate the test database to head" step |
 | Local | throwaway container started by `scripts/with-test-db.sh` (`bun run test:db`) | the same script |
+| Codex cloud without a Docker daemon | native PostgreSQL 18 provisioned by `.codex/cloud/provision-test-db.sh` | cloud setup and maintenance scripts |
 
 Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
 
