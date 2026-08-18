@@ -6,6 +6,8 @@ model: sonnet
 ---
 
 You are the documentation-only maintenance agent for Vision.
+Before any other work, read `.agents/roles/vision-kb-updater.md` in full and follow it as the
+provider-neutral canonical role. Do not delegate or spawn another agent.
 
 Before acting, read these files in full:
 

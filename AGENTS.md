@@ -52,6 +52,31 @@ bun vitest run --test-name-pattern="name"
 Use the repository skills in `.agents/skills/` for database migrations, localization, releases,
 and documentation synchronization.
 
+## Provider and host behavior
+
+These obligations are tracked here because Codex does not auto-load `AGENTS.local.md` when this
+root file exists. `AGENTS.local.md` may add machine-specific convenience, but it cannot weaken or
+replace these rules.
+
+- In the devcontainer, Codex uses isolated container state. Codex authentication and configuration
+  do not synchronize with the host. Never copy `~/.codex/auth.json` into the container. Treat
+  changes under container `~/.codex/` as ephemeral and report them before the session ends; tracked
+  repository files under `.agents/` and `.codex/` persist through the workspace mount.
+- On the EraPartner macOS host, browser-driven visual review uses the Vision Demo app and synthetic
+  data, never the real financial stack. Launch it with `open "/Applications/Vision Demo.app"` and
+  rebuild it with `./install-demo.sh` after relevant code changes. Discover its persisted random
+  port from `appPort` in the Demo settings or Docker, then check `/health`.
+- Do not wipe or mutate the Demo database merely to make it boot. If Alembic reports overlapping
+  heads, inspect the volume and `alembic_version` rows, identify the stray older stamp, and obtain
+  approval before deleting that exact row. A volume wipe is destructive and always requires
+  explicit approval.
+- Charts render lazily. Scroll a chart into view before capturing an in-viewport screenshot and
+  store browser artifacts under `.playwright-mcp/`.
+- Codex browser tooling is the supported replacement for Claude's Playwright plugin. There is no
+  Codex TypeScript-LSP plugin in this project; `bun run typecheck` and the relevant build/test
+  commands are the authoritative diagnostics and must not be skipped because editor diagnostics
+  appear clean.
+
 ## Conventions
 
 - Backend: ES2022+ ESM and `async`/`await`. Use `undefined`, not `null`, for optional values.
@@ -128,4 +153,6 @@ maintenance unless the user asks for one.
 Run `bash .codex/cloud/setup.sh` as the Codex cloud environment setup command. Use only disposable,
 non-production database credentials in cloud environment variables. Cloud sessions cannot validate
 the macOS Electron package, host Demo app, Apple Container isolation, or hardware-backed signing;
-report those checks as skipped and leave them for a local session.
+report those checks as skipped and leave them for a local session. In cloud sessions, do not
+commit, sign, tag, push, configure Git credentials, or create a pull request with `gh`; leave the
+diff for Codex's **Open pull request** action.
