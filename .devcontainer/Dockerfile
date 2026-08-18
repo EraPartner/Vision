@@ -21,7 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Base utilities + a non-root `dev` user (UID 1000). sudo intentionally absent.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg lsb-release xz-utils \
-      git less procps jq locales openssh-client unzip rsync \
+      git less procps jq locales openssh-client unzip rsync bubblewrap \
       iptables dnsutils openssl \
       squid-openssl \
       build-essential pkg-config libpq-dev \
@@ -212,7 +212,7 @@ RUN set -eux; \
     pinfile=/usr/local/share/vision/binary-pins.txt; \
     mkdir -p /usr/local/share/vision; \
     : > "$pinfile"; \
-    for b in node npm claude codex gh git python3; do \
+    for b in node npm claude codex bwrap gh git python3; do \
       p="$(command -v "$b")"; \
       h="$(sha256sum "$p" | awk '{print $1}')"; \
       printf '%s\t%s\t%s\n' "$b" "$p" "$h" >> "$pinfile"; \

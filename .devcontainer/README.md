@@ -15,6 +15,8 @@ Docker-in-Docker.
 | Alembic migrations | Python venv at `./venv` | — |
 | GitHub CLI (`gh`) | apt | — |
 | Claude Code | npm, pinned + SHA256-verified in `Dockerfile` (not the devcontainer feature) | — |
+| OpenAI Codex CLI | npm, pinned + SHA256-verified in `Dockerfile` | — |
+| Bubblewrap (`bwrap`) | apt; required by Codex and fingerprinted at build time | — |
 
 The base image is plain `debian:bookworm-slim`. The container user is
 `dev` (UID 1000).
