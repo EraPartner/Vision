@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-17
+updated: 2026-08-18
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -88,7 +88,7 @@ Flags: `--list` (inventory every token, always exit 0) · `--strict` (`PENDING` 
 | Script | Command | Description |
 |--------|---------|-------------|
 | `test` | `bun run --filter '…-node' test` | Backend unit + integration tests (Vitest). Without `TEST_DATABASE_URL` the DB-backed suites self-skip and the run prints a loud INCOMPLETE RUN banner after the summary — see [[docs/testing/testing#the-skip-banner\|the skip banner]]. |
-| `test:db` | `scripts/with-test-db.sh` | Backend suite against a throwaway `postgres:18-alpine` container (started, migrated to head, removed on exit) — the same shape as CI's Test (Backend) job. Arguments are forwarded to vitest. Requires Docker + the Alembic toolchain unless `TEST_DATABASE_URL` points to an already-migrated scratch database; the Codex cloud setup provisions that native PostgreSQL fallback when no Docker daemon is available. |
+| `test:db` | `scripts/with-test-db.sh` | Backend suite against a throwaway `postgres:18-alpine` container (started, migrated to head, removed on exit) — the same shape as CI's Test (Backend) job. Arguments are forwarded to vitest. Requires Docker + the Alembic toolchain unless `TEST_DATABASE_URL` points to an already-migrated scratch database; the Codex cloud setup provisions that native PostgreSQL fallback when no usable pre-existing Docker daemon is available. |
 | `test:frontend` | `bun run --filter 'vision-frontend' test` | Frontend unit + integration tests (Vitest + RTL + MSW). |
 | `test:all` | `concurrently … backend test … frontend test` | Run both test suites in parallel. |
 | `test:watch` | `bun run --filter '…-node' test:watch` | Backend tests in watch mode. |
