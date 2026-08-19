@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-18
+updated: 2026-08-19
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -122,7 +122,7 @@ Every script that *writes* the alembic version table (`db:migrate`/`db:upgrade`/
 |--------|---------|-------------|
 | `docker:dev` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up` | Start the dev stack (Postgres + app). |
 | `docker:dev:down` | `docker compose … down` | Stop the dev stack. |
-| `docker:dev:rebuild` | `npm run generate-locales-if-not-ci && … down && … up --build` | Rebuild app image. |
+| `docker:dev:rebuild` | `npm run generate-locales-if-not-ci && docker pull --platform linux/amd64 postgres:18-alpine && docker run … postgres --version && … down && … up --build` | Pull and verify the amd64 Postgres image in a disposable container, then rebuild the native app image and start the dev stack. The dev Compose override temporarily runs only Postgres under amd64 emulation because the current upstream ARM64 Alpine image has broken entrypoint scripts. The command stops before shutdown if the image test fails; named data volumes are preserved. |
 | `docker:clean` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build` | Start a first-run / onboarding stack. |
 | `docker:clean:down` | `docker compose … down` | Stop the clean stack. |
 | `docker:clean:reset` | `npm run generate-locales-if-not-ci && … down -v && … up --build` | Reset clean volumes and restart. |

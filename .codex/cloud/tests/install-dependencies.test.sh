@@ -8,8 +8,8 @@ trap 'rm -rf "$test_dir"' EXIT
 
 fixture="$test_dir/repo"
 fake_bin="$test_dir/bin"
-call_log="$test_dir/calls.log"
 test_home="$test_dir/home"
+call_log="$test_home/calls.log"
 
 mkdir -p \
   "$fixture/config" \
@@ -30,7 +30,8 @@ for file in \
 done
 printf 'root-lock\n' > "$fixture/bun.lock"
 printf 'backend-lock\n' > "$fixture/apps/node-backend/bun.lock"
-printf 'alembic>=1\n' > "$fixture/config/requirements.txt"
+printf 'alembic>=1\n' > "$fixture/config/requirements.in"
+printf 'alembic==1.2.3 --hash=sha256:test\n' > "$fixture/config/requirements.txt"
 : > "$call_log"
 
 # Literal shell source follows; expansion must happen when the fake command runs.
@@ -42,10 +43,15 @@ printf '%s\n' \
   '  printf "%s\n" "Python 3.12.0"' \
   '  exit 0' \
   'fi' \
-  'printf "python:%s\n" "$*" >> "$CALL_LOG"' \
+  'printf "python:%s\n" "$*" >> "$HOME/calls.log"' \
+  'if [[ "${1:-}" == "-m" && "${2:-}" == "pip" ]]; then' \
+  '  printf "python-secret:%s\n" "${TEST_SECRET-unset}" >> "$HOME/calls.log"' \
+  '  printf "python-proxy:%s\n" "${HTTPS_PROXY-unset}" >> "$HOME/calls.log"' \
+  '  printf "python-locale:%s/%s\n" "${LANG-unset}" "${LC_ALL-unset}" >> "$HOME/calls.log"' \
+  'fi' \
   'if [[ "${1:-}" == "-m" && "${2:-}" == "venv" ]]; then' \
   '  mkdir -p "$3/bin"' \
-  '  cp "$FAKE_BIN/python3" "$3/bin/python"' \
+  '  cp "$(command -v python3)" "$3/bin/python"' \
   '  printf "#!/usr/bin/env bash\nexit 0\n" > "$3/bin/alembic"' \
   '  chmod +x "$3/bin/python" "$3/bin/alembic"' \
   'fi' \
@@ -61,18 +67,21 @@ printf '%s\n' \
   '  printf "%s\n" "1.2.3"' \
   '  exit 0' \
   'fi' \
-  'printf "bun-install:%s\n" "$*" >> "$CALL_LOG"' \
+  'printf "bun-install:%s\n" "$*" >> "$HOME/calls.log"' \
+  'printf "bun-secret:%s\n" "${TEST_SECRET-unset}" >> "$HOME/calls.log"' \
+  'printf "bun-proxy:%s\n" "${HTTPS_PROXY-unset}" >> "$HOME/calls.log"' \
+  'printf "bun-locale:%s/%s\n" "${LANG-unset}" "${LC_ALL-unset}" >> "$HOME/calls.log"' \
   'mkdir -p node_modules/.bun' \
   > "$fake_bin/bun"
 chmod +x "$fake_bin/bun"
 
-export CALL_LOG="$call_log"
-export FAKE_BIN="$fake_bin"
 export PATH="$fake_bin:/usr/bin:/bin"
 export HOME="$test_home"
 export CODEX_HOME="$test_home/.codex"
 export VISION_CLOUD_REPO_ROOT="$fixture"
 export VISION_CLOUD_DISABLE_TIMEOUT=1
+export TEST_SECRET='must-not-reach-package-code'
+export HTTPS_PROXY='http://proxy.example.test:3128'
 
 run_installer() {
   bash "$cloud_dir/install-dependencies.sh" >/dev/null
@@ -95,7 +104,19 @@ assert_equals() {
 
 run_installer
 assert_equals 1 "$(count_calls '^python:-m pip ')" 'first run installs Python dependencies once'
+assert_equals 1 "$(count_calls '^python:-m pip .*--require-hashes')" \
+  'Python install enforces hashes from the compiled lock'
 assert_equals 1 "$(count_calls '^bun-install:')" 'first run installs workspace dependencies once'
+assert_equals 1 "$(count_calls '^python-secret:unset$')" 'pip cannot read arbitrary setup secrets'
+assert_equals 1 "$(count_calls '^bun-secret:unset$')" 'Bun cannot read arbitrary setup secrets'
+assert_equals 1 "$(count_calls '^python-proxy:http://proxy.example.test:3128$')" \
+  'pip retains the configured HTTPS proxy'
+assert_equals 1 "$(count_calls '^bun-proxy:http://proxy.example.test:3128$')" \
+  'Bun retains the configured HTTPS proxy'
+assert_equals 1 "$(count_calls '^python-locale:C.UTF-8/C.UTF-8$')" \
+  'pip receives an explicit UTF-8 locale'
+assert_equals 1 "$(count_calls '^bun-locale:C.UTF-8/C.UTF-8$')" \
+  'Bun receives an explicit UTF-8 locale'
 assert_equals 1 "$(count_calls '^bun-install:.*--ignore-scripts')" \
   'workspace install suppresses the root prepare hook'
 
@@ -103,10 +124,14 @@ run_installer
 assert_equals 1 "$(count_calls '^python:-m pip ')" 'unchanged Python dependencies are skipped'
 assert_equals 1 "$(count_calls '^bun-install:')" 'unchanged Bun dependencies are skipped'
 
-printf 'sqlalchemy>=2\n' >> "$fixture/config/requirements.txt"
+printf 'sqlalchemy>=2\n' >> "$fixture/config/requirements.in"
 run_installer
-assert_equals 2 "$(count_calls '^python:-m pip ')" 'requirements change reinstalls Python dependencies'
+assert_equals 2 "$(count_calls '^python:-m pip ')" 'requirements input change reinstalls Python dependencies'
 assert_equals 1 "$(count_calls '^bun-install:')" 'requirements change does not reinstall Bun dependencies'
+
+printf 'sqlalchemy==2.0.0 --hash=sha256:test\n' >> "$fixture/config/requirements.txt"
+run_installer
+assert_equals 3 "$(count_calls '^python:-m pip ')" 'requirements lock change reinstalls Python dependencies'
 
 printf 'backend-package-changed\n' >> "$fixture/apps/node-backend/package.json"
 run_installer

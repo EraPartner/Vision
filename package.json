@@ -49,7 +49,7 @@
     "quotes:densify": "bun run apps/node-backend/scripts/densify-asset-history.js",
     "docker:dev": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "docker:dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down",
-    "docker:dev:rebuild": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml down && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "docker:dev:rebuild": "npm run generate-locales-if-not-ci && POSTGRES_IMAGE=postgres:18-alpine && POSTGRES_PLATFORM=linux/amd64 && printf '[docker:dev:rebuild] Pulling and testing %s for %s\\n' \"$POSTGRES_IMAGE\" \"$POSTGRES_PLATFORM\" && docker pull --platform \"$POSTGRES_PLATFORM\" \"$POSTGRES_IMAGE\" && docker run --rm --platform \"$POSTGRES_PLATFORM\" \"$POSTGRES_IMAGE\" postgres --version && docker compose -f docker-compose.yml -f docker-compose.dev.yml down && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
     "docker:clean": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build",
     "docker:clean:down": "docker compose -f docker-compose.yml -f docker-compose.clean.yml down",
     "docker:clean:reset": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down -v && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build",

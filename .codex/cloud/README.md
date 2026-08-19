@@ -13,10 +13,15 @@ bash .codex/cloud/maintenance.sh
 
 The setup exports `CODEX_SESSION_ENV=cloud` for its own lifecycle and adds the same export to
 `.bashrc` for later shells. It installs the portable global working agreement, Python dependencies,
-and Bun workspace dependencies. Dependency fingerprints include the relevant runtime version,
-requirements, lockfiles, and workspace manifests. Successful fingerprints are stored under
-`~/.codex/vision-cloud-state/`, so maintenance skips package managers entirely when those inputs and
-their installed directories are unchanged.
+and Bun workspace dependencies. Python uses the exact, hash-verified `config/requirements.txt`
+compiled from `config/requirements.in`. Dependency fingerprints include the relevant runtime
+version, requirement input, lockfiles, and workspace manifests. Successful fingerprints are stored
+under `~/.codex/vision-cloud-state/`, so maintenance skips package managers entirely when those
+inputs and their installed directories are unchanged.
+
+pip, Bun, and their dependency lifecycle processes run with a sanitized environment. They receive
+only `HOME`, `PATH`, `CODEX_SESSION_ENV`, and standard proxy or certificate variables; other cloud
+setup secrets are not exposed to package code.
 
 The Bun install suppresses the root `prepare` hook. That hook installs the complete Electron
 development and packaging toolchain, which cloud cannot use for macOS builds. The backend workspace
@@ -27,13 +32,22 @@ without downloading Chrome or `chrome-headless-shell`.
 After dependency setup, an eight-second `docker info` probe detects an already usable daemon. The
 script does not install a Docker client or Compose merely to discover that no daemon exists. When a
 daemon is available, `bun run test:db` keeps using its disposable `postgres:18-alpine` container.
-Otherwise setup provisions native PostgreSQL 18, creates only a disposable `vision_test` role and
-database, writes their fixed connection variables to `~/.codex/vision-cloud-test-db.env`, and
-migrates the database through the same runner used by CI and application startup.
+Otherwise setup provisions native PostgreSQL 18 and creates only a disposable `vision_test` role
+and database. The role is not a superuser and cannot bypass row security. It owns the disposable
+database and has `CREATEDB` because three migration suites create isolated scratch databases. It
+has `CREATEROLE` because the role-bootstrap suite verifies role creation, grants, default
+privileges, idempotency, and degraded behavior with a separate restricted role. The active
+`pg_trgm` and `pgcrypto` migrations use PostgreSQL trusted
+extensions, so database ownership is sufficient. Setup writes fixed connection variables to
+`~/.codex/vision-cloud-test-db.env`, drops and rebuilds the disposable schema, and migrates it
+through the same runner used by CI and application startup.
 
 On a cached resume, maintenance installs only dependency layers whose fingerprints changed. If the
-native database environment file already exists, maintenance refreshes that database directly and
-does not repeat the Docker probe. Database migrations use a persistent head cache under
+native database environment file already exists, maintenance resets that database directly and
+does not repeat the Docker probe. `bun run test:db` also resets this one fixed managed database
+before every suite, so rows from an interrupted or prior task cannot survive into the next run.
+Caller-supplied database URLs remain caller-managed and are never reset. Database migrations use a
+persistent head cache under
 `~/.codex/vision-cloud-state/`. Installation and database lifecycle phases print timestamped
 `START`, `DONE`, or `FAILED` messages. Docker probes, downloads, package operations, PostgreSQL
 startup, SQL bootstrap, and migrations have explicit deadlines; package installation is
@@ -59,7 +73,23 @@ The dependency cache behavior has a focused offline test:
 
 ```bash
 bash .codex/cloud/tests/install-dependencies.test.sh
+bash .codex/cloud/tests/reset-test-db.test.sh
+```
+
+After changing Python dependency floors, regenerate the reviewed lock on Python 3.12:
+
+```bash
+uv pip compile config/requirements.in --output-file config/requirements.txt \
+  --generate-hashes --python-version 3.12 --universal
 ```
 
 Do not copy the host hooks. They protect the local Mac and use host paths. Run macOS Electron,
 Demo-app, Apple Container, firewall, and hardware-backed signing checks in a local session.
+
+## Pull request lifecycle
+
+Use the platform-managed **Open pull request** action to create a pull request. A
+pull-request-linked cloud task may inspect comments and checks, make in-scope follow-up changes,
+and let the connected GitHub integration update the same branch. When the user explicitly asks to
+merge, the integration may do so only after required checks and approvals pass and no blocking
+review remains. Never use an admin bypass or directly update a protected branch.

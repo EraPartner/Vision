@@ -3,9 +3,9 @@ title: Troubleshooting & FAQ
 type: reference
 status: active
 date: 2026-04-21
-updated: 2026-07-07
-tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch, keychain, safe-storage, macOS, backup-passphrase, compose-project-name, data-loss, down-v, volume-isolation, backup-restore]
-description: Common issues, error messages, and their solutions for the Vision project including Electron desktop app password authentication failures and macOS Keychain prompts
+updated: 2026-08-19
+tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch, keychain, safe-storage, macOS, backup-passphrase, compose-project-name, data-loss, down-v, volume-isolation, backup-restore, docker, architecture, migrations, adr-109, adr-111, migration-0088, adr-112]
+description: Common Vision errors and recovery steps, including database migration failures, Electron authentication failures, macOS Keychain prompts, and Docker volume safety.
 aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 ---
 
@@ -26,6 +26,26 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 3. If state is corrupted, reset dev volumes: `bun run docker:clean:reset`
 4. Ensure Docker Desktop is running and has enough disk space
 
+### Containers fail with entrypoint or architecture errors
+
+**Symptoms:** The database logs `docker-entrypoint.sh: exec format error`, or the app logs
+`/bin/sh: can't open '/entrypoint.sh': Permission denied`.
+
+Run `bun run docker:dev:rebuild`. The current official `postgres:18-alpine` ARM64 image can contain
+empty entrypoint scripts, producing the database error; see
+[docker-library/postgres#1378](https://github.com/docker-library/postgres/issues/1378). The dev
+override temporarily runs only Postgres as `linux/amd64` under Docker Desktop emulation. The app
+image still builds for the Docker host's native platform.
+
+Before stopping the current stack, the command pulls the amd64 Postgres image and runs
+`postgres --version` in a disposable container. If that entrypoint test fails, the command stops.
+If it succeeds, the command rebuilds the app with an explicit executable entrypoint mode and starts
+both services. The image test does not mount or remove the named database or attachment volumes.
+The amd64 workaround may make local database operations slightly slower and can be removed after a
+fixed upstream ARM64 image is published.
+
+Do not delete or reset a data volume for either error; neither error indicates database corruption.
+
 ### Database connection refused
 
 **Symptom:** `DATABASE_URL` connection fails.
@@ -44,6 +64,57 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 2. View pending migrations: `alembic history --verbose`
 3. If stuck mid-migration, Alembic auto-rolls back (PostgreSQL transactional DDL)
 4. For manual recovery: `alembic downgrade -1` then retry
+
+### ADR-109 conversion reports transactions for missing investments
+
+**Symptom:** Container startup repeats an `0087_flat_investments_conversion` error saying that one
+or more portfolio transactions reference investments that do not exist.
+
+**Cause:** On the former inheritance schema, deleting an investment removed its base and
+asset-class rows, but the transaction child tables had no enforceable foreign key and could retain
+the deleted investment's transactions. The original 0087 guard treated those predictable leftovers
+as unknown corruption and stopped the upgrade.
+
+**Recovery:**
+
+1. Keep or create a database backup before upgrading.
+2. Update or rebuild the Vision app image so it contains the patched migration 0087.
+3. Restart the app. The migration warns with the affected transaction IDs, omits those detached
+   rows from the canonical flat table, and keeps the originals in the renamed legacy rollback
+   tables.
+4. Confirm that Alembic reaches the current head and `/health` answers.
+
+Do not delete the database volume or manually remove the listed rows to make startup pass. If a
+different 0087 guard fails after updating, follow that guard's exact message because the automatic
+repair applies only to transactions left behind by a deleted investment. See
+[[docs/adr/111-complete-legacy-investment-delete-cascades|ADR-111]] for the decision and rollback
+behavior.
+
+### Migration 0088 cannot alter split_payments.amount because of a trigger
+
+**Symptom:** Container startup repeats an `0088_money_precision_alignment` failure with:
+
+```text
+cannot alter type of a column used in a trigger definition
+trigger trg_split_payment_overpayment_guard on table split_payments depends on column amount
+```
+
+**Cause:** The database previously ran the pre-squash split-audit migration and retained its
+cent-scale payment trigger. Fresh databases on the consolidated chain do not have that trigger.
+PostgreSQL records the trigger's `UPDATE OF amount` dependency and refuses to widen the column.
+
+**Recovery:**
+
+1. Keep or create a database backup before upgrading.
+2. Update or rebuild the Vision app image so it contains the patched migration 0088.
+3. Restart the app. Migration 0088 removes the legacy trigger and function, widens the money
+   columns, then continues through 0089 and 0090.
+4. Confirm that Alembic reports `0090_constraint_index_naming` and `/health` answers.
+
+Do not delete the database volume or manually change the trigger while the app is boot-looping.
+The failed attempt is transactionally rolled back. The canonical payment cap is the locked,
+four-decimal validation in `splitRepository.addPayment`; see
+[[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 ### Port already in use
 

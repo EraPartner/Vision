@@ -7,6 +7,46 @@ cloud_log() {
   printf '[vision-cloud] %s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
 }
 
+cloud_package_env() {
+  local name
+  local -a clean_env=(
+    env -i
+    "HOME=$HOME"
+    "PATH=$PATH"
+    "CODEX_SESSION_ENV=${CODEX_SESSION_ENV:-cloud}"
+    "LANG=C.UTF-8"
+    "LC_ALL=C.UTF-8"
+  )
+  for name in \
+    HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
+    http_proxy https_proxy all_proxy no_proxy \
+    SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS \
+    REQUESTS_CA_BUNDLE CURL_CA_BUNDLE; do
+    if printenv "$name" >/dev/null 2>&1; then
+      clean_env+=("$name=${!name}")
+    fi
+  done
+  "${clean_env[@]}" "$@"
+}
+
+cloud_run_package_with_timeout() {
+  local duration="$1"
+  shift
+
+  if [[ "${VISION_CLOUD_DISABLE_TIMEOUT:-0}" == 1 ]]; then
+    cloud_package_env "$@"
+    return
+  fi
+
+  if command -v timeout >/dev/null 2>&1; then
+    cloud_package_env timeout --foreground --kill-after=10s "$duration" "$@"
+    return
+  fi
+
+  cloud_log "WARNING: timeout(1) is unavailable; running package command without an external deadline: $1"
+  cloud_package_env "$@"
+}
+
 cloud_run_with_timeout() {
   local duration="$1"
   shift

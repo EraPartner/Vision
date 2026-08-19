@@ -90,7 +90,7 @@ bun run test:db tests/services/transferReconciliation.db.test.js
 VISION_TEST_DB_KEEP=1 bun run test:db
 ```
 
-Requires Docker and the Python Alembic toolchain (`pip install -r config/requirements.txt`) — migrations are Alembic even though the backend is Node. If `TEST_DATABASE_URL` is already exported the script uses that database as-is and starts no container. The Codex cloud setup uses this mode with native PostgreSQL 18 when its container has no usable pre-existing Docker daemon; see [[.codex/cloud/README|Codex cloud environment]]. Cloud maintenance fingerprints Python and Bun inputs, skips unchanged dependency installs, and refreshes the existing native database without repeating the Docker probe.
+Requires Docker and the Python Alembic toolchain (`pip install -r config/requirements.txt`) — migrations are Alembic even though the backend is Node. `config/requirements.txt` is an exact, hash-verified lock compiled from `config/requirements.in`. If `TEST_DATABASE_URL` is already exported the script normally uses that database as-is and starts no container. The Codex cloud setup uses this mode with a fixed native PostgreSQL 18 database when its container has no usable pre-existing Docker daemon; see [[.codex/cloud/README|Codex cloud environment]]. That one managed database is reset and migrated before each `bun run test:db`, and cloud maintenance resets it after a cached branch resume. Other pre-set URLs remain caller-managed and are never reset.
 
 #### The skip banner
 

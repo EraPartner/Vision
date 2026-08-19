@@ -20,8 +20,10 @@
 # it can neither collide with nor outlive a real local Postgres. Set
 # VISION_TEST_DB_KEEP=1 to leave it running for inspection after a failure.
 #
-# If TEST_DATABASE_URL is already exported, the script uses that database as-is
-# (no container, no migration) — for pointing at an already-migrated scratch DB.
+# If TEST_DATABASE_URL is already exported, the script normally uses that
+# database as-is. The one exception is the fixed disposable native database
+# managed by Codex cloud: it is reset and migrated before every run so cached
+# tasks and interrupted suites cannot leak rows into the next test process.
 
 set -eu
 
@@ -32,7 +34,13 @@ CONTAINER=${VISION_TEST_DB_CONTAINER:-vision-test-db}
 PORT=${VISION_TEST_DB_PORT:-55432}
 
 if [ -n "${TEST_DATABASE_URL:-}" ]; then
-  echo "[test-db] Using pre-set TEST_DATABASE_URL — not starting a container."
+  if [ "${CODEX_SESSION_ENV:-}" = cloud ] && \
+    [ "$TEST_DATABASE_URL" = 'postgresql://vision_test:vision_test@127.0.0.1:5432/vision_test' ]; then
+    echo "[test-db] Resetting the managed Codex cloud database."
+    bash "$REPO_ROOT/.codex/cloud/reset-test-db.sh"
+  else
+    echo "[test-db] Using caller-managed TEST_DATABASE_URL — not starting a container."
+  fi
   DATABASE_URL=${DATABASE_URL:-$TEST_DATABASE_URL}
   export DATABASE_URL TEST_DATABASE_URL
   cd apps/node-backend && exec bun vitest run "$@"

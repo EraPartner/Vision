@@ -96,7 +96,8 @@ if ! cloud_run_with_timeout 15s "${root[@]}" \
     cloud_run_with_timeout 90s "${root[@]}" pg_ctlcluster 18 main start; then
     if [[ ! -s /var/lib/postgresql/18/main/PG_VERSION ]]; then
       cloud_run_step 'Create and start the PostgreSQL 18 cluster' \
-        cloud_run_with_timeout 120s "${root[@]}" pg_createcluster 18 main --start
+        cloud_run_with_timeout 120s "${root[@]}" pg_createcluster 18 main \
+          --locale=C.UTF-8 --encoding=UTF8 --start
     else
       printf '%s\n' 'PostgreSQL 18 exists but could not be started.' >&2
       exit 1
@@ -127,18 +128,34 @@ cloud_run_step 'Ensure the disposable PostgreSQL role exists' \
   psql --dbname=postgres --set=ON_ERROR_STOP=1 --quiet \
   --command="DO \$\$ BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'vision_test') THEN
-      CREATE ROLE vision_test LOGIN SUPERUSER PASSWORD 'vision_test';
+      CREATE ROLE vision_test LOGIN NOSUPERUSER CREATEDB CREATEROLE
+        NOREPLICATION NOBYPASSRLS PASSWORD 'vision_test';
     ELSE
-      ALTER ROLE vision_test WITH LOGIN SUPERUSER PASSWORD 'vision_test';
+      ALTER ROLE vision_test WITH LOGIN NOSUPERUSER CREATEDB CREATEROLE
+        NOREPLICATION NOBYPASSRLS PASSWORD 'vision_test';
     END IF;
   END \$\$;"
 
-if ! cloud_run_with_timeout 45s "${postgres_user[@]}" \
+test_db_encoding="$(cloud_run_with_timeout 45s "${postgres_user[@]}" \
   psql --dbname=postgres --tuples-only --no-align \
-  --command="SELECT 1 FROM pg_database WHERE datname = 'vision_test'" | grep -qx 1; then
+  --command="SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = 'vision_test'" \
+  | tr -d '[:space:]')"
+if [[ -n "$test_db_encoding" && "$test_db_encoding" != UTF8 ]]; then
+  cloud_log "Recreating disposable vision_test database as UTF8 (was $test_db_encoding)."
+  cloud_run_step 'Disconnect the disposable PostgreSQL database' \
+    cloud_run_with_timeout 45s "${postgres_user[@]}" \
+    psql --dbname=postgres --set=ON_ERROR_STOP=1 --quiet \
+    --command="SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+      WHERE datname = 'vision_test' AND pid <> pg_backend_pid();"
+  cloud_run_step 'Drop the non-UTF8 disposable PostgreSQL database' \
+    cloud_run_with_timeout 45s "${postgres_user[@]}" dropdb vision_test
+  test_db_encoding=''
+fi
+if [[ -z "$test_db_encoding" ]]; then
   cloud_run_step 'Create the disposable PostgreSQL database' \
     cloud_run_with_timeout 45s "${postgres_user[@]}" \
-    createdb --owner=vision_test vision_test
+    createdb --owner=vision_test --encoding=UTF8 --locale=C.UTF-8 \
+      --template=template0 vision_test
 fi
 
 install -d -m 0700 "$codex_home"
@@ -158,11 +175,8 @@ grep -Fqx "$source_line" "$HOME/.bashrc" || printf '%s\n' "$source_line" >> "$HO
 export CODEX_SESSION_ENV=cloud
 export DATABASE_URL="$test_db_url"
 export TEST_DATABASE_URL="$test_db_url"
-export VISION_CACHE_DIR="$state_dir/migration-cache"
-export VISION_MIGRATE_TIMEOUT_MS=300000
 
 cd "$repo_root"
-cloud_run_step 'Migrate the disposable PostgreSQL database' \
-  cloud_run_with_timeout 330s bun run apps/node-backend/scripts/db-migrate.js
+bash "$script_dir/reset-test-db.sh"
 
 cloud_log 'Native PostgreSQL 18 is ready for bun run test and bun run test:db.'

@@ -154,5 +154,9 @@ Run `bash .codex/cloud/setup.sh` as the Codex cloud environment setup command. U
 non-production database credentials in cloud environment variables. Cloud sessions cannot validate
 the macOS Electron package, host Demo app, Apple Container isolation, or hardware-backed signing;
 report those checks as skipped and leave them for a local session. In cloud sessions, do not
-commit, sign, tag, push, configure Git credentials, or create a pull request with `gh`; leave the
-diff for Codex's **Open pull request** action.
+publish with shell Git commands, configure Git credentials, or create a pull request with `gh`.
+The platform-managed **Open pull request** action may create a pull request, and the connected
+GitHub integration may update the same branch for pull-request-linked follow-ups. When the user
+explicitly requests it, that integration may merge the pull request after all required checks and
+approvals pass and no blocking review remains. Do not use an admin bypass or directly update a
+default or protected branch outside that approved merge.
