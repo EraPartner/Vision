@@ -22,10 +22,10 @@
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.1.10",
     "archiver": "^8.0.0",
-    "eslint": "^10.7.0",
-    "globals": "^17.7.0",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0",
     "supertest": "^7.2.2",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10",
     "yauzl": "^3.4.0"
   },
