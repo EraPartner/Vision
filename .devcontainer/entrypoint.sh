@@ -61,14 +61,16 @@ if runuser -u postgres -- test -s "${PG_DATA}/PG_VERSION"; then
     pg_ctlcluster "${PG_VERSION}" "${PG_CLUSTER}" start || true
   else
     log "Adopting existing Postgres data dir..."
-    pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" --datadir="${PG_DATA}" --start || true
+    pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" \
+      --datadir="${PG_DATA}" --locale=C.UTF-8 --encoding=UTF8 --start || true
   fi
 else
   # Empty/fresh data volume. Drop any stale image-baked registration whose data
   # the volume shadowed, then create a fresh cluster on the volume.
   log "Creating fresh Postgres cluster (empty data volume)..."
   [[ -f "${PG_CONF_DIR}/postgresql.conf" ]] && pg_dropcluster "${PG_VERSION}" "${PG_CLUSTER}" 2>/dev/null || true
-  pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" --start || true
+  pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" \
+    --locale=C.UTF-8 --encoding=UTF8 --start || true
 fi
 
 for _ in $(seq 1 30); do
@@ -85,8 +87,25 @@ BEGIN
   END IF;
 END$$;
 SQL
+  if runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='financial_transactions'" 2>/dev/null | grep -q 1; then
+    db_encoding="$(runuser -u postgres -- psql -Atqc \
+      "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='financial_transactions'" postgres 2>/dev/null)"
+    if [[ "$db_encoding" != UTF8 ]]; then
+      user_tables="$(runuser -u postgres -- psql -Atqc \
+        "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+         WHERE c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema')" \
+        financial_transactions 2>/dev/null || printf 'unknown')"
+      if [[ "$user_tables" == 0 ]]; then
+        log "Recreating empty financial_transactions database as UTF8..."
+        runuser -u postgres -- dropdb financial_transactions || true
+      else
+        log "WARN: financial_transactions uses $db_encoding with $user_tables user tables; back up and migrate it to UTF8."
+      fi
+    fi
+  fi
   if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='financial_transactions'" 2>/dev/null | grep -q 1; then
-    runuser -u postgres -- createdb -O ftm_user financial_transactions || log "WARN: createdb failed."
+    runuser -u postgres -- createdb -O ftm_user --encoding=UTF8 \
+      --locale=C.UTF-8 --template=template0 financial_transactions || log "WARN: createdb failed."
   fi
   log "Postgres ready (db financial_transactions, role ftm_user)."
 else

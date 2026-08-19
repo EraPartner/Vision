@@ -16,6 +16,7 @@ inside this container, so there is no Docker-in-Docker.
 | Claude Code | npm, pinned + SHA256-verified in `Dockerfile` (not the devcontainer feature) | — |
 | OpenAI Codex CLI | npm, pinned + SHA256-verified in `Dockerfile` | — |
 | Bubblewrap (`bwrap`) | apt; required by Codex and fingerprinted at build time | — |
+| safe-chain | npm, baked at a reviewed version and fingerprinted at build time | — |
 
 The base image is plain `debian:bookworm-slim`. The container user is
 `dev` (UID 1000).
@@ -99,10 +100,11 @@ Playwright system-deps install fails here (see Known limitations).
 squid is supervised by the entrypoint: if it crashes, it's restarted
 (egress stays denied while down — fail-closed).
 
-**Supply-chain scanning.** `post-create` installs Aikido safe-chain and
-`BASH_ENV` wires it into every shell, so `npm`/`bun`/`pip` installs are
-screened against `malware-list.aikido.dev` before running. Defense-in-depth
-on top of the sandbox.
+**Supply-chain scanning.** The image bakes Aikido safe-chain at a reviewed
+version in the root-owned npm prefix. `post-create` only wires its wrappers, and
+fails if that local setup cannot complete. `BASH_ENV` loads them into every shell,
+so `npm`/`bun`/`pip` installs are screened against `malware-list.aikido.dev`
+before running. Defense-in-depth on top of the sandbox.
 
 **Observability.** Blocked egress shows as a TLS/cert error or
 `CONNECT 403` — that's the policy denying it. The definitive log is

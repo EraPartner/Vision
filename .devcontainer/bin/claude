@@ -121,6 +121,7 @@ else
     -e DEVCONTAINER=true \
     -e SANDBOX_AGENT="$AGENT" \
     -e PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    -e PUPPETEER_SKIP_DOWNLOAD=true \
     -e DATABASE_URL=postgresql://ftm_user:localdev@127.0.0.1:5432/financial_transactions \
     -e DB_HOST=127.0.0.1 \
     -e DB_PORT=5432 \
@@ -164,7 +165,8 @@ container exec --user "$SVC_USER" "$NAME" bash -lc '
   set -e
   cd /workspaces/Vision
   if [[ ! -f /home/dev/.postcreate-done ]]; then
-    bash .devcontainer/post-create.sh && touch /home/dev/.postcreate-done
+    bash .devcontainer/post-create.sh
+    touch /home/dev/.postcreate-done
   fi
   bash .devcontainer/post-start.sh'
 

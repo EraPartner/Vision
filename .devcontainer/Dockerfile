@@ -1,18 +1,8 @@
-# Vision sandbox image — devcontainer-FREE (built by `container build`).
-#
-# Self-contained twin of ./Dockerfile. The devcontainer build relied on
-# devcontainer FEATURES (node:1, python:1, anthropics/claude-code:1.0) layered by
-# the devcontainer CLI; compose has no feature system, so this file installs
-# Node + Python + the Claude CLI itself. Everything else (Postgres, Bun,
-# hardening, egress proxy, baked scripts) is identical to Dockerfile.
-#
-# Hardened for Claude CLI in --dangerously-skip-permissions mode:
-#   - no privilege escalation: setuid/setgid bits stripped, no sudo (apple/container has no --security-opt)
-#   - a root ENTRYPOINT does all privileged setup (perms, Postgres, proxy,
-#     firewall), then drops to a keep-alive
-#   - all egress forced through an in-container squid proxy (hostname allowlist)
+# Self-contained Vision sandbox with pinned tools and allowlisted egress.
 
 FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 ARG TZ=UTC
 ENV TZ="$TZ"
@@ -77,14 +67,7 @@ RUN set -eux; \
     rm /tmp/node.tar.xz; \
     mkdir -p /usr/local/share/npm-global
 
-# --- Python 3.12 (replaces the `python:1` feature) — python-build-standalone --
-# The feature compiled CPython from source; we use the prebuilt relocatable
-# CPython (the same builds uv/rye use). python3 + pip + venv + ssl, no compile.
-# Downloaded DIRECTLY from a pinned release asset, NOT resolved via the GitHub API:
-# the unauthenticated api.github.com 60-req/hr limit gets exhausted when several
-# images build in a row, returning 403 and failing the build (curl exit 22). Asset
-# downloads from the releases/download host don't count against that limit.
-# Bump by editing PY_RELEASE/PY_VERSION (asset = cpython-<ver>+<release>-<arch>...).
+# --- Python 3.12 — checksum-verified python-build-standalone ----------------
 ARG PY_RELEASE=20260510
 ARG PY_VERSION=3.12.13
 RUN set -eux; \
@@ -113,13 +96,13 @@ ENV CC=gcc CXX=g++
 # Build-time global prefix for the agent CLI (claude). Kept ROOT-owned (see the
 # claude install below): the unprivileged dev user must NOT be able to overwrite
 # the pinned claude/npm binaries post-launch, or the verify-pins launch gate is
-# bypassable (it fingerprints exactly these paths). Runtime `npm i -g` (safe-chain)
+# bypassable (it fingerprints exactly these paths). Runtime ad-hoc `npm i -g`
 # uses a SEPARATE dev-owned prefix, /home/dev/.npm-global, set after the install.
 # Root prefix is FIRST on PATH so claude always resolves to the pinned copy.
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
-ENV PATH=/usr/local/share/npm-global/bin:/home/dev/.npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH
+ENV PATH=/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH:/home/dev/.npm-global/bin
 # Login shells reset PATH via /etc/profile; re-add the tool dirs for them too.
-RUN printf 'export PATH="/usr/local/share/npm-global/bin:/home/dev/.npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH"\n' \
+RUN printf 'export PATH="/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH:/home/dev/.npm-global/bin"\n' \
       > /etc/profile.d/00-sandbox-path.sh
 
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
@@ -168,7 +151,16 @@ RUN set -eux; \
     echo "codex pin: want=$want got=$got"; \
     test "$want" = "$got"; \
     codex --version
-# Runtime global installs (safe-chain in post-create) go to a SEPARATE dev-owned
+
+# safe-chain is baked at a reviewed version before the npm prefix becomes
+# dev-writable. Its transitive dependency closure is not hash-pinned.
+ARG SAFE_CHAIN_VERSION=1.5.12
+RUN npm install -g --no-fund --no-audit "@aikidosec/safe-chain@${SAFE_CHAIN_VERSION}" \
+  && command -v safe-chain
+# Version output is diagnostic only; install/presence failures above stay fatal.
+RUN safe-chain --version 2>/dev/null || true
+
+# Runtime ad-hoc global installs go to a SEPARATE dev-owned
 # prefix, so they never need write access to the pinned root prefix above.
 RUN install -d -o dev -g dev -m 0755 /home/dev/.npm-global
 ENV NPM_CONFIG_PREFIX=/home/dev/.npm-global
@@ -212,7 +204,7 @@ RUN set -eux; \
     pinfile=/usr/local/share/vision/binary-pins.txt; \
     mkdir -p /usr/local/share/vision; \
     : > "$pinfile"; \
-    for b in node npm claude codex bwrap gh git python3; do \
+    for b in node npm claude codex bwrap gh git python3 safe-chain; do \
       p="$(command -v "$b")"; \
       h="$(sha256sum "$p" | awk '{print $1}')"; \
       printf '%s\t%s\t%s\n' "$b" "$p" "$h" >> "$pinfile"; \

@@ -76,9 +76,11 @@ RUN apk add --no-cache python3 py3-pip chromium && \
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils
 
-# Copy and make entrypoint executable
+# The host checkout can use a restrictive umask (for example 0750). Set the
+# image mode explicitly so the non-root `bun` runtime user can read and execute
+# the script regardless of the source file's host permissions.
 COPY docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod 0755 /entrypoint.sh
 
 # Install backend production dependencies. Backend depends on @vision/types
 # (workspace:*), so install from the monorepo root with the full workspace graph.
