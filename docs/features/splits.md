@@ -3,11 +3,11 @@ title: Feature - Splits & Owes
 type: feature
 status: active
 date: 2026-04-22
-updated: 2026-05-02
+updated: 2026-08-19
 tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, phase-q, decimal, money, i18n, notifications, recipient-groups, recipient-alias-collapsing]
 description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys. Phase Q adds recipient-group filtering for complete transaction history in OwesPage. Phase Q+ adds recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) into single rows for consistency with other reporting surfaces.
 aliases: [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
-related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/services/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
+related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/lib/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
 
 # Feature: Splits & Owes
@@ -34,10 +34,10 @@ The **owed summary** aggregates all unsettled splits to show who owes whom and h
 
 ### Split Audit Trail
 
-Phase 4 introduces a **split_audit** table (migration 0028) that records all lifecycle events: split creation, payment, settlement, and deletion. Each audit row captures:
-- `action`: one of `create`, `pay`, `settle`, `settle_all`, or `delete`
+The **split_audit** table (migration 0021) records all lifecycle events: split creation, payment, settlement, and deletion. Each audit row captures:
+- `action`: one of `create`, `payment`, `settle`, `settle_all`, or `delete`
 - `actor`: resolved from `x-actor` header → `req.user?.id` → `null`
-- `payload`: context-specific data (e.g., split snapshot on delete, payment amount on pay)
+- `payload`: context-specific data (e.g., split snapshot on delete, payment amount on payment)
 
 Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON DELETE SET NULL` on the `split_id` FK.
 
@@ -52,10 +52,8 @@ Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON D
 | id | SERIAL | Primary key |
 | transaction_id | INTEGER | Parent transaction |
 | recipient_id | INTEGER | Recipient who owes |
-| amount | NUMERIC(15,2) | Split amount |
-| currency | VARCHAR(10) | Currency code |
+| amount | NUMERIC(18,4) | Split amount (migration 0088) |
 | is_settled | BOOLEAN | Settlement status |
-| settled_at | TIMESTAMPTZ | When settled |
 | created_at | TIMESTAMPTZ | Creation timestamp |
 | updated_at | TIMESTAMPTZ | Last update |
 
@@ -65,13 +63,12 @@ Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON D
 |--------|------|-------------|
 | id | SERIAL | Primary key |
 | split_id | INTEGER | Reference to split |
-| amount | NUMERIC(15,2) | Payment amount |
+| amount | NUMERIC(18,4) | Payment amount (migration 0088) |
 | paid_at | DATE | Payment date |
 | note | TEXT | Payment note |
-| actor | VARCHAR(64) | Who recorded the payment |
 | created_at | TIMESTAMPTZ | Creation timestamp |
 
-**Migration:** `0009_transaction_splits.py`
+**Migration:** `0019_transaction_splits_and_agg.py`
 
 ### split_audit
 
@@ -79,26 +76,24 @@ Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON D
 |--------|------|-------------|
 | id | BIGSERIAL | Primary key |
 | split_id | INTEGER | FK to transaction_splits (ON DELETE SET NULL) |
-| action | VARCHAR(32) CHECK IN ('create', 'settle', 'settle_all', 'delete') | Event type |
-| actor | VARCHAR(64) | Who performed the action |
+| action | VARCHAR(50) | Event type (`create`, `payment`, `settle`, `settle_all`, or `delete`) |
+| actor | TEXT | Who performed the action |
 | payload | JSONB | Context-specific data (e.g., amount, recipient_id, payment info) |
 | created_at | TIMESTAMPTZ | Event timestamp |
 
-**Indices:**
-- `idx_split_audit_split_created` on (split_id, created_at DESC)
-- `idx_split_audit_action_created` on (action, created_at DESC)
+**Index:** `idx_split_audit_split_id` on (`split_id`)
 
-**Migration:** `0028_split_audit_overpayment_guard.py` — Also adds `fn_split_payment_overpayment_guard()` trigger on split_payments to enforce sum(payments) ≤ split.amount + 0.005 CENT at the database level (SQLSTATE 23514).
+**Migration:** `0021_split_audit.py`
 
 ---
 
 ## Validation & Overpayment Guards
 
-Phase 4 introduces pure calculation functions in [[apps/node-backend/src/services/calculations/splits.js]] that enforce three key invariants:
+Pure calculation functions in [[apps/node-backend/src/lib/calculations/splits.js]] enforce three key invariants:
 
 1. **Split allocation** — The sum of splits on a transaction cannot exceed the transaction's absolute amount.
 2. **Payment amount** — The sum of payments on a split cannot exceed the split's amount.
-3. **Decimal precision** — All monetary calculations use [[docs/adr/021-decimal-arithmetic-for-monetary-values|Decimal.js]] (Phase 9) to eliminate floating-point drift. Legacy tolerance checks `CENT_TOLERANCE = 0.005` are now redundant but kept for backward compatibility with pre-Phase-9 imports.
+3. **Decimal precision** — Split and payment caps are normalized and compared at the `NUMERIC(18,4)` storage scale. Display totals may still round to cents.
 
 ### Key Functions
 
@@ -107,6 +102,7 @@ Phase 4 introduces pure calculation functions in [[apps/node-backend/src/service
 | `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` | Validate a single split creation or batch sum |
 | `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` | Validate a batch of splits at once |
 | `validatePaymentAmount({ paymentAmount, splitAmount, alreadyPaid })` | Validate a payment against a split |
+| `roundToMoneyPrecision(value)` | Normalize a value to the four-decimal storage scale |
 | `computeSplitRemaining(split)` | Compute remaining balance on a split |
 | `computeOwedSummary(rows)` | Transform aggregation rows into owed summary |
 | `roundToCents(value)` | Round to 2 decimal places |
@@ -114,12 +110,19 @@ Phase 4 introduces pure calculation functions in [[apps/node-backend/src/service
 ### Defense in Depth
 
 Overpayment protection operates at three layers:
-1. **Route level** — `validatePaymentAmount` returns 400 before DB write
-2. **Database level** — `fn_split_payment_overpayment_guard()` trigger raises SQLSTATE 23514 if invariant violated
-3. **Audit level** — Every accepted write is recorded in `split_audit` for forensic reconstruction
+
+1. **Route level** — `validatePaymentAmount` returns 400 before the repository call.
+2. **Locked repository transaction** — `splitRepository.addPayment` locks the split row, recomputes the paid total, and rejects an exact four-decimal overpayment before inserting. The lock serializes concurrent payment requests.
+3. **Audit level** — Every accepted write is recorded in `split_audit` in the same transaction.
+
+> [!warning] No canonical overpayment trigger
+> Fresh databases never created the pre-squash `fn_split_payment_overpayment_guard()` trigger.
+> Migration 0088 removes it from older databases because its cent-scale rule and `UPDATE OF`
+> dependency block the precision alignment. Direct SQL can bypass the cap; use the API or
+> repository path. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 > [!info] Locked contracts (Phase 8)
-> The split allocation and payment-cap invariants are pinned by property tests in [[apps/node-backend/tests/property/splits.property.test.js]] — bounded random split sets must always satisfy `sum(splits) ≤ transactionTotal + CENT_TOLERANCE` and `sum(payments) ≤ split.amount + CENT_TOLERANCE`. Any change to the calc surface must keep these invariants green. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY.md|Calculation Inventory]].
+> The split allocation and payment-cap invariants are pinned by property tests in [[apps/node-backend/tests/property/splits.property.test.js]]. The migration 0088 database suite adds sub-cent cases at the exact four-decimal storage boundary. Any change to the calculation surface must keep both suites green. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/moneyPrecisionAlignment.db.test.js|Money precision migration tests]].
 
 ---
 
@@ -146,7 +149,7 @@ Overpayment protection operates at three layers:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/splits/:id/pay` | Record a payment; validates via `validatePaymentAmount`; writes audit row with action='pay' |
+| POST | `/api/splits/:id/pay` | Record a payment; validates under a row lock; writes audit row with action='payment' |
 | GET | `/api/splits/:id/payments` | Get payment history |
 | POST | `/api/splits/:id/settle` | Mark split as settled; writes audit row with action='settle' |
 | POST | `/api/splits/owed/:id/settle-all` | Settle all unsettled splits for recipient; writes single audit row with action='settle_all' + settled_count |
@@ -155,9 +158,9 @@ Implementation notes:
 - All routes resolve actor via `x-actor` header → `req.user?.id` → `null` using `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
 - Route-level ID parsing is standardized through `parseRouteId(req)` and reused across `:id` handlers ([[apps/node-backend/src/routes/splits.js]]).
 - Owed CSV export uses shared helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) for centralized CSV formatting with full escape support ([[apps/node-backend/src/routes/splits.js]]).
-- Split creation routes validate allocation against transaction total using `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/services/calculations/splits.js]]).
+- Split creation routes validate allocation against transaction total using `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/lib/calculations/splits.js]]).
 - Batch split creation persists rows through repository bulk insert (`createSplitsBatch`) after validation, reducing per-split round-trips ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- POST `/api/splits/:id/pay` validates payment amount via `validatePaymentAmount` before DB write, then proceeds through `addPayment` which runs insert + conditional auto-settlement in a single transaction ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- POST `/api/splits/:id/pay` validates payment amount early, then `addPayment` repeats the exact cap check under `SELECT ... FOR UPDATE` and runs insert, conditional auto-settlement, and audit in one transaction ([[apps/node-backend/src/repositories/splitRepository.js]]).
 - DELETE returns 404 if split not found; hard-deletes the row and audits the full pre-delete snapshot ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
@@ -257,4 +260,4 @@ i18n keys are defined in `i18n/source/en.json` and `i18n/source/nl.json` and acc
 - [[docs/adr/013-split-hard-delete-with-audit-trail]] — Audit trail design and hard-delete semantics
 - [[docs/features/views#owes]] — Owes page in views
 - [[docs/adr/002-database-schema#transaction-splits-tables]] — Schema details
-- [[apps/node-backend/src/services/calculations/splits.js]] — Pure calc module for validation
+- [[apps/node-backend/src/lib/calculations/splits.js]] — Pure calc module for validation

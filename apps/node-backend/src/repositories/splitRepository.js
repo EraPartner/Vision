@@ -427,9 +427,10 @@ export const splitRepository = {
    * audits — all in one transaction. The lock serializes concurrent /pay
    * requests so the validate→insert window cannot interleave (without it,
    * five parallel payments could each pass the precheck and collectively
-   * overpay). There is NO DB-level overpayment trigger (an earlier comment
-   * cited an aspirational fn_split_payment_overpayment_guard that was never
-   * shipped) — this lock + validation IS the guard.
+   * overpay). There is no canonical DB-level overpayment trigger. Early
+   * pre-squash databases carried fn_split_payment_overpayment_guard, but
+   * migration 0088 removes that legacy-only, cent-scale object. This lock +
+   * storage-precision validation is the authoritative guard.
    *
    * Amount handling: the payment is normalized to the NUMERIC(18,4) storage
    * precision and the cap is compared at that same scale (migration 0088);
@@ -654,9 +655,9 @@ export const splitRepository = {
   /**
    * Sum of existing payments against a split. Used by route-layer
    * overpayment validation before INSERT. The authoritative guard is
-   * addPayment's row lock + storage-precision validation (there is no
-   * DB-level overpayment trigger — an earlier comment cited an aspirational
-   * fn_split_payment_overpayment_guard that was never shipped).
+   * addPayment's row lock + storage-precision validation. Migration 0088
+   * removes the legacy-only DB trigger so upgraded and fresh databases share
+   * the same canonical enforcement path.
    *
    * @param {number} splitId
    * @returns {Promise<number>}

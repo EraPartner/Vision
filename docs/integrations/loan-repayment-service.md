@@ -3,6 +3,7 @@ title: Integration - Loan Repayment Service
 type: integration
 status: active
 date: 2026-04-02
+updated: 2026-08-19
 tags: [integration, loans, amortization, repayment, planned-transactions]
 description: Loan repayment calculation service supporting amortizing, fixed principal, and interest-only loans
 aliases: [loan repayment, amortization, loan calculator, planned loans]
@@ -76,12 +77,12 @@ final_payment = P + (P × monthly_rate)  (principal + last interest)
 |--------|------|-------------|
 | is_loan | BOOLEAN | Loan flag |
 | loan_type | TEXT | Loan type |
-| loan_principal | NUMERIC(15,2) | Principal amount |
+| loan_principal | NUMERIC(18,4) | Principal amount (migration 0088) |
 | loan_annual_interest_rate | NUMERIC(8,4) | Annual interest rate |
 | loan_term_months | INTEGER | Term in months |
 | loan_start_date | DATE | Start date |
 | loan_payment_day | INTEGER | Day of month for payment |
-| loan_regular_payment_amount | NUMERIC(15,2) | Regular payment amount |
+| loan_regular_payment_amount | NUMERIC(18,4) | Regular payment amount (migration 0088) |
 | loan_first_payment_date | DATE | First payment date |
 
 ### planned_transaction_loan_schedule
@@ -91,10 +92,10 @@ final_payment = P + (P × monthly_rate)  (principal + last interest)
 | planned_transaction_id | INTEGER | Loan reference |
 | installment_number | INTEGER | Installment number |
 | due_date | DATE | Due date |
-| payment_amount | NUMERIC(15,2) | Total payment |
-| principal_amount | NUMERIC(15,2) | Principal portion |
-| interest_amount | NUMERIC(15,2) | Interest portion |
-| remaining_principal | NUMERIC(15,2) | Remaining principal |
+| payment_amount | NUMERIC(18,4) | Total payment (migration 0088) |
+| principal_amount | NUMERIC(18,4) | Principal portion (migration 0088) |
+| interest_amount | NUMERIC(18,4) | Interest portion (migration 0088) |
+| remaining_principal | NUMERIC(18,4) | Remaining principal (migration 0088) |
 
 **Migration:** `0011_planned_loans.py`
 

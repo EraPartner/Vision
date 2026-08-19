@@ -3,7 +3,7 @@ title: Splits API
 type: endpoint
 status: active
 date: 2026-04-23
-updated: 2026-08-09
+updated: 2026-08-19
 tags:
   - api
   - splits
@@ -47,8 +47,8 @@ All monetary values in split responses (amounts, outstanding, paid) use **Decima
 
 - Split amounts must be **positive numbers**.
 - The cumulative split amount for a transaction (existing splits + new split(s)) cannot exceed the absolute transaction amount.
-- Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/services/calculations/splits.js]]).
-- Phase 9: Decimal.js enforcement eliminates floating-point tolerance checks; legacy CENT_TOLERANCE = 0.005 kept for backward compatibility.
+- Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/lib/calculations/splits.js]]).
+- Decimal.js enforcement compares allocation at the `NUMERIC(18,4)` storage scale.
 - If a transaction does not exist, split creation returns `404`.
 
 ### Payment Validation
@@ -56,7 +56,8 @@ All monetary values in split responses (amounts, outstanding, paid) use **Decima
 - Payment amounts must be **positive numbers**.
 - Sum of payments on a split cannot exceed the split's amount.
 - Validation uses `validatePaymentAmount` from the pure calc module.
-- Defense-in-depth: route returns 400 before DB write, plus DB trigger `fn_split_payment_overpayment_guard()` raises SQLSTATE 23514 if invariant violated.
+- The route returns 400 early. `splitRepository.addPayment` then locks the split row with `SELECT ... FOR UPDATE`, recomputes the total, and repeats the exact four-decimal cap before insert. This locked repository transaction is authoritative and serializes concurrent payment requests.
+- There is no canonical DB-level overpayment trigger. Migration 0088 removes the weaker pre-squash trigger from upgraded databases; direct SQL can bypass the cap. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 ### Audit Trail
 
@@ -269,7 +270,7 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
 ```
 
 Implementation notes:
-- Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/services/calculations/splits.js]]).
+- Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
 - Audit trail written via `splitRepository.writeAudit()` with action='create' and request actor resolved from headers ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
@@ -323,7 +324,7 @@ The endpoint validates total batch allocation via `validateBatchSplitAllocation`
 ```
 
 Implementation notes:
-- Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/services/calculations/splits.js]]).
+- Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
 - Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.js]]).
 - Persists all splits via bulk insert `createSplitsBatch()` after validation ([[apps/node-backend/src/repositories/splitRepository.js]]).
 - Audit trail: one row per split with action='create' and `batch: true` in payload ([[apps/node-backend/src/routes/splits.js]]).
@@ -358,7 +359,7 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
   "split_id": 1,
   "amount": 25.00,
   "note": "Partial payment",
-  "paid_at": "2025-01-20T00:00:00Z"
+  "paid_at": "2025-01-20"
 }
 ```
 
@@ -381,9 +382,9 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 Implementation notes:
 - Fetches split via `getSplitById(splitId)` and returns 404 if missing ([[apps/node-backend/src/routes/splits.js]]).
 - Gets already-paid amount via `getAlreadyPaid(splitId)` ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- Validates payment amount via `validatePaymentAmount({ paymentAmount, splitAmount, alreadyPaid })` ([[apps/node-backend/src/services/calculations/splits.js]]).
-- Inserts payment + conditionally auto-settles split in single DB transaction via `addPayment()` ([[apps/node-backend/src/repositories/splitRepository.js]]).
-- Actor propagated to payment record and audit trail via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
+- Validates payment amount via `validatePaymentAmount({ paymentAmount, splitAmount, alreadyPaid })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
+- `addPayment()` repeats the cap check under a split-row lock, then inserts the payment, conditionally auto-settles, and writes the audit row in one DB transaction ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Actor is propagated to the audit trail via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
 
@@ -587,10 +588,11 @@ interface SplitCreateInput {
 - [[docs/api/recipients]] - Recipients API
 - [[docs/features/splits]] - Feature specification
 - [[docs/adr/013-split-hard-delete-with-audit-trail]] - Audit trail design and hard-delete semantics
-- [[apps/node-backend/src/services/calculations/splits.js]] - Pure validation module
+- [[apps/node-backend/src/lib/calculations/splits.js]] - Pure validation module
 - [[docs/components/form-dialogs|SplitTransactionDialog]] - Frontend split dialog component
 
 ## Migrations
 
-- `0009_transaction_splits.py` — Added `transaction_splits` and `split_payments` tables for expense splitting
-- `0028_split_audit_overpayment_guard.py` — Added `split_audit` table (append-only lifecycle log) and `fn_split_payment_overpayment_guard()` trigger for defense-in-depth payment validation
+- `0019_transaction_splits_and_agg.py` — Added `transaction_splits`, `split_payments`, and the trigger-maintained outstanding aggregate
+- `0021_split_audit.py` — Added the append-only `split_audit` table
+- `0088_money_precision_alignment.py` — Widened split and payment amounts to `NUMERIC(18,4)` and retired the pre-squash overpayment trigger on upgraded databases

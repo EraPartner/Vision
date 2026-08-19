@@ -230,7 +230,9 @@ VALUES (5, 'Antwerp Apartment', 'EUR', true, 320000, 'Antwerp', 'Antwerpen', 125
 INSERT INTO savings_investments (id, name, currency, is_active, current_price, interest_rate) VALUES (6, 'Savings', 'EUR', true, 15000, 2.1500);
 INSERT INTO bond_investments (id, name, currency, is_active, current_price, interest_rate, maturity_date)
 VALUES (7, 'State Bond 2027', 'EUR', true, 10000, 3.3000, '2027-09-04');
-SELECT setval('investments_base_id_seq', 7, true);
+INSERT INTO stock_investments (id, name, currency, is_active, symbol, current_price)
+VALUES (8, 'Investment deleted before conversion', 'EUR', true, 'OLD', 100.00);
+SELECT setval('investments_base_id_seq', 8, true);
 
 INSERT INTO stock_transactions (id, investment_id, type, date, amount, fees, currency, fx_rate_to_eur, account_id, units, price_per_unit)
 VALUES (1, 1, 'buy', '2025-01-15', 4545.00, 1.00, 'USD', 0.9210000000, 1, 20.00000000, 227.250000),
@@ -244,7 +246,13 @@ VALUES (5, 4, 'buy', '2025-02-14', 2500.75, 'EUR', 999, 1.00000000, 2500.750000)
 INSERT INTO real_estate_transactions (id, investment_id, type, date, amount, currency) VALUES (6, 5, 'buy', '2024-07-01', 320000.00, 'EUR');
 INSERT INTO savings_transactions (id, investment_id, type, date, amount, currency) VALUES (7, 6, 'interest', '2025-12-31', 322.50, 'EUR');
 INSERT INTO bond_transactions (id, investment_id, type, date, amount, currency) VALUES (8, 7, 'buy', '2024-09-04', 10000.00, 'EUR');
-SELECT setval('portfolio_transactions_base_id_seq', 8, true);
+-- Legacy hardDelete removed an investment through investments_base, but no FK on the
+-- transaction children completed the intended cascade. Migration 0087 must omit this
+-- leftover from the flat copy while retaining it in the rollback relations.
+INSERT INTO stock_transactions (id, investment_id, type, date, amount, currency, units, price_per_unit)
+VALUES (9, 8, 'buy', '2024-01-01', 100.00, 'EUR', 1.00000000, 100.000000);
+DELETE FROM investments_base WHERE id = 8;
+SELECT setval('portfolio_transactions_base_id_seq', 9, true);
 
 INSERT INTO portfolio_import_batches (id, adapter_name, status, rows_total, rows_imported) VALUES (41, 'ibkr_csv', 'complete', 1, 1);
 SELECT setval(pg_get_serial_sequence('portfolio_import_batches','id'), 50, false);
@@ -269,7 +277,9 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     const admin = new pg.Client({ connectionString: adminUrl.toString() });
     await admin.connect();
     await admin.query(`DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${scratchDbName()}`);
+    await admin.query(
+      `CREATE DATABASE ${scratchDbName()} WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8'`,
+    );
     await admin.end();
 
     db = new pg.Client({ connectionString: scratchUrl() });
@@ -314,7 +324,7 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('v');
     expect(await scalar("SELECT to_regclass('public.legacy_inh_investments_base')")).toBeNull();
     expect(Number(await scalar('SELECT count(*) FROM investments'))).toBeGreaterThanOrEqual(7);
-    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBeGreaterThanOrEqual(8);
+    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBeGreaterThanOrEqual(9);
   }
 
   it('data pre-flight refuses corrupt legacy states with actionable errors, leaving 0086 intact', async () => {
@@ -336,7 +346,7 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     await q('DELETE FROM ONLY investments_base WHERE id = 99');
   }, 180_000);
 
-  it('converts, preserves every row, enforces the FKs, rolls back, and re-converts', async () => {
+  it('converts, preserves valid rows, completes legacy delete cascades, rolls back, and re-converts', async () => {
     // Sanity: the constructed database really is legacy-shaped.
     expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('v');
     expect(await scalar("SELECT 'metals' = ANY(enum_range(NULL::asset_class)::text[])")).toBe(false);
@@ -376,13 +386,19 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
                created_at, updated_at, fx_rate_to_eur,
                CASE WHEN id = 5 THEN NULL ELSE account_id END,
                CASE WHEN id = 3 THEN NULL ELSE import_batch_id END
-        FROM legacy_inh_portfolio_transactions
+        FROM legacy_inh_portfolio_transactions legacy_pt
+        WHERE EXISTS (
+          SELECT 1 FROM legacy_inh_investments legacy_i
+          WHERE legacy_i.id = legacy_pt.investment_id
+        )
         EXCEPT
         SELECT id, investment_id, type::text, date, amount, units, price_per_unit, fees, taxes,
                currency, note, is_recurring, recurrence_interval::text, recurrence_end_date,
                created_at, updated_at, fx_rate_to_eur, account_id, import_batch_id
         FROM portfolio_transactions) d`))).toBe(0);
     expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBe(8);
+    expect(await scalar('SELECT id FROM portfolio_transactions WHERE id = 9')).toBeUndefined();
+    expect(Number(await scalar('SELECT investment_id FROM legacy_inh_portfolio_transactions WHERE id = 9'))).toBe(8);
 
     // The bond interest_rate the legacy VIEW never exposed is preserved from the child table.
     expect(Number(await scalar('SELECT interest_rate FROM investments WHERE id = 7'))).toBe(3.3);
@@ -396,11 +412,12 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
 
     // Sequences: GREATEST(legacy sequence's next value, MAX(id)+1). The investments
     // side had its legacy sequence pushed AHEAD to 500 → next id is 501, never a
-    // reused one; the portfolio side's high-water mark is MAX(id)+1 = 9. (Read
+    // reused one; the portfolio side keeps the legacy next value 10 even though
+    // orphan transaction 9 is absent from the flat copy. (Read
     // non-consumingly — later FK-violation INSERTs below burn nextval values.)
     expect(Number(await scalar(`
       SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END
-        FROM portfolio_transactions_flat_id_seq`))).toBe(9);
+        FROM portfolio_transactions_flat_id_seq`))).toBe(10);
     const inserted = await q(
       "INSERT INTO investments (name, asset_class, currency, symbol) VALUES ('New', 'metals', 'EUR', 'XAG') RETURNING id",
     );
@@ -457,7 +474,8 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     expect(Number(await scalar('SELECT count(*) FROM pg_constraint WHERE conname LIKE $1', ['legacy\\_inh\\_%']))).toBe(0);
     // Data readable through the restored view, dangling links back as they were.
     expect(Number(await scalar('SELECT count(*) FROM investments'))).toBe(7);
-    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBe(8);
+    expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBe(9);
+    expect(Number(await scalar('SELECT investment_id FROM portfolio_transactions WHERE id = 9'))).toBe(8);
     expect(Number(await scalar('SELECT account_id FROM portfolio_transactions WHERE id = 5'))).toBe(999);
     // The canonical PK name went back to the pre-0013 snapshot it came from.
     expect(await scalar(
@@ -469,6 +487,8 @@ describe.skipIf(!haveDb)('ADR-109 conversion migration (0087)', () => {
     expect(await scalar("SELECT relkind::text FROM pg_class WHERE oid = to_regclass('public.investments')")).toBe('r');
     expect(Number(await scalar('SELECT count(*) FROM investments'))).toBe(7);
     expect(Number(await scalar('SELECT count(*) FROM portfolio_transactions'))).toBe(8);
+    expect(await scalar('SELECT id FROM portfolio_transactions WHERE id = 9')).toBeUndefined();
+    expect(Number(await scalar('SELECT investment_id FROM legacy_inh_portfolio_transactions WHERE id = 9'))).toBe(8);
   }, 180_000);
 
   it('is a strict no-op on a database that is already flat', async () => {

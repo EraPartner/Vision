@@ -33,6 +33,17 @@ The 0062 split-guard trigger (`enforce_split_within_amount`) needs no change —
 is unconstrained `numeric` and its `> ABS(NEW.amount) + 0.005` tolerance remains valid
 (a 4-dp split set summing exactly to a 4-dp parent passes with margin).
 
+LEGACY OVERPAYMENT TRIGGER: databases that ran the pre-squash migration
+`0028_split_audit_overpayment_guard` still carry
+`trg_split_payment_overpayment_guard`. Fresh databases on the consolidated chain never
+created it: payment serialization and the exact storage-precision cap live in
+`splitRepository.addPayment` under `SELECT ... FOR UPDATE`. PostgreSQL records the
+legacy trigger's `UPDATE OF amount` column dependency, so it refuses to retype
+`split_payments.amount` while that trigger exists. Drop the trigger and its function
+before the retype to converge upgraded databases on the canonical fresh-install shape.
+The cleanup is intentionally retained on downgrade; restoring a legacy-only, cent-scale
+guard would recreate schema drift and a weaker `+ 0.005` rule.
+
 DELIBERATELY NOT TOUCHED:
   * `import_staging_rows.amount`/`balance` NUMERIC(20,4) — explicitly kept by the ADR
     ("wider than its commit target is harmless").
@@ -98,10 +109,18 @@ depends_on: Union[str, Sequence[str], None] = None
 # rewritten once, whatever its column count.
 MONEY_COLUMNS: "list[tuple[str, tuple[str, ...]]]" = [
     ("transactions", ("balance",)),
-    ("planned_transactions", ("amount", "loan_principal", "loan_regular_payment_amount")),
+    (
+        "planned_transactions",
+        ("amount", "loan_principal", "loan_regular_payment_amount"),
+    ),
     (
         "planned_transaction_loan_schedule",
-        ("payment_amount", "principal_amount", "interest_amount", "remaining_principal"),
+        (
+            "payment_amount",
+            "principal_amount",
+            "interest_amount",
+            "remaining_principal",
+        ),
     ),
     ("transaction_splits", ("amount",)),
     ("split_payments", ("amount",)),
@@ -155,7 +174,7 @@ def _drop_runtime_mvs_bound_to_money_columns(conn) -> None:
         # destructive-ok: derived data only — materializedViewService.createMaterializedViews
         # recreates and populates any missing runtime MV from the post-listen warmup on the
         # same boot (0084/0085 precedent); dropped here only when it blocks the retype.
-        conn.execute(sa.text(f'DROP MATERIALIZED VIEW IF EXISTS {name} CASCADE'))
+        conn.execute(sa.text(f"DROP MATERIALIZED VIEW IF EXISTS {name} CASCADE"))
 
 
 # fn_agg_split_outstanding_sync with its locals at the (18,4) domain precision. Body is
@@ -200,19 +219,44 @@ _AGG_SYNC_FN_18_4 = """
     $$ LANGUAGE plpgsql;
 """
 
-# The pre-D7 function, restored verbatim (0019) on downgrade so the rolled-back schema is
-# an exact restore, (15,2) locals included.
+# The pre-D7 aggregate function, restored verbatim (0019) on downgrade, (15,2) locals
+# included. The separate legacy overpayment guard is intentionally not restored; see the
+# migration docstring.
 _AGG_SYNC_FN_15_2 = _AGG_SYNC_FN_18_4.replace("NUMERIC(18, 4)", "NUMERIC(15, 2)")
+
+
+def _drop_legacy_overpayment_guard(conn) -> None:
+    """Remove the pre-squash trigger that blocks retyping split_payments.amount.
+
+    The consolidated migration chain never creates this object. Keeping the cleanup
+    idempotent makes both a converted legacy database and a fresh database safe, while
+    avoiding CASCADE so any unexpected third-party dependency still fails loudly.
+    """
+    # destructive-ok: ADR-112 retires this legacy-only trigger; the consolidated chain
+    # never creates it and splitRepository.addPayment already owns the locked exact cap.
+    conn.execute(
+        sa.text(
+            "DROP TRIGGER IF EXISTS trg_split_payment_overpayment_guard ON split_payments"
+        )
+    )
+    # destructive-ok: ADR-112 removes the now-unreferenced legacy function after its
+    # sole trigger; no CASCADE is used, so an unexpected dependency still blocks safely.
+    conn.execute(
+        sa.text("DROP FUNCTION IF EXISTS fn_split_payment_overpayment_guard()")
+    )
 
 
 def upgrade() -> None:
     conn = op.get_bind()
+    _drop_legacy_overpayment_guard(conn)
     _drop_runtime_mvs_bound_to_money_columns(conn)
     for table, columns in MONEY_COLUMNS:
         # destructive-ok: pure WIDENING, NUMERIC(15,2) -> NUMERIC(18,4) per the ADR-060 D7
         # addendum (2026-07-10: 18,4 is the domain precision) — both precision and scale
         # grow, so no existing value can be truncated; narrowing lives in downgrade() only.
-        clauses = ", ".join(f"ALTER COLUMN {col} TYPE NUMERIC(18, 4)" for col in columns)
+        clauses = ", ".join(
+            f"ALTER COLUMN {col} TYPE NUMERIC(18, 4)" for col in columns
+        )
         conn.execute(sa.text(f"ALTER TABLE {table} {clauses}"))
     conn.execute(sa.text(_AGG_SYNC_FN_18_4))
     # The scale change rewrote each table in full (see docstring) — refresh planner stats
@@ -267,13 +311,17 @@ def downgrade() -> None:
             """
         )
     )
+    # A manually restored legacy trigger has the same column dependency and
+    # cent-scale semantics. Keep the canonical no-trigger shape on downgrade too.
+    _drop_legacy_overpayment_guard(conn)
     _drop_runtime_mvs_bound_to_money_columns(conn)
     for table, columns in MONEY_COLUMNS:
         # Re-narrow per the ADR's rollback clause: round(col, 2) — lossy exactly for the
         # values that used the 4-dp headroom. Explicit USING because the assignment cast
         # would raise on such values instead of rounding them.
         clauses = ", ".join(
-            f"ALTER COLUMN {col} TYPE NUMERIC(15, 2) USING round({col}, 2)" for col in columns
+            f"ALTER COLUMN {col} TYPE NUMERIC(15, 2) USING round({col}, 2)"
+            for col in columns
         )
         conn.execute(sa.text(f"ALTER TABLE {table} {clauses}"))
     conn.execute(sa.text(_AGG_SYNC_FN_15_2))

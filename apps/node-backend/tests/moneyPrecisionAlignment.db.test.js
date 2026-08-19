@@ -23,6 +23,9 @@
  *   6. The 0088 downgrade pre-flight refuses (with a curated message, database
  *      untouched) when a sub-cent split would round to 0.00 under
  *      USING round(amount, 2) and violate chk_split_amount_positive.
+ *   7. A pre-squash database carrying the legacy overpayment trigger migrates
+ *      through 0088, 0089, and 0090 to head; 0088 removes the trigger rather
+ *      than letting its UPDATE-OF column dependency block the amount retype.
  *
  * Isolation: fixtures carry a unique memo/name marker; afterAll deletes only what
  * this suite created (transactions cascade to splits → payments → agg rows). The
@@ -403,14 +406,48 @@ function alembic(...args) {
   });
 }
 
-describeDb('migration 0088 downgrade pre-flight refuses sub-cent rows', () => {
+// Relevant DDL from legacy_versions/0028_split_audit_overpayment_guard.py.
+// The UPDATE OF amount dependency is what made PostgreSQL reject 0088's ALTER.
+const LEGACY_OVERPAYMENT_GUARD_SQL = `
+  CREATE OR REPLACE FUNCTION fn_split_payment_overpayment_guard()
+  RETURNS trigger AS $$
+  DECLARE
+    v_split_amount NUMERIC(15, 2);
+    v_paid_total NUMERIC(15, 2);
+  BEGIN
+    SELECT amount INTO v_split_amount
+      FROM transaction_splits
+     WHERE id = NEW.split_id;
+
+    SELECT COALESCE(SUM(amount), 0) INTO v_paid_total
+      FROM split_payments
+     WHERE split_id = NEW.split_id
+       AND (TG_OP = 'INSERT' OR id <> NEW.id);
+
+    v_paid_total := v_paid_total + NEW.amount;
+    IF v_paid_total > v_split_amount + 0.005 THEN
+      RAISE EXCEPTION 'payment would exceed split outstanding balance'
+        USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER trg_split_payment_overpayment_guard
+    BEFORE INSERT OR UPDATE OF amount, split_id ON split_payments
+    FOR EACH ROW EXECUTE FUNCTION fn_split_payment_overpayment_guard();
+`;
+
+describeDb('migration 0088 legacy-trigger upgrade and downgrade safety', () => {
   /** @type {pg.Client|null} */ let db = null;
 
   beforeAll(async () => {
     const admin = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
     await admin.connect();
     await admin.query(`DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${scratchDbName()}`);
+    await admin.query(
+      `CREATE DATABASE ${scratchDbName()} WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8'`,
+    );
     await admin.end();
 
     db = new pg.Client({ connectionString: scratchUrl() });
@@ -420,6 +457,8 @@ describeDb('migration 0088 downgrade pre-flight refuses sub-cent rows', () => {
     await db.query(
       'CREATE TABLE alembic_version (version_num VARCHAR(64) NOT NULL, CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))',
     );
+    await alembic('upgrade', '0087_flat_investments_conversion');
+    await db.query(LEGACY_OVERPAYMENT_GUARD_SQL);
     await alembic('upgrade', 'head');
   }, 240_000);
 
@@ -429,6 +468,37 @@ describeDb('migration 0088 downgrade pre-flight refuses sub-cent rows', () => {
     await admin.connect();
     await admin.query(`DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`);
     await admin.end();
+  });
+
+  it('removes the legacy blocker and completes 0088, 0089, and 0090 to head', async () => {
+    const version = await db.query(`SELECT version_num FROM alembic_version`);
+    expect(version.rows[0].version_num).toBe('0090_constraint_index_naming');
+
+    const legacyGuard = await db.query(`
+      SELECT
+        to_regprocedure('public.fn_split_payment_overpayment_guard()') IS NOT NULL AS function_exists,
+        EXISTS (
+          SELECT 1
+            FROM pg_trigger
+           WHERE tgrelid = 'public.split_payments'::regclass
+             AND tgname = 'trg_split_payment_overpayment_guard'
+             AND NOT tgisinternal
+        ) AS trigger_exists
+    `);
+    expect(legacyGuard.rows[0]).toEqual({ function_exists: false, trigger_exists: false });
+
+    // Representative catalog pins prove the two revisions after 0088 ran on
+    // this legacy-shaped database as part of the same upgrade.
+    const laterRevisions = await db.query(`
+      SELECT
+        EXISTS (
+          SELECT 1 FROM pg_constraint
+           WHERE conrelid = 'public.planned_transactions'::regclass
+             AND conname = 'chk_planned_transactions_recurrence_pattern'
+        ) AS check_0089,
+        to_regclass('public.uq_transactions_opening_anchor') IS NOT NULL AS rename_0090
+    `);
+    expect(laterRevisions.rows[0]).toEqual({ check_0089: true, rename_0090: true });
   });
 
   it('refuses with a curated row list while a sub-cent split exists, then downgrades clean', async () => {
@@ -480,5 +550,12 @@ describeDb('migration 0088 downgrade pre-flight refuses sub-cent rows', () => {
        WHERE table_schema = 'public' AND numeric_precision = 15 AND numeric_scale = 2`,
     );
     expect(renarrowed[0].n).toBe(32);
+
+    // Downgrade restores the 15,2 aggregate helper, but deliberately does not
+    // resurrect the pre-squash cent-tolerance guard.
+    const legacyGuard = await db.query(`
+      SELECT to_regprocedure('public.fn_split_payment_overpayment_guard()') IS NOT NULL AS present
+    `);
+    expect(legacyGuard.rows[0].present).toBe(false);
   }, 240_000);
 });

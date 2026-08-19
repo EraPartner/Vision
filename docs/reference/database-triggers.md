@@ -3,9 +3,9 @@ title: Database Triggers Reference
 type: reference
 status: active
 date: 2026-04-21
-updated: 2026-06-25
-tags: [reference, database, triggers, postgresql, phase-1, dual-write-trigger, account-sync, split-guard, migration-0062, adr-088]
-description: Complete reference of all PostgreSQL triggers in the Vision database. 2026-06-25: sync_account_id_from_bank_account() hardened to lookup-only on UPDATE (migration 0062); trg_enforce_split_within_amount BEFORE UPDATE trigger added.
+updated: 2026-08-19
+tags: [reference, database, triggers, postgresql, phase-1, dual-write-trigger, account-sync, split-guard, migration-0062, adr-088, split-payments, migration-0088, adr-112]
+description: Complete reference of all PostgreSQL triggers in the Vision database. 2026-06-25: sync_account_id_from_bank_account() hardened to lookup-only on UPDATE (migration 0062); trg_enforce_split_within_amount BEFORE UPDATE trigger added. 2026-08-19: migration 0088 removes the legacy-only split-payment overpayment trigger before widening its amount column.
 aliases: [triggers, database triggers, trigger functions, updated_at triggers]
 ---
 
@@ -101,6 +101,22 @@ restores the prior resolve-or-create-on-update `sync_account_id_from_bank_accoun
 
 **Related code:** [[alembic/versions/0062_trigger_lookup_only_on_update.py]]
 
+## Split-Payment Overpayment Enforcement (migration 0088)
+
+The canonical schema has **no** `trg_split_payment_overpayment_guard` trigger. Fresh databases on
+the consolidated migration chain never created it. Older databases can retain it from the
+pre-squash migration `0028_split_audit_overpayment_guard`; migration 0088 drops that trigger and
+its function before widening `split_payments.amount` to `NUMERIC(18,4)`.
+
+The authoritative cap is `splitRepository.addPayment`: it locks the parent split with
+`SELECT ... FOR UPDATE`, recomputes existing payments, compares at four-decimal storage precision,
+and inserts, auto-settles, and audits in one transaction. Direct SQL does not receive this guard.
+See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
+
+This does not affect the aggregate-maintenance trigger
+`trg_split_payment_outstanding_sync`, which continues to update `agg_split_outstanding` after
+payment inserts, updates, and deletes.
+
 ## Migration References
 
 | Migration | Trigger Changes |
@@ -111,10 +127,12 @@ restores the prior resolve-or-create-on-update `sync_account_id_from_bank_accoun
 | `0016_add_fx_rate_to_portfolio_transactions` | Adds `fx_rate_to_eur` column with migration-safe guards |
 | `0051_account_id_dual_write_trigger` | Creates `sync_account_id_from_bank_account()` and binds it to `transactions` and `planned_transactions` (ADR-088) |
 | `0062_trigger_lookup_only_on_update` | Replaces `sync_account_id_from_bank_account()` with lookup-only-on-UPDATE variant; adds `trg_enforce_split_within_amount` (ADR-088 addendum) |
+| `0088_money_precision_alignment` | Removes the pre-squash `trg_split_payment_overpayment_guard`; aggregate-maintenance triggers remain (ADR-112) |
 
 ## Related
 
 - [[docs/adr/002-database-schema\|Database Schema ADR]] - Table definitions
 - [[docs/adr/027-alembic-single-source-of-schema\|ADR-027: Alembic as Single Source of Schema Truth]] - Migration strategy
 - [[docs/adr/088-account-entity\|ADR-088: Account Entity]] - Dual-write trigger rationale
+- [[docs/adr/112-retire-legacy-split-overpayment-trigger\|ADR-112: Retire legacy split-payment overpayment trigger]] - Canonical payment-cap enforcement
 - [[docs/guides/migrations\|Migration Guide]] - How schema changes are managed

@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-07-22
-updated: 2026-07-22
+updated: 2026-08-19
 tags: [feature, accounts, adr-088, adr-094, adr-105, adr-107, balances, reconciliation, ledger, running-balance, provenance, wp-b2, wp-b3, wp-b4]
 aliases: [accounts-feature, account-hub, account-ledger, bank-accounts]
 description: The budgeting accounts surface — grouped hub, per-account ledger route with running balance, balance provenance, drift reconciliation, and account lifecycle (open/edit/merge/close/archive/delete). Rebuilt under ADR-107 as a Glance → Overview → Ledger architecture with one balance definition everywhere.
@@ -78,7 +78,7 @@ The drift badge/chip (`statement_balance − computed_balance`, ADR-094) opens t
 
 The dialog:
 
-- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − computed`, rounded to cents half-away-from-zero so the preview always equals what `NUMERIC(15,2)` will store). *Save reading* PATCHes `statement_balance`/`statement_balance_date` through the normal account update path. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) can never pass as money. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path.
+- **Fresh statement reading** — an amount + as-of-date input (defaults to today) with a **live drift preview** (`entered − computed`, rounded to cents half-away-from-zero for display while `statement_balance` stores `NUMERIC(18,4)` after migration 0088). *Save reading* PATCHes `statement_balance`/`statement_balance_date` through the normal account update path. Raw input is shape-validated before parsing so typos (`12,,3`, `1234..56`) can never pass as money. A reading dated **before today** renders an amber warning — activity after that date is already in the computed balance, so an adjustment would double-count it — with the ledger exit emphasized as the recommended path.
 - **Accept computed balance** — rewrite the stored statement figure to the computed one (no transaction created).
 - **Add adjustment transaction** — keep the statement as truth; the server stamps one balancing ledger row.
 - **Show transactions since {date}** — deep-links to `/accounts/:id?since={statement date}` (the fresh reading's date when one is entered, else the stored anchor's).

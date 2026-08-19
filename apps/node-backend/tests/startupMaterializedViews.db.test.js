@@ -108,7 +108,9 @@ describe.skipIf(!hasTestDatabase())('startup: materialized views are built after
     await admin.connect();
     // FORCE: a previous aborted run may have left the locker session connected.
     await admin.query(`DROP DATABASE IF EXISTS ${scratchDbName()} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${scratchDbName()}`);
+    await admin.query(
+      `CREATE DATABASE ${scratchDbName()} WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8'`,
+    );
 
     // Own cache dir: the alembic skip-at-head cache is keyed on revision +
     // versions/ fingerprint, so a throwaway database's entry must never be

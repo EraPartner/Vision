@@ -85,6 +85,10 @@ describe.skipIf(!hasTestDatabase())('roleBootstrap (real Postgres)', () => {
     for (const role of ALL_ROLES) {
       const { rows } = await pool.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [role]);
       if (rows.length === 0) continue;
+      // PostgreSQL 16+ gives a CREATEROLE creator ADMIN but not SET membership
+      // in the new role. DROP OWNED requires SET permission, so grant that
+      // narrow membership option before removing the throwaway role.
+      await pool.query(`GRANT "${role}" TO CURRENT_USER WITH SET TRUE`);
       // DROP OWNED revokes privileges granted TO the role (incl. default-ACL
       // entries) and drops objects it owns — required before DROP ROLE.
       await pool.query(`DROP OWNED BY "${role}"`);

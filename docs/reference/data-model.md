@@ -3,10 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-08-11
-last_modified: 2026-08-11
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062, db-editor-audit, migration-0059, adr-101, provider-api-keys, instrument-provider-map, provider-quota, migration-0042, migration-0043, adr-079, cashflow-forecast-accuracy, cashflow-forecast-mc, cashflow-forecast-mc-rolling, migration-0012, migration-0013, migration-0016, materialized-views, mv-monthly-summary, mv-category-totals, mv-cashflow-daily]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger. 2026-08-11: added the previously-undocumented db_editor_audit (ADR-101, migration 0059), provider_api_keys/instrument_provider_map/provider_quota (ADR-079, migrations 0042/0043), and cashflow_forecast_accuracy/_mc/_mc_rolling (migrations 0012/0013/0016) tables, plus the three live runtime materialized views (mv_monthly_summary, mv_category_totals, mv_cashflow_daily — NOT four; mv_bank_balances was dropped for good in migration 0082).
+updated: 2026-08-19
+last_modified: 2026-08-19
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062, db-editor-audit, migration-0059, adr-101, provider-api-keys, instrument-provider-map, provider-quota, migration-0042, migration-0043, adr-079, cashflow-forecast-accuracy, cashflow-forecast-mc, cashflow-forecast-mc-rolling, migration-0012, migration-0013, migration-0016, materialized-views, mv-monthly-summary, mv-category-totals, mv-cashflow-daily, monetary-precision, migration-0088, adr-112]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger. 2026-08-11: added the previously-undocumented db_editor_audit (ADR-101, migration 0059), provider_api_keys/instrument_provider_map/provider_quota (ADR-079, migrations 0042/0043), and cashflow_forecast_accuracy/_mc/_mc_rolling (migrations 0012/0013/0016) tables, plus the three live runtime materialized views (mv_monthly_summary, mv_category_totals, mv_cashflow_daily — NOT four; mv_bank_balances was dropped for good in migration 0082). 2026-08-19: migration 0088 aligns transaction-ledger money columns to NUMERIC(18,4) and removes the legacy-only split-payment overpayment trigger (ADR-112).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -30,7 +30,7 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `date` | DATE | NOT NULL | Transaction date |
 | `amount` | NUMERIC(18,4) | NOT NULL | Amount (negative=expense, positive=income). Widened from `NUMERIC(15,2)` in migration 0025 (`fix_numeric_precision`). |
 | `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046 — see note below) |
-| `balance` | NUMERIC(15,2) | NULLABLE | Running balance after transaction — **written exclusively by the import pipeline** (`importPipeline/commit.js`). `NULL` on manually-created rows. `PATCH /api/transactions/:id` and `POST /api/transactions` (create) no longer accept this field. `TransactionInfoDialog` renders it read-only. See [[docs/adr/094-balance-reconciliation-drift|ADR-094 addendum (2026-06-25)]]. |
+| `balance` | NUMERIC(18,4) | NULLABLE | Running balance after transaction; widened by migration 0088. **Written exclusively by the import pipeline** (`importPipeline/commit.js`). `NULL` on manually-created rows. `PATCH /api/transactions/:id` and `POST /api/transactions` (create) no longer accept this field. `TransactionInfoDialog` renders it read-only. See [[docs/adr/094-balance-reconciliation-drift|ADR-094 addendum (2026-06-25)]]. |
 | `memo` | TEXT | NULLABLE | Original bank description |
 | `comment` | TEXT | NULLABLE | User-added note |
 | `bank_account` | TEXT | NULLABLE | Source bank account (string; being retired in favour of `account_id` — ADR-088) |
@@ -81,6 +81,8 @@ holdings, and liabilities together. Distinct from `recipient_bank_accounts` (cou
 | `multi_currency_cash` | BOOLEAN | NOT NULL, DEFAULT false | Holds cash in multiple currencies |
 | `has_cash_sleeve` | BOOLEAN | NOT NULL, DEFAULT true | Holds a spendable cash balance (false for holding-only wallets) |
 | `funding_account_id` | INTEGER | FK → accounts ON DELETE SET NULL, NULLABLE | Settlement account for sleeve-less trades |
+| `statement_balance` | NUMERIC(18,4) | NULLABLE | Latest bank-statement reading; widened by migration 0088 |
+| `statement_balance_date` | DATE | NULLABLE, required when `statement_balance` is set | Effective date of the statement reading |
 | `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Archived when false |
 | `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Timestamps (`updated_at` trigger) |
 
@@ -208,7 +210,7 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 |-------|------|-------------|-------------|
 | `id` | SERIAL | PK | Unique identifier |
 | `planned_date` | DATE | NOT NULL | Scheduled date |
-| `amount` | NUMERIC(15,2) | NOT NULL | Planned amount |
+| `amount` | NUMERIC(18,4) | NOT NULL | Planned amount; widened by migration 0088 |
 | `recipient_id` | INTEGER | FK → recipients | Payee |
 | `category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Category; FK updated to ON DELETE SET NULL by migration 0048 |
 | `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046, AUTHORED NOT YET APPLIED) |
@@ -216,6 +218,8 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 | `recurrence_pattern` | TEXT | NULLABLE | Pattern (daily, weekly, monthly, etc.) |
 | `reminder_days_before` | INTEGER | NULLABLE | Days before planned_date to show reminder (Phase 6) |
 | `is_loan` | BOOLEAN | DEFAULT false | Loan flag |
+| `loan_principal` | NUMERIC(18,4) | NULLABLE | Original loan principal; widened by migration 0088 |
+| `loan_regular_payment_amount` | NUMERIC(18,4) | NULLABLE | Regular payment amount; widened by migration 0088 |
 | `is_executed` | BOOLEAN | DEFAULT false | Execution flag |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
 
@@ -246,10 +250,10 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 | `planned_transaction_id` | INTEGER | FK → planned_transactions | Parent loan |
 | `installment_number` | INTEGER | NOT NULL | Payment sequence number |
 | `due_date` | DATE | NOT NULL | Scheduled payment date |
-| `payment_amount` | NUMERIC(15,2) | NOT NULL | Total payment |
-| `principal_amount` | NUMERIC(15,2) | NOT NULL | Principal portion |
-| `interest_amount` | NUMERIC(15,2) | NOT NULL | Interest portion |
-| `remaining_principal` | NUMERIC(15,2) | NOT NULL | Outstanding principal |
+| `payment_amount` | NUMERIC(18,4) | NOT NULL | Total payment; widened by migration 0088 |
+| `principal_amount` | NUMERIC(18,4) | NOT NULL | Principal portion; widened by migration 0088 |
+| `interest_amount` | NUMERIC(18,4) | NOT NULL | Interest portion; widened by migration 0088 |
+| `remaining_principal` | NUMERIC(18,4) | NOT NULL | Outstanding principal; widened by migration 0088 |
 
 **Related:** [[docs/integrations/loan-repayment-service|Loan Repayment Service]]
 
@@ -261,6 +265,13 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 > [!info] Canonical shape is a single flat table (ADR-109)
 > Every install has **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. Fresh installs get it from the `0001` baseline; legacy installs that carried the ADR-004 table-inheritance shape (base `investments_base` + 7 child tables + an `investments` VIEW) are converted by the one-time guarded migration `0087_flat_investments_conversion` (parity-checked copy, rename-based rollback — the old relations survive renamed `legacy_inh_*` until a later housekeeping drop). Asset-class-specific columns are simply NULL when not applicable.
+
+> [!note] Legacy delete-cascade completion
+> The inheritance schema could leave portfolio transactions behind after their investment was
+> deleted because its transaction children had no enforceable foreign key. During conversion,
+> 0087 warns with those transaction IDs and omits them from the flat copy to match the canonical
+> `ON DELETE CASCADE` contract. The original rows remain in `legacy_inh_*` for downgrade. See
+> [[docs/adr/111-complete-legacy-investment-delete-cascades|ADR-111]].
 
 **Purpose:** All investment holdings, one row per holding, discriminated by `asset_class`.
 
@@ -501,7 +512,7 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 | `id` | SERIAL | PK | Unique identifier |
 | `transaction_id` | INTEGER | NOT NULL, FK → transactions ON DELETE CASCADE | Parent transaction |
 | `recipient_id` | INTEGER | NOT NULL, FK → recipients ON DELETE CASCADE | Person who owes this amount |
-| `amount` | NUMERIC(15,2) | NOT NULL | Amount owed |
+| `amount` | NUMERIC(18,4) | NOT NULL | Amount owed; widened by migration 0088 |
 | `note` | TEXT | NULLABLE | Optional note |
 | `is_settled` | BOOLEAN | NOT NULL, DEFAULT false | Whether the split is fully settled |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
@@ -521,20 +532,26 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 |-------|------|-------------|-------------|
 | `id` | SERIAL | PK | Unique identifier |
 | `split_id` | INTEGER | NOT NULL, FK → transaction_splits ON DELETE CASCADE | Parent split |
-| `amount` | NUMERIC(15,2) | NOT NULL | Payment amount |
+| `amount` | NUMERIC(18,4) | NOT NULL | Payment amount; widened by migration 0088 |
 | `paid_at` | DATE | NOT NULL, DEFAULT CURRENT_DATE | Date payment was made |
 | `note` | TEXT | NULLABLE | Optional note |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
 
 **Indexes:** `idx_split_payments_split`
 
-**Related:** [[docs/features/splits|Splits Feature]], migration [[alembic/versions/0019_transaction_splits_and_agg.py|0019]]
+> [!warning] Payment writes must use the repository path
+> The canonical schema has no split-payment overpayment trigger. `splitRepository.addPayment`
+> enforces the exact four-decimal cap while holding a `SELECT ... FOR UPDATE` lock on the split.
+> Migration 0088 removes the weaker trigger left by pre-squash databases. Direct SQL can bypass
+> this cap. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
+
+**Related:** [[docs/features/splits|Splits Feature]], migrations [[alembic/versions/0019_transaction_splits_and_agg.py|0019]] and [[alembic/versions/0088_money_precision_alignment.py|0088]]
 
 ---
 
 ### SplitAudit
 
-**Purpose:** Audit log for split-related operations (create, update, payment, settle). Written by `splitRepository.writeAudit()`.
+**Purpose:** Audit log for split-related operations (`create`, `payment`, `settle`, `settle_all`, and `delete`). Written by `splitRepository.writeAudit()`.
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
@@ -971,9 +988,9 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 |-------|------|-------------|
 | `split_id` | INTEGER | FK → transaction_splits (ON DELETE CASCADE) |
 | `recipient_id` | INTEGER | FK → recipients (ON DELETE CASCADE) |
-| `original_amount` | NUMERIC(15,2) | Original split amount |
-| `paid_amount` | NUMERIC(15,2) | Total paid via `split_payments` |
-| `outstanding_amount` | NUMERIC(15,2) | `original - paid` |
+| `original_amount` | NUMERIC(18,4) | Original split amount |
+| `paid_amount` | NUMERIC(18,4) | Total paid via `split_payments` |
+| `outstanding_amount` | NUMERIC(18,4) | `original - paid` |
 | `updated_at` | TIMESTAMPTZ | Last update timestamp |
 
 **Indexes:**

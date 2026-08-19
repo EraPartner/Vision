@@ -31,13 +31,19 @@ WHAT IT DOES (legacy installs only — a strict no-op when `investments_base` is
      idempotent; everything after it runs in one transaction (all-or-nothing).
   3. Builds `investments_flat` / `portfolio_transactions_flat` with column definitions matching
      0001's flat DDL exactly (plus the flat-path columns later revisions appended: account_id
-     from 0052, import_batch_id from 0086), and copies every row. investments is copied from
-     the base + child JOIN rather than the view because the legacy view never exposed
+     from 0052, import_batch_id from 0086), and copies every investment plus every transaction
+     whose investment still exists. The legacy hard-delete path removed an investment through
+     `investments_base`, but the child transaction tables had no enforceable foreign key and
+     therefore kept invisible orphan transactions. The canonical FK uses ON DELETE CASCADE, so
+     the conversion completes that intended cascade while warning with the omitted transaction
+     ids. The rows remain in the renamed legacy tables for rollback. Investments are copied
+     from the base + child JOIN rather than the view because the legacy view never exposed
      `bond_investments.interest_rate` (0017 kept `savi.interest_rate` only) — copying the join
      preserves those values instead of silently dropping them.
   4. Parity pre-flight (ADR-109 §6): row counts and an order-independent hash over id + money
-     columns must match between each view and its flat copy, else RAISE (aborting the whole
-     conversion transaction — the database is left untouched on the legacy shape).
+     columns must match between the investments view and its flat copy, and between the valid
+     transaction subset and its flat copy, else RAISE (aborting the whole conversion transaction
+     — the database is left untouched on the legacy shape).
   5. Swap: canonical index/constraint names still occupied by legacy relations (e.g.
      `investments_pkey` on the pre-0013 `investments_legacy` snapshot) are renamed aside with a
      `legacy_inh_` prefix; the views and inheritance tables are renamed aside the same way; the
@@ -49,9 +55,7 @@ WHAT IT DOES (legacy installs only — a strict no-op when `investments_base` is
      (0001), account_id (0052), import_batch_id (0086), asset_price_history.investment_id
      (0026, with the same orphan-row cleanup 0026 performs on flat installs), and the
      portfolio_import_staging_rows investment FKs (0040, dangling matches nulled — staging
-     rows are transient and had no referential integrity on legacy installs). A lot whose
-     investment_id references no investment aborts the conversion instead of being dropped:
-     trades are money data and are never silently discarded.
+     rows are transient and had no referential integrity on legacy installs).
   7. Resyncs the id sequences to GREATEST(the legacy sequence's next value, MAX(id)+1) — so a
      legacy sequence that ran ahead of the surviving rows never re-issues previously-used ids
      (stale FK-less references like investment_ticker_prefs rows could otherwise attach to a
@@ -69,9 +73,9 @@ migration guide's batching shapes exist for). Flat installs pay two to_regclass(
 
 ROLLBACK (downgrade): reverse the renames. The converted flat tables are dropped (rows written
 after the conversion are lost — the rollback path is destructive by definition), the legacy
-views/tables get their canonical names back, and any index/constraint renamed aside in step 5
-gets its original name back. On installs that were never converted (fresh/flat) downgrade is a
-no-op.
+views/tables get their canonical names back, including any orphan transactions omitted from the
+flat copy, and any index/constraint renamed aside in step 5 gets its original name back. On
+installs that were never converted (fresh/flat) downgrade is a no-op.
 
 After this revision every install is on the flat shape before the backend starts listening
 (docker-entrypoint.sh / main.js run `alembic upgrade head` ahead of app.listen), so the
@@ -86,7 +90,9 @@ import sqlalchemy as sa
 
 
 revision: str = "0087_flat_investments_conversion"
-down_revision: Union[str, Sequence[str], None] = "0086_portfolio_transactions_import_batch_id"
+down_revision: Union[str, Sequence[str], None] = (
+    "0086_portfolio_transactions_import_batch_id"
+)
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -131,7 +137,9 @@ _CANONICAL_RELATION_NAMES = [
     "idx_ptxn_investment_date_id",
 ]
 
-_CANONICAL_NAMES_SQL_ARRAY = "ARRAY[" + ", ".join(f"'{n}'" for n in _CANONICAL_RELATION_NAMES) + "]"
+_CANONICAL_NAMES_SQL_ARRAY = (
+    "ARRAY[" + ", ".join(f"'{n}'" for n in _CANONICAL_RELATION_NAMES) + "]"
+)
 
 
 def _is_legacy_shape(bind) -> bool:
@@ -396,8 +404,31 @@ def upgrade() -> None:
         """
     )
 
-    # Copy portfolio transactions straight from the view — it exposes every flat column
-    # (0086's definition), so this is the view's own projection, row for row.
+    # Legacy investment deletion went through investments_base. Because PostgreSQL inheritance
+    # did not propagate the investment FK to transaction children, that valid API action left
+    # transaction rows whose investment no longer existed. The canonical FK is ON DELETE CASCADE,
+    # so omit those leftovers from the flat copy while preserving them in the legacy relations
+    # kept for rollback. Make the repair visible in the migration log.
+    op.execute(
+        """
+        DO $$
+        DECLARE bad_ids text;
+        BEGIN
+            SELECT string_agg(pt.id::text, ', ' ORDER BY pt.id) INTO bad_ids
+              FROM portfolio_transactions pt
+             WHERE NOT EXISTS (SELECT 1 FROM investments i WHERE i.id = pt.investment_id);
+            IF bad_ids IS NOT NULL THEN
+                RAISE WARNING 'ADR-109 conversion: omitting legacy portfolio transaction(s) % '
+                    'because their investments were previously deleted. This completes the '
+                    'canonical ON DELETE CASCADE behavior; rollback keeps the rows in the legacy '
+                    'inheritance tables.', bad_ids;
+            END IF;
+        END $$;
+        """
+    )
+
+    # The view exposes every flat column (0086's definition), so this is the view's own
+    # projection, row for row, restricted only to transactions with a surviving investment.
     op.execute(
         """
         INSERT INTO portfolio_transactions_flat (
@@ -408,7 +439,8 @@ def upgrade() -> None:
             id, investment_id, type, date, amount, units, price_per_unit, fees, taxes,
             currency, fx_rate_to_eur, note, is_recurring, recurrence_interval,
             recurrence_end_date, created_at, updated_at, account_id, import_batch_id
-        FROM portfolio_transactions;
+        FROM portfolio_transactions pt
+        WHERE EXISTS (SELECT 1 FROM investments i WHERE i.id = pt.investment_id);
         """
     )
 
@@ -451,7 +483,9 @@ def upgrade() -> None:
                        currency, COALESCE(fx_rate_to_eur::text, '<null>'),
                        COALESCE(account_id::text, '<null>'),
                        COALESCE(import_batch_id::text, '<null>')), 0)::numeric), 0)
-              INTO view_count, view_hash FROM portfolio_transactions;
+              INTO view_count, view_hash
+              FROM portfolio_transactions pt
+             WHERE EXISTS (SELECT 1 FROM investments i WHERE i.id = pt.investment_id);
             SELECT COUNT(*),
                    COALESCE(SUM(hashtextextended(concat_ws('|',
                        id::text, investment_id::text, type::text, date::text, amount::text,
@@ -512,12 +546,16 @@ def upgrade() -> None:
     # trigger, the *_investments_full helper views, the inheritance links — all follow the
     # renames by OID and keep working against the renamed relations)…
     op.execute("ALTER VIEW investments RENAME TO legacy_inh_investments")
-    op.execute("ALTER VIEW portfolio_transactions RENAME TO legacy_inh_portfolio_transactions")
+    op.execute(
+        "ALTER VIEW portfolio_transactions RENAME TO legacy_inh_portfolio_transactions"
+    )
     for tbl in _LEGACY_TABLES:
         op.execute(f"ALTER TABLE {tbl} RENAME TO {_ASIDE_PREFIX}{tbl}")
     # …and the flat copies take the canonical names.
     op.execute("ALTER TABLE investments_flat RENAME TO investments")
-    op.execute("ALTER TABLE portfolio_transactions_flat RENAME TO portfolio_transactions")
+    op.execute(
+        "ALTER TABLE portfolio_transactions_flat RENAME TO portfolio_transactions"
+    )
     # PostgreSQL 18+ catalogues per-column NOT NULL constraints in pg_constraint
     # with auto-generated names taken from the table's CREATE-time name — which
     # here is the transient *_flat name, surviving the rename above. Rename them
@@ -547,27 +585,13 @@ def upgrade() -> None:
     # 6. Canonical constraints, indexes and triggers (0001/0026/0040/0052/
     #    0079/0086 names), including the FKs the view shape could not hold.
     # ------------------------------------------------------------------
-    op.execute("ALTER TABLE investments ADD CONSTRAINT investments_pkey PRIMARY KEY (id)")
-    op.execute("ALTER TABLE portfolio_transactions ADD CONSTRAINT portfolio_transactions_pkey PRIMARY KEY (id)")
-
-    # A lot referencing a nonexistent investment is corrupt money data — refuse to convert
-    # (and to silently discard) rather than guess.
     op.execute(
-        """
-        DO $$
-        DECLARE bad_ids text;
-        BEGIN
-            SELECT string_agg(pt.id::text, ', ' ORDER BY pt.id) INTO bad_ids
-              FROM portfolio_transactions pt
-             WHERE NOT EXISTS (SELECT 1 FROM investments i WHERE i.id = pt.investment_id);
-            IF bad_ids IS NOT NULL THEN
-                RAISE EXCEPTION 'ADR-109 conversion: portfolio transaction(s) % reference '
-                    'investments that do not exist. Aborting without changing the schema; '
-                    'restore from backup or contact support.', bad_ids;
-            END IF;
-        END $$;
-        """
+        "ALTER TABLE investments ADD CONSTRAINT investments_pkey PRIMARY KEY (id)"
     )
+    op.execute(
+        "ALTER TABLE portfolio_transactions ADD CONSTRAINT portfolio_transactions_pkey PRIMARY KEY (id)"
+    )
+
     op.execute(
         """
         ALTER TABLE portfolio_transactions
@@ -610,7 +634,9 @@ def upgrade() -> None:
 
     # 0026 skipped this FK on legacy installs; apply it now with the identical orphan cleanup
     # 0026 runs on flat installs (derived price-history rows for deleted investments).
-    op.execute("DELETE FROM asset_price_history WHERE investment_id NOT IN (SELECT id FROM investments)")
+    op.execute(
+        "DELETE FROM asset_price_history WHERE investment_id NOT IN (SELECT id FROM investments)"
+    )
     op.execute(
         """
         ALTER TABLE asset_price_history
@@ -653,18 +679,26 @@ def upgrade() -> None:
 
     op.execute("CREATE INDEX idx_investments_asset_class ON investments (asset_class)")
     op.execute("CREATE INDEX idx_investments_is_active ON investments (is_active)")
-    op.execute("CREATE INDEX idx_portfolio_txn_investment_id ON portfolio_transactions (investment_id)")
+    op.execute(
+        "CREATE INDEX idx_portfolio_txn_investment_id ON portfolio_transactions (investment_id)"
+    )
     op.execute("CREATE INDEX idx_portfolio_txn_date ON portfolio_transactions (date)")
     op.execute("CREATE INDEX idx_portfolio_txn_type ON portfolio_transactions (type)")
-    op.execute("CREATE INDEX idx_portfolio_transactions_account_id ON portfolio_transactions (account_id)")
+    op.execute(
+        "CREATE INDEX idx_portfolio_transactions_account_id ON portfolio_transactions (account_id)"
+    )
     op.execute(
         """
         CREATE INDEX idx_portfolio_transactions_import_batch_id
             ON portfolio_transactions (import_batch_id) WHERE import_batch_id IS NOT NULL
         """
     )
-    op.execute("CREATE INDEX idx_ptxn_investment_account ON portfolio_transactions (investment_id, account_id)")
-    op.execute("CREATE INDEX idx_ptxn_investment_date_id ON portfolio_transactions (investment_id, date, id)")
+    op.execute(
+        "CREATE INDEX idx_ptxn_investment_account ON portfolio_transactions (investment_id, account_id)"
+    )
+    op.execute(
+        "CREATE INDEX idx_ptxn_investment_date_id ON portfolio_transactions (investment_id, date, id)"
+    )
 
     # 0001's updated_at triggers (update_updated_at_column() exists on legacy installs too —
     # legacy 0013 created it).
@@ -733,7 +767,9 @@ def downgrade() -> None:
     bind = op.get_bind()
     converted = bool(
         bind.execute(
-            sa.text("SELECT to_regclass('public.legacy_inh_investments_base') IS NOT NULL")
+            sa.text(
+                "SELECT to_regclass('public.legacy_inh_investments_base') IS NOT NULL"
+            )
         ).scalar()
     )
     if not converted:
@@ -744,9 +780,15 @@ def downgrade() -> None:
     # Drop the FKs this revision added onto other tables, then the converted flat tables
     # (freeing the canonical names; rows written after the conversion are lost — the
     # rollback path is destructive by definition).
-    op.execute("ALTER TABLE asset_price_history DROP CONSTRAINT IF EXISTS fk_aph_investment")
-    op.execute("ALTER TABLE portfolio_import_staging_rows DROP CONSTRAINT IF EXISTS fk_pf_staging_resolved_investment")
-    op.execute("ALTER TABLE portfolio_import_staging_rows DROP CONSTRAINT IF EXISTS fk_pf_staging_override_investment")
+    op.execute(
+        "ALTER TABLE asset_price_history DROP CONSTRAINT IF EXISTS fk_aph_investment"
+    )
+    op.execute(
+        "ALTER TABLE portfolio_import_staging_rows DROP CONSTRAINT IF EXISTS fk_pf_staging_resolved_investment"
+    )
+    op.execute(
+        "ALTER TABLE portfolio_import_staging_rows DROP CONSTRAINT IF EXISTS fk_pf_staging_override_investment"
+    )
     op.execute("DROP TABLE portfolio_transactions")
     op.execute("DROP TABLE investments")
 
@@ -754,7 +796,9 @@ def downgrade() -> None:
     for tbl in reversed(_LEGACY_TABLES):
         op.execute(f"ALTER TABLE {_ASIDE_PREFIX}{tbl} RENAME TO {tbl}")
     op.execute("ALTER VIEW legacy_inh_investments RENAME TO investments")
-    op.execute("ALTER VIEW legacy_inh_portfolio_transactions RENAME TO portfolio_transactions")
+    op.execute(
+        "ALTER VIEW legacy_inh_portfolio_transactions RENAME TO portfolio_transactions"
+    )
 
     # …and every index/constraint renamed aside by the upgrade gets its original name back.
     op.execute(
