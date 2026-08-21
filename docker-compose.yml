@@ -15,6 +15,10 @@ name: vision
 services:
   db:
     image: postgres:18-alpine
+    # The current linux/arm64 image can contain empty entrypoint scripts
+    # (docker-library/postgres#1378). Run only PostgreSQL under Docker Desktop's
+    # amd64 emulation until the upstream image is reliable; the app stays native.
+    platform: linux/amd64
     restart: unless-stopped
     # SSD-tuned planner: default random_page_cost=4.0 assumes spinning disks and
     # over-penalizes index scans. 1.1 reflects near-uniform random/sequential cost.

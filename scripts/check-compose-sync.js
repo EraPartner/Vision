@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
  * Guards packaging/electron/resources/docker-compose.yml against drifting from
- * the root docker-compose.yml on the two properties that decide which volumes a
- * user's data lives in:
+ * the root docker-compose.yml on the properties that decide which volumes a
+ * user's data lives in and which PostgreSQL runtime starts against them:
  *
  *   1. the top-level `name:` (the compose project name) — every named volume is
  *      created as `<project>_<volume>`, so a project-name change silently points
  *      the packaged app at a different, empty database
  *   2. the top-level `volumes:` key set — omitting the attachments volume here
  *      is exactly the v1.0.2 data-loss bug
+ *   3. the `db` service image and platform — a platform mismatch can select the
+ *      broken ARM64 Postgres entrypoint instead of the validated amd64 image
  *
  * This replaces two byte-identical copies of an inline awk one-liner (ci.yml's
  * verify-compose-sync job and release.yml's verify job) that could drift from
@@ -62,9 +64,11 @@ function unquote(value) {
 /**
  * Walk a compose file and return the structural bits this guard compares.
  *
- * Returns `{ name, volumes }` where `name` is the top-level project name (undefined
- * when absent) and `volumes` is the list of keys in the top-level `volumes:` mapping
- * (undefined when there is no such block — distinct from an empty block).
+ * Returns `{ name, volumes, dbImage, dbPlatform }`. `name` is the top-level
+ * project name (undefined when absent), `volumes` is the list of keys in the
+ * top-level `volumes:` mapping (undefined when there is no such block — distinct
+ * from an empty block), and the db fields are direct scalar properties of the
+ * `services.db` mapping.
  */
 function parseCompose(text, label) {
   const lines = String(text).split(/\r?\n/);
@@ -73,6 +77,12 @@ function parseCompose(text, label) {
   let inVolumes = false;
   let volumeIndent; // indent of the first child key; deeper lines are that key's value
   let blockScalarIndent; // when set, skip every line indented deeper than this
+  let inServices = false;
+  let serviceIndent;
+  let currentService;
+  let servicePropertyIndent;
+  let dbImage;
+  let dbPlatform;
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
@@ -91,11 +101,18 @@ function parseCompose(text, label) {
       // Any top-level construct ends the volumes block — including a `---`
       // document break or a sequence item, not just another key.
       inVolumes = false;
+      inServices = false;
       if (!match) continue;
       const key = match[2];
       const value = stripInlineComment(match[3]);
       if (BLOCK_SCALAR_RE.test(value)) blockScalarIndent = indent;
       if (key === 'name' && value !== '') name = unquote(value);
+      if (key === 'services') {
+        inServices = true;
+        serviceIndent = undefined;
+        currentService = undefined;
+        servicePropertyIndent = undefined;
+      }
       if (key === 'volumes') {
         if (volumes !== undefined) {
           throw new Error(`${label}: two top-level 'volumes:' blocks — invalid compose file`);
@@ -104,6 +121,26 @@ function parseCompose(text, label) {
         inVolumes = true;
         volumeIndent = undefined;
       }
+      continue;
+    }
+
+    if (inServices) {
+      if (!match) continue;
+      const key = match[2];
+      const value = stripInlineComment(match[3]);
+      if (BLOCK_SCALAR_RE.test(value)) blockScalarIndent = indent;
+
+      if (serviceIndent === undefined) serviceIndent = indent;
+      if (indent === serviceIndent) {
+        currentService = key;
+        servicePropertyIndent = undefined;
+        continue;
+      }
+      if (currentService !== 'db') continue;
+      if (servicePropertyIndent === undefined) servicePropertyIndent = indent;
+      if (indent !== servicePropertyIndent || value === '') continue;
+      if (key === 'image') dbImage = unquote(value);
+      if (key === 'platform') dbPlatform = unquote(value);
       continue;
     }
 
@@ -124,7 +161,7 @@ function parseCompose(text, label) {
     volumes.push(match[2]);
   }
 
-  return { name, volumes };
+  return { name, volumes, dbImage, dbPlatform };
 }
 
 /**
@@ -145,6 +182,22 @@ function diffCompose(root, electron) {
         'Both files must pin the same project name (the shared vision_postgres_data ' +
         'volume depends on it).',
     );
+  }
+
+  for (const [label, key] of [
+    ['database image', 'dbImage'],
+    ['database platform', 'dbPlatform'],
+  ]) {
+    if (!root[key] || !electron[key]) {
+      problems.push(
+        `${label} missing — root: ${root[key] || '(none)'}, ` +
+          `electron: ${electron[key] || '(none)'}`,
+      );
+    } else if (root[key] !== electron[key]) {
+      problems.push(
+        `${label} out of sync — root '${root[key]}' vs electron '${electron[key]}'.`,
+      );
+    }
   }
 
   if (root.volumes === undefined || electron.volumes === undefined) {
@@ -185,6 +238,9 @@ function diffCompose(root, electron) {
 const SELF_TEST_ROOT = `# comment
 name: vision
 services:
+  db:
+    image: postgres:18-alpine
+    platform: linux/amd64
   app:
     image: x
     volumes:
@@ -214,6 +270,11 @@ function selfTest() {
     JSON.stringify(root.volumes) ===
       JSON.stringify(['postgres_data', 'attachments_data', 'vision_cache_data']),
     `got ${JSON.stringify(root.volumes)}`,
+  );
+  check(
+    'parses the database image and platform',
+    root.dbImage === 'postgres:18-alpine' && root.dbPlatform === 'linux/amd64',
+    `got image=${JSON.stringify(root.dbImage)} platform=${JSON.stringify(root.dbPlatform)}`,
   );
 
   // The awk version's real bug: it never stopped at the next top-level block,
@@ -275,6 +336,16 @@ function selfTest() {
     JSON.stringify(diffCompose(root, unnamed)),
   );
 
+  const wrongPlatform = parseCompose(
+    SELF_TEST_ROOT.replace('platform: linux/amd64', 'platform: linux/arm64'),
+    'self-test platform mismatch',
+  );
+  check(
+    'a database platform mismatch is caught',
+    diffCompose(root, wrongPlatform).some((p) => p.includes('database platform out of sync')),
+    JSON.stringify(diffCompose(root, wrongPlatform)),
+  );
+
   const noVolumes = parseCompose('name: vision\nservices:\n  app:\n    image: x\n', 'self-test no volumes');
   check(
     'a missing volumes block is caught',
@@ -314,8 +385,15 @@ function main() {
   }
 
   const [root, electron] = parsed;
-  console.log(`[check-compose-sync] ${ROOT_COMPOSE}    : name=${root.name} volumes=${(root.volumes || []).join(' ')}`);
-  console.log(`[check-compose-sync] ${ELECTRON_COMPOSE}: name=${electron.name} volumes=${(electron.volumes || []).join(' ')}`);
+  console.log(
+    `[check-compose-sync] ${ROOT_COMPOSE}    : name=${root.name} ` +
+      `db=${root.dbImage} platform=${root.dbPlatform} volumes=${(root.volumes || []).join(' ')}`,
+  );
+  console.log(
+    `[check-compose-sync] ${ELECTRON_COMPOSE}: name=${electron.name} ` +
+      `db=${electron.dbImage} platform=${electron.dbPlatform} ` +
+      `volumes=${(electron.volumes || []).join(' ')}`,
+  );
 
   const problems = diffCompose(root, electron);
   if (problems.length > 0) {
@@ -324,7 +402,9 @@ function main() {
     process.exit(1);
   }
 
-  console.log('[check-compose-sync] in sync: project name and named volumes match.');
+  console.log(
+    '[check-compose-sync] in sync: project name, database runtime, and named volumes match.',
+  );
 }
 
 main();

@@ -10,12 +10,6 @@
 #   # or:  bun run docker:dev
 
 services:
-  db:
-    # The current postgres:18-alpine linux/arm64 image has empty entrypoint
-    # scripts (docker-library/postgres#1378). Keep the workaround dev-only and
-    # run the database under Docker Desktop's amd64 emulation until it is fixed.
-    platform: linux/amd64
-
   app:
     build:
       context: .

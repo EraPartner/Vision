@@ -92,7 +92,7 @@ jobs:
       - name: Self-test the compose-sync checker
         run: node scripts/check-compose-sync.js --self-test
 
-      - name: Check project name and named volumes match between compose files
+      - name: Check database runtime and named volumes match between compose files
         run: node scripts/check-compose-sync.js
 
       - name: Check version tag matches package.json

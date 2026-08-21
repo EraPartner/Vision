@@ -545,9 +545,9 @@ jobs:
           echo "Branch protection OK — every expected gate is enforced."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Compose sync — named volumes in docker-compose.yml must match the embedded
-  # packaging/electron/resources/docker-compose.yml. Divergence caused the
-  # v1.0.2 data-wipe bug; catch it early in CI, not just at release time.
+  # Compose sync — the database runtime and named volumes in docker-compose.yml
+  # must match packaging/electron/resources/docker-compose.yml. Divergence can
+  # start the wrong database image against user data; catch it early in CI.
   # ─────────────────────────────────────────────────────────────────────────────
   verify-compose-sync:
     name: Verify Compose Volume Sync
@@ -567,7 +567,7 @@ jobs:
       - name: Self-test the checker
         run: node scripts/check-compose-sync.js --self-test
 
-      - name: Check project name and named volumes match between compose files
+      - name: Check database runtime and named volumes match between compose files
         run: node scripts/check-compose-sync.js
 
   # ─────────────────────────────────────────────────────────────────────────────
