@@ -395,11 +395,10 @@ export const transactionRepository = {
    * - `total` preserves historical route semantics from getCount(): it counts over
    *   the same filters WITHOUT the uncategorised predicate, so it may include rows
    *   the queue does not list.
-   * - The four total-only filters are `transactionId`, `categoryId`, `categoryIds`
-   *   and `search`: a category filter cannot narrow a set defined by having no
-   *   effective category, and search/transactionId stay total-only for the same
-   *   historical reason. Every other filter is applied to BOTH halves, through the
-   *   same builder the main list uses, so the two can never disagree.
+   * - The two total-only filters are `categoryId` and `categoryIds`: a category
+   *   filter cannot narrow a set defined by having no effective category. Every
+   *   other row-compatible filter is applied to BOTH halves through the same
+   *   builder the main list uses, so the two can never disagree.
    *
    * @param {TransactionFilters} [filters]
    * @returns {Promise<{ rows: EnrichedTransactionRow[], total: number }>}
@@ -458,6 +457,7 @@ export const transactionRepository = {
       params: rowsParams,
       nextParamIdx: rowsNextParam,
     } = buildTransactionWhere({
+      transactionId,
       startDate,
       endDate,
       accountId,
@@ -465,6 +465,7 @@ export const transactionRepository = {
       recipientId,
       recipientGroupId,
       recipientName,
+      search,
       active: true,
       transactionType,
       amountMin,

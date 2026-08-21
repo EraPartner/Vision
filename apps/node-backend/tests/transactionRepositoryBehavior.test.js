@@ -171,15 +171,16 @@ describe('getUncategorisedWithCount', () => {
     expect(params).toEqual([10, 100, 7, ['groceries'], 10, 100, 7, ['groceries'], 50, 0]);
   });
 
-  it('keeps the total-only filters out of the row half (documented asymmetry)', async () => {
+  it('applies row-compatible filters to the queue while keeping category filters total-only', async () => {
     query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
     await transactionRepository.getUncategorisedWithCount({
       categoryIds: [3], search: 'coffee', transactionId: 5, active: false,
     });
     const [sql] = query.mock.calls[0];
     const rowCte = sql.slice(sql.indexOf('uncategorised_rows AS ('));
-    expect(rowCte).not.toContain('t.category_id IN (');
-    expect(rowCte).not.toContain('t.id IN (');
+    expect(rowCte).not.toMatch(/\(\s+t\.category_id IN \(\$\d+/);
+    expect(rowCte).toContain('t.id = $');
+    expect(rowCte).toContain('t.id IN (');
     // The queue is an active-rows worklist regardless of the `active` param.
     expect(rowCte).toContain('t.is_active = true');
     expect(rowCte).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL');

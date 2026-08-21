@@ -578,6 +578,16 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
         expect(total).toBe(9);
       });
 
+      it('search and transactionId narrow both the uncategorised rows and total', async () => {
+        const searched = await transactionRepository.getUncategorisedWithCount({ search: 'BAKERY BIG' });
+        expect(searched.rows.map((r) => r.id)).toEqual([U.big]);
+        expect(searched.total).toBe(1);
+
+        const exact = await transactionRepository.getUncategorisedWithCount({ transactionId: U.small });
+        expect(exact.rows.map((r) => r.id)).toEqual([U.small]);
+        expect(exact.total).toBe(1);
+      });
+
       it('amountMin narrows both halves (magnitude by default)', async () => {
         const { rows, total } = await transactionRepository.getUncategorisedWithCount({ amountMin: 100 });
         expect(rows.map((r) => r.id)).toEqual([U.income, U.big]); // |900|, |−300|
