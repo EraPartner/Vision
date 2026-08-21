@@ -13,7 +13,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
-// Context threaded from main.js via init(): { appPort(), useRepoMode() }.
+// Context threaded from main.js via init(): { appPort(), useRepoMode(), isDemo() }.
 let ctx = {};
 function init(context) {
   ctx = context;
@@ -212,6 +212,47 @@ function startContainers(cwd, extraFiles = [], skipBuild = false) {
   return run('docker', args, cwd, { timeout: 300000, env });
 }
 
+const POSTGRES_IMAGE = 'postgres:18-alpine';
+const POSTGRES_PLATFORM = 'linux/amd64';
+
+// A broken postgres:18-alpine ARM64 image was published with empty entrypoint
+// scripts (docker-library/postgres#1378). Docker keeps that bad image in its
+// local cache indefinitely, and `compose up` does not pull a replacement while
+// the tag is already present. Smoke-test the cached image without mounting the
+// real database. If it cannot even print its version, refresh the tag and test
+// once more. Returning true tells the caller to use `compose up` so an existing
+// db container is recreated from the refreshed image instead of being resumed.
+async function ensurePostgresImage(cwd, runner = run) {
+  const smokeArgs = [
+    'run',
+    '--rm',
+    '--platform',
+    POSTGRES_PLATFORM,
+    '--pull=never',
+    POSTGRES_IMAGE,
+    'postgres',
+    '--version',
+  ];
+  try {
+    await runner('docker', smokeArgs, cwd, { timeout: 30000 });
+    return false;
+  } catch (err) {
+    console.warn(
+      `[postgres-image] cached ${POSTGRES_IMAGE} failed its startup check; pulling a replacement:`,
+      err
+    );
+  }
+
+  await runner(
+    'docker',
+    ['pull', '--platform', POSTGRES_PLATFORM, POSTGRES_IMAGE],
+    cwd,
+    { timeout: 300000 }
+  );
+  await runner('docker', smokeArgs, cwd, { timeout: 30000 });
+  return true;
+}
+
 // `docker compose ps --format json` emits NDJSON in newer compose versions
 // and a JSON array in older ones — handle both.
 function parseComposePsOutput(out) {
@@ -234,6 +275,20 @@ function parseComposePsOutput(out) {
 //
 // Returns { built: true } when `up --build` actually ran, { built: false } otherwise.
 async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
+  // The demo uses a locally built, pre-seeded database image. It must never be
+  // replaced by the production Postgres tag.
+  const databaseImageRefreshed = ctx.isDemo && ctx.isDemo()
+    ? false
+    : await ensurePostgresImage(cwd);
+
+  // `compose start` keeps the old image ID. After a repair pull, force the `up`
+  // path so Compose recreates the db container while preserving its named data
+  // volume. No database files are deleted or rewritten by this step.
+  if (databaseImageRefreshed) {
+    await startContainers(cwd, extraFiles, skipBuild);
+    return { built: !skipBuild && (!app.isPackaged || ctx.useRepoMode()) };
+  }
+
   try {
     const psOut = await run(
       'docker',
@@ -323,6 +378,7 @@ module.exports = {
   readComposeProjectName,
   isComposeAppRunning,
   composeArgs,
+  ensurePostgresImage,
   composeStartOrUp,
   stopContainers,
   pullLatestImage,

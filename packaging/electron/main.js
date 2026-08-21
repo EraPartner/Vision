@@ -344,6 +344,7 @@ function updateSettings(mutate) {
 composeMod.init({
   appPort: () => appPort,
   useRepoMode: () => useRepoMode,
+  isDemo: () => __IS_DEMO,
 });
 backupCrypto.init({
   APP_NAME,
@@ -871,6 +872,49 @@ function loadErrorPage() {
   mainWindow.loadURL(pageUrl);
 }
 
+// `docker compose up -d` only proves that Docker accepted the start request. A
+// backend that exits during its database preflight still makes that command
+// succeed, leaving the splash to time out with no useful evidence in
+// userData/logs/main.log. Capture a small, redacted snapshot at that exact
+// point so startup failures can be diagnosed without asking the user to find
+// and run Docker commands in a separate terminal.
+function redactStartupDiagnostics(value) {
+  return String(value || '')
+    .replace(/(postgres(?:ql)?:\/\/[^:\s/@]+:)[^@\s/]+(@)/gi, '$1***$2')
+    .replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+async function logStartupDiagnostics() {
+  if (!workDir) return;
+  const commands = [
+    {
+      label: 'compose ps',
+      args: ['compose', ...composeArgs(workDir, overrideFiles), 'ps', '--all'],
+    },
+    {
+      label: 'compose logs',
+      args: [
+        'compose',
+        ...composeArgs(workDir, overrideFiles),
+        'logs',
+        '--no-color',
+        '--tail',
+        '200',
+        'app',
+        'db',
+      ],
+    },
+  ];
+  const results = await Promise.allSettled(commands.map(({ args }) =>
+    run('docker', args, workDir, { timeout: 15000, env: dockerEnv })
+  ));
+  for (let i = 0; i < results.length; i += 1) {
+    const result = results[i];
+    const raw = result.status === 'fulfilled' ? result.value : result.reason;
+    console.error(`[startup-diagnostics] ${commands[i].label}\n${redactStartupDiagnostics(raw)}`);
+  }
+}
+
 // Drive health polling → app load with watchdog once healthy. Safe to call
 // more than once (e.g. from the retry button).
 let healthWatchdogTimer = null;
@@ -961,6 +1005,9 @@ function pollAndLoad({ building = false } = {}) {
     })
     .catch(() => {
       endPollHealth();
+      logStartupDiagnostics().catch((err) => {
+        console.error('[startup-diagnostics] collection failed:', redactStartupDiagnostics(err));
+      });
       loadErrorPage();
       // Keep polling in the background so a still-running migration that finishes
       // after the budget elapses re-navigates to the app on its own.

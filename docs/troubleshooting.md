@@ -31,11 +31,19 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 **Symptoms:** The database logs `docker-entrypoint.sh: exec format error`, or the app logs
 `/bin/sh: can't open '/entrypoint.sh': Permission denied`.
 
-Run `bun run docker:dev:rebuild`. The current official `postgres:18-alpine` ARM64 image can contain
-empty entrypoint scripts, producing the database error; see
-[docker-library/postgres#1378](https://github.com/docker-library/postgres/issues/1378). The dev
-override temporarily runs only Postgres as `linux/amd64` under Docker Desktop emulation. The app
-image still builds for the Docker host's native platform.
+The current official `postgres:18-alpine` ARM64 image can contain empty entrypoint scripts,
+producing the database error; see
+[docker-library/postgres#1378](https://github.com/docker-library/postgres/issues/1378).
+
+Vision.app and the command-line development stack temporarily run only PostgreSQL as
+`linux/amd64` under Docker Desktop emulation; the app image remains native. Before starting the
+real stack, Vision.app pulls and smoke-tests that exact platform in a disposable container, then
+uses `docker compose up` to recreate a database container that failed the check. The named database
+volume is preserved. If the replacement also fails, startup stops with the Docker error instead of
+waiting on the "Almost ready..." page. The app also writes a redacted `docker compose ps` and
+bounded `app`/`db` log snapshot to its main log when readiness still times out.
+
+For the command-line development stack, run `bun run docker:dev:rebuild`.
 
 Before stopping the current stack, the command pulls the amd64 Postgres image and runs
 `postgres --version` in a disposable container. If that entrypoint test fails, the command stops.
