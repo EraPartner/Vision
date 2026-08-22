@@ -1526,7 +1526,7 @@ look-changing one.
   - No live impact: the only caller is the AI-chat expenses tool (`services/aiChat/tools/expenses.js:669`), which passes `{limit, offset}` and no filters. Filed so the next reader is not misled by the cross-references.
   - Fix: consolidate `getUncategorised` onto `buildTransactionWhere` too (its uncategorised predicate is already shared), or delete it in favour of the `WithCount` form if the AI-chat caller can take the extra count.
 
-- [ ] **Switching between two equal-length conversations with no active stream never re-runs the auto-scroll, so the view keeps the previous transcript's offset** 🔽
+- [x] **Switching between two equal-length conversations with no active stream never re-runs the auto-scroll, so the view keeps the previous transcript's offset** 🔽 ✅ 2026-08-22 · a3433ec3
   - ↪ _from: Orchestration session 2026-08-11 · noticed while adding the streaming scroll-pin guard (pre-existing, predates that change)_
   - `apps/frontend/src/features/ai-chat/ChatMessageList.tsx` — the streaming auto-scroll effect's deps are `combined.length`, `assistantDraft`, `isStreaming`, `streamingToolContentLength`
   - None of those change when you switch from one idle conversation to another with the same message count, so the effect never fires and the scroller keeps whatever offset the previous transcript left. 8751876d (#163) wired a `conversationId` prop into the component for the pin reset but deliberately did NOT add it to these deps — that would be a visible scroll-position change beyond that change's residual scope.
