@@ -1681,7 +1681,7 @@ look-changing one.
   - This is the same class as the repo's own history of green suites masking bug classes, one level up: the suite is not wrong, it is *silently partial*.
   - Fix options, cheapest first: have the default `test` script print a loud banner when `TEST_DATABASE_URL` is unset ("N DB-backed tests SKIPPED — run `bun run test:db` before trusting this"), and/or make the pre-push hook run `test:db` when a `.db.test.js` file or anything it imports has changed. Do not make `test` require a database — the fast default is worth keeping.
 
-- [ ] **`bun run test:frontend` has the same silently-partial shape — the live-contract suite self-skips and the run still reports success** 🔽
+- [x] **`bun run test:frontend` has the same silently-partial shape — the live-contract suite self-skips and the run still reports success** 🔽 ✅ 2026-08-22 · eac82b79
   - ↪ _from: Orchestration session 2026-08-11 · surfaced by the implementer while closing the backend skip-banner finding above_
   - `apps/frontend/src/test/live-contracts/live-contracts.test.ts` gates on `LIVE_API_BASE` and self-skips; `.github/workflows/ci.yml` job `test-live-api-contracts` is the only thing that runs it
   - Same class as the backend finding above, one order of magnitude smaller: `bun run test:frontend` reports `177 passed | 1 skipped (178) / 2423 passed | 36 skipped (2459)` and exits 0, so a local green is again not a CI green — just over a much narrower surface (36 tests in 1 file, against the backend's 378 in 27).
