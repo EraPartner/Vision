@@ -133,6 +133,9 @@ characters; if a required path does not satisfy that restriction, stop for manua
     next-item-session-after-publication = <CONTINUE_THIS_SESSION or START_FRESH_SESSION>
     # Repeat only for unrelated dirty paths that existed before this item:
     # pre-existing-path = path/to/unrelated-file
+    # Reserved for explicit user-authorized maintenance added after this item
+    # became ready. An implementation agent must not add this autonomously:
+    # post-ready-protected-path = path/to/unrelated-maintenance-file
 
 [publication]
     phase = implementation-pending
@@ -193,13 +196,15 @@ ga publish-vision-todo
 ```
 
 The command validates both fetch and push URLs, the pinned signing identity, exact signed commit
-trees, TODO content, validation evidence, and two-commit topology. It opens approval-gated LockBox
-for one signed implementation commit, applies the exact TODO proof with a write-ahead recovery
-record, opens LockBox for one signed bookkeeping commit, then opens a fixed-commit push session,
-asks once before a non-force push, and independently attests real
-`origin/main`. The user still reviews Git writes, approves the push, and authorizes two Touch ID
-signatures. If the command or model is interrupted, rerun the same command; it resumes from durable
-checkpoint and Git evidence. A closed checkpoint is re-verified rather than trusted by status.
+trees, TODO content, validation evidence, and two-commit topology. It runs one headless LockBox task
+for the signed implementation commit, applies the exact TODO proof with a write-ahead recovery
+record, runs one headless task for the signed bookkeeping commit, then runs a fixed-commit non-force
+push task and independently attests real `origin/main`. Invoking `ga publish-vision-todo` authorizes
+those exact validated Git operations and the push; Codex does not ask for an additional command or
+push confirmation. The user still authorizes each commit signature with Touch ID when that commit
+has not already been created. If the command or model is interrupted, rerun the same command; it
+resumes from durable checkpoint and Git evidence. A closed checkpoint is re-verified rather than
+trusted by status.
 
 ## 6. Finish and route explicitly
 
