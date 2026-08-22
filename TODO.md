@@ -7297,7 +7297,7 @@ statement-balance-without-date) are NOT repeated here — check there too before
 
 **Filed 2026-07-27 (noticed during the reconcile-flow implementation/verification passes — small, not fixed to preserve scope):**
 
-- [ ] **BankBalancesWidget chart legend still IBAN-tails while the cards above show display_name** 🔽
+- [x] **BankBalancesWidget chart legend still IBAN-tails while the cards above show display_name** 🔽 ✅ 2026-08-22 · 2c4742e0
   - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
   - `apps/frontend/src/components/dashboard/BankBalancesWidget.tsx:36-42` (`shortAccountName`) is now used only for chart series labels (`label: shortAccountName(acct.bank_account)`), so the legend reads "···12345678" under cards that say "KBC Zichtrekening". Map series labels through the same display-name resolution the cards use.
 
