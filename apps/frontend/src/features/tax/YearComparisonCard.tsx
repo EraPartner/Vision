@@ -147,7 +147,10 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                             value={String(compareYear)}
                             onValueChange={(v) => setCompareYear(Number(v))}
                         >
-                            <SelectTrigger className="h-8 w-28 text-xs">
+                            <SelectTrigger
+                                aria-label={t('tax.comparison.selectYear')}
+                                className="h-8 w-28 text-xs"
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

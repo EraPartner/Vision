@@ -2571,6 +2571,7 @@ const en: Record<string, string> = {
   'tax.comparison.row.grossIncome': 'Gross income',
   'tax.comparison.row.netTakeHome': 'Net take-home',
   'tax.comparison.row.totalPIT': 'Total PIT',
+  'tax.comparison.selectYear': 'Compare with year',
   'tax.comparison.title': '{year} vs another year',
   'tax.comparison.versus': 'vs',
   'tax.currentlyAutomaticLabel': 'Currently automatic:',

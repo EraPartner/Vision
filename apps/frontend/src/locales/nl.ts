@@ -2571,6 +2571,7 @@ const nl: Record<string, string> = {
   'tax.comparison.row.grossIncome': 'Bruto inkomen',
   'tax.comparison.row.netTakeHome': 'Netto te besteden',
   'tax.comparison.row.totalPIT': 'Totale PB',
+  'tax.comparison.selectYear': 'Vergelijken met jaar',
   'tax.comparison.title': '{year} versus een ander jaar',
   'tax.comparison.versus': 'vs',
   'tax.currentlyAutomaticLabel': 'Automatisch vandaag:',
