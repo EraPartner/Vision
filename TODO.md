@@ -2899,7 +2899,7 @@ look-changing one.
   - This is a user-facing money label understating what was deducted, on a page whose whole job is explaining a tax computation. The label predates the recomposition (it is the old `tax.card.*` key, carried forward deliberately so that change stayed layout-only).
   - Fix: either extend the description to name the property-tax estimate, or — better, since property tax is not withheld from take-home pay the way SS and PIT are — reconsider whether `netTakeHome` should subtract `propertyTaxEstimate` at all. **That second option is a calculation change, so decide it deliberately and separately; do not change the arithmetic just to make the label true.**
 
-- [ ] **`YearComparisonCard`'s year `SelectTrigger` has no accessible name — axe reports critical `button-name`** 🔼
+- [x] **`YearComparisonCard`'s year `SelectTrigger` has no accessible name — axe reports critical `button-name`** 🔼 ✅ 2026-08-22 · 177e2337 (localized comparison-year combobox label in English and Dutch; focused accessible-name regression test)
   - ↪ _from: Orchestration session 2026-08-14 · found by the tax-page recomposition's axe pass (pre-existing, out of that item's scope)_
   - `apps/frontend/src/features/tax/YearComparisonCard.tsx:150` — the `SelectTrigger` renders without a label or `aria-label`, so a screen-reader user gets an unnamed button. Only surfaces once a comparison year exists, which is why earlier a11y scans came back clean.
   - Fix: give the trigger an `aria-label` (or a visible label associated with it) and confirm with an axe run that has a comparison year selected.
