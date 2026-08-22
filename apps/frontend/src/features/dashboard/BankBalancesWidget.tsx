@@ -70,7 +70,10 @@ export function BankBalancesWidget() {
     // accounts, same shared balance source (computed_balance, ADR-094 Phase C)
     // the Accounts hub reads. getBankBalances still backs the history chart +
     // net-position total (both now read that shared source server-side).
-    const { data: accountsData, isLoading: accountsLoading } = useAccounts({ active: "true" });
+    // Load archived entities too: history/net-position aggregation is governed
+    // by in_net_worth, so an inactive-but-counted account still needs its
+    // display name in the chart. Cards stay active-only below.
+    const { data: accountsData, isLoading: accountsLoading } = useAccounts({ active: "all" });
     // Balance provenance subline (WP-B2) — the entity payload carries
     // anchor_date/post_anchor_count, same fields the Accounts hub cards read.
     const balanceProvenance = useBalanceProvenance();
@@ -81,10 +84,17 @@ export function BankBalancesWidget() {
     // The ~365-point × N-accounts chart dataset (and its derived series/legend)
     // is expensive to build and produced a fresh `data`/`series` identity on
     // every dashboard re-render, defeating chart-level memoization. Memoize it
-    // on the source payload so it only rebuilds when the balances change.
+    // on the balance payload and account entities so it rebuilds only when the
+    // chart data or its user-facing labels change.
     const chartBundle = useMemo(() => {
         if (!data) return null;
         const { accounts, history, total_history } = data;
+        const displayLabelByAccountName = new Map(
+            (accountsData?.items ?? []).map((account) => [
+                account.name,
+                account.display_name || account.name,
+            ]),
+        );
 
         // CHART: include any account with a non-zero balance anywhere in history,
         // not just a non-zero current balance — an account closed last month
@@ -121,7 +131,9 @@ export function BankBalancesWidget() {
 
         const accountSeries: AreaSeries<BankChartDatum>[] = chartAccounts.map((acct, idx) => ({
             key: acct.bank_account,
-            label: shortAccountName(acct.bank_account),
+            // Keep the aggregation name as the data key, but label the series
+            // from the same account entity source as the cards above it.
+            label: displayLabelByAccountName.get(acct.bank_account) ?? shortAccountName(acct.bank_account),
             accessor: (d) => d.values[acct.bank_account] ?? 0,
             color: ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length],
             strokeWidth: 2,
@@ -133,7 +145,7 @@ export function BankBalancesWidget() {
         }));
 
         return { chartAccounts, chartData, hasNegativeBalances, accountSeries, legendItems };
-    }, [data]);
+    }, [accountsData, data]);
 
     if (isLoading || accountsLoading) {
         return (
@@ -182,11 +194,11 @@ export function BankBalancesWidget() {
     // to a real account that opens in the detail sheet.
     const entityAccounts = accountsData?.items ?? [];
     const balanceCards = entityAccounts.filter(
-        (a) => a.computed_balance != null && Math.abs(a.computed_balance) > 0.000001,
+        (a) => a.is_active && a.computed_balance != null && Math.abs(a.computed_balance) > 0.000001,
     );
 
-    // Memoized above (rebuilds only when `data` changes); non-null once past the
-    // loading/error guards.
+    // Memoized above (rebuilds when balance data or account labels change);
+    // non-null once past the loading/error guards.
     const { chartAccounts, chartData, hasNegativeBalances, accountSeries, legendItems } = chartBundle!;
 
     const isPositive = total_net_position >= 0;

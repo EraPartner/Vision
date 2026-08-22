@@ -66,18 +66,22 @@ function mockWidgetApi({
     payloadAccounts = PAYLOAD_ACCOUNTS,
     total = TOTAL,
     entityAccounts = ENTITY_ACCOUNTS,
+    history = {},
+    totalHistory = [],
 }: {
     payloadAccounts?: typeof PAYLOAD_ACCOUNTS;
     total?: number;
     entityAccounts?: unknown[];
+    history?: Record<string, Array<{ date: string; balance: number }>>;
+    totalHistory?: Array<{ date: string; balance: number }>;
 } = {}) {
     server.use(
         http.get(`${API_BASE}/api/aggregations/bank-balances`, () =>
             aggOk({
                 accounts: payloadAccounts,
                 total_net_position: total,
-                history: {},
-                total_history: [],
+                history,
+                total_history: totalHistory,
             }),
         ),
         http.get(`${API_BASE}/api/accounts`, () =>
@@ -161,6 +165,85 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         const eurCard = screen.getByRole("button", { name: "Open details for Argenta Savings" });
         expect(eurCard.textContent).toMatch(/€/);
         expect(eurCard.textContent).not.toMatch(/\$/);
+    });
+
+    it("labels chart series from account entities and preserves the name and unmatched fallbacks", async () => {
+        const friendlyIban = "BE68539007547034";
+        const nameOnlyIban = "BE71096123456769";
+        const unmatchedIban = "BE30001234567890";
+        const friendlyHistory = [
+            { date: "2026-08-20", balance: 1000 },
+            { date: "2026-08-21", balance: 1100 },
+        ];
+        const nameOnlyHistory = [
+            { date: "2026-08-20", balance: 200 },
+            { date: "2026-08-21", balance: 250 },
+        ];
+        const unmatchedHistory = [
+            { date: "2026-08-20", balance: 50 },
+            { date: "2026-08-21", balance: 75 },
+        ];
+        mockWidgetApi({
+            payloadAccounts: [
+                {
+                    bank_account: friendlyIban,
+                    display_name: "Aggregation label must not win",
+                    balance: 1100,
+                    transaction_count: 2,
+                },
+                {
+                    bank_account: nameOnlyIban,
+                    display_name: "Another aggregation label",
+                    balance: 250,
+                    transaction_count: 1,
+                },
+                {
+                    bank_account: unmatchedIban,
+                    display_name: "Unmatched aggregation label",
+                    balance: 75,
+                    transaction_count: 1,
+                },
+            ],
+            total: 1425,
+            entityAccounts: [
+                {
+                    ...ENTITY_ACCOUNTS[0],
+                    name: friendlyIban,
+                    display_name: "KBC Daily",
+                    computed_balance: 1100,
+                    is_active: false,
+                    in_net_worth: true,
+                },
+                {
+                    ...ENTITY_ACCOUNTS[1],
+                    name: nameOnlyIban,
+                    display_name: undefined,
+                    computed_balance: 250,
+                    is_active: false,
+                    in_net_worth: true,
+                },
+            ],
+            history: {
+                [friendlyIban]: friendlyHistory,
+                [nameOnlyIban]: nameOnlyHistory,
+                [unmatchedIban]: unmatchedHistory,
+            },
+            totalHistory: [
+                { date: "2026-08-20", balance: 1250 },
+                { date: "2026-08-21", balance: 1425 },
+            ],
+        });
+        renderWithApp(<BankBalancesWidget />);
+
+        const heading = await screen.findByText("Balance History");
+        const historyCard = heading.closest(".glass-regular") as HTMLElement;
+        expect(within(historyCard).getByText("KBC Daily")).toBeInTheDocument();
+        expect(within(historyCard).queryByText("Aggregation label must not win")).not.toBeInTheDocument();
+        expect(within(historyCard).queryByText("···07547034")).not.toBeInTheDocument();
+        expect(within(historyCard).getByText(nameOnlyIban)).toBeInTheDocument();
+        expect(within(historyCard).getByText("···34567890")).toBeInTheDocument();
+        expect(within(historyCard).queryByText(unmatchedIban)).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Open details for KBC Daily" })).not.toBeInTheDocument();
     });
 
     it("renders a stale drift chip in warning tone once the statement reading ages past the threshold", async () => {

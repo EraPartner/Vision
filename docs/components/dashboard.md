@@ -7,7 +7,7 @@ updated: 2026-08-22
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
-related_code: ["apps/frontend/src/components/dashboard"]
+related_code: ["apps/frontend/src/components/dashboard", "apps/frontend/src/features/dashboard"]
 ---
 
 # Dashboard Components
@@ -44,7 +44,7 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 | ForecastInner | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel | [[apps/frontend/src/components/dashboard/ForecastInner.tsx\|ForecastInner.tsx]] |
 | ForecastInnerRolling | Rolling-window forecast rendering with preset duration chips and "today" reference line | [[apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]] |
 | CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F) | [[apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
-| BankBalancesWidget | Bank account balance display | [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
+| BankBalancesWidget | Bank account balance cards and history chart with entity display names | [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
 | MonthlySpendingChart | Monthly spending line chart (visx) | [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx\|MonthlySpendingChart.tsx]] |
 
 ---
@@ -553,7 +553,7 @@ const { data: rollingData } = useQuery({
 
 Displays current balances for all bank accounts and a 12-month Balance History chart (stacked area or multi-line).
 
-The component fetches from `GET /api/aggregations/bank-balances` via React Query key `["bankBalances", currency]`. It does not accept props — all data is loaded internally.
+The component loads chart history and the net-position total from `GET /api/aggregations/bank-balances` via React Query key `["bankBalances", currency]`. It also loads all account entities from `GET /api/accounts?active=all` for user-facing names, while current balance cards remain limited to active accounts. Loading inactive entities matters because an archived account can remain `in_net_worth` and therefore still appear in history. The component does not accept props.
 
 ### Data shape consumed
 
@@ -580,13 +580,14 @@ The component fetches from `GET /api/aggregations/bank-balances` via React Query
 
 - Total net-position hero card
 - Per-account balance cards (accounts with a current non-zero balance)
-- **Double-click to filter transactions (2026-06-25):** Double-clicking any per-account card navigates to `/transactions?bank_account=<account name>&filter_label=<short account name>`, opening the transactions list pre-filtered to that account. This mirrors the identical affordance on `AccountsPage`. Cards carry `cursor-pointer` and `hover:shadow-glass-soft` styling to signal interactivity; the tooltip text reuses the `accounts.openTransactions` i18n key.
+- **Shared account-detail navigation:** Clicking a per-account card, or activating it with Enter or Space, opens `/accounts/:id`, the same account ledger used by the Accounts page.
 - Balance History chart: stacked area when all balances are non-negative, multi-line when any account carries a negative balance (overdraft)
+- Chart series and legend labels use the matching account entity's `display_name`, falling back to its canonical `name`; an unmatched aggregation row keeps the shortened bank-account label. The aggregation `bank_account` remains the series and history key.
 - Currency formatting — large balances use compact notation (`formatCurrencyCompact`) with full value in `title` tooltip
 - Integer transaction counts use app locale formatter for consistent separators/grouping
 - `premium-frame` treatment on the net-position and per-account cards for consistent visual hierarchy
 
-Code links: [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/node-backend/src/repositories/infoRepositoryBanks.js]], [[docs/api/aggregations#bank-balances|Bank Balances API]]
+Code links: [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/node-backend/src/repositories/infoRepositoryBanks.js]], [[docs/api/aggregations#bank-balances|Bank Balances API]]
 
 ---
 
