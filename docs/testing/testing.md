@@ -3,9 +3,9 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-08-18
-last-updated: 2026-08-18
-last_updated_timestamp: 2026-08-18T00:00:00Z
+updated: 2026-08-22
+last-updated: 2026-08-22
+last_updated_timestamp: 2026-08-22T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 wired_real_db_harness: 2026-07-27
@@ -125,6 +125,38 @@ bun exec playwright test --headed
 
 # Run E2E tests in debug mode (step through)
 bun exec playwright test --debug
+```
+
+#### The live-contract skip banner
+
+The frontend live-contract suite needs a real backend and therefore self-skips when
+`LIVE_API_BASE` is absent. A normal `bun test:frontend` run remains fast and exits successfully,
+but `src/test/live-contracts/liveContractSkipBanner.ts` now prints an explicit banner after the
+Vitest summary:
+
+```text
+==============================================================================
+  INCOMPLETE RUN -- 36 live-contract tests across 1 file were SKIPPED
+==============================================================================
+  LIVE_API_BASE is not set, so the real-backend API contract suite
+  self-skipped. This run is NOT equivalent to CI's full-stack
+  "Test (Live API Contracts)" job.
+==============================================================================
+```
+
+- Counts come from the current run; the reporter does not hardcode the example's 36 tests.
+- Other skipped frontend tests do not trigger this banner.
+- The reporter is silent when `LIVE_API_BASE` is set. CI runs the suite against its disposable
+  Compose stack; local macOS validation may use the Vision Demo app and its synthetic data.
+- `vite.config.ts` appends the reporter in `configureVitest`. It does not replace Vitest's default
+  reporter or GitHub Actions annotations.
+
+To run only the live contracts from the repository root, replace the port with the Demo app's
+persisted port or another disposable Vision backend:
+
+```bash
+LIVE_API_BASE=http://localhost:<port> bun run --filter 'vision-frontend' test \
+  src/test/live-contracts/live-contracts.test.ts
 ```
 
 ## Test Structure

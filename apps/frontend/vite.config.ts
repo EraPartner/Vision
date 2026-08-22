@@ -2,6 +2,29 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { createLiveContractSkipBannerReporter } from "./src/test/live-contracts/liveContractSkipBanner";
+
+function liveContractSkipBannerPlugin() {
+    return {
+        name: 'vision:live-contract-skip-banner',
+        configureVitest({ vitest }: { vitest?: { config?: { reporters?: unknown[] } } }) {
+            const reporters = vitest?.config?.reporters;
+            if (!Array.isArray(reporters)) {
+                process.stdout.write(
+                    '[live-contract-skip-banner] could not attach to vitest reporters -- ' +
+                    'live-contract skips will NOT be announced. Fix liveContractSkipBanner.ts.\n',
+                );
+                return;
+            }
+            if (reporters.some((reporter) => (
+                typeof reporter === 'object'
+                && reporter !== null
+                && 'isLiveContractSkipBanner' in reporter
+            ))) return;
+            reporters.push(createLiveContractSkipBannerReporter());
+        },
+    };
+}
 
 export default defineConfig(({ mode }) => ({
     server: {
@@ -18,6 +41,7 @@ export default defineConfig(({ mode }) => ({
     },
     plugins: [
         react(),
+        liveContractSkipBannerPlugin(),
     ],
     resolve: {
         alias: {
