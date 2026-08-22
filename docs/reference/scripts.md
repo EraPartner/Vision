@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-19
+updated: 2026-08-22
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -65,14 +65,14 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 
 #### How `check-todo-stamps` classifies a stamp
 
-A SHA copied off the branch it was written on dies the moment that branch squash-merges. The convention in `TODO.md`'s *Status markers* section (stamp with the merge commit, and carry the `(#NN)` regardless) exists to make that recoverable; the convention was swept clean in `711279a` (#147) and rotted straight back, then swept again on 2026-08-13 for **83** SHAs. This checker is the guard that replaces a third sweep.
+A SHA copied off a feature branch dies when that branch squash-merges. The convention in `TODO.md`'s *Status markers* section therefore has two publication modes: a pull request uses the merge or squash commit and carries `(#NN)`; the approved local LockBox direct-to-`main` workflow uses its signed implementation commit without a PR number and publishes the following TODO bookkeeping commit in the same fast-forward push. The convention was swept clean in `711279a` (#147) and rotted straight back, then swept again on 2026-08-13 for **83** SHAs. This checker is the guard that replaces a third sweep.
 
 | Verdict | Meaning | Effect |
 |---------|---------|--------|
 | `OK` | The SHA is reachable from the base branch. | — |
 | `ROT` | Not on the base branch, but its `(#NN)` **has** a squash-merge commit there — the branch SHA died in that squash. | **exit 1**; the error names the exact merge commit to re-point at |
 | `OPEN` | Not on the base branch and its `(#NN)` has **no** merge commit there, i.e. that PR has not landed. Stamping before the merge exists is explicitly permitted. | reported, never fails |
-| `PENDING` | Not on the base branch, no `(#NN)`, but reachable from `HEAD` — a stamp made on the current branch that has not been given its PR number yet. | warning; fatal under `--strict` |
+| `PENDING` | Not yet on the base branch, no `(#NN)`, but reachable from `HEAD` — either a feature-branch stamp missing its PR number or the direct-to-`main` LockBox pair before its push completes. | warning; fatal under `--strict`; becomes `OK` after an approved direct-to-`main` push |
 | `ORPHAN` | On neither the base branch nor `HEAD`, and no `(#NN)` to recover it from. | **exit 1** |
 
 > [!info] No network, no token

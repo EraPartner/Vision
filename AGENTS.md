@@ -52,6 +52,11 @@ bun vitest run --test-name-pattern="name"
 Use the repository skills in `.agents/skills/` for database migrations, localization, releases,
 and documentation synchronization.
 
+For one-item TODO backlog work, use `.agents/prompts/implement-next-todo.md`. Its durable version 3
+checkpoint is published locally only through the user-run `ga publish-vision-todo` LockBox command.
+Regular implementation agents may run its read-only `--fingerprint` and `--check` preflights but
+must not launch the publishing workflow themselves.
+
 ## Provider and host behavior
 
 These obligations are tracked here because Codex does not auto-load `AGENTS.local.md` when this
@@ -139,6 +144,7 @@ Finish with changed files, checks run, skipped checks, residual risk, and follow
 | `packaging/electron/` | Desktop shell |
 | `docs/` | Obsidian knowledge base |
 | `.devcontainer/` | Hardened development sandbox |
+| `.agents/prompts/implement-next-todo.md` | Resumable one-item TODO workflow and publication handoff |
 
 Commit directly to `main`; do not create a branch unless the user asks.
 

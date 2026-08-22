@@ -4,7 +4,7 @@
 Why this exists
 ---------------
 TODO.md is the only record of which backlog work is real, and its proof mechanism is the
-commit stamp: `- [x] ... ✅ YYYY-MM-DD · <sha> (#NN)`. A stamp is only proof if a reader can
+commit stamp: `- [x] ... ✅ YYYY-MM-DD · <sha> [optional (#NN)]`. A stamp is only proof if a reader can
 run `git show <sha>` and see the change. Feature-branch SHAs do not qualify -- squash-merge
 rewrites them, so a SHA copied from the branch you are working on becomes a dangling pointer
 the moment its PR lands.
@@ -31,8 +31,9 @@ Every `· <sha>` and `partial-<sha>` token in TODO.md must resolve against the b
             long as the `(#NN)` is carried). Reported, never failed.
 
   PENDING   the SHA is NOT on the base branch, carries NO `(#NN)`, but IS reachable from HEAD.
-            A stamp made on the current branch that has not been given its PR number yet. It
-            will become unrecoverable rot at squash time. Warning; `--strict` makes it fatal.
+            This is either a feature-branch stamp missing its PR number or the approved
+            direct-to-main LockBox commit pair before the push updates the base. Warning;
+            `--strict` makes it fatal. A completed direct-to-main push becomes OK.
 
   ORPHAN    the SHA is on neither the base branch nor HEAD and carries no `(#NN)`. Nothing
             names the change, so nothing can recover it. Exit 1.
@@ -89,8 +90,10 @@ GITHUB_REPO = "EraPartner/Vision"
 
 # `✅ 2026-08-13 · <sha> (#NN)` and `🔎 partial-<sha> (#NN)`. The `(#NN)` is optional here so
 # that a stamp missing it can be *reported* rather than silently skipped -- the convention
-# requires it, and a SHA without one is exactly the unrecoverable case.
-TOKEN_RE = re.compile(r"(?:·\s+|partial-)(?P<sha>[0-9a-f]{7,40})\b(?:\s*\(#(?P<pr>\d+)\))?")
+# requires it for pull-request publication. Direct-to-main LockBox stamps intentionally omit it.
+TOKEN_RE = re.compile(
+    r"(?:·\s+|partial-)(?P<sha>[0-9a-f]{7,40})\b(?:\s*\(#(?P<pr>\d+)\))?"
+)
 
 # A squash-merge commit's subject ends in `(#NN)`. Matching the SUBJECT only is load-bearing:
 # commit *bodies* cite PR numbers too, so `git log --grep="(#157)"` over-matches.
@@ -116,7 +119,11 @@ def parse(text: str) -> list[Token]:
     for lineno, line in enumerate(text.split("\n"), 1):
         for m in TOKEN_RE.finditer(line):
             pr = m.group("pr")
-            out.append(Token(lineno, m.start("sha") + 1, m.group("sha"), int(pr) if pr else None))
+            out.append(
+                Token(
+                    lineno, m.start("sha") + 1, m.group("sha"), int(pr) if pr else None
+                )
+            )
     return out
 
 
@@ -139,7 +146,9 @@ class GitResolver:
         self._merges = self._merge_commits(base)
 
     def _git(self, *args: str) -> str:
-        r = subprocess.run(["git", *args], cwd=self.repo, capture_output=True, text=True)
+        r = subprocess.run(
+            ["git", *args], cwd=self.repo, capture_output=True, text=True
+        )
         if r.returncode != 0:
             raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
         return r.stdout
@@ -200,10 +209,15 @@ def classify(tokens: list[Token], resolver) -> list[Token]:
                 t.detail = f"PR #{t.pr} has not landed on the base branch yet"
         elif resolver.on_head(t.sha):
             t.verdict = PENDING
-            t.detail = "on this branch only, and carries no (#NN) to recover it after the squash"
+            t.detail = (
+                "reachable from HEAD but not the base, with no (#NN); direct-to-main publication "
+                "must finish its push, otherwise a feature branch must add its PR number"
+            )
         else:
             t.verdict = ORPHAN
-            t.detail = "on neither the base branch nor this branch, and carries no (#NN)"
+            t.detail = (
+                "on neither the base branch nor this branch, and carries no (#NN)"
+            )
     return tokens
 
 
@@ -223,7 +237,10 @@ def verify_open(tokens: list[Token]) -> list[str]:
     for pr in prs:
         req = urllib.request.Request(
             f"https://api.github.com/repos/{GITHUB_REPO}/pulls/{pr}",
-            headers={"Accept": "application/vnd.github+json", "User-Agent": "vision-check-todo-stamps"},
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "vision-check-todo-stamps",
+            },
         )
         if token:
             req.add_header("Authorization", f"Bearer {token}")
@@ -267,25 +284,72 @@ class FakeResolver:
         return self.merges.get(pr)
 
 
-BASE = ["1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]
+BASE = [
+    "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+]
 HEAD_ONLY = ["3333333ccccccccccccccccccccccccccccccccc"]
 MERGES = {147: "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 
 SELF_TEST_CASES = [
     # (name, markdown, expected verdicts in order)
-    ("a stamp that resolves on main is clean", "- [x] done ✅ 2026-01-01 · 1111111 (#147)", [OK]),
-    ("a full 40-char stamp resolves too", "- [x] x ✅ · 1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (#147)", [OK]),
-    ("a dead branch SHA whose PR landed is ROT", "- [x] x ✅ 2026-01-01 · 9999999 (#147)", [ROT]),
-    ("a dead branch SHA whose PR is unlanded is OPEN", "- [x] x ✅ · 9999999 (#166)", [OPEN]),
-    ("partial- stamps are checked identically", "- [ ] x 🔎 partial-9999999 (#147) 2026-01-01", [ROT]),
+    (
+        "a stamp that resolves on main is clean",
+        "- [x] done ✅ 2026-01-01 · 1111111 (#147)",
+        [OK],
+    ),
+    (
+        "a direct-to-main stamp on the base is clean without a PR number",
+        "- [x] done ✅ 2026-01-01 · 1111111",
+        [OK],
+    ),
+    (
+        "a full 40-char stamp resolves too",
+        "- [x] x ✅ · 1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (#147)",
+        [OK],
+    ),
+    (
+        "a dead branch SHA whose PR landed is ROT",
+        "- [x] x ✅ 2026-01-01 · 9999999 (#147)",
+        [ROT],
+    ),
+    (
+        "a dead branch SHA whose PR is unlanded is OPEN",
+        "- [x] x ✅ · 9999999 (#166)",
+        [OPEN],
+    ),
+    (
+        "partial- stamps are checked identically",
+        "- [ ] x 🔎 partial-9999999 (#147) 2026-01-01",
+        [ROT],
+    ),
     ("a clean partial- stamp passes", "- [ ] x 🔎 partial-2222222 (#147)", [OK]),
-    ("a branch SHA with no (#NN) is a PENDING warning", "- [x] x ✅ · 3333333", [PENDING]),
+    (
+        "a HEAD-only SHA with no (#NN) is a PENDING warning",
+        "- [x] x ✅ · 3333333",
+        [PENDING],
+    ),
     ("a SHA on no branch and no (#NN) is an ORPHAN", "- [x] x ✅ · 8888888", [ORPHAN]),
-    ("several tokens on one line are all classified", "✅ · 1111111 (#147) ✅ · 9999999 (#147)", [OK, ROT]),
-    ("a prose SHA with no `·`/`partial-` prefix is not a token", "- [ ] the `9999999` pass left residue", []),
-    ("this file's own list of dead SHAs is prose, not stamps",
-     "  - **#154 (9):** `0e8d7c34` `1eebf923` · **#155 (14):** `0467b53c` `1d3e3b1c`", []),
-    ("`partial-#82` (the pre-SHA spelling) is not a token", "- [ ] x 🔎 partial-#82 2026-07-11", []),
+    (
+        "several tokens on one line are all classified",
+        "✅ · 1111111 (#147) ✅ · 9999999 (#147)",
+        [OK, ROT],
+    ),
+    (
+        "a prose SHA with no `·`/`partial-` prefix is not a token",
+        "- [ ] the `9999999` pass left residue",
+        [],
+    ),
+    (
+        "this file's own list of dead SHAs is prose, not stamps",
+        "  - **#154 (9):** `0e8d7c34` `1eebf923` · **#155 (14):** `0467b53c` `1d3e3b1c`",
+        [],
+    ),
+    (
+        "`partial-#82` (the pre-SHA spelling) is not a token",
+        "- [ ] x 🔎 partial-#82 2026-07-11",
+        [],
+    ),
     ("a date after `·` is not mistaken for a SHA", "- [x] x ✅ 2026-01-01 · done", []),
     ("a 6-char hex word is too short to be a stamp", "- [x] x ✅ · abcdef", []),
     ("the ROT message names the merge commit to use", "✅ · 9999999 (#147)", [ROT]),
@@ -314,10 +378,14 @@ def run_self_test() -> int:
         print(f"{TAG}   FAIL ROT detail lacks the merge commit: {rot.detail!r}")
 
     # An ambiguous PR->merge mapping must not invent a target.
-    amb = classify(parse("✅ · 9999999 (#147)"), FakeResolver(BASE, HEAD_ONLY, {147: None}))[0]
+    amb = classify(
+        parse("✅ · 9999999 (#147)"), FakeResolver(BASE, HEAD_ONLY, {147: None})
+    )[0]
     if amb.verdict == OPEN:
         passed += 1
-        print(f"{TAG}   ok   an unresolvable PR->merge mapping degrades to OPEN, not a guess")
+        print(
+            f"{TAG}   ok   an unresolvable PR->merge mapping degrades to OPEN, not a guess"
+        )
     else:
         failed += 1
         print(f"{TAG}   FAIL ambiguous mapping produced {amb.verdict}")
@@ -332,8 +400,12 @@ def run_self_test() -> int:
 def resolve_base(repo: Path, explicit: str | None) -> str:
     candidates = (explicit,) if explicit else BASE_CANDIDATES
     for ref in candidates:
-        r = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-                           cwd=repo, capture_output=True, text=True)
+        r = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        )
         if r.returncode == 0:
             return ref
     raise SystemExit(
@@ -343,7 +415,11 @@ def resolve_base(repo: Path, explicit: str | None) -> str:
 
 
 def arg_value(argv: list[str], flag: str):
-    return argv[argv.index(flag) + 1] if flag in argv and argv.index(flag) + 1 < len(argv) else None
+    return (
+        argv[argv.index(flag) + 1]
+        if flag in argv and argv.index(flag) + 1 < len(argv)
+        else None
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -356,8 +432,15 @@ def main(argv: list[str]) -> int:
         return 1
 
     repo = REPO_ROOT
-    shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=repo,
-                             capture_output=True, text=True).stdout.strip() == "true"
+    shallow = (
+        subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        == "true"
+    )
     if shallow:
         msg = (
             f"{TAG} SHALLOW CLONE -- ancestry answers here are FALSE, not just incomplete\n"
@@ -365,7 +448,10 @@ def main(argv: list[str]) -> int:
             f"{TAG}   Run `git fetch --unshallow` to make this check meaningful."
         )
         if "--require-full-history" in argv:
-            print(f"{msg}\n{TAG} ERROR: --require-full-history was passed.", file=sys.stderr)
+            print(
+                f"{msg}\n{TAG} ERROR: --require-full-history was passed.",
+                file=sys.stderr,
+            )
             return 1
         print(f"{msg}\n{TAG} SKIPPED (exit 0): refusing to emit invented verdicts.")
         return 0
@@ -374,29 +460,42 @@ def main(argv: list[str]) -> int:
     tokens = classify(parse(path.read_text(encoding="utf-8")), GitResolver(repo, base))
 
     by = collections.Counter(t.verdict for t in tokens)
-    rel = path.relative_to(repo) if path.is_absolute() and repo in path.parents else path
+    rel = (
+        path.relative_to(repo) if path.is_absolute() and repo in path.parents else path
+    )
 
     if "--list" in argv:
         for t in tokens:
-            print(f"{rel}:{t.line}:{t.col}: {t.verdict:<7} {t.sha} "
-                  f"{'(#%d) ' % t.pr if t.pr else ''}-- {t.detail}")
+            print(
+                f"{rel}:{t.line}:{t.col}: {t.verdict:<7} {t.sha} "
+                f"{'(#%d) ' % t.pr if t.pr else ''}-- {t.detail}"
+            )
 
     for verdict, header in (
-        (ROT, "stamp SHAs that died in a squash-merge (re-point them at the merge commit)"),
+        (
+            ROT,
+            "stamp SHAs that died in a squash-merge (re-point them at the merge commit)",
+        ),
         (ORPHAN, "stamp SHAs that exist nowhere and carry no (#NN) to recover them"),
     ):
         hits = [t for t in tokens if t.verdict == verdict]
         if hits:
             print(f"\n{TAG} ERROR: {header}:", file=sys.stderr)
             for t in hits:
-                print(f"  {rel}:{t.line}: {t.sha}"
-                      f"{' (#%d)' % t.pr if t.pr else ''} -- {t.detail}", file=sys.stderr)
+                print(
+                    f"  {rel}:{t.line}: {t.sha}"
+                    f"{' (#%d)' % t.pr if t.pr else ''} -- {t.detail}",
+                    file=sys.stderr,
+                )
 
     pending = [t for t in tokens if t.verdict == PENDING]
     if pending:
         stream = sys.stderr if "--strict" in argv else sys.stdout
-        print(f"\n{TAG} {'ERROR' if '--strict' in argv else 'WARNING'}: stamps that will rot at "
-              f"squash time -- add the `(#NN)` that survives it:", file=stream)
+        print(
+            f"\n{TAG} {'ERROR' if '--strict' in argv else 'WARNING'}: stamps reachable only "
+            f"from HEAD -- finish the direct-to-main push or add the PR number before squash:",
+            file=stream,
+        )
         for t in pending:
             print(f"  {rel}:{t.line}: {t.sha} -- {t.detail}", file=stream)
 
@@ -405,9 +504,11 @@ def main(argv: list[str]) -> int:
             print(f"{TAG} {note}")
 
     fatal = sum(by[v] for v in FATAL) + (by[PENDING] if "--strict" in argv else 0)
-    summary = (f"{len(tokens)} stamp token(s) in {rel} vs {base}: "
-               f"{by[OK]} ok, {by[ROT]} rot, {by[OPEN]} awaiting-merge, "
-               f"{by[PENDING]} unnumbered-on-branch, {by[ORPHAN]} orphaned")
+    summary = (
+        f"{len(tokens)} stamp token(s) in {rel} vs {base}: "
+        f"{by[OK]} ok, {by[ROT]} rot, {by[OPEN]} awaiting-merge, "
+        f"{by[PENDING]} pending-on-head, {by[ORPHAN]} orphaned"
+    )
 
     if fatal:
         print(
