@@ -3,9 +3,9 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-09
-tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss]
-description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-06-24 (gain/loss consistency pass): StatCard now renders TrendHue for the card background tint; gained valueClassName prop to override the headline value colour.
+updated: 2026-08-22
+tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
 ---
@@ -36,7 +36,7 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 | Component | Description | File |
 |-----------|-------------|------|
 | StatCard | Summary stat card with trend and gradient icon tile | [[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]] |
-| NetSummaryCard | Hero net-worth summary with sparkline scrub (V9) | [[apps/frontend/src/components/dashboard/NetSummaryCard.tsx\|NetSummaryCard.tsx]] |
+| NetSummaryCard | Hero net-worth summary with sparkline scrub (V9) and a localized accessible income/spending proportion summary | [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx\|NetSummaryCard.tsx]] |
 | MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
 | CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
 | CashFlowComparisonChart | Current vs previous period comparison (visx) | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
@@ -126,7 +126,8 @@ Hero card showing net balance trend for the current period. As of V9, the sparkl
 - **Card-level gradient and header icon**: deliberately stay on the live value (no strobing).
 - **Out-of-range guard**: if a `netHistory` refetch causes the scrubbed index to become out of range, resets to live value.
 - **Reduced motion**: pointer events still fire; the `RollingNumber` switches to a plain span so there is no rolling animation during scrub.
-- **Keyboard (2026-08-09)**: the scrub div is focusable (`tabIndex={0}`, `role="group"` labelled with the trend caption) and uses the shared chart key map from `useChartKeyboardNav` ([[docs/components/charts#keyboard-navigation-2026-08-09-keyboardnavts|Chart Primitives — Keyboard Navigation]]): ←/→ step months, Home/End jump, Escape/blur reset to the live value. Only rendered (hence only focusable) when there are ≥2 history points. Tests: `apps/frontend/src/components/dashboard/__tests__/NetSummaryCard.keyboard.test.tsx`.
+- **Keyboard (2026-08-09)**: the scrub div is focusable (`tabIndex={0}`, `role="group"` labelled with the trend caption) and uses the shared chart key map from `useChartKeyboardNav` ([[docs/components/charts#keyboard-navigation-2026-08-09-keyboardnavts|Chart Primitives — Keyboard Navigation]]): ←/→ step months, Home/End jump, Escape/blur reset to the live value. Only rendered (hence only focusable) when there are ≥2 history points. Tests: `apps/frontend/src/features/dashboard/__tests__/NetSummaryCard.keyboard.test.tsx`.
+- **Income/spending proportion accessibility (2026-08-22)**: the complete bar is one `role="img"` whose localized name includes both unabridged currency values and both percentages. Its two colour segments are `aria-hidden`, avoiding duplicate label-only image announcements. The adjacent visible amounts remain unchanged. Test: `apps/frontend/src/features/dashboard/__tests__/NetSummaryCard.accessibility.test.tsx`.
 
 ### Dependencies
 
@@ -134,7 +135,7 @@ Hero card showing net balance trend for the current period. As of V9, the sparkl
 - `RollingNumber` for hero value display.
 - `useUpcomingPlannedPayments` is not consumed here (it backs `UpcomingPaymentsNotification` in AppLayout).
 
-Code links: [[apps/frontend/src/components/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/components/charts/Sparkline.tsx]]
+Code links: [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/components/charts/Sparkline.tsx]]
 
 ---
 

@@ -25,7 +25,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const { formatCompact } = useChartCurrencyFormatter();
+  const { formatCurrency, formatCompact } = useChartCurrencyFormatter();
 
   // Scrubbing the sparkline drives the hero number through netHistory;
   // releasing/leaving snaps back to the live month. Card-level tint and the
@@ -88,6 +88,10 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const netCompact = formatCompact(shownNet);
   const incomeCompact = formatCompact(incomeTotal);
   const spendingCompact = formatCompact(spendingTotal);
+  const splitBarLabel = [
+    `${t('dashboard.stat.income')}: ${formatCurrency(incomeTotal)} (${formatPercent(incomePct, { digits: 1, locale })})`,
+    `${t('dashboard.stat.spending')}: ${formatCurrency(spendingTotal)} (${formatPercent(spendingPct, { digits: 1, locale })})`,
+  ].join('; ');
 
   return (
     <Card
@@ -128,18 +132,20 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{t('dashboard.stat.incomeVsSpending')}</span>
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/50 flex">
+          <div
+            role="img"
+            aria-label={splitBarLabel}
+            className="h-2.5 w-full overflow-hidden rounded-full bg-muted/50 flex"
+          >
             <div
-              role="img"
+              aria-hidden="true"
               className="h-full bg-gain transition-[width] duration-700"
               style={{ width: `${incomePct}%` }}
-              aria-label={t('dashboard.stat.income')}
             />
             <div
-              role="img"
+              aria-hidden="true"
               className="h-full bg-loss transition-[width] duration-700"
               style={{ width: `${spendingPct}%` }}
-              aria-label={t('dashboard.stat.spending')}
             />
           </div>
           <div className="flex items-center justify-between text-xs">
