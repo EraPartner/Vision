@@ -88,6 +88,11 @@ export function ChatMessageList({
         (sum, m) => sum + (m.content?.length ?? 0),
         0,
     );
+    // React Query briefly keeps the previous conversation as placeholder data
+    // during an uncached switch. The conversation id changes first, then the
+    // equal-length replacement transcript arrives in a later commit. Track the
+    // last message identity so that second commit gets its own bottom scroll.
+    const latestCombinedMessageId = combined.at(-1)?.id;
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -149,7 +154,7 @@ export function ChatMessageList({
             el.scrollTo({ top: el.scrollHeight });
         });
         return () => cancelAnimationFrame(raf);
-    }, [combined.length, assistantDraft, isStreaming, streamingToolContentLength]);
+    }, [combined.length, latestCombinedMessageId, assistantDraft, isStreaming, streamingToolContentLength, conversationId]);
 
     const { t } = useLanguage();
     const showDraft = isStreaming && assistantDraft.length > 0;
