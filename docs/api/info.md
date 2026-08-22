@@ -3,7 +3,7 @@ title: Info & Analytics API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-06-19
+updated: 2026-08-22
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -547,6 +547,12 @@ Notes:
 - **Pre-converted values**: Breakdown summary values are converted to target currency server-side; client receives final amounts.
 - **Cache key**: Response cache key now includes period: `${currency}:${period}` to preserve separate cached responses per period.
 - Reads from the `portfolio_performance_snapshots` table — no on-demand computation.
+- Persisted snapshots are authoritative: the response does not apply a second
+  value-only spike-smoothing pass. This preserves real one-day cash movements
+  and the stored value decomposition. `gain_loss` and `return_pct` are derived
+  again from the value actually served, so the three fields cannot contradict
+  each other ([[apps/node-backend/src/services/info/performanceHelpers.js]],
+  [[docs/reference/algorithms#spike-sanitization|Spike Sanitization]]).
 - Includes per-class value/invested breakdowns (stocks+ETFs, crypto, metals) in metrics.
 - Route-level rate limited (`30 req / 60s`) to protect against excessive queries.
 - Caching behavior: shared cache/inflight utilities (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) now power both `/api/info/net-worth` and `/api/info/portfolio-performance` response caches for consistent TTL and concurrent-request deduplication ([[apps/node-backend/src/routes/info.js]]).

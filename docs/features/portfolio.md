@@ -3,8 +3,8 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-06-20
-last_modified: 2026-08-10
-updated: 2026-08-10
+last_modified: 2026-08-22
+updated: 2026-08-22
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -436,6 +436,11 @@ The Performance page architecture was significantly refactored to move heavy com
 - `heatmap` object: contribution-adjusted monthly returns per year-month (fixed formula: `((curr.value / curr.invested) / (prev.value / prev.invested) - 1) * 100`)
 - `breakdownSummary` array: per-investment values all pre-converted to target currency server-side
 - **Period-filtered snapshots** are downsampled to ~400 points server-side using LTTB, while metrics/heatmap always use full historical data
+- Persisted snapshots remain the single source of truth during response shaping:
+  the backend no longer applies a second total-only spike smoother that could
+  erase a genuine one-day cash movement. It derives `gain_loss` and
+  `return_pct` from the value it serves, preserving snapshot decomposition and
+  FX-neutral parity ([[docs/reference/algorithms#spike-sanitization|Spike Sanitization]]).
 - Cache key includes period: `${currency}:${period}` for independent caching per period
 - New service: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] with functions: `computeMetrics(snapshots)`, `computeHeatmap(snapshots)`, `getBreakdownSummary(currency)`
 - New utility: [[apps/node-backend/src/utils/downsample.js]] — LTTB downsampler ported to backend

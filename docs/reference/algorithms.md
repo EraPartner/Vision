@@ -3,7 +3,7 @@ title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
 date: 2026-04-02
-updated: 2026-08-11
+updated: 2026-08-22
 tags: [algorithms, computer-science, performance, data-structures, snapshot-valuation, fixed-income, real-estate, accrued-interest]
 description: Formal documentation of all algorithms used in Vision — LTTB downsampling, deduplication hashing, recurring pattern detection, currency conversion, portfolio snapshot valuation, and more
 aliases: [algorithms, data structures, CS, computational methods]
@@ -460,9 +460,17 @@ needles and is safe to interpolate. When neither neighbour holds anything outsid
 cash the ratio is indeterminate but moot — the non-cash part reconciles to zero —
 and a factor of 1 keeps an all-cash portfolio's two totals exactly equal.
 
-Rows that do not decompose in the input (legacy/partial series, or the
-`/portfolio-performance` route helper which passes no `sumFields`) fall back to
+Rows that do not decompose in the input (legacy or partial series) fall back to
 the plain geometric-mean rule.
+
+The snapshot builder applies this sanitization before persisting each series,
+then derives `gain_loss` and `return_pct` from the sanitized `value`. The
+`/portfolio-performance` response therefore treats persisted rows as the only
+source of truth and does not smooth them a second time. It re-derives those two
+fields at the response boundary so every served row keeps
+`gain_loss == value - invested` and the matching return percentage. The removed
+second pass used only the total `value`; it could flatten a real one-day cash
+movement while leaving `cash_value` and `value_fx_neutral` untouched.
 
 #### Parity Invariant (2026-05-18)
 

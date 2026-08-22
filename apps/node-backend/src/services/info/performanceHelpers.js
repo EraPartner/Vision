@@ -9,7 +9,7 @@ import { computeMetrics, computeHeatmap } from '../portfolioPerformanceSnapshotS
 import { toWireDate } from '../../lib/dateFormat.js';
 import { getPortfolioSummary } from '../portfolio/portfolioSummaryService.js';
 import { todayAppDateString, addDaysYmd } from '../../lib/timezone.js';
-import { toYmd, sanitizeIsolatedValueSpikes } from '../../utils/portfolioMath.js';
+import { toYmd } from '../../utils/portfolioMath.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
 import {
   portfolioSummaryCache,
@@ -126,10 +126,24 @@ function filterSnapshotsByPeriod(snapshots, period) {
  * @returns {Promise<Record<string, any>>}
  */
 export async function buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, allSnapshots, period) {
-  // Smooth isolated one-day price needles (kinesis data-quality issue) BEFORE
-  // metrics/heatmap/series, mirroring the protection the net-worth path already
-  // has. The chart, heatmap month-ends, and metrics all consumed raw needles.
-  const cleanSnapshots = /** @type {any} */ (sanitizeIsolatedValueSpikes(allSnapshots, 'value'));
+  // Snapshot storage already applies the decomposition-aware sanitizer before
+  // computing derived fields. A second, value-only pass here used a different
+  // rule: it flattened genuine one-day cash movements and could make value,
+  // gain_loss, return_pct, and value_fx_neutral contradict each other. Treat the
+  // persisted decomposition as authoritative and only re-derive the two fields
+  // whose invariant is cheap to enforce at the response boundary.
+  const cleanSnapshots = /** @type {any} */ (allSnapshots.map((snapshot) => {
+    const value = toDecimal(snapshot.value);
+    const invested = toDecimal(snapshot.invested);
+    const gainLoss = value.minus(invested);
+    return {
+      ...snapshot,
+      gain_loss: toNumber(gainLoss),
+      return_pct: invested.gt(0)
+        ? toNumber(gainLoss.div(invested).times(100))
+        : 0,
+    };
+  }));
 
   const snapshotMetrics = computeMetrics(cleanSnapshots);
   const heatmap = computeHeatmap(cleanSnapshots);
