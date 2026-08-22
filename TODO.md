@@ -1508,7 +1508,7 @@ look-changing one.
   - Verify first *who calls `getCount`* and whether a user-visible number depends on it — that is what decides the priority. The uncategorised twin turned out to be seven params, not six, so re-derive the dropped set from the route rather than trusting this list.
   - Fix: forward the full set to `buildTransactionWhere`, exactly as `getAllWithCount` and (now) `getUncategorisedWithCount` do.
 
-- [ ] **`search` and `transactionId` are still dropped from the uncategorised ROWS half — a search-filtered queue returns every uncategorised row** 🔼
+- [x] **`search` and `transactionId` are still dropped from the uncategorised ROWS half — a search-filtered queue returns every uncategorised row** 🔼 ✅ 2026-08-22 · 79a0f543 (both filters now narrow the uncategorised rows and total; focused SQL-shape regression passes and a real-PostgreSQL regression is included for CI)
   - ↪ _from: Orchestration session 2026-08-13 · adversarial verification of the uncategorised filter fix (reproduced live, not speculative)_
   - `apps/node-backend/src/repositories/transactionRepository.js:456-475` — the deliberate total-only set is `transactionId`, `categoryId`, `categoryIds`, `search`.
   - The docstring's justification covers only two of the four: "a category filter cannot narrow a set defined by having no effective category" is sound for `categoryId`/`categoryIds`, but **`search` can absolutely narrow an uncategorised set**. Verifier's live probe: `GET /api/transactions?uncategorised=true&search=bakery` returns rows=6 (every uncategorised row) against a search-narrowed total=5 — rows and total answering different questions, which is the exact bug just fixed for the other seven params.
