@@ -2870,7 +2870,7 @@ look-changing one.
   - **Different in kind from the two that were fixed, which is why it was left:** its four tiles are genuinely content-derived (they read the performance payload, not page metadata), so there is no *filler* to remove. The remaining complaint is only that the page's opening shape is interchangeable with its neighbours' — a wider design question than the ticked item's Fix line authorised.
   - Fix: decide whether an interchangeable-but-honest opening is actually a defect here. If it is, give the page an opening derived from what a performance page is *for* (a return-over-time lede rather than four parallel figures) — and get visual sign-off first, per the binding constraint.
 
-- [ ] **`formatCurrencyCompact` abbreviates inconsistently: `2010` renders `2010 €` but `920` renders `-920,00 €`** 🔼
+- [x] **`formatCurrencyCompact` abbreviates inconsistently: `2010` renders `2010 €` but `920` renders `-920,00 €`** 🔼 ✅ 2026-08-23 · 764ead26
   - ↪ _from: Orchestration session 2026-08-14 · found while re-composing the Statistics opening (pre-existing; the new lede routes around it by using `<Money>` for detail figures)_
   - `apps/frontend/src/utils/currency.ts` — the helper switches to compact notation on a 9-character threshold, but with the EU locale that threshold trips *before* compact notation actually abbreviates anything, so two values of similar magnitude render in visibly different formats side by side.
   - Affects **every** compact call site, not just the statistics lede, which is why it is filed rather than patched in place: changing the threshold changes number formatting across the app and wants its own visual check.
