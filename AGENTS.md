@@ -50,12 +50,15 @@ bun vitest run --test-name-pattern="name"
 ```
 
 Use the repository skills in `.agents/skills/` for database migrations, localization, releases,
-and documentation synchronization.
+documentation synchronization, and TODO backlog batches.
 
-For one-item TODO backlog work, use `.agents/prompts/implement-next-todo.md`. Its durable version 3
-checkpoint is published locally only through the user-run `ga publish-vision-todo` LockBox command.
-Regular implementation agents may run its read-only `--fingerprint` and `--check` preflights but
-must not launch the publishing workflow themselves.
+For TODO backlog implementation, use the `implement-todo-batch` skill and the short cloud kickoff
+in `.agents/prompts/implement-todo-batch.md`. A normal batch contains two to four compatible,
+cloud-verifiable findings from one subsystem and produces one reviewed pull request. Keep a
+security, financial-correctness, persistence, migration, packaging, visual, or architectural item
+alone. Use read-only subagents freely for triage and review; delegate writes only when workers have
+isolated worktrees and explicit non-overlapping ownership. Finish the current batch before choosing
+another, and use a fresh cloud task for the next batch.
 
 ## Provider and host behavior
 
@@ -144,9 +147,12 @@ Finish with changed files, checks run, skipped checks, residual risk, and follow
 | `packaging/electron/` | Desktop shell |
 | `docs/` | Obsidian knowledge base |
 | `.devcontainer/` | Hardened development sandbox |
-| `.agents/prompts/implement-next-todo.md` | Resumable one-item TODO workflow and publication handoff |
+| `.agents/skills/implement-todo-batch/` | Cloud-first bounded TODO batch orchestration |
+| `.agents/prompts/implement-todo-batch.md` | Short kickoff for one TODO batch pull request |
 
-Commit directly to `main`; do not create a branch unless the user asks.
+When an authorized local publication workflow uses direct commits, commit to `main` unless the user
+asks for a branch. Cloud TODO batches instead use the platform-managed task branch and pull-request
+flow described above; do not update `main` directly.
 
 Create a session note only when a substantial session produces durable context not already captured
 in an ADR, feature, reference, or guide. Examples include a multi-stage investigation, a cross-module

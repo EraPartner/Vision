@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Guards TODO.md's commit stamps against pre-squash rot.
+"""Audits TODO.md's legacy inline commit stamps for pre-squash rot.
 
 Why this exists
 ---------------
-TODO.md is the only record of which backlog work is real, and its proof mechanism is the
-commit stamp: `- [x] ... ✅ YYYY-MM-DD · <sha> [optional (#NN)]`. A stamp is only proof if a reader can
-run `git show <sha>` and see the change. Feature-branch SHAs do not qualify -- squash-merge
-rewrites them, so a SHA copied from the branch you are working on becomes a dangling pointer
-the moment its PR lands.
+Older TODO.md entries used commit stamps such as
+`- [x] ... ✅ YYYY-MM-DD · <sha> [optional (#NN)]`. New completions rely on the checked box and
+merged pull-request history instead, but the historical annotations remain useful when their SHAs
+resolve. A feature-branch SHA can become a dangling pointer when its pull request squash-merges.
 
 That has now happened three times. `1240a95` (#147) re-pointed all 167 stamp citations and
 wrote the convention into the status-markers section; four sessions later 37 fresh danglers
 had appeared; by 2026-08-13 it was 85. A convention that rots twice needs a mechanical guard,
-not a third sweep. This is the guard.
+not a third sweep. This optional tool remains available for legacy maintenance; it is not a normal
+backlog-delivery gate.
 
 What it checks
 --------------
-Every `· <sha>` and `partial-<sha>` token in TODO.md must resolve against the base branch
-(`origin/main`). Each token is classified:
+Every existing `· <sha>` and `partial-<sha>` token in TODO.md is classified against the base branch
+(`origin/main`):
 
   OK        the SHA is reachable from the base branch -- `git show` works for any reader.
 
@@ -26,14 +26,11 @@ Every `· <sha>` and `partial-<sha>` token in TODO.md must resolve against the b
             unambiguous: the error names the exact merge commit to re-point at. Exit 1.
 
   OPEN      the SHA is NOT on the base branch and its `(#NN)` has no squash-merge commit on
-            the base branch -- i.e. that PR has not landed yet. The stamp is correct as
-            written (the convention explicitly permits stamping before the merge exists, as
-            long as the `(#NN)` is carried). Reported, never failed.
+            the base branch -- i.e. that historical annotation points at an unmerged PR.
+            Reported, never failed.
 
   PENDING   the SHA is NOT on the base branch, carries NO `(#NN)`, but IS reachable from HEAD.
-            This is either a feature-branch stamp missing its PR number or the approved
-            direct-to-main LockBox commit pair before the push updates the base. Warning;
-            `--strict` makes it fatal. A completed direct-to-main push becomes OK.
+            Warning; `--strict` makes it fatal.
 
   ORPHAN    the SHA is on neither the base branch nor HEAD and carries no `(#NN)`. Nothing
             names the change, so nothing can recover it. Exit 1.
@@ -43,22 +40,19 @@ Network
 **The check is entirely offline.** Knowing which PRs are still open would normally need an
 API call; it does not here, because "has PR #NN landed?" is answerable from the base branch
 itself -- a landed PR leaves a squash commit whose *subject line* ends in `(#NN)`. That proxy
-is what separates ROT from OPEN, so CI needs no token, no network and no extra permissions,
-and the answer is deterministic.
+is what separates ROT from OPEN without a token, network access, or nondeterministic API state.
 
 `--verify-open` upgrades the proxy to a confirmation via the GitHub API (a PR that is neither
 merged nor open is dead, and its stamp is unrecoverable). It **degrades gracefully**: with no
 network, no token, or any API error it prints a notice, keeps the offline verdict, and does
-not change the exit code. It is a local convenience, not a gate -- CI deliberately runs the
-offline form.
+not change the exit code. It is a local convenience, not a gate.
 
 Shallow clones
 --------------
 Ancestry answers on a shallow clone are *false* (see the ⚠️ at the top of TODO.md: the
 2026-08-05 sweep was corrupted by exactly this). On a shallow repository the check prints a
-loud warning and exits 0 rather than emit invented verdicts. `--require-full-history` turns
-that into a hard failure -- CI passes it, because CI checks out with `fetch-depth: 0` and a
-shallow checkout there means the workflow, not the file, is broken.
+loud warning and exits 0 rather than emit invented verdicts. `--require-full-history` turns that
+into a hard failure for an intentional full-history audit.
 
 Usage
 -----
@@ -89,8 +83,7 @@ BASE_CANDIDATES = ("origin/main", "refs/remotes/origin/main", "main", "refs/head
 GITHUB_REPO = "EraPartner/Vision"
 
 # `✅ 2026-08-13 · <sha> (#NN)` and `🔎 partial-<sha> (#NN)`. The `(#NN)` is optional here so
-# that a stamp missing it can be *reported* rather than silently skipped -- the convention
-# requires it for pull-request publication. Direct-to-main LockBox stamps intentionally omit it.
+# that a legacy annotation missing it can be reported rather than silently skipped.
 TOKEN_RE = re.compile(
     r"(?:·\s+|partial-)(?P<sha>[0-9a-f]{7,40})\b(?:\s*\(#(?P<pr>\d+)\))?"
 )
@@ -493,7 +486,7 @@ def main(argv: list[str]) -> int:
         stream = sys.stderr if "--strict" in argv else sys.stdout
         print(
             f"\n{TAG} {'ERROR' if '--strict' in argv else 'WARNING'}: stamps reachable only "
-            f"from HEAD -- finish the direct-to-main push or add the PR number before squash:",
+            f"from HEAD -- inspect whether each legacy annotation needs a merged-PR SHA:",
             file=stream,
         )
         for t in pending:
@@ -512,7 +505,7 @@ def main(argv: list[str]) -> int:
 
     if fatal:
         print(
-            f"\n{TAG} A stamp is only proof if `git show <sha>` works for the next reader.\n"
+            f"\n{TAG} A legacy inline SHA should resolve for the next reader.\n"
             f"{TAG} Re-point each SHA above at the squash-merge commit named beside it, keeping\n"
             f"{TAG} its `(#NN)`. Derive any mapping you are unsure of from git rather than by\n"
             f"{TAG} position -- fetch `+refs/pull/*/head:refs/remotes/origin/pr/*`, then\n"

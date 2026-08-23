@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vision TODO Batch"
+  short_description: "Deliver a coherent TODO batch as one PR"
+  default_prompt: "Use $implement-todo-batch to select and deliver one coherent Vision TODO batch."
