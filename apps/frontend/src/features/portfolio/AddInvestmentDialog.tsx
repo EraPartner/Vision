@@ -15,7 +15,6 @@ import { AssetTypeSelector } from './AssetTypeSelector';
 import { defaultProviderFor } from './defaultProviderFor';
 import { InvestmentFormFields } from './InvestmentFormFields';
 import type { InvestmentForm } from './InvestmentFormFields';
-import { PRICE_PROVIDERS } from './PriceProviderFields';
 import { priceProviderPayload } from './priceProviderPayload';
 import { todayYmd } from '@/lib/timezone';
 
@@ -61,12 +60,9 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
     bond: t('addInv.desc.bond'),
   };
 
-  const priceProviders = PRICE_PROVIDERS(t);
-
   const unitBased = isUnitBased(form.assetClass as AssetClass);
   const fixedIncome = isFixedIncome(form.assetClass as AssetClass);
   const realEstate = isRealEstate(form.assetClass as AssetClass);
-  const selectedProvider = priceProviders.find(p => p.key === form.priceProvider);
   const computedInitialUnits = parseDecimal(form.initialUnits);
   const computedPricePerUnit = form.initialAmount && computedInitialUnits > 0
     ? (parseDecimal(form.initialAmount) / computedInitialUnits).toFixed(4)
@@ -224,8 +220,6 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
               isFixedIncome={fixedIncome}
               isRealEstate={realEstate}
               computedPricePerUnit={computedPricePerUnit}
-              priceProviders={priceProviders}
-              selectedProvider={selectedProvider}
               t={t}
             />
             <DialogFooter className="pt-2 sm:justify-between">

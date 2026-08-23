@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import type { PriceProvider } from '@/types/api';
-import { PriceProviderFields, type PriceProviderOption } from './PriceProviderFields';
+import { PriceProviderFields } from './PriceProviderFields';
 import { INVESTMENT_CURRENCIES } from '@/utils/currency';
 
 export interface InvestmentForm {
@@ -45,14 +45,12 @@ interface InvestmentFormFieldsProps {
   isFixedIncome: boolean;
   isRealEstate: boolean;
   computedPricePerUnit: string;
-  priceProviders: PriceProviderOption[];
-  selectedProvider: PriceProviderOption | undefined;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export function InvestmentFormFields({
   form, setForm, isUnitBased, isFixedIncome, isRealEstate,
-  computedPricePerUnit, priceProviders, selectedProvider, t,
+  computedPricePerUnit, t,
 }: InvestmentFormFieldsProps) {
   return (
     <>
@@ -284,8 +282,6 @@ export function InvestmentFormFields({
           idPrefix="inv"
           form={form}
           setForm={setForm}
-          priceProviders={priceProviders}
-          selectedProvider={selectedProvider}
           showManualPrice
           t={t}
         />

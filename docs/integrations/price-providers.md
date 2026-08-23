@@ -3,8 +3,8 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-06-17
-updated: 2026-06-17
+last_modified: 2026-08-23
+updated: 2026-08-23
 tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify, research, adr-079, adr-082, capability-map, quota-governor, macro, macroeconomic, fred, dbnomics, eurostat, provider-pinned]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
@@ -251,16 +251,18 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 ## Adding a Price Provider
 
 Unlike the [bank-adapter seam](bank-adapters.md#adding-new-banks), adding a price provider is **not**
-a single registration point — the provider identity is spread across the backend, a PostgreSQL enum,
-the OpenAPI contract, and several hardcoded frontend lists. The current touchpoints:
+a single registration point. The provider identity is spread across backend dispatch, a PostgreSQL
+enum, and the OpenAPI contract. The frontend picker now gets its membership and ordering from the
+backend catalog instead of maintaining separate Add and Edit dialog lists. The current touchpoints:
 
 **Backend**
 1. Add the fetch strategy to `PROVIDERS` in `services/prices/priceProviderRegistry.js`.
 2. Add a `SUPPORTED_PROVIDERS` entry (key/name/description) in `services/priceProviderService.js`.
 3. Extend live-price fetching in the same file: add the provider's key to the
-   `stale = { … }` bucket and add its `if (stale.<key>.length)` batch-fetch block.
+   `stale = { … }` bucket and to either `idBasedProviders` or `investmentBasedProviders`.
 4. Add per-provider handling in `fetchHistoricalPrices` (`services/priceProviderService.js`).
-5. Add a probe entry in `services/providerHealthService.js`.
+5. Add a probe entry in `services/providerHealthService.js` when the provider supports a useful
+   health probe.
 
 **Database**
 6. Add the value to the `price_provider` PostgreSQL enum via a **new** Alembic revision (the enum is
@@ -268,17 +270,18 @@ the OpenAPI contract, and several hardcoded frontend lists. The current touchpoi
    pattern used by `0022_add_kinesis_price_provider_enum.py`).
 
 **Contract + frontend**
-7. Add the value to the `price_provider` enum in `openapi.yaml`, then run `bun run generate:types`.
-8. Update the two hardcoded provider lists in `AddInvestmentDialog.tsx` and
-   `EditInvestmentDialog.tsx`, the frontend type unions (`types/api.ts`, `types/portfolio.ts`), and
-   the `addInv.provider.hint.*` i18n keys (en + nl).
+7. Add the value to the `price_provider` enum in `openapi.yaml`, run `bun run generate:types`, and
+   update the hand-written `PriceProvider` union in `apps/frontend/src/types/api.ts`.
+8. Add an `addInv.provider.hint.*` localization key and map it in
+   `features/portfolio/usePriceProviderCatalog.ts` when the backend's English description is not
+   sufficient. Add and Edit both render the shared `PriceProviderFields`, which loads
+   `GET /api/investments/providers`; they need no separate catalog edits.
 
 > [!tip] Reducing this cost
-> Steps 1–4 are the load-bearing backend duplication (four near-identical dispatch blocks differing
-> only in key resolution). Collapsing them into a single loop over a provider descriptor
-> (`{ key, resolveId, batch, cacheKeyOf }`) would make the registry strategy object the single
-> backend registration point; the enum-migration, OpenAPI, and frontend touchpoints remain
-> unavoidable.
+> Live fetching already groups providers into identifier-based and investment-based descriptor
+> loops. Historical fetching still has provider-specific branches. The database enum and OpenAPI
+> union remain explicit compatibility boundaries; the frontend option catalog itself is served by
+> the backend.
 
 ## Related
 
@@ -292,4 +295,4 @@ the OpenAPI contract, and several hardcoded frontend lists. The current touchpoi
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
 - [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — Macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, in-memory only)
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[alembic/versions/0019_asset_price_history_cache.py]]
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]

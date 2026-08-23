@@ -4,9 +4,9 @@
  * both the Add investment flow (via InvestmentFormFields) and EditInvestmentDialog,
  * which previously carried near-identical copies of this markup.
  *
- * `PRICE_PROVIDERS` is the single source for the provider option list (it was
- * defined three times); it is a builder because the option names/hints are
- * translated.
+ * Provider membership and ordering come from the backend catalog exposed by
+ * GET /api/investments/providers. Known hints stay translated, with a local
+ * fallback while the catalog request is pending or unavailable.
  *
  * The outer `isUnitBased` gating differs between callers (Add hides the whole
  * block for non-unit-based assets; Edit always shows it but hides only the
@@ -18,23 +18,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { PriceProvider } from '@/types/api';
+import { usePriceProviderCatalog } from './usePriceProviderCatalog';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
-
-export interface PriceProviderOption {
-  key: PriceProvider;
-  name: string;
-  hint: string;
-}
-
-/** Single source for the provider dropdown options (names/hints are translated). */
-export const PRICE_PROVIDERS = (t: (k: string) => string): PriceProviderOption[] => [
-  { key: 'manual', name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
-  { key: 'binance', name: 'Binance', hint: t('addInv.provider.hint.binance') },
-  { key: 'yahoo', name: 'Yahoo Finance', hint: t('addInv.provider.hint.yahoo') },
-  { key: 'kinesis', name: 'Kinesis', hint: t('addInv.provider.hint.kinesis') },
-  { key: 'custom', name: 'Custom JSON', hint: t('addInv.provider.hint.custom') },
-];
 
 /** The provider-related fields the shared block reads and writes. */
 export interface PriceProviderFormShape {
@@ -53,8 +39,6 @@ interface PriceProviderFieldsProps<F extends PriceProviderFormShape> {
   idPrefix: string;
   form: F;
   setForm: (updater: (prev: F) => F) => void;
-  priceProviders: PriceProviderOption[];
-  selectedProvider: PriceProviderOption | undefined;
   /** Whether the manual current-price input may appear (gated on unit-based). */
   showManualPrice: boolean;
   t: TranslateFn;
@@ -64,11 +48,12 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
   idPrefix,
   form,
   setForm,
-  priceProviders,
-  selectedProvider,
   showManualPrice,
   t,
 }: PriceProviderFieldsProps<F>) {
+  const priceProviders = usePriceProviderCatalog(t);
+  const selectedProvider = priceProviders.find((provider) => provider.key === form.priceProvider);
+
   return (
     <div className="space-y-3 pt-2 border-t border-border">
       <Label className="text-sm font-medium">{t('addInv.label.priceProvider')}</Label>

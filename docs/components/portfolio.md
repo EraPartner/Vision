@@ -3,7 +3,7 @@ title: Portfolio Components
 type: component
 status: active
 date: 2026-06-24
-updated: 2026-06-28
+updated: 2026-08-23
 tags: [components, portfolio, investments, phase-1, phase-3.6, portfolio-ticker, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
@@ -18,9 +18,9 @@ Components for managing investment portfolios, including stocks, crypto, metals,
 
 | Component | Description | File |
 |-----------|-------------|------|
-| AddInvestmentDialog | Add new investment | [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx\|AddInvestmentDialog.tsx]] |
+| AddInvestmentDialog | Add new investment | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx\|AddInvestmentDialog.tsx]] |
 | AddPortfolioTxnDialog | Record buy/sell transactions | [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx\|AddPortfolioTxnDialog.tsx]] |
-| EditInvestmentDialog | Edit existing investment details | [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx\|EditInvestmentDialog.tsx]] |
+| EditInvestmentDialog | Edit existing investment details | [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx\|EditInvestmentDialog.tsx]] |
 | EditPortfolioTxnDialog | Edit existing portfolio transaction | [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx\|EditPortfolioTxnDialog.tsx]] |
 | InvestmentDetailDialog | View investment details | [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx\|InvestmentDetailDialog.tsx]] |
 | AddToWatchlistDialog | Add symbol to watchlist | [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx\|AddToWatchlistDialog.tsx]] |
@@ -70,11 +70,9 @@ bonds       - Government/corporate bonds
 ### Usage
 
 ```tsx
-import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
+import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 
-<AddInvestmentDialog>
-  <Button>Add Investment</Button>
-</AddInvestmentDialog>
+<AddInvestmentDialog />
 ```
 
 ### Settings Propagation Notes
@@ -83,9 +81,11 @@ import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog"
 - Reset/cancel path restores `currency` to `appSettings.defaultCurrency`
 - Submit payload and initial buy-transaction currency fallback now use `defaultCurrency` (replacing fixed EUR fallback)
 - Default crypto provider selection is `binance` (replacing legacy `coingecko` default)
-- Add/Edit provider pickers include `kinesis` with dedicated UI hint text for provider-id guidance
+- Add/Edit use the shared `PriceProviderFields` picker. Provider membership and ordering load from
+  `GET /api/investments/providers`; localized hints cover known providers, and a local fallback keeps
+  the form usable while the catalog is loading or unavailable.
 
-Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
+Code links: [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
 
 ### Custom Provider Advanced Fields
 
@@ -180,7 +180,7 @@ Validation highlights:
 - symbol required for unit-based assets in UI
 - backend enforces non-empty + globally unique symbol and immutable `asset_class`
 
-Code link: [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]]
+Code link: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]]
 
 ### EditPortfolioTxnDialog
 

@@ -248,6 +248,7 @@ export const netWorthKeys = {
 
 export const portfolioKeys = {
     investments: ['investments'] as const,
+    providers: ['investment-providers'] as const,
     transactionsAll: ['portfolio-transactions'] as const,
     transactions: (investmentIdsCsv: string) =>
         ['portfolio-transactions', investmentIdsCsv] as const,

@@ -25,6 +25,19 @@ export function createInvestment(data: InvestmentCreate): Promise<Investment> {
 
 export type PriceSource = 'live' | 'close' | 'cached' | 'historical_fallback';
 
+export interface SupportedPriceProvider {
+    key: string;
+    name: string;
+    description: string;
+}
+
+export async function getSupportedPriceProviders(): Promise<SupportedPriceProvider[]> {
+    const { providers } = await apiRequest<{ providers: SupportedPriceProvider[] }>(
+        '/api/investments/providers',
+    );
+    return providers;
+}
+
 export function refreshInvestmentPrices(): Promise<{
     updated: number;
     total: number;

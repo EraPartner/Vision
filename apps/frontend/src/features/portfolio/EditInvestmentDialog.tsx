@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import type { InvestmentSummary } from '@/types/portfolio';
 import { isUnitBased } from '@/utils/assetClass';
 import type { PriceProvider } from '@/types/api';
-import { PriceProviderFields, PRICE_PROVIDERS } from './PriceProviderFields';
+import { PriceProviderFields } from './PriceProviderFields';
 import { priceProviderPayload } from './priceProviderPayload';
 import { INVESTMENT_CURRENCIES } from '@/utils/currency';
 import {
@@ -71,8 +71,6 @@ export function EditInvestmentDialog({ investment, trigger, open: openProp, onOp
 
   const unitBased = isUnitBased(investment.assetClass);
 
-  const priceProviders = PRICE_PROVIDERS(t);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -104,8 +102,6 @@ export function EditInvestmentDialog({ investment, trigger, open: openProp, onOp
       // handled in hook
     }
   };
-
-  const selectedProvider = priceProviders.find((p) => p.key === form.priceProvider);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -164,8 +160,6 @@ export function EditInvestmentDialog({ investment, trigger, open: openProp, onOp
             idPrefix="edit-inv"
             form={form}
             setForm={setForm}
-            priceProviders={priceProviders}
-            selectedProvider={selectedProvider}
             showManualPrice={unitBased}
             t={t}
           />

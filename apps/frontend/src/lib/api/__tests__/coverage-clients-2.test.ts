@@ -27,6 +27,7 @@ import {
 } from "@/lib/api/transactions";
 import {
   getInvestments,
+  getSupportedPriceProviders,
   createInvestment,
   refreshInvestmentPrices,
   updateInvestment,
@@ -248,6 +249,23 @@ describe("transactions API client", () => {
 // ---------------------------------------------------------------------------
 
 describe("portfolio API client", () => {
+  it("getSupportedPriceProviders unwraps the backend catalog", async () => {
+    server.use(
+      http.get(`${API_BASE}/api/investments/providers`, () =>
+        ok({
+          providers: [
+            { key: "manual", name: "Manual", description: "Set price manually" },
+            { key: "yahoo", name: "Yahoo Finance", description: "Stocks and ETFs" },
+          ],
+        }),
+      ),
+    );
+
+    const providers = await getSupportedPriceProviders();
+
+    expect(providers.map((provider) => provider.key)).toEqual(["manual", "yahoo"]);
+  });
+
   it("getInvestments forwards asset_class + active", async () => {
     let url = "";
     server.use(
