@@ -5,7 +5,7 @@ method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
 date: 2026-06-18
-updated: 2026-08-11
+updated: 2026-08-22
 last_modified: 2026-06-18
 tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078, account-id, adr-091, migration-0057]
 status: active
@@ -83,7 +83,7 @@ One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201
 {
   "ok": true,
   "data": {
-    "batch_id": "42",
+    "batch_id": 42,
     "total": 150,
     "imported": 148,
     "duplicates": 1,
@@ -97,7 +97,7 @@ One-shot portfolio CSV import. Runs the full pipeline synchronously. Returns 201
 {
   "ok": true,
   "data": {
-    "batch_id": "43",
+    "batch_id": 43,
     "requires_review": true,
     "match_source_counts": {
       "symbol_exact": 120,
@@ -285,6 +285,8 @@ When the pipeline detects unresolved instruments (symbol not found in `investmen
 > Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGSERIAL`, so the ceiling is *not* `int32`). Anything else returns `400 VALIDATION_ERROR`.
 >
 > These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId` (`lib/importBatchIds.js`, shared with the transaction import router). Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
+>
+> As of 2026-08-22, `openapi.yaml` publishes these path parameters as `integer` / `int64` with the same positive safe-integer range. Generated TypeScript clients therefore expose `id` and `rowId` path arguments as `number`, matching runtime validation and the shipped frontend callers. This is a breaking schema correction for external spec consumers that generated string-valued path arguments; runtime behavior did not change. `PortfolioImportBatch.id` in batch list/detail responses remains a string because node-postgres returns raw `BIGINT` values as strings at that repository boundary.
 
 ### GET /api/portfolio/import/batches/:id/preview
 
@@ -294,7 +296,7 @@ Returns staging rows grouped by investment (or by distinct raw symbol/name for u
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `batch_id` | string | Batch identifier |
+| `batch_id` | number | Positive safe-integer batch identifier |
 | `groups[]` | array | One entry per resolved investment or per distinct unresolved symbol+name combination |
 | `groups[].investment_id` | `number \| null` | Matched or overridden investment. `null` = unresolved. |
 | `groups[].symbol` | string | Raw CSV symbol for the group |
@@ -359,7 +361,7 @@ Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not ye
 {
   "ok": true,
   "data": {
-    "batch_id": "43",
+    "batch_id": 43,
     "imported": 148,
     "duplicates": 1,
     "errors": 1

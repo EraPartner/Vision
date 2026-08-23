@@ -6425,7 +6425,10 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     get:
       summary: Get import batch
       operationId: getImportBatch
@@ -6460,7 +6463,10 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     get:
       summary: Preview import batch rows before commit
       operationId: previewImportBatch
@@ -6488,12 +6494,18 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
       - in: path
         name: rowId
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     post:
       summary: Override the matched recipient for a staged row
       operationId: overrideImportRow
@@ -6534,12 +6546,18 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
       - in: path
         name: rowId
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     post:
       summary: Override category for a staged row
       operationId: overrideImportRowCategory
@@ -6580,7 +6598,10 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     post:
       summary: Commit import batch — writes transactions to DB
       operationId: commitImportBatch
@@ -6889,7 +6910,10 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     get:
       summary: Get portfolio import batch
       operationId: getPortfolioImportBatch
@@ -6924,7 +6948,10 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     get:
       summary: Preview portfolio import batch rows grouped by investment
       operationId: previewPortfolioImportBatch
@@ -6943,12 +6970,18 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
       - in: path
         name: rowId
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     post:
       summary: Resolve an unmatched portfolio import row to an existing investment or request a new one be created
       operationId: portfolioImportRowInvestmentOverride
@@ -6992,7 +7025,10 @@ paths:
         name: id
         required: true
         schema:
-          type: string
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
     post:
       summary: Commit a reviewed portfolio import batch — writes portfolio_transactions to DB
       operationId: commitPortfolioImportBatch

@@ -5,7 +5,7 @@ method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
 date: 2026-04-26
-updated: 2026-08-11
+updated: 2026-08-22
 last_modified: 2026-08-09
 tags: [api, import, csv, bank, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
 status: active
@@ -405,13 +405,16 @@ When the pipeline detects fuzzy / pattern / new recipient resolutions it leaves 
 > Every `:id` and `:rowId` on `/api/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`Number.MAX_SAFE_INTEGER` — `import_batches.id` and `import_staging_rows.id` are `BIGSERIAL`, so the ceiling is *not* `int32`). Anything else returns `400 VALIDATION_ERROR` (`"Invalid batch id"` / `"Invalid batch or row id"`).
 >
 > These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000, `"0o17"` → 15, `"0b11"` → 3 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId`, so these routes and the `:id` path params enforce one accept set. An integral id above `int32` is still a legal row and 404s if absent; `"1e300"`, previously let through to that same 404, is now a 400. Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
+>
+> As of 2026-08-22, `openapi.yaml` publishes these path parameters as `integer` / `int64` with the same positive safe-integer range. Generated TypeScript clients therefore expose `id` and `rowId` path arguments as `number`, matching runtime validation and the shipped frontend callers. This is a breaking schema correction for external spec consumers that generated string-valued path arguments; runtime behavior did not change. `ImportBatch.id` in batch list/detail responses remains a string because node-postgres returns raw `BIGINT` values as strings at that repository boundary.
 
 ### GET /api/import/batches/:id/preview
 
 Returns staging rows grouped by effective recipient with match-source badges and category state.
 
 **Path Parameters:**
-- `id` — import batch id (must be in `awaiting_review` or `matched` status)
+
+- `id` — positive `int64` import batch id, represented as a safe JavaScript number (must be in `awaiting_review` or `matched` status)
 
 **Response:** unified envelope with `data: { batch_id, groups[], totals }`. Each group:
 
