@@ -28,6 +28,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { cn } from "@/lib/utils";
+import { sumConvertedMonthlyAmounts } from "@/features/planned/plannedCurrencyTotals";
 
 const FREQ_LABEL_KEYS: Record<string, string> = {
   daily: 'plannedPage.freq.daily',
@@ -79,7 +80,10 @@ export default function PlannedPaymentsPage() {
   const { t } = useLanguage();
   const loadingSurfaceProps = useLoadingSurfaceProps();
   const { appSettings } = useAppSettings();
-  const { convertToTarget } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
+  const {
+    convertToTargetIfAvailable,
+    isLoading: currencyRatesLoading,
+  } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
 
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
@@ -119,26 +123,11 @@ export default function PlannedPaymentsPage() {
 
   const rows: TableRow[] = useMemo(() => filteredPayments.map((p, i) => ({ ...p, _idx: i })), [filteredPayments]);
 
-  const totalMonthly = useMemo(() => {
-    return payments
-      // "Est. monthly" = net monthly impact of recurring rows: incoming
-      // (amount > 0) and outgoing (amount < 0) both counted, signed, so e.g.
-      // +70 income and -100 expense net to -30.
-      .filter((p) => p.is_active && p.is_recurring)
-      .reduce((sum, p) => {
-        const mult =
-          p.frequency === "daily" ? 30 :
-            p.frequency === "weekly" ? 4.33 :
-              p.frequency === "biweekly" ? 2.17 :
-                p.frequency === "monthly" ? 1 :
-                  p.frequency === "quarterly" ? 1 / 3 :
-                    p.frequency === "yearly" ? 1 / 12 :
-                      p.frequency === "custom" && p.custom_interval_days ? 30 / p.custom_interval_days : 1;
-        // Convert each row's amount to the display currency before summing —
-        // raw summation counted a 500 USD subscription as 500 in the default currency.
-        return sum + convertToTarget(p.amount, p.currency) * mult;
-      }, 0);
-  }, [payments, convertToTarget]);
+  const monthlyTotal = useMemo(() => {
+    // Net monthly impact of active recurring rows: incoming and outgoing both
+    // keep their sign, while rows without an available FX rate are excluded.
+    return sumConvertedMonthlyAmounts(payments, convertToTargetIfAvailable);
+  }, [payments, convertToTargetIfAvailable]);
 
   // The "due in the next 7 days" window now lives in NextSevenDaysStrip
   // (bucketNextSevenDays), which carries the same is_active filter, the same
@@ -458,8 +447,10 @@ export default function PlannedPaymentsPage() {
 
         <NextSevenDaysStrip
           payments={payments}
-          estimatedMonthly={totalMonthly}
-          convertAmount={convertToTarget}
+          estimatedMonthly={monthlyTotal.total}
+          estimatedMonthlyUnavailableCount={monthlyTotal.unavailableCount}
+          currencyRatesLoading={currencyRatesLoading}
+          convertAmount={convertToTargetIfAvailable}
           onSelect={(payment) => { setEditing(payment); setFormOpen(true); }}
         />
 

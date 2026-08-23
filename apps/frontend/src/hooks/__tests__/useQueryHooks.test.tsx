@@ -200,6 +200,7 @@ describe("useCurrencyConverter", () => {
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         // 10 USD * 0.9 (USD→EUR) / 1 (EUR→EUR) = 9
         expect(result.current.convertToTarget(10, "USD")).toBeCloseTo(9);
+        expect(result.current.convertToTargetIfAvailable(10, "USD")).toBeCloseTo(9);
     });
 
     it("returns same amount for same-currency conversion", async () => {
@@ -211,5 +212,32 @@ describe("useCurrencyConverter", () => {
         const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         expect(result.current.convertToTarget(100, "EUR")).toBe(100);
+    });
+
+    it("reports a missing rate through the optional conversion API", async () => {
+        vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
+            total_rates: 0,
+            rates: [],
+            fallback_rates: {},
+        });
+        const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.convertToTargetIfAvailable(100, "GBP")).toBeUndefined();
+        expect(result.current.convertToTargetIfAvailable(100, "EUR")).toBe(100);
+        expect(result.current.convertToTarget(100, "GBP")).toBe(100);
+    });
+
+    it("reports a missing target rate through the optional conversion API", async () => {
+        vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
+            total_rates: 1,
+            rates: [{ currency: "USD", rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
+            fallback_rates: {},
+        });
+        const { result } = renderHook(() => useCurrencyConverter("GBP"), { wrapper: makeQueryWrapper() });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.convertToTargetIfAvailable(100, "USD")).toBeUndefined();
+        expect(result.current.convertToTarget(100, "USD")).toBe(100);
     });
 });

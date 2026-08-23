@@ -40,18 +40,27 @@ export function useCurrencyConverter(targetCurrency: string) {
     ),
   }), [exchangeData]);
 
-  const convertToTarget = useCallback(
-    (amount: number, fromCurrency?: string): number => {
+  const convertToTargetIfAvailable = useCallback(
+    (amount: number, fromCurrency?: string): number | undefined => {
       const from = (fromCurrency ?? 'EUR').toUpperCase();
       const to = targetCurrency.toUpperCase();
       if (from === to) return amount;
       const rateFrom = ratesToEur[from];
       const rateTo = ratesToEur[to];
-      if (!rateFrom || !rateTo) return amount;
+      if (!rateFrom || !rateTo) return undefined;
       return (amount * rateFrom) / rateTo;
     },
     [ratesToEur, targetCurrency]
   );
 
-  return { convertToTarget, ratesToEur, isLoading, error };
+  // Legacy display consumers intentionally retain the original-amount fallback.
+  // Aggregates must use convertToTargetIfAvailable so a missing rate cannot blend
+  // source and target currencies into one total.
+  const convertToTarget = useCallback(
+    (amount: number, fromCurrency?: string): number =>
+      convertToTargetIfAvailable(amount, fromCurrency) ?? amount,
+    [convertToTargetIfAvailable]
+  );
+
+  return { convertToTarget, convertToTargetIfAvailable, ratesToEur, isLoading, error };
 }

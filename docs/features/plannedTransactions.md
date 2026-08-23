@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-08-14
-tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
+updated: 2026-08-23
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
-description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders on all pages including the dashboard (no per-route stand-down). June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
+description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders on all pages including the dashboard (no per-route stand-down). June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies.
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -676,9 +676,16 @@ and are lifted verbatim from the "Due this week" tile they replaced:
 - the window is `0 <= differenceInDays(due, today) <= 7`, i.e. eight columns.
 
 The header also shows the window's net total, converted with the same
-`useCurrencyConverter` instance that sums Est. Monthly. When nothing is due, the
-day rail still renders (the eight days are visibly clear) with an explicit
-"Nothing due in the next 7 days" note beneath it.
+`useCurrencyConverter` instance that sums Est. Monthly. Both aggregates call
+`convertToTargetIfAvailable` and sum through
+`features/planned/plannedCurrencyTotals.ts`. A payment whose source or target
+rate is unavailable is omitted from the aggregate instead of being added in its
+original currency; the affected aggregate shows a localized count of omitted
+payments. While the shared exchange-rate query is loading, both aggregate
+figures remain skeletons; an unresolved request is never presented as a missing
+rate. Individual day items still show their original amount and currency. When
+nothing is due, the day rail still renders (the eight days are visibly clear)
+with an explicit "Nothing due in the next 7 days" note beneath it.
 
 The `Pending` and `Executed` counts are gone on purpose: the table below is the
 list of pending items, each row carries its own executed state, and the
@@ -686,7 +693,9 @@ Execution History dialog is the place to read execution counts.
 
 #### "Est. Monthly" (June 2026)
 
-Its value is computed by the `totalMonthly` `useMemo` in [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]] and passed to the strip as `estimatedMonthly`.
+Its value and unavailable-rate count are computed by the `monthlyTotal`
+`useMemo` in [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]] and passed to
+the strip as `estimatedMonthly` and `estimatedMonthlyUnavailableCount`.
 
 **Semantics (current, as of 2026-06-17): net monthly figure.**
 
@@ -698,8 +707,9 @@ The card shows the **net** monthly impact of all active recurring planned paymen
 **Calculation:**
 
 ```
-totalMonthly = Σ ( convertToTarget(p.amount, p.currency) × frequencyMultiplier(p.frequency) )
+monthlyTotal = Σ ( convertToTargetIfAvailable(p.amount, p.currency) × frequencyMultiplier(p.frequency) )
                for each p where p.is_active && p.is_recurring
+               and the conversion is available
 ```
 
 Frequency-to-monthly multipliers:
@@ -714,7 +724,13 @@ Frequency-to-monthly multipliers:
 | yearly | 1/12 |
 | custom | 30 / `custom_interval_days` |
 
-Each row's amount is converted to the display currency via `convertToTarget(amount, currency)` before being multiplied — this prevents raw multi-currency amounts from being summed in mismatched units.
+Each row's amount is converted to the display currency via
+`convertToTargetIfAvailable(amount, currency)` before being multiplied. If the
+source or target exchange rate is missing, the row is excluded and the card
+shows how many payments were not included. The legacy `convertToTarget` callback
+continues to return the original amount for non-aggregate display consumers;
+Planned totals deliberately use the explicit optional conversion path so raw
+multi-currency amounts cannot be summed in mismatched units.
 
 **Display:** The `<Money>` component for this card is rendered with the `signed` prop, so a net inflow displays an explicit leading `+` and a net outflow displays `−`. One-time (non-recurring) planned payments are excluded entirely; only rows where `is_recurring` is true contribute.
 

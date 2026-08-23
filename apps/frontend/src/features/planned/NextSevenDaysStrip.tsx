@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import { CalendarCheck2, CalendarClock, CheckCircle2, Repeat } from "lucide-react";
+import { AlertCircle, CalendarCheck2, CalendarClock, CheckCircle2, Repeat } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { TrendHue } from "@/components/shared/TrendHue";
 import { Money } from "@/components/shared/Money";
@@ -12,6 +13,7 @@ import {
   toYmd,
 } from "@/components/shared/dateUtils";
 import { bucketNextSevenDays, WINDOW_DAYS } from "./nextSevenDays";
+import { sumConvertedAmounts } from "./plannedCurrencyTotals";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +36,12 @@ interface NextSevenDaysStripProps {
   payments: PlannedPayment[];
   /** Net monthly impact of active recurring rows, already converted to the display currency. */
   estimatedMonthly: number;
-  /** The page's FX converter — the same one "Est. monthly" is summed with. */
-  convertAmount: (amount: number, fromCurrency?: string) => number;
+  /** Active recurring rows omitted from the monthly total because an FX rate is unavailable. */
+  estimatedMonthlyUnavailableCount: number;
+  /** True while the shared FX query is still resolving. */
+  currencyRatesLoading: boolean;
+  /** The page's optional FX converter — the same one "Est. monthly" is summed with. */
+  convertAmount: (amount: number, fromCurrency?: string) => number | undefined;
   /** Open a due item for editing — same target as the row's pencil action. */
   onSelect: (payment: PlannedPayment) => void;
 }
@@ -43,6 +49,8 @@ interface NextSevenDaysStripProps {
 export function NextSevenDaysStrip({
   payments,
   estimatedMonthly,
+  estimatedMonthlyUnavailableCount,
+  currencyRatesLoading,
   convertAmount,
   onSelect,
 }: NextSevenDaysStripProps) {
@@ -53,11 +61,7 @@ export function NextSevenDaysStrip({
   const buckets = useMemo(() => bucketNextSevenDays(payments, new Date()), [payments]);
   const dueCount = buckets.reduce((n, b) => n + b.items.length, 0);
   const windowTotal = useMemo(
-    () =>
-      buckets.reduce(
-        (sum, b) => b.items.reduce((s, p) => s + convertAmount(p.amount, p.currency), sum),
-        0,
-      ),
+    () => sumConvertedAmounts(buckets.flatMap((bucket) => bucket.items), convertAmount),
     [buckets, convertAmount],
   );
 
@@ -93,35 +97,59 @@ export function NextSevenDaysStrip({
               {dueCount > 0 && (
                 <>
                   <span className="text-muted-foreground/60">·</span>
-                  <span
-                    className={cn(
-                      "font-semibold tabular-nums",
-                      windowTotal < 0 ? "amount-loss" : "amount-gain",
-                    )}
-                  >
-                    <Money amount={windowTotal} signed />
-                  </span>
+                  {currencyRatesLoading ? (
+                    <span role="status" aria-label={t("common.loading")}>
+                      <Skeleton aria-hidden className="inline-block h-4 w-20 align-middle" />
+                    </span>
+                  ) : (
+                    <span
+                      className={cn(
+                        "font-semibold tabular-nums",
+                        windowTotal.total < 0 ? "amount-loss" : "amount-gain",
+                      )}
+                    >
+                      <Money amount={windowTotal.total} signed />
+                    </span>
+                  )}
                 </>
               )}
               <span className="text-muted-foreground/60">·</span>
               <span className="text-muted-foreground">{rangeLabel}</span>
             </p>
+            {!currencyRatesLoading && windowTotal.unavailableCount > 0 && (
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-warning">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                {tc("plannedPage.fxUnavailable", windowTotal.unavailableCount)}
+              </p>
+            )}
           </div>
 
           {/* The one surviving aggregate — deliberately a side figure, not a tile. */}
-          <div className="text-right shrink-0">
+          <div className="max-w-full shrink-0 text-right">
             <p className="flex items-center justify-end gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               <Repeat className="h-3 w-3" />
               {t("plannedPage.estMonthly")}
             </p>
-            <p
-              className={cn(
-                "mt-1 text-2xl font-bold tabular-nums",
-                estimatedMonthly < 0 ? "amount-loss" : "amount-gain",
-              )}
-            >
-              <Money amount={estimatedMonthly} signed />
-            </p>
+            {currencyRatesLoading ? (
+              <div className="mt-1 flex justify-end" role="status" aria-label={t("common.loading")}>
+                <Skeleton aria-hidden className="h-7 w-24" />
+              </div>
+            ) : (
+              <p
+                className={cn(
+                  "mt-1 text-2xl font-bold tabular-nums",
+                  estimatedMonthly < 0 ? "amount-loss" : "amount-gain",
+                )}
+              >
+                <Money amount={estimatedMonthly} signed />
+              </p>
+            )}
+            {!currencyRatesLoading && estimatedMonthlyUnavailableCount > 0 && (
+              <p className="mt-1 flex items-center justify-end gap-1.5 text-xs text-warning">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                {tc("plannedPage.fxUnavailable", estimatedMonthlyUnavailableCount)}
+              </p>
+            )}
           </div>
         </div>
 

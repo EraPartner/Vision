@@ -1489,6 +1489,8 @@ const en: Record<string, string> = {
   'plannedPage.freq.quarterly': 'Quarterly',
   'plannedPage.freq.weekly': 'Weekly',
   'plannedPage.freq.yearly': 'Yearly',
+  'plannedPage.fxUnavailable.one': '{count} payment excluded: exchange rate unavailable',
+  'plannedPage.fxUnavailable.other': '{count} payments excluded: exchange rates unavailable',
   'plannedPage.history.button': 'History',
   'plannedPage.history.colExecutedOn': 'Executed on',
   'plannedPage.history.colPlanned': 'Planned payment',

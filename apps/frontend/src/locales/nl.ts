@@ -1489,6 +1489,8 @@ const nl: Record<string, string> = {
   'plannedPage.freq.quarterly': 'Per kwartaal',
   'plannedPage.freq.weekly': 'Wekelijks',
   'plannedPage.freq.yearly': 'Jaarlijks',
+  'plannedPage.fxUnavailable.one': '{count} betaling niet meegerekend: wisselkoers niet beschikbaar',
+  'plannedPage.fxUnavailable.other': '{count} betalingen niet meegerekend: wisselkoersen niet beschikbaar',
   'plannedPage.history.button': 'Geschiedenis',
   'plannedPage.history.colExecutedOn': 'Uitgevoerd op',
   'plannedPage.history.colPlanned': 'Geplande betaling',
