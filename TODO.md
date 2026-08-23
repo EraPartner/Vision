@@ -5119,7 +5119,7 @@ look-changing one.
   - Strictly better than before 9ccfc0f (#149) (there was no `node_modules` at all), but the fresh-clone dev story is still incomplete — the backend tests now pass, the desktop app still does not launch.
   - Fix: add `trustedDependencies: ["electron"]` to `packaging/electron/package.json`, or have the install step run the postinstall explicitly. Weigh against `--ignore-scripts`, which both CI workflows deliberately pass.
 
-- [ ] **CI and release install `packaging/electron` with different tools, so CI tests one dependency set and the signed app ships another** 🔼
+- [x] **CI and release install `packaging/electron` with different tools, so CI tests one dependency set and the signed app ships another** 🔼 ✅ 2026-08-23 · ac4e590a
   - ↪ _from: Orchestration session 2026-08-05 · pre-push gate fix (found while establishing what CI actually does; pre-existing, deliberately not touched under scope discipline)_
   - `.github/workflows/ci.yml:437` runs `npm install --prefix packaging/electron --ignore-scripts`, which **ignores the committed `packaging/electron/bun.lock`**, while `.github/workflows/release.yml:293` runs `bun install --frozen-lockfile` against it. The backend tests that exercise `backup/bundle.js` therefore run against npm-resolved versions in CI, while the shipped `.dmg` uses the bun-pinned ones.
   - Directly relevant to 9ccfc0f (#149), which chose `--frozen-lockfile` precisely to keep those pins honest — the local path is now pinned while CI's is not.
