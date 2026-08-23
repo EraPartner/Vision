@@ -1600,7 +1600,7 @@ look-changing one.
   - Related, and the reason this is filed rather than ignored: that frontend `.catch` accepts `1.5`/`-1`, so a hand-written or legacy stored value could now 400 the dashboard at the route layer, since 76000adc (#163) tightened the aggregation query params. Worth confirming against a real stored settings row before deciding the fix.
   - Also noted nearby: `reports.js:91` types exclusion ids as `z.number().int().positive()` with **no int32 ceiling**, so a past-int4 value now 400s at the SQL builder rather than at the route edge.
 
-- [ ] **`openapi.yaml` types import batch/row ids as `string` although they are numeric — and the runtime is now further from the spec** 🔽
+- [x] **`openapi.yaml` types import batch/row ids as `string` although they are numeric — and the runtime is now further from the spec** 🔽 ✅ 2026-08-23 · 1a9833cc
   - ↪ _from: Orchestration session 2026-08-11 · noticed while converging the id validators_
   - `openapi.yaml:6200-6716`
   - Pre-existing spec inaccuracy, deliberately left alone by 3880f7ed (#163) because correcting it changes the generated frontend types and so carries its own blast radius. Worth doing knowingly rather than as a side effect: after that change the runtime rejects every non-integer string form for ids the spec still types `string`, so spec and behaviour are further apart in practice than before.
