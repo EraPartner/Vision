@@ -7,8 +7,8 @@
  * default and no supplying trigger, so an INSERT that omits it dies with 23502
  * at commit — which is what the cash path did from its introduction (every
  * `route='cash'` row was recorded as a per-row error and the ledger stayed
- * empty). These tests drive `commitBatch` against the real schema and assert
- * the rows actually land, carry the batch's BROKER as their recipient (sleeve
+ * empty). These tests drive `commitPortfolioImport` against the real schema
+ * and assert the rows actually land, carry the batch's BROKER as their recipient (sleeve
  * account `institution`, falling back to `name`), keep the ledger sign from
  * the cash-sign fix, stay dedup-able on re-import, and remain rollback-able
  * through the route-split delete.
@@ -19,7 +19,7 @@
  * ONE recipient row instead of forking near-duplicates.
  *
  * Isolation: per-test targeted DELETEs of the corpus this suite owns.
- * commitBatch/rollbackBatch open their own transactions, so a wrapping
+ * commitPortfolioImport/rollbackBatch open their own transactions, so a wrapping
  * transaction would nest.
  */
 
@@ -33,7 +33,7 @@ import {
 } from './setup/db.js';
 
 import { closePool } from '../src/database/connection.js';
-import { commitBatch } from '../src/services/portfolioImportPipeline/commit.js';
+import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
 
 const pool = getTestPool();
@@ -116,7 +116,7 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     const depositRow = await stageCash(batchId, 0, { typeRaw: 'deposit', amount: 1000, note: 'wire in' });
     const withdrawalRow = await stageCash(batchId, 1, { typeRaw: 'withdrawal', amount: 250 });
 
-    const res = await commitBatch({ batchId });
+    const res = await commitPortfolioImport({ batchId });
     expect(res).toMatchObject({ imported: 2, duplicates: 0, errors: 0 });
 
     const rows = await ledgerRows();
@@ -145,12 +145,12 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
   it('does not fork the broker identity across batches with casing/whitespace variants', async () => {
     const batchA = await newBrokerageBatch(fx.accountId); // institution ' DeGiro '
     await stageCash(batchA, 0, { typeRaw: 'deposit', amount: 100 });
-    expect((await commitBatch({ batchId: batchA })).imported).toBe(1);
+    expect((await commitPortfolioImport({ batchId: batchA })).imported).toBe(1);
 
     const otherAccount = await seedAccount({ name: 'DEGIRO SLEEVE 2', institution: 'DEGIRO  ' });
     const batchB = await newBrokerageBatch(otherAccount);
     await stageCash(batchB, 0, { typeRaw: 'deposit', amount: 200, note: 'second batch' });
-    expect((await commitBatch({ batchId: batchB })).imported).toBe(1);
+    expect((await commitPortfolioImport({ batchId: batchB })).imported).toBe(1);
 
     const { rows } = await pool.query(`SELECT id, name FROM recipients WHERE normalized_name = 'DEGIRO'`);
     expect(rows).toHaveLength(1); // one identity, not 'DEGIRO' + ' DeGiro ' twins
@@ -164,7 +164,7 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     const batchId = await newBrokerageBatch(acct);
     await stageCash(batchId, 0, { typeRaw: 'deposit', amount: 500 });
 
-    expect((await commitBatch({ batchId })).imported).toBe(1);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(1);
     const rows = await ledgerRows();
     expect(rows).toHaveLength(1);
     expect(rows[0].recipient_name).toBe('IBKR-MAIN');
@@ -173,11 +173,11 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
   it('re-importing the same statement is a no-op (field dedup, not a second ledger row)', async () => {
     const batchA = await newBrokerageBatch(fx.accountId);
     await stageCash(batchA, 0, { typeRaw: 'withdrawal', amount: 250, note: 'wd' });
-    expect((await commitBatch({ batchId: batchA })).imported).toBe(1);
+    expect((await commitPortfolioImport({ batchId: batchA })).imported).toBe(1);
 
     const batchB = await newBrokerageBatch(fx.accountId);
     await stageCash(batchB, 0, { typeRaw: 'withdrawal', amount: 250, note: 'wd' });
-    const res = await commitBatch({ batchId: batchB });
+    const res = await commitPortfolioImport({ batchId: batchB });
     expect(res).toMatchObject({ imported: 0, duplicates: 1 });
     expect(await ledgerRows()).toHaveLength(1);
   });
@@ -196,7 +196,7 @@ describeDb('portfolio import — brokerage cash commit (real Postgres)', () => {
     const batchId = await newBrokerageBatch(fx.accountId);
     await stageCash(batchId, 0, { typeRaw: 'deposit', amount: 1000 });
     await stageCash(batchId, 1, { typeRaw: 'withdrawal', amount: 250 });
-    expect((await commitBatch({ batchId })).imported).toBe(2);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(2);
     expect(await ledgerRows()).toHaveLength(3);
 
     const res = await rollbackBatch(batchId);

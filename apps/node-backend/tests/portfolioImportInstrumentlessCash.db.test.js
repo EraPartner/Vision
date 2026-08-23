@@ -22,7 +22,7 @@
  * portfolio DELETE never sees their ids.
  *
  * Isolation: per-test targeted DELETEs of the corpus this suite owns.
- * commitBatch/rollbackBatch open their own transactions, so a wrapping
+ * commitPortfolioImport/rollbackBatch open their own transactions, so a wrapping
  * transaction would nest.
  */
 
@@ -38,7 +38,7 @@ import {
 import { closePool } from '../src/database/connection.js';
 import { validateBatch } from '../src/services/portfolioImportPipeline/validate.js';
 import { matchBatch } from '../src/services/portfolioImportPipeline/matchInvestments.js';
-import { commitBatch } from '../src/services/portfolioImportPipeline/commit.js';
+import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
 import accountRepository from '../src/repositories/accountRepository.js';
 import { clearMemoryCache } from '../src/services/currency/currencyConversionService.js';
@@ -164,7 +164,7 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
 
     await matchBatch({ batchId });
 
-    const res = await commitBatch({ batchId });
+    const res = await commitPortfolioImport({ batchId });
     // THE discriminating assertion: pre-D6 these four rows each errored
     // "unresolved instrument — pick or create a holding" (imported 1, errors 4).
     expect(res).toMatchObject({ imported: 5, duplicates: 0, errors: 0 });
@@ -206,13 +206,13 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
     await stageCorpus(batchA);
     await validateBatch({ batchId: batchA });
     await matchBatch({ batchId: batchA });
-    expect((await commitBatch({ batchId: batchA })).imported).toBe(5);
+    expect((await commitPortfolioImport({ batchId: batchA })).imported).toBe(5);
 
     const batchB = await newBrokerageBatch(fx.accountId, TYPE_MAPPING);
     await stageCorpus(batchB);
     await validateBatch({ batchId: batchB });
     await matchBatch({ batchId: batchB });
-    const res = await commitBatch({ batchId: batchB });
+    const res = await commitPortfolioImport({ batchId: batchB });
     expect(res).toMatchObject({ imported: 0, duplicates: 5, errors: 0 });
     expect(await ledgerRows()).toHaveLength(4);
   });
@@ -237,7 +237,7 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
     await stageCorpus(batchId);
     await validateBatch({ batchId });
     await matchBatch({ batchId });
-    expect((await commitBatch({ batchId })).imported).toBe(5);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(5);
     expect(await ledgerRows()).toHaveLength(5); // 4 D6 rows + decoy
 
     const res = await rollbackBatch(batchId);
@@ -280,7 +280,7 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
     await validateBatch({ batchId: batchA });
     await matchBatch({ batchId: batchA });
 
-    const resA = await commitBatch({ batchId: batchA });
+    const resA = await commitPortfolioImport({ batchId: batchA });
     expect(resA).toMatchObject({ imported: 2, duplicates: 0, errors: 0 });
     const ledgerA = await ledgerRows();
     expect(ledgerA.map((r) => r.amount)).toEqual([-2.5, -2.5]);
@@ -294,7 +294,7 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
     await validateBatch({ batchId: batchB });
     await matchBatch({ batchId: batchB });
 
-    const resB = await commitBatch({ batchId: batchB });
+    const resB = await commitPortfolioImport({ batchId: batchB });
     expect(resB).toMatchObject({ imported: 0, duplicates: 2, errors: 0 });
     expect(await ledgerRows()).toHaveLength(2);
   });
@@ -317,7 +317,7 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
     await validateBatch({ batchId });
     await matchBatch({ batchId });
 
-    const res = await commitBatch({ batchId });
+    const res = await commitPortfolioImport({ batchId });
     expect(res).toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
     const amounts = (await ledgerRows()).map((r) => r.amount).sort((a, b) => a - b);
     expect(amounts).toEqual([-10, 10]); // the fee landed; the bystander is untouched
@@ -338,7 +338,7 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
     await stagePending(batchId, 1, { typeRaw: 'dividend', amount: 100, currency: 'USD' }); // 100 USD, instrument-less
     await validateBatch({ batchId });
     await matchBatch({ batchId });
-    expect((await commitBatch({ batchId })).imported).toBe(2);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(2);
 
     // (a) native currency stored raw on the row.
     const { rows: usdRows } = await pool.query(
@@ -370,7 +370,7 @@ describeDb('portfolio import — D6 instrument-less cash rows (real Postgres)', 
     expect(routed[0].route).toBeNull();
 
     await matchBatch({ batchId });
-    const res = await commitBatch({ batchId });
+    const res = await commitPortfolioImport({ batchId });
     expect(res).toMatchObject({ imported: 0, errors: 1 });
     const { rows: errRows } = await pool.query(
       `SELECT error_message FROM portfolio_import_staging_rows WHERE batch_id = $1`,

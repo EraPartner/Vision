@@ -25,7 +25,7 @@
  * (the loop cost 25).
  *
  * Isolation: per-test targeted DELETEs of the corpus this suite owns.
- * commitBatch/rollbackBatch open their own transactions, so a wrapping
+ * commitPortfolioImport/rollbackBatch open their own transactions, so a wrapping
  * transaction would nest.
  */
 
@@ -50,7 +50,7 @@ vi.mock('../src/database/connection.js', async (importOriginal) => {
 });
 
 import { query, closePool } from '../src/database/connection.js';
-import { commitBatch } from '../src/services/portfolioImportPipeline/commit.js';
+import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
 import { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.js';
 
@@ -130,8 +130,8 @@ async function stageTrade(batchId, rowIndex, over = {}) {
  * `transactions` row on the sleeve plus a `committed` staging row whose
  * `route='cash'` and whose `committed_txn_id` is that TRANSACTIONS id.
  *
- * Seeded rather than driven through `commitBatch` on purpose: these fixtures
- * FORCE the ledger id (setval) to collide with a portfolio lot id, which the
+ * Seeded rather than driven through `commitPortfolioImport` on purpose: these
+ * fixtures FORCE the ledger id (setval) to collide with a portfolio lot id, which the
  * real commit path can never do, and the routing invariant under test is about
  * the ID SHAPE, not about who wrote it. The commit path itself (which now
  * supplies `recipient_id` — NOT NULL since migration 0001) is exercised
@@ -218,7 +218,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     const batchId = await newBatch();
     for (let i = 0; i < 4; i++) await stageTrade(batchId, i);
 
-    const res = await commitBatch({ batchId });
+    const res = await commitPortfolioImport({ batchId });
     expect(res.imported).toBe(4);
 
     const { rows } = await pool.query(
@@ -238,7 +238,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     // ── Batch B commits first; its lot ids are the collision targets. ──
     const batchB = await newBatch();
     for (let i = 0; i < 3; i++) await stageTrade(batchB, i, { amount: 900, units: 9, price_per_unit: 100 });
-    expect((await commitBatch({ batchId: batchB })).imported).toBe(3);
+    expect((await commitPortfolioImport({ batchId: batchB })).imported).toBe(3);
     const bLots = await lotIdsOfBatch(batchB);
     expect(bLots).toHaveLength(3);
 
@@ -252,7 +252,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     const collidingId = bLots[0];
     const batchA = await newBatch({ brokerage: true });
     for (let i = 1; i <= 5; i++) await stageTrade(batchA, i, { amount: 300 + i, units: 3, price_per_unit: (300 + i) / 3 });
-    const commitA = await commitBatch({ batchId: batchA });
+    const commitA = await commitPortfolioImport({ batchId: batchA });
     expect(commitA.imported).toBe(5);
     const cashId = await commitCashRow(batchA, 0, collidingId);
 
@@ -282,12 +282,12 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
   it('rolls back rows committed BEFORE the migration (import_batch_id IS NULL)', async () => {
     const batchB = await newBatch();
     for (let i = 0; i < 2; i++) await stageTrade(batchB, i, { amount: 700, units: 7, price_per_unit: 100 });
-    await commitBatch({ batchId: batchB });
+    await commitPortfolioImport({ batchId: batchB });
     const bLots = await lotIdsOfBatch(batchB);
 
     const legacy = await newBatch();
     for (let i = 0; i < 4; i++) await stageTrade(legacy, i, { amount: 400 + i, units: 4, price_per_unit: (400 + i) / 4 });
-    await commitBatch({ batchId: legacy });
+    await commitPortfolioImport({ batchId: legacy });
     const legacyLots = await lotIdsOfBatch(legacy);
     expect(legacyLots).toHaveLength(4);
 
@@ -306,7 +306,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
   it('rolls back a mixed-vintage batch exactly once per row', async () => {
     const batchId = await newBatch();
     for (let i = 0; i < 4; i++) await stageTrade(batchId, i, { amount: 100 + i, units: 1, price_per_unit: 100 + i });
-    await commitBatch({ batchId });
+    await commitPortfolioImport({ batchId });
     const lots = await lotIdsOfBatch(batchId);
     expect(lots).toHaveLength(4);
 
@@ -324,7 +324,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
   it('never routes a cash id into the portfolio table, nor a trade id into the ledger', async () => {
     const batchId = await newBatch({ brokerage: true });
     await stageTrade(batchId, 1);
-    await commitBatch({ batchId });
+    await commitPortfolioImport({ batchId });
     await commitCashRow(batchId, 0);
 
     vi.clearAllMocks();
@@ -347,7 +347,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     for (let i = 0; i < 25; i++) {
       await stageTrade(batchId, i, { amount: 100 + i, units: 1, price_per_unit: 100 + i });
     }
-    expect((await commitBatch({ batchId })).imported).toBe(25);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(25);
 
     vi.clearAllMocks();
     const res = await rollbackBatch(batchId);
@@ -365,7 +365,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     for (let i = 0; i < 5; i++) {
       await stageTrade(batchId, i, { amount: 200 + i, units: 2, price_per_unit: (200 + i) / 2 });
     }
-    await commitBatch({ batchId });
+    await commitPortfolioImport({ batchId });
     await pool.query(`UPDATE portfolio_transactions SET import_batch_id = NULL`);
 
     vi.clearAllMocks();
@@ -382,7 +382,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
   it('is atomic: a failure between the trade pass and the cash pass deletes NOTHING, and a retry completes', async () => {
     const batchId = await newBatch({ brokerage: true });
     for (let i = 1; i <= 3; i++) await stageTrade(batchId, i, { amount: 300 + i, units: 3, price_per_unit: (300 + i) / 3 });
-    expect((await commitBatch({ batchId })).imported).toBe(3);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(3);
     const cashId = await commitCashRow(batchId, 0);
     const lots = await lotIdsOfBatch(batchId);
     expect(lots).toHaveLength(3);
@@ -429,7 +429,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
   it("never runs the ledger pass for a NON-brokerage batch, even if a staging row claims route='cash'", async () => {
     const batchId = await newBatch(); // brokerage: false
     await stageTrade(batchId, 1);
-    expect((await commitBatch({ batchId })).imported).toBe(1);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(1);
     const [lotId] = await lotIdsOfBatch(batchId);
 
     // An innocent ledger row FORCED to share the lot's id — the collision that
@@ -462,7 +462,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
   it("rolls a non-brokerage route='cash' row back through the PORTFOLIO fallback when its lot predates 0086", async () => {
     const batchId = await newBatch();
     await stageTrade(batchId, 1);
-    expect((await commitBatch({ batchId })).imported).toBe(1);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(1);
     const [lotId] = await lotIdsOfBatch(batchId);
 
     // Pre-0086 vintage + the hypothetical route corruption together: the bulk
@@ -491,7 +491,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
   it('resets rolled-back staging rows to matched with committed_txn_id cleared; other statuses untouched', async () => {
     const batchId = await newBatch({ brokerage: true });
     for (let i = 1; i <= 2; i++) await stageTrade(batchId, i, { amount: 100 + i, units: 1, price_per_unit: 100 + i });
-    expect((await commitBatch({ batchId })).imported).toBe(2);
+    expect((await commitPortfolioImport({ batchId })).imported).toBe(2);
     await commitCashRow(batchId, 0);
     // A row the commit marked 'error' — it created nothing, so rollback must
     // leave it alone.
