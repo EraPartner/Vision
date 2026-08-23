@@ -2876,7 +2876,7 @@ look-changing one.
   - Affects **every** compact call site, not just the statistics lede, which is why it is filed rather than patched in place: changing the threshold changes number formatting across the app and wants its own visual check.
   - Fix: make the switch depend on whether compact notation would actually shorten the string (or on magnitude rather than character count), then sweep the call sites and confirm no page starts rendering long-form where it previously abbreviated.
 
-- [ ] **`convertToTarget` silently returns the raw amount when an FX rate is missing, so a mixed-currency sum can blend currencies** 🔼
+- [x] **`convertToTarget` silently returns the raw amount when an FX rate is missing, so a mixed-currency sum can blend currencies** 🔼 ✅ 2026-08-23 · 2ad6049b
   - ↪ _from: Orchestration session 2026-08-14 · noticed while re-composing the Planned opening (pre-existing in `totalMonthly`; the new next-7-days total inherits it deliberately rather than diverging)_
   - The estimated-monthly figure on Planned sums converted amounts; when a rate is unavailable the converter falls back to the unconverted number, so the total can silently add e.g. USD to EUR and present the result as a single currency figure. The new next-7-days window total uses the same converter instance on purpose — diverging would have produced two totals on one screen that disagree.
   - This is a money-correctness issue on a user-facing figure, so it wants real verification rather than a quick patch: reproduce with a planned payment in a currency that has no stored rate.
