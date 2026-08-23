@@ -3,7 +3,7 @@ title: Bulk Transaction Actions
 type: feature
 status: active
 date: 2026-05-08
-updated: 2026-08-11
+updated: 2026-08-23
 tags: [feature, transactions, bulk, productivity]
 description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, and tag operations across many transactions in one atomic call.
 aliases: [bulk-actions, bulk-delete, bulk-update, bulk-export]
@@ -72,6 +72,10 @@ Every write route runs inside `withTransaction(client => …)` and ends with `sc
 | `apps/frontend/src/pages/TransactionsPage.tsx` | Owns selection state and selection mode; clears selection whenever the current filter changes |
 
 The bulk-tag toolbar that previously lived inline inside `TransactionsTable` is now folded into the same dropdown menu via `BulkTagDialog`. The existing `POST /api/transactions/bulk-tag` route is untouched.
+
+The recategorize and recipient-reassignment dialogs show localized `Category` and `Recipient`
+labels linked to their combobox triggers. This gives each dialog's only field the same visible and
+screen-reader name while reusing the shared combobox controls.
 
 ## API Endpoints
 

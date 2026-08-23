@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
     Dialog,
     DialogContent,
@@ -46,8 +47,10 @@ export function BulkRecipientDialog({
                     preventDefaults Enter inside the combobox). grid gap-5 mirrors
                     DialogContent's layout, so the wrapper is layout-neutral. */}
                 <form onSubmit={handleApply} className="grid gap-5">
-                <div className="py-2">
+                <div className="grid gap-2 py-2">
+                    <Label htmlFor="bulk-recipient">{t('txPage.field.recipient')}</Label>
                     <RecipientCombobox
+                        id="bulk-recipient"
                         value={recipientId}
                         onSelect={(id) => setRecipientId(id)}
                         className="w-full"
