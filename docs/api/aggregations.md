@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-08-11
-last_modified: 2026-08-11
+updated: 2026-08-23
+last_modified: 2026-08-23
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -324,6 +324,11 @@ Average metrics vs. current period (always computed live in Phase 2).
 
 Account balances and daily historical balance data over the last 12 months.
 
+Each `accounts` row includes the canonical numeric `account_id`. Consumers should use it when
+joining the aggregation to account entities. `bank_account` remains the account label and the key
+used by the `history` map for backward compatibility. This is an additive, non-breaking response
+change.
+
 **Path:** `GET /api/aggregations/bank-balances`
 
 **Query Parameters:**
@@ -343,6 +348,7 @@ Account balances and daily historical balance data over the last 12 months.
 {
   "accounts": [
     {
+      "account_id": 42,
       "bank_account": "IBAN:BE12345678901234",
       "balance": 5230.50,
       "transaction_count": 156,

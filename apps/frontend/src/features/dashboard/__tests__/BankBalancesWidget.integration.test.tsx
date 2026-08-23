@@ -22,9 +22,9 @@ function ymdDaysAgo(n: number): string {
 // including one whose CURRENT balance nets to zero, which is precisely why the
 // widget's card list is not the same population.
 const PAYLOAD_ACCOUNTS = [
-    { bank_account: "KBC Checking", display_name: "KBC Checking", balance: 2450.75, transaction_count: 120 },
-    { bank_account: "Argenta Savings", display_name: "Argenta Savings", balance: 8100.2, transaction_count: 14 },
-    { bank_account: "Old Joint", display_name: "Old Joint", balance: 0, transaction_count: 31 },
+    { account_id: 1, bank_account: "KBC Checking", display_name: "KBC Checking", balance: 2450.75, transaction_count: 120 },
+    { account_id: 2, bank_account: "Argenta Savings", display_name: "Argenta Savings", balance: 8100.2, transaction_count: 14 },
+    { account_id: 3, bank_account: "Old Joint", display_name: "Old Joint", balance: 0, transaction_count: 31 },
 ];
 const TOTAL = 2450.75 + 8100.2 + 0; // 10.550,95 €
 
@@ -126,6 +126,24 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         expect(within(totalCard).getByText("Across 1 account(s)")).toBeInTheDocument();
     });
 
+    it("keeps the transaction count visible when aggregation and entity names diverge", async () => {
+        mockWidgetApi({
+            payloadAccounts: [
+                {
+                    ...PAYLOAD_ACCOUNTS[0],
+                    bank_account: "STALE IMPORT LABEL",
+                    transaction_count: 73,
+                },
+            ],
+            total: 2450.75,
+            entityAccounts: [ENTITY_ACCOUNTS[0]],
+        });
+        renderWithApp(<BankBalancesWidget />);
+
+        const card = await screen.findByRole("button", { name: "Open details for KBC Checking" });
+        expect(within(card).getByText("73 transactions")).toBeInTheDocument();
+    });
+
     it("renders a drift chip on the card whose account carries drift, and none on the others", async () => {
         mockWidgetApi();
         renderWithApp(<BankBalancesWidget />);
@@ -186,18 +204,21 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         mockWidgetApi({
             payloadAccounts: [
                 {
+                    account_id: 1,
                     bank_account: friendlyIban,
                     display_name: "Aggregation label must not win",
                     balance: 1100,
                     transaction_count: 2,
                 },
                 {
+                    account_id: 2,
                     bank_account: nameOnlyIban,
                     display_name: "Another aggregation label",
                     balance: 250,
                     transaction_count: 1,
                 },
                 {
+                    account_id: 99,
                     bank_account: unmatchedIban,
                     display_name: "Unmatched aggregation label",
                     balance: 75,

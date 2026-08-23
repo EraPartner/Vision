@@ -145,8 +145,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
   describe('current balances', () => {
     it('computes anchor+delta for stamped accounts and Σ(amount) for manual-only ones', async () => {
       await seedRecipient();
-      await addAccount('AAA MANUAL');
-      await addAccount('BBB STAMPED', {
+      const manualAccountId = await addAccount('AAA MANUAL');
+      const stampedAccountId = await addAccount('BBB STAMPED', {
         displayName: 'KBC Zichtrekening',
         statementBalance: '960.00',
         statementBalanceDate: await ymdFromToday(),
@@ -165,6 +165,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
 
       expect(r.accounts.map((a) => a.bank_account)).toEqual(['AAA MANUAL', 'BBB STAMPED']); // ORDER BY a.name
       expect(r.accounts[0]).toMatchObject({
+        account_id: manualAccountId,
         bank_account: 'AAA MANUAL',
         display_name: 'AAA MANUAL', // display_name NULL → falls back to name
         balance: 70,
@@ -174,6 +175,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepositoryBanks (real DB)'
       expect(r.accounts[0].anchor_date).toBeUndefined();
       expect(r.accounts[0].drift).toBeUndefined(); // no statement balance stored
       expect(r.accounts[1]).toMatchObject({
+        account_id: stampedAccountId,
         bank_account: 'BBB STAMPED',
         display_name: 'KBC Zichtrekening',
         balance: 975,

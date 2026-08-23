@@ -69,7 +69,8 @@ export const banksRepository = {
     // with one historical-rate lookup instead of two.
     const [latestBalanceResult, historyResult] = await Promise.all([
       query(`
-        SELECT a.name AS bank_account,
+        SELECT a.id AS account_id,
+               a.name AS bank_account,
                COALESCE(a.display_name, a.name) AS display_name,
                bal.currency,
                bal.balance,
@@ -182,7 +183,7 @@ export const banksRepository = {
       await batchConvertGroupsWithHistoricalRateFallback(
         [
           latestBalanceResult.rows.map((/** @type {{
-            bank_account: string, display_name: string, currency: string|null,
+            account_id: number, bank_account: string, display_name: string, currency: string|null,
             balance: string, statement_balance: string|null, account_currency: string,
             anchor_date: string|null, post_anchor_count: string|null,
             date: Date|null, transaction_count: string,
@@ -232,6 +233,7 @@ export const banksRepository = {
       if (!entry) {
         entry = {
           account: {
+            account_id: row.account_id,
             bank_account: row.bank_account,
             display_name: row.display_name || row.bank_account,
             balance: 0,

@@ -185,9 +185,10 @@ export function BankBalancesWidget() {
 
     const { accounts, total_net_position } = data;
 
-    // Transaction counts still come from the balances aggregation, keyed by the
-    // account name (== transactions.bank_account via the dual-write trigger).
-    const countByAccountName = new Map(accounts.map((acct) => [acct.bank_account, acct.transaction_count]));
+    // Transaction counts still come from the balances aggregation. Join them
+    // to entity-backed cards by canonical account id so a stale or divergent
+    // display key cannot silently hide the count.
+    const countByAccountId = new Map(accounts.map((acct) => [acct.account_id, acct.transaction_count]));
 
     // Balance CARDS come from the account ENTITY now: only accounts carrying a
     // non-zero computed balance (the shared source), so a card always maps 1:1
@@ -243,7 +244,7 @@ export function BankBalancesWidget() {
                         const balance = a.computed_balance ?? 0;
                         const acctPositive = balance >= 0;
                         const label = a.display_name || a.name;
-                        const txCount = countByAccountName.get(a.name);
+                        const txCount = countByAccountId.get(a.id);
                         const provenanceText = balanceProvenance(a);
                         const drift = driftBadge(a);
                         return (

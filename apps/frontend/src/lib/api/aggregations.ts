@@ -70,6 +70,7 @@ export function getAggregationBankBalances(params?: {
     currency?: string;
 }): Promise<AggregationEnvelope<{
     accounts: Array<{
+        account_id: number;
         bank_account: string;
         balance: number;
         transaction_count: number;

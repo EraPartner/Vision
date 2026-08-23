@@ -1197,7 +1197,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Current balance per bank account */
+        /**
+         * Current balance per bank account
+         * @description Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key.
+         */
         get: operations["getBankBalances"];
         put?: never;
         post?: never;

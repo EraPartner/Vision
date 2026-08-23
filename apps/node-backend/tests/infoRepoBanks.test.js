@@ -33,24 +33,24 @@ describe('banksRepository.getBankBalances', () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          { bank_account: 'A', currency: 'EUR', balance: '1000', date: '2025-04-15', transaction_count: '10', first_transaction: '2024-01-01', last_transaction: '2025-04-15' },
-          { bank_account: 'B', currency: 'USD', balance: '200', date: '2025-04-15', transaction_count: '5', first_transaction: '2024-06-01', last_transaction: '2025-04-15' },
+          { account_id: 41, bank_account: 'A', currency: 'EUR', balance: '1000', date: '2025-04-15', transaction_count: '10', first_transaction: '2024-01-01', last_transaction: '2025-04-15' },
+          { account_id: 42, bank_account: 'B', currency: 'USD', balance: '200', date: '2025-04-15', transaction_count: '5', first_transaction: '2024-06-01', last_transaction: '2025-04-15' },
         ],
       })
       .mockResolvedValueOnce({ rows: [] });
 
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
       [
-        { bank_account: 'A', amount_eur: 1000, transaction_count: '10', first_transaction: '2024-01-01', last_transaction: '2025-04-15' },
-        { bank_account: 'B', amount_eur: 187.5, transaction_count: '5', first_transaction: '2024-06-01', last_transaction: '2025-04-15' },
+        { account_id: 41, bank_account: 'A', amount_eur: 1000, transaction_count: '10', first_transaction: '2024-01-01', last_transaction: '2025-04-15' },
+        { account_id: 42, bank_account: 'B', amount_eur: 187.5, transaction_count: '5', first_transaction: '2024-06-01', last_transaction: '2025-04-15' },
       ],
       [],
     ]);
 
     const r = await banksRepository.getBankBalances();
     expect(r.accounts).toHaveLength(2);
-    expect(r.accounts[0]).toMatchObject({ bank_account: 'A', balance: 1000, transaction_count: 10 });
-    expect(r.accounts[1]).toMatchObject({ bank_account: 'B', balance: 187.5, transaction_count: 5 });
+    expect(r.accounts[0]).toMatchObject({ account_id: 41, bank_account: 'A', balance: 1000, transaction_count: 10 });
+    expect(r.accounts[1]).toMatchObject({ account_id: 42, bank_account: 'B', balance: 187.5, transaction_count: 5 });
     expect(r.total_net_position).toBe(1187.5);
   });
 
@@ -208,6 +208,7 @@ describe('banksRepository.getBankBalances', () => {
     await banksRepository.getBankBalances();
 
     const currentBalanceSql = query.mock.calls[0][0];
+    expect(currentBalanceSql).toContain('a.id AS account_id');
     expect(currentBalanceSql).toContain('COALESCE(a.display_name, a.name) AS display_name');
     // Drift is no longer computed in SQL against the cross-currency lb.balance:
     // the raw inputs come out and the shared statementPartitionBalance helper

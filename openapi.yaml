@@ -4484,6 +4484,7 @@ paths:
   /api/aggregations/bank-balances:
     get:
       summary: Current balance per bank account
+      description: Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key.
       operationId: getBankBalances
       tags: [Aggregations]
       responses:
