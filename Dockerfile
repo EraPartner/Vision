@@ -69,12 +69,16 @@ WORKDIR /app
 # preinstalled packages. Upgrading before `apk add` (the previous order) left
 # freshly-pulled chromium deps at whatever version the build-cache snapshot had,
 # which is how CVE-flagged openexr 3.3.2-r0 persisted in a cached layer.
+# Pip vendors packages such as msgpack, and Alpine seeds setuptools into the
+# venv. Neither installer is needed at runtime, so remove both after resolving
+# the migration dependencies instead of shipping their extra attack surface.
 RUN apk add --no-cache python3 py3-pip chromium && \
     apk upgrade --no-cache && \
     python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils
+    pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils && \
+    python -m pip uninstall --yes pip setuptools
 
 # The host checkout can use a restrictive umask (for example 0750). Set the
 # image mode explicitly so the non-root `bun` runtime user can read and execute
