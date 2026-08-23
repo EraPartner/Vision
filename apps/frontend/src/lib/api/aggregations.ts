@@ -72,7 +72,11 @@ export function getAggregationBankBalances(params?: {
     accounts: Array<{
         account_id: number;
         bank_account: string;
+        display_name: string;
         balance: number;
+        drift?: number;
+        anchor_date?: string;
+        post_anchor_count?: number;
         transaction_count: number;
         first_transaction: string;
         last_transaction: string;

@@ -91,6 +91,44 @@ describe("aggregations — simple wrappers", () => {
     await getAggregationBankBalances({ currency: "EUR" });
     expect(ref.url).toContain("currency=EUR");
   });
+
+  it("getAggregationBankBalances exposes account display, drift, and provenance fields", async () => {
+    const ref = { url: "" };
+    captureUrl("/api/aggregations/bank-balances", ref, {
+      data: {
+        accounts: [
+          {
+            account_id: 7,
+            bank_account: "BE00 0000 0000 0000",
+            display_name: "Daily account",
+            balance: 125,
+            drift: -5,
+            anchor_date: "2026-08-20",
+            post_anchor_count: 3,
+            transaction_count: 12,
+            first_transaction: "2026-01-01",
+            last_transaction: "2026-08-23",
+          },
+        ],
+        total_net_position: 125,
+        history: {},
+        total_history: [],
+      },
+      meta: {
+        computedAt: "2026-08-23T00:00:00.000Z",
+        source: "live",
+      },
+    });
+
+    const response = await getAggregationBankBalances();
+
+    expect(response.data.accounts[0]).toMatchObject({
+      display_name: "Daily account",
+      drift: -5,
+      anchor_date: "2026-08-20",
+      post_anchor_count: 3,
+    });
+  });
 });
 
 describe("aggregations — cashflow forecast branch coverage", () => {
