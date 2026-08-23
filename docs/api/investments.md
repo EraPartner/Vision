@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-08-11
-updated: 2026-08-11
+last_modified: 2026-08-23
+updated: 2026-08-23
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -334,6 +334,13 @@ Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend
 
 Create a portfolio transaction.
 
+POST and PATCH share one request-body parser for transaction type, dates, money fields, currency,
+notes, recurrence fields, and `account_id`. Malformed dates, non-finite or out-of-range numbers,
+non-boolean `is_recurring`, invalid recurrence intervals, and non-string notes return
+`400 VALIDATION_ERROR` before a repository write. Decimal numeric strings, including exponent
+notation, remain accepted and are normalized to numbers for compatibility. Create still requires
+`type` and `date`; PATCH treats every field as optional.
+
 **Request Body:**
 ```json
 {
@@ -357,7 +364,7 @@ Create a portfolio transaction.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| type | string | Yes | Transaction type: buy, sell, gift, dividend, fee, tax, interest, rent_income, appreciation |
+| type | string | Yes | Canonical transaction type: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital |
 | date | string | Yes | Transaction date (YYYY-MM-DD) |
 | amount | number | No | Total amount (auto-computed if missing for unit-based types) |
 | units | number | No | Number of units (required for buy/sell/gift on unit-based assets) |
@@ -424,12 +431,20 @@ Update a portfolio transaction by transaction ID.
 
 Update endpoint notes:
 - Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
+- The shared POST/PATCH body parser validates common field shapes at the controller boundary;
+  repository normalization remains defense in depth for type-specific unit math, oversell checks,
+  and recurrence-window rules.
 - Repository update logic keeps inheritance compatibility fallback behavior for non-updatable `portfolio_transactions` views ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - Transaction `type` is immutable on edit; attempts to change it return `400` with `VALIDATION_ERROR`.
 - **Account reassignment:** `account_id` (integer) or `null` can be included in the PATCH body to reassign or unassign a lot's account without changing any other fields. An absent key leaves the column alone. This is how `EditPortfolioTxnDialog`'s account selector persists its change.
 - Unit-based buy/sell updates enforce the same 2-of-3 pricing rule as create: when changing pricing fields, client must send at least 2 of `amount`, `units`, `price_per_unit`, and backend computes the missing value.
 - If all 3 pricing fields are sent on update and inconsistent, request is rejected with `400` (with the same precision normalization and compatibility tolerance handling as create).
-- Optional `fx_rate_to_eur` is supported on update payloads as well, including UI edit flow ([[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Optional `fx_rate_to_eur` is supported on update payloads as well; `null` clears a stored rate,
+  while an absent key leaves it unchanged. This includes the UI edit flow
+  ([[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]],
+  [[apps/node-backend/src/routes/investments.js]],
+  [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- `null` clears `recurrence_interval` and `recurrence_end_date`; absent keys leave them unchanged.
 - Oversell protection also applies on update: edited `sell` rows are rejected when resulting sold units exceed holdings for the effective transaction date.
 
 Update-path compatibility:

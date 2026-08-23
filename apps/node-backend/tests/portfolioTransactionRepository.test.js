@@ -309,6 +309,28 @@ describe('portfolioTransactionRepository.update', () => {
     expect(result).toEqual({ id: 9, amount: 1200 });
   });
 
+  it('preserves explicit null when clearing the stored FX rate', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 11, investment_id: 2, type: 'dividend', amount: '100', currency: 'USD', fx_rate_to_eur: '0.92', asset_class: 'stock' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 11, investment_id: 2, type: 'dividend', amount: '100', currency: 'USD', fx_rate_to_eur: null }] });
+
+    const result = await portfolioTransactionRepository.update(11, { fx_rate_to_eur: null });
+
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      'UPDATE portfolio_transactions SET fx_rate_to_eur = $1 WHERE id = $2 RETURNING *',
+      [null, 11]
+    );
+    expect(result).toEqual({
+      id: 11,
+      investment_id: 2,
+      type: 'dividend',
+      amount: 100,
+      currency: 'USD',
+      fx_rate_to_eur: null,
+    });
+  });
+
   it('rejects changing transaction type', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 12, investment_id: 1, type: 'buy', amount: '1000', units: '5', price_per_unit: '200', fees: '0', taxes: '0' }] });

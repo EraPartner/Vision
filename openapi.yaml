@@ -1016,7 +1016,7 @@ components:
 
     PortfolioTxnType:
       type: string
-      enum: [buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift]
+      enum: [buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift, split, merger, spinoff, return_of_capital]
 
     RecurrenceInterval:
       type: string
@@ -4804,6 +4804,11 @@ paths:
       tags: [Portfolio]
       requestBody:
         required: true
+        description: >-
+          Partial portfolio-transaction fields. Shared POST/PATCH validation
+          rejects malformed dates, non-finite or out-of-range numbers,
+          non-boolean recurrence flags, invalid recurrence intervals, and
+          non-string notes with 400 VALIDATION_ERROR before a repository write.
         content:
           application/json:
             schema:
@@ -4843,10 +4848,13 @@ paths:
                 is_recurring:
                   type: boolean
                 recurrence_interval:
-                  $ref: "#/components/schemas/RecurrenceInterval"
+                  allOf:
+                    - $ref: "#/components/schemas/RecurrenceInterval"
+                  nullable: true
                 recurrence_end_date:
                   type: string
                   format: date
+                  nullable: true
       responses:
         "200":
           description: Updated transaction
@@ -4859,6 +4867,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PortfolioTransaction"
+        "400":
+          description: Malformed transaction field or repository validation failure
     delete:
       summary: Delete portfolio transaction
       operationId: deletePortfolioTransaction
@@ -5007,11 +5017,15 @@ paths:
       tags: [Portfolio]
       requestBody:
         required: true
+        description: >-
+          Portfolio-transaction fields use the same shape validation as PATCH;
+          type and date are additionally required for create. Malformed fields
+          return 400 VALIDATION_ERROR before a repository write.
         content:
           application/json:
             schema:
               type: object
-              required: [type, date, amount, currency]
+              required: [type, date]
               properties:
                 type:
                   $ref: "#/components/schemas/PortfolioTxnType"
@@ -5032,13 +5046,17 @@ paths:
                   type: string
                 note:
                   type: string
+                  nullable: true
                 is_recurring:
                   type: boolean
                 recurrence_interval:
-                  $ref: "#/components/schemas/RecurrenceInterval"
+                  allOf:
+                    - $ref: "#/components/schemas/RecurrenceInterval"
+                  nullable: true
                 recurrence_end_date:
                   type: string
                   format: date
+                  nullable: true
                 fx_rate_to_eur:
                   type: number
                   nullable: true
@@ -5064,6 +5082,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PortfolioTransaction"
+        "400":
+          description: Missing required field, malformed transaction field, or repository validation failure
 
   /api/investments/{id}/summary:
     parameters:

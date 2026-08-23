@@ -3470,7 +3470,7 @@ export interface components {
         /** @enum {string} */
         AssetClass: "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
         /** @enum {string} */
-        PortfolioTxnType: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest" | "rent_income" | "appreciation" | "gift";
+        PortfolioTxnType: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest" | "rent_income" | "appreciation" | "gift" | "split" | "merger" | "spinoff" | "return_of_capital";
         /** @enum {string} */
         RecurrenceInterval: "daily" | "weekly" | "bi-weekly" | "monthly" | "quarterly" | "yearly";
         /** @enum {string} */
@@ -6895,6 +6895,7 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Partial portfolio-transaction fields. Shared POST/PATCH validation rejects malformed dates, non-finite or out-of-range numbers, non-boolean recurrence flags, invalid recurrence intervals, and non-string notes with 400 VALIDATION_ERROR before a repository write. */
         requestBody: {
             content: {
                 "application/json": {
@@ -6917,9 +6918,9 @@ export interface operations {
                     /** @description Free-text note; null clears it */
                     note?: string | null;
                     is_recurring?: boolean;
-                    recurrence_interval?: components["schemas"]["RecurrenceInterval"];
+                    recurrence_interval?: components["schemas"]["RecurrenceInterval"] | null;
                     /** Format: date */
-                    recurrence_end_date?: string;
+                    recurrence_end_date?: string | null;
                 };
             };
         };
@@ -6934,6 +6935,13 @@ export interface operations {
                         data?: components["schemas"]["PortfolioTransaction"];
                     };
                 };
+            };
+            /** @description Malformed transaction field or repository validation failure */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7077,23 +7085,24 @@ export interface operations {
             };
             cookie?: never;
         };
+        /** @description Portfolio-transaction fields use the same shape validation as PATCH; type and date are additionally required for create. Malformed fields return 400 VALIDATION_ERROR before a repository write. */
         requestBody: {
             content: {
                 "application/json": {
                     type: components["schemas"]["PortfolioTxnType"];
                     /** Format: date */
                     date: string;
-                    amount: number;
+                    amount?: number;
                     units?: number;
                     price_per_unit?: number;
                     fees?: number;
                     taxes?: number;
-                    currency: string;
-                    note?: string;
+                    currency?: string;
+                    note?: string | null;
                     is_recurring?: boolean;
-                    recurrence_interval?: components["schemas"]["RecurrenceInterval"];
+                    recurrence_interval?: components["schemas"]["RecurrenceInterval"] | null;
                     /** Format: date */
-                    recurrence_end_date?: string;
+                    recurrence_end_date?: string | null;
                     /** @description Explicit EUR conversion rate; absent/null is resolved automatically */
                     fx_rate_to_eur?: number | null;
                     /**
@@ -7115,6 +7124,13 @@ export interface operations {
                         data?: components["schemas"]["PortfolioTransaction"];
                     };
                 };
+            };
+            /** @description Missing required field, malformed transaction field, or repository validation failure */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

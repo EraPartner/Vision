@@ -3,7 +3,7 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-08-11
+updated: 2026-08-23
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
@@ -523,6 +523,34 @@ The one intended difference from a plain `validateId` call is the **upper bound*
 > Not affected: an integral id above `int32` (e.g. `2147483648`) is a legal `BIGSERIAL` row and still reaches the repository, 404ing if absent. `"1e300"`, previously let through to that same downstream 404, is now a 400 — it names no batch in any notation the API accepts.
 >
 > No shipped caller is affected: `lib/api/imports.ts` and `lib/api/portfolioImports.ts` type `batchId`/`rowId` as `number`, and `ImportReviewPage.tsx` normalizes the `:batchId` route param with `Number()` before building the URL, so a hand-typed `/import/12.0/review` was already requesting batch `12` on the wire.
+
+---
+
+### Portfolio transaction write bodies
+
+`POST /api/investments/:id/transactions` and
+`PATCH /api/investments/transactions/:txnId` use one loose Zod body schema in
+`controllers/investmentController.js`. POST adds its `type` and `date` requiredness after the shared
+parse; every PATCH field remains optional. The repository normalizer still owns type-specific unit
+math, oversell checks, and recurrence-window validation.
+
+The shared boundary validates these common shapes before any repository write:
+
+| Fields | Rule |
+|---|---|
+| `type` | Canonical `PORTFOLIO_TXN_TYPES` value |
+| `date`, `recurrence_end_date` | `YYYY-MM-DD`; transaction `date` cannot be cleared, while recurrence end date can |
+| `amount`, `units`, `price_per_unit`, `fees`, `taxes`, `fx_rate_to_eur` | Finite JSON number or decimal numeric string (including exponent notation) within the field's PostgreSQL-safe range; strings normalize to numbers, while booleans, arrays, hex and padded forms reject |
+| `currency` | Three-letter ISO shape, normalized to uppercase; create may fall back when empty, PATCH cannot clear it |
+| `note` | String or `null` |
+| `is_recurring` | Boolean, without string or number coercion |
+| `recurrence_interval` | Canonical `PORTFOLIO_RECURRENCE_INTERVALS` value or a clear value |
+| `account_id` | Existing `validateId` path described below; `null` retains its unassign meaning on PATCH |
+
+Malformed values now return **400 `VALIDATION_ERROR`** instead of reaching PostgreSQL as a cast,
+enum, NOT NULL, or numeric-range failure. The schema is loose so unknown fields retain the existing
+repository-allowlist behavior; this change closes validation drift without changing the write
+field vocabulary.
 
 ---
 

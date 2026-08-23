@@ -3,7 +3,7 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-08-22
+updated: 2026-08-23
 last_modified: 2026-06-19
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
@@ -163,9 +163,9 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | PATCH | `/api/investments/:id` | Update | — | [[docs/api/investments\|Investments]] |
 | DELETE | `/api/investments/:id` | Hard delete | — | [[docs/api/investments\|Investments]] |
 | GET | `/api/investments/:id/transactions` | Portfolio transactions | — | [[docs/api/investments\|Investments]] |
-| POST | `/api/investments/:id/transactions` | Create portfolio transaction | — | [[docs/api/investments\|Investments]] |
+| POST | `/api/investments/:id/transactions` | Create portfolio transaction (shared typed body validation) | — | [[docs/api/investments\|Investments]] |
 | DELETE | `/api/investments/transactions/:txnId` | Delete portfolio transaction | — | [[docs/api/investments\|Investments]] |
-| PATCH | `/api/investments/transactions/:txnId` | Update portfolio transaction | — | [[docs/api/investments\|Investments]] |
+| PATCH | `/api/investments/transactions/:txnId` | Update portfolio transaction (shared typed body validation) | — | [[docs/api/investments\|Investments]] |
 | GET | `/api/investments/:id/summary` | Investment summary | — | [[docs/api/investments\|Investments]] |
 
 ## Watchlist (5 endpoints)

@@ -170,7 +170,10 @@ export async function update(id, fields) {
   const shouldApplyDefaultFeesTaxes = shouldNormalizeAllUnitMath || normalizedType === 'gift';
   if (shouldApplyDefaultFeesTaxes || fields.fees !== undefined) normalizedFields.fees = normalized.fees;
   if (shouldApplyDefaultFeesTaxes || fields.taxes !== undefined) normalizedFields.taxes = normalized.taxes;
-  if (fields.fx_rate_to_eur !== undefined) normalizedFields.fx_rate_to_eur = normalized.fx_rate_to_eur;
+  // parseOptionalNumber maps null to undefined for create/default semantics.
+  // On PATCH, explicit null means clear and must survive buildSetClauses.
+  if (fields.fx_rate_to_eur === null) normalizedFields.fx_rate_to_eur = null;
+  else if (fields.fx_rate_to_eur !== undefined) normalizedFields.fx_rate_to_eur = normalized.fx_rate_to_eur;
 
   // Recurrence hygiene on update: turning recurrence off clears the now-stale
   // interval/end-date; a bounded series's end date must stay on or after its

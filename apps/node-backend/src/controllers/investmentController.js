@@ -18,11 +18,20 @@ import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js'
 import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateNumber, assertMaxLength, assertCurrency, validateId, validateIntArray } from '../middleware/validation.js';
+import {
+  validateNumber,
+  assertMaxLength,
+  assertCurrency,
+  assertYmd,
+  validateId,
+  validateIntArray,
+} from '../middleware/validation.js';
 import { invalidatePortfolioCaches } from '../services/info/cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
 import { parsePagination, parseIntClamped } from '../lib/pagination.js';
+import { PORTFOLIO_TXN_TYPES } from '@vision/types/portfolioTxnTypes';
+import { PORTFOLIO_RECURRENCE_INTERVALS } from '@vision/types/recurrence';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -144,6 +153,134 @@ function parseInvestmentBody(body) {
   // Non-object bodies skipped field validation pre-zod; keep that boundary.
   if (!body || typeof body !== 'object') return body;
   const result = investmentBodySchema.safeParse(body);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(msg);
+  }
+  return result.data;
+}
+
+// POST and PATCH accept the same portfolio-transaction field vocabulary. Keep
+// one parser so PATCH cannot drift behind create again; requiredness remains an
+// endpoint concern because every PATCH field is optional. The repository still
+// applies type-specific unit math and recurrence-window rules after this
+// request-shape boundary.
+const DECIMAL_NUMBER_STRING = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+// NUMERIC(18,4) has fourteen integer digits. Stay one integer unit inside the
+// fractional upper edge so Number conversion cannot round an accepted value
+// up to 10^14 and overflow Postgres.
+const PORTFOLIO_MONEY_MAX = 99_999_999_999_999;
+
+/**
+ * @param {string} field
+ * @param {number} [max]
+ */
+const portfolioNumberField = (field, max = PORTFOLIO_MONEY_MAX) => z.unknown().transform((value, ctx) => {
+  // Preserve the repository's established per-field null/empty conventions:
+  // required amount math rejects these, while nullable/defaulted numeric
+  // fields clear or reset there.
+  if (value === null || value === '') return value;
+  if (
+    typeof value !== 'number'
+    && (typeof value !== 'string' || !DECIMAL_NUMBER_STRING.test(value))
+  ) {
+    ctx.addIssue({ code: 'custom', message: `${field} must be a number` });
+    return z.NEVER;
+  }
+  const result = validateNumber(value, {
+    min: -max,
+    max,
+    fieldName: field,
+  });
+  if (!result.valid) {
+    ctx.addIssue({ code: 'custom', message: result.error });
+    return z.NEVER;
+  }
+  return result.value;
+}).optional();
+
+/**
+ * @param {string} field
+ * @param {boolean} allowClear
+ */
+const portfolioDateField = (field, allowClear) => z.unknown().transform((value, ctx) => {
+  if (value === null || value === '') {
+    if (allowClear) return null;
+    ctx.addIssue({ code: 'custom', message: `${field} cannot be cleared` });
+    return z.NEVER;
+  }
+  if (typeof value !== 'string') {
+    ctx.addIssue({ code: 'custom', message: `${field} must be in YYYY-MM-DD format` });
+    return z.NEVER;
+  }
+  try {
+    const date = assertYmd(value, field);
+    // Date accepts and normalizes impossible calendar days such as February
+    // 30. Round-trip the validated ISO value so those do not reach Postgres.
+    if (
+      date.startsWith('0000-')
+      || new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date
+    ) {
+      ctx.addIssue({ code: 'custom', message: `${field} is not a valid date` });
+      return z.NEVER;
+    }
+    return date;
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+}).optional();
+
+const portfolioCurrencyField = z.unknown().transform((value, ctx) => {
+  // Create treats null/empty as "use the investment currency" while PATCH
+  // rejects clearing the NOT NULL column. Preserve presence for that later
+  // endpoint-specific decision.
+  if (value === null || value === '') return value;
+  if (typeof value !== 'string') {
+    ctx.addIssue({ code: 'custom', message: 'currency must be a 3-letter ISO code' });
+    return z.NEVER;
+  }
+  try {
+    return assertCurrency(value);
+  } catch (err) {
+    ctx.addIssue({ code: 'custom', message: err.message });
+    return z.NEVER;
+  }
+}).optional();
+
+const portfolioRecurrenceIntervalField = z.union([
+  z.enum(PORTFOLIO_RECURRENCE_INTERVALS),
+  z.null(),
+  z.literal('').transform(() => null),
+]).optional();
+
+const portfolioTransactionBodySchema = z.looseObject({
+  type: z.enum(PORTFOLIO_TXN_TYPES).optional(),
+  date: portfolioDateField('date', false),
+  amount: portfolioNumberField('amount'),
+  // Respect each column's integer-digit capacity: units and FX rates have ten
+  // integer digits, while price_per_unit has twelve.
+  units: portfolioNumberField('units', 9_999_999_999),
+  price_per_unit: portfolioNumberField('price_per_unit', 999_999_999_999),
+  fees: portfolioNumberField('fees'),
+  taxes: portfolioNumberField('taxes'),
+  currency: portfolioCurrencyField,
+  fx_rate_to_eur: portfolioNumberField('fx_rate_to_eur', 9_999_999_999),
+  note: z.string().nullable().optional(),
+  is_recurring: z.boolean().optional(),
+  recurrence_interval: portfolioRecurrenceIntervalField,
+  recurrence_end_date: portfolioDateField('recurrence_end_date', true),
+  account_id: z.unknown().optional(),
+});
+
+/**
+ * @param {unknown} body
+ * @returns {any}
+ */
+export function parsePortfolioTransactionBody(body) {
+  const result = portfolioTransactionBodySchema.safeParse(body);
   if (!result.success) {
     const msg = result.error.issues
       .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
@@ -638,12 +775,13 @@ export async function createTransaction(req, res) {
   const inv = await investmentRepository.getById(investment_id);
   if (!inv) throw new NotFoundError('Investment not found');
 
+  const body = parsePortfolioTransactionBody(req.body);
   const {
     type, date, amount, units, price_per_unit, fees, taxes,
     currency, note, is_recurring, recurrence_interval,
     recurrence_end_date, account_id,
-  } = req.body;
-  let { fx_rate_to_eur } = req.body;
+  } = body;
+  let { fx_rate_to_eur } = body;
 
   if (!type || !date) {
     throw new ValidationError('type and date are required');
@@ -704,7 +842,7 @@ export async function deleteTransaction(req, res) {
  */
 export async function updateTransaction(req, res) {
   const txnId = requireTxnId(req);
-  const fields = { ...(req.body || {}) };
+  const fields = parsePortfolioTransactionBody(req.body || {});
 
   // Validate a free-typed currency (ISO shape, uppercased) before it reaches
   // the VARCHAR(10) column — create validates it, but PATCH forwarded the raw

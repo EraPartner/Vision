@@ -479,6 +479,20 @@ describe('Investment Routes', () => {
       expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
     });
 
+    it('rejects malformed shared transaction fields before repository create', async () => {
+      investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'EUR' });
+
+      const res = await api.post(`${BASE}/1/transactions`).send({
+        type: 'buy',
+        date: '2026-01-15',
+        amount: 1000,
+        is_recurring: 'false',
+      }).expect(400);
+
+      expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
     it('should throw ValidationError when repository raises validation error', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'EUR' });
       const err = new Error('For buy/sell transactions, provide at least two of amount, units, and price_per_unit');
@@ -595,6 +609,51 @@ describe('Investment Routes', () => {
         1,
         expect.objectContaining({ currency: 'USD' }),
       );
+    });
+
+    it('rejects malformed shared transaction fields before the repository write', async () => {
+      const invalidBodies = [
+        { date: '' },
+        { date: 'not-a-date' },
+        { amount: 'Infinity' },
+        { units: {} },
+        { is_recurring: 'false' },
+        { recurrence_interval: 'fortnightly' },
+        { recurrence_end_date: '2026/12/31' },
+        { note: 123 },
+      ];
+
+      for (const body of invalidBodies) {
+        const res = await api.patch(`${BASE}/transactions/1`).send(body).expect(400);
+        expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
+      }
+      expect(portfolioTransactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('normalizes valid shared fields and preserves PATCH clear semantics', async () => {
+      portfolioTransactionRepository.update.mockResolvedValue({ id: 1, investment_id: 10 });
+
+      await api.patch(`${BASE}/transactions/1`).send({
+        amount: '1200.5',
+        fees: null,
+        taxes: '',
+        is_recurring: false,
+        recurrence_interval: '',
+        recurrence_end_date: '',
+        note: null,
+        account_id: null,
+      }).expect(200);
+
+      expect(portfolioTransactionRepository.update).toHaveBeenCalledWith(1, {
+        amount: 1200.5,
+        fees: null,
+        taxes: '',
+        is_recurring: false,
+        recurrence_interval: null,
+        recurrence_end_date: null,
+        note: null,
+        account_id: null,
+      });
     });
   });
 
