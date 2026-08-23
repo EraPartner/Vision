@@ -3564,7 +3564,7 @@ look-changing one.
   - `components/charts/ChartPeriodSelector.tsx:26-34` — `aria-selected` buttons without roving tabindex, arrow-key movement, or `aria-controls`; SRs announce "tab" and users expect arrow navigation that doesn't exist. Operable (they're real buttons) but the semantics lie.
   - Fix: either drop the tab roles (plain group + `aria-pressed`) or implement roving tabindex + ←/→.
 
-- [ ] **ChartBuilderPage indicator-period input suppresses the global focus ring** 🔽 🔎 verified-present 2026-07-11
+- [x] **ChartBuilderPage indicator-period input suppresses the global focus ring** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-08-23 · 1556bb73
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1_
   - `pages/research/ChartBuilderPage.tsx:521-526` — `<input type="number" className="… outline-none">` overrides the global `:focus-visible` ring (`index.css:79-83`); the input is also unlabeled. (This is the only remaining `outline-none`-without-replacement on a form control found outside the already-filed TagInput case.)
   - Fix: remove `outline-none` (or add a `focus-visible:ring-2` replacement) and give it an `aria-label`.
