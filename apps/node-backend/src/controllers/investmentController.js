@@ -253,7 +253,7 @@ const portfolioCurrencyField = z.unknown().transform((value, ctx) => {
 const portfolioRecurrenceIntervalField = z.union([
   z.enum(PORTFOLIO_RECURRENCE_INTERVALS),
   z.null(),
-  z.literal('').transform(() => null),
+  z.literal('').transform(/** @returns {null} */ () => null),
 ]).optional();
 
 const portfolioTransactionBodySchema = z.looseObject({

@@ -534,7 +534,9 @@ describe('Info Routes', () => {
               metals_invested: 90,
               inflation_adjusted_value: 1234.56,
               gain_loss: 234.06,
-              return_pct: 23.4,
+              // The response boundary deliberately derives this from value and
+              // invested instead of trusting a stale stored percentage.
+              return_pct: (234.06 / 1000.5) * 100,
             },
           ],
         })));
