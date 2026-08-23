@@ -432,17 +432,15 @@ jobs:
       - name: Migrate the test database to head
         run: bun run apps/node-backend/scripts/db-migrate.js
 
-      - name: Cache electron npm dependencies
+      - name: Cache electron Bun dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
         with:
-          path: |
-            ~/.npm
-            packaging/electron/node_modules
-          key: ${{ runner.os }}-npm-electron-${{ hashFiles('packaging/electron/package.json') }}
-          restore-keys: ${{ runner.os }}-npm-electron-
+          path: packaging/electron/node_modules
+          key: ${{ runner.os }}-bun-electron-${{ hashFiles('packaging/electron/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-electron-
 
       - name: Install electron workspace dependencies
-        run: npm install --prefix packaging/electron --ignore-scripts
+        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
 
       - name: Run backend tests with coverage
         run: cd apps/node-backend && bun vitest run --coverage

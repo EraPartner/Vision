@@ -3,7 +3,7 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-08-10
+updated: 2026-08-23
 tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
 description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
@@ -680,6 +680,9 @@ package-mac:
   runs-on: macos-latest
   steps:
     - uses: actions/checkout@v4
+    - uses: ./.github/actions/setup
+    - name: Install frozen Electron dependencies without lifecycle scripts
+      run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
     - name: Build macOS package
       run: cd packaging/electron && npm run dist
     - name: Generate checksum
@@ -697,16 +700,20 @@ package-mac:
 
 **Steps:**
 
-1. **Build:** `cd packaging/electron && npm run dist`
+1. **Install:** `bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron`
+   - Uses the same committed `packaging/electron/bun.lock` as CI backend tests and release verification
+   - Keeps dependency lifecycle scripts disabled in verification and release automation
+
+2. **Build:** `cd packaging/electron && npm run dist`
    - Runs electron-builder in distribution mode
    - Outputs `Vision-x.y.z-arm64.dmg` and `Vision-x.y.z-arm64-mac.zip`
 
-2. **Checksum:** `shasum -a 256 Vision-*.zip > Vision-*.zip.sha256`
+3. **Checksum:** `shasum -a 256 Vision-*.zip > Vision-*.zip.sha256`
    - Computes SHA256 hash of the ZIP file
    - Format: `<hash> *<filename>` (standard sha256sum format)
    - Example: `a1b2c3d4e5f6... *Vision-1.2.3-arm64-mac.zip`
 
-3. **Upload:** Both `.zip` and `.sha256` attached to the GitHub Release
+4. **Upload:** Both `.zip` and `.sha256` attached to the GitHub Release
    - Enables checksum verification in update system
    - See [[docs/adr/023-update-installer-checksum-verification|ADR-023]] for verification logic
 

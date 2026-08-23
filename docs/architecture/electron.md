@@ -3,9 +3,21 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-06-11
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent overlay, under-window vibrancy. June 2026 (startup fixes): quit uses compose stop (preserves warm-boot fast path), window bounds persisted/restored, localized theme-aware splash with phase narration, graceful shutdown closes idle keep-alive sockets, dev watcher covers packages/ and i18n/source. June 2026 (accelerator fixes): renderer-ready reset moved from did-start-loading to did-start-navigation+isSameDocument guard (eliminates sendToApp queue jam on React Router navigations); handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer→native-menu key-equivalent redispatch.
+updated: 2026-08-23
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
+description: >-
+  Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring,
+  Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application
+  update system with checksum verification (April 2026), Phase 7 backup/restore hardening with
+  concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS
+  integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent
+  overlay, under-window vibrancy. June 2026 (startup fixes): quit uses compose stop (preserves warm-boot
+  fast path), window bounds persisted/restored, localized theme-aware splash with phase narration,
+  graceful shutdown closes idle keep-alive sockets, dev watcher covers packages/ and i18n/source. June
+  2026 (accelerator fixes): renderer-ready reset moved from did-start-loading to
+  did-start-navigation+isSameDocument guard (eliminates sendToApp queue jam on React Router navigations);
+  handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer→native-menu
+  key-equivalent redispatch.
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes, electronAPI, native menu, dock badge, system accent, vibrancy]
 related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
@@ -238,31 +250,17 @@ If updating the icon, regenerate `.icns` from `.svg` using an asset pipeline too
   - Or: `xattr -dr com.apple.quarantine /Applications/Vision.app`
 - **For production**: Acquire Developer ID, set `mac.signingIdentity` + `mac.notarize` in electron-builder config
 
-#### Package Manager (npm vs. bun)
+#### Package Manager (Bun)
 
-The `packaging/electron/` sub-package uses **npm** for dependency management, while the root project uses **bun**.
+`packaging/electron/` is a separate Bun package with its own committed `bun.lock`. It is not a root workspace, so install it explicitly:
 
-**Why npm for electron-builder?**
-
-Bun's nested-hoisting algorithm places transitive dependencies in their own `node_modules/` trees, with shared deps at intermediate paths. This confuses electron-builder's asar tree-walker, resulting in incomplete bundling — runtime hits `Cannot find module 'archiver-utils'` even though the package is installed.
-
-**Solution:** npm's flat-top-level hoisting ensures all dependencies (including Archiver's transitives) live at `node_modules/` root, where electron-builder can find and bundle them correctly.
-
-**Transitive Explicit Declaration:** Because hoisting timing varies, Vision's `packaging/electron/package.json` explicitly declares archiver's transitives:
-
-```json
-{
-  "dependencies": {
-    "archiver": "^7.1.2",
-    "archiver-utils": "^5.0.2",
-    "compress-commons": "^6.0.2",
-    "readable-stream": "^4.5.2",
-    "zip-stream": "^6.0.1"
-  }
-}
+```bash
+bun install --frozen-lockfile --cwd packaging/electron
 ```
 
-This forces npm and electron-builder to include them at the correct depth inside `app.asar`, guaranteeing backup serialization works at runtime.
+CI backend verification and release verification add `--ignore-scripts`; the macOS package job uses the equivalent command from inside `packaging/electron/`. All three paths therefore resolve the dependency tree from the same lockfile. `npm run dist` remains a script invocation in local examples; it does not make npm the dependency resolver.
+
+The package declares its runtime dependencies directly (`archiver` and `yauzl`), and `bun.lock` pins their complete transitive graph. Do not reintroduce a second package lock for this directory.
 
 ### Platforms (Future)
 
@@ -874,29 +872,17 @@ See [[docs/adr/027-alembic-single-source-of-schema#follow-up-migration-ordering-
 
 **Verification:** After build, inspect asar contents:
 ```bash
-npm ls @electron/asar  # Confirm npm package installed
 file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 ```
 
 ### Cannot find module 'archiver-utils' (or compress-commons, readable-stream, zip-stream)
 
-**Cause:** Hoisting left Archiver's transitives as nested-only, electron-builder couldn't bundle them. See [[#package-manager-npm-vs-bun|Package Manager (npm vs. bun)]] above.
+**Cause:** The Electron dependency tree or packaged asar is incomplete. See [[#package-manager-bun|Package Manager (Bun)]] above.
 
 **Fix:**
-1. Ensure `package-lock.json` exists (npm, not bun.lock)
-2. Explicitly declare transitives in `packaging/electron/package.json`:
-   ```json
-   {
-     "dependencies": {
-       "archiver": "^7.1.2",
-       "archiver-utils": "^5.0.2",
-       "compress-commons": "^6.0.2",
-       "readable-stream": "^4.5.2",
-       "zip-stream": "^6.0.1"
-     }
-   }
-   ```
-3. Rebuild: `npm install && npm run dist`
+1. Confirm `packaging/electron/bun.lock` is present and unchanged.
+2. Reinstall with `bun install --frozen-lockfile --cwd packaging/electron`.
+3. Rebuild with `npm run dist` from `packaging/electron/` and inspect the resulting asar before changing dependency declarations.
 
 ### ENOENT docker-compose.yml at Contents/Resources/resources/
 

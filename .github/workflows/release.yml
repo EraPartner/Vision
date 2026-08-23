@@ -187,7 +187,7 @@ jobs:
         run: CI=1 bun run build
 
       - name: Install electron workspace dependencies (required for backend tests)
-        run: npm install --prefix packaging/electron --ignore-scripts
+        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
 
       - name: Run backend tests
         run: bun run test

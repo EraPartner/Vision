@@ -3,8 +3,8 @@ title: Deployment Guide
 type: guide
 status: active
 date: 2026-04-21
-updated: 2026-04-27
-tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding, container-hardening, packaging, troubleshooting]
+updated: 2026-08-23
+tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding, container-hardening, packaging, bun, troubleshooting]
 description: Production deployment instructions including port binding and admin endpoints security
 aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
 related_code: [[docker-compose.yml]]
@@ -248,7 +248,7 @@ Vision can be packaged into a clickable macOS .app bundle with `.dmg` and `.zip`
 
 #### Prerequisites
 
-- **Node.js (npm)** — `packaging/electron/` uses npm (not bun) for package management. See [[#package-manager-note|Package Manager Note]] below.
+- **Bun and Node.js** — Bun resolves the Electron dependencies; Node.js remains available for Electron tooling. See [[#package-manager-note|Package Manager Note]] below.
 - Docker Desktop running (required at runtime)
 - macOS 11.0 or later
 - arm64 architecture (Apple Silicon)
@@ -259,8 +259,8 @@ Vision can be packaged into a clickable macOS .app bundle with `.dmg` and `.zip`
 # Navigate to electron packaging directory
 cd packaging/electron
 
-# Install dependencies (npm, not bun)
-npm install
+# Install the dependency tree pinned by packaging/electron/bun.lock
+bun install --frozen-lockfile
 
 # Run build and package
 npm run dist
@@ -273,28 +273,25 @@ This produces three artifacts in `packaging/electron/dist/`:
 
 #### Package Manager Note
 
-`packaging/electron/` uses **npm** (not bun) for dependency management:
+`packaging/electron/` uses **Bun** for dependency management:
 
 - **Root project**: Uses bun (via `bun.lock`)
-- **Electron sub-package**: Uses npm (via `package-lock.json`)
+- **Electron sub-package**: Uses Bun via its separate `packaging/electron/bun.lock`
 
-**Rationale:** Bun's nested-hoisting behavior confused electron-builder's asar tree-walker, leaving transitive dependencies as nested-only copies that Node.js resolution couldn't find at runtime. Switching to npm forces top-level flattening in `node_modules`, ensuring electron-builder bundles all dependencies at the correct depth inside `app.asar`.
+The Electron directory is not a root workspace, so it needs its own explicit frozen install. CI backend verification, release verification, and the macOS package build all resolve this same lockfile. Verification jobs add `--ignore-scripts`; `npm run dist` below invokes a package script but does not resolve dependencies with npm.
 
-**Transitive dependencies caveat:** Archiver transitives are declared explicitly in `packaging/electron/package.json` to force electron-builder inclusion:
+The package declares the runtime modules loaded by the backup bundle directly:
 
 ```json
 {
   "dependencies": {
-    "archiver": "^7.1.2",
-    "archiver-utils": "^5.0.2",
-    "compress-commons": "^6.0.2",
-    "readable-stream": "^4.5.2",
-    "zip-stream": "^6.0.1"
+    "archiver": "^8.0.0",
+    "yauzl": "^3.3.0"
   }
 }
 ```
 
-Without explicit declarations, bundling-time hoisting fails and archiver-based backup cannot serialize the bundle at runtime.
+Their transitive graph is pinned in `packaging/electron/bun.lock`; do not add a second lockfile for this package.
 
 #### Bundled Resources Configuration
 
@@ -400,10 +397,9 @@ The icon is located at `packaging/electron/build/icon.svg` (source vector) and c
 - Verify: `ls -la packaging/electron/dist/mac-arm64/Vision.app/Contents/Resources/app.asar` should contain `backup/bundle.js`
 
 **"Cannot find module 'archiver-utils'" or other missing transitives:**
-- Cause: Bun's nested-hoisting left archiver dependencies incomplete; npm flatten resolves them
-- Fix: Ensure `packaging/electron/package-lock.json` exists (use npm, not bun)
-- Add explicit transitives to `package.json`: `archiver-utils`, `compress-commons`, `readable-stream`, `zip-stream`
-- Rebuild: `npm install && npm run dist`
+- Cause: The frozen Electron dependency tree was not installed or the packaged asar is incomplete
+- Fix: Confirm `packaging/electron/bun.lock`, then run `bun install --frozen-lockfile --cwd packaging/electron` from the repository root
+- Rebuild with `npm run dist` from `packaging/electron/` and inspect the asar before changing dependency declarations
 
 **"ENOENT docker-compose.yml" in Contents/Resources/resources/:**
 - Cause: `resources/docker-compose.yml` not copied to `extraResources`
