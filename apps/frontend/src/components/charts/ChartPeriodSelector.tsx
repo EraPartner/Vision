@@ -23,15 +23,14 @@ export function ChartPeriodSelector<P extends string>({
 }: ChartPeriodSelectorProps<P>) {
     const pad = size === "sm" ? "px-2 py-1" : "px-3 py-1.5";
     return (
-        <div className={cn("flex w-fit gap-1 rounded-lg bg-muted p-1", className)} role="tablist">
+        <div className={cn("flex w-fit gap-1 rounded-lg bg-muted p-1", className)}>
             {periods.map((p) => {
                 const active = p === value;
                 return (
                     <button
                         key={p}
                         type="button"
-                        role="tab"
-                        aria-selected={active}
+                        aria-pressed={active}
                         onClick={() => onChange(p)}
                         className={cn(
                             "rounded-md text-xs font-medium transition-[color,background-color,box-shadow]",
