@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-22
+updated: 2026-08-23
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -101,7 +101,7 @@ function MyCard() {
 - Animated hover effect (lift + shadow)
 - Color-coded change indicator via `DeltaPill`
 - Large formatted value via `RollingNumber` (odometer reels; plain span under `prefers-reduced-motion`)
-- **Compact currency display** — Optional `titleValue` prop enables tooltip showing full value when display is compacted (e.g., "€5.2K" with "€5,234.56" on hover)
+- **Compact currency display** — `formatCurrencyCompact` uses the locale's compact form only when `Intl.NumberFormat` emits a real compact-notation part and the result is shorter than the full value. Locale outputs that merely drop grouping or decimals stay fully formatted. Optional `titleValue` enables a tooltip with the full value when compaction is active (e.g., "€5.2K" with "€5,234.56" on hover).
 
 ### Surface Consistency (April 2026)
 
@@ -583,7 +583,7 @@ The component loads chart history and the net-position total from `GET /api/aggr
 - **Shared account-detail navigation:** Clicking a per-account card, or activating it with Enter or Space, opens `/accounts/:id`, the same account ledger used by the Accounts page.
 - Balance History chart: stacked area when all balances are non-negative, multi-line when any account carries a negative balance (overdraft)
 - Chart series and legend labels use the matching account entity's `display_name`, falling back to its canonical `name`; an unmatched aggregation row keeps the shortened bank-account label. The aggregation `bank_account` remains the series and history key.
-- Currency formatting — large balances use compact notation (`formatCurrencyCompact`) with full value in `title` tooltip
+- Currency formatting — large balances use locale-native compact notation (`formatCurrencyCompact`) only when it genuinely abbreviates the value; otherwise they retain full grouping and decimals. Compacted values expose the full value in a `title` tooltip.
 - Integer transaction counts use app locale formatter for consistent separators/grouping
 - `premium-frame` treatment on the net-position and per-account cards for consistent visual hierarchy
 

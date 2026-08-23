@@ -98,9 +98,11 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         const heading = await screen.findByText("Total Net Liquid Position");
         const totalCard = heading.closest(".glass-regular") as HTMLElement;
 
-        // The headline figure is the server's sum over its three payload rows
-        // (compacted for display, full value in the title)…
-        expect(within(totalCard).getByTitle(/10\.550,95/)).toBeInTheDocument();
+        // The headline figure is the server's sum over its three payload rows.
+        // de-DE has no compact suffix at this magnitude, so the full value stays
+        // visible and does not get a redundant title tooltip.
+        expect(within(totalCard).getByText(/10\.550,95/)).toBeInTheDocument();
+        expect(within(totalCard).queryByTitle(/10\.550,95/)).not.toBeInTheDocument();
         // …so the count beside it must be 3, NOT the 2 balance cards rendered
         // below (the zero-balance account is summed but has no card).
         expect(within(totalCard).getByText("Across 3 account(s)")).toBeInTheDocument();
@@ -122,7 +124,8 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
 
         const heading = await screen.findByText("Total Net Liquid Position");
         const totalCard = heading.closest(".glass-regular") as HTMLElement;
-        expect(within(totalCard).getByTitle(/2\.450,75/)).toBeInTheDocument();
+        expect(within(totalCard).getByText(/2\.450,75/)).toBeInTheDocument();
+        expect(within(totalCard).queryByTitle(/2\.450,75/)).not.toBeInTheDocument();
         expect(within(totalCard).getByText("Across 1 account(s)")).toBeInTheDocument();
     });
 
@@ -174,9 +177,11 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         });
         renderWithApp(<BankBalancesWidget />);
 
-        // Compacted for display, full figure in the title (same as the total card).
+        // de-DE has no compact suffix at this magnitude, so the full figure is
+        // visible and there is no redundant full-value tooltip.
         const usdCard = await screen.findByRole("button", { name: "Open details for Wise USD" });
-        expect(within(usdCard).getByTitle(/1\.234,50/).textContent).toMatch(/\$/);
+        expect(within(usdCard).getByText(/1\.234,50\s*\$/)).toBeInTheDocument();
+        expect(within(usdCard).queryByTitle(/1\.234,50/)).not.toBeInTheDocument();
         expect(usdCard.textContent).not.toMatch(/€/);
 
         // The EUR account beside it still reads in euro — nothing global changed.

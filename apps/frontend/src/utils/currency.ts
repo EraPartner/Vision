@@ -281,11 +281,11 @@ export function formatCurrencyCompact(
     maximumFractionDigits: 1,
   }).formatToParts(amount);
   const compact = compactParts.map((p) => p.value).join('');
+  const hasCompactNotation = compactParts.some((p) => p.type === 'compact');
 
-  if (compact.length >= full.length) {
+  if (!hasCompactNotation || compact.length >= full.length) {
     return { display: full, full, isCompact: false, parts: fullParts };
   }
 
   return { display: compact, full, isCompact: true, parts: compactParts };
 }
-

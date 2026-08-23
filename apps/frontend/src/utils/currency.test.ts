@@ -85,6 +85,14 @@ describe("formatCurrencyCompact", () => {
     expect(result.display).toBe(result.full);
   });
 
+  test("keeps de-DE thousands full when compact notation has no abbreviation", () => {
+    const result = formatCurrencyCompact(2_010, "EUR", "de-DE", 2);
+
+    expect(result.isCompact).toBe(false);
+    expect(result.display).toBe("2.010,00\u00a0€");
+    expect(result.parts.some((part) => part.type === "compact")).toBe(false);
+  });
+
   test("abbreviates large amounts (en-US, EUR)", () => {
     const result = formatCurrencyCompact(1_253_632, "EUR", "en-US", 2);
     expect(result.isCompact).toBe(true);
@@ -96,6 +104,7 @@ describe("formatCurrencyCompact", () => {
     const result = formatCurrencyCompact(1_253_632, "EUR", "de-DE", 2);
     expect(result.isCompact).toBe(true);
     expect(result.display.length).toBeLessThan(result.full.length);
+    expect(result.parts.some((part) => part.type === "compact")).toBe(true);
   });
 
   test("handles negative large amounts", () => {
