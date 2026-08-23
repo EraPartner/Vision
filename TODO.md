@@ -3559,7 +3559,7 @@ look-changing one.
   - `components/shared/VirtualDataTable.tsx:699` — all ~25+ mounted interactive rows are tab stops, so Tab from the search box walks row-by-row before escaping the table (arrow-key nav already exists at `:715-728`, making per-row tab stops redundant).
   - Fix: roving tabindex — only the active/first row gets `0`, others `-1`; arrows already move focus.
 
-- [ ] **ChartPeriodSelector claims `role="tablist"`/`tab` but implements none of the tabs keyboard pattern** 🔽 🔎 verified-present 2026-07-11
+- [x] **ChartPeriodSelector claims `role="tablist"`/`tab` but implements none of the tabs keyboard pattern** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-08-23 · 74538808
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1_
   - `components/charts/ChartPeriodSelector.tsx:26-34` — `aria-selected` buttons without roving tabindex, arrow-key movement, or `aria-controls`; SRs announce "tab" and users expect arrow navigation that doesn't exist. Operable (they're real buttons) but the semantics lie.
   - Fix: either drop the tab roles (plain group + `aria-pressed`) or implement roving tabindex + ←/→.
