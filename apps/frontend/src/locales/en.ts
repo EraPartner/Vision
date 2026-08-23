@@ -1871,6 +1871,7 @@ const en: Record<string, string> = {
   'research.builder.emptyTitle': 'Build your chart',
   'research.builder.groupEconomic': 'Economic data',
   'research.builder.groupMarkets': 'Markets',
+  'research.builder.indicatorPeriod': 'Period for {indicator} indicator',
   'research.builder.indicators': 'Indicators',
   'research.builder.logScale': 'Log scale',
   'research.builder.oscNone': 'None',

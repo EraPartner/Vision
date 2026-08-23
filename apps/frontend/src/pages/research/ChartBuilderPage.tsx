@@ -36,6 +36,7 @@ import {
   type Oscillator,
   type SeriesType,
 } from "./chartBuilderState";
+import { IndicatorPeriodInput } from "./IndicatorPeriodInput";
 
 const PROVIDERS = ["", "yahoo", "twelve_data", "finnhub", "fmp", "alpha_vantage"];
 const MAX_SERIES = 5;
@@ -470,12 +471,10 @@ export default function ChartBuilderPage() {
               {indicators.map((ind) => (
                 <Badge key={ind.id} variant="secondary" className="gap-1.5 py-1">
                   <span>{ind.type === "bollinger" ? `BB` : ind.type.toUpperCase()}</span>
-                  <input
-                    type="number"
-                    value={ind.period}
-                    min={2}
+                  <IndicatorPeriodInput
+                    indicator={ind.type === "bollinger" ? "BB" : ind.type.toUpperCase()}
+                    period={ind.period}
                     onChange={(e) => updateIndicator(ind.id, { period: Math.max(2, Number(e.target.value) || 2) })}
-                    className="w-12 bg-transparent text-center tabular-nums outline-none"
                   />
                   <button onClick={() => removeIndicator(ind.id)} aria-label={t("research.builder.removeIndicator")}>
                     <X className="h-3 w-3 hover:text-destructive" />

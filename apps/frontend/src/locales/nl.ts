@@ -1871,6 +1871,7 @@ const nl: Record<string, string> = {
   'research.builder.emptyTitle': 'Bouw je grafiek',
   'research.builder.groupEconomic': 'Economische data',
   'research.builder.groupMarkets': 'Markten',
+  'research.builder.indicatorPeriod': 'Periode voor {indicator}-indicator',
   'research.builder.indicators': 'Indicatoren',
   'research.builder.logScale': 'Logaritmische schaal',
   'research.builder.oscNone': 'Geen',
