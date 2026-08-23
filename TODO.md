@@ -7301,7 +7301,7 @@ statement-balance-without-date) are NOT repeated here — check there too before
   - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
   - `apps/frontend/src/components/dashboard/BankBalancesWidget.tsx:36-42` (`shortAccountName`) is now used only for chart series labels (`label: shortAccountName(acct.bank_account)`), so the legend reads "···12345678" under cards that say "KBC Zichtrekening". Map series labels through the same display-name resolution the cards use.
 
-- [ ] **BankBalancesWidget transaction-count join silently drops the "N transactions" line on name divergence** 🔽
+- [x] **BankBalancesWidget transaction-count join silently drops the "N transactions" line on name divergence** 🔽 ✅ 2026-08-23 · cead0bf0
   - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
   - The per-card count joins the aggregation payload to the entity list via `a.name === acct.bank_account`; any divergence (rename mid-flight, whitespace) hides the line with no signal. Low stakes; consider joining on account id once the payload exposes it.
 
