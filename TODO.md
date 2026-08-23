@@ -4023,7 +4023,7 @@ look-changing one.
   - `tax.dividendWithholding`/`dividendWhtPaid`/`dividendWhtNetCost`/`estimatedDividendWht` all correctly use "roerende voorheffing", but `tax.rules.investment.dividends` ("daarna 30% **bronbelasting**") and `tax.rules.investment.savings` ("daarna 15% **bronbelasting**") switch to the generic/Netherlands term for the same Belgian tax.
   - Fix: use "roerende voorheffing" in both `tax.rules.investment.*` keys.
 
-- [ ] **nl: shared-expense "splits" pluralized as the verb "splitsen" instead of the noun "splitsingen"** 🔼 🔎 verified-present 2026-07-11
+- [x] **nl: shared-expense "splits" pluralized as the verb "splitsen" instead of the noun "splitsingen"** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-08-23 · fc81fd2a
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - Singular is fine (`owesPage.split` "{n} splitsing", `owesPage.deleteSplit` "Splitsing verwijderen") but the plural uses the infinitive verb: `owesPage.splits` "{n} splitsen", `owesPage.outstandingSplits` "Openstaande splitsen", `owesPage.settleAll.confirmTitle`/`confirmDescription` "openstaande splits(en)". The noun plural of "splitsing" is "splitsingen".
   - Fix: "{n} splitsingen" / "Openstaande splitsingen" / "openstaande splitsingen" at the four sites.
