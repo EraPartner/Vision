@@ -21,14 +21,14 @@ import globals from 'globals';
 /**
  * no-repo-direct-from-route
  *
- * Disallows importing from `../repositories/` (or any path containing
- * `/repositories/`) inside files under `src/routes/`, and likewise from the
- * database layer (any path containing `/database/` — `query`,
+ * Disallows importing or re-exporting from `../repositories/` (or any path
+ * containing `/repositories/`) inside files under `src/routes/`, and likewise
+ * from the database layer (any path containing `/database/` — `query`,
  * `withTransaction`, etc.), which would let routes run raw SQL and bypass
  * the route→service boundary (ADR-067).
  * Routes must delegate data access to the services layer.
  */
-const noRepoDirectFromRoute = {
+export const noRepoDirectFromRoute = {
   meta: {
     type: 'suggestion',
     docs: {
@@ -47,23 +47,27 @@ const noRepoDirectFromRoute = {
     schema: [],
   },
   create(context) {
+    const check = (node) => {
+      const src = node.source?.value;
+      if (typeof src !== 'string') return;
+      if (src.includes('/repositories/') || src.includes('Repository')) {
+        context.report({
+          node,
+          messageId: 'noDirectRepo',
+          data: { source: src },
+        });
+      } else if (src.includes('/database/')) {
+        context.report({
+          node,
+          messageId: 'noDirectDb',
+          data: { source: src },
+        });
+      }
+    };
     return {
-      ImportDeclaration(node) {
-        const src = node.source.value;
-        if (src.includes('/repositories/') || src.includes('Repository')) {
-          context.report({
-            node,
-            messageId: 'noDirectRepo',
-            data: { source: src },
-          });
-        } else if (src.includes('/database/')) {
-          context.report({
-            node,
-            messageId: 'noDirectDb',
-            data: { source: src },
-          });
-        }
-      },
+      ImportDeclaration: check,
+      ExportNamedDeclaration: check,
+      ExportAllDeclaration: check,
     };
   },
 };
