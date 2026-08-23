@@ -3,8 +3,8 @@ title: Feature - Portfolio CSV Import
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-08-10
-last_modified: 2026-08-10
+updated: 2026-08-23
+last_modified: 2026-08-23
 tags: [feature, portfolio, import, csv, brokerage, trades, portfolio-import, instrument-matching, review, type-normalizer, deduplication, fx, adr-078, adr-074, adr-066, migration-0040, migration-0041, migration-0057, account-id, adr-091]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
 description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, field-based+intra-batch deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
@@ -98,8 +98,8 @@ Progress event: `{ phase: 'matching', current, total, percent }`
 
 When a batch enters `awaiting_review`, the frontend navigates to `PortfolioImportReviewPage`. For each unresolved group (distinct raw symbol+name), the user chooses one of:
 
-- **Pick an existing investment** via `InvestmentCombobox` → `POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override` with `{ investment_id }`.
-- **Create a new investment** → same endpoint with `{ create_new: true }`. Creates an investment from the row's symbol/name/default_asset_class and links all rows with the same raw symbol+name.
+- **Pick an existing investment** via `InvestmentCombobox` → one `POST /api/portfolio/import/batches/:id/rows/investment-override` with the complete group's `row_ids` and `{ investment_id }`.
+- **Create a new investment** → the same group endpoint with the complete `row_ids` and `{ create_new: true }`. It creates one investment from the first row's symbol/name/default_asset_class and links the full group atomically.
 
 When all rows are resolved, the user clicks **Commit** → `POST /api/portfolio/import/batches/:id/commit`.
 
@@ -215,6 +215,20 @@ Portfolio CSV Import is accessible under **Portfolio → Tools → Import portfo
 |------|-------|---------|
 | `PortfolioImportPage` | `/portfolio/import` | Column mapper, file upload, parser picker, brokerage account picker |
 | `PortfolioImportReviewPage` | `/portfolio/import/review/:batchId` | Investment resolution for unmatched rows |
+
+### Atomic group resolution
+
+The review page resolves a complete unmatched instrument group through one
+`POST /api/portfolio/import/batches/:id/rows/investment-override` request. Picking an existing
+holding sends the group's staging-row ids with `investment_id`; creating a holding sends the same
+ids with `create_new: true`. The backend locks the batch and complete row set before looking up or
+creating a holding, then applies the set in one transaction. If the batch is not reviewable, one id
+is missing, belongs to another batch, is no longer reviewable, or a create-new retry finds an
+existing user override, no staging row changes and no new holding remains. This replaces the
+previous serialized one-request-per-row flow, which could issue thousands of requests and stop
+after a partial group update.
+
+See [[docs/api/portfolio-imports#POST /api/portfolio/import/batches/:id/rows/investment-override|the bulk review endpoint contract]].
 
 > [!warning] Brokerage routing UI flag-gated — default OFF (ADR-103, 2026-06-20)
 > The **brokerage toggle** (marks a batch as `is_brokerage=true`) and the **sleeve-account picker**

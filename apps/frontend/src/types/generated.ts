@@ -2428,6 +2428,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/portfolio/import/batches/{id}/rows/investment-override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Atomically resolve a portfolio import review group to one investment */
+        post: operations["portfolioImportRowsInvestmentOverride"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/portfolio/import/batches/{id}/commit": {
         parameters: {
             query?: never;
@@ -8986,6 +9005,20 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description Malformed id, batch already aborted, or batch still in progress */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Batch not found, including at the locked lifecycle recheck */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     previewPortfolioImportBatch: {
@@ -9051,6 +9084,59 @@ export interface operations {
                 content?: never;
             };
             /** @description Batch or staging row not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    portfolioImportRowsInvestmentOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Complete set of review-row ids to resolve atomically */
+                    row_ids: number[];
+                    /**
+                     * Format: int32
+                     * @description Existing investment to link every requested row to
+                     */
+                    investment_id?: number;
+                    /**
+                     * @description Create one investment from the first requested row and link every requested row to it; rejected if any row already has a user override
+                     * @enum {boolean}
+                     */
+                    create_new?: true;
+                } & (unknown | unknown);
+            };
+        };
+        responses: {
+            /** @description Every requested row resolved to one investment in a single transaction */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Malformed input, mutually ambiguous resolution request, non-reviewable batch, or create-new row set already overridden */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Investment or requested row not found, belongs to another batch, or is no longer reviewable; no rows are changed */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -135,6 +135,7 @@ package "Routes" {
     +GET /batches/:id : get portfolio import batch
     +DELETE /batches/:id : rollback portfolio import batch
     +GET /batches/:id/preview : preview rows grouped by investment
+    +POST /batches/:id/rows/investment-override : resolve review group atomically
     +POST /batches/:id/rows/:rowId/investment-override : resolve unmatched row
     +POST /batches/:id/commit : commit reviewed batch
   }

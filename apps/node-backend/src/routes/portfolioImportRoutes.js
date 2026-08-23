@@ -30,6 +30,7 @@ import {
   getPreviewRows,
   overrideInvestment,
   createInvestmentForRow,
+  resolveInvestmentRows,
   rollbackBatch,
   setBatchAccount,
 } from '../services/portfolioImportBatchService.js';
@@ -46,6 +47,7 @@ import { parsePagination } from '../lib/pagination.js';
 const router = Router();
 
 const PARSER_KIND = 'portfolio';
+const MAX_BULK_RESOLUTION_ROWS = 5000;
 
 /** @param {unknown} raw */
 function parseTypeMapping(raw) {
@@ -371,10 +373,21 @@ router.delete('/batches/:id', /** @param {ExpressRequest} req @param {ExpressRes
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   if (batch.status === 'aborted') throw new ValidationError('Batch is already aborted');
-  if (['staging', 'validating', 'matching', 'committing'].includes(batch.status)) {
+  if (['pending', 'staging', 'validating', 'matching', 'committing'].includes(batch.status)) {
     throw new ValidationError('Cannot rollback a batch that is still in progress');
   }
-  const { deleted } = await rollbackBatch(id);
+  let deleted;
+  try {
+    ({ deleted } = await rollbackBatch(id));
+  } catch (err) {
+    if (/** @type {any} */ (err)?.code === 'VALIDATION_ERROR') {
+      throw new ValidationError(/** @type {Error} */ (err).message);
+    }
+    if (/** @type {any} */ (err)?.code === 'NOT_FOUND') {
+      throw new NotFoundError(/** @type {Error} */ (err).message);
+    }
+    throw err;
+  }
   logger.info('[portfolio-import] batch rolled back', { batchId: id, deleted });
   // Not a plain delete: a rollback reports the side-effect count the caller
   // surfaces, so it keeps a 200 body (docs/reference/code-patterns.md,
@@ -453,6 +466,64 @@ router.get('/batches/:id/preview', /** @param {ExpressRequest} req @param {Expre
   res.ok({ batch_id: batchId, groups, totals });
 });
 
+// POST /api/portfolio/import/batches/:id/rows/investment-override
+// Body: { row_ids, investment_id } or { row_ids, create_new: true }.
+router.post('/batches/:id/rows/investment-override', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
+  const batchId = parseBatchIdParam(req);
+  const rawRowIds = req.body?.row_ids;
+  if (!Array.isArray(rawRowIds) || rawRowIds.length === 0) {
+    throw new ValidationError('row_ids must be a non-empty array');
+  }
+  if (rawRowIds.length > MAX_BULK_RESOLUTION_ROWS) {
+    throw new ValidationError(`row_ids must contain at most ${MAX_BULK_RESOLUTION_ROWS} entries`);
+  }
+
+  const rowIds = rawRowIds.map((raw, index) => {
+    const parsed = validateId(raw, `row_ids[${index}]`, Number.MAX_SAFE_INTEGER);
+    if (!parsed.valid) throw new ValidationError(`row_ids[${index}] must be a positive integer`);
+    return parsed.value;
+  });
+  if (new Set(rowIds).size !== rowIds.length) {
+    throw new ValidationError('row_ids must not contain duplicates');
+  }
+
+  if (req.body?.create_new !== undefined && req.body.create_new !== true) {
+    throw new ValidationError('create_new must be true when provided');
+  }
+  const createNew = req.body?.create_new === true;
+  const hasInvestmentId = req.body?.investment_id !== undefined && req.body?.investment_id !== null;
+  if (createNew === hasInvestmentId) {
+    throw new ValidationError('Provide exactly one of investment_id or create_new: true');
+  }
+
+  let investmentId;
+  if (hasInvestmentId) {
+    const parsed = validateId(req.body.investment_id, 'investment_id');
+    if (!parsed.valid) throw new ValidationError('investment_id must be a positive integer');
+    investmentId = parsed.value;
+  }
+
+  let result;
+  try {
+    result = await resolveInvestmentRows({ batchId, rowIds, investmentId, createNew });
+  } catch (err) {
+    if (/** @type {any} */ (err)?.code === 'VALIDATION_ERROR') {
+      throw new ValidationError(/** @type {Error} */ (err).message);
+    }
+    if (/** @type {any} */ (err)?.code === 'NOT_FOUND') {
+      throw new NotFoundError(/** @type {Error} */ (err).message);
+    }
+    throw err;
+  }
+
+  res.ok({
+    investment_id: result.investmentId,
+    created: result.created,
+    resolved: result.resolved,
+    ...(result.investment ? { investment: result.investment } : {}),
+  });
+});
+
 // POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override
 // Body: { investment_id } to point at an existing holding, or { create_new: true }.
 router.post('/batches/:id/rows/:rowId/investment-override', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
@@ -468,6 +539,9 @@ router.post('/batches/:id/rows/:rowId/investment-override', /** @param {ExpressR
       // translateRepoError — a raw coded Error would surface as a 500.
       if (/** @type {any} */ (err)?.code === 'VALIDATION_ERROR') {
         throw new ValidationError(/** @type {Error} */ (err).message);
+      }
+      if (/** @type {any} */ (err)?.code === 'NOT_FOUND') {
+        throw new NotFoundError(/** @type {Error} */ (err).message);
       }
       throw err;
     }

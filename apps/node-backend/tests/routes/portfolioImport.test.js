@@ -55,6 +55,7 @@ vi.mock('../../src/services/portfolioImportBatchService.js', () => ({
   getPreviewRows: vi.fn(),
   overrideInvestment: vi.fn(),
   createInvestmentForRow: vi.fn(),
+  resolveInvestmentRows: vi.fn(),
   rollbackBatch: vi.fn(),
   setBatchAccount: vi.fn(),
 }));
@@ -76,7 +77,13 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-import { getBatch, getPreviewRows, listBatches } from '../../src/services/portfolioImportBatchService.js';
+import {
+  getBatch,
+  getPreviewRows,
+  listBatches,
+  createInvestmentForRow,
+  resolveInvestmentRows,
+} from '../../src/services/portfolioImportBatchService.js';
 
 const { default: portfolioImportRouter } = await import('../../src/routes/portfolioImportRoutes.js');
 
@@ -103,6 +110,16 @@ describe('Portfolio Import Routes — batch/row id guards', () => {
     const res = await api.post(`${BASE}/batches/5/rows/0/investment-override`).send({}).expect(400);
     expect(res.body).toEqual(errEnvelope({ code: 'VALIDATION_ERROR' }));
   });
+
+  it('maps a missing create-new row from the legacy endpoint to 404', async () => {
+    createInvestmentForRow.mockRejectedValue(Object.assign(new Error('Row not found'), { code: 'NOT_FOUND' }));
+
+    const res = await api.post(`${BASE}/batches/5/rows/6/investment-override`)
+      .send({ create_new: true })
+      .expect(404);
+
+    expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
+  });
 });
 
 describe('Portfolio Import Routes — collection response shape', () => {
@@ -121,5 +138,60 @@ describe('Portfolio Import Routes — collection response shape', () => {
       limit: 50,
       offset: 0,
     }));
+  });
+});
+
+describe('Portfolio Import Routes — bulk investment resolution', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('resolves a complete row set through one service call', async () => {
+    resolveInvestmentRows.mockResolvedValue({
+      investmentId: 42,
+      created: false,
+      resolved: 3,
+    });
+
+    const res = await api.post(`${BASE}/batches/5/rows/investment-override`)
+      .send({ row_ids: [10, 11, 12], investment_id: 42 })
+      .expect(200);
+
+    expect(resolveInvestmentRows).toHaveBeenCalledTimes(1);
+    expect(resolveInvestmentRows).toHaveBeenCalledWith({
+      batchId: 5,
+      rowIds: [10, 11, 12],
+      investmentId: 42,
+      createNew: false,
+    });
+    expect(res.body).toEqual(okEnvelope({ investment_id: 42, created: false, resolved: 3 }));
+  });
+
+  it('rejects malformed, duplicate, or ambiguous row-set bodies before the service', async () => {
+    const invalidBodies = [
+      { row_ids: [], investment_id: 42 },
+      { row_ids: [10, '11abc'], investment_id: 42 },
+      { row_ids: [10, 10], investment_id: 42 },
+      { row_ids: [10] },
+      { row_ids: [10], investment_id: 42, create_new: true },
+      { row_ids: [10], investment_id: 42, create_new: false },
+    ];
+
+    for (const body of invalidBodies) {
+      await api.post(`${BASE}/batches/5/rows/investment-override`).send(body).expect(400);
+    }
+
+    expect(resolveInvestmentRows).not.toHaveBeenCalled();
+  });
+
+  it('maps an ineligible row set to 404 without reporting partial success', async () => {
+    const err = Object.assign(new Error('One or more rows are no longer reviewable'), {
+      code: 'NOT_FOUND',
+    });
+    resolveInvestmentRows.mockRejectedValue(err);
+
+    const res = await api.post(`${BASE}/batches/5/rows/investment-override`)
+      .send({ row_ids: [10, 11], create_new: true })
+      .expect(404);
+
+    expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
   });
 });

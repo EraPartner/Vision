@@ -165,9 +165,7 @@ export function PortfolioImportReviewPage() {
     if (investmentId == null) return;
     setBusyGroup(groupKey(g));
     try {
-      for (const row of g.rows) {
-        await apiClient.overridePortfolioImportRow(batchId, row.id, { investmentId });
-      }
+      await apiClient.overridePortfolioImportRows(batchId, g.rows.map((row) => row.id), { investmentId });
       await refresh();
     } catch (err) {
       toast.error(t("importPage.toast.serverError"), { description: apiErrorToMessage(err, t) });
@@ -180,14 +178,7 @@ export function PortfolioImportReviewPage() {
     if (!g.rows.length) return;
     setBusyGroup(groupKey(g));
     try {
-      const [first, ...rest] = g.rows;
-      const created = await apiClient.overridePortfolioImportRow(batchId, first.id, { createNew: true });
-      const newId = created.investment_id;
-      if (newId) {
-        for (const row of rest) {
-          await apiClient.overridePortfolioImportRow(batchId, row.id, { investmentId: newId });
-        }
-      }
+      await apiClient.overridePortfolioImportRows(batchId, g.rows.map((row) => row.id), { createNew: true });
       await refresh();
       toast.success(t("portfolioImport.toast.holdingCreated"));
     } catch (err) {

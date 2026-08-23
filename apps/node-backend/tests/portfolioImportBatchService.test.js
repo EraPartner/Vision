@@ -16,12 +16,18 @@ vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
 }));
 
 vi.mock('../src/repositories/investmentRepository.js', () => ({
-  default: {},
+  default: {
+    create: vi.fn(),
+    getById: vi.fn(),
+  },
 }));
 
 vi.mock('../src/repositories/portfolioImportBatchRepository.js', () => ({
   getRowForInvestmentCreation: vi.fn(),
+  lockBatchForUpdate: vi.fn(),
+  lockInvestmentResolutionRows: vi.fn(),
   overrideInvestment: vi.fn(),
+  overrideInvestments: vi.fn(),
   getCommittedRows: vi.fn(),
   markBatchAborted: vi.fn(),
   resetCommittedRowsToMatched: vi.fn(),
@@ -33,12 +39,21 @@ vi.mock('../src/repositories/portfolioImportBatchRepository.js', () => ({
 
 import { query, withTransaction } from '../src/database/connection.js';
 import portfolioTransactionRepository from '../src/repositories/portfolioTransactionRepository.js';
+import investmentRepository from '../src/repositories/investmentRepository.js';
 import {
+  getRowForInvestmentCreation,
+  lockBatchForUpdate,
+  lockInvestmentResolutionRows,
+  overrideInvestment,
+  overrideInvestments,
   getCommittedRows,
   markBatchAborted,
   resetCommittedRowsToMatched,
 } from '../src/repositories/portfolioImportBatchRepository.js';
-import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
+import {
+  resolveInvestmentRows,
+  rollbackBatch,
+} from '../src/services/portfolioImportBatchService.js';
 
 /**
  * Default query mock: answer rollbackBatch's is_brokerage lookup (true unless a
@@ -61,6 +76,15 @@ beforeEach(() => {
   // Default: nothing carries the 0086 stamp, i.e. the pre-migration world. Each
   // test that exercises the bulk path says so explicitly.
   portfolioTransactionRepository.hardDeleteByImportBatch.mockResolvedValue([]);
+  lockBatchForUpdate.mockResolvedValue({ status: 'complete', is_brokerage: true });
+  lockInvestmentResolutionRows.mockResolvedValue({
+    batchStatus: 'awaiting_review',
+    rows: [10, 11, 12].map((id) => ({
+      id,
+      status: 'matched',
+      user_override_investment_id: null,
+    })),
+  });
 });
 
 describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
@@ -83,6 +107,7 @@ describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
     // committed_txn_id is a PORTFOLIO id. Feeding it to the ledger DELETE
     // would destroy an unrelated transactions row of the same number.
     mockQueries(false);
+    lockBatchForUpdate.mockResolvedValue({ status: 'complete', is_brokerage: false });
     getCommittedRows.mockResolvedValue([{ id: 812, route: 'cash' }]);
 
     const res = await rollbackBatch(5);
@@ -103,6 +128,16 @@ describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
     // Reset happens before the abort mark (both inside the transaction).
     expect(resetCommittedRowsToMatched.mock.invocationCallOrder[0])
       .toBeLessThan(markBatchAborted.mock.invocationCallOrder[0]);
+  });
+
+  it('locks and rejects a pending batch before reading or deleting committed rows', async () => {
+    lockBatchForUpdate.mockResolvedValue({ status: 'pending', is_brokerage: false });
+
+    await expect(rollbackBatch(5)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(lockBatchForUpdate).toHaveBeenCalledWith(5);
+    expect(getCommittedRows).not.toHaveBeenCalled();
+    expect(portfolioTransactionRepository.hardDeleteByImportBatch).not.toHaveBeenCalled();
   });
 
   it('never passes a cash id to the batch-stamped bulk delete', async () => {
@@ -147,6 +182,122 @@ describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
 
     const res = await rollbackBatch(5);
     expect(res).toEqual({ deleted: 2 });
+  });
+});
+
+describe('resolveInvestmentRows — atomic group resolution', () => {
+  it('checks one existing investment and sends the complete row set to one bulk write', async () => {
+    investmentRepository.getById.mockResolvedValue({ id: 88 });
+    overrideInvestments.mockResolvedValue({ requestedCount: 3, eligibleCount: 3, updatedCount: 3 });
+
+    const result = await resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [10, 11, 12],
+      investmentId: 88,
+    });
+
+    expect(withTransaction).toHaveBeenCalledTimes(1);
+    expect(investmentRepository.getById).toHaveBeenCalledWith(88);
+    expect(overrideInvestments).toHaveBeenCalledTimes(1);
+    expect(overrideInvestments).toHaveBeenCalledWith({
+      batchId: 5,
+      rowIds: [10, 11, 12],
+      investmentId: 88,
+    });
+    expect(result).toMatchObject({ investmentId: 88, created: false, resolved: 3 });
+  });
+
+  it('creates one holding inside the transaction and resolves the full row set to it', async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({
+      batchStatus: 'awaiting_review',
+      rows: [10, 11].map((id) => ({ id, status: 'matched', user_override_investment_id: null })),
+    });
+    getRowForInvestmentCreation.mockResolvedValue({
+      symbol_raw: 'VWCE',
+      name_raw: 'Vanguard FTSE All-World',
+      currency: 'EUR',
+      default_asset_class: 'etf',
+    });
+    investmentRepository.create.mockResolvedValue({ id: 91, name: 'Vanguard FTSE All-World' });
+    overrideInvestment.mockResolvedValue(1);
+    overrideInvestments.mockResolvedValue({ requestedCount: 2, eligibleCount: 2, updatedCount: 2 });
+
+    const result = await resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [10, 11],
+      createNew: true,
+    });
+
+    expect(investmentRepository.create).toHaveBeenCalledTimes(1);
+    expect(overrideInvestments).toHaveBeenCalledWith({
+      batchId: 5,
+      rowIds: [10, 11],
+      investmentId: 91,
+    });
+    expect(result).toMatchObject({ investmentId: 91, created: true, resolved: 2 });
+  });
+
+  it('throws inside the transaction when any requested row is ineligible', async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({
+      batchStatus: 'awaiting_review',
+      rows: [10, 11].map((id) => ({ id, status: 'matched', user_override_investment_id: null })),
+    });
+
+    await expect(resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [10, 11, 999],
+      investmentId: 88,
+    })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    expect(withTransaction).toHaveBeenCalledTimes(1);
+    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(overrideInvestments).not.toHaveBeenCalled();
+  });
+
+  it('rejects an aborted batch before any investment lookup, creation, or row write', async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({ batchStatus: 'aborted', rows: [] });
+
+    await expect(resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [10, 11],
+      createNew: true,
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(investmentRepository.create).not.toHaveBeenCalled();
+    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(overrideInvestments).not.toHaveBeenCalled();
+  });
+
+  it('rejects a batch that is still matching before any investment or row write', async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({ batchStatus: 'matching', rows: [] });
+
+    await expect(resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [10],
+      investmentId: 88,
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(investmentRepository.getById).not.toHaveBeenCalled();
+    expect(overrideInvestments).not.toHaveBeenCalled();
+  });
+
+  it('rejects create-new after a concurrent request has resolved the locked row set', async () => {
+    lockInvestmentResolutionRows.mockResolvedValue({
+      batchStatus: 'awaiting_review',
+      rows: [
+        { id: 10, status: 'matched', user_override_investment_id: 91 },
+        { id: 11, status: 'matched', user_override_investment_id: 91 },
+      ],
+    });
+
+    await expect(resolveInvestmentRows({
+      batchId: 5,
+      rowIds: [10, 11],
+      createNew: true,
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(investmentRepository.create).not.toHaveBeenCalled();
+    expect(overrideInvestments).not.toHaveBeenCalled();
   });
 });
 

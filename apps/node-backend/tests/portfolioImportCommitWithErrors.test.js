@@ -20,7 +20,11 @@ vi.mock('../src/services/info/cache.js', () => ({
 import { query } from '../src/database/connection.js';
 import { commitBatch } from '../src/services/portfolioImportPipeline/commit.js';
 import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
-import { overrideInvestment } from '../src/repositories/portfolioImportBatchRepository.js';
+import {
+  lockInvestmentResolutionRows,
+  overrideInvestment,
+  overrideInvestments,
+} from '../src/repositories/portfolioImportBatchRepository.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -91,6 +95,92 @@ describe('overrideInvestment — repair path for errored rows', () => {
     query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const rowCount = await overrideInvestment({ batchId: 5, rowId: 2, investmentId: 88 });
     expect(rowCount).toBe(0);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('overrideInvestments — atomic row-set guard', () => {
+  it('updates the complete eligible set in one statement and repairs error counters once', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          requested_count: 3,
+          eligible_count: 3,
+          updated_count: 3,
+          reset_error_count: 2,
+        }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const result = await overrideInvestments({
+      batchId: 5,
+      rowIds: [10, 11, 12],
+      investmentId: 88,
+    });
+
+    expect(result).toEqual({
+      requestedCount: 3,
+      eligibleCount: 3,
+      updatedCount: 3,
+      resetErrorCount: 2,
+    });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/counts\.requested_count = counts\.eligible_count/);
+    expect(sql).toMatch(/ORDER BY r\.id\s+FOR UPDATE OF r/);
+    expect(sql).toMatch(/FOR UPDATE OF r/);
+    expect(params).toEqual([5, [10, 11, 12], 88]);
+    expect(query.mock.calls[1][1]).toEqual([5, 2]);
+  });
+
+  it('performs no update and no counter write when one requested row is ineligible', async () => {
+    query.mockResolvedValueOnce({
+      rows: [{
+        requested_count: 3,
+        eligible_count: 2,
+        updated_count: 0,
+        reset_error_count: 0,
+      }],
+      rowCount: 1,
+    });
+
+    const result = await overrideInvestments({
+      batchId: 5,
+      rowIds: [10, 11, 999],
+      investmentId: 88,
+    });
+
+    expect(result.updatedCount).toBe(0);
+    expect(result.eligibleCount).toBe(2);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('lockInvestmentResolutionRows — batch-first serialization', () => {
+  it('locks the batch before locking the complete ordered row set', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ status: 'awaiting_review', is_brokerage: false }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 10, status: 'matched', user_override_investment_id: null },
+          { id: 11, status: 'error', user_override_investment_id: null },
+        ],
+        rowCount: 2,
+      });
+
+    const result = await lockInvestmentResolutionRows({ batchId: 5, rowIds: [11, 10] });
+
+    expect(result.batchStatus).toBe('awaiting_review');
+    expect(query.mock.calls[0][0]).toMatch(/portfolio_import_batches[\s\S]*FOR UPDATE/);
+    expect(query.mock.calls[1][0]).toMatch(/ORDER BY id\s+FOR UPDATE/);
+    expect(query.mock.calls[1][1]).toEqual([5, [11, 10]]);
+  });
+
+  it('does not try to lock rows when the batch does not exist', async () => {
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    await expect(lockInvestmentResolutionRows({ batchId: 999, rowIds: [10] }))
+      .resolves.toEqual({ batchStatus: undefined, rows: [] });
     expect(query).toHaveBeenCalledTimes(1);
   });
 });

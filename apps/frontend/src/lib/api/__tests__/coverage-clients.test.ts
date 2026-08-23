@@ -39,6 +39,7 @@ import {
   deletePortfolioParserConfig,
   getPortfolioImportPreview,
   overridePortfolioImportRow,
+  overridePortfolioImportRows,
   commitPortfolioImportBatch,
   rollbackPortfolioImportBatch,
   type PortfolioCustomConfig,
@@ -465,6 +466,44 @@ describe("portfolioImports API client", () => {
     );
     await overridePortfolioImportRow(5, 9, { createNew: true });
     expect(body).toMatchObject({ create_new: true });
+  });
+
+  it("overridePortfolioImportRows sends one row-set request for an existing investment", async () => {
+    let requests = 0;
+    let body: unknown = null;
+    server.use(
+      http.post(
+        `${API_BASE}/api/portfolio/import/batches/5/rows/investment-override`,
+        async ({ request }) => {
+          requests += 1;
+          body = await request.json();
+          return ok({ investment_id: 33, created: false, resolved: 3 });
+        },
+      ),
+    );
+
+    const result = await overridePortfolioImportRows(5, [9, 10, 11], { investmentId: 33 });
+
+    expect(requests).toBe(1);
+    expect(body).toEqual({ row_ids: [9, 10, 11], investment_id: 33 });
+    expect(result.resolved).toBe(3);
+  });
+
+  it("overridePortfolioImportRows creates once for the complete row set", async () => {
+    let body: unknown = null;
+    server.use(
+      http.post(
+        `${API_BASE}/api/portfolio/import/batches/5/rows/investment-override`,
+        async ({ request }) => {
+          body = await request.json();
+          return ok({ investment_id: 44, created: true, resolved: 2 });
+        },
+      ),
+    );
+
+    await overridePortfolioImportRows(5, [9, 10], { createNew: true });
+
+    expect(body).toEqual({ row_ids: [9, 10], create_new: true });
   });
 
   it("commitPortfolioImportBatch posts account_id when provided", async () => {

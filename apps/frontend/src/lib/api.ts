@@ -122,6 +122,7 @@ export const apiClient = {
     importPortfolioCSVWithProgress: portImp.importPortfolioCSVWithProgress,
     getPortfolioImportPreview: portImp.getPortfolioImportPreview,
     overridePortfolioImportRow: portImp.overridePortfolioImportRow,
+    overridePortfolioImportRows: portImp.overridePortfolioImportRows,
     commitPortfolioImportBatch: portImp.commitPortfolioImportBatch,
     rollbackPortfolioImportBatch: portImp.rollbackPortfolioImportBatch,
     listPortfolioParserConfigs: portImp.listPortfolioParserConfigs,

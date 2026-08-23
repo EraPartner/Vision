@@ -281,6 +281,25 @@ export function overridePortfolioImportRow(
   });
 }
 
+export function overridePortfolioImportRows(
+  batchId: number,
+  rowIds: number[],
+  payload: { investmentId?: number; createNew?: boolean },
+): Promise<{
+  investment_id: number;
+  created: boolean;
+  resolved: number;
+  investment?: unknown;
+}> {
+  const body = payload.createNew
+    ? { row_ids: rowIds, create_new: true }
+    : { row_ids: rowIds, investment_id: payload.investmentId };
+  return apiRequest(`/api/portfolio/import/batches/${batchId}/rows/investment-override`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export function commitPortfolioImportBatch(
   batchId: number,
   accountId?: number | null,

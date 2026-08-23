@@ -52,6 +52,23 @@ export async function getBatch(id) {
 }
 
 /**
+ * Lock one batch for a lifecycle-sensitive transaction.
+ *
+ * @param {number} batchId
+ * @returns {Promise<{ status: string, is_brokerage: boolean }|undefined>}
+ */
+export async function lockBatchForUpdate(batchId) {
+  const { rows } = await query(
+    `SELECT status, is_brokerage
+       FROM portfolio_import_batches
+      WHERE id = $1
+      FOR UPDATE`,
+    [batchId],
+  );
+  return rows[0];
+}
+
+/**
  * Staging rows for the review preview, joined to their effective investment.
  * Caller groups by effective investment.
  *
@@ -151,6 +168,110 @@ export async function overrideInvestment({ batchId, rowId, investmentId }) {
   }
 
   return result.rowCount;
+}
+
+/**
+ * Serialize a review resolution against its batch and lock the complete row set.
+ * The batch lock comes first so concurrent "create new" requests for the same
+ * batch cannot both create a holding before either request sees the other's
+ * overrides.
+ *
+ * @param {{ batchId: number, rowIds: number[] }} args
+ * @returns {Promise<{ batchStatus: string|undefined, rows: Array<{ id: number, status: string, user_override_investment_id: number|null }> }>}
+ */
+export async function lockInvestmentResolutionRows({ batchId, rowIds }) {
+  const batch = await lockBatchForUpdate(batchId);
+  if (!batch) {
+    return { batchStatus: undefined, rows: [] };
+  }
+
+  const { rows } = await query(
+    `SELECT id, status, user_override_investment_id
+       FROM portfolio_import_staging_rows
+      WHERE batch_id = $1 AND id = ANY($2::bigint[])
+      ORDER BY id
+      FOR UPDATE`,
+    [batchId, rowIds],
+  );
+
+  return { batchStatus: batch.status, rows };
+}
+
+/**
+ * Point a complete requested set of review rows at one investment.
+ *
+ * The requested/eligible count guard is inside the same statement as the
+ * update. If even one id is missing, belongs to another batch, or is no longer
+ * reviewable, the UPDATE sees a false guard and changes zero rows. The service
+ * wraps this statement (and optional holding creation) in one transaction.
+ *
+ * @param {{ batchId: number, rowIds: number[], investmentId: number }} args
+ * @returns {Promise<{ requestedCount: number, eligibleCount: number, updatedCount: number, resetErrorCount: number }>}
+ */
+export async function overrideInvestments({ batchId, rowIds, investmentId }) {
+  const { rows } = await query(
+    `WITH requested AS (
+        SELECT DISTINCT unnest($2::bigint[]) AS id
+     ),
+     locked AS (
+        SELECT r.id, r.status AS old_status
+          FROM portfolio_import_staging_rows r
+          JOIN requested req ON req.id = r.id
+         WHERE r.batch_id = $1
+         ORDER BY r.id
+         FOR UPDATE OF r
+     ),
+     eligible AS (
+        SELECT id, old_status
+          FROM locked
+         WHERE old_status IN ('matched', 'error')
+     ),
+     counts AS (
+        SELECT (SELECT COUNT(*)::int FROM requested) AS requested_count,
+               (SELECT COUNT(*)::int FROM eligible) AS eligible_count
+     ),
+     upd AS (
+        UPDATE portfolio_import_staging_rows r
+           SET user_override_investment_id = $3,
+               status = CASE WHEN eligible.old_status = 'error' THEN 'matched' ELSE r.status END,
+               error_message = CASE WHEN eligible.old_status = 'error' THEN NULL ELSE r.error_message END
+          FROM eligible, counts
+         WHERE r.id = eligible.id
+           AND counts.requested_count = counts.eligible_count
+        RETURNING eligible.old_status
+     )
+     SELECT counts.requested_count,
+            counts.eligible_count,
+            COUNT(upd.old_status)::int AS updated_count,
+            COUNT(upd.old_status) FILTER (WHERE upd.old_status = 'error')::int AS reset_error_count
+       FROM counts
+       LEFT JOIN upd ON TRUE
+      GROUP BY counts.requested_count, counts.eligible_count`,
+    [batchId, rowIds, investmentId],
+  );
+
+  const summary = rows[0] ?? {
+    requested_count: rowIds.length,
+    eligible_count: 0,
+    updated_count: 0,
+    reset_error_count: 0,
+  };
+
+  if (summary.reset_error_count > 0) {
+    await query(
+      `UPDATE portfolio_import_batches
+          SET rows_error = GREATEST(COALESCE(rows_error, 0) - $2, 0)
+        WHERE id = $1`,
+      [batchId, summary.reset_error_count],
+    );
+  }
+
+  return {
+    requestedCount: summary.requested_count,
+    eligibleCount: summary.eligible_count,
+    updatedCount: summary.updated_count,
+    resetErrorCount: summary.reset_error_count,
+  };
 }
 
 /**

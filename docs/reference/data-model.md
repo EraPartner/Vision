@@ -3,8 +3,8 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-08-19
-last_modified: 2026-08-19
+updated: 2026-08-23
+last_modified: 2026-08-23
 tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker, balance-write-protection, trigger-lookup-only, split-guard, migration-0062, db-editor-audit, migration-0059, adr-101, provider-api-keys, instrument-provider-map, provider-quota, migration-0042, migration-0043, adr-079, cashflow-forecast-accuracy, cashflow-forecast-mc, cashflow-forecast-mc-rolling, migration-0012, migration-0013, migration-0016, materialized-views, mv-monthly-summary, mv-category-totals, mv-cashflow-daily, monetary-precision, migration-0088, adr-112]
 description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026). 2026-06-25: balance field write-protected (import-pipeline-only); migration 0062 hardens the dual-write trigger (lookup-only on UPDATE) and adds enforce_split_within_amount BEFORE UPDATE trigger. 2026-08-11: added the previously-undocumented db_editor_audit (ADR-101, migration 0059), provider_api_keys/instrument_provider_map/provider_quota (ADR-079, migrations 0042/0043), and cashflow_forecast_accuracy/_mc/_mc_rolling (migrations 0012/0013/0016) tables, plus the three live runtime materialized views (mv_monthly_summary, mv_category_totals, mv_cashflow_daily — NOT four; mv_bank_balances was dropped for good in migration 0082). 2026-08-19: migration 0088 aligns transaction-ledger money columns to NUMERIC(18,4) and removes the legacy-only split-payment overpayment trigger (ADR-112).
 aliases: [data model, entities, domain model, schema entities]
@@ -1154,7 +1154,7 @@ All of them share these anchor columns; the remaining columns are the source's n
 | `fx_rate` | NUMERIC(20,8) | NULLABLE | EUR FX rate (from CSV or auto-resolved via fxResolve) |
 | `note` | TEXT | NULLABLE | Free-text note from CSV |
 | `resolved_investment_id` | INTEGER | NULLABLE, FK → investments | Set by matchInvestments phase (symbol or name match) |
-| `user_override_investment_id` | INTEGER | NULLABLE, FK → investments | Set by `POST .../rows/:rowId/investment-override`; takes precedence over `resolved_investment_id` |
+| `user_override_investment_id` | INTEGER | NULLABLE, FK → investments | Set by the single-row `POST .../rows/:rowId/investment-override` or atomic group `POST .../rows/investment-override`; takes precedence over `resolved_investment_id` |
 | `match_source` | TEXT | NULLABLE | `symbol_exact` \| `name_exact` \| `unresolved` |
 | `status` | TEXT | NOT NULL, DEFAULT `'pending'` | Row status: `pending`, `valid`, `duplicate`, `error`, `committed` |
 | `error_detail` | TEXT | NULLABLE | Validation or commit error message |

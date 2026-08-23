@@ -12,7 +12,10 @@ import investmentRepository from '../repositories/investmentRepository.js';
 import { query, withTransaction } from '../database/connection.js';
 import {
   getRowForInvestmentCreation,
+  lockBatchForUpdate,
+  lockInvestmentResolutionRows,
   overrideInvestment,
+  overrideInvestments,
   getCommittedRows,
   markBatchAborted,
   resetCommittedRowsToMatched,
@@ -39,8 +42,71 @@ export {
  *          always finds the row it just created.
  */
 export async function createInvestmentForRow({ batchId, rowId }) {
+  return withTransaction(async () => {
+    const locked = await validateInvestmentResolutionRows({
+      batchId,
+      rowIds: [rowId],
+      rejectExistingOverride: true,
+    });
+    if (!locked) return undefined;
+
+    const investment = await createInvestmentFromRow({ batchId, rowId });
+    await overrideInvestment({ batchId, rowId, investmentId: investment.id });
+    return investment;
+  });
+}
+
+/**
+ * Validate and lock the full resolution set before any investment lookup or
+ * creation. Returns undefined only when the batch itself does not exist.
+ *
+ * @param {{ batchId: number, rowIds: number[], rejectExistingOverride?: boolean }} args
+ */
+async function validateInvestmentResolutionRows({ batchId, rowIds, rejectExistingOverride = false }) {
+  const locked = await lockInvestmentResolutionRows({ batchId, rowIds });
+  if (!locked.batchStatus) return undefined;
+
+  if (!['awaiting_review', 'complete_with_errors'].includes(locked.batchStatus)) {
+    const err = /** @type {Error & { code?: string }} */ (
+      new Error(`Batch ${batchId} is not in a reviewable state (status: ${locked.batchStatus})`)
+    );
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  if (locked.rows.length !== rowIds.length || locked.rows.some((row) => !['matched', 'error'].includes(row.status))) {
+    const err = /** @type {Error & { code?: string }} */ (
+      new Error('One or more rows were not found in this batch or are no longer reviewable')
+    );
+    err.code = 'NOT_FOUND';
+    throw err;
+  }
+
+  if (rejectExistingOverride && locked.rows.some((row) => row.user_override_investment_id != null)) {
+    const err = /** @type {Error & { code?: string }} */ (
+      new Error('One or more rows already have a user-selected investment')
+    );
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  return locked.rows;
+}
+
+/**
+ * Create the holding after the caller has locked and validated its row set.
+ *
+ * @param {{ batchId: number, rowId: number }} args
+ */
+async function createInvestmentFromRow({ batchId, rowId }) {
   const row = await getRowForInvestmentCreation({ batchId, rowId });
-  if (!row) return undefined;
+  if (!row) {
+    const err = /** @type {Error & { code?: string }} */ (
+      new Error(`Row ${rowId} not found in batch ${batchId}`)
+    );
+    err.code = 'NOT_FOUND';
+    throw err;
+  }
   if (!row.default_asset_class) {
     const err = /** @type {Error & { code?: string }} */ (new Error('batch has no default asset class for new holdings'));
     err.code = 'VALIDATION_ERROR';
@@ -67,8 +133,68 @@ export async function createInvestmentForRow({ batchId, rowId }) {
     price_provider: 'manual',
   }));
 
-  await overrideInvestment({ batchId, rowId, investmentId: investment.id });
   return investment;
+}
+
+/**
+ * Resolve a complete review group through one atomic operation. Existing
+ * holdings are checked before any staging write. When a new holding is
+ * requested, its creation and every staging-row override share the same
+ * transaction, so an invalid row set cannot leave an orphan holding behind.
+ *
+ * @param {{ batchId: number, rowIds: number[], investmentId?: number, createNew?: boolean }} args
+ * @returns {Promise<{ investmentId: number, created: boolean, resolved: number, investment?: import('../types/rows.js').InvestmentRow }>}
+ */
+export async function resolveInvestmentRows({ batchId, rowIds, investmentId, createNew = false }) {
+  return withTransaction(async () => {
+    const locked = await validateInvestmentResolutionRows({
+      batchId,
+      rowIds,
+      rejectExistingOverride: createNew,
+    });
+    if (!locked) {
+      const err = /** @type {Error & { code?: string }} */ (new Error(`Batch ${batchId} not found`));
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+
+    let investment;
+    let effectiveId = investmentId;
+
+    if (createNew) {
+      investment = await createInvestmentFromRow({ batchId, rowId: rowIds[0] });
+      effectiveId = investment.id;
+    } else {
+      investment = await investmentRepository.getById(effectiveId);
+      if (!investment) {
+        const err = /** @type {Error & { code?: string }} */ (
+          new Error(`Investment ${effectiveId} not found`)
+        );
+        err.code = 'NOT_FOUND';
+        throw err;
+      }
+    }
+
+    const result = await overrideInvestments({
+      batchId,
+      rowIds,
+      investmentId: /** @type {number} */ (effectiveId),
+    });
+    if (result.updatedCount !== result.requestedCount) {
+      const err = /** @type {Error & { code?: string }} */ (
+        new Error('One or more rows were not found in this batch or are no longer reviewable')
+      );
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+
+    return {
+      investmentId: /** @type {number} */ (effectiveId),
+      created: createNew,
+      resolved: result.updatedCount,
+      ...(createNew ? { investment } : {}),
+    };
+  });
 }
 
 /**
@@ -129,17 +255,30 @@ export async function createInvestmentForRow({ batchId, rowId }) {
  */
 export async function rollbackBatch(batchId) {
   return withTransaction(async () => {
+    // Share the batch-first lock order with review resolution. This closes the
+    // route pre-check race and prevents resolution from creating a holding while
+    // rollback already owns staging rows (the opposite order could deadlock).
+    const lockedBatch = await lockBatchForUpdate(batchId);
+    if (!lockedBatch) {
+      const err = /** @type {Error & { code?: string }} */ (new Error(`Batch ${batchId} not found`));
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+    if (lockedBatch.status === 'aborted' || ['pending', 'staging', 'validating', 'matching', 'committing'].includes(lockedBatch.status)) {
+      const err = /** @type {Error & { code?: string }} */ (
+        new Error(`Batch ${batchId} cannot be rolled back from status ${lockedBatch.status}`)
+      );
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
     const rows = await getCommittedRows(batchId);
 
     // Brokerage flag for the route guard (see docstring). Committed cash rows
     // can only exist on a brokerage batch (resolveAndCheck writes route='cash'
     // only when is_brokerage) — this re-check keeps a corrupted/hand-edited
     // staging row from crossing the transactions/portfolio id line.
-    const { rows: batchRows } = await query(
-      `SELECT is_brokerage FROM portfolio_import_batches WHERE id = $1`,
-      [batchId],
-    );
-    const isBrokerage = batchRows[0]?.is_brokerage === true;
+    const isBrokerage = lockedBatch.is_brokerage === true;
 
     // 1. Trades stamped with this batch — one statement.
     const bulkDeletedIds = await portfolioTransactionRepository.hardDeleteByImportBatch(batchId);

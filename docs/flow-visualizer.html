@@ -2543,8 +2543,8 @@
         {
           "from": "fe.pages",
           "to": "fe.apiclient",
-          "payload": "POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override  { investment_id } or { create_new: true }",
-          "annotation": "User resolves each unresolved group via InvestmentCombobox (apps/frontend/src/components/portfolio/InvestmentCombobox.tsx); the override endpoint (portfolioImportBatchService.overrideInvestment) updates resolved_investment_id and propagates to all rows sharing the same raw symbol+name in the batch."
+          "payload": "POST /api/portfolio/import/batches/:id/rows/investment-override  { row_ids, investment_id } or { row_ids, create_new: true }",
+          "annotation": "User resolves each unresolved group via apps/frontend/src/features/portfolio/InvestmentCombobox.tsx. One atomic request locks the batch and complete row set, then resolveInvestmentRows in apps/node-backend/src/services/portfolioImportBatchService.js links every requested row to one existing or newly created holding."
         },
         {
           "from": "fe.apiclient",

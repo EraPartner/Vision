@@ -5,8 +5,8 @@ method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
 date: 2026-06-18
-updated: 2026-08-22
-last_modified: 2026-06-18
+updated: 2026-08-23
+last_modified: 2026-08-23
 tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078, account-id, adr-091, migration-0057]
 status: active
 aliases: [portfolio-imports-api, portfolio-csv-import, brokerage-import]
@@ -273,7 +273,13 @@ Get a single portfolio import batch with full status and row counts.
 
 ### DELETE /api/portfolio/import/batches/:id
 
-Rollback a batch. Deletes all `portfolio_transactions` committed by this batch and marks the batch status as `aborted`. Only committed batches can be rolled back; `awaiting_review` batches can be aborted without effect on portfolio_transactions.
+Rollback a batch. Deletes all `portfolio_transactions` committed by this batch and marks the batch status as `aborted`. Only settled or review-waiting batches can be rolled back; `awaiting_review` batches can be aborted without effect on portfolio transactions. The service rechecks the state while holding the same batch lock used by review resolution, so a concurrent group resolution cannot create a holding during rollback.
+
+| Status | Meaning |
+|--------|---------|
+| `200 OK` | Rollback completed; body reports `{ deleted }` |
+| `400 Bad Request` | Malformed id, batch already aborted, or batch still in progress |
+| `404 Not Found` | Batch does not exist, including when it disappeared before the locked recheck |
 
 ---
 
@@ -322,7 +328,7 @@ or
 { "create_new": true }
 ```
 
-When `create_new: true`, a new investment record is created from the row's `symbol` / `name` / `default_asset_class` and linked to the row. All other rows with the same raw symbol/name in this batch are also resolved to the new investment.
+When `create_new: true`, a new investment record is created from this row's `symbol` / `name` / `default_asset_class` and linked to this row. The review page uses the group endpoint below when resolving a complete symbol/name group.
 
 `investment_id: null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than a link to investment 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]).
 
@@ -333,6 +339,51 @@ When `create_new: true`, a new investment record is created from the row's `symb
 | `200 OK` | Override applied; body contains the updated row |
 | `400 Bad Request` | Malformed batch id, row id or `investment_id`, or `create_new` validation failed |
 | `404 Not Found` | Batch or staging row not found |
+
+---
+
+### POST /api/portfolio/import/batches/:id/rows/investment-override
+
+Resolve a complete review group with one atomic request instead of one request per staging row.
+
+**Request Body:**
+
+```json
+{ "row_ids": [101, 102, 103], "investment_id": 12 }
+```
+
+or:
+
+```json
+{ "row_ids": [101, 102, 103], "create_new": true }
+```
+
+- `row_ids` is required, unique, non-empty, and limited to 5,000 positive safe-integer staging-row ids.
+- Provide exactly one of `investment_id` or `create_new: true`.
+- Existing-investment mode verifies the investment before changing staging rows.
+- Create-new mode creates one holding from the first requested row, then links the complete set to it.
+- The batch and complete row set are locked before holding lookup or creation; the set-based update shares the same database transaction.
+- If any row is missing, belongs to another batch, or is no longer in `matched` or `error` status, the request returns `404` and changes no row. A failed create-new request also rolls back the holding creation.
+- A non-reviewable batch or create-new retry whose row set already has a user override returns `400` before creating a holding.
+- Error rows that are successfully assigned return to `matched`, clear their error message, and decrement the batch error count once per repaired row.
+
+**Response envelope `data`:**
+
+```json
+{
+  "investment_id": 12,
+  "created": false,
+  "resolved": 3
+}
+```
+
+When `created` is `true`, `data.investment` also contains the created holding.
+
+| Status | Meaning |
+|--------|---------|
+| `200 OK` | Every requested row resolved to one investment |
+| `400 Bad Request` | Malformed ids, empty/duplicate/oversized row set, invalid resolution mode, non-reviewable batch, or create-new row set already overridden |
+| `404 Not Found` | Investment or requested row missing, cross-batch, or no longer reviewable; nothing changed |
 
 ---
 

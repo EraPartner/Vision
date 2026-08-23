@@ -563,6 +563,7 @@ The id **route params** above are only half of what a write addresses. The other
 | `POST /api/import/batches/:id/rows/:rowId/override` | `recipient_id` | `parseOverrideId` (`lib/importBatchIds.js`) |
 | `POST /api/import/batches/:id/rows/:rowId/category-override` | `category_id` | `parseOverrideId` |
 | `POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override` | `investment_id` | `parseOverrideId` |
+| `POST /api/portfolio/import/batches/:id/rows/investment-override` | `row_ids[]`, `investment_id` | `validateId`, inline; safe-integer row ids and int32 investment id |
 | `POST /api/portfolio/import/batches/:id/commit` | `account_id` | `validateId`, inline |
 | `POST /api/portfolio/import/csv/custom` (+ `/csv/custom/stream`) | `account_id` | `validateId`, in `brokerageParamsSchema` |
 | `POST /api/transactions`, `PATCH /api/transactions/:id` | `recipient_id`, `category_id` | `validateId`, in the zod body schemas |

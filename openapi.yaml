@@ -6962,6 +6962,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed id, batch already aborted, or batch still in progress
+        "404":
+          description: Batch not found, including at the locked lifecycle recheck
 
   /api/portfolio/import/batches/{id}/preview:
     parameters:
@@ -7039,6 +7043,63 @@ paths:
           description: Malformed batch id, row id or investment_id, or create_new validation failed
         "404":
           description: Batch or staging row not found
+
+  /api/portfolio/import/batches/{id}/rows/investment-override:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+    post:
+      summary: Atomically resolve a portfolio import review group to one investment
+      operationId: portfolioImportRowsInvestmentOverride
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [row_ids]
+              properties:
+                row_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  uniqueItems: true
+                  items:
+                    type: integer
+                    format: int64
+                    minimum: 1
+                    maximum: 9007199254740991
+                  description: Complete set of review-row ids to resolve atomically
+                investment_id:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  description: Existing investment to link every requested row to
+                create_new:
+                  type: boolean
+                  enum: [true]
+                  description: Create one investment from the first requested row and link every requested row to it; rejected if any row already has a user override
+              oneOf:
+                - required: [investment_id]
+                - required: [create_new]
+      responses:
+        "200":
+          description: Every requested row resolved to one investment in a single transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed input, mutually ambiguous resolution request, non-reviewable batch, or create-new row set already overridden
+        "404":
+          description: Investment or requested row not found, belongs to another batch, or is no longer reviewable; no rows are changed
 
   /api/portfolio/import/batches/{id}/commit:
     parameters:
