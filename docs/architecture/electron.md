@@ -258,7 +258,7 @@ If updating the icon, regenerate `.icns` from `.svg` using an asset pipeline too
 bun install --frozen-lockfile --cwd packaging/electron
 ```
 
-CI backend verification and release verification add `--ignore-scripts`; the macOS package job uses the equivalent command from inside `packaging/electron/`. All three paths therefore resolve the dependency tree from the same lockfile. `npm run dist` remains a script invocation in local examples; it does not make npm the dependency resolver.
+A normal local install runs `packaging/electron/package.json`'s narrow `postinstall` command, `install-electron`, so the pinned Electron binary exists before any `electron:*` wrapper launches it. CI backend verification and release verification add `--ignore-scripts`; the macOS package job uses the equivalent command from inside `packaging/electron/` and electron-builder fetches its build runtime independently. All three paths therefore resolve the dependency tree from the same lockfile without broadening lifecycle-script execution on release runners. `npm run dist` remains a script invocation in local examples; it does not make npm the dependency resolver.
 
 The package declares its runtime dependencies directly (`archiver` and `yauzl`), and `bun.lock` pins their complete transitive graph. Do not reintroduce a second package lock for this directory.
 
@@ -673,6 +673,8 @@ The backend sets Content-Security-Policy headers appropriate for Electron:
 ## Development
 
 ### Running Electron
+
+The root `bun install` prepares the separate Electron package outside CI. If its local binary is missing, repair it explicitly with `bun run install:electron` before launching a wrapper.
 
 ```bash
 # Development mode

@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-22
+updated: 2026-08-23
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -25,9 +25,10 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| `install:all` | `bun install` | Install workspace dependencies (frontend + backend + packages/types). |
-| `prepare` | `node scripts/setup-git-hooks.js` | Lifecycle hook — installs the repo's git hooks automatically after `bun install`. |
+| `install:all` | `bun install` | Install workspace dependencies; the root `prepare` hook also installs the separate Electron package outside CI. |
+| `prepare` | hooks setup + conditional frozen Electron install | Lifecycle hook — installs Git hooks, then installs `packaging/electron` dependencies outside CI when that directory and Bun are available. The Electron package's own `postinstall` materializes its pinned local binary. |
 | `hooks:setup` | `node scripts/setup-git-hooks.js` | Manually (re)install the git hooks (same script as `prepare`). |
+| `install:electron` | `bun install --frozen-lockfile --cwd packaging/electron` | Install the separate Electron dependency tree and run its local binary installer. CI and release use their explicit `--ignore-scripts` variants instead. |
 | `dev` | `concurrently … backend dev … frontend dev` | Run both workspaces' `dev` scripts in parallel with coloured prefixes. |
 | `backend` | `bun run --filter '…-node' start` | Start the backend in production mode (no watcher). |
 | `update` | `bun update` | Refresh dependency graph to the latest allowed versions. |
@@ -130,7 +131,7 @@ Every script that *writes* the alembic version table (`db:migrate`/`db:upgrade`/
 
 ### Electron
 
-The wrappers spawn Electron from `packaging/electron/`, layering a docker-compose override based on the desired flavour.
+The wrappers spawn Electron from `packaging/electron/`, layering a docker-compose override based on the desired flavour. A normal root `bun install` prepares this separate package and its pinned Electron binary; run `bun run install:electron` to repair or refresh it explicitly.
 
 | Script | Command | Description |
 |--------|---------|-------------|

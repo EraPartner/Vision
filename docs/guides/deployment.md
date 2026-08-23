@@ -260,6 +260,7 @@ Vision can be packaged into a clickable macOS .app bundle with `.dmg` and `.zip`
 cd packaging/electron
 
 # Install the dependency tree pinned by packaging/electron/bun.lock
+# The package postinstall materializes the pinned local Electron binary.
 bun install --frozen-lockfile
 
 # Run build and package
@@ -278,7 +279,7 @@ This produces three artifacts in `packaging/electron/dist/`:
 - **Root project**: Uses bun (via `bun.lock`)
 - **Electron sub-package**: Uses Bun via its separate `packaging/electron/bun.lock`
 
-The Electron directory is not a root workspace, so it needs its own explicit frozen install. CI backend verification, release verification, and the macOS package build all resolve this same lockfile. Verification jobs add `--ignore-scripts`; `npm run dist` below invokes a package script but does not resolve dependencies with npm.
+The Electron directory is not a root workspace, so it needs its own explicit frozen install. A normal local install runs the package's narrow `postinstall` command, `install-electron`, which verifies and materializes the pinned Electron binary required by `electron:dev`, `electron:prod`, and local packaging. CI backend verification, release verification, and the macOS package build all resolve the same lockfile with `--ignore-scripts`; electron-builder obtains the build runtime independently during packaging. `npm run dist` below invokes a package script but does not resolve dependencies with npm.
 
 The package declares the runtime modules loaded by the backup bundle directly:
 

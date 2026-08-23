@@ -4,6 +4,7 @@
   "description": "Vision desktop wrapper",
   "main": "main.js",
   "scripts": {
+    "postinstall": "install-electron",
     "start": "node ../../scripts/generate-locales.js && electron .",
     "dist": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64",
     "dist:arm64": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64"
