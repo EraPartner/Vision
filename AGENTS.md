@@ -60,6 +60,12 @@ alone. Use read-only subagents freely for triage and review; delegate writes onl
 isolated worktrees and explicit non-overlapping ownership. Finish the current batch before choosing
 another, and use a fresh cloud task for the next batch.
 
+Before selecting a Cloud batch, verify the latest required `CI Complete` result on `main` is green
+when the connected integration exposes that state. After opening a non-draft pull request, request
+GitHub native squash auto-merge and read the pull request back to confirm it is queued. Keep the
+branch current and repair batch-introduced failures until the ruleset passes. Start the next batch
+only after the merge is present on `main`; a queued merge is a wait state, not completion.
+
 ## Provider and host behavior
 
 These obligations are tracked here because Codex does not auto-load `AGENTS.local.md` when this
@@ -169,6 +175,9 @@ report those checks as skipped and leave them for a local session. In cloud sess
 publish with shell Git commands, configure Git credentials, or create a pull request with `gh`.
 The platform-managed **Open pull request** action may create a pull request, and the connected
 GitHub integration may update the same branch for pull-request-linked follow-ups. When the user
-explicitly requests it, that integration may merge the pull request after all required checks and
-approvals pass and no blocking review remains. Do not use an admin bypass or directly update a
-default or protected branch outside that approved merge.
+explicitly requests it, that integration may enable native squash auto-merge for the exact pull
+request. Confirm the auto-merge request by reading back the pull-request state; do not infer it from
+green local checks or a submitted request. If native auto-merge is unavailable, the integration may
+merge after all required checks and approvals pass and no blocking review, code-quality, or
+code-scanning condition remains. Do not use an admin bypass or directly update a default or
+protected branch outside that approved merge.

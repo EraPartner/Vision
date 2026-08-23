@@ -17,6 +17,21 @@ that batch. Do not replace it after an interruption or rate limit, and do not be
 Use the current cloud task and its diff as recovery state; do not create a separate checkpoint
 schema or depend on chat prose when files provide stronger evidence.
 
+## Verify the merge path before selection
+
+When repository state is available through the connected GitHub integration, verify the delivery
+path before spending implementation work:
+
+- the latest required `CI Complete` result on the default branch is successful;
+- GitHub native auto-merge is enabled and squash merge is allowed; and
+- the active default-branch rules require the branch to be current, require `CI Complete`, and have
+  no unmet review, code-quality, or code-scanning condition.
+
+If default-branch CI is red, select a TODO finding only when it directly repairs that failure and
+keep it as a one-item batch. Otherwise stop and request a dedicated CI-restoration task. Do not
+build an unrelated batch that cannot merge. If remote settings cannot be read, record that
+auto-merge is unverified rather than promising it will work.
+
 ## Triage with read-only scouts
 
 Read `TODO.md`'s status rules, usage guidance, binding constraints, and `## Findings`. Revalidate
@@ -101,7 +116,8 @@ Git history and the merged pull request are the completion record.
 ## Publish only when authorized
 
 In cloud, use the platform-managed **Open pull request** action rather than terminal Git
-publication. The pull-request description includes:
+publication. Open a non-draft pull request so it is eligible for native auto-merge. The
+pull-request description includes:
 
 - every exact selected heading and the reason for batching them;
 - implementation and changed paths per item;
@@ -110,10 +126,31 @@ publication. The pull-request description includes:
 - residual risks; and
 - confirmation that no unselected finding was included.
 
-Merge through the connected integration only when the user explicitly authorized it, all required
-checks and approvals pass, no blocking review remains, and the integration exposes permission.
-Never bypass protections or fall back to shell credentials or pushes.
+When the user authorized merge, immediately ask the connected integration to enable GitHub native
+auto-merge with the squash method for this exact pull request. Read the pull request back and
+confirm that auto-merge is actually queued; a request, a green local check, or an agent statement is
+not proof.
+
+Keep the pull request mergeable while it is queued:
+
+- monitor the required `CI Complete` check and every ruleset condition;
+- diagnose and fix failures introduced by the batch, then update the same pull-request branch;
+- use the connected integration to update the branch when the strict ruleset reports it behind;
+- re-check auto-merge after every update and re-enable it if GitHub cleared the request; and
+- do not absorb a failure that was already present on the default branch unless repairing it was
+  the selected one-item batch.
+
+If native auto-merge is unavailable, remain in the task and merge through the connected integration
+after all required checks and approvals pass and no blocking review, code-quality, or code-scanning
+condition remains. Never bypass protections or fall back to shell credentials or pushes.
 
 If publication is unavailable, leave the reviewed diff ready and identify the single missing
 platform action. After merge, verify that `main` contains the implementation and checked headings.
-Do not select the next batch. Finish with `NEXT_BATCH_SESSION: START_FRESH_CLOUD_TASK`.
+Do not select the next batch.
+
+Finish with exactly one route:
+
+- verified merged: `NEXT_BATCH_SESSION: START_FRESH_CLOUD_TASK`;
+- native auto-merge verified queued but not yet merged: `NEXT_BATCH_SESSION: WAIT_FOR_AUTO_MERGE`;
+- auto-merge or publication unavailable: `NEXT_BATCH_SESSION: BLOCKED` plus the exact missing
+  platform capability or failing gate.

@@ -4,10 +4,10 @@ type: guide
 status: active
 date: 2026-04-28
 updated: 2026-08-23
-tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
-description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
+tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, auto-merge, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
+description: GitHub Actions CI/CD pipelines including continuous integration checks, native pull-request auto-merge, supply chain security scanning, quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", "config/gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
+related_code: [".github/workflows/ci.yml", ".github/workflows/auto-merge.yml", ".github/workflows/release.yml", ".agents/skills/implement-todo-batch/SKILL.md", "config/gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
 ---
 
 # CI/CD Pipelines
@@ -568,6 +568,33 @@ ci-complete:
 4. Remove individual job names if previously set (ci-complete is the sufficient check)
 
 **Failure:** Indicates failure in Docker-tier scanning or container health; must be fixed before merging.
+
+---
+
+## Native pull-request auto-merge
+
+The repository enables GitHub native auto-merge and permits squash merges. The active `main`
+ruleset requires a current branch, the `CI Complete` status check, and its configured code-quality
+and code-scanning conditions. Native auto-merge is therefore a server-side queue: after it is
+enabled for an eligible non-draft pull request, GitHub merges only when those rules pass.
+
+There are two callers:
+
+- `.github/workflows/auto-merge.yml` waits for required checks and enables squash auto-merge only
+  for Dependabot patch and minor updates.
+- The `implement-todo-batch` Cloud workflow asks the connected GitHub integration to enable squash
+  auto-merge for its exact backlog pull request and then reads the PR back to verify that the request
+  was accepted.
+
+Cloud backlog auto-merge deliberately does not use a branch-prefix or actor-name GitHub Actions
+workflow. Those identifiers can be copied by an unrelated pull request. The connected integration
+must instead act on the exact PR authorized by the kickoff prompt.
+
+Before selecting a Cloud batch, the agent checks that the latest required `CI Complete` result on
+`main` is green. After opening the PR, it keeps the branch current, fixes failures introduced by the
+batch, and re-enables auto-merge if an update clears the request. A red baseline is a blocker unless
+the selected one-item batch directly repairs it. A submitted request is not proof: the PR must show
+native auto-merge as queued, and the next batch starts only after the merge reaches `main`.
 
 ---
 
