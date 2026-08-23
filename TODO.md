@@ -7305,7 +7305,7 @@ statement-balance-without-date) are NOT repeated here — check there too before
   - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
   - The per-card count joins the aggregation payload to the entity list via `a.name === acct.bank_account`; any divergence (rename mid-flight, whitespace) hides the line with no signal. Low stakes; consider joining on account id once the payload exposes it.
 
-- [ ] **`getAggregationBankBalances` client type omits fields the backend has sent since WP-A1** 🔽
+- [x] **`getAggregationBankBalances` client type omits fields the backend has sent since WP-A1** 🔽 ✅ 2026-08-23 · f8f494b6
   - ↪ _from: Orchestration session 2026-07-27 · reconcile-flow verification_
   - `apps/frontend/src/lib/api/aggregations.ts:69-84` lacks `display_name`, `drift`, `anchor_date`, `post_anchor_count` that `infoRepositoryBanks.js:156-172` serializes. Nothing breaks (the widget reads them off the account entity), but the contract type is stale and invites a consumer reading `undefined`.
 
