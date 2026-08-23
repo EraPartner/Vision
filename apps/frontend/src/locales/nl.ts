@@ -2552,7 +2552,7 @@ const nl: Record<string, string> = {
   'tax.capitalGainsTax': 'Meerwaardebelasting',
   'tax.card.monthlyTaxReserve': 'Maandelijkse belastingreserve',
   'tax.card.netTakeHome': 'Netto uitbetaald',
-  'tax.card.netTakeHome.desc': 'Na werknemersbijdrage sociale zekerheid, speciale SS-bijdrage en PIT',
+  'tax.card.netTakeHome.desc': 'Na werknemersbijdrage sociale zekerheid, speciale SS-bijdrage, PIT en geschatte onroerende voorheffing',
   'tax.card.profileGrossIncome': 'Profiel Bruto Inkomen',
   'tax.card.profileGrossIncome.desc': 'Jaarlijks bruto-inkomen gebruikt in het profiel',
   'tax.card.totalPIT': 'Totale PIT (Federaal + Gemeentelijk)',

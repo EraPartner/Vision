@@ -2550,7 +2550,7 @@
   "tax.capitalGainsTax": "Capital Gains Tax",
   "tax.card.monthlyTaxReserve": "Monthly Tax Reserve",
   "tax.card.netTakeHome": "Net Take-Home",
-  "tax.card.netTakeHome.desc": "After employee social security, special SS contribution, and PIT",
+  "tax.card.netTakeHome.desc": "After employee social security, special SS contribution, PIT, and estimated property tax",
   "tax.card.profileGrossIncome": "Profile Gross Income",
   "tax.card.profileGrossIncome.desc": "Annual gross income used in profile",
   "tax.card.totalPIT": "Total PIT (Federal + Communal)",
