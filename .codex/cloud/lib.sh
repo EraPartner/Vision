@@ -71,19 +71,15 @@ cloud_run_with_heartbeat() {
   local label="$3"
   shift 3
 
-  cloud_run_with_timeout "$duration" "$@" &
-  local command_pid=$!
-
   (
     while sleep "$interval"; do
-      kill -0 "$command_pid" >/dev/null 2>&1 || exit 0
       cloud_log "WAIT: $label is still running."
     done
   ) &
   local heartbeat_pid=$!
 
   local status=0
-  wait "$command_pid" || status=$?
+  cloud_run_with_timeout "$duration" "$@" || status=$?
   kill "$heartbeat_pid" >/dev/null 2>&1 || true
   wait "$heartbeat_pid" >/dev/null 2>&1 || true
   return "$status"
@@ -95,19 +91,15 @@ cloud_run_package_with_heartbeat() {
   local label="$3"
   shift 3
 
-  cloud_run_package_with_timeout "$duration" "$@" &
-  local command_pid=$!
-
   (
     while sleep "$interval"; do
-      kill -0 "$command_pid" >/dev/null 2>&1 || exit 0
       cloud_log "WAIT: $label is still running."
     done
   ) &
   local heartbeat_pid=$!
 
   local status=0
-  wait "$command_pid" || status=$?
+  cloud_run_package_with_timeout "$duration" "$@" || status=$?
   kill "$heartbeat_pid" >/dev/null 2>&1 || true
   wait "$heartbeat_pid" >/dev/null 2>&1 || true
   return "$status"

@@ -62,14 +62,18 @@ before every suite, so rows from an interrupted or prior task cannot survive int
 Caller-supplied database URLs remain caller-managed and are never reset. Database migrations use a
 persistent head cache under
 `~/.codex/vision-cloud-state/`. Installation and database lifecycle phases print timestamped
-`START`, `WAIT`, `DONE`, or `FAILED` messages. Docker probes, downloads, package operations,
-PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; package installation is
-non-interactive and network calls have bounded retries. The package-index and package-support steps
-each stop after two minutes, and PostgreSQL 18 installation stops after five minutes. These
-deadlines reserve startup time for project dependency installation instead of allowing one silent
-system-package command to consume the entire cloud deadline. The pinned Bun download stops after two
-minutes, Bun runtime resolution stops after fifteen seconds, and the workspace install emits a
-heartbeat every 30 seconds and stops after seven minutes.
+`START`, `WAIT`, `DONE`, or `FAILED` messages. Setup merges standard error into standard output
+before the first marker so package-manager output and lifecycle markers retain execution order.
+Long-running package commands remain in the foreground; only their heartbeat timer runs in the
+background.
+Dependency-fingerprint writes are explicit lifecycle steps. Docker probes, downloads, package
+operations, PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; package
+installation is non-interactive and network calls have bounded retries. The package-index and
+package-support steps each stop after two minutes, and PostgreSQL 18 installation stops after five
+minutes. These deadlines reserve startup time for project dependency installation instead of
+allowing one silent system-package command to consume the entire cloud deadline. The pinned Bun
+download stops after two minutes, Bun runtime resolution stops after fifteen seconds, and the
+workspace install emits a heartbeat every 30 seconds and stops after seven minutes.
 
 Codex automatically invalidates its environment cache after setup or maintenance configuration
 changes. Use **Reset cache** in the environment settings if an older cached image still has the

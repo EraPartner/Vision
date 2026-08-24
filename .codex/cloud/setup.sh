@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Codex cloud captures stdout and stderr separately, which can display buffered
+# package-manager output after later lifecycle markers. Merge them before any
+# setup output so the trace preserves execution order.
+exec 2>&1
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 codex_home="${CODEX_HOME:-$HOME/.codex}"

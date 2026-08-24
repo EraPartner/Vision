@@ -39,7 +39,8 @@ else
       venv/bin/python -m pip install --no-input --require-hashes \
         --only-binary=psycopg2-binary \
         -r config/requirements.txt
-  cloud_write_marker "$python_marker" "$python_fingerprint"
+  cloud_run_step 'Persist Python dependency fingerprint' \
+    cloud_write_marker "$python_marker" "$python_fingerprint"
 fi
 
 cloud_log 'START: Resolve Bun dependency fingerprint.'
@@ -69,5 +70,6 @@ else
     cloud_run_package_with_heartbeat 420s 30s 'Bun workspace dependency installation' env \
       PUPPETEER_SKIP_DOWNLOAD=true \
       bun install --frozen-lockfile --ignore-scripts --no-progress
-  cloud_write_marker "$bun_marker" "$bun_fingerprint"
+  cloud_run_step 'Persist Bun dependency fingerprint' \
+    cloud_write_marker "$bun_marker" "$bun_fingerprint"
 fi

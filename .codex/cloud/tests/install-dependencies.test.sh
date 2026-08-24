@@ -158,4 +158,17 @@ if command -v timeout >/dev/null 2>&1; then
   fi
 fi
 
+heartbeat_output="$(
+  cloud_run_with_heartbeat 2s 0.05s 'foreground test command' \
+    bash -c 'printf "%s\n" "workload-start"; sleep 0.2; printf "%s\n" "workload-done"'
+)"
+heartbeat_start_line="$(printf '%s\n' "$heartbeat_output" | grep -n '^workload-start$' | cut -d: -f1)"
+heartbeat_wait_line="$(printf '%s\n' "$heartbeat_output" | grep -n 'WAIT: foreground test command' | head -1 | cut -d: -f1)"
+heartbeat_done_line="$(printf '%s\n' "$heartbeat_output" | grep -n '^workload-done$' | cut -d: -f1)"
+if [[ -z "$heartbeat_start_line" || -z "$heartbeat_wait_line" || -z "$heartbeat_done_line" ]] ||
+  (( heartbeat_start_line >= heartbeat_wait_line || heartbeat_wait_line >= heartbeat_done_line )); then
+  printf 'FAIL: heartbeat output did not preserve foreground command order\n' >&2
+  exit 1
+fi
+
 printf '%s\n' 'PASS: cloud dependency cache tests'
