@@ -53,6 +53,18 @@ done
 exec /usr/bin/install "${args[@]}"
 FAKE_INSTALL
 
+cat > "$fake_bin/timeout" <<'FAKE_TIMEOUT'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$TIMEOUT_LOG"
+if [[ "${1:-}" == --kill-after=* ]]; then
+  shift
+fi
+(( $# >= 2 ))
+shift
+exec "$@"
+FAKE_TIMEOUT
+
 cat > "$fake_bin/apt-get" <<'FAKE_APT'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -70,13 +82,14 @@ chmod +x \
   "$fake_bin/sudo" \
   "$fake_bin/curl" \
   "$fake_bin/install" \
+  "$fake_bin/timeout" \
   "$fake_bin/apt-get"
 
 export PATH="$fake_bin:/usr/bin:/bin"
 export HOME="$test_root/home"
 export CODEX_HOME="$test_root/home/.codex"
 export CALL_LOG="$test_root/apt-calls.log"
-export VISION_CLOUD_DISABLE_TIMEOUT=1
+export TIMEOUT_LOG="$test_root/timeouts.log"
 export VISION_CLOUD_OS_RELEASE="$system_root/os-release"
 export VISION_CLOUD_POSTGRES_BIN="$system_root/usr/lib/postgresql/18/bin/postgres"
 export VISION_CLOUD_POSTGRES_COMMON_DIR="$system_root/etc/postgresql-common"
@@ -92,6 +105,7 @@ dependency_line="$(grep -n 'install-dependencies.sh' "$repo_root/.codex/cloud/se
 grep -Fq 'Dpkg::Use-Pty=0 update' "$CALL_LOG"
 grep -Fq 'Dpkg::Use-Pty=0 install -y --no-install-recommends postgresql-common' "$CALL_LOG"
 grep -Fq 'Dpkg::Use-Pty=0 install -y --no-install-recommends postgresql-18' "$CALL_LOG"
+grep -Eq '^--kill-after=10s 300s .*postgresql-common$' "$TIMEOUT_LOG"
 grep -Fxq 'create_main_cluster = false' \
   "$VISION_CLOUD_POSTGRES_COMMON_DIR/createcluster.conf"
 [[ -x "$VISION_CLOUD_POSTGRES_BIN" ]]

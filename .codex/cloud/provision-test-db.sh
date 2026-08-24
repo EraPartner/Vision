@@ -102,7 +102,7 @@ if [[ ! -x "$postgres_bin" ]]; then
     cloud_run_with_heartbeat 120s 30s 'PostgreSQL package index refresh' \
       "${apt_get[@]}" update
   cloud_run_step 'Install PostgreSQL package support' \
-    cloud_run_with_heartbeat 120s 30s 'PostgreSQL package support installation' \
+    cloud_run_with_heartbeat 300s 30s 'PostgreSQL package support installation' \
       "${apt_get[@]}" install -y --no-install-recommends \
       postgresql-common
 

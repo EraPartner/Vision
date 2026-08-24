@@ -68,9 +68,9 @@ Long-running package commands remain in the foreground; only their heartbeat tim
 background.
 Dependency-fingerprint writes are explicit lifecycle steps. Docker probes, downloads, package
 operations, PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; package
-installation is non-interactive and network calls have bounded retries. The package-index and
-package-support steps each stop after two minutes, and PostgreSQL 18 installation stops after five
-minutes. These deadlines reserve startup time for project dependency installation instead of
+installation is non-interactive and network calls have bounded retries. The package-index step
+stops after two minutes. PostgreSQL package-support and PostgreSQL 18 installation each stop after
+five minutes. These deadlines reserve startup time for project dependency installation instead of
 allowing one silent system-package command to consume the entire cloud deadline. The pinned Bun
 download stops after two minutes, Bun runtime resolution stops after fifteen seconds, and the
 workspace install emits a heartbeat every 30 seconds and stops after seven minutes.
