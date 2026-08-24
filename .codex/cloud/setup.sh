@@ -21,13 +21,20 @@ command -v python3 >/dev/null || { printf '%s\n' 'Python 3 is required.' >&2; ex
 command -v bun >/dev/null || { printf '%s\n' 'Bun is required.' >&2; exit 1; }
 
 cd "$repo_root"
-bash "$script_dir/install-dependencies.sh"
-
 cloud_log 'Checking for an existing Docker daemon (8s deadline).'
 if cloud_docker_daemon_available; then
+  use_native_postgres=0
   cloud_log 'Docker daemon available; bun run test:db will use a disposable Postgres container.'
 else
-  cloud_log 'No usable Docker daemon; provisioning native PostgreSQL 18.'
+  use_native_postgres=1
+  cloud_log 'No usable Docker daemon; installing native PostgreSQL 18 packages before project dependencies.'
+  bash "$script_dir/provision-test-db.sh" --install-packages-only
+fi
+
+bash "$script_dir/install-dependencies.sh"
+
+if (( use_native_postgres )); then
+  cloud_log 'Provisioning the native PostgreSQL 18 test database.'
   bash "$script_dir/provision-test-db.sh"
 fi
 

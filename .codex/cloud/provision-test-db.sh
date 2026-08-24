@@ -7,6 +7,17 @@ codex_home="${CODEX_HOME:-$HOME/.codex}"
 cloud_env="$codex_home/vision-cloud-test-db.env"
 state_dir="$codex_home/vision-cloud-state"
 test_db_url='postgresql://vision_test:vision_test@127.0.0.1:5432/vision_test'
+postgres_bin="${VISION_CLOUD_POSTGRES_BIN:-/usr/lib/postgresql/18/bin/postgres}"
+postgres_common_dir="${VISION_CLOUD_POSTGRES_COMMON_DIR:-/etc/postgresql-common}"
+pgdg_key_path="${VISION_CLOUD_PGDG_KEY_PATH:-/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc}"
+pgdg_source_path="${VISION_CLOUD_PGDG_SOURCE_PATH:-/etc/apt/sources.list.d/pgdg.list}"
+os_release="${VISION_CLOUD_OS_RELEASE:-/etc/os-release}"
+
+mode="${1:-provision}"
+if [[ "$mode" != provision && "$mode" != --install-packages-only ]]; then
+  printf 'Usage: %s [--install-packages-only]\n' "$0" >&2
+  exit 2
+fi
 
 # shellcheck source=.codex/cloud/lib.sh
 source "$script_dir/lib.sh"
@@ -41,18 +52,21 @@ apt_get=(
   -o Acquire::http::Timeout=30
   -o Acquire::https::Timeout=30
   -o DPkg::Lock::Timeout=60
+  -o Dpkg::Use-Pty=0
 )
 
-if [[ ! -x /usr/lib/postgresql/18/bin/postgres ]]; then
+if [[ ! -x "$postgres_bin" ]]; then
   command -v curl >/dev/null || {
     cloud_run_step 'Refresh package indexes for curl' \
-      cloud_run_with_timeout 600s "${apt_get[@]}" update
+      cloud_run_with_heartbeat 120s 30s 'curl package index refresh' \
+        "${apt_get[@]}" update
     cloud_run_step 'Install curl and certificate authorities' \
-      cloud_run_with_timeout 600s "${apt_get[@]}" install -y --no-install-recommends \
+      cloud_run_with_heartbeat 120s 30s 'curl and certificate installation' \
+        "${apt_get[@]}" install -y --no-install-recommends \
         ca-certificates curl
   }
 
-  os_codename="$(awk -F= '$1 == "VERSION_CODENAME" { gsub(/^"|"$/, "", $2); print $2; exit }' /etc/os-release)"
+  os_codename="$(awk -F= '$1 == "VERSION_CODENAME" { gsub(/^"|"$/, "", $2); print $2; exit }' "$os_release")"
   if [[ -z "$os_codename" ]]; then
     printf '%s\n' 'Could not determine the operating-system codename for PostgreSQL packages.' >&2
     exit 1
@@ -60,8 +74,12 @@ if [[ ! -x /usr/lib/postgresql/18/bin/postgres ]]; then
 
   pg_key="$(mktemp)"
   pg_source="$(mktemp)"
+  configured_createcluster_conf=''
   cleanup_temp() {
     rm -f "$pg_key" "$pg_source"
+    if [[ -n "$configured_createcluster_conf" ]]; then
+      rm -f "$configured_createcluster_conf"
+    fi
   }
   trap cleanup_temp EXIT
 
@@ -74,20 +92,50 @@ if [[ ! -x /usr/lib/postgresql/18/bin/postgres ]]; then
       https://www.postgresql.org/media/keys/ACCC4CF8.asc \
       -o "$pg_key"
   printf '%s\n' \
-    "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${os_codename}-pgdg main" \
+    "deb [signed-by=$pgdg_key_path] https://apt.postgresql.org/pub/repos/apt ${os_codename}-pgdg main" \
     > "$pg_source"
   "${root[@]}" install -D -m 0644 "$pg_key" \
-    /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    "$pgdg_key_path"
   "${root[@]}" install -D -m 0644 "$pg_source" \
-    /etc/apt/sources.list.d/pgdg.list
+    "$pgdg_source_path"
   cloud_run_step 'Refresh PostgreSQL package indexes' \
-    cloud_run_with_timeout 600s "${apt_get[@]}" update
+    cloud_run_with_heartbeat 120s 30s 'PostgreSQL package index refresh' \
+      "${apt_get[@]}" update
+  cloud_run_step 'Install PostgreSQL package support' \
+    cloud_run_with_heartbeat 120s 30s 'PostgreSQL package support installation' \
+      "${apt_get[@]}" install -y --no-install-recommends \
+      postgresql-common
+
+  createcluster_conf="$postgres_common_dir/createcluster.conf"
+  configured_createcluster_conf="$(mktemp)"
+  awk '
+    BEGIN { updated = 0 }
+    /^[[:space:]#]*create_main_cluster[[:space:]]*=/ {
+      print "create_main_cluster = false"
+      updated = 1
+      next
+    }
+    { print }
+    END {
+      if (!updated) print "create_main_cluster = false"
+    }
+  ' "$createcluster_conf" > "$configured_createcluster_conf"
+  "${root[@]}" install -m 0644 "$configured_createcluster_conf" "$createcluster_conf"
+  rm -f "$configured_createcluster_conf"
+  configured_createcluster_conf=''
+
   cloud_run_step 'Install PostgreSQL 18' \
-    cloud_run_with_timeout 900s "${apt_get[@]}" install -y --no-install-recommends \
+    cloud_run_with_heartbeat 300s 30s 'PostgreSQL 18 installation' \
+      "${apt_get[@]}" install -y --no-install-recommends \
       postgresql-18
 
   cleanup_temp
   trap - EXIT
+fi
+
+if [[ "$mode" == --install-packages-only ]]; then
+  cloud_log 'PostgreSQL 18 packages are installed; cluster creation is deferred.'
+  exit 0
 fi
 
 if ! cloud_run_with_timeout 15s "${root[@]}" \

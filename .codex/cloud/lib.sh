@@ -39,7 +39,7 @@ cloud_run_package_with_timeout() {
   fi
 
   if command -v timeout >/dev/null 2>&1; then
-    cloud_package_env timeout --foreground --kill-after=10s "$duration" "$@"
+    cloud_package_env timeout --kill-after=10s "$duration" "$@"
     return
   fi
 
@@ -57,12 +57,36 @@ cloud_run_with_timeout() {
   fi
 
   if command -v timeout >/dev/null 2>&1; then
-    timeout --foreground --kill-after=10s "$duration" "$@"
+    timeout --kill-after=10s "$duration" "$@"
     return
   fi
 
   cloud_log "WARNING: timeout(1) is unavailable; running without an external deadline: $1"
   "$@"
+}
+
+cloud_run_with_heartbeat() {
+  local duration="$1"
+  local interval="$2"
+  local label="$3"
+  shift 3
+
+  cloud_run_with_timeout "$duration" "$@" &
+  local command_pid=$!
+
+  (
+    while sleep "$interval"; do
+      kill -0 "$command_pid" >/dev/null 2>&1 || exit 0
+      cloud_log "WAIT: $label is still running."
+    done
+  ) &
+  local heartbeat_pid=$!
+
+  local status=0
+  wait "$command_pid" || status=$?
+  kill "$heartbeat_pid" >/dev/null 2>&1 || true
+  wait "$heartbeat_pid" >/dev/null 2>&1 || true
+  return "$status"
 }
 
 cloud_run_step() {
