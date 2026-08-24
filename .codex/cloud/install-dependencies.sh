@@ -37,6 +37,7 @@ else
       PIP_DEFAULT_TIMEOUT=30 \
       PIP_RETRIES=3 \
       venv/bin/python -m pip install --no-input --require-hashes \
+        --only-binary=psycopg2-binary \
         -r config/requirements.txt
   cloud_write_marker "$python_marker" "$python_fingerprint"
 fi

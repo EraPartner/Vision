@@ -18,6 +18,10 @@ the relevant runtime version, requirement input, lockfiles, and workspace manife
 fingerprints are stored under `~/.codex/vision-cloud-state/`, so maintenance skips package managers
 entirely when those inputs and their installed directories are unchanged.
 
+The PostgreSQL adapter uses the prebuilt `psycopg2-binary` distribution. Cloud pip accepts only a
+published wheel for that package, so setup never spends its startup budget compiling `psycopg2`
+from source. An unsupported Python or platform combination fails promptly instead.
+
 Cloud uses the same Bun 1.3.14 version as CI and the devcontainer. A discovered Bun command is
 accepted only when `bun --version` returns 1.3.14 within ten seconds. Otherwise setup downloads the
 release with the same SHA-256 checksums used by the devcontainer into

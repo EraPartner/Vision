@@ -106,6 +106,8 @@ run_installer
 assert_equals 1 "$(count_calls '^python:-m pip ')" 'first run installs Python dependencies once'
 assert_equals 1 "$(count_calls '^python:-m pip .*--require-hashes')" \
   'Python install enforces hashes from the compiled lock'
+assert_equals 1 "$(count_calls '^python:-m pip .*--only-binary=psycopg2-binary')" \
+  'Python install refuses to build the PostgreSQL adapter from source'
 assert_equals 1 "$(count_calls '^bun-install:')" 'first run installs workspace dependencies once'
 assert_equals 1 "$(count_calls '^python-secret:unset$')" 'pip cannot read arbitrary setup secrets'
 assert_equals 1 "$(count_calls '^bun-secret:unset$')" 'Bun cannot read arbitrary setup secrets'
