@@ -18,7 +18,6 @@ grep -Fqx 'export CODEX_SESSION_ENV=cloud' "$HOME/.bashrc" || \
   printf '%s\n' 'export CODEX_SESSION_ENV=cloud' >> "$HOME/.bashrc"
 
 command -v python3 >/dev/null || { printf '%s\n' 'Python 3 is required.' >&2; exit 1; }
-command -v bun >/dev/null || { printf '%s\n' 'Bun is required.' >&2; exit 1; }
 
 cd "$repo_root"
 cloud_log 'Checking for an existing Docker daemon (8s deadline).'

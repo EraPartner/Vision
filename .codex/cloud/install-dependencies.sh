@@ -12,6 +12,13 @@ source "$script_dir/lib.sh"
 install -d -m 0700 "$state_dir"
 cd "$repo_root"
 
+bash "$script_dir/install-bun.sh"
+toolchain_env="$codex_home/vision-cloud-toolchain.env"
+if [[ -f "$toolchain_env" ]]; then
+  # shellcheck disable=SC1090
+  source "$toolchain_env"
+fi
+
 python_fingerprint="$({
   python3 --version
   cloud_fingerprint 2 config/requirements.in config/requirements.txt
@@ -34,8 +41,10 @@ else
   cloud_write_marker "$python_marker" "$python_fingerprint"
 fi
 
+cloud_log 'START: Resolve Bun dependency fingerprint.'
+bun_version="$(cloud_run_package_with_timeout 15s bun --version)"
 bun_fingerprint="$({
-  bun --version
+  printf '%s\n' "$bun_version"
   cloud_fingerprint 1 \
     bun.lock \
     apps/node-backend/bun.lock \
@@ -45,6 +54,7 @@ bun_fingerprint="$({
     packages/shared-utils/package.json \
     packages/types/package.json
 } | cloud_hash_stream)"
+cloud_log 'DONE: Resolve Bun dependency fingerprint.'
 bun_marker="$state_dir/bun-dependencies.sha256"
 
 if cloud_marker_matches "$bun_marker" "$bun_fingerprint" &&
@@ -55,7 +65,7 @@ else
   # Cloud cannot package macOS builds, and the backend workspace already owns
   # archiver/yauzl for its backup round-trip tests, so suppress that hook here.
   cloud_run_step 'Install Bun workspace dependencies' \
-    cloud_run_package_with_timeout 900s env \
+    cloud_run_package_with_heartbeat 420s 30s 'Bun workspace dependency installation' env \
       PUPPETEER_SKIP_DOWNLOAD=true \
       bun install --frozen-lockfile --ignore-scripts --no-progress
   cloud_write_marker "$bun_marker" "$bun_fingerprint"

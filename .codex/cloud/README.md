@@ -1,7 +1,6 @@
 # Codex cloud environment
 
-Choose Python 3.12 and Node.js 24 for the environment, ensure Bun is available, and set these
-commands:
+Choose Python 3.12 and Node.js 24 for the environment and set these commands:
 
 ```bash
 # Setup script
@@ -12,12 +11,19 @@ bash .codex/cloud/maintenance.sh
 ```
 
 The setup exports `CODEX_SESSION_ENV=cloud` for its own lifecycle and adds the same export to
-`.bashrc` for later shells. It installs the portable global working agreement, Python dependencies,
-and Bun workspace dependencies. Python uses the exact, hash-verified `config/requirements.txt`
-compiled from `config/requirements.in`. Dependency fingerprints include the relevant runtime
-version, requirement input, lockfiles, and workspace manifests. Successful fingerprints are stored
-under `~/.codex/vision-cloud-state/`, so maintenance skips package managers entirely when those
-inputs and their installed directories are unchanged.
+`.bashrc` for later shells. It installs the portable global working agreement, the pinned Bun
+runtime, Python dependencies, and Bun workspace dependencies. Python uses the exact, hash-verified
+`config/requirements.txt` compiled from `config/requirements.in`. Dependency fingerprints include
+the relevant runtime version, requirement input, lockfiles, and workspace manifests. Successful
+fingerprints are stored under `~/.codex/vision-cloud-state/`, so maintenance skips package managers
+entirely when those inputs and their installed directories are unchanged.
+
+Cloud uses the same Bun 1.3.14 version as CI and the devcontainer. A discovered Bun command is
+accepted only when `bun --version` returns 1.3.14 within ten seconds. Otherwise setup downloads the
+release with the same SHA-256 checksums used by the devcontainer into
+`~/.codex/vision-cloud-bin/` and persists that directory on `PATH` through
+`~/.codex/vision-cloud-toolchain.env`. This avoids spending an unbounded part of the cloud startup
+deadline on a lazy or incompatible preinstalled Bun command.
 
 pip, Bun, and their dependency lifecycle processes run with a sanitized environment. They receive
 only `HOME`, `PATH`, `CODEX_SESSION_ENV`, and standard proxy or certificate variables; other cloud
@@ -57,7 +63,9 @@ PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; packa
 non-interactive and network calls have bounded retries. The package-index and package-support steps
 each stop after two minutes, and PostgreSQL 18 installation stops after five minutes. These
 deadlines reserve startup time for project dependency installation instead of allowing one silent
-system-package command to consume the entire cloud deadline.
+system-package command to consume the entire cloud deadline. The pinned Bun download stops after two
+minutes, Bun runtime resolution stops after fifteen seconds, and the workspace install emits a
+heartbeat every 30 seconds and stops after seven minutes.
 
 Codex automatically invalidates its environment cache after setup or maintenance configuration
 changes. Use **Reset cache** in the environment settings if an older cached image still has the
@@ -78,6 +86,7 @@ use the native PostgreSQL fallback; `bun run test:db` still runs the database-ba
 The dependency cache behavior has a focused offline test:
 
 ```bash
+bash .codex/cloud/tests/install-bun.test.sh
 bash .codex/cloud/tests/install-dependencies.test.sh
 bash .codex/cloud/tests/provision-test-db.test.sh
 bash .codex/cloud/tests/reset-test-db.test.sh

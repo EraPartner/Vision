@@ -64,7 +64,7 @@ printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
   'if [[ "${1:-}" == "--version" ]]; then' \
-  '  printf "%s\n" "1.2.3"' \
+  '  printf "%s\n" "1.3.14"' \
   '  exit 0' \
   'fi' \
   'printf "bun-install:%s\n" "$*" >> "$HOME/calls.log"' \
