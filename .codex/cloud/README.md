@@ -27,7 +27,11 @@ accepted only when `bun --version` returns 1.3.14 within ten seconds. Otherwise 
 release with the same SHA-256 checksums used by the devcontainer into
 `~/.codex/vision-cloud-bin/` and persists that directory on `PATH` through
 `~/.codex/vision-cloud-toolchain.env`. This avoids spending an unbounded part of the cloud startup
-deadline on a lazy or incompatible preinstalled Bun command.
+deadline on a lazy or incompatible preinstalled Bun command. If the GitHub release asset is
+unavailable, setup installs the same exact version from Bun's official platform package on npm,
+with lifecycle scripts disabled. The fallback is bound to the public npm registry and a reviewed
+SHA-512 Subresource Integrity value in a temporary package lock. Setup also verifies the installed
+runtime version before using it.
 
 pip, Bun, and their dependency lifecycle processes run with a sanitized environment. They receive
 only `HOME`, `PATH`, `CODEX_SESSION_ENV`, and standard proxy or certificate variables; other cloud
