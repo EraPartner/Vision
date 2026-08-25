@@ -67,6 +67,10 @@ before the first marker so package-manager output and lifecycle markers retain e
 System-package commands use `timeout --foreground` so `apt-get` and `dpkg` retain normal access to
 the setup terminal instead of being suspended in a separate process group. Long-running commands
 still execute synchronously; only their heartbeat timer runs in the background.
+PostgreSQL cluster creation and server startup are separate lifecycle steps. Before
+`pg_ctlcluster` daemonizes the server, its launch wrapper closes every inherited file descriptor
+above standard input, output, and error. The running server therefore cannot retain a private
+Codex setup descriptor and keep the completed setup session open.
 Dependency-fingerprint writes are explicit lifecycle steps. Docker probes, downloads, package
 operations, PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; package
 installation is non-interactive and network calls have bounded retries. The package-index step

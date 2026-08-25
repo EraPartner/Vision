@@ -158,6 +158,16 @@ if command -v timeout >/dev/null 2>&1; then
   fi
 fi
 
+exec 9> "$test_dir/inherited-descriptor"
+# Literal shell source follows; expansion must happen inside the descriptor probe.
+# shellcheck disable=SC2016
+descriptor_probe='fd_root="/proc/$BASHPID/fd"; [[ -d "$fd_root" ]] || fd_root=/dev/fd; [[ ! -e "$fd_root/9" ]]'
+if ! cloud_run_with_closed_fds_timeout 2s bash -c "$descriptor_probe"; then
+  printf 'FAIL: descriptor-isolated commands inherited file descriptor 9\n' >&2
+  exit 1
+fi
+exec 9>&-
+
 heartbeat_output="$(
   cloud_run_with_heartbeat 2s 0.05s 'foreground test command' \
     bash -c 'printf "%s\n" "workload-start"; sleep 0.2; printf "%s\n" "workload-done"'

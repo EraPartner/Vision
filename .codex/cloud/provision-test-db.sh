@@ -140,17 +140,14 @@ fi
 
 if ! cloud_run_with_timeout 15s "${root[@]}" \
   pg_ctlcluster 18 main status >/dev/null 2>&1; then
-  if ! cloud_run_step 'Start PostgreSQL 18' \
-    cloud_run_with_timeout 90s "${root[@]}" pg_ctlcluster 18 main start; then
-    if [[ ! -s /var/lib/postgresql/18/main/PG_VERSION ]]; then
-      cloud_run_step 'Create and start the PostgreSQL 18 cluster' \
-        cloud_run_with_timeout 120s "${root[@]}" pg_createcluster 18 main \
-          --locale=C.UTF-8 --encoding=UTF8 --start
-    else
-      printf '%s\n' 'PostgreSQL 18 exists but could not be started.' >&2
-      exit 1
-    fi
+  if [[ ! -s /var/lib/postgresql/18/main/PG_VERSION ]]; then
+    cloud_run_step 'Create the PostgreSQL 18 cluster' \
+      cloud_run_with_timeout 120s "${root[@]}" pg_createcluster 18 main \
+        --locale=C.UTF-8 --encoding=UTF8
   fi
+  cloud_run_step 'Start PostgreSQL 18' \
+    cloud_run_with_closed_fds_timeout 90s \
+      "${root[@]}" pg_ctlcluster 18 main start
 fi
 
 wait_for_postgres() {

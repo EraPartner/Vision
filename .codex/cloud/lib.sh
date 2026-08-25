@@ -65,6 +65,39 @@ cloud_run_with_timeout() {
   "$@"
 }
 
+cloud_run_with_closed_fds() {
+  bash -c '
+    fd_root="/proc/$BASHPID/fd"
+    [[ -d "$fd_root" ]] || fd_root=/dev/fd
+    fd_paths=("$fd_root"/*)
+    for fd_path in "${fd_paths[@]}"; do
+      fd="${fd_path##*/}"
+      if [[ "$fd" =~ ^[0-9]+$ ]] && (( fd > 2 )) && [[ -e "$fd_path" ]]; then
+        eval "exec ${fd}>&-"
+      fi
+    done
+    exec "$@"
+  ' vision-cloud-close-fds "$@"
+}
+
+cloud_run_with_closed_fds_timeout() {
+  local duration="$1"
+  shift
+
+  if [[ "${VISION_CLOUD_DISABLE_TIMEOUT:-0}" == 1 ]]; then
+    cloud_run_with_closed_fds "$@"
+    return
+  fi
+
+  if command -v timeout >/dev/null 2>&1; then
+    cloud_run_with_closed_fds timeout --kill-after=10s "$duration" "$@"
+    return
+  fi
+
+  cloud_log "WARNING: timeout(1) is unavailable; running descriptor-isolated command without an external deadline: $1" >&2
+  cloud_run_with_closed_fds "$@"
+}
+
 cloud_run_with_foreground_timeout() {
   local duration="$1"
   shift

@@ -111,6 +111,16 @@ grep -Fxq 'create_main_cluster = false' \
   "$VISION_CLOUD_POSTGRES_COMMON_DIR/createcluster.conf"
 [[ -x "$VISION_CLOUD_POSTGRES_BIN" ]]
 
+grep -Fq "cloud_run_step 'Create the PostgreSQL 18 cluster'" \
+  "$repo_root/.codex/cloud/provision-test-db.sh"
+grep -Fq 'cloud_run_with_closed_fds_timeout 90s' \
+  "$repo_root/.codex/cloud/provision-test-db.sh"
+if grep -Fq -- '--encoding=UTF8 --start' \
+  "$repo_root/.codex/cloud/provision-test-db.sh"; then
+  printf '%s\n' 'PostgreSQL cluster creation must not launch an unisolated daemon.' >&2
+  exit 1
+fi
+
 first_call_count="$(wc -l < "$CALL_LOG" | tr -d '[:space:]')"
 bash "$repo_root/.codex/cloud/provision-test-db.sh" --install-packages-only >/dev/null
 second_call_count="$(wc -l < "$CALL_LOG" | tr -d '[:space:]')"
