@@ -11,7 +11,9 @@ Use these to tell *implemented* from *still open* at a glance. A checkbox is onl
 - `🔎 verified-present YYYY-MM-DD` — the finding was re-checked against current code on that date and the bug is **still present** (confirmed real, *not* done). This is a live work queue, not a completion mark.
 - `🔎 partial YYYY-MM-DD (…)` — part of the finding is implemented but a described sub-case remains, so the item stays open. State what is done and the exact remaining scope. Historical `partial-<sha> (#NN)` and `partial-#NN` markers remain valid but are not required for new work.
 - `🔎 needs-GitHub-check YYYY-MM-DD` — cannot be confirmed from the repo alone (e.g. GitHub branch-protection / ruleset settings); check the platform side.
+- `🔎 decision-needed YYYY-MM-DD (…)` — implementation is blocked on the stated user or design decision. Do not select it until that decision is recorded.
 - _no status marker_ — open finding, not re-verified since it was filed.
+- Put tracking markers and historical notes on an indented `Tracking:` line. Keep the checkbox line to the stable title, optional size, and priority so agents can cite it without copying its history.
 - **Historical stamps are optional metadata.** Existing `✅ … · <sha>` and `partial-<sha>` tokens are retained as history. `bun run check-todo-stamps` remains available as a manual legacy audit, but new completions do not add stamps and normal backlog delivery does not run that checker.
 - **⚠️ Run `git fetch --unshallow` before legacy SHA archaeology.** Agent sessions often start from a shallow clone, and ancestry tests on one give *false* answers. Check for `.git/shallow` first if you intentionally investigate an existing stamp.
 
@@ -32,6 +34,14 @@ Use these to tell *implemented* from *still open* at a glance. A checkbox is onl
 - **Research context & coverage notes** = scope/method/caveats from the original passes (archive; safe to trim).
 
 Findings are single-pass research unless a `from:` line says "adversarially verified" (the 2026-06-30 audit) — confirm against current code before acting.
+
+### Agent queue view
+
+Run `bun run todo:list` for the concise, authoritative open-findings queue. Use `--json` when a
+coordinator needs machine-readable records, or filter with `--state` and `--priority`. The reported
+state is derived from tracking text and is only a triage aid; revalidate the finding against current
+code before selecting it. `bun run todo:check` enforces stable headings, source metadata, unique open
+titles, and that every open findings section stays inside `## Findings`.
 
 ## ⚠️ Binding constraints (read before acting)
 
@@ -234,7 +244,8 @@ look-changing one.
   - `getAll`/`getAllWithCount` resolve category via a 3-level fallback (own → recipient default → recipient's *primary* recipient's default) and expose `effective_category_id`. `getById`/`create` hand-roll separate SQL with only 2 levels, never computing `effective_category_id`. A transaction on an alias recipient is correctly categorized in lists but shows uncategorized when fetched/created via the single-row paths.
   - Fix: extract the category CASE + `effective_category_id` expression into one shared SQL fragment reused by `getAll`, `getById`, and `create`.
 
-- [ ] **`PATCH`-to-clear silently no-ops on 5 account fields** ⏫ ✅ 2026-07-11 · 9a2db72 (#82) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — funding_account_id cannot be cleared (or set) from the UI at all -- no form field exists for it, so the item's own verification note's claim that 'the frontend submit path needs the matching change' for this field is not delivered…) 🔎 investigated-not-applied 2026-08-11 (#165) (**the audit's LEFT clause asks for something a signed-off decision elsewhere in this file forbids — implemented, then reverted deliberately; reasoning recorded so it is not re-attempted blind.** The backend half is genuinely done and was re-verified empirically this session, not just read: a probe against the real `accountService` + the real SET builder shows `{funding_account_id: null}` surviving the validator (`accountService.js:76-84` returns `null` early, before `validateId`), skipping the existence/self/cycle assert (`:197-198`, early-return on `== null`), and reaching the repository as a real `SET "funding_account_id" = $1` / `[null]` — while an *omitted* key is still correctly dropped. That half is pinned by `tests/accountService.test.js:128-147`. The UI half is where the conflict is: this item wants a `funding_account_id` control in the account dialogs, and **`TODO.md:6003` says the opposite in as many words** — "Decided via D3: the ADR-090 sleeve-less funding picker is built in Phase E (holdings enable); until then leave the field untouched, don't surface it in Phase D dialogs", corroborated by `docs/adr/103-per-account-holdings-ui-flag.md:122-123`, which scopes the picker to the `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` flip behind an 8-item prerequisite gate. A working picker was built and fully verified (lint/typecheck/locales clean, 4 new integration tests incl. one asserting clear sends explicit `null`) and then reverted, because a dated phase decision with an ADR behind it outranks an audit residue clause that did not know about it. **Two facts worth carrying forward.** (1) The column is currently *write-only* — the only readers are `accountMergeService.js:237`'s reference count and `accountRepository.js:321` `repointFundingAccount`; no balance, transfer, net-worth or import path reads it, because the ADR-090 settlement consumer does not exist yet. So the picker would have written a column nothing acts on, which is precisely why D3 sequenced it into Phase E. (2) Shipping it would have *enlarged* the blast radius of the already-filed `TODO.md:7014` hole (`repointFundingAccount` bypasses `assertFundingAccountValid`, so a merge can mint the cycles the service guard rejects) — unreachable today only because no user can populate the field. **So: this item's remaining scope is not "unfinished work", it is work deliberately deferred to the Phase E flip; it should be closed together with `TODO.md:6003`, not before it.** Noticed in passing, not fixed and not in scope: `EditPortfolioTxnDialog.tsx` has the identical shape — it holds `form.accountId` and sends `account_id: … : null` correctly at `:169` but renders no control for it.)
+- [ ] **`PATCH`-to-clear silently no-ops on 5 account fields** ⏫
+  - Tracking: ✅ 2026-07-11 · 9a2db72 (#82) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — funding_account_id cannot be cleared (or set) from the UI at all -- no form field exists for it, so the item's own verification note's claim that 'the frontend submit path needs the matching change' for this field is not delivered…) 🔎 investigated-not-applied 2026-08-11 (#165) (**the audit's LEFT clause asks for something a signed-off decision elsewhere in this file forbids — implemented, then reverted deliberately; reasoning recorded so it is not re-attempted blind.** The backend half is genuinely done and was re-verified empirically this session, not just read: a probe against the real `accountService` + the real SET builder shows `{funding_account_id: null}` surviving the validator (`accountService.js:76-84` returns `null` early, before `validateId`), skipping the existence/self/cycle assert (`:197-198`, early-return on `== null`), and reaching the repository as a real `SET "funding_account_id" = $1` / `[null]` — while an *omitted* key is still correctly dropped. That half is pinned by `tests/accountService.test.js:128-147`. The UI half is where the conflict is: this item wants a `funding_account_id` control in the account dialogs, and **`TODO.md:6003` says the opposite in as many words** — "Decided via D3: the ADR-090 sleeve-less funding picker is built in Phase E (holdings enable); until then leave the field untouched, don't surface it in Phase D dialogs", corroborated by `docs/adr/103-per-account-holdings-ui-flag.md:122-123`, which scopes the picker to the `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` flip behind an 8-item prerequisite gate. A working picker was built and fully verified (lint/typecheck/locales clean, 4 new integration tests incl. one asserting clear sends explicit `null`) and then reverted, because a dated phase decision with an ADR behind it outranks an audit residue clause that did not know about it. **Two facts worth carrying forward.** (1) The column is currently *write-only* — the only readers are `accountMergeService.js:237`'s reference count and `accountRepository.js:321` `repointFundingAccount`; no balance, transfer, net-worth or import path reads it, because the ADR-090 settlement consumer does not exist yet. So the picker would have written a column nothing acts on, which is precisely why D3 sequenced it into Phase E. (2) Shipping it would have *enlarged* the blast radius of the already-filed `TODO.md:7014` hole (`repointFundingAccount` bypasses `assertFundingAccountValid`, so a merge can mint the cycles the service guard rejects) — unreachable today only because no user can populate the field. **So: this item's remaining scope is not "unfinished work", it is work deliberately deferred to the Phase E flip; it should be closed together with `TODO.md:6003`, not before it.** Noticed in passing, not fixed and not in scope: `EditPortfolioTxnDialog.tsx` has the identical shape — it holds `form.accountId` and sends `account_id: … : null` correctly at `:169` but renders no control for it.)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/services/accountService.js:44,71-92` (`sanitize()` maps explicit `null` → `undefined`), `apps/node-backend/src/repositories/accountRepository.js:95` (skips any field `=== undefined` when building `SET`)
   - `PATCH /api/accounts/:id` sent to clear e.g. `funding_account_id: null` is silently ignored — no error, no change — for `display_name`, `institution`, `funding_account_id`, `statement_balance`, `statement_balance_date`. The same bug class was already fixed once in `savedCharts.js` per its own comment, and is reintroduced here.
@@ -571,7 +582,8 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-08-10 · WP-C4 partitioned-engine pass (adversarial verifier + implementer residue; the engine itself shipped verified)_
   - (a) **Partition oversell is invisible**: a sell tagged to a broker holding fewer units than it sold clamps to that partition's lots, so re-tagging lots away from an account with sells silently INCREASES global units/value (verifier probe: +2 units, +20 value); the calculators' `_oversold` flag is dropped by `buildInvestmentSummaryCore` and has no partition-level equivalent. Propagate an oversold signal to the summary/read surfaces (natural WP-C5 companion) so mis-tagged sells surface instead of resurrecting units. (b) **`usePortfolioSummaries.ts:37` still runs the FLAT core client-side** — its header's "the two sides cannot drift" promise is now false: PortfolioOverviewPage/StocksPage/PerformancePage/NetWorthPage/InvestmentDetailDialog show flat realized while the summary API shows partitioned figures on fully-assigned multi-broker instruments. Switch it to `buildInvestmentSummaryCorePartitioned` (scheduled naturally with WP-C5's read surfaces). (c) `snapshotBuilder.js` still replays flat — historical snapshot invested/realized can diverge from the live summary for fully-assigned multi-broker instruments (value/units identical since units are partition-invariant); WP-C7 territory. (d) Cosmetic: a NULL-account dividend on a fully-assigned instrument mints an `account_id: null` byAccount row carrying just that income while `fullyAssigned: true` — consistent totals, odd display. (e) Sell validation gained one EXISTS query per account-carrying sell (incl. per staged import row) — fine now, fold into the C3/C4 batch-commit perf pass if import profiles ever regress.
 
-- [ ] **WP-C2/D6 residues from the fd8ffb25 (#157) pass (grouped)** 🔽 🔎 partial-899a5220 (#158) 2026-08-10 (DONE: **(a)** fixed at the D6 call site, not in the repository — `getByGeneralDetail`'s only caller is `createOrGet`, and filtering there would make `POST /api/categories` return a null category and crash `POST /api/categories/assign`; an inactive category now leaves the kind unmapped so the row commits uncategorized, the same state external deposit/withdrawal cash rows already land in. Orchestrator checked the silent-regression trap the guard invites: had `createOrGet` not returned `is_active`, `category.is_active` would read `undefined` and disable D6 categorization *entirely* — it survives both paths (INSERT sets it with `RETURNING *`; `getByGeneralDetail` does `SELECT *` through `enrichCategory`, which spreads `...row`). **(b)** stripped, along with the two terms that existed solely to feed it (`t.balance` in the anchor projection, `COALESCE(SUM(t2.amount),0)` in the delta); anchor predicate, tuple comparison, `NOT EXISTS` fallback and `COUNT(*)` byte-identical. Zero-readers claim re-verified by the orchestrator rather than taken on the implementer's word — both consuming queries project explicit column lists and select only `lb.anchor_date`/`lb.post_anchor_count` (`accountRepository.js:109-110`, `infoRepositoryBanks.js:88-89`); all three repo-wide `lb.balance` hits are inside `--` SQL comments explaining why the figure was abandoned. Executed against a real PG16 cluster (old vs. new lateral over five fixtures — stamped+manual, manual-only, empty, multi-currency, inactive-only — provenance identical on all five, `SELECT lb.balance` now errors), because string-asserted SQL is weak evidence in this repo. Both pinned by regression tests, the new commit case confirmed discriminating by removing the guard. **(c) REFUTED — does not reproduce, do not re-implement:** the review UI already hides `overrideInvestment` on cash rows (`{!g.is_cash && (` at `PortfolioImportReviewPage.tsx:139`, and `resolved` short-circuits on `g.is_cash` at `:121`); the guard originates in `46ff9598` and the #157 pass touched **zero** frontend files, so the sub-item was filed in error. LEFT: **(d)**, **(e)** and **(f)** only — untouched on purpose, since the finding's own text classifies each as a design/product decision (persisting a per-row occurrence index; a per-currency running-balance column in one interleaved list; a settings-level category-name mapping) rather than a small fix. New residues from this pass filed in the grouped finding below)
+- [ ] **WP-C2/D6 residues from the fd8ffb25 (#157) pass (grouped)** 🔽
+  - Tracking: 🔎 partial-899a5220 (#158) 2026-08-10 (DONE: **(a)** fixed at the D6 call site, not in the repository — `getByGeneralDetail`'s only caller is `createOrGet`, and filtering there would make `POST /api/categories` return a null category and crash `POST /api/categories/assign`; an inactive category now leaves the kind unmapped so the row commits uncategorized, the same state external deposit/withdrawal cash rows already land in. Orchestrator checked the silent-regression trap the guard invites: had `createOrGet` not returned `is_active`, `category.is_active` would read `undefined` and disable D6 categorization *entirely* — it survives both paths (INSERT sets it with `RETURNING *`; `getByGeneralDetail` does `SELECT *` through `enrichCategory`, which spreads `...row`). **(b)** stripped, along with the two terms that existed solely to feed it (`t.balance` in the anchor projection, `COALESCE(SUM(t2.amount),0)` in the delta); anchor predicate, tuple comparison, `NOT EXISTS` fallback and `COUNT(*)` byte-identical. Zero-readers claim re-verified by the orchestrator rather than taken on the implementer's word — both consuming queries project explicit column lists and select only `lb.anchor_date`/`lb.post_anchor_count` (`accountRepository.js:109-110`, `infoRepositoryBanks.js:88-89`); all three repo-wide `lb.balance` hits are inside `--` SQL comments explaining why the figure was abandoned. Executed against a real PG16 cluster (old vs. new lateral over five fixtures — stamped+manual, manual-only, empty, multi-currency, inactive-only — provenance identical on all five, `SELECT lb.balance` now errors), because string-asserted SQL is weak evidence in this repo. Both pinned by regression tests, the new commit case confirmed discriminating by removing the guard. **(c) REFUTED — does not reproduce, do not re-implement:** the review UI already hides `overrideInvestment` on cash rows (`{!g.is_cash && (` at `PortfolioImportReviewPage.tsx:139`, and `resolved` short-circuits on `g.is_cash` at `:121`); the guard originates in `46ff9598` and the #157 pass touched **zero** frontend files, so the sub-item was filed in error. LEFT: **(d)**, **(e)** and **(f)** only — untouched on purpose, since the finding's own text classifies each as a design/product decision (persisting a per-row occurrence index; a per-currency running-balance column in one interleaved list; a settings-level category-name mapping) rather than a small fix. New residues from this pass filed in the grouped finding below)
   - ↪ _from: Orchestration session 2026-08-10 · WP-C2 D6 pass (implementer + adversarial verifier residue; none are correctness breaks in the shipped change)_
   - (a) `categoryRepository.getByGeneralDetail` does not filter `is_active`, so D6 auto-categorization can stamp new ledger rows with a category the user soft-deleted, and nothing reactivates it (verifier finding; repairable by recategorizing). (b) The dead cross-currency `balance` column is still emitted by `COMPUTED_BALANCE_LATERAL` (`accountBalanceSql.js:52`) with zero readers — strip or rename it so no future consumer resurrects the FX-blind figure. (c) Review UI still offers `overrideInvestment` on `route='cash'` staging rows; commit correctly ignores it, but the affordance is misleading. (d) Re-commit drain after a repaired error row starts fresh occurrence counters, so the repaired row of an identical pair dedups against its already-committed twin — same lossiness the boolean dedup had, inherent to field dedup without a per-row discriminator; needs a design decision (e.g. persisting the occurrence index on the staging row). (e) `transactionRepository.js:275,632` — the transactions-list `running_balance` window (`SUM(t.amount) OVER (PARTITION BY t.account_id …)`) is cross-currency FX-blind; display-only column, and a per-currency running column in one interleaved list is a product decision, not a small fix. (f) D6 category names (INCOME:DIVIDENDS etc.) are derived from ADR-095 prose — if a user's existing categories spell these differently, D6 creates parallel ones; consider a settings-level mapping if it bites.
 
@@ -583,7 +595,8 @@ look-changing one.
   - (d) **An errored `route='cash'` row has no repair affordance.** A cash row that errors at commit (e.g. "brokerage cash row requires a batch account") lands in the cash group, where the review page shows the message but offers no action, because the override repair path is instrument-only. Related to (d) of the finding above (re-commit drain) but distinct: that one is about dedup counters, this one is about there being no way to retry at all.
   - (e) Doc imprecision, pre-existing: `docs/features/accounts.md:25` says the balance is "served by `accountBalanceSql.js`'s lateral" — it is the *per-currency* lateral that serves the figure, and after this pass the plain lateral serves none.
 
-- [ ] **Native float accumulation on money in report/aggregation paths (beyond already-known sites)** 🔽 🔎 verified-present 2026-07-11 *(drift, not gross error — all rounded at the end)* 🔎 partial-fab7a77 (#99) 2026-07-14 (converted 8 report/aggregation money accumulators to Decimal-exact; dataFetcherTax.js and the forecast chart-series file left untouched (pervasive eslint-disabled raw-money math where a partial conversion would be inconsistent))
+- [ ] **Native float accumulation on money in report/aggregation paths (beyond already-known sites)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 *(drift, not gross error — all rounded at the end)* 🔎 partial-fab7a77 (#99) 2026-07-14 (converted 8 report/aggregation money accumulators to Decimal-exact; dataFetcherTax.js and the forecast chart-series file left untouched (pervasive eslint-disabled raw-money math where a partial conversion would be inconsistent))
   - ↪ _from: Correctness research 2026-07-02 · Wave 1c_
   - `infoRepo.monthly.js:83-85` · `infoRepositoryNetWorth.js:199` · `infoRepo.forecast.js:314,531` · `infoRepo.statistics.js:57,62,85-86` · `services/reports/dataFetcherTax.js:205` (`dividendsReceived +=` — tax report, medium-low) · `reports/sections/portfolioExecutiveSummary.js:33-34`, `portfolioAllocation.js:59-60`, `assetClassDetail.js:58-59` (display-only)
   - Fix: `toDecimal`/`addAll` from `lib/money.js` / shared-utils.
@@ -702,13 +715,15 @@ look-changing one.
   - Dead code in practice (`validateLoanConfig` guarantees a non-empty schedule), but a stray `null` outside the documented repository-row-not-found exception.
   - Fix: remove the defensive fallback, or change to `?? undefined`.
 
-- [ ] **ADR-096 portfolio-income/FIRE-coverage feature has no endpoint wired up — but this is an unimplemented Proposed-status ADR, not a silently-orphaned built feature** ⬇ 🔎 verified-present 2026-07-11 🔧 *(reframed after verification)*
+- [ ] **ADR-096 portfolio-income/FIRE-coverage feature has no endpoint wired up — but this is an unimplemented Proposed-status ADR, not a silently-orphaned built feature** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11 🔧 *(reframed after verification)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/services/portfolio/portfolioIncomeService.js` (`aggregateIncome`, `coverageRatio`) has zero callers anywhere in `src/`, any route, or the frontend.
   - Fix: wire into a portfolio-stats route if this is still wanted, or close the ADR as deferred/not-pursued.
   - Verification (2026-06-30): the original framing ("unlike `brokerageFanout.js`, there's no note explaining why this is unreachable") is misleading — **`docs/adr/096-dividend-income-fire.md:13` has status "Proposed"** (vs. ADR-095 "Implemented" and ADR-103 "Accepted"), which *is* the explanation: this was never built out, not built-and-abandoned. The code-level dead end and the fix suggestion are still valid; only the "documentation discipline gap" framing was wrong.
 
-- [ ] **Systemic `null` instead of `undefined` for optional values in route filter-parsing, beyond the documented exception** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Systemic `null` instead of `undefined` for optional values in route filter-parsing, beyond the documented exception** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - Pervasive: `routes/transactions.js:61-94`, `importRoutes.js:414-524`, `portfolioImportRoutes.js:55-422`, `aggregations.js:234-250`, `categories.js:21`, `tags.js:21`, `research.js:57-146`, `marketLookup.js`
   - Violates the stated convention at scale beyond the documented repository row-not-found exception. Currently harmless (consumers mostly use `!= null` loose checks) but the same pattern class that caused the account-PATCH bug above.
@@ -736,7 +751,8 @@ look-changing one.
   - `adapters/vision.js:53-60` matches on `'Booking Date,Recipient Bank Account,Amount,Reference'` as a substring, not an exact header match (verified). Current first-match-wins order (`adapters/index.js:19,53-58`) shields the five earlier adapters, but nothing pins that ordering, and any future/unknown bank export containing those words would silently misdetect as a Vision export.
   - Fix: require an exact header match (or a stronger positive signal) in `vision.detect()`.
 
-- [ ] **Import/portfolio test suites pass (36/36) but use unrealistic fixtures that mask several filed bug classes** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Import/portfolio test suites pass (36/36) but use unrealistic fixtures that mask several filed bug classes** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a/1b/1c (residue, closed 2026-07-03)_
   - `brokerageFanout.test.js` fixtures always set `row.amount` and stub the cash leg asserting call-counts only → the `{...created, ...row}` spread bug (`brokerageFanout.js:132`) is doubly masked; no error-path/`errors`-counter test. `accountSnapshotParity.test.js`'s headline Σ==value assertion is near-tautological (`splitByAccount` normalizes weights to sum 1 by construction); no split/RoC/oversell fixtures; despite the name there is no cross-check against `portfolioSummaryService`; 8 order-coupled `mockResolvedValueOnce` calls make the mock define the query contract. `portfolioImportCommit.test.js` never tests `commitPortfolioImport` (batch-status-after-error unasserted) and its dispatch regex leaves the success-path `status='committed'` UPDATE and batch counters entirely unasserted. No suite anywhere posts a non-EUR trade or asserts the leg's currency param (FX-on-sleeve invisible to tests). `visionAdapter.test.js` feeds only clean `YYYY-MM-DD` dates and unprefixed amounts — formats the real export never produces — and never tests `vision.detect()`, the `skipped` counter, or `balance`. `revolutAdapter.test.js` malformed-row tests assert only `toHaveLength(3)`, not which row survived. `bankAdapterFactory.test.js` covers detect for only 2 of 8 banks, with no ambiguity/ordering pin and 3 banks missing from the `getSupportedBanks` assertion. `EditPortfolioTxnDialog.test.tsx:24,71` feeds plain `"2025-01-10"` dates the real API never sends (it sends ISO timestamps), so the date−1 round-trip shift filed below is invisible to the suite.
   - Fix: add fixtures for the failure modes above (non-EUR trades, error paths, realistic wire-shape dates/formats) to each suite named.
@@ -855,7 +871,8 @@ look-changing one.
   - `apps/node-backend/src/repositories/transactionRepository.js:66` (`EFFECTIVE_CATEGORY_ID_SQL`: own → `rc` recipient default → `pc` primary default) vs `:67-72` (`CATEGORY_NAME_SQL`: `c` → **`pc` → `rc`**). For an alias recipient that has its own default AND a primary with a different default, the transactions list reports the recipient-default id but displays the primary-default name. The newly-fixed aggregation surfaces follow the id (matching `EFFECTIVE_CATEGORY_ID_SQL`), so they disagree with the reference surface's displayed name in this topology.
   - Fix: make `CATEGORY_NAME_SQL` join through the same COALESCE the id uses (`rc` before `pc`); pin with a DB test on the alias-with-own-default-and-differing-primary-default topology.
 
-- [ ] **Recurring detection emits raw `categoryId` beside the resolved `categoryName`, and groups/labels patterns by alias rather than primary recipient** 🔽 🔎 partial-ce17654 (#137) 2026-07-28 (categoryId half DONE: the pattern now emits the same 3-level effective id the name resolves from, pinned live + mock; creating a planned payment from a pattern now carries the displayed category instead of silently uncategorised. LEFT: the alias grouping/labeling half — whether patterns should group by primary recipient and label with the canonical name is an explicit product decision, deliberately not driven from the category fix)
+- [ ] **Recurring detection emits raw `categoryId` beside the resolved `categoryName`, and groups/labels patterns by alias rather than primary recipient** 🔽
+  - Tracking: 🔎 partial-ce17654 (#137) 2026-07-28 (categoryId half DONE: the pattern now emits the same 3-level effective id the name resolves from, pinned live + mock; creating a planned payment from a pattern now carries the displayed category instead of silently uncategorised. LEFT: the alias grouping/labeling half — whether patterns should group by primary recipient and label with the canonical name is an explicit product decision, deliberately not driven from the category fix)
   - ↪ _from: Orchestration session 2026-07-28 · category-resolution fix pass (noticed, out of scope; the categoryId half pre-existing and widened by the 3-level fix)_
   - `apps/node-backend/src/services/recurringDetectionService.js:280` — emitted `categoryId` is raw `t.category_id` while `categoryName` is the resolved effective category, so any recipient-default-categorised pattern reports `categoryId: null` with a non-null `categoryName` (consumers keying on the id see uncategorised). And `:152` — `recipient_name` is `r.name` with grouping on raw `recipient_id`, not `COALESCE(pr.name, r.name)`/primary id, so an alias and its primary yield two separate patterns which now carry the same category label. The recipient half changes grouping semantics — decide deliberately, don't drive it from the category fix.
   - Fix: emit the same effective category id the name is resolved from; separately decide whether patterns should group by primary recipient (alias-merge semantics) and label with the canonical name.
@@ -955,7 +972,8 @@ look-changing one.
   - `apps/node-backend/src/repositories/infoRepositoryMonthly.js:118` reads `todayAppDateString()` (comment at :117 explicitly names "the SQL paths' `CURRENT_DATE`") against `CURRENT_DATE` windows at :61-62, :158-159, :175 — identical ~2h/month month-boundary exposure. `plannedTransactionRepository.js:611-638` uses `CURRENT_DATE` for due-soon windows while the module reads `todayAppDateString()` elsewhere (milder: day-window drift); :612 also builds an interval via `($1 || ' days')::INTERVAL` string concat of a bound value — use `make_interval(days => $1::int)` like the forecast fix.
   - Fix: bind the app-date anchor per ADR-009, exactly as c1d6761 (#142) did for forecast/averageVsCurrent.
 
-- [ ] **Forecast/statistics DB-test residue: `CURRENT_DATE`-anchored fixtures vs app-clock queries, positive-offset assumptions in the new rollover tests, one non-discriminating mock case** ⏬ 🔎 partial-c1d6761 (#142) 2026-08-01 (sub-item (a) DONE for the two MIGRATED repos after it broke CI live at 22:14 UTC — the exposure was NIGHTLY for day-window boundaries, not just month-end: forecast suite helpers now substitute CURRENT_DATE→app date at call time (rollover describe deliberately kept on the DB clock via now()), averageVsCurrent describes in infoRepository.db.test.js same; verified green inside the drift window. infoRepoBanks/aliasCategoryResolution fixtures stay on CURRENT_DATE on purpose — their repos still query CURRENT_DATE. LEFT: (b) positive-offset assumptions, (c) non-discriminating mock case)
+- [ ] **Forecast/statistics DB-test residue: `CURRENT_DATE`-anchored fixtures vs app-clock queries, positive-offset assumptions in the new rollover tests, one non-discriminating mock case** ⏬
+  - Tracking: 🔎 partial-c1d6761 (#142) 2026-08-01 (sub-item (a) DONE for the two MIGRATED repos after it broke CI live at 22:14 UTC — the exposure was NIGHTLY for day-window boundaries, not just month-end: forecast suite helpers now substitute CURRENT_DATE→app date at call time (rollover describe deliberately kept on the DB clock via now()), averageVsCurrent describes in infoRepository.db.test.js same; verified green inside the drift window. infoRepoBanks/aliasCategoryResolution fixtures stay on CURRENT_DATE on purpose — their repos still query CURRENT_DATE. LEFT: (b) positive-offset assumptions, (c) non-discriminating mock case)
   - ↪ _from: Orchestration session 2026-08-01 · forecast clock fix pass (verifier caveats; none affect source correctness)_
   - (a) Older DB fixtures anchor on Postgres `CURRENT_DATE` (`tests/infoRepoForecast.db.test.js:47-48` `monthDay()`, `tests/infoRepository.db.test.js:483-485`, same pattern in infoRepoBanks/aliasCategoryResolution DB suites) while the queries now anchor on the app clock — those describes flake for ~2h on the last day of each month (pre-existing exposure, verified identical pre/post fix). Fix: derive the shared fixture helpers from the app date. (b) The 9 new rollover cases assume a positive UTC offset (`infoRepoForecast.test.js:427` frozen instant; `infoRepoForecast.db.test.js:626` premise guard, assumption stated at :577) — they fail under `APP_TIMEZONE=America/New_York` though the SOURCE is zone-agnostic (verified both directions). (c) `infoRepoForecast.test.js:463-489` passes on pre-fix source; its comment describes a mechanism the mock cannot observe — reword or drop (the DB counterpart genuinely discriminates).
 
@@ -1003,7 +1021,8 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-08-02 · ADR-088 reader/writer decouple pass (implementer + adversarial verifier residue; none are correctness breaks in shipped paths)_
   - (a) `services/transactionService.js:55,84` — the manual-dedup hash still keys on the raw input `bank_account` string, not the resolved account identity. Deliberately untouched: changing the recipe invalidates every historical hash. If it ever moves to account identity, ship with a hash-migration or a dual-hash grace path. (b) `bank_account` values on the wire now carry the account's CANONICAL casing (projected from `accounts.name`) rather than the stored row string — behavior pinned by tests, but `openapi.yaml`/API docs don't mention the normalization; add a note where the field is described. (c) `tests/backup-roundtrip.test.js` fails 10/12 in any environment without `packaging/electron` node_modules (`archiver`/`yauzl` unresolved from the backend suite) — pre-existing, unrelated to any diff; either install the packaging workspace in CI/dev bootstrap or make the suite self-skip when the modules are absent.
 
-- [ ] **`statementPartition` drops zero-sum partitions only in step 2 — cancelling noise in the DECLARED currency still swings the reconciliation base (−€10 → +€90 on a mislabelled account)** 🔽 🔎 partial-58e45e68 (#155) 2026-08-09 (the "at minimum" clause DONE: the funded filter is now `!roundToCents(sum).isZero()` — sub-cent residues (|sum| ≤ 0.005, banker's rounding) drop like true zeros, consistent with reconcileService's DRIFT_EPSILON and every consumer's cents rounding; adversarially verified — flip band enumerated per caller, the lone-residue-partition case proven numerically identical (label-only flip to the more honest rule-3 reading), discriminating test fails on the old filter. LEFT: the mislabelled-account rationale tension — step 1 elects a zero own-currency partition even when cancelling noise in the DECLARED currency swings the base −€10 → +€90 — is an explicit product decision on which step rationale wins, not attempted)
+- [ ] **`statementPartition` drops zero-sum partitions only in step 2 — cancelling noise in the DECLARED currency still swings the reconciliation base (−€10 → +€90 on a mislabelled account)** 🔽
+  - Tracking: 🔎 partial-58e45e68 (#155) 2026-08-09 (the "at minimum" clause DONE: the funded filter is now `!roundToCents(sum).isZero()` — sub-cent residues (|sum| ≤ 0.005, banker's rounding) drop like true zeros, consistent with reconcileService's DRIFT_EPSILON and every consumer's cents rounding; adversarially verified — flip band enumerated per caller, the lone-residue-partition case proven numerically identical (label-only flip to the more honest rule-3 reading), discriminating test fails on the old filter. LEFT: the mislabelled-account rationale tension — step 1 elects a zero own-currency partition even when cancelling noise in the DECLARED currency swings the base −€10 → +€90 — is an explicit product decision on which step rationale wins, not attempted)
   - ↪ _from: Orchestration session 2026-08-01 · cross-currency balances fix pass (verifier probe on c1d6761 (#142))_
   - `apps/node-backend/src/repositories/accountBalanceSql.js:236-249` — step 1 elects the own-currency partition even when its sum is 0 (deliberate: a EUR account spent to zero must keep a EUR base), but that means two cancelling €50 rows on a mislabelled USD-only "EUR" account flip the base from `{USD,100}` to `{EUR,0}` and the badge from −10 to +90. Related: `Number(p.balance) !== 0` treats a sub-cent residue (0.0001) as a funded partition.
   - Fix: needs a product decision on which rationale wins for the mislabelled case (the two step rationales are in tension — documented in the helper JSDoc); at minimum treat sub-cent residues as zero-sum when dropping.
@@ -1262,7 +1281,7 @@ look-changing one.
   - This is the third input to the class already fixed for tracking-only rows and (by a37d6cc (#149)) for unattributed rows. It wants its own decision rather than a reflex: the third arm exists precisely to give a span when nothing is active, so excluding inactive rows from it would make it unconditionally empty.
   - Measured identical on both sides of a37d6cc (#149), so it is pre-existing and untouched.
 
-- [ ] **`NOT_TRACKING_ONLY`'s doc describes an un-migrated ledger shape that is no longer reachable by INSERT** ⏬
+- [x] **`NOT_TRACKING_ONLY`'s doc describes an un-migrated ledger shape that is no longer reachable by INSERT** ⏬ ✅ 2026-08-25 · corrected the fallback and test prose to distinguish blank-label inserts, current labelled update-only edge cases, and legacy unattributed rows without changing SQL or assertions.
   - ↪ _from: Orchestration session 2026-08-05 · net-worth span verification (verifier established the real reachability while auditing a37d6cc (#149))_
   - The comment claims the un-migrated ledger "has rows carrying a `bank_account` string … and NO accounts row behind them". Migration 0050 backfilled `account_id` for every non-empty `bank_account`; the `sync_account_id_from_bank_account` trigger auto-creates an account (defaulting `in_net_worth = true`) for any non-empty label on INSERT; and `routes/transactions.js:122` makes `bank_account` required on manual create. So NULL-`account_id` rows now arise essentially only via the trigger's UPDATE path that blanks a label, or from pre-0050 rows with no label at all.
   - Consequence: the "carrying a string" half of the doc is stale, and the mixed case is narrower than the comment implies. The new tests already work around it correctly (insert with `bank: null`, then UPDATE the label) — only the prose is wrong.
@@ -1358,7 +1377,8 @@ look-changing one.
   - `EditPortfolioTxnDialog.tsx:150,290-298` (`min="0"` permits 0) vs `portfolioTxRepo.common.js:164-166` ("must be positive").
   - Fix: change the field's `min` to just above 0 (or validate `> 0` client-side).
 
-- [ ] **Currency free-text class: multiple surfaces let malformed currency codes reach a raw 400/500** 🔽 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (ISO-4217 assertCurrency now wired into POST/PATCH /api/transactions so free-typed codes 400 instead of 500; other currency-accepting surfaces still open) 🔎 partial-fab7a77 (#99) 2026-07-14 (currency now validated (ISO shape) on portfolio-tx + investment create/update too; remaining non-transaction surfaces still open) 🔎 partial-fab7a77 (#99) 2026-07-14 (watchlist currency uppercased on write) 🔎 partial-f80ccd1 (#136) 2026-07-28 (full-surface sweep with per-surface verdicts: planned POST/PATCH, portfolio-tx PATCH, generic+vision CSV adapters (shared normalizeIsoCurrency — free-text cells no longer 500 whole commits at the 0046 CHECK), portfolio-import new-holding + repo VALIDATION_ERROR→400 translation all fixed; accounts/investments/watchlist/reports/info confirmed already-validated. LEFT by design: compute-only rebalance/forecast currency params (degrade to logged 1:1 fallback, no write), bank-specific machine-export adapters, dbEditor, and the conservative app_settings blob guard)
+- [ ] **Currency free-text class: multiple surfaces let malformed currency codes reach a raw 400/500** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (ISO-4217 assertCurrency now wired into POST/PATCH /api/transactions so free-typed codes 400 instead of 500; other currency-accepting surfaces still open) 🔎 partial-fab7a77 (#99) 2026-07-14 (currency now validated (ISO shape) on portfolio-tx + investment create/update too; remaining non-transaction surfaces still open) 🔎 partial-fab7a77 (#99) 2026-07-14 (watchlist currency uppercased on write) 🔎 partial-f80ccd1 (#136) 2026-07-28 (full-surface sweep with per-surface verdicts: planned POST/PATCH, portfolio-tx PATCH, generic+vision CSV adapters (shared normalizeIsoCurrency — free-text cells no longer 500 whole commits at the 0046 CHECK), portfolio-import new-holding + repo VALIDATION_ERROR→400 translation all fixed; accounts/investments/watchlist/reports/info confirmed already-validated. LEFT by design: compute-only rebalance/forecast currency params (degrade to logged 1:1 fallback, no write), bank-specific machine-export adapters, dbEditor, and the conservative app_settings blob guard)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - AddAccountDialog: `<3` letters/digits → `accountService.js:48-51` `^[A-Z]{3}$` raw 400 (`AddAccountDialog.tsx:194-199`; the `|| "EUR"` at `:101` rescues empty only). Transaction PATCH: free text, no check either side in code (`TransactionInfoDialog.tsx:78-79,158`) — the 0046 DB CHECK turns `"euro"`/`"€"` into a raw 500. `AddTransactionDialog.tsx:119` `maxLength={10}` vs `transactions.currency` VARCHAR(3) (`0001_initial_database_schema.py:190`) + ISO CHECK (`0046_currency_integrity.py:65`) → 4-10 chars = PG 22001/CHECK 500.
   - Fix: validate ISO-4217 client-side (regex or a fixed currency list) before submit on all three surfaces.
@@ -1378,7 +1398,8 @@ look-changing one.
   - `PortfolioImportPage.tsx:211-217` (`min="0"` attr only; `parseInt || 0` keeps negatives) and `portfolioImportRoutes.js:100`; csv-parse throws `Invalid Option: from must be a positive integer` (verified by executing csv-parse).
   - Fix: clamp to `Math.max(0, n)` client-side and/or validate server-side before passing to csv-parse.
 
-- [ ] **Backend has ZERO length validation anywhere — `sanitizeString` is dead code** 🔽 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (throwing assertMaxLength added and wired to the VARCHAR(100) bank_account mirror on create/PATCH; broad systemic length coverage still open) 🔎 partial-fab7a77 (#99) 2026-07-14 (assertMaxLength on watchlist + investment string fields) 🔎 partial-f80ccd1 (#136) 2026-07-28 (all remaining VARCHAR write surfaces now capped to their actual column widths: recipient_bank_accounts.account_number→34, investment price_provider_id→200, provider urls→500, provider paths→300. Systematic survey result: every other directive-named field (transactions memo/comment, recipients, categories, planned strings, accounts name/display_name/institution, tags, splits note) is a TEXT column with zero app-level-cap precedent in the codebase — deliberately left; closing this finding fully would need a decided TEXT-cap policy first)
+- [ ] **Backend has ZERO length validation anywhere — `sanitizeString` is dead code** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (throwing assertMaxLength added and wired to the VARCHAR(100) bank_account mirror on create/PATCH; broad systemic length coverage still open) 🔎 partial-fab7a77 (#99) 2026-07-14 (assertMaxLength on watchlist + investment string fields) 🔎 partial-f80ccd1 (#136) 2026-07-28 (all remaining VARCHAR write surfaces now capped to their actual column widths: recipient_bank_accounts.account_number→34, investment price_provider_id→200, provider urls→500, provider paths→300. Systematic survey result: every other directive-named field (transactions memo/comment, recipients, categories, planned strings, accounts name/display_name/institution, tags, splits note) is a TEXT column with zero app-level-cap precedent in the codebase — deliberately left; closing this finding fully would need a decided TEXT-cap policy first)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - `middleware/validation.js:78` `sanitizeString` has no call sites (`validateDateString` likewise dead) — an intended-but-unwired sanitization layer; the only real protection is frontend `maxLength` + the DB column width. Real exposure is narrow (core text columns are TEXT): `manual_raw_transactions.bank_account` VARCHAR(100) (`0001:431`) — frontend cap is exact-match, so an API-length overflow 500s the raw-mirror insert *after* the main insert already succeeded (mid-operation failure; `transactions.bank_account` is TEXT, so the sinks diverge); `watchlist.name/symbol/price_provider_id` (200/20/200, `0001:539-545`) and `investments.name` (200, `0001:473`) are provider-/market-prefilled — HTML `maxLength` doesn't clamp programmatic values.
   - Fix: wire `sanitizeString`/`validateDateString` into the routes they were built for, or delete them if genuinely superseded.
@@ -1393,7 +1414,8 @@ look-changing one.
   - Restore flow asks for a "wachtwoord" where backup set a "wachtzin" (same secret, two different names, in a security-critical flow: `settings.restore.passphrase*` vs `settings.backup.passphrase.*`) · `importReview.toast.persistDefaultFailed` "Standaard ontvanger opslaan mislukt" — wrong referent (reads "failed to save the default recipient"; sibling `importReview.persistDefault` gets it right) · `recurring.loading` "Terugkerende detectie" (modifier on the wrong noun) · `transactions.memo` "Omschrijving" collides with the Description label (also "Omschrijving") · `dashboard.greetingAfternoon` "Goedenmiddag" should be "Goedemiddag".
   - Fix: correct each string; unify the backup/restore passphrase terminology first (security-critical UX).
 
-- [ ] **Backlog batch: assorted low-severity validation/consistency gaps across planned/portfolio-tx/splits/watchlist/accounts/tax** ⏬ 🔎 verified-present 2026-07-11 🔎 partial-55d9364 (#93) 2026-07-14 (splits/batch sub-item fixed: all-dropped input now returns 400 instead of 201 {total:0}; the other planned/portfolio-tx/watchlist/accounts/tax sub-items in this bundle remain open) 🔎 partial-55d9364 (#93) 2026-07-14 (two more sub-items fixed: planned is_recurring-without-pattern now 400; watchlist empty-name + added_price-on-PATCH now rejected — bundle still has other open sub-items) 🔎 partial-fab7a77 (#99) 2026-07-14 (splits sub-item fixed: POST / and /batch validate transaction_id/recipient_id/amount before Postgres (was FK/type 500); other planned/portfolio-tx/watchlist/accounts/tax sub-items remain) 🔎 partial-fab7a77 (#99) 2026-07-14 (planned reminder/amount guards, portfolio-tx whitelists, account statement_balance bounds) 🔎 partial-f80ccd1 (#136) 2026-07-28 (full sub-item audit table produced; fixed this pass: planned PATCH is_recurring-without-pattern guard (only when the PATCH touches recurrence fields, so legacy broken rows stay editable — pinned), planned PATCH amount bounds (0/1e15/Infinity/null/'' previously reached the DB), CSV mapper duplicate-column non-blocking warning, phantom `balance` removed from frontend update type + openapi + handleUpdate, inline amount-clear no longer parses '' to 0 (VirtualDataTable keeps raw string while editing). Confirmed fixed-by-earlier-pass: splits batch all-or-nothing, watchlist PATCH guards, tax mortgageStartYear + profileConfigured. LEFT: the nl copy/terminology sweep sub-item only (subjective bulk copy calls, cleanly separable))
+- [ ] **Backlog batch: assorted low-severity validation/consistency gaps across planned/portfolio-tx/splits/watchlist/accounts/tax** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-55d9364 (#93) 2026-07-14 (splits/batch sub-item fixed: all-dropped input now returns 400 instead of 201 {total:0}; the other planned/portfolio-tx/watchlist/accounts/tax sub-items in this bundle remain open) 🔎 partial-55d9364 (#93) 2026-07-14 (two more sub-items fixed: planned is_recurring-without-pattern now 400; watchlist empty-name + added_price-on-PATCH now rejected — bundle still has other open sub-items) 🔎 partial-fab7a77 (#99) 2026-07-14 (splits sub-item fixed: POST / and /batch validate transaction_id/recipient_id/amount before Postgres (was FK/type 500); other planned/portfolio-tx/watchlist/accounts/tax sub-items remain) 🔎 partial-fab7a77 (#99) 2026-07-14 (planned reminder/amount guards, portfolio-tx whitelists, account statement_balance bounds) 🔎 partial-f80ccd1 (#136) 2026-07-28 (full sub-item audit table produced; fixed this pass: planned PATCH is_recurring-without-pattern guard (only when the PATCH touches recurrence fields, so legacy broken rows stay editable — pinned), planned PATCH amount bounds (0/1e15/Infinity/null/'' previously reached the DB), CSV mapper duplicate-column non-blocking warning, phantom `balance` removed from frontend update type + openapi + handleUpdate, inline amount-clear no longer parses '' to 0 (VirtualDataTable keeps raw string while editing). Confirmed fixed-by-earlier-pass: splits batch all-or-nothing, watchlist PATCH guards, tax mortgageStartYear + profileConfigured. LEFT: the nl copy/terminology sweep sub-item only (subjective bulk copy calls, cleanly separable))
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Planned: API-only `is_recurring:true` without a pattern stores and is perpetually due after execution (`plannedTransactions.js:211` guard fires only when a pattern is present; `recurrence.js:55`) · `reminder_days_before` creatable + returned but missing from the PATCH whitelist → updates silently dropped (`validation.js:26-33`) · zero/absurd amounts end-to-end (`PlannedPaymentForm.tsx:58` blocks only empty; `plannedTransactions.js:181` null-check only; zero at least excluded from auto-match, `plannedMatchService.js:63`).
   - Portfolio-tx: `type`/`currency`/`recurrence_interval` have no backend whitelist or DB CHECK (`type:'banana'` inserts and is invisible to units replay, `common.js:222-266`) · recurrence fields are stored-but-inert metadata — grep finds NO backend consumer of `is_recurring`/`recurrence_interval`/`recurrence_end_date` for portfolio txns (**CONFIRMED 2026-07-10 (D9): badge-only IS the intended design — do not file the missing consumer as a bug; remaining work is hygiene only: whitelist interval values, validate `end ≥ start`, clear stale interval/end-date on recurrence-off**) · turning recurrence off leaves stale interval/end-date stored (`EditPortfolioTxnDialog.tsx:153-155`).
@@ -1532,7 +1554,7 @@ look-changing one.
   - None of those change when you switch from one idle conversation to another with the same message count, so the effect never fires and the scroller keeps whatever offset the previous transcript left. 8751876d (#163) wired a `conversationId` prop into the component for the pin reset but deliberately did NOT add it to these deps — that would be a visible scroll-position change beyond that change's residual scope.
   - Fix: add `conversationId` to the auto-scroll effect's deps so a transcript swap always lands at the bottom. Confirm against the pin ratchet added in 8751876d before shipping.
 
-- [ ] **The AI-chat streaming draft bubble re-mints `createdAt` every chunk, so `React.memo` can never bail out on it** ⏬
+- [x] **The AI-chat streaming draft bubble re-mints `createdAt` every chunk, so `React.memo` can never bail out on it** ⏬
   - ↪ _from: Orchestration session 2026-08-11 · noticed while adding the streaming scroll-pin guard_
   - `apps/frontend/src/features/ai-chat/ChatMessageList.tsx:186` — the synthesised draft message carries `createdAt: new Date().toISOString()`
   - A fresh value per chunk changes the `message` object identity every chunk. That is *correct* for the draft (it must re-render as tokens arrive), but it also means the memo can never bail even when nothing visible changed but the cursor blink. Hoist the timestamp to when the draft starts rather than re-reading the clock per render. Genuinely minor — filed because it sits directly adjacent to the landed `React.memo(ChatBubble)` work and would otherwise be re-derived.
@@ -1606,7 +1628,7 @@ look-changing one.
   - Pre-existing spec inaccuracy, deliberately left alone by 3880f7ed (#163) because correcting it changes the generated frontend types and so carries its own blast radius. Worth doing knowingly rather than as a side effect: after that change the runtime rejects every non-integer string form for ids the spec still types `string`, so spec and behaviour are further apart in practice than before.
   - Fix: type them `integer` with `format: int64` (they are BIGSERIAL — do NOT use int32, see the validator item above), regenerate the frontend types, and check the diff before shipping.
 
-- [ ] **`backup/coverage.js`'s hand-maintained migration stamp keeps rotting — make it self-updating or drop it** ⏬
+- [x] **`backup/coverage.js`'s hand-maintained migration stamp keeps rotting — make it self-updating or drop it** ⏬
   - ↪ _from: Orchestration session 2026-08-11 · filed while fixing the stamp for the second time_
   - `apps/node-backend/src/backup/coverage.js:22` ("Last verified against: …"), enforced-content counterpart `apps/node-backend/tests/backup-coverage.test.js`
   - The stamp has now drifted twice and been "fixed" twice (0035→0064 era, then 0080→0090 in 344b3b2a (#163)); a 2026-07-14 tick claiming it was current was refuted by the 2026-08-10 audit. A comment that must be hand-updated on every migration will keep going stale, and because it *looks* authoritative it actively misleads — the previous re-verification trusted it and got the wrong answer.
@@ -1730,7 +1752,7 @@ look-changing one.
   - Impact is narrow but real: branch protection matches the check-run context on the head SHA rather than the workflow run's conclusion, so a green `CI Complete` from a hand-cancelled run would satisfy the required check. It needs repo write access, and the Actions UI still shows the run as cancelled with a warning annotation on every tolerated job. Note this is **not** an artefact of the option chosen — a human-cancelled run has no `failure` under either option the parent finding offered.
   - Fix: the discriminator that actually works is to compare the run's head SHA against the PR's live head SHA (`gh api repos/$REPO/pulls/$N --jq .head.sha`) — differ ⇒ superseded, match ⇒ manual cancel, so only the former is tolerated. Deliberately not built as part of `be7b4c1`: it needs a `pull-requests: read` permission block and a `GH_TOKEN` on two jobs that currently run with `permissions: {}`, which is a wider change than that finding scoped and wants its own decision.
 
-- [ ] **`getAllWithCount`'s `countSql` and `getCount` can take the reduced `COUNT_JOINS` set** ⏬
+- [x] **`getAllWithCount`'s `countSql` and `getCount` can take the reduced `COUNT_JOINS` set** ⏬ ✅ 2026-08-25 · both count-only queries now retain only the recipient join used by the shared filter builder; unit tests pin the reduced SQL and the full projection joins on data queries.
   - ↪ _from: Orchestration session 2026-08-11 · noticed while closing the count-join-set residue_
   - `apps/node-backend/src/repositories/transactionRepository.js:669` (`countSql`), `:339` (`getCount`)
   - Both still interpolate the full six-way `TRANSACTION_JOINS` into a count that projects nothing. The `COUNT_JOINS` constant added in 3e7865fd (#163) applies unchanged, and the safety argument was established for the whole builder, not just the uncategorised path: `r` is the only alias `buildTransactionWhere` references, and the other five are LEFT JOINs onto primary keys. Deliberately left out of that change's scope.
@@ -1986,11 +2008,13 @@ look-changing one.
   - The queryFn loops `getTransactions({limit: 200, offset})` pages until 5 non-excluded rows are found, with no page cap — a user whose recent history is dominated by excluded categories (e.g. transfers) triggers many sequential 200-row round trips, and `invalidateAll` refires the whole loop after every transaction create/update/delete.
   - Fix: pass exclusion IDs server-side with `limit: 5`, or at minimum cap the loop (~3 pages).
 
-- [ ] **VirtualDataTable: every search keystroke re-renders the whole table and re-runs the O(n) row pipeline** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — No memoized Row component was extracted; the ~25-40 visible virtual rows and their Radix ContextMenu/TagChip subtrees still fully re-render on every search keystroke because VirtualDataTable itself re-renders on setLocalSearchQuer…)
+- [x] **VirtualDataTable: every search keystroke re-renders the whole table and re-runs the O(n) row pipeline** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 ✅ 2026-08-25 (the remaining visible-row rerender case is resolved with an extracted memoized row and stable edit callbacks)
   - ↪ _from: Performance research 2026-07-02 · Frontend — runtime rendering_
   - `apps/frontend/src/components/shared/VirtualDataTable.tsx:134,164-175,346-384,677-810`
   - The 300ms debounce only covers the API call; `setLocalSearchQuery` fires per keystroke and re-renders the entire table. `processedRows` lists `localSearchQuery` in its deps and re-maps **all loaded rows** even in server-search mode (filter branch skipped, `deferredData.map` not); the ~25-40 visible virtual rows then all re-render (no row memoization), each carrying a Radix ContextMenu root, badges, `TagChip`s, and a closed `SplitTransactionDialog` whose body still executes Decimal math every render (`components/splits/SplitTransactionDialog.tsx:57-77`).
   - Fix: colocate the search input + suggestions in a child component; drop `localSearchQuery` from `processedRows` deps when `isServerSearch`; extract a memoized Row keyed on `(row, isEditing, columnWidths)`; gate SplitTransactionDialog's derived math behind `open`.
+  - Completion: extracted `VirtualizedTableRow`, memoized it, and stabilized the edit callbacks so unchanged visible rows keep their existing subtrees during search input updates. Focused rendering tests cover the memo boundary.
 
 - [x] **`Intl.NumberFormat`/`DateTimeFormat` constructed per formatted value on TaxOverviewPage (and 6 smaller sites) — re-run at chart-hover rate** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — RealEstatePage.tsx:38-40 and MarketLookupPage.tsx:131-134 (the latter feeding a chart tick formatter at hover rate) still construct a new Intl.NumberFormat on every formatted value/call; 2 of the item's 7 named sites remain unfixe…) ✅ 2026-08-10 · 94130e40 (#161) (LEFT clause delivered: the last 2 of the 7 named sites now memoize their formatters per (locale, options) instead of constructing one per formatted value. MarketLookupPage's was the one that mattered — it feeds the price chart's y-axis tick formatter, so it paid the ~50-200µs constructor cost at hover/redraw rate; RealEstatePage's is keyed on the `decimals` argument its call sites pass. Output strings are byte-identical, so this is inherently visually free. The other 5 sites (CustomChart, CustomChartBuilderModal, ResearchFundamentalsTab, CloseAccountDialog, TaxOverviewPage) were re-checked and are genuinely already fixed. Deliberately NOT done, still open as its own concern: the `Money.tsx` module-level-Map refactor the finding's last sentence suggests — that is a different shared component and was out of this scope. Lint + tsc clean, frontend suite at baseline)
   - ↪ _from: Performance research 2026-07-02 · Frontend — runtime rendering_
@@ -2009,7 +2033,8 @@ look-changing one.
   - The team already suffered one silent regression — recharts dragged into the preload graph, documented as a post-mortem comment in `apps/frontend/vite.config.ts:71-76`.
   - Fix: add `size-limit` (or a gzip-size assertion script) on the entry graph + total, wired into CI.
 
-- [ ] **Blanket `radix-ui` manualChunk forces all 27 Radix packages into the boot graph (49.8 KB gz preloaded)** 🔼 🔎 verified-present 2026-07-11 🔎 measured-2026-07-19 (empirically NOT a clean win on the current rolldown tree: removing the blanket rule entirely and letting Rollup split naturally dropped the total boot-preload from 304.4 → 300.5 KB gz — only ~3.9 KB. The 54.3 KB radix chunk is overwhelmingly SHELL-used (dialog/dropdown-menu/tooltip/label/separator/slot via the sidebar + sonner/toaster + button's slot), so Rollup preloads it either way; the premise that the rule force-preloads *lazy-only* radix doesn't hold here. Kept the named chunk for its stable-vendor caching benefit. Reassess only if the shell's radix surface shrinks. The `icons` sub-point (14.2 KB gz) is the same shape and likely the same non-result.)
+- [ ] **Blanket `radix-ui` manualChunk forces all 27 Radix packages into the boot graph (49.8 KB gz preloaded)** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 measured-2026-07-19 (empirically NOT a clean win on the current rolldown tree: removing the blanket rule entirely and letting Rollup split naturally dropped the total boot-preload from 304.4 → 300.5 KB gz — only ~3.9 KB. The 54.3 KB radix chunk is overwhelmingly SHELL-used (dialog/dropdown-menu/tooltip/label/separator/slot via the sidebar + sonner/toaster + button's slot), so Rollup preloads it either way; the premise that the rule force-preloads *lazy-only* radix doesn't hold here. Kept the named chunk for its stable-vendor caching benefit. Reassess only if the shell's radix surface shrinks. The `icons` sub-point (14.2 KB gz) is the same shape and likely the same non-result.)
   - ↪ _from: Performance research 2026-07-02 · Frontend — bundle / loading_
   - `apps/frontend/vite.config.ts:77-79`; `dist/index.html:22` modulepreloads `radix-ui-*.js` (164.7 KB raw / 49.8 KB gz)
   - Because one shell component touches any Radix primitive, the blanket `@radix-ui/*` rule ships menubar, navigation-menu, context-menu, hover-card, accordion, slider, etc. at boot even where only lazy pages use them — the exact failure mode the file's own recharts comment warns about. Same mechanism, smaller scale: the `icons` chunk (`vite.config.ts:86-88`, 14.8 KB gz preloaded) hoists every lucide icon used anywhere into boot.
@@ -2037,7 +2062,8 @@ look-changing one.
   - No GROUP BY, no LIMIT; `historyMonths` clamps at 120, so a 10-year window ships every transaction row through Node per request. The sibling `infoRepo.monthly.js:139-180` already proved the fix is FX-semantics-preserving (grouped by date+currency with an explicit comment). `ByCategory` is worse: re-run on every `include_breakdown` request even on MC-cache hits (`forecast/index.js:284-287`). *(Note: the 2026-06-30 "verified optimized" entry covered `services/calculations/aggregation/cashflowForecast.js`, which contains no SQL — this is the separate `infoRepo.forecast.js` layer.)*
   - Fix: mirror the monthly-summary shape — `GROUP BY t.date, t.currency` with `SUM(amount)` in all four queries.
 
-- [ ] **All-time pivot endpoints ship near-transaction-cardinality intermediate rows per request — no default date bound, no cache** 🔼 🔎 verified-present 2026-07-11 🔎 partial-2026-07-19 (the TTL-cache half is done: category/recipient-by-year/recipient/tag pivots now go through a shared 5-min statistics cache (`_statisticsCache.js` → `statisticsResponseCache` in routes/info/_cache.js) with inflight-dedup, keyed on all inputs (currency, exclusions, bucket, dates, ids, allTags), busted synchronously on every transaction/category/recipient mutation via a new `invalidateStatisticsCaches()` hooked into `scheduleReconcile` + `scheduleRefresh` + `refreshMaterializedViews` — repeated statistics-page loads no longer re-run the full all-time scan. LEFT: the rolling-window `startDate` default (reduces the COLD-request intermediate-set size too) is a user-visible behavior change — statistics would default to a window instead of all-time — deliberately not applied without sign-off. Exact per-date FX semantics preserved (pure memoization, no grain change).)
+- [ ] **All-time pivot endpoints ship near-transaction-cardinality intermediate rows per request — no default date bound, no cache** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-2026-07-19 (the TTL-cache half is done: category/recipient-by-year/recipient/tag pivots now go through a shared 5-min statistics cache (`_statisticsCache.js` → `statisticsResponseCache` in routes/info/_cache.js) with inflight-dedup, keyed on all inputs (currency, exclusions, bucket, dates, ids, allTags), busted synchronously on every transaction/category/recipient mutation via a new `invalidateStatisticsCaches()` hooked into `scheduleReconcile` + `scheduleRefresh` + `refreshMaterializedViews` — repeated statistics-page loads no longer re-run the full all-time scan. LEFT: the rolling-window `startDate` default (reduces the COLD-request intermediate-set size too) is a user-visible behavior change — statistics would default to a window instead of all-time — deliberately not applied without sign-off. Exact per-date FX semantics preserved (pure memoization, no grain change).)
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `infoRepositoryStatistics.js:113-133` (`getCategoryPivot`: groups by `t.date` over the whole table, then **doubles** the set in JS — two conversion legs pushed per row at `:139-144`), `infoRepositoryRecipients.js:183-200` (`getRecipientByYear`, no date filter), `:274-292` (`getRecipientPivot`, dates optional/default null), `infoRepositoryTags.js:53-70` (`getTagPivot` with `allTags=true`)
   - Grouping by `t.date` is deliberate (per-date FX, documented at `:106-112`), but the intermediate set ≈ distinct (entity, day, currency) pairs ≈ transaction count for sparse data, growing forever; all are `source:'live'` on every statistics-page load.
@@ -2049,7 +2075,8 @@ look-changing one.
   - `fetchTransactionsInRange` (`expenses.js:24-34`) does **not** use the per-turn `memoizeAsync` cache — that cache exists but only wraps portfolio fetches (`_portfolioFetch.js:19-42`). One chat turn calling e.g. `getSpendByCategory` + `getTopRecipients` + `getMonthlySpend` over the same range runs three identical 50k-row scans with per-row `toDecimal` allocations.
   - Fix: route `fetchTransactionsInRange` through `memoizeAsync(cache, ...)` (the plumbing already passes `cache` into `run()`); push category/recipient/month aggregations into SQL where the tool doesn't need raw rows.
 
-- [ ] **`getNetWorthByAccount` replays the entire multi-year snapshot history live, per request, on the event loop** 🔼 ✅ 2026-07-21 (re-verified fixed: migration `0074_snapshot_account_split.py` added a persisted per-account snapshot side table, and `infoRepositoryNetWorth.js:344` now reads `readPersistedAccountSeries(target)` first, only falling back to the live `computeDailySnapshots` at :350 on an un-migrated/empty DB — exactly the proposed "persist the split alongside snapshots" fix. Marker was never stamped. Minor residue: `computeAndStoreSnapshots` still full-DELETE+reinsert (the separate "incremental rebuild" sub-point) is not this item.) 🔎 re-verified-open 2026-08-10 (completed-item audit: tick refuted — The completion note asserts an active code path (infoRepositoryNetWorth.js:344 calling readPersistedAccountSeries) that does not exist — the entire feature was deleted by 0c404300, two days after the stamp. TODO.md's own line-6846…)
+- [ ] **`getNetWorthByAccount` replays the entire multi-year snapshot history live, per request, on the event loop** 🔼
+  - Tracking: ✅ 2026-07-21 (re-verified fixed: migration `0074_snapshot_account_split.py` added a persisted per-account snapshot side table, and `infoRepositoryNetWorth.js:344` now reads `readPersistedAccountSeries(target)` first, only falling back to the live `computeDailySnapshots` at :350 on an un-migrated/empty DB — exactly the proposed "persist the split alongside snapshots" fix. Marker was never stamped. Minor residue: `computeAndStoreSnapshots` still full-DELETE+reinsert (the separate "incremental rebuild" sub-point) is not this item.) 🔎 re-verified-open 2026-08-10 (completed-item audit: tick refuted — The completion note asserts an active code path (infoRepositoryNetWorth.js:344 calling readPersistedAccountSeries) that does not exist — the entire feature was deleted by 0c404300, two days after the stamp. TODO.md's own line-6846…)
   - ↪ _from: Performance research 2026-07-02 · Database layer_
   - `apps/node-backend/src/services/portfolio/snapshotBuilder.js:43-593` (`computeDailySnapshots`: day-walk over `O(days × investments)` with Decimal math, fully synchronous; `computeAndStoreSnapshots` always DELETEs + reinserts the whole series at `:660`), called live from `infoRepositoryNetWorth.js:292`
   - Only a 5-min TTL response cache (`routes/info/_cache.js:7`) sits in front, and `invalidatePortfolioCaches()` clears it on every investment/transaction write — so each portfolio edit + page view replays the full history (7 bulk queries + the day walk). The headline `getNetWorth` correctly reads the persisted snapshots table instead (`infoRepositoryNetWorth.js:66-77`).
@@ -2067,19 +2094,22 @@ look-changing one.
   - No `DELETE FROM import_batches/import_staging_rows/portfolio_import_*` anywhere in `apps/node-backend/src` (grepped all *.js). 0040's own comment calls staging rows "transient — cascade-drop with their batch," but batches are never deleted. Grows scans (incl. the FK-check scans below), review-query joins (`importBatchRepository.js:98-116`), and backup size.
   - Fix: retention pass (startup or the existing daily interval in `startup/warmup.js`) deleting batches with `status IN ('complete','failed','aborted')` older than N days — `ON DELETE CASCADE` on `batch_id` clears the rows for free.
 
-- [ ] **CategoryPivotTable creates one backdrop-filter region per row: `glass-sticky-col` (12–16px blur) is applied per sticky `<td>`, all re-blurred on every horizontal scroll frame** 🔼 🔎 verified-present 2026-07-11
+- [ ] **CategoryPivotTable creates one backdrop-filter region per row: `glass-sticky-col` (12–16px blur) is applied per sticky `<td>`, all re-blurred on every horizontal scroll frame** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/GPU research 2026-07-02 · Wave A_
   - `apps/frontend/src/components/statistics/CategoryPivotTable.tsx:239,263,317,356`, `apps/frontend/src/index.css:430-446` (blur 12px standard / 16px fx-enhanced)
   - Each category/subcategory row's frozen first cell is its own `backdrop-filter` element, so a pivot with dozens of expanded rows holds dozens of simultaneous blur regions, and horizontally scrolling the table (its core interaction) re-samples every one per frame while value cells stream underneath. (The already-filed DOM-size item is a different axis — this is compositor cost that persists even after DOM slimming.)
   - Fix: blur once — wrap the column in a single sticky container (or absolutely-positioned column overlay) carrying one `glass-sticky-col`, cells transparent; or drop to the opaque `hsl(var(--card))` fallback at the standard tier.
 
-- [ ] **Chart tooltip is a `glass-thick` (28px blur + saturate + elevated shadow) surface repositioned on every mousemove, multiplied across sync-linked charts** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Chart tooltip is a `glass-thick` (28px blur + saturate + elevated shadow) surface repositioned on every mousemove, multiplied across sync-linked charts** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/GPU research 2026-07-02 · Wave A_
   - `apps/frontend/src/components/charts/ChartTooltip.tsx:169`
   - Moving a backdrop-filter element forces the blur to be re-sampled at each new position every frame; while scrubbing a chart on Dashboard/NetWorth/Performance the tooltip re-blurs continuously, and ChartSync shows one such tooltip per linked chart simultaneously. This is compositor cost on top of (distinct from) the already-filed React hover re-render storm — fixing the re-renders won't remove it.
   - Fix: use an opaque `bg-popover` (or `glass-thin` without saturate) for chart tooltips; frequently-moving surfaces should never carry backdrop-filter.
 
-- [ ] **Enhanced tier runs two animators simultaneously: the drifting CSS aurora blobs are never paused while the WebGL aurora animates on top of them** 🔼 🔎 verified-present 2026-07-11 🔎 verified-present 2026-08-09 ⚠️ **GATED — proven LOOK-CHANGING, needs user sign-off (2026-08-09 pixel probe)**: the premise that the WebGL layer occludes the blobs is FALSE — the canvas carries `opacity-60 dark:opacity-50` (ShaderAurora.tsx:338) and the shader's own alpha peaks at 0.65 with 47.8% of pixels under alpha 0.1, so a SwiftShader render of the real shaders held over the compiled CSS shows blob drift changing **41.0% of viewport pixels** (196,807/480,000) through the live aurora. Freezing the blobs at the enhanced tier would visibly still the ambient composite — not a visually-free fix. No free sub-part exists: static-atmosphere and idle already freeze/pause the blobs, so the only remaining case (enhanced, focused, small display) is exactly the visible one. If signed off, the sketched design: ShaderAurora toggles a root class (e.g. `fx-webgl-live`) in startLoop/stopLoop — tracking actual drawing, so context loss/failure resumes the blobs — plus one CSS pause rule
+- [ ] **Enhanced tier runs two animators simultaneously: the drifting CSS aurora blobs are never paused while the WebGL aurora animates on top of them** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 verified-present 2026-08-09 ⚠️ **GATED — proven LOOK-CHANGING, needs user sign-off (2026-08-09 pixel probe)**: the premise that the WebGL layer occludes the blobs is FALSE — the canvas carries `opacity-60 dark:opacity-50` (ShaderAurora.tsx:338) and the shader's own alpha peaks at 0.65 with 47.8% of pixels under alpha 0.1, so a SwiftShader render of the real shaders held over the compiled CSS shows blob drift changing **41.0% of viewport pixels** (196,807/480,000) through the live aurora. Freezing the blobs at the enhanced tier would visibly still the ambient composite — not a visually-free fix. No free sub-part exists: static-atmosphere and idle already freeze/pause the blobs, so the only remaining case (enhanced, focused, small display) is exactly the visible one. If signed off, the sketched design: ShaderAurora toggles a root class (e.g. `fx-webgl-live`) in startLoop/stopLoop — tracking actual drawing, so context loss/failure resumes the blobs — plus one CSS pause rule
   - ↪ _from: UI/GPU research 2026-07-02 · Wave B_
   - `apps/frontend/src/components/layout/ShaderAurora.tsx:10-11` ("CSS aurora blobs (always rendered underneath)"), `apps/frontend/src/index.css:589,605` (blob `animation:` lines), `apps/frontend/src/index.css:1085-1122` (tier rules — only `fx-reduced` hides and `fx-static-atmosphere` freezes the blobs; there is no `:root.fx-enhanced` pause rule)
   - Relationship clarified: the layers are tiered as fallback (WebGL failure leaves CSS blobs), but at the enhanced tier BOTH animate concurrently — two independent invalidation sources under every backdrop-filter, and on electron-mac enhanced additionally stacks the vibrancy-translucent body (`index.css:541-543`) on the same frames. The CSS drift is redundant work whenever the WebGL layer is actually drawing.
@@ -2097,7 +2127,8 @@ look-changing one.
   - Same defect class as the already-filed VirtualDataTable column-resize, but in the separate non-virtual `DataTable` used for Dashboard "Recent transactions" (`apps/frontend/src/pages/DashboardPage.tsx:495`); each mousemove (~60-120Hz) creates a new widths object and re-renders header + all rows, and width changes reflow the table each frame. Bounded by the small row count, but it's a second copy of the bug that will be missed if only VirtualDataTable is fixed.
   - Fix: during drag, write the width to a CSS variable / inline style on the `<col>`/`<th>` via ref per rAF; commit to React state once on mouseup (same fix as VirtualDataTable — fix both together).
 
-- [ ] **Every transactions-list page load scans the entire filtered set — `COUNT(*) OVER ()` defeats LIMIT top-N even on the unfiltered default view** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — getUncategorisedWithCount's total_cte (transactionRepository.js:459-464) still runs a full COUNT(*) over the complete TRANSACTION_JOINS join set on every request to this endpoint, independent of and heavier than the reduced-join u…) 🔎 partial-2d24be67 (#163) 2026-08-11 (the audit's LEFT clause is delivered: `getUncategorisedWithCount`'s total CTE now uses a new `COUNT_JOINS` constant carrying only `LEFT JOIN recipients r` instead of the full six-way `TRANSACTION_JOINS`. Safe because `r` is the only alias any `buildTransactionWhere` predicate references (`recipientName`'s `r.name ILIKE` — every clause the builder can emit was read, and after the sibling recipientGroupId fix below it is the sole non-comment alias reference left), and the five dropped aliases are LEFT JOINs onto primary keys, so none can drop or duplicate a transaction. ⚠️ **The audit clause's premise was partly wrong and the honest gain is smaller than it claims:** measured on a live 60k-row database, PostgreSQL already elided the five unreferenced LEFT JOINs by itself (join removal on unique keys) — old and new count subplans read identical buffers (857 vs 857). The win is planning time (0.614ms → 0.511ms median) and legibility, not a runtime six-way join. LEFT, and why this stays open rather than ticked: the finding's own Fix line also asks to "compute total only when `offset === 0` … alternatively cache count per filter-hash briefly", and that was never done — `getAllWithCount`'s `countSql` (transactionRepository.js:669) still issues an unconditional full COUNT over the filtered set on every page request, in parallel with the data query. The earlier root fix solved the *headline* defect a different way, by splitting the window count into a separate query so the data query pipelines and stops at LIMIT; it did not make the count itself cheaper or conditional)
+- [ ] **Every transactions-list page load scans the entire filtered set — `COUNT(*) OVER ()` defeats LIMIT top-N even on the unfiltered default view** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — getUncategorisedWithCount's total_cte (transactionRepository.js:459-464) still runs a full COUNT(*) over the complete TRANSACTION_JOINS join set on every request to this endpoint, independent of and heavier than the reduced-join u…) 🔎 partial-2d24be67 (#163) 2026-08-11 (the audit's LEFT clause is delivered: `getUncategorisedWithCount`'s total CTE now uses a new `COUNT_JOINS` constant carrying only `LEFT JOIN recipients r` instead of the full six-way `TRANSACTION_JOINS`. Safe because `r` is the only alias any `buildTransactionWhere` predicate references (`recipientName`'s `r.name ILIKE` — every clause the builder can emit was read, and after the sibling recipientGroupId fix below it is the sole non-comment alias reference left), and the five dropped aliases are LEFT JOINs onto primary keys, so none can drop or duplicate a transaction. ⚠️ **The audit clause's premise was partly wrong and the honest gain is smaller than it claims:** measured on a live 60k-row database, PostgreSQL already elided the five unreferenced LEFT JOINs by itself (join removal on unique keys) — old and new count subplans read identical buffers (857 vs 857). The win is planning time (0.614ms → 0.511ms median) and legibility, not a runtime six-way join. LEFT, and why this stays open rather than ticked: the finding's own Fix line also asks to "compute total only when `offset === 0` … alternatively cache count per filter-hash briefly", and that was never done — `getAllWithCount`'s `countSql` (transactionRepository.js:669) still issues an unconditional full COUNT over the filtered set on every page request, in parallel with the data query. The earlier root fix solved the *headline* defect a different way, by splitting the window count into a separate query so the data query pipelines and stops at LIMIT; it did not make the count itself cheaper or conditional)
   - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
   - `apps/node-backend/src/repositories/transactionRepository.js:452-457,277-299`, `apps/node-backend/src/routes/transactions.js:243-250`
   - `getAllWithCount` appends `COUNT(*) OVER () AS total_count`, forcing full materialization of the filtered 6-way join before LIMIT/OFFSET on every page request — including page 1 of the plain unfiltered list, paid even when `include_balance=false`. Distinct from the filed OFFSET+running_balance item (keyset wouldn't remove this: the count itself is the full-set scan). `getUncategorisedWithCount` is worse: its total CTE runs a second, semantically different full count (full TRANSACTION_JOINS + list filters) alongside the uncategorised row query, per request. Growth linear in table size on the app's hottest read endpoint.
@@ -2123,13 +2154,6 @@ look-changing one.
   - `apps/frontend/src/App.tsx:115-133` (`setLanguage` is a fresh arrow at :118), `apps/frontend/src/contexts/LanguageContext.tsx:130-133` (`value` memo deps include `setLanguage`), `apps/frontend/src/components/layout/AppLayout.tsx:231` (settings render as a Dialog over the live page), `components/settings/sections/GeneralSection.tsx:43-109` + `BehaviorSection.tsx:41,57` + `AppearanceSection.tsx:213` (per-toggle `updateAppSettings` calls)
   - `updateAppSettings` replaces the whole `appSettings` object, so `LanguageBridge` (subscribed via `useAppSettings`) re-renders on every settings change — including keys unrelated to language (decimals, startup section, AI model, colorblind toggle). Each re-render mints a new `setLanguage` identity, invalidating the `useMemo`'d context value and forcing every `useLanguage` consumer (virtually every text-bearing component) to re-render. Because settings is a modal over the mounted page, each toggle re-renders the full page + shell behind the dialog. `t`/`tc` themselves are stable — the unstable arrow is the sole leak. (TODO's existing LanguageBridge item files it as a naming/altitude issue only — this is the separate perf leak.)
   - Fix: `const setLanguage = useCallback((lang) => updateAppSettings({ language: lang }), [updateAppSettings])` in `LanguageBridge` (the zustand action is referentially stable), or select `language` straight from the store inside LanguageProvider.
-
-- [ ] **First navigation is gated on a full materialized-view refresh every boot, even when the MVs are already fresh — refresh duration is added serially to splash time ahead of SPA load** 🔼 🔎 verified-present 2026-07-11 🔎 wontfix 2026-08-01 (closed per the finding's own 📏 2026-07-05 live measurement below: the gate costs 33–38ms on the demo DB and projects well under the 100ms poll quantum at real scale, while buying a guaranteed non-empty first dashboard paint — keep the gate. Reopen only if a real-data instrumented boot ever shows the refresh above ~200ms, per the measurement's own caveat)
-  - ↪ _from: Performance research 2026-07-05 · Wave P4 (boot latency)_
-  - `packaging/electron/main.js:1022-1065` (pingReady/pollReady), `:1121-1126` (pollAndLoad navigates only after ready); `apps/node-backend/src/main.js:234-235,279` (`caches.materializedViews` = warmup settled); `apps/node-backend/src/startup/warmup.js:202-207`; `apps/node-backend/src/services/materializedViewService.js:171-209`
-  - The Electron shell refuses to `loadURL(APP_URL)` until `/health/detailed` reports `caches.materializedViews === true`, which only flips when `refreshMaterializedViews()` (4× `REFRESH … CONCURRENTLY`, deliberately the slower concurrent form) settles post-listen. MVs persist in Postgres and data only changes through the app, so on every normal warm boot they are already fresh from the previous session — yet the gate serializes refresh-duration (est. 0.3-2s on a grown DB, plus ≤300ms poll quantization) *before* SPA bundle fetch/parse/settings fetch, which could fully overlap it. First-ever boot is worse: CONCURRENTLY fails on unpopulated views and retries non-concurrently (two serial attempts, materializedViewService.js:185-199). The empty-dashboard problem the gate solves only exists when views were never populated.
-  - Fix: gate on "populated" instead of "refreshed this boot" — e.g. backend reports `pg_matviews.ispopulated` (instant query) as the readiness key, or Electron navigates on plain `/health` and the refresh overlaps SPA load; keep the strict gate only for the first-run/unpopulated case.
-  - **📏 Measured 2026-07-05 (Wave S1, demo app, 31 months data): 33–38ms gate cost, not 0.3-2s — recommend CLOSING as "keep the gate, cost negligible".** A 25ms-resolution poller saw `caches.materializedViews:true` 33–38ms after the first HTTP response in all three warm runs; backend logs "Materialized views refreshed in 31ms". Even at the real DB's ~4× data scale this projects well under the Electron 100ms poll quantum. The gate buys a guaranteed non-empty first dashboard paint for ~0 cost. (Caveat: demo DB is ~¼ of the real month span — re-check only if a real-data instrumented boot ever shows the refresh above ~200ms.)
 
 - [x] **Docker Desktop not running → dialog + `app.quit()`, forcing a manual relaunch instead of waiting for the daemon** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99)
   - ↪ _from: Performance research 2026-07-05 · Wave P4 (boot latency)_
@@ -2213,7 +2237,8 @@ look-changing one.
   - Query is bounded (3 years) but the grouping/sorting/interval-detection runs synchronously on the event loop with no caching; the AI-chat tool can trigger it repeatedly within one chat session.
   - Fix: cache the result short-term (a few minutes), invalidate on transaction mutation.
 
-- [ ] **`Card` primitive defaults every instance to the most expensive glass-blur tier** 🔽 🔎 verified-present 2026-07-11 *(root cause of the Watchlist finding above)*
+- [ ] **`Card` primitive defaults every instance to the most expensive glass-blur tier** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 *(root cause of the Watchlist finding above)*
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/components/ui/card.tsx:9`
   - Blur tier is baked unconditionally into the base `className`, with no variant prop to opt out — only an additive override is possible.
@@ -2239,7 +2264,8 @@ look-changing one.
   - `useOllamaStatus` polls every 30s while chat/settings mounted even when the integration is disabled/unreachable (`hooks/useOllamaStatus.ts:11-14`); optional backoff when down.
   - `usePortfolioPrefetch` (`hooks/usePortfolioPrefetch.ts:37-42`, mounted in AppSidebar) fires net-worth + full-period performance on every app boot for all users, documented as intentional (backend warms these) — verify backend cache-hit cost before changing; flagged as a trade-off, not a bug.
 
-- [ ] **Minor render hygiene (grouped)** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — CategoryPivotTable.tsx still defaults yearFilter to 'all' and renders every period column eagerly for multi-year data (~3-4k <td>s per toggle); neither of the item's two suggested mitigations (default-to-latest-year, column window…) 🔎 blocked-on-user-decision 2026-08-11 (#165) (**stays open: both remaining mitigations are look-changing, so this needs the user's call under the binding visual-impact caveat. Investigated properly and stopped before writing code — reasoning recorded so it is not re-attempted blind.** The `BankBalancesWidget` half of this grouped item is confirmed **done** — it imports `useMemo` and builds `chartBundle` inside one at `:85` — so `CategoryPivotTable` is all that is left. Changing the year default from "all" to latest year alters what the user sees on first load, which is exactly the visible change the caveat says to stop on, so the visually-free alternative the finding itself lists (window the period columns) was attempted first. **It cannot be done without a visible change either, for a concrete structural reason:** the table is `ScrollArea > div.min-w-[800px] > table.w-full` with **no `<colgroup>`, no `table-layout: fixed` anywhere in the frontend, and no width class on any period `<th>`/`<td>`** — so every column's width is computed by the browser's auto table layout from the widest cell in that column, and the body cells (`formatCurrency`, e.g. "€1.234,56") are wider than the headers ("Jan 26"). `min-w-[800px]` is only a floor. Windowing necessarily removes the very body cells that determine those widths, so any implementation must take control of column widths — `table-layout: fixed`, a pixel `<colgroup>`, or `colSpan` spacers — and all three change column widths, total table width and horizontal-scroll extent relative to today. The one variant that could preserve widths (render full, measure, then switch to a measured `<colgroup>`) has to re-measure on every valueMode/year change, i.e. re-render the full table on precisely the toggles this finding is about, so it does not fix the stated cost. Worth noting the finding's own reassurance about the sticky column **checks out and is not the blocker**: `ui/scroll-area.tsx` gives the Radix Viewport `overflow-auto`, so the `sticky left-0 glass-sticky-col` cells stick to that scrollport and wrapping is safe — the blocker is the auto column sizing. Also relevant to any future attempt: in jsdom all measured widths are 0, and `CategoryPivotTable.a11y.test.tsx:119` pins an exact drill-button count, so a measurement-driven window would need a render-everything fallback and its windowed path would be covered by no test at all. **The decision to put to the user is therefore: accept a visible change (default-to-latest-year, or fixed column widths) or accept the DOM size as it stands.** One genuinely visually-free option exists that is *not* among the finding's two and does *not* satisfy it as written — memoising the per-group row subtree so a collapse/valueMode toggle re-reconciles only affected rows, cutting the rebuild cost but not the DOM size.)
+- [ ] **Minor render hygiene (grouped)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — CategoryPivotTable.tsx still defaults yearFilter to 'all' and renders every period column eagerly for multi-year data (~3-4k <td>s per toggle); neither of the item's two suggested mitigations (default-to-latest-year, column window…) 🔎 blocked-on-user-decision 2026-08-11 (#165) (**stays open: both remaining mitigations are look-changing, so this needs the user's call under the binding visual-impact caveat. Investigated properly and stopped before writing code — reasoning recorded so it is not re-attempted blind.** The `BankBalancesWidget` half of this grouped item is confirmed **done** — it imports `useMemo` and builds `chartBundle` inside one at `:85` — so `CategoryPivotTable` is all that is left. Changing the year default from "all" to latest year alters what the user sees on first load, which is exactly the visible change the caveat says to stop on, so the visually-free alternative the finding itself lists (window the period columns) was attempted first. **It cannot be done without a visible change either, for a concrete structural reason:** the table is `ScrollArea > div.min-w-[800px] > table.w-full` with **no `<colgroup>`, no `table-layout: fixed` anywhere in the frontend, and no width class on any period `<th>`/`<td>`** — so every column's width is computed by the browser's auto table layout from the widest cell in that column, and the body cells (`formatCurrency`, e.g. "€1.234,56") are wider than the headers ("Jan 26"). `min-w-[800px]` is only a floor. Windowing necessarily removes the very body cells that determine those widths, so any implementation must take control of column widths — `table-layout: fixed`, a pixel `<colgroup>`, or `colSpan` spacers — and all three change column widths, total table width and horizontal-scroll extent relative to today. The one variant that could preserve widths (render full, measure, then switch to a measured `<colgroup>`) has to re-measure on every valueMode/year change, i.e. re-render the full table on precisely the toggles this finding is about, so it does not fix the stated cost. Worth noting the finding's own reassurance about the sticky column **checks out and is not the blocker**: `ui/scroll-area.tsx` gives the Radix Viewport `overflow-auto`, so the `sticky left-0 glass-sticky-col` cells stick to that scrollport and wrapping is safe — the blocker is the auto column sizing. Also relevant to any future attempt: in jsdom all measured widths are 0, and `CategoryPivotTable.a11y.test.tsx:119` pins an exact drill-button count, so a measurement-driven window would need a render-everything fallback and its windowed path would be covered by no test at all. **The decision to put to the user is therefore: accept a visible change (default-to-latest-year, or fixed column widths) or accept the DOM size as it stands.** One genuinely visually-free option exists that is *not* among the finding's two and does *not* satisfy it as written — memoising the per-group row subtree so a collapse/valueMode toggle re-reconciles only affected rows, cutting the rebuild cost but not the DOM size.)
   - ↪ _from: Performance research 2026-07-02 · Frontend — runtime rendering_
   - `CategoryPivotTable.tsx:76,242-360` defaults to "all" years and renders every period × category eagerly — multi-year data ≈ 3-4k `<td>`s rebuilt per valueMode/collapse/year toggle (computation memos are fine; cost is DOM size). Default to latest year or window the period columns.
   - `BankBalancesWidget.tsx:113-147` builds its ~365-point × N-accounts chart dataset in the render body unmemoized — fresh `data` identity per dashboard re-render, which would also defeat any chart-level memoization added for the findings above. Wrap in `useMemo` keyed on `data`.
@@ -2254,13 +2280,15 @@ look-changing one.
   - Source `apps/frontend/index.html:13` declares `/src/theme-flash.ts` as a separate early module; built `dist/index.html` has no such script — `vision_theme` handling lives inside the main `index-*.js`, so the dark class is applied only after the full ~300 KB gz boot graph executes. The "runs before React mounts" comment at `index.html:12` is misleading in prod.
   - Fix: inline the theme snippet as a plain non-module `<script>` in `index.html` so it survives bundling and runs pre-paint.
 
-- [ ] **Minor bundle/loading items (grouped)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Minor bundle/loading items (grouped)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Performance research 2026-07-02 · Frontend — bundle / loading_
   - No font preloading: 6 static weights imported via `main.tsx:9-14` (latin-subset — good) but no `<link rel="preload" as="font">` in `index.html` → FOUT on cold load; also both woff+woff2 emitted (~168 KB dist bloat, browsers fetch woff2 only). Preload Inter 400/600 woff2; consider variable fonts.
   - `AIChatPage` is the largest chunk (373 KB raw / 104 KB gz, correctly lazy): contains recharts + the duplicate decimal.js; nesting `ToolResultCard`'s chart rendering behind its own `lazy()` would cut /ai-chat time-to-interactive substantially.
   - `zod` + API client (18.3 KB gz) and `BelgianTaxProfileContext` (6.5 KB gz) sit in the boot graph — defensible (runtime validation, global provider); the tax context could defer its data tables to tax routes. ~~`@types/d3-sankey` listed in runtime `dependencies`~~ ✅ 2026-07-19 (moved to devDependencies alongside `@types/d3-array`) — remaining sub-items (font preload/woff dedup, AIChatPage ToolResultCard lazy-chart split, zod/tax-context boot-graph deferral) still open.
 
-- [ ] **Minor infra items (grouped)** 🔽 🔎 partial 2026-07-11 (MV/reconcile debounce max-wait now added; SSE heartbeat, Vary:Accept-Encoding, gzip .gz siblings, and per-call getLogLevel still present) 🔎 partial-fab7a77 (#99) 2026-07-14 (getLogLevel cached at module load, >1s slow-query log promoted to warn, SSE 20s :hb heartbeat, Vary:Accept-Encoding on gzip — done; remaining grouped sub-items open)
+- [ ] **Minor infra items (grouped)** 🔽
+  - Tracking: 🔎 partial 2026-07-11 (MV/reconcile debounce max-wait now added; SSE heartbeat, Vary:Accept-Encoding, gzip .gz siblings, and per-call getLogLevel still present) 🔎 partial-fab7a77 (#99) 2026-07-14 (getLogLevel cached at module load, >1s slow-query log promoted to warn, SSE 20s :hb heartbeat, Vary:Accept-Encoding on gzip — done; remaining grouped sub-items open)
   - ↪ _from: Performance research 2026-07-02 · Backend — HTTP / infrastructure_
   - MV/reconcile debounces are trailing-only with no max-wait (`materializedViewService.js:232-240`, `transferReconciliationService.js:229-237`): a machine-cadence mutation stream (<1s apart) defers refresh indefinitely. Add a max-wait (fire at ≥10s regardless).
   - SSE streams have no heartbeat (`lib/sse.js:44-72`; consumers `routes/ai.js:285-359`, `importRoutes.js:238-301`, `portfolioImportRoutes.js:184`): behind a reverse proxy with default idle timeout (nginx 60s), a silent stream (e.g. Ollama cold-load >60s before first token) gets killed → reconnect loop. Add a 15-30s `:hb` comment interval, cleared on close.
@@ -2284,7 +2312,8 @@ look-changing one.
   - The insights endpoints can't use the table (net-not-spend totals, no transfer exclusion — the reason the sibling MV was dropped in `0038`). Every CSV bulk import pays a plpgsql upsert per row for a table whose one query could be an indexed `EXISTS` against `transactions`.
   - Fix: replace the reader with `EXISTS(SELECT 1 FROM transactions ...)` (covered by existing indexes) and drop table+trigger in a new migration — or wire it into a real fast path; either way stop paying for nothing.
 
-- [ ] **Historical-FX conversion loads the full `exchange_rates` history per call; zero-rate currencies can trigger per-(currency,date) DB/HTTP fetches inside the conversion loop** 🔽 🔎 verified-present 2026-07-11 🔎 partial-55d9364 (#93) 2026-07-14 (the full-history-per-call reload is now a process-level cached index invalidated on write paths + 24h TTL; LEFT: the zero-rate per-(currency,date) in-loop fetch edge deliberately deferred as a follow-up)
+- [ ] **Historical-FX conversion loads the full `exchange_rates` history per call; zero-rate currencies can trigger per-(currency,date) DB/HTTP fetches inside the conversion loop** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-55d9364 (#93) 2026-07-14 (the full-history-per-call reload is now a process-level cached index invalidated on write paths + 24h TTL; LEFT: the zero-rate per-(currency,date) in-loop fetch edge deliberately deferred as a follow-up)
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `services/currency/currencyConversionService.js:252-258` (duplicated at `services/reports/dataFetcherTax.js:148-155`) — no date lower bound, no cross-request cache: every historical-converting endpoint re-reads ~all stored rates per currency (ECB backfill ≈ 6.9k rows/currency) and rebuilds `buildHistoricalRateIndex` per request. Edge: a currency with zero stored rows falls into `getRateToEurForDate` per unique (currency,date) — `rateFetcher.js:395-434` does a DB point query and potentially an ECB HTTP fetch inside the loop (memoized only per-call).
   - Fix: bound the history query by the data's min date; add a small process-level rate-index cache invalidated by the existing 12h `warmCache` cycle.
@@ -2295,7 +2324,8 @@ look-changing one.
   - Postgres scans these tables in full to enforce `SET NULL` on each parent delete — and recipients *are* deleted in bulk (import rollback `DELETE ... WHERE id = ANY(...)` at `importBatchRepository.js:215`, plus merges).
   - Fix: partial indexes (`... WHERE <col> IS NOT NULL`) on the six columns, or rely on the staging-retention fix keeping the tables small.
 
-- [ ] **Import commit blocks its HTTP response on 4 full MV recomputes (incl. the all-time `mv_category_totals`)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Import commit blocks its HTTP response on 4 full MV recomputes (incl. the all-time `mv_category_totals`)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Performance research 2026-07-02 · Database layer_
   - `services/importPipeline/commit.js:245` + `routes/importRoutes.js:391` both `await refreshAggregations()` → awaited `REFRESH ... CONCURRENTLY` on all 4 views. Partially deliberate (the >100-row path awaits so the review page lands on fresh data — `importPipeline/index.js:95-101`), and storm risk itself is well-handled (in-flight coalescing + queued re-run).
   - Fix: respond first, refresh after (`scheduleRefresh()`), keeping only the MC-cache invalidation synchronous — weigh against the deliberate fresh-on-landing behavior before changing.
@@ -2305,13 +2335,15 @@ look-changing one.
   - `0051` (narrowed by `0062_trigger_lookup_only_on_update.py:56-85`): on every INSERT it runs `INSERT INTO accounts ... ON CONFLICT DO NOTHING` **plus** `SELECT id FROM accounts WHERE name = ...`. Both hit `uq_accounts_name` on a tiny table so per-row cost is bounded, but the insert-attempt arm takes a write lock and burns an `accounts.id` sequence value per row even when the account exists. A 5,000-row import executes ~15k extra indexed statements across the full trigger stack (the other two triggers verified fine).
   - Fix: SELECT-first, insert only on miss.
 
-- [ ] **Skeleton shimmer animates `background-position` — a paint-property infinite animation repainting every skeleton's full area each frame** 🔽 🔎 verified-present 2026-07-11
+- [x] **Skeleton shimmer animates `background-position` — a paint-property infinite animation repainting every skeleton's full area each frame** 🔽 ✅ 2026-08-25 · replaced background-position animation with a shared clipped child layer using compositor-friendly `translate3d`; Skeleton, ChartSkeleton, and PageLoader preserve reduced-motion and accessibility behavior; focused tests, frontend lint/typecheck, production build, and independent review passed
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/GPU research 2026-07-02 · Wave A_
   - `apps/frontend/src/components/ui/skeleton.tsx:7`, `apps/frontend/src/components/charts/ChartSkeleton.tsx:41` (300px-tall shimmer overlay), `apps/frontend/tailwind.config.ts:158-161,183` (shimmer keyframes = backgroundPosition, 2.4s infinite)
   - `background-position` is not compositor-animatable, so each of the 8+ concurrent skeletons on Dashboard load (statSkeleton grid at `pages/DashboardPage.tsx:305-320` + two 300px ChartSkeletons) repaints per frame; runs while offscreen too (no visibility gating). Transient (loading states only), hence low.
   - Fix: shimmer via `transform: translateX()` on an absolutely-positioned gradient pseudo-element/child instead of background-position.
 
-- [ ] **Nested blur-inside-blur on permanent chrome: workspace tab strip carries `backdrop-blur-sm` inside the already-blurred `glass-chrome` sidebar; chat table headers/composer blur inside glass cards** 🔽 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (workspace tab-strip inner backdrop-blur-sm removed (invisible over the already-frosted glass-chrome); ToolResultCard/ChatComposer inner blurs intentionally kept to avoid a visible change)
+- [ ] **Nested blur-inside-blur on permanent chrome: workspace tab strip carries `backdrop-blur-sm` inside the already-blurred `glass-chrome` sidebar; chat table headers/composer blur inside glass cards** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (workspace tab-strip inner backdrop-blur-sm removed (invisible over the already-frosted glass-chrome); ToolResultCard/ChatComposer inner blurs intentionally kept to avoid a visible change)
   - ↪ _from: UI/GPU research 2026-07-02 · Wave A_
   - `apps/frontend/src/components/layout/AppSidebar.tsx:301`, `apps/frontend/src/features/ai-chat/ToolResultCard.tsx:135` (sticky `<thead>` blur re-sampled per scroll frame), `features/ai-chat/ChatComposer.tsx:71`
   - A backdrop-filter element inside another forces the browser to resolve the outer blur before computing the inner one; the sidebar case is mounted permanently on every page. Regions are small, so cost is modest — but it is pure waste: the tab strip sits on an already-frosted surface where the extra blur is visually invisible.
@@ -2354,13 +2386,8 @@ look-changing one.
   - Fix: `React.memo(ChatBubble)`; render the streaming draft in a leaf component so only it re-renders per chunk; guard auto-scroll with an "is pinned to bottom" check and scroll via `el.scrollTo({top: el.scrollHeight})` inside rAF.
   - Verification (2026-07-03, residue): the `combined` memo (`ChatMessageList.tsx:27-50`) keeps message object identities stable during draft streaming, so `React.memo(ChatBubble)` would bail out all completed messages for free — the unmemoized `ChatBubble` re-runs on every chunk for every completed bubble too, not just the streaming draft, including `ToolResultCard`'s full `<table>` reconciliation and its recharts views. Existing mitigants: no markdown lib (plain `whitespace-pre-wrap` text), `useMemo` on `asRows`, and recharts animations disabled (`isAnimationActive={false}`). Cost scales with conversation length × chunk rate — worst on long tool-heavy chats. Still open: no runtime profiling of AI-chat streaming has been performed (a DevTools pass on a streaming chat with 2-3 tool tables would pin the real cost).
 
-- [ ] **Exact bank-account filter executed as unanchored `ILIKE '%…%'`, skipping `idx_transactions_bank_account` and risking substring over-match** 🔽 🔎 partial 2026-07-11 (ADR-088 added an FK-indexed `t.account_id = $` filter path as the preferred account filter; the bank_account substring escape hatch is still an unanchored ILIKE) 🔎 wontfix 2026-07-14 2026-07-14 (the singular bank_account filter is an intentional free-text substring escape hatch (documented in filterBuilder/routes/frontend); the account dropdown is multi-select and already uses exact `bank_account IN (...)`. Not a bug — the over-match only affects the deliberate free-text path)
-  - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
-  - `apps/node-backend/src/services/filterBuilder.js:111-113`, `apps/node-backend/src/routes/transactions.js:88`, `apps/frontend/src/features/transactions/hooks/useTransactionListData.ts:118`
-  - The frontend sends an exact account string picked from a dropdown, but the builder wraps it as `t.bank_account ILIKE '%v%'` — seq scan instead of an index probe on `idx_transactions_bank_account`/`idx_transactions_bank_date_active`, plus a latent correctness edge (one account label being a substring of another matches both). The export path already supports exact `bank_accounts IN (…)` (`:114-121`); the list path never uses it.
-  - Fix: use exact (or prefix-anchored, case-normalized) matching for the list endpoint's account filter, or route the frontend's dropdown value through the existing exact `bankAccounts` branch.
-
-- [ ] **Sorting by memo/recipient/category/currency computes expression sort keys over the fully materialized set with no supporting index** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Sorting by memo/recipient/category/currency computes expression sort keys over the fully materialized set with no supporting index** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
   - `apps/node-backend/src/repositories/transactionRepository.js:27-40,428-434`
   - `TRANSACTION_SORT_COLUMNS` maps recipient → `COALESCE(pr.name, r.name)` and category → a 3-branch CASE with string concatenation; memo and currency have no btree index. Any non-date sort string-computes a sort key per row and sorts the entire filtered set each page (compounded by the `COUNT(*) OVER ()` materialization filed above). Interpolation itself is safe — whitelist map + ternary direction, values parameterized.
@@ -2390,7 +2417,8 @@ look-changing one.
   - Measured: 143–249ms in every scenario, always the slowest member of `parallel_init` (so it sets that phase's duration); the socket `/_ping` beside it takes 15–21ms. It runs unconditionally, even when `composeStartOrUp`'s all-running fast path is about to no-op.
   - Fix: check image presence via the Docker socket HTTP API (`GET /images/json`, same pattern as `pingDockerSocket`) or skip the check when containers are already running. Saves ~150–250ms; hot boot is already sub-second, hence low.
 
-- [ ] **Splash becomes visible at ~340ms typical / ~650ms after-idle — above the 300ms "perceived instant" bar, but only ~150ms of it is app-controlled** 🔽 🔎 verified-present 2026-07-11 📏 *(measured live — limited headroom, filed for completeness)*
+- [ ] **Splash becomes visible at ~340ms typical / ~650ms after-idle — above the 300ms "perceived instant" bar, but only ~150ms of it is app-controlled** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 📏 *(measured live — limited headroom, filed for completeness)*
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S1 (live instrumented boot, demo app)_
   - `packaging/electron/main.js:3118-3127` (menu/dock setup before `createWindow()`)
   - Measured spawn→`create_window` end: 337/339ms warm-typical, 646–653ms on first-launch-after-idle; actual pixel paint of the data-URL splash adds an unmeasured few tens of ms. Composition: ~190–430ms Electron framework init before module eval (fixed cost, untraced) + ~60ms `app.whenReady`/menus + 87–124ms `create_window`. Only the last ~150ms is app-controlled.
@@ -2414,7 +2442,8 @@ look-changing one.
   - After a red-button close (window destroyed, app + containers still alive), reopening paints an empty window and re-runs the entire SPA boot unguarded.
   - Fix: the hide-on-close option above makes this path disappear entirely; short of that, load `splashDataUrl()` first and reuse `pollAndLoad()`.
 
-- [ ] ~~**Login-item background prelaunch — true cold-login-to-instant, but weakest value-for-effort of the three keep-alive options**~~ **DECLINED 2026-07-10 — do not build; the other two keep-alive options were approved instead.** 💡🔽 🔎 verified-present 2026-07-11
+- [ ] ~~**Login-item background prelaunch — true cold-login-to-instant, but weakest value-for-effort of the three keep-alive options**~~ **DECLINED 2026-07-10 — do not build; the other two keep-alive options were approved instead.** 💡🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S3 (architecture options)_
   - No `setLoginItemSettings`/launchd code exists anywhere in main.js (grep confirmed)
   - Feasible via `app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })` + a launch flag that runs the container path without showing a window. Appears in System Settings › Login Items (consent UX needed), always-on RAM, and mostly duplicates what hide-on-close + keep-services-running achieve on the first manual open.
@@ -2439,7 +2468,8 @@ look-changing one.
   - Small tables never cross autovacuum's analyze threshold, so misestimates persist for the install's lifetime; join misestimates compound on real installs where they can flip plans.
   - Fix: run a database-wide `ANALYZE` once after initdb-load/restore/migration completes — one statement in the boot path (could piggyback where MVs are created) and in the Electron restore path.
 
-- [ ] **pg_stat_statements available (1.12) but not installed — the next perf pass on a real install has no query-level evidence** 🔽 🔎 verified-present 2026-07-11 *(observability)*
+- [ ] **pg_stat_statements available (1.12) but not installed — the next perf pass on a real install has no query-level evidence** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 *(observability)*
   - ↪ _from: DB performance research 2026-07-06 · Wave D2_
   - Live `pg_available_extensions`: default_version 1.12, installed_version NULL
   - Needs `shared_preload_libraries=pg_stat_statements` in the db `command:` + `CREATE EXTENSION IF NOT EXISTS` (idempotent, could live with the MV create-if-not-exists boot block). Piggybacks on the `random_page_cost` compose `command:` change filed by Wave D1 — one combined compose edit covers both.
@@ -2470,7 +2500,8 @@ look-changing one.
   - Fix: composite indexes if/when these tables grow — `(is_active, is_executed, planned_date)`, `(investment_id, date, id)`, `(investment_id, account_id)`.
   - Verification (2026-06-30): the `exchange_rates` sub-claim is **wrong and removed** — `alembic/versions/0001_initial_database_schema.py` defines `CONSTRAINT uq_currency_date UNIQUE (currency_code, rate_date)` inline in the table definition, which Postgres backs with a real composite index covering exactly the access pattern (`rateFetcher.js:308-326` filters `currency_code = $1 AND rate_date <= $2`). Two independent verification passes initially missed this by only grepping for `CREATE INDEX` statements and not inline `CONSTRAINT ... UNIQUE` clauses — a useful lesson for future index audits in this codebase.
 
-- [ ] **Minor pagination/cache hygiene gaps** ⬇ 🔎 verified-present 2026-07-11 🔎 partial-55d9364 (#93) 2026-07-14 (GET /api/tags is now paginated (parsePagination + LIMIT/OFFSET + getCount, threaded through tagService); other minor hygiene gaps in the bundle not swept) 🔎 partial-fab7a77 (#99) 2026-07-14 (clearMvCache stale "cleared after bulk import" comment corrected (it is a test-reset seam; negatives self-heal via TTL); other pagination/cache hygiene gaps in the bundle still open)
+- [ ] **Minor pagination/cache hygiene gaps** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-55d9364 (#93) 2026-07-14 (GET /api/tags is now paginated (parsePagination + LIMIT/OFFSET + getCount, threaded through tagService); other minor hygiene gaps in the bundle not swept) 🔎 partial-fab7a77 (#99) 2026-07-14 (clearMvCache stale "cleared after bulk import" comment corrected (it is a test-reset seam; negatives self-heal via TTL); other pagination/cache hygiene gaps in the bundle still open)
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `routes/tags.js:19-24` + `tagRepository.js:15-29` (unbounded list, no LIMIT, unlike every sibling route); `recipients.js:23-26` → `recipientClusterService.js:36-43` (loads every active recipient before bucketing, output capped but scan isn't); `infoRepositoryHelpers.js:80-82` `clearMvCache()` exported/documented as "used after bulk import" but has zero actual callers (self-heals via 60s negative TTL; comment is stale).
   - Fix: add `parsePagination` to the tags route; wire up or remove the dead `clearMvCache()` export.
@@ -2499,7 +2530,8 @@ look-changing one.
   - Negligible in steady state (Postgres logs almost nothing at default verbosity), but the known demo failure mode — migrate crash-loop on stale `alembic_version` (documented in CLAUDE.md) — is exactly the scenario that spews unbounded log growth into the Docker VM disk. Disk-space nit, not query perf.
   - Fix: `logging: { driver: json-file, options: { max-size: "5m", max-file: "3" } }` on db (and arguably app) in all composes.
 
-- [ ] **Alpine/musl collation hazard: DB reports `en_US.utf8` (libc provider) on a musl image — swapping the image variant (alpine↔debian) on an existing volume would silently corrupt all text btree indexes** ⬇ 🔎 verified-present 2026-07-11 *(packaging rule, not a perf fix)*
+- [ ] **Alpine/musl collation hazard: DB reports `en_US.utf8` (libc provider) on a musl image — swapping the image variant (alpine↔debian) on an existing volume would silently corrupt all text btree indexes** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11 *(packaging rule, not a perf fix)*
   - ↪ _from: DB performance research 2026-07-06 · Wave D1_
   - Live `pg_database`: `datcollate=en_US.utf8, datlocprovider=c` on `postgres:18-alpine` (`docker-compose.yml:3`, `packaging/electron/resources/docker-compose.yml:5`); devcontainer runs *Debian* glibc PG 18 (`.devcontainer/Dockerfile:49`) but on its own datadir — no shared volume today
   - Under musl, `en_US.utf8` collates as byte order (accented Dutch recipient names sort "wrong" — cosmetic; marginally *faster* sorts, no perf harm). The real hazard: a future "switch off Alpine for CVE reasons" image change on an existing `postgres_data` volume changes collation order silently — text btree indexes become corrupt without erroring.
@@ -2516,25 +2548,29 @@ look-changing one.
   - A second launch pays full module eval before discovering the lock; two simultaneous first launches can also both enter the `renameSync` migration before either takes the lock (theoretical race, non-fatal).
   - Fix: move the lock acquisition to immediately after `app.setName(...)` (main.js:84 — must stay after setName since the lock lives in userData) and before the migration IIFE. Combined with the archiver lazy-require this makes second-launch focus near-instant.
 
-- [ ] **Asar ships 2128 node_modules files (incl. full lodash via archiver-utils) for the backup feature alone; 4 transitive deps redundantly listed as direct** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Asar ships 2128 node_modules files (incl. full lodash via archiver-utils) for the backup feature alone; 4 transitive deps redundantly listed as direct** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S2 (main-process cold-start static sweep)_
   - `packaging/electron/package.json:12-19`; built-app asar listing: 2137 entries, 2128 under `/node_modules/`, 11MB (lodash, glob, cross-spawn, wrap-ansi arrive via `archiver-utils`)
   - Asar index parse scales with entry count but 2137 is still small (~low single-digit ms) — footprint/hygiene more than boot time; the boot cost is the archiver eval finding above. `archiver-utils`, `compress-commons`, `readable-stream`, `zip-stream` are transitive deps of archiver listed as direct.
   - Fix (opportunistic only): swap archiver for a lean zip writer (e.g. `yazl`, sibling of the already-used `yauzl`) to cut the tree ~10×; at minimum prune the redundant direct deps.
 
-- [ ] **Minor DB-layer items (grouped)** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Minor DB-layer items (grouped)** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Performance research 2026-07-02 · Database layer_
   - Transactions list uses OFFSET pagination + `SELECT t.*` with the `running_balance` window evaluated over the entire filtered set before LIMIT/OFFSET (`transactionRepository.js:126-140`) — tens of ms at current scale; keyset `(date, id)` (already used by the export streamer) would cap the worst case if it ever shows up.
   - Forecast MC caches are wiped on every import (`aggregationRefresh.js:43-47`) and a cache-miss recompute includes a synchronous 12-month walk-forward backtest (`forecast/index.js:265`, `includeBacktest=true` default) — bounded (~low hundreds of ms) at the current horizon; yield between methods if it grows.
   - `db_editor_audit` (0059) and `ai_messages`/`ai_conversations` grow unboundedly (deleted only on explicit conversation delete) — user-action-rate tables, backup-size concern only; optional retention setting.
 
-- [ ] **Dark-mode double text-shadow (2px + 14px blur) applies to every heading and every `p/span/div` inside `.canvas-text` subtrees** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Dark-mode double text-shadow (2px + 14px blur) applies to every heading and every `p/span/div` inside `.canvas-text` subtrees** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/GPU research 2026-07-02 · Wave A_
   - `apps/frontend/src/index.css:59-68` (`.dark .canvas-text :is(h1, h2, h3, p, span, div)`)
   - `.font-display` includes every CardTitle, so effectively all titles app-wide paint two blurred text-shadows in dark mode, and the `:is(span, div)` arm matches broadly inside PageHeader subtrees (selector-matching + rasterization cost on first paint and any content change). Cost is static paint, not per-frame — hence lowest.
   - Fix: scope the halo to direct heading/subtitle elements of PageHeader rather than all descendant spans/divs; consider a single shadow.
 
-- [ ] **macOS window-level vibrancy material is created unconditionally and never removed when the effective tier is below enhanced** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **macOS window-level vibrancy material is created unconditionally and never removed when the effective tier is below enhanced** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/GPU research 2026-07-02 · Wave B_
   - `packaging/electron/main.js:1497-1502` (`vibrancy: 'under-window'` set at window creation), `apps/frontend/src/components/layout/ElectronBridge.tsx:117-121` (renderer only toggles the `.vibrancy` CSS class; no IPC to `setVibrancy(null)`)
   - At standard/reduced tiers the page paints opaque so the NSVisualEffectView is invisible, but the window server still maintains the under-window blur material behind the window (sampled on move/desktop changes) — wasted (small) compositor/battery work for the common non-enhanced case; `followWindow` limits it to the active window only.
@@ -2564,7 +2600,8 @@ look-changing one.
   - Conversation count grows unboundedly with usage, and the same component re-renders per streamed token via `useActiveStreams`/`ChatConversationList` (that identity-churn half is filed separately as "aiChatStreamStore emits a new `activeIds` array on every token, not just on membership change", 🏛️ Architecture & API) — so N light rows × per-token frequency multiply. Growth is slow, rows are light; minimal on its own, but that already-filed compare-before-swap fix increases in value as the list grows.
   - Fix: the filed `activeIds` compare-before-swap fix removes the multiplier; pagination optional later.
 
-- [ ] **Zero CSS containment anywhere — every below-fold dashboard/statistics section is fully laid out and painted on mount; `content-visibility: auto` is an untapped, visually-free win** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — ChatMessageList.tsx / ChatBubble.tsx (the in-conversation message bubbles the finding explicitly names as a Fix target) never received .cv-auto/.cv-auto-row; only React.memo was added there, a different technique that doesn't defe…) 🔎 investigated-not-applied 2026-08-11 (#163) (**the chat sub-case should probably NOT be done — deliberately left unapplied, reasoning recorded so it is not re-attempted blind.** The utilities exist (`index.css:155` `.cv-auto`, `:163` `.cv-auto-row` with `contain-intrinsic-size: auto 72px`) and are live at DashboardPage:489,501 / StatisticsPage:197,239 / ChatConversationList:102 / WatchlistPage:181 — so the residue is real, ChatMessageList/ChatBubble genuinely never got it. But this scroller is **bottom-anchored**, unlike every other target the utility was written for: its resting position is the *end* of the transcript, so nearly every bubble sits ABOVE the viewport, and the auto-scroll's `el.scrollHeight` read is load-bearing. The `auto` keyword only helps once an element has a last-remembered size, which requires it to have rendered — so on the FIRST open of any conversation no bubble has one and every off-screen bubble contributes the 72px fallback. Worked example: a 40-message conversation ~6000px tall reports ~4100px at the moment the effect fires; we scroll there, the now-near-viewport bubbles render, real heights replace estimates, `scrollHeight` grows — and no further commit occurs, because the effect's deps are all unchanged. Net effect: **opening an existing conversation stops landing at the bottom.** Tool bubbles are worse — a table/recharts card is 300-600px against a 72px estimate. The only fixes are a settle-loop or repeated re-scroll, i.e. exactly the visible scroll-behaviour change the binding visual-impact caveat says to stop on. ⚠️ Honest caveat: this is a *structural* argument, not a runtime observation — no browser binary is available in the sandbox, and the finding's own Wave G2 PASS does NOT transfer, having tested large top-anchored sections rather than a bottom-anchored variable-height list. To settle it rather than leave it here: one Playwright run — open a ~40-message conversation with 2-3 tool tables, with and without `.cv-auto-row` on the bubble roots, assert `scrollHeight - scrollTop - clientHeight <= 8` a second after load. A comment at ChatMessageList.tsx:170-181 records the same reasoning in the code. All the finding's non-chat targets remain done)
+- [ ] **Zero CSS containment anywhere — every below-fold dashboard/statistics section is fully laid out and painted on mount; `content-visibility: auto` is an untapped, visually-free win** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — ChatMessageList.tsx / ChatBubble.tsx (the in-conversation message bubbles the finding explicitly names as a Fix target) never received .cv-auto/.cv-auto-row; only React.memo was added there, a different technique that doesn't defe…) 🔎 investigated-not-applied 2026-08-11 (#163) (**the chat sub-case should probably NOT be done — deliberately left unapplied, reasoning recorded so it is not re-attempted blind.** The utilities exist (`index.css:155` `.cv-auto`, `:163` `.cv-auto-row` with `contain-intrinsic-size: auto 72px`) and are live at DashboardPage:489,501 / StatisticsPage:197,239 / ChatConversationList:102 / WatchlistPage:181 — so the residue is real, ChatMessageList/ChatBubble genuinely never got it. But this scroller is **bottom-anchored**, unlike every other target the utility was written for: its resting position is the *end* of the transcript, so nearly every bubble sits ABOVE the viewport, and the auto-scroll's `el.scrollHeight` read is load-bearing. The `auto` keyword only helps once an element has a last-remembered size, which requires it to have rendered — so on the FIRST open of any conversation no bubble has one and every off-screen bubble contributes the 72px fallback. Worked example: a 40-message conversation ~6000px tall reports ~4100px at the moment the effect fires; we scroll there, the now-near-viewport bubbles render, real heights replace estimates, `scrollHeight` grows — and no further commit occurs, because the effect's deps are all unchanged. Net effect: **opening an existing conversation stops landing at the bottom.** Tool bubbles are worse — a table/recharts card is 300-600px against a 72px estimate. The only fixes are a settle-loop or repeated re-scroll, i.e. exactly the visible scroll-behaviour change the binding visual-impact caveat says to stop on. ⚠️ Honest caveat: this is a *structural* argument, not a runtime observation — no browser binary is available in the sandbox, and the finding's own Wave G2 PASS does NOT transfer, having tested large top-anchored sections rather than a bottom-anchored variable-height list. To settle it rather than leave it here: one Playwright run — open a ~40-message conversation with 2-3 tool tables, with and without `.cv-auto-row` on the bubble roots, assert `scrollHeight - scrollTop - clientHeight <= 8` a second after load. A comment at ChatMessageList.tsx:170-181 records the same reasoning in the code. All the finding's non-chat targets remain done)
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G1_
   - `grep contain:/content-visibility/contain-intrinsic across apps/frontend/src → 0 hits` · `apps/frontend/src/pages/DashboardPage.tsx:485-511` (CashFlowForecastChart + recent-transactions DataTable, below the fold on typical viewports) · `apps/frontend/src/pages/StatisticsPage.tsx:169-283` (stacked ChartCards + CategoryPivotTable per tab) · `apps/frontend/src/features/ai-chat/ChatMessageList.tsx:82-97` (plain column of ChatBubbles in an overflow-y scroller)
   - The repo uses no `contain:` or `content-visibility:` at all. Dashboard mounts 5 stacked widget sections and paints all of them (including two glass chart cards, the forecast chart, and a DataTable) even though the lower half starts offscreen; Statistics tabs stack 2+ chart cards plus the pivot table; long AI chats paint every bubble on each update. `content-visibility: auto` + `contain-intrinsic-size` (matching the existing skeleton heights) on the below-fold section wrappers and on chat bubbles skips their layout+paint until scrolled near — a real cut to first-render and update cost on the two heaviest pages. Interactions verified: no `position: sticky` inside any proposed target (DataTable/CashFlowForecastChart/ChartCard grep clean; CategoryPivotTable's sticky column lives inside its own scroll container, so wrapping the whole table is safe — just don't apply it per-row there). Caveat to verify at runtime: visx `ParentSize` (ResizeObserver) inside a skipped subtree may measure 0 until unskip, which defers chart SVG generation to scroll-into-view — that is the desired lazy behavior and matches the app's already-documented blank-until-scrolled screenshot artifact, and it composes with the already-filed chart mount-stagger fix (whileInView gating). **Runtime-verified 2026-07-05 (Wave G2, demo app): PASS** — tested both post-mount application and the faithful variant (property applied in the same mutation batch the chart node was inserted, so ParentSize's first ResizeObserver measurement happened while skipped); in both, scrolling into view produced a fully rendered 1284×300 visx SVG with real geometry (screenshots `.playwright-mcp/cv-*.png`). The measure-0-while-skipped state recovers on unskip.
@@ -2576,11 +2613,13 @@ look-changing one.
   - Every keystroke sets `search` immediately, re-rendering `Command` and making cmdk score/sort/filter all rendered items synchronously (against the *stale* pre-debounce list), then 300ms later the server query re-filters and swaps the list — double filtering with a rank flash, plus a ~1000-item (~3-4k DOM node) mount inside a glass popover every time it opens. This combobox sits on transaction edit surfaces, so it's a hot path. React 19 note: no `useTransition`/`useDeferredValue` is used here (the only `useDeferredValue` in the app is VirtualDataTable's).
   - Fix: set `shouldFilter={false}` on `Command` (the server search is already the filter — kills the per-keystroke cmdk pass and the double-filter inconsistency), and cap the unsearched initial fetch (50-100 rows) or virtualize `CommandList`; the category comboboxes can keep cmdk filtering but deserve the same render cap if category counts grow. **Visually free**
 
-- [ ] **Fonts: `font-display: swap` with no preload and no metric-compatible fallback — Fraunces headings FOUT/reflow on web cold loads; font stack names variable fonts that aren't installed** 🔽 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (dead "Fraunces Variable"/"Inter Variable" family names dropped from the stack (packages not installed); the font preload + metric-compatible fallback (index.html, outside src/) still open)
+- [x] **Fonts: `font-display: swap` with no preload and no metric-compatible fallback — Fraunces headings FOUT/reflow on web cold loads; font stack names variable fonts that aren't installed** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 ✅ 2026-08-25 (the build plugin now resolves and preloads the exact hashed Inter 400 and Fraunces 600 WOFF2 assets for root, subpath, and relative deployments; dead variable-font family aliases are gone)
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G1_
   - `apps/frontend/src/main.tsx:9-14` (6 static @fontsource latin subsets: Fraunces 400/600/700, Inter 400/500/600, ~18-24 KB woff2 each) · `node_modules/@fontsource/*/latin-400.css` (`font-display: swap`) · `apps/frontend/index.html` (no `<link rel="preload" as="font">`) · `apps/frontend/src/styles/tokens.css:120-124` (stack lists `"Fraunces Variable", "Inter Variable"` first — those packages aren't installed, so the names never match; harmless but misleading)
   - Subsetting is already good (latin-only, 3 weights each). But the woff2 files are discovered only from the bundled CSS, and `swap` with no `size-adjust`/ascent-override means Fraunces (display serif) first paints as Iowan/Palatino/Georgia and then reflows every heading on swap — visible CLS on web cold loads. In Electron the files are local so the swap window is near-zero; this is a web-deployment polish item, honestly modest.
   - Fix: preload the two critical files (Inter 400, Fraunces 600) — needs a tiny Vite plugin or manual hashed-asset injection since names are hashed; and/or add metric-override fallback `@font-face` rules (fontaine does this automatically). Drop the dead `"* Variable"` names from tokens.css, or actually switch to `@fontsource-variable` (2 requests instead of 6). **Visually free** (strictly reduces visual instability)
+  - Completion: extended the existing build-graph plugin to fail loudly unless each critical WOFF2 resolves uniquely, inject correct cross-origin font preloads without duplicates, and honor Vite's deployment base. Regression tests cover root, `/vision/`, relative, missing, ambiguous, and existing-link cases. Two production builds confirm the selected preload fix and bundle guards; no guessed metric override was added.
 
 - [x] **AreaChart/LineChart/ComposedChart hover handlers call `getBoundingClientRect` on every pointermove — one forced layout per hover frame, on top of the already-filed tooltip reflows** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · fab7a77 (#99)
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G1_
@@ -2589,7 +2628,8 @@ look-changing one.
   - Fix: cache the rect in a ref on `pointerenter`/`pointerdown` and invalidate on scroll/resize (or use `event.nativeEvent.offsetX`, which needs no rect at all for a rect-aligned overlay). **Visually free**
   - Runtime note (2026-07-05, Wave G2): at demo density (31 months) a 60Hz hover sweep held a perfect 60fps with 0 long tasks — no measurable cost on a fast machine at DPR 1. Keep as cheap hygiene; cost at ~120-month bar density (~5px/bar) and DPR 2 remains unmeasured.
 
-- [ ] **Default route not modulepreloaded — Dashboard's entire chunk graph (incl. the 34 kB gz shared chart chunk) waits one full serial hop behind the 119 kB gz entry bundle on every cold web load** 🔽 🔎 verified-present 2026-07-11
+- [x] **Default route not modulepreloaded — Dashboard's entire chunk graph (incl. the 34 kB gz shared chart chunk) waits one full serial hop behind the 119 kB gz entry bundle on every cold web load** 🔽 ✅ 2026-08-25 · added a build-time static-closure preload plugin for Dashboard, excluding entry and dynamic locale/AI/motion chunks; hardened the size guard for root, relative, subpath, and CDN bases; 15 focused tests, frontend lint/typecheck, default and `/vision/` production builds, bundle budgets, and independent review passed
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G3_
   - `dist/index.html` (built, Vite 8.0.16/rolldown): `<link rel="modulepreload">` covers only the entry's *static* graph — 12 chunks (`rolldown-runtime`, `icons`, `router`, `query`, `LanguageContext`, `apiEventBus`, `client`, `dialogGenie`, `utils`, `radix-ui`, `dist`, `react-vendor`). `DashboardPage-*.js`, `charts-*.js`, and the locale chunks (`en`/`nl`, 50/55 kB gz) are absent. `apps/frontend/src/App.tsx:29` (`lazy(routeLoaders["/"])`) + `lib/routePreload.ts:8` — Dashboard is a dynamic import; the sidebar hover-prefetch can't help the *initial* load of `/`. `contexts/LanguageContext.tsx:27-28` — the active locale is a second dynamic import on the same critical path.
   - Mechanism: cold load of `/` = fetch+parse+execute `index-*.js` (429 kB / 119 kB gz) → React mounts → router resolves → *then* `__vite__mapDeps` fetches `DashboardPage-*.js` + its 25 deps (verified in the built entry chunk: charts, time, money, StatCard, card, popover…) in parallel. So it's exactly **one extra network round-trip plus main-bundle execute time** before dashboard code starts downloading — not a multi-hop waterfall (Vite's preload helper parallelizes the deps). Honest magnitude: ~1 RTT + ~50-200 ms on a real web deployment; **≈0 in Electron and LAN-docker** (assets are local), which is the dominant deployment. Verified the chart chunk is the visx/framer one: `charts-*.js` contains framer/visx and zero `recharts` (recharts correctly isolated inside `AIChatPage` — the vite.config.ts:71-76 isolation comment holds).
@@ -2620,7 +2660,8 @@ look-changing one.
   - During an assistant stream, every token re-renders `AIChatPage` → `ChatMessageList` → fresh `ChatBubble` elements → every prior `ToolBubble`/`ToolResultCard` re-renders and its Recharts tree reconciles per token (the `useMemo(asRows, [result])` at `:94` keeps data stable, so it's pure reconcile cost). A conversation with several chart/table tool results pays a full Recharts reconcile of the whole backlog per token.
   - Fix: `React.memo` `ToolResultCard` (props stable for completed messages) and/or memoize completed `ChatBubble`s so only the streaming draft bubble re-renders.
 
-- [ ] **Enhanced-tier macOS vibrancy stacks the OS under-window blur beneath unchanged in-page glass blur — double blur pass over the same pixels, and the window can never be treated as opaque** 🔽 🔎 verified-present 2026-07-11 *(static analysis; needs a macOS device to confirm empirically — closes the UI/GPU Wave A vibrancy residue)*
+- [ ] **Enhanced-tier macOS vibrancy stacks the OS under-window blur beneath unchanged in-page glass blur — double blur pass over the same pixels, and the window can never be treated as opaque** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 *(static analysis; needs a macOS device to confirm empirically — closes the UI/GPU Wave A vibrancy residue)*
   - ↪ _from: Performance research 2026-07-09 · Wave F3_
   - `packaging/electron/main.js:1500-1501` (`vibrancy: 'under-window'` + `followWindow`), `ElectronBridge.tsx:117-121` (`.vibrancy` class added only at enhanced tier), `index.css:541-543` (body becomes `hsl(var(--background)/0.72)` — 28% transparent), `index.css:400-423` (glass tokens unchanged — no `.vibrancy .glass{...}` override exists)
   - Over transparent body regions the compositor produces OS-vibrancy-blurred desktop pixels, which the in-page `backdrop-filter` then samples and blurs *again* at full glass radii; the translucent body also forfeits any opaque-region compositor short-circuit. Enhanced tier thus adds the vibrancy pass on top of unchanged glass cost rather than trading it down.
@@ -2638,7 +2679,8 @@ look-changing one.
   - Both join a derived `(SELECT split_id, SUM(amount) FROM split_payments GROUP BY split_id)` that aggregates ALL payments across every recipient, then discard everything outside the requested recipient. Tiny table today; grows with every recorded payment.
   - Fix: correlate the sum to the recipient's splits (`LEFT JOIN LATERAL ... WHERE split_id = ts.id`) or push the recipient filter into the aggregate subquery.
 
-- [ ] **DB-editor table browser runs an unbounded `COUNT(*)` + LIMIT/OFFSET on every page load (admin-only)** 🔽 🔎 verified-present 2026-07-11 🔎 reverted-2026-07-14 (a first-page count-skip was implemented in fab7a77 (#99) then reverted: it relocated the pre-existing `client.query(countSql, params)` sink into a changed hunk, which CodeQL re-flags as a "new" taint alert on this admin editor even though columns are allowlisted against the live schema and values are parameterized. Left open to avoid re-introducing that sink line; a future fix should compute the total without moving the interpolated-WHERE query — e.g. a windowed count on the data query, or keep it on `main`'s line)
+- [ ] **DB-editor table browser runs an unbounded `COUNT(*)` + LIMIT/OFFSET on every page load (admin-only)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 reverted-2026-07-14 (a first-page count-skip was implemented in fab7a77 (#99) then reverted: it relocated the pre-existing `client.query(countSql, params)` sink into a changed hunk, which CodeQL re-flags as a "new" taint alert on this admin editor even though columns are allowlisted against the live schema and values are parameterized. Left open to avoid re-introducing that sink line; a future fix should compute the total without moving the interpolated-WHERE query — e.g. a windowed count on the data query, or keep it on `main`'s line)
   - ↪ _from: Performance research 2026-07-09 · Wave F2_
   - `apps/node-backend/src/services/dbEditor.js:196,204` (count alongside every data page, same READ-ONLY txn), `:195` (`LIMIT/OFFSET` paging)
   - With no filter the count is a full scan of the table (worst: `transactions`) re-executed on every page/sort/filter change, racing the 15s `READ_TIMEOUT_MS`; deep offsets scan-and-discard.
@@ -2787,7 +2829,9 @@ look-changing one.
   - `apps/frontend/src/components/shared/Money.tsx:44-61` renders symbol at 0.85em/raised and decimals at 0.88em/75% via `formatToParts` — genuinely crafted micro-typography. Adoption: 34 uses in 13 files vs 60 plain `formatCurrency(` calls in 29 files (grep `--include=*.tsx`). The bypassers are the *flagship* numbers: `components/dashboard/NetSummaryCard.tsx:62,89` (the 5xl dashboard net, via `formatCompact`→`RollingNumber` plain string), `components/dashboard/StatCard.tsx:53`, `pages/portfolio/StocksPage.tsx:216-289` stat tiles (`fmt()`), `pages/portfolio/net-worth/NetWorthPage.tsx:361-370` peak/trough, `components/portfolio/TotalValueCard.tsx`, plus ~10 local `const fmt = useCurrencyFormatter(...)` per-page helpers. Net effect: the crafted treatment shows on secondary rows while heroes render full-size "€" and full-weight cents — hierarchy inverted.
   - Fix: adopt `Money` on stat tiles/detail dialogs; for the two `RollingNumber` heroes, make RollingNumber parts-aware (accept `Intl.formatToParts` output so symbol/decimals keep the Money treatment inside the odometer) — raw strings stay only for chart axes/ticks.
 
-- [ ] **DECIDED (2026-08-05) — `exceptZero` is the house convention; sweep of the remaining 31 manual-prefix money sites is DEFERRED by the stop-rule. `signDisplay: exceptZero` drops the minus sign from any loss that rounds to zero — at the 0-decimals setting that is every value in ±0.5** 🔼 🔎 verified-present 2026-08-05
+- [ ] **Sweep the remaining manual-prefix money sites onto the decided `exceptZero` convention** 🔼
+  - Tracking: 🔎 verified-present 2026-08-05
+  - Decision: `exceptZero` is the house convention. The 31-site sweep was deferred by the prior stop-rule. It intentionally drops the minus sign from a loss that rounds to zero, including values within ±0.5 when configured for zero decimal places.
   - ↪ _from: Orchestration session 2026-08-04 · Money adoption (found by the independent verifier, which falsified the implementer's claim that the change differed only at exactly zero; reproduced a third time by the orchestrator)_
   - `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx:198, 207, 210, 217, 225` — the realized/unrealized/total gain tiles and the FX-attribution subline moved from a manual `${v >= 0 ? '+' : ''}` prefix to `signDisplay: "exceptZero"`. The manual form took the sign from the **raw** value; `exceptZero` decides it **after rounding**. They therefore diverge for any value that rounds to zero at the configured digit count, not just exact zero.
   - Measured (de-DE/EUR, node 22): at 2 digits, `-0.001` and `-0.004` go `-0,00 €` → `0,00 €`. At **0 digits** — a first-class option in `components/settings/sections/GeneralSection.tsx:47`, labelled `0 (1,234)` — `-0.42` and `-0.49` go `-0 €` → `0 €`. A minus sign disappears from a money figure.
@@ -3142,7 +3186,8 @@ look-changing one.
   - `i18n/source/en.json` — Add Transaction flow: title "Add Transaction":880 → button "Save":879 → toast "Transaction added":865 (three verbs, one flow); same Save-button pattern at `form.addCategory.save`:855 and `form.addRecipient.save`:862. Meanwhile `addInv.title`:153 "Add Investment" → button "Create":92; and categories has both "Category added":393 and "Category created":397 for creation.
   - Fix: one verb per flow — button repeats the dialog verb ("Add transaction" → toast "Transaction added"); reserve "Save"/"Save changes" for edit mode (the keys already split add/edit: `editTitle`/`updateSuccess`).
 
-- [ ] **Class-soup: 119 call sites re-add `glass-regular` and 47 re-add `premium-frame` that Card already applies — intent signal lost** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Class-soup: 119 call sites re-add `glass-regular` and 47 re-add `premium-frame` that Card already applies — intent signal lost** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/components/ui/card.tsx:9` already includes both, yet `grep -rn 'Card className="[^"]*glass-regular'` → 119 and `premium-frame` → 47 (e.g. `components/dashboard/CategoryPieChart.tsx:77`, `dashboard/MonthlyTrendsChart.tsx:152`, `dashboard/BankBalancesWidget.tsx:64,84,154`, `statistics/RecipientInsightsTab.tsx:184-223`). When every card restates its material, a reader (or the next agent) can't tell which surfaces were *deliberately* promoted — the exact patchwork feel this research targets, and a divergence trap if the base ever changes.
   - Fix: mechanical sweep deleting redundant `glass-regular`/`premium-frame`/`micro-lift` from Card call sites; after the sweep, an explicit material class on a Card means "intentional override" again.
@@ -3152,103 +3197,123 @@ look-changing one.
   - `apps/frontend/src/components/statistics/SankeyChart.tsx:27-42` — `NODE_COLORS` hardcodes 12 `hsl(220 70% 50%)`-style mid-lightness hues (generic evenly-spaced wheel, not the jewel family), sandwiched between two token entries (`--primary`, `--muted-foreground`). Fixed ~50% lightness in both modes: reads muddy against dark glass, loud against light, and ignores theme variants — visibly "a different app" next to token-colored charts on the same statistics page.
   - Fix: cycle `CHART_TOKEN_COLORS` from `components/charts/palette.ts` (repeat with opacity steps if 12+ distinct nodes are needed), keeping `--primary` for the root node.
 
-- [ ] **"Warning" is improvised as raw amber/yellow in ~6 files although the `--warning` token exists and is used 74×** 🔼 🔎 verified-present 2026-07-11
+- [ ] **"Warning" is improvised as raw amber/yellow in ~6 files although the `--warning` token exists and is used 74×** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/features/accounts/MergeAccountDialog.tsx:74` `text-amber-600 dark:text-amber-500`; `components/research/ResearchAnalystTab.tsx:21,62` `text-yellow-500 dark:text-yellow-400` + `:78` `bg-yellow-400` (hold-verdict bar); `pages/portfolio/RebalancePage.tsx:282` `text-amber-600 dark:text-amber-500`; `pages/DbMaintenancePage.tsx:90` `text-yellow-600` (no dark variant); `pages/admin/TableDataEditorPage.tsx:79,302,376` amber-500/700 set. Four different hues for one meaning, against 74 correct `-warning` usages elsewhere — semantic drift that makes caution states feel per-page instead of per-app.
   - Fix: sweep to `text-warning` / `bg-warning/…` (`--warning: 38 80% 50%` light, `38 88% 62%` dark already close to these ambers); grep guard: `(amber|yellow)-[0-9]` should end at 0 outside charts.
 
-- [ ] **There is no `--info` token, so "informational" blue is improvised raw per file — visible daily on import-review badges** 🔼 🔎 verified-present 2026-07-11
+- [ ] **There is no `--info` token, so "informational" blue is improvised raw per file — visible daily on import-review badges** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - Semantic tokens cover success/warning/destructive/gain/loss but not info, so: `apps/frontend/src/pages/ImportReviewPage.tsx:55,300` pattern badges `border-blue-400 text-blue-600 dark:text-blue-400`; `features/recipients/RecipientPatternsDialog.tsx:334` `text-blue-600 dark:text-blue-400`; `components/layout/AppLayout.tsx:192` `Moon … text-blue-400` (no light variant — washed out on the light theme); devtools/admin method colors `components/devtools/RequestList.tsx:14-17` (`text-sky-500`/`text-orange-500`) and `pages/admin/EndpointLivenessPage.tsx:17` (`bg-blue-500/10 text-blue-700`). Each site picked its own blue — the app has no *voice* for "neutral information".
   - Fix: add an `--info` token pair to `styles/tokens.css` + `tailwind.config.ts` (tuned to the jewel family — `--chart-3` (204 68% 48% / 204 78% 62%) is the natural candidate) and route these sites through it; theme variants inherit via `themes.ts`.
 
-- [ ] **Icon-tile glow is always primary-tinted even when the tile itself is gain/loss/chart-4/orange — copy-pasted shadow that contradicts its subject** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Icon-tile glow is always primary-tinted even when the tile itself is gain/loss/chart-4/orange — copy-pasted shadow that contradicts its subject** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - The pasted `shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]` sits under tiles whose fill is a *different* hue: `apps/frontend/src/components/dashboard/NetSummaryCard.tsx:82` (gain/loss gradient tile, emerald glow even when red/orange), `components/dashboard/StatCard.tsx:48` (`iconBg` may be loss), `pages/DashboardPage.tsx:461` (`from-chart-4/20` purple tile, emerald glow), `components/shared/PageHeader.tsx:27` (glow fixed to primary while `iconColor` is a prop — and `pages/DbMaintenancePage.tsx:163` passes `from-orange-500/20 to-orange-500/5 text-orange-500`, also the app's only raw-palette gradient). A crafted version would never halo a red tile in green.
   - Fix: make the glow follow the tile hue — set the tile's `color` to its semantic token and use `shadow-[0_2px_8px_-2px_currentColor]`-style (or a `--tile-glow` var per tone); replace DbMaintenance's orange with `warning` (its true meaning).
 
-- [ ] **Two numeric voices for the same money: transactions/owes/recipient tables render amounts in `font-mono` (SF Mono), dashboard/portfolio in Inter `tabular-nums`** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Two numeric voices for the same money: transactions/owes/recipient tables render amounts in `font-mono` (SF Mono), dashboard/portfolio in Inter `tabular-nums`** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3_
   - `apps/frontend/src/features/transactions/components/TransactionsTable.tsx:228`, `features/transactions/components/TransactionQuickLook.tsx:47` (mono + `tracking-tight` on a 4xl amount), `pages/OwesPage.tsx:444`, `components/statistics/RecipientInsightsTab.tsx:119,130` + `pages/RecipientInsightsPage.tsx:100,111` all wrap `<Money>` in `font-mono` — overriding the Inter-tabular voice `Money` itself establishes (`components/shared/Money.tsx:44`) and that every dashboard/portfolio/net-worth figure uses. Same content type, two typefaces, page by page. The app *does* have a deliberate mono role — identifiers: tickers (`components/shared/SymbolSearchResultItem.tsx:39`, `components/portfolio/PortfolioTicker.tsx:169`), IBANs (`pages/RecipientsPage.tsx:182`), SQL/devtools — which this money-in-mono usage dilutes.
   - Fix: one numeric voice for money = Inter + `tabular-nums` (what `Money` already emits); strip `font-mono` from the six money sites; document the mono role as "identifiers, not amounts" next to the `--font-mono` token (`styles/tokens.css:124`).
 
-- [ ] **`CardTitle`'s default (Fraunces display, 2xl) is a fiction — 78 of 130 call sites downsize it to xs–base, putting the display serif on 12–14px stat labels** 🔼 🔎 verified-present 2026-07-11
+- [ ] **`CardTitle`'s default (Fraunces display, 2xl) is a fiction — 78 of 130 call sites downsize it to xs–base, putting the display serif on 12–14px stat labels** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3_
   - `apps/frontend/src/components/ui/card.tsx:29` sets `font-display text-2xl font-semibold`; only 24 sites use `<CardTitle>` bare, 78 override to `text-sm`/`text-base`-class sizes (grep) — e.g. `components/dashboard/StatCard.tsx:47`, `components/dashboard/NetSummaryCard.tsx:75`, `components/statistics/SummaryCards.tsx:63` re-style it into a muted eyebrow-label but keep the `font-display` class, so "LAST MONTH — NET" renders in Fraunces at 14px (a text-optical serif doing UI-chrome duty; no `font-sans` override exists anywhere). The display face is meant for brand moments (h1–h3, per `index.css:39-46`); spread over every stat label at micro sizes it stops being special — and each of the 78 overrides improvises its own size/weight/color combo.
   - Fix: give CardTitle cva size variants — `default` (display 2xl, unchanged), `sm` (display lg for chart cards), and a `label` variant (`font-body` — this is the S3-eyebrow, below) — then sweep the 78 overrides onto variants; rule: Fraunces never below `text-lg`.
 
-- [ ] **~20 eyebrow/section-label recipes: 42 uppercase labels across 7 tracking values, 3 sizes, 3 weights, 4 muted tints — per-file improvisation of one role** 🔼 🔎 verified-present 2026-07-11
+- [ ] **~20 eyebrow/section-label recipes: 42 uppercase labels across 7 tracking values, 3 sizes, 3 weights, 4 muted tints — per-file improvisation of one role** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3_
   - grep `uppercase` in `apps/frontend/src` → 42 uses whose tracking splits `tracking-wide`×16 / `tracking-[0.12em]`×11 / `tracking-[0.08em]`×5 / `tracking-wider`×4 / `tracking-[0.14em]`×2 / `tracking-[0.16em]`×1 / `tracking-[0.18em]`×1 / none×2, on `text-[10px]`/`text-[11px]`/`text-xs`, `font-medium`/`font-semibold`/regular, and `text-muted-foreground` vs `/70` vs `/80`. The class-string dump shows ~20 distinct full recipes for the identical role (section eyebrow) — the exact "each file rolls its own" texture that reads generated. The most-repeated designed variant (`text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70`, sidebar) is a good candidate keeper.
   - Fix: one `.eyebrow` utility class in `index.css` (pick ~`text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground/80`) + optional `.eyebrow-strong`; sweep all 42 sites; grep guard: `uppercase tracking-` outside the utility definition → 0.
 
-- [ ] **Percent/delta presentation is rebuilt inline ~54× with drifting sign and precision rules — while `DeltaPill` ("replaces ad-hoc colored delta text") has 4 consumers** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Percent/delta presentation is rebuilt inline ~54× with drifting sign and precision rules — while `DeltaPill` ("replaces ad-hoc colored delta text") has 4 consumers** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3_
   - grep `toFixed(N)}%` → 54 inline constructions plus ≥5 local `fmtPct` helpers (`pages/portfolio/StocksPage.tsx:30` and `pages/portfolio/CryptoPage.tsx:26` are byte-identical copies; `pages/research/PortfolioForecastPage.tsx:53`, `pages/research/ResearchComparePage.tsx:208`, `components/research/ResearchFundamentalsTab.tsx:101`). Drift within the same meaning: zero gets a "+" at `components/portfolio/TotalValueCard.tsx:72` (`>= 0`) but not at `components/tax/YearComparisonCard.tsx:246` (`> 0`); precision wobbles 0/1/2 dp between neighboring surfaces (`pages/research/WatchlistPage.tsx:236` 1dp vs `ResearchHomePage.tsx:174` 2dp). Meanwhile the crafted standard exists — `components/shared/DeltaPill.tsx` (tinted pill + arrow + tabular, invertible) — but only StatCard and 3 portfolio pages use it.
   - Fix: shared `formatSignedPercent(v, dp=1)` (true −, explicit +, one zero rule) in `utils/` or shared-utils; adopt `DeltaPill` for change-vs-reference chips (research quotes, year comparison, watchlist since-added); delete the copy-pasted `fmtPct`s.
 
-- [ ] **Below-scale micro-type sprawl: 105 arbitrary `text-[10px]`/`text-[11px]` plus 606 `text-xs` — three competing "small" with no token, and 10px is dense-chrome territory** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Below-scale micro-type sprawl: 105 arbitrary `text-[10px]`/`text-[11px]` plus 606 `text-xs` — three competing "small" with no token, and 10px is dense-chrome territory** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3_
   - grep across `pages components features`: `text-[10px]`×72, `text-[11px]`×33 — arbitrary values minted per file below the Tailwind scale, on badges, eyebrows, axis labels, ticker chips (`components/portfolio/PortfolioTicker.tsx`, sidebar group labels, `components/shared/DeltaPill.tsx` uses `text-xs`…). Combined with `text-xs`×606 vs `text-sm`×495 vs everything-larger×175, the sub-14px band is 86% of all explicit sizing — dense finance UI justifies small type, but *three unnamed sizes* in that band means adjacent labels differ by 1px accidentally, not by role.
   - Fix: name the band — add `text-2xs` (11px/14px line-height) to the Tailwind `fontSize` scale (`config/tailwind.config.ts`), map the 10px cases up to it or down to a deliberate `text-3xs` if truly needed (chart ticks only); ban `text-[NNpx]` via grep guard once swept.
   - Verification (2026-07-03): triage of ~60/607 `text-xs` sites finds it's actually two families, not one uniform problem — ~75-80% is legitimate dense-data/caption dialect. The real demotion is form `Label` at `text-xs` vs the house `ui/label.tsx:8` `text-sm`, concentrated in the portfolio form-dialog cluster (`InvestmentFormFields.tsx:216,225,244,257,266,300`, `EditInvestmentDialog` ×8, `PortfolioTaxAdjustmentsDialog` ×5 — ~30-45 sites); plus ⬇ `TabsTrigger` `text-xs` ×8 (`CashFlowForecastChart.tsx:224-270`) and ⬇ `OnboardingWizard.tsx:295` item titles.
 
-- [ ] **ResearchHomePage's 6-card EntryCard grid is a second sidebar — icon+title+description feature-tour composition inside a working app** 🔼 🔎 verified-present 2026-07-11
+- [ ] **ResearchHomePage's 6-card EntryCard grid is a second sidebar — icon+title+description feature-tour composition inside a working app** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - `pages/research/ResearchHomePage.tsx:188-224` (+ `EntryCard` def `:297-310`): six cards whose icons and destinations are exactly the research nav items (`components/layout/AppSidebar.tsx:192-203` — Globe/LineChart/GitCompareArrows/CandlestickChart/TrendingUp/Target), each with a one-line description. A launcher grid that duplicates always-visible navigation is the canonical generated "landing hub" trope — it tells the user what the sidebar already tells them.
   - Fix: keep the hub, make every card *report live content* from its destination: Watchlist → top mover + distance-to-target; Compare → last comparison pair; Chart Builder → last saved chart sparkline; Forecast → current p50; Markets → today's index move. Cards become glanceable state, not a table of contents.
 
-- [ ] **DollarSign is the app's money icon in a EUR-default Belgian app — 12 files; lucide's Euro icon: 0 uses** 🔼 🔎 verified-present 2026-07-11
+- [ ] **DollarSign is the app's money icon in a EUR-default Belgian app — 12 files; lucide's Euro icon: 0 uses** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - `components/dashboard/NetSummaryCard.tsx:83` (the dashboard hero tile), portfolio-value tiles (`pages/portfolio/StocksPage.tsx:210`, `CryptoPage.tsx:129`, `SavingsPage.tsx:102`, `RealEstatePage.tsx:117`), `components/statistics/SummaryCards.tsx:44` (net balance), `components/portfolio/TotalValueCard.tsx:230`, `pages/portfolio/PerformancePage.tsx:449`, `pages/OwesPage.tsx:269` (the record-payment *action* button), `components/portfolio/InvestmentDetailDialog.tsx:211`, `pages/RecipientInsightsPage.tsx:199`, `components/statistics/RecipientInsightsTab.tsx:199`. The $ reflex is a pure template inheritance — the app itself renders € everywhere via `Money`.
   - Fix: one shared `CurrencyIcon` that picks `Euro`/`DollarSign`/`PoundSterling` from `appSettings.defaultCurrency` (or sidestep the coin metaphor with `Wallet`/`Banknote` where the tile means "value", and a check/receipt metaphor for OwesPage's *pay* action, which isn't about currency at all).
 
-- [ ] **Icon identity drift: 4 pages wear a different icon in the sidebar than in their own header, and BarChart3/Landmark/Database/TrendingUp each mean 2–3 unrelated things** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Icon identity drift: 4 pages wear a different icon in the sidebar than in their own header, and BarChart3/Landmark/Database/TrendingUp each mean 2–3 unrelated things** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - Nav↔header mismatches: Crypto `Coins` (`components/layout/AppSidebar.tsx:161`) vs `Bitcoin` (`pages/portfolio/CryptoPage.tsx:113`); Market lookup `LineChart` (`:194`) vs `BarChart3` (`pages/research/MarketLookupPage.tsx:285`); Exchange rates `ArrowLeftRight` (`:146`) vs `Database` (`pages/admin/ExchangeRatesPage.tsx:105`); Portfolio dashboard `LayoutDashboard` (`:153`) vs `PieChartIcon` (`pages/portfolio/PortfolioOverviewPage.tsx:226`). Collisions: `BarChart3` is the identity of Statistics (nav `:127` + page), Performance (nav `:175` + `PerformancePage.tsx:190`), *and* MarketLookup's header; `Landmark` = both tax pages/nav (`:130,:177`) *and* AccountsPage (`pages/AccountsPage.tsx:94`) — taxes and bank accounts share a face; `Database` = DB maintenance (nav `:143` + `DbMaintenancePage.tsx:162`) and exchange rates; `TrendingUp` = Stocks nav (`:160`), Forecast nav (`:202`), plus generic stat-tile duty (`SavingsPage.tsx:133` interest, `StocksPage.tsx:250` unrealized P&L, `SummaryCards.tsx:28` income). Icons assigned per-file from whatever lucide name came to mind — no identity system.
   - Fix: a `lib/pageIcons.ts` map (one icon per destination, one destination per icon) imported by both AppSidebar and each page's PageHeader/EmptyState; resolve collisions by content (Statistics keeps BarChart3; Performance → Gauge/ChartSpline; MarketLookup keeps nav's LineChart; ExchangeRates keeps ArrowLeftRight; Accounts → Wallet2/CreditCard, leaving Landmark to tax).
 
-- [ ] **Icon-decorated-heading reflex: ~60% of all CardTitles carry an icon that restates the adjacent word — including a trends chart iconed with TrendingDown** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Icon-decorated-heading reflex: ~60% of all CardTitles carry an icon that restates the adjacent word — including a trends chart iconed with TrendingDown** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - 43 CardTitles use the leading-icon pattern (`grep 'CardTitle className="flex items-center gap-2'`) + ~17 more take dialect-B's icon-right slot, against 130 total — plus PageHeader puts an icon tile on all 38 pages, so effectively every heading in the app is icon-decorated and the icons stop carrying signal. The give-away mismatch: the dashboard's neutral income-vs-expense chart gets a *decline* icon in its 11×11 gradient tile (`pages/DashboardPage.tsx:434-435` `TrendingDown` on "Monthly Trends"), and CategoryPie's `Tags` tile (`:461-462`) restates the word "category". Import cards' icons (`features/imports/SimpleImportCard.tsx:85-88`, `ExportCard.tsx:70-73`) do the same one-icon-per-title ritual.
   - Fix: rule, not sweep — icons on *identity* surfaces (PageHeader, nav, empty states) and on tiles where they disambiguate siblings at a glance (the 4 import cards qualify); chart cards drop the icon tile (a chart is its own picture — fixes the TrendingDown lie for free); section CardTitles inside an already-identified page go bare. Fewer icons = the remaining ones read as chosen.
 
-- [ ] **ImportPage stacks six same-weight full-width cards — the daily task, one-time setup, and static reference all get identical density** 🔼 🔎 verified-present 2026-07-11
+- [ ] **ImportPage stacks six same-weight full-width cards — the daily task, one-time setup, and static reference all get identical density** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - `pages/ImportPage.tsx:23-28`: TransactionImportCard (THE recurring task) → RecipientsImportCard → CategoriesImportCard (both one-time setup imports) → ExportCard → ImportHistoryCard → SupportedBanksCard (static reference list), each an equal Card in one column. Uniform density regardless of importance is a generated-page texture; a crafted import page knows what you came for.
   - Fix: transaction import as the page's hero (drop zone + bank picker front and center, history beside/below it since it answers "did my last import work"); demote recipients/categories import + supported banks into a collapsed "Setup & reference" group or side rail; ExportCard keeps secondary weight.
 
-- [ ] **Dialogs got the signature genie exit; every other overlay ships stock shadcn zoom with untokened timing and no reduced-motion gate** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Dialogs got the signature genie exit; every other overlay ships stock shadcn zoom with untokened timing and no reduced-motion gate** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S5_
   - Crafted layer: `components/ui/dialog.tsx:42` + `alert-dialog.tsx:40` — 420ms overshoot spring in (`tailwind.config.ts:185`, `cubic-bezier(0.34,1.45,0.64,1)`) and a 200ms genie-out that shrinks toward the opening pointer (`lib/dialogGenie.ts`), `motion-reduce:animate-none` gated. Default layer: `popover.tsx:20`, `dropdown-menu.tsx:40`, `select.tsx:69`, `tooltip.tsx:20`, `context-menu.tsx`, `sheet.tsx:22` all run tailwindcss-animate's boilerplate `fade-in-0 zoom-in-95 slide-in-from-*-2` at the plugin's defaults — no `--duration-*`/`--ease-*` token, and none has a `motion-reduce` gate (grep: 0 across all six). The modal layer feels Vision; the menu layer feels like every shadcn app.
   - Fix: keep the hierarchy (menus quicker + quieter than dialogs is right) but own it: add `duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]` and `motion-reduce:data-[state=open]:animate-none` (+ closed) to the six overlay content classes.
 
-- [ ] **The dashboard's full arrival choreography replays on every navigation — the app's best moment is spent as noise, while real completions get none** 🔼 🔎 verified-present 2026-07-11
+- [ ] **The dashboard's full arrival choreography replays on every navigation — the app's best moment is spent as noise, while real completions get none** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S5_
   - `components/shared/RollingNumber.tsx:29-36` rolls every digit from 0 on *every mount*; `PageTransition.tsx:26` is keyed on pathname; `DashboardPage.tsx:401` re-staggers — so dashboard→transactions→dashboard re-runs the whole ~1s reveal each trip, training the user to ignore it. Meanwhile the events that *deserve* a moment end flat: committing an import batch is `toast.success` + `navigate("/import")` (`pages/ImportReviewPage.tsx:120-139` — the highest-stakes completion in the app), and finishing onboarding just closes the dialog (`components/onboarding/OnboardingWizard.tsx:208`). The vocabulary already exists (`icon-success-bounce`, stagger, odometer) — it's aimed at the wrong events.
   - Fix: gate the full dashboard choreography (stagger + odometer roll) to once per session (sessionStorage flag; returns get a quiet fast fade); spend the saved budget on completions — import commit lands on a success panel whose imported-count rolls up (RollingNumber) with the existing bounce check, and onboarding completion hands off into the dashboard's (once-per-session) staggered reveal.
 
-- [ ] **Dead motion vocabulary in two of three layers — Tailwind keyframes and Framer variants that nothing uses** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Dead motion vocabulary in two of three layers — Tailwind keyframes and Framer variants that nothing uses** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S5_
   - `apps/frontend/tailwind.config.ts:146-157,180-182` — `fade-up`/`fade-in`/`scale-in` keyframes + animations: 0 uses in src. `lib/motion.ts` — `fadeUp`/`fadeIn`/`scaleIn`/`dialogVariants`/`staggerContainer`/`microLift`/`pressFeedback` variants and `springs.soft`/`springs.bouncy`: imported only by `lib/__tests__/motion.test.ts` (live consumers import only `durations`/`easings`/`springs.snappy`/`springs.dialog`). Three parallel entrance systems exist (CSS `.animate-in`, Tailwind `animate-fade-up`, Framer `fadeUp`) and one is used — the next contributor flips a three-sided coin, which is exactly how the double-entrance above happened.
   - Fix: delete the unused Tailwind animations and Framer variants (tests included), leaving one documented entrance API per layer (CSS utility for static mounts, framer for layout/gesture work).
 
-- [ ] **The three moment-of-truth components are visual strangers: EmptyState got the designed treatment, PageError half of it, the crash fallback none** 🔼 🔎 verified-present 2026-07-11
+- [ ] **The three moment-of-truth components are visual strangers: EmptyState got the designed treatment, PageError half of it, the crash fallback none** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
   - `apps/frontend/src/components/shared/EmptyState.tsx:13-19` — glass tile + aurora glow halo + `font-display` title (the crafted anatomy). `components/shared/PageError.tsx:14-18` — same 16×16 tile *shape* but flat `from-destructive/15` gradient + `shadow-sm`, no halo, title NOT `font-display`. `components/shared/ErrorBoundary.tsx:22-24` (the whole-section crash fallback) — a naked `AlertTriangle` with no tile at all, `text-lg font-semibold` plain. Three siblings for "this area has no content / failed / crashed", three anatomies — the state a user hits at their worst moment is the least designed. (2026-06-30 filed *pages bypassing PageError*; this is the shared components' own visual drift — S4 explicitly deferred it here.)
   - Fix: one `StateBlock` anatomy (tile + optional halo + font-display title + description + action slot) with a `tone` variant (`neutral` = current EmptyState, `destructive` = tinted tile, halo in destructive/10); PageError and ErrorFallback become thin wrappers over it, so every no-content moment shares one crafted face.
 
-- [ ] **~10 hand-rolled empty states beside the designed component — including the tax feature's entire first-run screen** 🔼 🔎 verified-present 2026-07-11
+- [ ] **~10 hand-rolled empty states beside the designed component — including the tax feature's entire first-run screen** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
   - The bare-icon-plus-text clone (no glass tile, no halo, no `font-display`): `pages/TaxOverviewPage.tsx:431-445` (the no-tax-profile screen — a whole feature's front door, `Landmark h-12 w-12 text-muted-foreground/40` + plain h3) and `:560,687` (checklist empties); `components/statistics/SavedChartsSection.tsx:71-76` (dashed box, plus its own bootleg `bg-muted animate-pulse` skeleton at `:66-69` instead of `Skeleton`/`SectionLoader`); `components/portfolio/PortfolioNewsFeed.tsx:50,72`; `pages/research/ResearchHomePage.tsx:279`; `pages/research/PortfolioForecastPage.tsx:209`; `pages/portfolio/PerformancePage.tsx:57`; `pages/AIChatPage.tsx:125-133` (glass but dashed-border, h-6 icon, its own recipe); `pages/research/MarketOverviewPage.tsx:1074` (a bare `<p>` in a dashed box). Each is a page where 17 sibling surfaces already render the crafted `EmptyState` — the difference is visible page-to-page as "designed here, shrugged there".
   - Fix: adopt `EmptyState` at all ten sites (it already takes `action`); add a `compact` size variant for in-card slots (news feed, saved-charts, forecast) so density isn't the excuse; the TaxOverview no-profile screen deserves the full treatment + its existing setup CTA.
 
-- [ ] **Table zero-states default to one dead muted line — and the app's own best practice proves the slot accepts better** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Table zero-states default to one dead muted line — and the app's own best practice proves the slot accepts better** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
   - `components/shared/DataTable.tsx:480-484` / `components/shared/VirtualDataTable.tsx:670-674` render empties as bare `text-center text-muted-foreground py-12` text, defaulting to `table.noData` = "No data to display" (`i18n/source/en.json:2839`). `features/transactions/components/TransactionsTable.tsx:384-393` shows the ceiling: it passes a full `EmptyState` (contextual icon, search-aware description, Import CTA) through the same `emptyMessage` prop — but `pages/PlannedPaymentsPage.tsx:504`, `pages/DashboardPage.tsx:500`, and `pages/OwesPage.tsx:472` pass plain strings, so a first-run Planned Payments page (a primary nav destination) greets the user with one grey sentence in an empty grid. (U4 owns CTA *presence*; this is the visual rank of the slot.)
   - Fix: pass compact `EmptyState`s (with the page's identity icon) on the primary tables; make the shared default a compact EmptyState with the table's title icon rather than raw text, so no future table ships the dead line.
 
-- [ ] **Boot splash and backend-error page — the two moments the app stands naked, before any CSS loads — wear another app's colors** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Boot splash and backend-error page — the two moments the app stands naked, before any CSS loads — wear another app's colors** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
   - Splash: `packaging/electron/main.js:1399-1405` — a generic 26px border-spinner + system-font app name; the no-saved-theme fallback palette (`:1383-1387`) is literal Tailwind slate (`#0f172a/#94a3b8/#e2e8f0/#f8fafc`), the default-scaffold tell, and no brand mark. Error page: `packaging/electron/assets/error.css:1-21` mints its own palette with an arbitrary blue accent (`--accent: #5b8cff` dark / `#2c5cff` light) — nothing in the app is blue; primary is emerald (`tokens.css:33,149`), so the first thing a user sees when the backend hiccups is off-brand in the one color that matters. (S1 praised this page's *copy* as house-quality; the mechanics — theme persistence via `readSplashTheme`, reduced-motion, CSP, i18n — are genuinely good. Only the character is borrowed.)
   - Fix: reuse `deriveSplashPalette`'s persisted theme in error.css (inject the same CSS vars), swap the blue accent for the brand emerald/champagne pair, and put the VisionMark above the spinner/title on both — boot and failure then look like Vision within 100ms.
@@ -3302,7 +3367,8 @@ look-changing one.
   - Every user of the core add-transaction dialog sees a field captioned "Bank" that actually wants a currency code; free-typed junk goes to the backend as `currency` (maxLength 10, no code validation).
   - Fix: label it with a currency key (e.g. `accounts.field.currency`), and consider a Select of known codes like PlannedPaymentForm:149-156.
 
-- [ ] **Add Transaction recipient/category pickers are plain Selects capped at 200 items with no search — the searchable comboboxes already exist but aren't used here** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Add Transaction recipient/category pickers are plain Selects capped at 200 items with no search — the searchable comboboxes already exist but aren't used here** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2_
   - `components/forms/AddTransactionDialog.tsx:26-27` fetches `{limit: 200, active: true}`; `:125-144` renders plain Radix Selects. `components/shared/RecipientCombobox.tsx:23-29` / `CategoryCombobox.tsx` (used by PlannedPaymentForm) do debounced server-side search with limit 1000 plus an explicit "none" clear item.
   - With more than 200 recipients (real dataset qualifies) the needed recipient may not even be in the list, and scanning 200 unsearchable options is the slowest interaction in the app's most-used form. No free-text creation either — a new recipient forces abandoning the dialog for the Recipients page (same dead-end in SplitTransactionDialog:185).
@@ -3324,7 +3390,8 @@ look-changing one.
   - `pages/research/WatchlistPage.tsx:246-257` — trash icon click → `deleteMutation.mutate(item.id)` directly; destroys the user-typed notes and target price with only a "Removed from watchlist" toast (`en.json:3505`), no undo. `components/research/ResearchMappingDialog.tsx:256` — same direct `deleteMutation.mutate(m.id)` for provider mappings. Every comparable surface (transactions, categories, recipients, planned, splits, conversations, portfolio txns) goes through `useConfirmDialog`.
   - Fix: route both through `useConfirmDialog` (destructive variant), or add an undo action to the toast.
 
-- [ ] **DatePicker has no typed entry and no month/year jump — backfilling old dates is a click marathon; it also can't carry an `id`** 🔼 🔎 verified-present 2026-07-11
+- [ ] **DatePicker has no typed entry and no month/year jump — backfilling old dates is a click marathon; it also can't carry an `id`** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2_
   - `components/shared/DatePicker.tsx:10-21` — props accept no `id`; the control is a button + `components/ui/calendar.tsx` popover with default caption (no `captionLayout="dropdown"`/`fromYear` — grep), so reaching a 2019 portfolio buy date means ~80 month-arrow clicks and there is no way to just type the date. Native fallback exists only at `AddAccountDialog:273` (`type="date"`).
   - Affects every dated form (transactions, planned, portfolio txns) whenever the date isn't near today.
@@ -3412,13 +3479,15 @@ look-changing one.
   - `components/ui/tabs.tsx:50` — `TabsList` is `inline-flex h-10 …` with `whitespace-nowrap` triggers (`:72`) and no `overflow-x-auto`/`flex-wrap` (grep: zero in tabs.tsx). `pages/StatisticsPage.tsx:160-167` renders 6 triggers (~550px wide), `pages/research/PortfolioForecastPage.tsx` 5, `pages/admin/ExchangeRatesPage.tsx` 5, `pages/research/MarketLookupPage.tsx` 4 — at 375px the list overhangs the viewport and drags the whole page into horizontal panning; the last tabs (Flow/Custom on Statistics) are off-screen by default.
   - Fix: add `max-w-full overflow-x-auto` to the TabsList base classes (one-line primitive fix covers all pages); optionally hide the scrollbar with the existing scrollbar utility styling.
 
-- [ ] **Essential info lives in native `title=` tooltips — invisible on touch (and Radix tooltips don't open on tap either)** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Essential info lives in native `title=` tooltips — invisible on touch (and Radix tooltips don't open on tap either)** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U6_
   - Info-bearing (not merely redundant) `title`-only carriers: compact-currency full values — 16 sites render `title={r.isCompact ? r.full : undefined}` around abbreviated amounts (`components/dashboard/BankBalancesWidget.tsx:166,202`, `components/statistics/SummaryCards.tsx`, `CategoryPivotTable.tsx`, `YearlySummaryTable.tsx`, `components/dashboard/NetSummaryCard.tsx`, `pages/DashboardPage.tsx`) — a touch user can never see the exact figure behind "€1.2M"; `components/portfolio/StalePriceIndicator.tsx:33-38` — the *when* of a stale price exists only as `title`/`aria-label` on a 12px clock icon; `pages/portfolio/StocksPage.tsx:370-372` — the FX-fallback-rate warning (`portfolio.fxFallbackNote`) is a `title` on a `<td>` plus a bare "⚠" glyph; `pages/AccountsPage.tsx:135,155,164` — open-transactions hint, drift explanation, balance-provenance tooltip. Radix `Tooltip` (used app-wide via `TooltipProvider`, `App.tsx:174`) does not open on touch by design, so converting `title` → Radix tooltip alone would not fix touch.
   - Affects tablet users reading portfolio/dashboard figures — the compacted exact amounts and stale-price timestamps are core financial data, not decoration.
   - Fix: for compact currency, reveal the full value on tap (wrap in a Popover-on-coarse-pointer, or toggle full/compact on click); for stale-price/FX warnings, render the date/note as visible text on coarse-pointer layouts or make the indicator a tap-toggled Popover.
 
-- [ ] **Six+ pages roll bespoke error UI instead of the shared `PageError` component** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Six+ pages roll bespoke error UI instead of the shared `PageError` component** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `AccountsPage.tsx:109-111` (plain `<p>`, no icon/retry), `DbMaintenancePage.tsx:206-212`, `RecipientInsightsPage.tsx:145-151`, `PlannedPaymentsPage.tsx:438-443`, `ImportReviewPage.tsx:256-264`, `DashboardPage.tsx:344-348`
   - `PageError` already supports icon/heading/message/`onRetry` but is used in only 6 consumer pages; the rest produce several visually different treatments, several with no retry action.
@@ -3444,12 +3513,14 @@ look-changing one.
   - Fix: route status pills through `<Badge variant=...>` (add a compact size variant if needed).
   - Verification (2026-06-30): the companion "focus rings reimplemented ad hoc" claim mostly doesn't hold — `index.css:79-83` defines a global `:focus-visible` ring that `ChartPeriodSelector.tsx`, `DashboardSettingsDialog.tsx`, and `OnboardingWizard.tsx` (all three checked) already inherit by default; they don't set `outline-none` and were wrongly listed. Only **`TagInput.tsx:63`'s remove button is a genuine gap** — it sets `focus:outline-none` via a Tailwind utility class, which (per CSS layer ordering) wins over the global base-layer rule even on `:focus-visible`. Fix: add `focus-visible:ring-2 focus-visible:ring-ring` to `TagInput.tsx`'s remove button only; the other three sites need no change.
 
-- [ ] **`/planned` front-loads four stacked advisory sections before the actual payments table — the clearest "piling up"** 🔼 🔎 verified-present 2026-07-11
+- [ ] **`/planned` front-loads four stacked advisory sections before the actual payments table — the clearest "piling up"** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI clutter review 2026-07-01 · Real issues_
   - `apps/frontend/src/pages/PlannedPaymentsPage.tsx` — above "All Payments" the page stacks: global upcoming-payments notification → "1 suggested match(es)" (`components/planned/MatchSuggestionsBanner.tsx`, `PlannedPaymentsPage.tsx:495`) → a red **"Amount Changes Detected"** card (3 rows) → **"Detected Recurring Patterns"** (`RecurringDetectionPanel.tsx`, 10 full-height rows, **default-expanded**). Page is ~2990px tall; the user scrolls past all four advisory blocks to reach their own planned payments.
   - Fix: collapse "Detected Recurring Patterns" by default (or cap its rows with a "show more"); make "Amount Changes Detected" and "Suggested matches" more compact/dismissible so primary content sits higher.
 
-- [ ] **"Market News" feed renders 25 uncapped articles beside a much shorter column → huge empty void** 🔼 🔎 verified-present 2026-07-11
+- [ ] **"Market News" feed renders 25 uncapped articles beside a much shorter column → huge empty void** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI clutter review 2026-07-01 · Real issues_
   - `apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx:22` fetches **25** articles and `:79` renders **all** of them (no `slice`/cap, no internal max-height). Placed in `pages/portfolio/PortfolioOverviewPage.tsx:384-444` as a 2:1 grid (`grid-cols-3`, `lg:items-stretch`) beside "All Investments", and on `pages/research/ResearchHomePage.tsx` beside "From your watchlist". The 25-item feed makes that row ~4000px tall while the neighbor fills ~700px → ~2700–3000px of empty space next to the feed (page reaches 4131px on Portfolio Overview). Systemic: same component, two pages, both lopsided. It's the toggleable `news` widget (`isVisible('news')`), on by default — so it shows **when that widget is enabled**.
   - Fix: cap the rendered list (e.g. top ~6 with "View all"), or give the feed its own `max-h` + internal scroll, or make it full-width below the row instead of a stretched grid column.
@@ -3459,67 +3530,80 @@ look-changing one.
   - `i18n/source/en.json:280` `aiChat.enterHint` "Enter to send . Shift+Enter for a new line", `:990` `importPage.progressSummary` "{imported} imported . {duplicates} duplicates . {errors} errors", `:995`, `:1041`, `:1428` `onboarding.stepOf` "Step {n} of {total} . {label}" — same artifact in nl.json (same lines). All render verbatim (`TransactionImportCard.tsx:441`, `ChatComposer.tsx:146`, `OnboardingWizard.tsx:241`). Almost certainly a mangled middle dot.
   - Fix: replace " . " with " · " (U+00B7) in all five en+nl pairs.
 
-- [ ] **Mood-only empty states in surfaces that could invite action — against the app's own good examples** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Mood-only empty states in surfaces that could invite action — against the app's own good examples** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/en.json:1153` `market.noNews` / `:1302` `newsFeed.noNews` "No news available" (dead-end shrug; could say what would populate it), `:751` `dbMaintenance.noTables` "No tables found", and a duplicate pair on one page family: `categories.noCategories`:411 "No categories yet." vs `categoriesPage.empty`:425 "No categories found." The app's crafted counterexamples show the bar: `accounts.emptyDescription`:26, `portfolio.noInvestmentsDesc`:1819, `statsPage.noDataDesc`:2767 ("Import your bank transactions to see statistics."). (Wave U4 filed CTA *mechanics*; this is the copy itself.)
   - Fix: news: "No recent news for your holdings — headlines appear once your portfolio has tickers with coverage."; unify the two categories strings to one voice ("No categories yet — add one or import a bank CSV to start.").
 
-- [ ] **Cheerleader glyphs: the app's only emoji ("All settled! 🎉") and ✓-prefixed advice-bot toasts on watchlist** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Cheerleader glyphs: the app's only emoji ("All settled! 🎉") and ✓-prefixed advice-bot toasts on watchlist** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/en.json:1459` `owesPage.allSettled` "All settled! 🎉" (sole emoji in UI copy, `pages/OwesPage.tsx`); `:3499` `watchlist.atTarget` "✓ Price is at or below your target!" and `:3513` `watchlistChart.atTarget` "…your target! Consider buying." — glyph-in-string (the ✓ should be the badge's icon, not text), exclamation enthusiasm, and "Consider buying" is chatbot advice voice inside a price chip.
   - Fix: "All settled." / "At or below your target price" (badge tone, ✓ as an icon element if wanted); drop "Consider buying." — the target-hit state already says it.
 
-- [ ] **Three filler subtitles ("View and manage…", "Manage your…", "Overview of…") on the app's most-visited pages, next to genuinely crafted ones** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Three filler subtitles ("View and manage…", "Manage your…", "Overview of…") on the app's most-visited pages, next to genuinely crafted ones** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/en.json:3446` `txPage.subtitle` "View and manage all your transactions", `:1729` `plannedPage.subtitle` "Manage your recurring and scheduled payments", `:694` `dashboard.subtitle` "Overview of your finances" — textbook filler that restates the nav item. The same file proves the house can write: `rebalance.subtitle`:1981 "Deploy spendable cash into underweight sleeves toward a target allocation -- without selling.", `research.compare.subtitle`:2151, `insights.subtitle`:1074.
   - Fix: say something the title doesn't — e.g. txPage: "Search, filter, and categorize every imported transaction"; plannedPage: "Upcoming bills and the recurring payments Vision watches for you"; dashboard: drop the subtitle (the cards are the overview).
 
-- [ ] **A few "Enter X" placeholders against the app's established "e.g. <real value>" exemplar pattern** 🔽 🔎 verified-present 2026-07-11
+- [ ] **A few "Enter X" placeholders against the app's established "e.g. <real value>" exemplar pattern** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/en.json:219` `addWatchlist.targetPlaceholder` "Enter target price" (a price field should show a price), `:939` `importPage.customBankName` "Enter your bank name...", `:2581` `settings.research.placeholder` "Enter API key", `:721` `dbEditor.filterPlaceholder` "filter..." (lone lowercase). The dominant pattern is exemplary and specific: "e.g. Rent, Netflix":1634, "e.g. KBC Checking or an IBAN":37, "e.g. Groceries vs Transport":635, "0.00":867.
   - Fix: "e.g. 85.00", "e.g. Argenta", "sk-... (from your provider dashboard)", "Filter rows...".
 
-- [ ] **The app's only gradient text is a financial figure — the headline number fades into `muted-foreground`** 🔽 🔎 verified-present 2026-07-11
+- [ ] **The app's only gradient text is a financial figure — the headline number fades into `muted-foreground`** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/components/dashboard/BankBalancesWidget.tsx:165` — `text-3xl font-bold tabular-nums bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent` on the net-position amount. `bg-clip-text` gradient headings are the canonical generated-UI signature; here it's also anti-hierarchical (the most important digits render *lower-contrast* at the end) and a one-off — no other number or heading in the app gets this treatment (repo-wide grep: this is the sole `bg-clip-text`).
   - Fix: solid `text-foreground` like every sibling KPI (NetSummaryCard, StatCard); if a lux treatment is wanted for hero figures, design it once as a system (e.g. the champagne `--accent` on the currency symbol) — not a gradient fade on one widget.
 
-- [ ] **Gain/loss card-wash gradient has four dialects despite `TrendHue` declaring itself the single source of truth** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Gain/loss card-wash gradient has four dialects despite `TrendHue` declaring itself the single source of truth** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/components/shared/TrendHue.tsx:3-7` defines the wash as `from-gain/10 to-gain/5` ("the single source of truth for the card tint") and is used by 4 surfaces — but siblings inline their own stops: `components/statistics/SummaryCards.tsx:67-69` `/20→/5 + ring`, `components/dashboard/StatCard.tsx:31-33` `/20→/10`, `components/dashboard/NetSummaryCard.tsx:57` duplicates TrendHue's exact gradient inline instead of rendering it, `pages/portfolio/RealEstatePage.tsx:190` `/15→/5`, `pages/portfolio/StocksPage.tsx:226` `/20→/5`. Same meaning, four intensities — the tint reads as accident, not signal.
   - Fix: give `TrendHue` an `intensity` prop (`subtle` = 10/5 card wash, `strong` = 20/5 icon-tile fill) and route all six sites through it; inline `from-(gain|loss)/` outside TrendHue becomes the grep guard.
 
-- [ ] **`glass-thin` is a fully-maintained material tier with zero consumers, while three surfaces hand-roll exactly what it's for** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`glass-thin` is a fully-maintained material tier with zero consumers, while three surfaces hand-roll exactly what it's for** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/index.css:205,404-407,888,933-939` define, fallback, hairline, and fx-reduce `.glass-thin` — but `grep -rn "glass-thin" --include=*.tsx` → 0 hits. Meanwhile `features/ai-chat/ChatComposer.tsx:71` (`bg-background/40 … backdrop-blur-sm`), `features/ai-chat/ToolResultCard.tsx:135` (`bg-muted/40 backdrop-blur-sm` sticky header), and `components/layout/AppSidebar.tsx:301` (`bg-sidebar-accent/60 … backdrop-blur-sm`) improvise ad-hoc thin glass with raw utility combos. The 5-tier material system ships 4 tiers plus 3 bootlegs.
   - Fix: adopt `.glass-thin` at those three sites (they gain the hairline + fx-reduced handling for free) — or, if thin is genuinely unwanted, remove the tier so the system's documentation matches reality.
 
-- [ ] **Gain/loss setting swatches hardcode dark-mode hues — in light mode the preview doesn't match what the setting produces** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Gain/loss setting swatches hardcode dark-mode hues — in light mode the preview doesn't match what the setting produces** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/components/settings/sections/AppearanceSection.tsx:219,225` — inline `hsl(24 90% 62%)` and `hsl(358 82% 62%)` are the *dark* `--loss` values (`styles/skin-v2.css:30`, `styles/tokens.css:160`); the light-mode values are `24 85% 45%` / `358 74% 48%`. On the light theme the swatch shows a pastel that the UI never renders — a small honesty gap exactly where the user is choosing colors.
   - Fix: derive the swatches from the tokens (e.g. a `.amount-loss` dot inside a scoped `[data-skin]` preview, or read the mode-correct pair from `skin-v2.css`/`tokens.css` values in one shared constant).
 
-- [ ] **Two parallel identities for the same semantic: `.amount-gain/.amount-loss` (60 uses) vs `text-gain/text-loss` (106) — plus two local re-derivations of the chart palette** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Two parallel identities for the same semantic: `.amount-gain/.amount-loss` (60 uses) vs `text-gain/text-loss` (106) — plus two local re-derivations of the chart palette** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/index.css:901-905` defines `.amount-gain/.amount-loss` and `apps/frontend/tailwind.config.ts:75-76` maps `gain`/`loss` utilities to the same tokens — both correct, but split ~60/106 across the codebase (e.g. `dashboard/BankBalancesWidget.tsx:167` uses `amount-gain`, `statistics/SummaryCards.tsx:30` uses `text-gain`), so the next component flips a coin. Same pattern in charts: `components/statistics/CustomChart.tsx:22` and `CustomChartBuilderModal.tsx:25` each locally rebuild `Array.from({length:16}, … --chart-N)` instead of importing `components/charts/palette.ts`.
   - Fix: standardize on the Tailwind utilities (they compose with `/opacity`, `bg-`, `ring-`), shrink `.amount-*` to a deprecated alias or sweep it out; replace the two local arrays with `CHART_TOKEN_COLORS`.
 
-- [ ] **Every table cell wraps with `[overflow-wrap:anywhere]` — long recipient/investment names break mid-word at arbitrary letters in the app's primary tables** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Every table cell wraps with `[overflow-wrap:anywhere]` — long recipient/investment names break mid-word at arbitrary letters in the app's primary tables** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3_
   - `apps/frontend/src/components/shared/VirtualDataTable.tsx:736` and `components/shared/DataTable.tsx:496` apply `whitespace-normal break-words [overflow-wrap:anywhere]` to *every* cell, so "Intervest Offices & Warehouses" can render "Warehou / ses" wherever the column edge falls — anywhere-breaking is a last-resort for unbreakable tokens (IBANs, refs), not prose names. Cells that need protection already self-defend with `whitespace-nowrap` (amounts) — the rest get typographic roulette.
   - Fix: default text columns to `truncate` + `title` attr (one-line rows keep the virtualizer's fixed row height honest too); reserve `[overflow-wrap:anywhere]` as an opt-in `col.wrap: "anywhere"` for raw-reference columns.
 
-- [ ] **The portfolio section's headline number has two different hero compositions two clicks apart — a shared TotalValueCard and a same-named local clone** 🔽 🔎 verified-present 2026-07-11
+- [ ] **The portfolio section's headline number has two different hero compositions two clicks apart — a shared TotalValueCard and a same-named local clone** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - `components/portfolio/TotalValueCard.tsx` (liquid-glass bento: allocation split + best/worst performers + sparkline) is consumed only by `pages/portfolio/PortfolioOverviewPage.tsx:279`; `pages/portfolio/PerformancePage.tsx:430-470` defines its *own* `TotalValueCard` (different anatomy: DollarSign tile icon-right, invested/net-P&L inline row, FX attribution) for the same "total portfolio value" concept. Same name, same meaning, two visual identities on sibling pages. *(A4's dedup list didn't catch this pair; the layout drift is the user-visible half.)*
   - Fix: one hero composition with slots — the Performance page's extras (FX attribution, invested row) become optional sections of the shared card, so the portfolio's headline number always looks like itself.
 
-- [ ] **Page-level vertical rhythm is a coin flip: 45× `space-y-6` vs 12× `space-y-8` with no rule** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Page-level vertical rhythm is a coin flip: 45× `space-y-6` vs 12× `space-y-8` with no rule** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - grep page roots: `space-y-6` ×45 (14 with `animate-in`) vs `space-y-8 animate-in` ×12 — e.g. TransactionsPage/PlannedPaymentsPage/OwesPage/RecipientsPage breathe at 8 while Dashboard-adjacent Accounts/Tax/Statistics/portfolio pages sit at 6; sibling pages in the same nav group differ arbitrarily. Sub-perceptual per page, but it's why the app feels subtly "differently assembled" page to page. (The half-missing `animate-in` entrance is S5's motion axis — left to it.)
   - Fix: one page-shell rhythm token (pick `space-y-6`; grant `space-y-8` only to deliberately airy pages like Dashboard, as a decision not an accident) — trivially enforced if pages share a `<PageShell>` wrapper, which would also carry the entrance animation once.
 
-- [ ] **Skeleton screens hardcode the 4-card template even where the loaded page won't show 4 cards** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Skeleton screens hardcode the 4-card template even where the loaded page won't show 4 cards** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4_
   - `pages/PlannedPaymentsPage.tsx:394-401` and `pages/StatisticsPage.tsx:84-92` render `[...Array(4)]` stat-card skeletons + one big block; `pages/OwesPage.tsx:43-47` `[...Array(3)]`. The skeletons encode the scaffold, not the content — if finding 2's re-compositions land, these lie; today they already mismatch (OwesPage loads into a hero card + recipient grid, not 3 tiles).
   - Fix: derive each skeleton from the page's real loaded composition (hero-sized block where a hero renders, table-row strips where a table renders) — skeletons are part of the page's identity, not a shared placeholder.
@@ -3529,7 +3613,8 @@ look-changing one.
   - Base components declare property lists (`button.tsx:8` `transition-[background-color,box-shadow,transform,color]`; `micro-lift`/`premium-frame` per-property with split fast/normal durations, `index.css:692-695,718-722`), but 19 sites use blanket `transition-all`: `pages/research/WatchlistPage.tsx:166` stacks it *on top of* `micro-lift`, replacing the curated multi-duration transition with one-size 150ms-default-ease; also `components/onboarding/OnboardingWizard.tsx:323,412,469`, `components/charts/ChartPeriodSelector.tsx:37`, progress fills (`components/portfolio/TotalValueCard.tsx:115`, `CashFlowForecastDiagnostics.tsx:262`).
   - Fix: property lists per the base-component convention (`transition-colors`, `transition-[width]` for meters); grep guard: `transition-all` → 0 outside `ui/sidebar.tsx`'s rail edge case.
 
-- [ ] **Raw duration literals and system-adjacent one-off timings orbit the fast/normal/slow scale** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Raw duration literals and system-adjacent one-off timings orbit the fast/normal/slow scale** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S5_
   - 46 token uses (`duration-fast` ×30, `normal` ×14, `slow` ×2) vs 15 literals: `duration-300` ×6, `200` ×3, `500` ×2 (the decorative corner-orb zooms, `components/dashboard/StatCard.tsx:45`, `NetSummaryCard.tsx:71`), `700` ×2 (`NetSummaryCard.tsx:107,112` income/expense meters), `150` ×1, `1000` ×1. Plus hardcoded ms inside the system's own utilities: `RollingNumber.tsx` 600ms, `icon-success-bounce` 600ms (`index.css:835`), `press-feedback` 90ms (`:731`), `premium-icon-action` 120ms (`:745`) — a shadow scale of 90/120/600 that no token names.
   - Fix: extend the scale honestly (`--duration-press: 90ms`, `--duration-reveal: 600ms`) and map the 15 literals onto tokens; the corner-orb zoom's motion should ride along with S2's `CardSheen` consolidation.
@@ -3539,17 +3624,20 @@ look-changing one.
   - `components/ui/skeleton.tsx:7` — `animate-shimmer` with no `motion-reduce:animate-none`, while the identical shimmer IS gated at `App.tsx:109` and `components/charts/ChartSkeleton.tsx:40` (and `animate-shimmer` is absent from the `index.css:977` reduced-motion block). Same leak class: all six non-dialog overlays (finding above), `components/ui/accordion.tsx:43` accordion-up/down, `input-otp.tsx:44` caret blink, and one ungated pulse `components/research/ResearchMappingDialog.tsx:233` (the other pulses correctly use `motion-safe:`).
   - Fix: add `animate-shimmer`, `animate-accordion-*`, `animate-caret-blink`, and the tailwindcss-animate `data-[state]` enter/exits to the global `prefers-reduced-motion` block in `index.css` (one CSS rule beats six per-component gates); adopt `motion-safe:` as the stated convention for decorative pulses.
 
-- [ ] **The identity corner is three unaligned version strings and an About with no "about"** 🔽 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (native About panel now populated via setAboutPanelOptions (name/version/AGPL/website); the three-unaligned-version-strings identity corner is a frontend concern, still open)
+- [ ] **The identity corner is three unaligned version strings and an About with no "about"** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (native About panel now populated via setAboutPanelOptions (name/version/AGPL/website); the three-unaligned-version-strings identity corner is a frontend concern, still open)
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
   - `components/layout/AppSidebar.tsx:405` hardcodes "Vision v1.0" — but `packaging/electron/package.json` says 1.0.2 and `apps/frontend/package.json` says 1.0.0, so the wordmark's only version claim is already false and frozen. `components/settings/sections/AboutSection.tsx:148+` is titled "About" yet contains only an update-checker + developer toggles — the current version renders *only after* clicking "Check for updates" (`:171`); no app mark, no license line (the app is AGPL-3.0), no repo/docs link. Electron side: bare `{ role: 'about' }` (`main.js:2895`) with no `setAboutPanelOptions` (0 hits — no copyright/website in the native panel), and the Help menu (`:2971-2977`) holds a single item. Crafted apps sign their work; this one forgot its own name-plate.
   - Fix: one build-time version constant (vite `define` from package.json) → sidebar footer + an identity header in AboutSection (VisionMark, name in Fraunces, version, AGPL-3.0 + source link); `app.setAboutPanelOptions({ applicationVersion, copyright, website })`; Help menu gains the repo/docs link.
 
-- [ ] **The 404 is composed but characterless — the one page where the display face costs nothing skips it** 🔽 🔎 verified-present 2026-07-11
+- [ ] **The 404 is composed but characterless — the one page where the display face costs nothing skips it** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
   - `apps/frontend/src/pages/NotFound.tsx:23` sets the giant "404" in `text-6xl font-bold tracking-tight` — *not* `font-display`, so the app's single largest piece of type is the only jumbo heading not in Fraunces; the tile (`:20-22`) is the flat-gradient dialect with generic `FileQuestion`, no aurora halo. Mechanics are fine (U3 verified: localized, logs the path, home CTA) — but a 404 is where personality is cheapest and most memorable, and this one is interchangeable with any dashboard template's.
   - Fix: Fraunces on the 404 numeral, EmptyState's glass-tile + halo treatment (or the VisionMark), and — since the sidebar stays alive around it — a quiet secondary link pair (Transactions · Import) under the primary CTA; keep the existing copy.
 
-- [ ] **Table column resize is mouse-only (no keyboard or touch path)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Table column resize is mouse-only (no keyboard or touch path)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1_
   - `components/shared/VirtualDataTable.tsx:642-649` and `components/shared/DataTable.tsx:455-462` — resize handles are `<div onMouseDown>` with document mousemove tracking; not focusable, no keydown, and touch users get nothing (mouse events only).
   - Fix: make the handle a focusable `role="separator"` with ←/→ adjusting width (and switch to pointer events for touch); low urgency since defaults are usable without resizing.
@@ -3569,161 +3657,190 @@ look-changing one.
   - `pages/research/ChartBuilderPage.tsx:521-526` — `<input type="number" className="… outline-none">` overrides the global `:focus-visible` ring (`index.css:79-83`); the input is also unlabeled. (This is the only remaining `outline-none`-without-replacement on a form control found outside the already-filed TagInput case.)
   - Fix: remove `outline-none` (or add a `focus-visible:ring-2` replacement) and give it an `aria-label`.
 
-- [ ] **VirtualDataTable filter-chip clear button has no accessible name** 🔽 🔎 verified-present 2026-07-11 *(additional instance of the already-filed icon-only-name class)*
+- [ ] **VirtualDataTable filter-chip clear button has no accessible name** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 *(additional instance of the already-filed icon-only-name class)*
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1_
   - `components/shared/VirtualDataTable.tsx:562-564` — the chip's `<button>` contains only an `X` icon; the chip text lives outside the button, so SRs announce "button" with no name.
   - Fix: `aria-label={t('aria.clearFilter', { name: col?.header })}`-style name.
 
-- [ ] **59 of 248 `<Label>` uses have no `htmlFor`, and split/watchlist-search inputs have placeholder-only labels** 🔽 🔎 verified-present 2026-07-11
+- [ ] **59 of 248 `<Label>` uses have no `htmlFor`, and split/watchlist-search inputs have placeholder-only labels** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2_
   - Grep: 59 `<Label>` without `htmlFor` (e.g. `components/forms/AddTransactionDialog.tsx:124,136`, `components/portfolio/AddToWatchlistDialog.tsx:193,245,260,275,295`, `features/imports/ExportCard.tsx:88-119`, `components/planned/PlannedPaymentForm.tsx:162,197,219,264,288`); many wrap DatePicker/combobox components that can't accept an id at all. `components/splits/SplitTransactionDialog.tsx:192-204` amount + note inputs have no label element (placeholder-as-label), same for the watchlist symbol search (`AddToWatchlistDialog.tsx:196-201`).
   - Click-to-focus doesn't work and SRs announce unnamed fields; placeholders vanish on input.
   - Fix: plumb `id` through DatePicker/comboboxes (trigger button), add `htmlFor` everywhere, real labels (or `aria-label`) on the split entry fields.
 
-- [ ] **PlannedPaymentForm validates with native `alert()` — the only three call sites in the app** 🔽 🔎 verified-present 2026-07-11
+- [ ] **PlannedPaymentForm validates with native `alert()` — the only three call sites in the app** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2_
   - `components/planned/PlannedPaymentForm.tsx:59,65,70` — blocking OS alert box (in Electron a native modal) for required-fields and loan-term errors, while the rest of the app uses toasts; the submit button is *also* disabled for the same base conditions (`:323`), so the alert paths mostly fire for the loan sub-fields.
   - Fix: replace with inline field errors or at minimum the toast pattern.
 
-- [ ] **Delete confirms for categories/recipients don't say what happens to their transactions** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Delete confirms for categories/recipients don't say what happens to their transactions** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2_
   - `i18n/source/en.json:423` (`categoriesPage.delete.desc`) and `:2058` (`recipientsPage.delete.desc`) are bare "Are you sure … cannot be undone" — nothing about whether the category's/recipient's transactions are blocked, orphaned, or recategorized. Contrast the good ones: `tags.deleteConfirm` (en.json:2858, "will remove it from all transactions") and `aiChat.deleteConfirm` (en.json:274).
   - Users can't judge blast radius before confirming on entities referenced by hundreds of transactions.
   - Fix: state the consequence and include the affected-transaction count (both pages already have counts nearby).
 
-- [ ] **Cross-page drill-downs are all `onClick` + `navigate()` — none are real links (no cmd/middle-click, no href preview)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Cross-page drill-downs are all `onClick` + `navigate()` — none are real links (no cmd/middle-click, no href preview)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3_
   - `pages/RecipientsPage.tsx:392`, `pages/CategoriesPage.tsx:205`, `pages/OwesPage.tsx:235,474`, `components/statistics/CategoryPivotTable.tsx:292-377`, `pages/research/WatchlistPage.tsx:75`, `pages/research/MarketOverviewPage.tsx:997`, `pages/research/ResearchHomePage.tsx:108,193-223`, `components/dashboard/BankBalancesWidget.tsx:51`, `pages/AccountsPage.tsx:86`, `components/portfolio/InvestmentDetailDialog.tsx:141` — every entity drill-down is a programmatic `navigate()` on div/row/button click; `<Link>` appears on only 6 pages (mostly empty-state CTAs).
   - In the self-hosted web deployment, open-in-new-tab (cmd/middle-click) fails everywhere, and the status bar never previews where a click leads. (Electron is unaffected, browser use is.)
   - Fix: for pure-navigation clicks render `<Link to=…>` (or Button `asChild`), keeping `navigate()` only where the click has side effects; row-level clicks can wrap the primary cell text in a Link.
 
-- [ ] **Dashboard stat cards and category pie invite drill-down but dead-end (only BankBalances rows navigate)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Dashboard stat cards and category pie invite drill-down but dead-end (only BankBalances rows navigate)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3_
   - `apps/frontend/src/pages/DashboardPage.tsx:411-417` (last-month income / spending / transaction-count StatCards) and `:477` (CategoryPieChart) have no onClick/Link; `BankBalancesWidget.tsx:51` on the same page does navigate to filtered transactions.
   - Users click the "Last month spending" card expecting last month's expenses and nothing happens — inconsistent affordance on the app's landing page, and the equivalent filtered views already exist (`/transactions?start_date=…&end_date=…&transaction_type=expense`).
   - Fix: link StatCards to the matching pre-filtered /transactions URL and pie slices to the category drill (reuse `CategoryPivotTable`'s `buildDrillUrl` param shape).
 
-- [ ] **ResearchMappingDialog: a failed auto-resolve masquerades as "No proposals found"** 🔽 🔎 verified-present 2026-07-11
+- [ ] **ResearchMappingDialog: a failed auto-resolve masquerades as "No proposals found"** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4_
   - `apps/frontend/src/components/research/ResearchMappingDialog.tsx:67-72` — `resolveMutation` has no `onError`, and the render at `:166-169` is `isPending ? skeleton : proposals.length === 0 ? noProposals` — a provider outage/rate-limit during the auto-resolve on open (`:79-84`) renders exactly the same "No proposals" line as a genuine no-match, steering users to conclude the instrument is unmappable.
   - Fix: add a `resolveMutation.isError` branch with the error message + the existing Re-resolve button as the retry affordance.
 
-- [ ] **Dashboard customization silently fails to persist — applied locally, gone on next launch** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Dashboard customization silently fails to persist — applied locally, gone on next launch** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4_
   - `apps/frontend/src/contexts/SettingsContext.tsx:85-88` (dashboardSettings persist → `logger.error` only) and `hooks/useWidgetVisibility.ts:40-44` (widget hide/show persist → `logger.error` only), while app settings got exactly this treatment fixed via the save-error nonce toaster (`contexts/AppSettingsContext.tsx:84-120`). The change appears applied (local state updates), then silently reverts on the next launch.
   - Fix: route both through the same save-error nonce/toast pattern as appSettings.
 
-- [ ] **Price data age is invisible until the 24h stale threshold — no "as of" anywhere on portfolio values** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Price data age is invisible until the 24h stale threshold — no "as of" anywhere on portfolio values** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4_
   - `apps/frontend/src/components/portfolio/StalePriceIndicator.tsx:23-25` returns null unless `isPriceStale` (24h fixed threshold, `utils/priceStaleness.ts:8`; manual-provider holdings are never flagged), and `price_updated_at` is rendered nowhere else (grep: only StocksPage:344 / CryptoPage:256 pass it, both into this indicator). Portfolio Overview/Net Worth totals carry no timestamp at all.
   - During a market day the user cannot tell 5-minute-old from 23-hour-old prices, and totals give no cue when they were last computed — notable for an app whose refresh is manual.
   - Fix: a small "prices as of <time>" caption (oldest `price_updated_at` among live-provider holdings) near the portfolio total, plus the same in the holdings-table header tooltip.
 
-- [ ] **A handful of number displays use the browser locale instead of the app numberFormat setting** 🔽 🔎 verified-present 2026-07-11
+- [ ] **A handful of number displays use the browser locale instead of the app numberFormat setting** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5_
   - `features/ai-chat/ToolResultCard.tsx:68-69` (`value.toLocaleString()` / `toLocaleString(undefined,…)` for every numeric cell in AI-chat tool result tables), `pages/portfolio/RebalancePage.tsx:92` (percent), `pages/DbMaintenancePage.tsx:70,87,91` (admin timestamps + row counts). Separately, six statistics charts hand-build axis ticks as `` `${currencySymbol}${(v/1000).toFixed(0)}k` `` (`NetTrendChart.tsx:40`, `TopRecipientsChart.tsx:60`, `CategoryTrendChart.tsx:63`, `MonthlyChart.tsx:92`, `YearlyComparisonChart.tsx:38`, `CustomChart.tsx:249`) even though the same hook already exposes locale-aware `formatCompact` (`hooks/useChartCurrencyFormatter.ts:45-48`) — symbol-first ordering and dot decimals regardless of locale.
   - Users whose OS locale differs from their in-app numberFormat get inconsistent grouping/decimal separators between AI-chat tables, rebalance %, and the rest of the app.
   - Fix: pass `numberFormatToLocale(appSettings.numberFormat)` at the three toLocaleString sites; switch the axis ticks to `formatCompact(v).display`.
 
-- [ ] **Two period-selector implementations: shared ChartPeriodSelector vs four bespoke RANGES button rows — different casing, options, and translation** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Two period-selector implementations: shared ChartPeriodSelector vs four bespoke RANGES button rows — different casing, options, and translation** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5_
   - `components/charts/ChartPeriodSelector.tsx:1-4` is documented as "segmented time-range control shared by every chart … One look, one feel" and is used with translated labels (`pages/portfolio/PerformancePage.tsx:107-114,210-214`, NetWorthPage). But `pages/research/MarketLookupPage.tsx:36-44,425-433`, `pages/research/ResearchComparePage.tsx:31-37`, `pages/research/ChartBuilderPage.tsx:25-31`, and `components/portfolio/WatchlistChartDialog.tsx:28-33` each define their own RANGES array rendered as default/ghost Buttons.
   - Visible drift: portfolio charts show a muted segmented control labeled `1m 3m 6m 1y 3y All` (localized), research charts show pill Buttons labeled `1M 3M 6M 1Y 5Y` (+`1D/5D/MAX` on Market Lookup only, untranslated) — different look, casing, and option sets for the same concept, sometimes one navigation step apart.
   - Fix: render the research/watchlist range pickers through `ChartPeriodSelector` (it's generic over the period type), with `t()`-backed labels; keep the per-page range values.
 
-- [ ] **Terminology drift: "Investment" vs "Holding" for the same entity — including one control whose key says investment and label says holding** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Terminology drift: "Investment" vs "Holding" for the same entity — including one control whose key says investment and label says holding** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5_
   - `i18n/source/en.json`: 55 values say "investment", 35 say "holding", across the same features. Same-surface clashes: portfolio page has section "Holdings" (`portfolio.holdings`, en.json:1787) opened by button "Add Investment" (`portfolio.addInvestment`:1741); `combobox.investment.placeholder` (:473) reads "Select a holding..."; delete flow says "Delete Investment" (:1772) while move flow says "Move '{holding}'" (:1799); accounts pages are all-holdings (`accounts.close.transferTo`:16), Net Worth mixes both (:1270-1273).
   - Users meet two names for one thing, and translators must guess whether the distinction is intentional (nl parity drift compounds it).
   - Fix: pick one term per audience surface (suggest "holding" for positions-in-an-account contexts, "investment" for the instrument entity), document it in `docs/glossary.md`, and sweep en+nl values — keys can stay.
 
-- [ ] **Button/title case drift: newer features use sentence case, core dialogs use Title Case** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Button/title case drift: newer features use sentence case, core dialogs use Title Case** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5_
   - Measured on "Add …" labels in `i18n/source/en.json`: Title Case ×16 ("Add Investment":153, "Add Transaction":880, "Add Category":392, "Add Recipient":2015, "Add Payment":1548, "Add Pattern":1988, "Add Person":2684, "Add Entry":1444, "Add All":1547…) vs sentence case ×10 ("Add account":2, "Add row":707, "Add sleeve":1943, "Add part":2670, "Add residence":3046, "Add to Watchlist" mixed:217). The split tracks feature age — accounts/rebalance/db-editor/splits (2026 work) went sentence-case against the older Title-Case core.
   - Adjacent dialogs visibly disagree ("Add account" next to "Add Transaction" in the same header area).
   - Fix: pick one convention (sentence case matches the Apple-refine direction), add it to the i18n skill/docs style note, and sweep en.json button/title values (nl mostly already reads sentence-case naturally).
 
-- [ ] **Tax "frozen year" sky palette (and admin yellow) lack dark-mode variants — low-contrast in dark theme; rest of the app is raw-palette-clean** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Tax "frozen year" sky palette (and admin yellow) lack dark-mode variants — low-contrast in dark theme; rest of the app is raw-palette-clean** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5_
   - No `dark:` pair on: `components/tax/TaxYearSwitcher.tsx:89` (`text-sky-600`), `:112` (`text-sky-700 border-sky-500/40`), `components/tax/YearComparisonCard.tsx:168,198`, `components/tax/YearActionsMenu.tsx:84`, `components/tax/MultiYearTrendStrip.tsx:121`, `components/tax/HistoricalYearBanner.tsx:37,44`, `components/tax/SnapshotHistoryDialog.tsx:36` (`text-sky-700` badge) — sky-600/700 on the dark background is well under 4.5:1 for the tiny snowflake/badge text. Same class of miss: `pages/DbMaintenancePage.tsx:90` (`text-yellow-600`). Counterexamples in the same folders pair correctly (`features/accounts/MergeAccountDialog.tsx:74`, `pages/admin/EndpointLivenessPage.tsx:17`).
   - This CLOSES the 2026-06-30 "raw palette not re-checked" item with specifics: repo-wide there are ZERO raw gray/white/black text/bg classes and only ~28 colored-palette sites, most correctly dark-paired — the frozen-year sky family is the main gap.
   - Fix: add `dark:text-sky-400` (and `dark:text-yellow-400` on DbMaintenance) or fold the frozen-year styling into a semantic token like the gain/loss pair.
 
-- [ ] **Hover-revealed row actions on touch rely on undiscoverable sticky tap-hover** 🔽 🔎 verified-present 2026-07-11 *(touch delta of the U1 keyboard finding — same sites)*
+- [ ] **Hover-revealed row actions on touch rely on undiscoverable sticky tap-hover** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 *(touch delta of the U1 keyboard finding — same sites)*
   - ↪ _from: UI/UX research 2026-07-03 · Wave U6_
   - The `opacity-0 group-hover:opacity-100` action clusters (U1's list: `pages/portfolio/StocksPage.tsx:380`, `CryptoPage.tsx:285`, `features/ai-chat/ChatConversationList.tsx:140`, `components/shared/AttachmentPanel.tsx:74`, `VirtualDataTable.tsx:622`, `DataTable.tsx:435`) only appear on touch after a first tap sets the browser's emulated :hover on the row — nothing signals this, and the first tap may trigger the row's own handlers. U1's fix (`focus-visible`/`group-focus-within`) does not help touch.
   - Fix: additionally reveal on coarse pointers — Tailwind `[@media(pointer:coarse)]:opacity-100` on the same elements (or `pointer-coarse:` plugin variant), keeping the hover choreography for mouse users.
 
-- [ ] **Sub-40px touch targets on repeated small controls — against the app's own 40px `icon-touch-target` convention** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Sub-40px touch targets on repeated small controls — against the app's own 40px `icon-touch-target` convention** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U6_
   - `index.css:765` defines a 2.5rem `icon-touch-target` used in 21 files (good), but misses: `components/charts/ChartPeriodSelector.tsx:24-37` period pills (`px-2 py-1 text-xs` ≈ 24px tall, on every chart); `components/shared/TagInput.tsx:60-67` tag-chip remove × (12px icon in an unpadded button); `components/shared/VirtualDataTable.tsx:562` filter-chip clear × (icon-only, no padding); `pages/admin/TableDataEditorPage.tsx:419,446,490,495` h-6/h-7 icon buttons; checkbox is 18px (`components/ui/checkbox.tsx:14`) with click area not extended by labels where `htmlFor` is missing (59 sites, filed in U2).
   - Fix: extend hit areas without visual growth (padding + negative margin, or `before:` pseudo-element ≥40px) on the chip ×s and period pills; admin-page buttons are desktop-only and can stay.
 
-- [ ] **105 arbitrary `text-[10px]`/`text-[11px]` sites ignore browser font-size scaling** 🔽 🔎 verified-present 2026-07-11
+- [ ] **105 arbitrary `text-[10px]`/`text-[11px]` sites ignore browser font-size scaling** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U6_
   - Grep: 105 occurrences across portfolio/research/tax/AI-chat surfaces (e.g. `pages/portfolio/PerformancePage.tsx:388,490,533,546`, `features/ai-chat/ToolResultCard.tsx:134,291`, `pages/TaxOverviewPage.tsx:498,723`). Tailwind's `text-xs` is rem-based and honors the user's browser font-size preference; `text-[10px]` is frozen — users who raise their default font size get a UI where body text grows but these micro-labels (often the data-bearing ones: table cells in ToolResultCard, chart annotations) stay at 10px.
   - Fix: define a rem-based `text-2xs` (0.6875rem) token in `config/tailwind` and sweep the arbitrary px values onto it / `text-xs`.
 
-- [ ] **Hardcoded English `aria-label`s in shared UI primitives override already-correctly-localized visible text — Dutch screen-reader users hear English, not just "alongside" it** 🔽 🔧 🔎 verified-present 2026-07-11 *(severity nuance: this is worse than "tooltip stays English")*
+- [ ] **Hardcoded English `aria-label`s in shared UI primitives override already-correctly-localized visible text — Dutch screen-reader users hear English, not just "alongside" it** 🔽
+  - Tracking: 🔧 🔎 verified-present 2026-07-11 *(severity nuance: this is worse than "tooltip stays English")*
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `components/ui/pagination.tsx:56,72` (`aria-label="Go to previous/next page"`), `components/shared/SectionLoader.tsx:11` (`aria-label="Loading"`), `components/ui/sidebar.tsx:246,249` (`aria-label`/`title="Toggle Sidebar"`)
   - These hardcoded labels sit on elements whose **visible text is already correctly localized** via `t('pagination.previous'/'next')`. Per accessible-name computation rules, an explicit `aria-label` overrides visible text content for the accessible name — so a Dutch screen-reader user hears the English label instead of the correctly-localized Dutch text that's right there on screen, not merely "in addition to" it. (i18n coverage is otherwise excellent — full `en`/`nl` key parity — these are the exception.)
   - Fix: add `common.loading`, `pagination.previous/next`, `sidebar.toggle` keys to both locale files, regenerate, swap literals for `t()`.
 
-- [ ] **Net Worth hero card has a large empty lower region** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Net Worth hero card has a large empty lower region** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI clutter review 2026-07-01 · Minor / cosmetic_
   - `apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx` — the top-left "Net Worth" card is height-matched (grid) to the 3-card right column (Liquid Assets / Investments / Liabilities) but only its top ~15% is filled (value + "+x this month"), leaving a big void inside the card.
   - Fix: don't stretch the hero to the right column's height, or add content (mini trend/sparkline) to fill it.
 
-- [ ] **`/recipients` repeats its title verbatim** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`/recipients` repeats its title verbatim** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI clutter review 2026-07-01 · Minor / cosmetic_
   - `apps/frontend/src/pages/RecipientsPage.tsx` — the `PageHeader` H1 "All Recipients / 53 recipients" is immediately repeated as the card header right below it (identical text + count). Redundant stacked titles.
   - Fix: drop or differentiate the inner card header (e.g. omit it, or use it only for the toolbar).
 
-- [ ] **`/ai-chat` shows the Ollama status twice** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`/ai-chat` shows the Ollama status twice** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI clutter review 2026-07-01 · Minor / cosmetic_
   - `apps/frontend/src/pages/AIChatPage.tsx` panel subtitle "Local AI model unreachable" duplicates the `features/ai-chat/OllamaStatusBanner.tsx` warning banner text directly below it.
   - Fix: keep the actionable banner (Retry / Setup guide); drop the duplicate subtitle status line.
 
-- [ ] **The global "upcoming payments" notification renders on *every* page (~150px, 3 rows)** 🔽 🔎 verified-present 2026-07-11 *(same root cause already noted at the AI-insight section above)*
+- [ ] **The global "upcoming payments" notification renders on *every* page (~150px, 3 rows)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 *(same root cause already noted at the AI-insight section above)*
   - ↪ _from: UI clutter review 2026-07-01 · Minor / cosmetic_
   - `apps/frontend/src/components/layout/AppLayout.tsx:218-219` mounts `FxStatusBanner` + `UpcomingPaymentsNotification` above every page with no priority/arbiter, so any page-specific banner stacks beneath it. This is the stacking vector; see the existing note that `SuggestionCard` was removed once (commit `6785a3eb`) for exactly this "already covered on every page" redundancy.
   - Fix: consider a single notification arbiter/host so at most one advisory shows at a time (would also bound the `/planned` and portfolio stacks above). Design-level, not urgent.
 
-- [ ] **RecipientInsightsPage is unrouted dead code — insights only exist as a Statistics tab** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **RecipientInsightsPage is unrouted dead code — insights only exist as a Statistics tab** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3_
   - `apps/frontend/src/pages/RecipientInsightsPage.tsx` — absent from the route table (`App.tsx:184-232`); its only importers are two test files (`pages/__tests__/RecipientInsightsPage.integration.test.tsx`, `LanguageSwitch.integration.test.tsx`), while the live UI ships `components/statistics/RecipientInsightsTab.tsx`.
   - No user impact today, but it's an IA trap for maintainers (two divergent insights implementations) and its integration tests exercise a page nobody can reach.
   - Fix: delete the page + retarget its tests at `RecipientInsightsTab`, or route it and link it from RecipientsPage rows.
 
-- [ ] **Amount-display drift: Money micro-typography on half the surfaces, plain strings on the rest — and two different minus glyphs between the two biggest lists** ⏬ 🔎 partial 2026-07-11 (TransactionsTable now uses `<Money signed>`; but PlannedPaymentsPage:220 & MatchSuggestionsBanner:46 still hand-prefix U+2212, and Money still only in 14 files with portfolio/accounts tables not adopted)
+- [ ] **Amount-display drift: Money micro-typography on half the surfaces, plain strings on the rest — and two different minus glyphs between the two biggest lists** ⏬
+  - Tracking: 🔎 partial 2026-07-11 (TransactionsTable now uses `<Money signed>`; but PlannedPaymentsPage:220 & MatchSuggestionsBanner:46 still hand-prefix U+2212, and Money still only in 14 files with portfolio/accounts tables not adopted)
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5_
   - `components/shared/Money.tsx` (Apple-Wallet treatment: raised small symbol, dimmed decimals) is used in 13 files (transactions table/quick-look, dashboard, planned, owes, performance) while 36 files render plain `formatCurrency`/`useCurrencyFormatter` strings for the same kind of figure (`pages/portfolio/StocksPage.tsx:77`, `pages/AccountsPage.tsx:31`, statistics, tax). Sign glyphs also differ: `features/transactions/components/TransactionsTable.tsx:230` prefixes ASCII `'-'` while `pages/PlannedPaymentsPage.tsx:218`, `components/planned/ExecutionHistoryDialog.tsx:152`, `LinkTransactionDialog.tsx:261`, `MatchSuggestionsBanner.tsx:46` prefix typographic `'−'` (U+2212) around the identical `<Money amount={Math.abs(…)}>` pattern.
   - Transactions and Planned Payments — visually adjacent money lists — hyphenate negatives differently; portfolio tables look flatter than transaction tables for no reason.
   - Fix: pick one glyph (Money already supports `signed` via Intl `signDisplay` — use it and drop the manual prefixes), and adopt Money in the portfolio/accounts tables as a follow-up polish pass.
 
-- [ ] **Dialog field grids (`grid-cols-2`/`grid-cols-3`) never collapse at phone widths** ⏬ 🔎 verified-present 2026-07-11 *(needs live viewport check)*
+- [ ] **Dialog field grids (`grid-cols-2`/`grid-cols-3`) never collapse at phone widths** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11 *(needs live viewport check)*
   - ↪ _from: UI/UX research 2026-07-03 · Wave U6_
   - Non-responsive multi-column form rows inside dialogs: `components/forms/AddTransactionDialog.tsx:97,112`, `components/planned/PlannedPaymentForm.tsx:142` (`grid-cols-3`), `components/tax/profile-steps/IncomeStep.tsx:138` (`grid-cols-3`), `features/accounts/AddAccountDialog.tsx:182,225,266`, `components/portfolio/InvestmentFormFields.tsx:81-360` (8 rows), `EditPortfolioTxnDialog.tsx:182`, `AddPortfolioTxnDialog.tsx:170` — at 375px each column gets ~100-160px, so labels truncate and date/select triggers compress; still operable, just cramped (hence lowest priority given desktop-primary use).
   - Fix: `grid-cols-1 sm:grid-cols-2` (resp. `sm:grid-cols-3`) on the dialog field rows.
 
-- [ ] **`/import` is a single narrow centered column — wide empty side margins on desktop** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **`/import` is a single narrow centered column — wide empty side margins on desktop** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI clutter review 2026-07-01 · Minor / cosmetic_
   - `apps/frontend/src/pages/ImportPage.tsx` — all sections (CSV/Recipients/Categories import, Export, History, Supported Banks) stack in one ~680px centered column, leaving large empty left/right gutters at ≥1440px. Cosmetic; a deliberate form-centering choice.
   - Fix (optional): widen the column, or use a 2-column arrangement for the independent import blocks.
 
-- [ ] **`font-bold` on Inter body/number text never renders a true 700 — Inter latin-700 isn't loaded, so ~108 sites (incl. every hero number) silently render the 600 face and the app's "bold" tier ≡ "semibold"** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`font-bold` on Inter body/number text never renders a true 700 — Inter latin-700 isn't loaded, so ~108 sites (incl. every hero number) silently render the 600 face and the app's "bold" tier ≡ "semibold"** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G3 (filed under UI/UX — design-integrity, zero GPU cost)_
   - `apps/frontend/src/main.tsx:12-14` loads Inter 400/500/600 only. `grep font-bold` excluding `<h1-h3>` (Fraunces, 700 *is* loaded) and same-line `font-mono` (SF Mono is a local system font with a real bold) → **108 sites**, including the largest numbers in the app: `components/dashboard/StatCard.tsx:53` (`text-3xl font-bold`), `components/dashboard/NetSummaryCard.tsx:89` (`text-4xl md:text-5xl font-bold`), `components/statistics/SummaryCards.tsx:76`, `components/portfolio/TotalValueCard.tsx:227`, `components/shared/DataTable.tsx:360` / `VirtualDataTable.tsx:545` (filter-count pills), `components/statistics/CategoryPivotTable.tsx:247,310,355`, `pages/TaxOverviewPage.tsx:458,509,667`, etc.
   - Mechanism: CSS font-matching maps requested 700 → nearest loaded face (600) and uses it as-is (engines don't synthesize when a ≥600 face exists) — so this is **not** faux-bold ugliness, it's a weight-hierarchy collapse: `font-bold` and `font-semibold` are pixel-identical, and the intended emphasis tier on money/stat surfaces doesn't exist at render time. GPU-irrelevant; design-integrity only. Related micro-issue, same family: **true faux-italic** at 3 sites — `components/shared/RecipientCombobox.tsx:67`, `CategoryCombobox.tsx:55`, `pages/admin/TableDataEditorPage.tsx:122` (`italic` on Inter; no italic face loaded → synthesized oblique — visible but tiny, all three are muted empty/null placeholders).
   - Fix, two options: (a) add `import "@fontsource/inter/latin-700.css"` to main.tsx (+~24 kB woff2, +1 request) — **LOOK-CHANGING — needs user approval** (every one of the 108 sites gets visibly heavier; arguably this *restores* the designed look, but it changes what renders today); or (b) sweep `font-bold`→`font-semibold` on non-heading/non-mono text — **visually free** (formalizes what already renders) but bakes in a flatter weight scale. The italics: either load the italic faces or drop `italic` for the 3 placeholders (visually free-ish either way; too small to matter).
 
-- [ ] **nl terminology drift on core domain nouns: "begunstigde" vs "ontvanger", and target price translated three different ways** 🔽 🔎 verified-present 2026-07-11
+- [ ] **nl terminology drift on core domain nouns: "begunstigde" vs "ontvanger", and target price translated three different ways** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1 (residue, closed 2026-07-03)_
   - `i18n/source/nl.json` — "begunstigde" ×7 (exactly the `recipients.*FailedTitle` create/delete/merge/unmerge/update family + `plannedPage.link.includesLinked` + `importPage.recipientColPlaceholder`) vs "ontvanger" ×114; "target price" is translated three ways: "doelkoers" ×9 vs "streefprijs" (`watchlist.updateFailed` — same page!) vs "richtprijzen" (`research.entry.watchlist`). Plus machine-translation tells: `onboarding.desc.welcome` "Laten we u instellen" (calqued) + "financiebeheerder" (malformed compound); `tax.markFiled.description` "Je kan" vs the standard "je kunt" used elsewhere.
   - Fix: standardize on "ontvanger" (already the dominant term) and one target-price term; fix the two calques and the kan/kunt slip as part of any nl.json sweep.
 
-- [ ] **~589 dead i18n keys (~17% of 3,529), each with a dead nl twin** 🔽 🔎 verified-present 2026-07-11 🔎 partial-58e45e68 (#155) 2026-08-09 (the validator's substring hole is closed, so 63 of these are now CONFIRMED dead and enumerated verbatim in scripts/validate-locales.js's UNUSED_KEY_ALLOWLIST — the pruning pass should start there and delete the allowlist alongside the keys. LEFT: the pruning itself, and the remaining ~526 candidates the original count claims beyond the 63 the exact matcher can prove from static references)
+- [ ] **~589 dead i18n keys (~17% of 3,529), each with a dead nl twin** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-58e45e68 (#155) 2026-08-09 (the validator's substring hole is closed, so 63 of these are now CONFIRMED dead and enumerated verbatim in scripts/validate-locales.js's UNUSED_KEY_ALLOWLIST — the pruning pass should start there and delete the allowlist alongside the keys. LEFT: the pruning itself, and the remaining ~526 candidates the original count claims beyond the 63 the exact matcher can prove from static references)
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1 (residue, closed 2026-07-03)_
   - Dominated by superseded parallel namespaces: `planned.*` ×44 (→plannedPage/plannedForm), `transactions.*` ×44 (→txPage), `statistics.*` ×33 (→statsPage), `research` ×48, `tax` ×37, `onboarding` ×34 (incl. the confirmed-dead `onboarding.importStep.*` ×11), `form` ×22, `shadowDivergences.*` ×19 (feature removed), `notifications.*` ×8, 35 `common.*` one-worders, `common.notFound`/`notFoundDesc` (superseded by `notFound.*`). All 25 template-literal `t()`-families + 12 `tc()` plural keys were re-derived and excluded honestly; the scan covered frontend + packaging/electron + node-backend. Correction to an earlier checked-clean note: `common.ok` is NOT dead — `packaging/electron/main.js` has its own `t()` (55 call sites) and uses it at `:385/:1141/:3298`.
   - Fix: a pruning pass gated on `bun run validate-locales`; verify individually first (10/10 spot checks held, but only 10 were made — don't bulk-delete off the scanner alone).
@@ -3733,67 +3850,80 @@ look-changing one.
   - `packaging/electron/main.js:2647-2656` — the restore-backup confirm hardcodes English ('Restore Backup', 'This will permanently replace all current data and cannot be undone.', 'Restore'/'Cancel') while every other Electron dialog (Docker prompts `:3251/:3264`, updates `:1946/:1963`, slow-boot `:1139`, embedded-prep `:383`) correctly uses the main-process `t()` loader (`:12-56`). Nearby IPC error strings ('Backup file not found' etc.) also return English to the renderer.
   - Fix: route the restore-confirm strings through the existing `t()` loader like every sibling dialog; for the backend toast-English addendum (already filed in Correctness), `errorHandler.js` ships stable `ApiErrorCode` codes, so a client-side code→i18n mapping is feasible without touching message strings.
 
-- [ ] **Calendar/DatePicker never pass a locale to react-day-picker — English month captions and weekday abbreviations render in the Dutch app** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Calendar/DatePicker never pass a locale to react-day-picker — English month captions and weekday abbreviations render in the Dutch app** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1 (residue, closed 2026-07-03)_
   - `components/ui/calendar.tsx` (crafted: Fraunces caption, Monday week start) and `shared/DatePicker.tsx` never forward a `locale` prop to react-day-picker, so month names and weekday headers stay English regardless of the active app language — an i18n-adoption gap on an otherwise crafted component.
   - Fix: pass the active-language date-fns locale object into `<DayPicker locale={...}>`.
 
-- [ ] **~26 files hand-roll `Intl.NumberFormat` currency clones instead of `formatCurrency`/`Money`** 🔽 🔎 verified-present 2026-07-11
+- [ ] **~26 files hand-roll `Intl.NumberFormat` currency clones instead of `formatCurrency`/`Money`** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3 (residue, closed 2026-07-03)_
   - Tax cluster worst: `TaxOverviewPage.tsx:90`, `components/tax/MultiYearTrendStrip.tsx:47`, `YearComparisonCard.tsx:75`, `SuggestedDeductionsCard.tsx:17` (also DashboardPage, RebalancePage, NetWorthPage…). Alignment itself is clean (all tax tables are right-aligned + tabular); ⬇ `SuggestedDeductionsCard.tsx:144` is the only tax amount missing `tabular-nums`.
   - Fix: adopt `formatCurrency`/`Money` at these sites (the copy-paste angle on the same three tax files is tracked separately as an Architecture-domain dedup finding — this entry is the UI-typography angle only).
 
-- [ ] **Chart tick typography: the shared axis spec exists but misses numerics, and ai-chat charts drift off it entirely** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Chart tick typography: the shared axis spec exists but misses numerics, and ai-chat charts drift off it entirely** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3 (residue, closed 2026-07-03)_
   - `charts/ChartAxis.tsx:22-37` is a real one-spec axis (fontSize 11, Inter, token colors) used by Area/Bar/Line/StackedBar/Composed, but lacks `fontVariantNumeric: 'tabular-nums'` on numeric ticks (one-line fix). `ToolResultCard.tsx:201-202,232-233` (recharts) sets fontSize 10 with no `fill` → recharts falls back to its hardcoded `#666`, off-token and weak in dark mode.
   - Fix: add the tabular-nums variant to ChartAxis; give ToolResultCard's recharts ticks a token `fill`.
 
-- [ ] **MarketOverviewPage heat grid hardcodes `rgb(34,197,94)`/`rgb(239,68,68)` instead of the gain/loss tokens** 🔽 🔎 verified-present 2026-07-11
+- [ ] **MarketOverviewPage heat grid hardcodes `rgb(34,197,94)`/`rgb(239,68,68)` instead of the gain/loss tokens** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2 (residue, closed 2026-07-03)_
   - `heatStyle`, `MarketOverviewPage.tsx:919-927` — bypasses `--gain`/`--loss` and the ADR-104 colorblind setting on a money-signal surface, in an otherwise *designed* grid (saturation cap, dual-stop gradient, written colorblind rationale). Same class: 🔽 `YearComparisonCard.tsx:237-238` favorable/unfavorable money deltas use `text-accent`/`text-destructive` instead of gain/loss (`DeltaPill` exists for exactly this); ⏬ `ResearchComparePage.tsx:126-132` correlation cells hardcode hsl hues 145/0 (non-money, lower stakes).
   - Fix: derive the heat-grid triplets from `--gain`/`--loss`; route YearComparisonCard's deltas through `DeltaPill`.
 
-- [ ] **AI settings tab is the one Settings anatomy hold-out** 🔽 🔎 verified-present 2026-07-11
+- [ ] **AI settings tab is the one Settings anatomy hold-out** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4 (residue, closed 2026-07-03)_
   - `SettingsPrimitives.tsx` (SettingsSection→SettingsGroup→SettingRow) is adopted by all 7 `sections/`, but `AIChatSettingsSection.tsx:35-40` and `ResearchKeysSection.tsx:48-53` hand-roll icon-in-h3 headers + bare `rounded-lg border` cards (zero primitives), nested inside a proper SettingsSection by `AiSection.tsx` → doubled heading hierarchy. ⏬ `AppearanceSection.tsx:93-96`'s variant-picker heading also sits outside any group.
   - Fix: refit both sections onto `SettingsPrimitives` like their 7 siblings. (The code-duplication angle on the same two files is tracked separately as an Architecture-domain finding — this entry is the UX-anatomy-consistency angle.)
 
-- [ ] **`AIChatPage.tsx:178` conversation title is an `h1` rendered at `text-base`** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`AIChatPage.tsx:178` conversation title is an `h1` rendered at `text-base`** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3 (residue, closed 2026-07-03)_
   - Renders the Fraunces display serif at 16px, off the type-role ladder (h1-h3 are meant to be display sizes only — the house rule is Fraunces never below `text-lg`).
   - Fix: bump to at least `text-lg`, or move the conversation title off the h1/display role onto a plain label if 16px is the intended size.
 
-- [ ] **Hidden dashboard widgets leave orphan gutters in multi-column rows** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Hidden dashboard widgets leave orphan gutters in multi-column rows** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S4 (residue, closed 2026-07-03)_
   - Bento heroes toggle atomically (good), but `DashboardPage.tsx:426-458` (`lg:grid-cols-5`, span-3 + span-2 independently hideable) leaves a permanent 2/5 or 3/5 hole when only one is hidden; same class at `StatisticsPage.tsx:196-216` and `PortfolioOverviewPage.tsx:327+`.
   - Fix: a full-span fallback keyed off the sibling's `isVisible`, so hiding one widget lets the other take the full row.
 
-- [ ] **4 stray `focus-visible:ring-primary/50` sites break from the house `ring-2 ring-ring/70 ring-offset-2` pattern** 🔽 🔎 verified-present 2026-07-11
+- [ ] **4 stray `focus-visible:ring-primary/50` sites break from the house `ring-2 ring-ring/70 ring-offset-2` pattern** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2 (residue, closed 2026-07-03)_
   - `WatchlistPage.tsx:166`, `OwesPage.tsx:91`, `VirtualDataTable.tsx:703`, `devtools/RequestList.tsx:124` (devtools exemption was DECLINED 2026-07-10 — tokenize decision below — so this site gets swept with the rest).
   - Fix: sweep all four onto the house ring pattern (devtools included — exemption declined 2026-07-10).
 
-- [ ] **Vision Demo ships the identical app icon as the real app — indistinguishable in the Dock/Applications** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Vision Demo ships the identical app icon as the real app — indistinguishable in the Dock/Applications** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6 (residue, closed 2026-07-03)_
   - `electron-builder-demo.json:13` points at the same `build/icon.icns`; `resources-demo/` holds no icon variant. The mark itself (`build/icon.svg`) is designed and on-token — only the demo needs a badged variant. ⏬ Non-mac icons are moot: both builder configs target macOS only (no win/linux blocks; `BrowserWindow`'s `icon` option is ignored on macOS) — becomes real only if other platforms ever ship.
   - Fix: derive a badged "DEMO" variant of `icon.svg`/`icon.icns` for `resources-demo/` and point `electron-builder-demo.json` at it.
 
-- [ ] **`.dark` shadow overrides hardcode raw `hsl(0 0% 0% / …)` instead of the theme's own shadow token** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **`.dark` shadow overrides hardcode raw `hsl(0 0% 0% / …)` instead of the theme's own shadow token** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2 (residue, closed 2026-07-03)_
   - `index.css:488,674,708,715,761,876` hand-write black shadows in dark mode; `styles/themes.ts` defines a per-variant shadow hue (Nord `220 30% 6%`, ocean `194 40% 15%`…) that these blocks silently discard, so a Nord/ocean user's dark-mode shadows don't match their chosen variant.
   - Fix: replace the raw `hsl(0 0% 0% / …)` literals with `hsl(var(--glass-shadow))`.
 
-- [ ] **Toast motion is the one overlay outside the token motion system** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Toast motion is the one overlay outside the token motion system** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S5 (residue, closed 2026-07-03)_
   - `ui/sonner.tsx`'s skin is fully house (glass-thick, font-display title, token action-button shadow) and shares the global success-icon bounce (`index.css:859`), but its enter/exit/swipe physics are sonner library defaults, ungoverned by `--duration-*`/`--ease-*`. Whether the default feel actually clashes is an eyes-on call (see Still-to-research).
   - Fix, if the eyes-on pass confirms a clash: override sonner's transition props with the token durations/easings.
 
-- [ ] **AI-chat tool sub-states are the smallest remaining gap in the three-tier loading system, plus five small copy nits** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **AI-chat tool sub-states are the smallest remaining gap in the three-tier loading system, plus five small copy nits** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6 (residue, closed 2026-07-03)_
   - The error card is on-token (`border-destructive/30 bg-destructive/5`, `ToolResultCard.tsx:95-105`) but its fallback string 'Tool failed.' (`:21`) is hardcoded English; there's no designed tool-running intermediate state (the crafted thinking dots already carry this — acceptable as-is). Copy nits found alongside: ⬇ `OllamaStatusBanner.tsx:38` prefers the raw English `status?.error` over its own localized hint; ⏬ `aria.toggleSidebar` nl "Zijbalk wisselen" means "swap sidebar", not toggle — should be in-/uitklappen; ⏬ nl `shortcuts.*` mixes imperative and infinitive verb forms; ⬇ `cashflow.window30` nl reads "30 d" vs en "30d".
   - Fix: translate 'Tool failed.'; fix the four copy nits alongside any other nl.json sweep.
 
-- [ ] **Four design/UX decisions — ALL DECIDED 2026-07-10 (now implementation work)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Four design/UX decisions — ALL DECIDED 2026-07-10 (now implementation work)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1–S6 (residue, closed 2026-07-03); decided by the user 2026-07-10_
   - (1) **devtools palette: TOKENIZE** — no exemption; sweep `RequestList.tsx:14-17` sky/orange, TableDataEditor amber/emerald, EndpointLiveness blue onto the token system (includes the devtools `ring-1` site parked in the focus-ring finding above). (2) **`formatCurrencyCompact` 9-char threshold: KEEP AS-IS** — hover mitigation stands; touch access arrives with the filed touch-tooltip sweep; no threshold change, no setting. (3) **print story: BROADER SUPPORT** — browser print is a supported surface for the report-like pages (TaxOverviewPage first, then Statistics and Net Worth): `@media print` stylesheets that hide nav/aurora/glass and flatten to ink-on-paper; other pages stay out of scope. (4) **PWA manifest: YES, minimal** — `manifest.json` + `theme-color` riding on the filed favicon/brand-mark work; no service worker, no offline claims.
   - Fix: implement the four calls above; the nl je/u register (fifth in this family) is decided **je** on its own ⏫ finding.
@@ -3803,17 +3933,20 @@ look-changing one.
   - `ScrollToTop.tsx:7-9` only scrolls, `PageTransition.tsx:16-33` only animates, and `<main>` (`AppLayout.tsx:217`) has no `tabIndex={-1}` — after any sidebar navigation, keyboard focus strands on the old nav link with no page-change announcement for screen readers. Separately, `OnboardingWizard.tsx:171-172`'s `goNext`/`goBack` only call `setStep` — the new step's `<h2>` is never focused and the progress label (`:240-242`) isn't `aria-live` (no `ref`/`.focus()` anywhere in the file).
   - Fix: give `<main>` `tabIndex={-1}` and focus it on route change; focus the step heading and mark the progress label `aria-live="polite"` in OnboardingWizard.
 
-- [ ] **SymbolSearchBox is not an ARIA combobox** 🔽 🔎 verified-present 2026-07-11
+- [ ] **SymbolSearchBox is not an ARIA combobox** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1 (residue, closed 2026-07-03)_
   - `SymbolSearchBox.tsx:44-65` is a custom `<Input>` + Card with no `role="combobox"`/`aria-expanded`/`aria-activedescendant` and no arrow-key navigation from the input (result rows are real `<button>`s, Tab-only).
   - Fix: add combobox ARIA wiring and arrow-key navigation into the result list.
 
-- [ ] **Toast actions' only keyboard path is an undocumented Alt+T, and context-menu-only row actions are undiscoverable** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Toast actions' only keyboard path is an undocumented Alt+T, and context-menu-only row actions are undiscoverable** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1 (residue, closed 2026-07-03)_
   - `ui/sonner.tsx` sets no `hotkey` (sonner's default is Alt+T, absent from ShortcutsOverlay); the recipients "Create Rule" toast action (`useRecipients.ts:88-97`) has no keyboard path beyond that and a 4s window. Separately, Duplicate/show-all-from-recipient/mark-active/delete live only in the row context menu (`TransactionsTable.tsx:319-370`) — Shift+F10 does work (`VirtualDataTable.tsx:808-810`) but nothing documents it.
   - Fix: document Alt+T (or set an explicit hotkey) in ShortcutsOverlay; add a one-line hint for Shift+F10 context-menu access.
 
-- [ ] **DashboardSettingsDialog nav is plain buttons, not real tabs; TableDataEditorPage icon buttons lack accessible names** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **DashboardSettingsDialog nav is plain buttons, not real tabs; TableDataEditorPage icon buttons lack accessible names** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1 (residue, closed 2026-07-03)_
   - `DashboardSettingsDialog.tsx:92-111` is Tab-reachable with `aria-current` but has no `role="tab"`/tablist/arrow-roving semantics. Separately, `TableDataEditorPage.tsx:419` (delete new row) and `:490,:495` (pager) are icon-only with no accessible name — `:446` alone has a `title`.
   - Fix: either implement the tabs pattern (roving tabindex + arrow keys) or drop the visual tab styling for DashboardSettingsDialog; add `aria-label`s to the three TableDataEditorPage buttons.
@@ -3828,52 +3961,62 @@ look-changing one.
   - `next()` (`TaxProfileDialog.tsx:102-110`) advances unconditionally and the final branch saves + closes with no validation anywhere; the step tabs (`:148`) can also be clicked directly to jump freely, skipping required fields on earlier steps.
   - Fix: gate `next()` (and direct tab clicks) on the current step's required fields before allowing advancement.
 
-- [ ] **RecipientCombobox stale `displayLabel` — CONFIRMED unique to this combobox** 🔽 🔎 verified-present 2026-07-11
+- [ ] **RecipientCombobox stale `displayLabel` — CONFIRMED unique to this combobox** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - The list is server-filtered by `debouncedSearch` and `selected` derives from it (`RecipientCombobox.tsx:25-33`); `search` never resets on close, so the trigger shows the placeholder while a value is selected whenever the filter (or first-load latency, or >1000 recipients) excludes the selection from the current results. Verified unique to this combobox — Category/BankAccountMulti/TagFilter comboboxes load their full lists client-side and have no parity bug.
   - Fix: reset `search` when the popover closes (or derive the trigger label independently from the loaded-list filter).
 
-- [ ] **Tax profile fields eat a typed `0`, and "12." can't survive the round-trip** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Tax profile fields eat a typed `0`, and "12." can't survive the round-trip** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - `value={x || ''}` at `IncomeStep.tsx:46,62,110,128,219,262,278` and `ExemptionsStep.tsx:128-202` (9 sites total): a typed `0` renders as empty, and a trailing decimal like "12." can't survive the `parseDecimal` round-trip. Mostly cosmetic since 0≡empty for these optional fields.
   - Fix: use `value={x ?? ''}` (not `||`) and preserve the raw typed string until blur/submit.
 
-- [ ] **LinkTransactionDialog search input has no label, and its tolerance field yields 0/NaN on clear** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **LinkTransactionDialog search input has no label, and its tolerance field yields 0/NaN on clear** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - `LinkTransactionDialog.tsx:175` search input has no label/id; `:227-232` the tolerance field's `Number(e.target.value)` produces 0/NaN when cleared, and `min={0}` isn't enforced while typing.
   - Fix: add a label/id to the search input; clamp and NaN-guard the tolerance field's `onChange`.
 
-- [ ] **ExportDialog's custom date range has no from≤to validation** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **ExportDialog's custom date range has no from≤to validation** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - `ExportDialog.tsx:307-332` — an inverted range only surfaces as a server-error toast; there's no client-side check.
   - Fix: validate `from ≤ to` client-side before submit and disable the export action otherwise.
 
-- [ ] **Onboarding bank-picker cards lack `aria-pressed` — selection is visual-only** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Onboarding bank-picker cards lack `aria-pressed` — selection is visual-only** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - `OnboardingWizard.tsx:319-334` — the selected bank card has no `aria-pressed` (or equivalent), so screen-reader users can't tell which bank is currently selected.
   - Fix: add `aria-pressed={isSelected}` to the bank cards.
 
-- [ ] **Page-internal state is URL-invisible across portfolio and list pages — same class as the already-filed transactions finding, but six more pages** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Page-internal state is URL-invisible across portfolio and list pages — same class as the already-filed transactions finding, but six more pages** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3 (residue, closed 2026-07-03)_
   - `NetWorthPage.tsx:72` period, `PerformancePage.tsx:89-90` period + FX-neutral toggle, `ResearchComparePage.tsx:202-205` compared symbols/range/sort (no save mechanism at all — a curated comparison vanishes on reload), `RecipientsPage.tsx:43-47`, `CategoriesPage.tsx:35-36`, `PlannedPaymentsPage.tsx:79`. Heaviest: `RebalancePage.tsx:77,82-85` — a half-built plan (sleeves, percentages, name, cash cap) is lost on refresh with no URL and no draft persistence.
   - Fix: mirror the transactions-page fix (`?`-param sync with `{replace: true}`) on each; prioritize RebalancePage given the data-loss risk of a half-built plan.
 
-- [ ] **Settings is not deep-linkable in the browser, and VirtualDataTable has no scroll restoration on back-navigation** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Settings is not deep-linkable in the browser, and VirtualDataTable has no scroll restoration on back-navigation** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3 (residue, closed 2026-07-03)_
   - Settings has no `/settings` route — it's a dialog (`AppLayout.tsx:37,231`), and section targeting exists only via the Electron `open-settings` bridge (`ElectronBridge.tsx:54` + `LEGACY_TAB_MAP`, `DashboardSettingsDialog.tsx:39-51`); browser users can't bookmark or link to a specific settings section. Separately, `VirtualDataTable` has no location-keyed scroll save/restore (`ScrollToTop` only touches `window`), so back-navigation into a long list reopens at the top.
   - Fix: consider a `/settings` route (at least for the web deployment); add a location-keyed scroll-position cache to VirtualDataTable.
 
-- [ ] **No popstate/useBlocker guard anywhere — browser back with a heavyweight dialog open navigates underneath and discards typed work** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **No popstate/useBlocker guard anywhere — browser back with a heavyweight dialog open navigates underneath and discards typed work** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3 (residue, closed 2026-07-03)_
   - Repo-wide grep finds zero `popstate`/`useBlocker` usage; browser back with AddTransaction, MergeRecipients, or PlannedPaymentForm open navigates the page underneath the dialog and silently discards typed input — a particular risk on mobile back gestures.
   - Fix: add a `useBlocker`/`beforeunload`-style guard when a heavyweight dialog has unsaved input and back-navigation fires.
 
-- [ ] **OnboardingWizard step inputs are lost on reload, and ChartBuilderPage persists only ONE chart config to a single localStorage slot** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **OnboardingWizard step inputs are lost on reload, and ChartBuilderPage persists only ONE chart config to a single localStorage slot** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3 (residue, closed 2026-07-03)_
   - `OnboardingWizard.tsx:101,146-157` — step/sub-step inputs vanish on reload (completion itself is server-persisted and Back still works, so this is scoped to in-progress form state). Separately, `ChartBuilderPage.tsx:93,107,112` persists exactly one chart config to a single localStorage slot — it isn't shareable, and building a second config silently overwrites the first.
   - Fix: low priority for onboarding (rare to reload mid-wizard); for ChartBuilder, key the localStorage slot per saved-chart id or move to a real "save as" flow.
 
-- [ ] **`/import` vs `/portfolio/import`: two separate importers under a shared-looking prefix** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **`/import` vs `/portfolio/import`: two separate importers under a shared-looking prefix** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U3 (residue, closed 2026-07-03)_
   - Two genuinely different importers with workspace-separated sidebar labels (`AppSidebar.tsx:136,183`) — low confusion risk since they live in different workspaces, but the shared `/…/import` prefix + same icon is a minor IA smell.
   - Fix: low priority — a distinct icon for one of the two would remove the last bit of ambiguity; not worth a route rename.
@@ -3883,22 +4026,26 @@ look-changing one.
   - `ProviderHealthPage.tsx:125-201` has no error branch at all and renders blank on error; `DbMaintenancePage.tsx:206-214` and `TableDataEditorPage.tsx:349-355` show a raw "Unauthorized" string; none of the three link to the `/admin` token card (`AdminOverviewPage.tsx:84-99`). (`ExchangeRatesPage`'s GET is not token-gated — `routes/info/rates.js` has no `adminAuth` — so it's out of 401 scope.)
   - Fix: give all three an error state with a link back to the `/admin` token card, matching the pattern the token card itself demonstrates.
 
-- [ ] **AI-chat interrupted stream leaves an unmarked frozen draft, with no timeout on a hung-open connection** 🔽 🔎 verified-present 2026-07-11
+- [ ] **AI-chat interrupted stream leaves an unmarked frozen draft, with no timeout on a hung-open connection** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4 (residue, closed 2026-07-03)_
   - Mid-stream drops and SSE `error` frames do reject and toast correctly (`ai.ts:168-172` throws → store catch → `onError`, `aiChatStreamStore.ts:263-269` — better than initially feared), but the partial `assistantDraft` is neither persisted (only `done` merges to cache, `:223-238`) nor marked interrupted; cancel leaves it frozen with no stopped/regenerate affordance, and a hung-open connection ("Thinking…" forever) has no timeout at all.
   - Fix: mark interrupted drafts visually with a regenerate affordance; add a client-side timeout for a stalled stream.
 
-- [ ] **Update mutations are silent while create/delete toast — the same asymmetry across all four core entities** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Update mutations are silent while create/delete toast — the same asymmetry across all four core entities** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4 (residue, closed 2026-07-03)_
   - `useAccounts.ts:39-41`, `useCategories.ts:50`, `useTags.ts:36`, `useRecipients.ts:50` all invalidate-only on update, while every create/delete toasts on the same entities.
   - Fix: pick one convention — most likely add an update-success toast to match create/delete, applied consistently across all four hooks.
 
-- [ ] **No background-refetch cue on placeholderData lists, and sonner announces errors at the same politeness as info** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **No background-refetch cue on placeholderData lists, and sonner announces errors at the same politeness as info** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4 (residue, closed 2026-07-03)_
   - Only `isFetchingMore` + refresh-button spinners exist as a background-fetch cue — matters mainly right after an import, when lists silently show pre-import data until the refetch lands. Separately, `ui/sonner.tsx` has no politeness override, so it inherits sonner's default `aria-live="polite"` for every toast, including errors that should be assertive.
   - Fix: add a subtle background-refetch indicator; override sonner's `aria-live` to `assertive` for error toasts specifically.
 
-- [ ] **Dashboard monthly-summary queries don't feed the page's error subtitle, and FxStatusBanner has no inline refresh** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Dashboard monthly-summary queries don't feed the page's error subtitle, and FxStatusBanner has no inline refresh** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4 (residue, closed 2026-07-03)_
   - `DashboardPage.tsx:88,97` don't destructure `error` from the monthly-summary queries (the page-level error subtitle at `:348` covers the others), so an errored monthly chart renders empty rather than as an error. Separately, ⏬ FxStatusBanner shows staleness with an as-of date (good) but the refresh action lives only on ExchangeRatesPage, with no inline link from the banner itself.
   - Fix: wire the monthly-summary `error` into the page subtitle; add an inline refresh link/button to FxStatusBanner.
@@ -3908,37 +4055,44 @@ look-changing one.
   - `crypto.noCrypto` / `stocks.noStocks` / `savings.noAccounts` / `realestate.noProperties` / `portfolio.noInvestments` all have no CTA, while peer surfaces guide the user (`transactions.noTransactions` "…Import a CSV", `watchlist.empty`, `accounts.emptyDescription`).
   - Fix: give the five portfolio empty states a CTA matching their peers (e.g. "Add your first holding" / link to the relevant import).
 
-- [ ] **belegging vs positie: nl portfolio terminology is split, mirroring an EN holding/investment inconsistency** 🔽 🔎 verified-present 2026-07-11
+- [ ] **belegging vs positie: nl portfolio terminology is split, mirroring an EN holding/investment inconsistency** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - nl.json counts: belegging(en) ~57 · positie(s) ~27 · effecten ~10 (correct Belgian usage for securities) · "holding" untranslated ×1. The split mirrors EN's own holding-vs-investment inconsistency (`portfolio.holdings` vs `portfolio.investments`) — standardize EN first. Same-surface mix to fix regardless: `invDetail.breakdown` "Beleggingsoverzicht" vs `invDetail.byAccount` "Posities per rekening".
   - Fix: standardize EN terminology (see the separate EN Investment-vs-Holding finding), then let nl keep `belegging` as the primary line-item term (matches `nav.investments`) with `positie` reserved for open/closed-position contexts.
 
-- [ ] **Truncation gaps on long entity names in Recipients, Watchlist, and Categories** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Truncation gaps on long entity names in Recipients, Watchlist, and Categories** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - `RecipientsPage.tsx:159-171` — name + merge-target render unbounded in a flex row (no `truncate`/`min-w-0`); `WatchlistPage.tsx:174-182` — CardTitle company name competes with the right-hand percentage with no truncation; `CategoriesPage.tsx:213-219` — the detail Badge is unclamped (though the description below it correctly uses `truncate max-w-[200px]`).
   - Fix: add `truncate min-w-0` (plus a `title` attribute) to the three sites.
 
-- [ ] **Chart date-pattern drift: month-first vs day-first, and three different year-abbreviation styles** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Chart date-pattern drift: month-first vs day-first, and three different year-abbreviation styles** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - `ForecastInnerRolling.tsx:53` "MMM d" is the lone month-first outlier (everything else in the app is day-first); PerformancePage tooltips use "dd MMM yyyy" vs `BankBalancesWidget:238`'s "d MMM yy"; `statisticsUtils.ts:24,32` ships both "MMM yyyy" and "MMM yy".
   - Fix: standardize on one day-first pattern and one year-abbreviation convention; centralize in `statisticsUtils.ts`.
 
-- [ ] **Dialog-footer button variant/verb drift: ghost vs outline cancel buttons, and "Save" vs verb-label mixing** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Dialog-footer button variant/verb drift: ghost vs outline cancel buttons, and "Save" vs verb-label mixing** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - Cancel is `variant="ghost"` in the bulk dialogs plus `MarkAsFiledDialog.tsx:77`, against an `outline` majority elsewhere; `ExportDialog.tsx:390-391`'s primary action is the only non-default dialog primary (`outline`+`sm`); "Save" (`EditPortfolioTxnDialog:357`) vs verb-labels like `addPortTxn.record` "Record" mix within the same dialog family.
   - Fix: standardize cancel on `outline`, standardize submit-button verb per flow (edit = "Save", create = the domain verb).
 
-- [ ] **Empty-state punctuation drift: some end in a period, others don't, for the identical sentence pattern** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Empty-state punctuation drift: some end in a period, others don't, for the identical sentence pattern** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - "No categories yet." / "No recipients yet." (period) vs "No investments yet" / "No conversations yet" (no period) — same sentence shape, inconsistent punctuation.
   - Fix: pick one convention (no trailing period matches the house's general UI-copy style) and sweep.
 
-- [ ] **CardContent padding overrides are scattered across many values — wide but victimless drift** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **CardContent padding overrides are scattered across many values — wide but victimless drift** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - `pt-6` ×19, `px-4` ×23, `pb-3 px-4` ×21, `p-3` ×7, `py-4` ×8, … — no single value dominates. Related nit: `onboarding.categories.selectAll`/`deselectAll` render in Title Case amid an otherwise sentence-case UI.
   - Fix: low priority — fold into any future CardContent-variant pass rather than a standalone sweep; fix the two Title Case strings alongside any other copy sweep.
 
-- [ ] **`leading-none` sits on wrap-capable text in AlertTitle and Label — long Dutch strings risk colliding line boxes at high zoom** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **`leading-none` sits on wrap-capable text in AlertTitle and Label — long Dutch strings risk colliding line boxes at high zoom** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U6 (residue, closed 2026-07-03)_
   - `ui/alert.tsx:39` (AlertTitle) and `ui/label.tsx:8` (Label) both use `leading-none`; wrapped Dutch strings at 125-150% browser zoom will collide line boxes since `leading-none` leaves no room between wrapped lines.
   - Fix: drop `leading-none` in favor of a small positive line-height (e.g. `leading-tight`) on these two wrap-capable text roles.
@@ -3958,7 +4112,8 @@ look-changing one.
   - `apps/frontend/src/components/tax/MarkAsFiledDialog.tsx:77` — Cancel calls `setOpen(false)` directly, never `handleOpenChange` (`:43-46`, where `setReference('')` lives); Radix fires `onOpenChange` only for its own dismiss paths (Esc/overlay/✕), not a programmatic state flip. Type a reference → Cancel → reopen shows the stale reference; confirming then files the year with a value the user thought they discarded (stored verbatim, `:37-39`).
   - Fix: route Cancel through `handleOpenChange(false)` so all close paths share the reset.
 
-- [ ] **Bulk success toasts report only the server-side count — no reconciliation against what the user selected, and the export toast has no count at all** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Bulk success toasts report only the server-side count — no reconciliation against what the user selected, and the export toast has no count at all** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R1_
   - `BulkDeleteResult`/`BulkUpdateResult` are `{deleted}`/`{updated}` only (`apps/frontend/src/types/api.ts:571-577`) and the toasts echo them ("Deleted {n}"/"Updated {n}", `useTransactions.ts:257/275`). In filter-mode the bar advertises `effectiveCount = totalMatching` as "N selected" (`BulkActionsBar.tsx:76`); if the server affects fewer rows (concurrent edits), the toast silently shows the smaller number with no "X of Y" delta. The export toast (`txPage.bulk.exported` "Export ready", `:293`) carries no count.
   - Fix: surface requested-vs-affected when they differ ("Updated 80 of 100 — 20 unchanged"; needs the backend to return a requested/skipped count); add the row count to the export toast.
@@ -3968,7 +4123,8 @@ look-changing one.
   - Neither dialog renders a `<Label>` for its combobox (`BulkRecipientDialog.tsx:44-49`, `BulkRecategorizeDialog.tsx:43-48`), and the combobox triggers carry `role="combobox"` with no `aria-label`/`aria-labelledby` (`RecipientCombobox.tsx:38-44`, `CategoryCombobox.tsx:30-36`) — a screen reader hears only "Select recipient…" with no field name. Sibling BulkExportDialog does it right (`<Label htmlFor>` on its radio options, `BulkExportDialog.tsx:45-50`).
   - Fix: add a visible `<Label htmlFor>` (or `aria-label` on the trigger) naming the field.
 
-- [ ] **Native menu / dock / dialog language tracks the OS locale, not the in-app language setting — and never rebuilds when the user switches language** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Native menu / dock / dialog language tracks the OS locale, not the in-app language setting — and never rebuilds when the user switches language** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R2_
   - The native menu is built from the Electron-side `t()`, whose dictionary is chosen once at boot purely from `app.getLocale()` (`packaging/electron/main.js:18` maps nl-prefixed OS locales to Dutch, everything else to English; loaded once in `initI18n`, `:51`). `setupApplicationMenu()` (`:2890`) and `setupDockMenu()` (`:2983`) run exactly once at launch (`:3118-3119`), and no IPC re-runs them on language change (grep: only `getLocale` at `:18`). The in-app language is an independent user preference (`App.tsx:117` reads `appSettings.language ?? 'en'`). Net effect: an English-locale Mac set to Dutch in-app shows a fully Dutch UI under an all-English menu bar, dock menu, and native dialogs — and vice-versa; runtime language switches never touch the native chrome.
   - Fix: seed the Electron-side language from persisted `appSettings.language` instead of `app.getLocale()`, and add an `app:language-changed` IPC from the LanguageContext setter that reloads the dictionary and re-runs `setupApplicationMenu()`/`setupDockMenu()`.
@@ -3978,12 +4134,14 @@ look-changing one.
   - No `webContents.on('context-menu', …)` handler exists anywhere in `packaging/electron` (grep clean), and `webPreferences` (`main.js:1503-1509`) sets no spellcheck/menu config. Copy/paste exist only as Edit-menu roles (`:2931-2939`) and keyboard shortcuts, so right-clicking any text field — the dbEditor WHERE box and cell editors, the AI-chat composer, every search box — shows nothing; and since Electron's default spellcheck is ON, misspelling underlines appear with no way to reach the suggestions. Conspicuous because the app ships bespoke right-click menus for data rows (`contextMenu.*`, `en.json:561-568`, used in TransactionsTable), setting an expectation plain inputs then break.
   - Fix: add a `context-menu` handler on `mainWindow.webContents` building an edit menu from `params` (Cut/Copy/Paste/Select All gated on `params.isEditable`/`editFlags`, plus `params.dictionarySuggestions` + add-to-dictionary); localize labels via the existing async `t()` loader.
 
-- [ ] **dbEditor: staged cell edits cannot be reverted individually — changing your mind on one cell forces a global "Discard changes"** 🔽 🔎 verified-present 2026-07-11
+- [ ] **dbEditor: staged cell edits cannot be reverted individually — changing your mind on one cell forces a global "Discard changes"** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R2_
   - `TableDataEditorPage.tsx`: new rows have a per-row remove (`:419-420`) and delete-marks toggle off (`toggleDelete` `:227-233`, undo affordance `:447-449`), but an edited cell has no revert-to-original path — `EditableCell` (`:67-136`) offers Set-NULL (`:124-131`) but re-opening a dirty cell re-seeds the editor with the *edited* value (`:97`). The only undo for one edit among many is `discardAll()` (`:239-243`), which also nukes every other pending insert/delete/edit; the commit preview (`:504-529`) is likewise all-or-nothing.
   - Fix: when a cell is dirty, render a small revert affordance (e.g. `Undo2`) that deletes just that column from the staged edits; optionally let the preview dialog exclude individual statements before commit.
 
-- [ ] **Native menu items use ASCII "..." instead of the "…" ellipsis glyph — the HIG-governed surface of the already-filed double-hyphen habit** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Native menu items use ASCII "..." instead of the "…" ellipsis glyph — the HIG-governed surface of the already-filed double-hyphen habit** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R2_
   - `i18n/source/en.json:1186` `"menu.importCsv": "Import CSV..."` and `:1189` `"menu.settings": "Settings..."` (mirrored in nl.json) ship three periods where the macOS HIG specifies the single `…` glyph for menu items opening further UI — exactly the "Apple-polished" convention the app targets. The same `...` habit appears in-app (`dbEditor.committing`, `contextMenu.delete`, `importReview.committing`).
   - Fix: replace `...` with `…` in the two `menu.*` keys (and sweep the in-app `...` strings) in en.json + nl.json — fold into the em-dash typography sweep already filed.
@@ -3993,12 +4151,14 @@ look-changing one.
   - `createWindow()` (`main.js:1485-1510`) never sets `backgroundColor`, so Electron defaults to opaque white. Boot is covered by the theme-aware splash (`:3127`) and on macOS the `vibrancy: 'under-window'` material (`:1500`) masks the default — but the vibrancy block is darwin-only. On Windows/Linux, and on any full document load bypassing the splash (View → Reload role `:2951` / ⌘R), a dark-theme user gets a white frame before the app paints.
   - Fix: set `backgroundColor` from the persisted splash theme (`readSplashTheme`/`SPLASH_THEME_KEY` already exist — convert the stored HSL to hex) so the pre-paint frame matches the active theme on every platform.
 
-- [ ] **Planned-payments dock badge is macOS-only — Windows/Linux users get no due-count indicator at all** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Planned-payments dock badge is macOS-only — Windows/Linux users get no due-count indicator at all** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R2_
   - `app:set-badge` (`main.js:3000-3008`) early-returns unless `process.platform === 'darwin' && app.dock`, then calls `app.dock.setBadge()`. The renderer's planned-payments due count therefore silently does nothing off macOS (Windows taskbar overlay and Linux Unity badge both unsupported by this call).
   - Fix: use cross-platform `app.setBadgeCount(clamped)` (macOS dock number, Linux Unity count) and/or `setOverlayIcon` on Windows instead of the darwin-gated `app.dock.setBadge`.
 
-- [ ] **`setAboutPanelOptions` is never called and the About item is macOS-only — Windows/Linux have no About/version surface in the menu** ⏬ 🔎 verified-present 2026-07-11 *(native sibling of the filed in-app "About with no about" finding)*
+- [ ] **`setAboutPanelOptions` is never called and the About item is macOS-only — Windows/Linux have no About/version surface in the menu** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11 *(native sibling of the filed in-app "About with no about" finding)*
   - ↪ _from: UI/UX review 2026-07-10 · Wave R2_
   - `app.setAboutPanelOptions` appears nowhere (grep clean) and `{ role: 'about' }` lives only in the darwin-guarded app submenu (`main.js:2892-2895`). macOS shows a bare Info.plist panel with no branded copyright/credits; Windows/Linux menus have no About entry — no in-menu way to see the running version.
   - Fix: call `app.setAboutPanelOptions({ applicationName, applicationVersion, copyright })` and add a Help-menu "About Vision" item on non-macOS (opening `app.showAboutPanel()` or the in-app About).
@@ -4028,37 +4188,44 @@ look-changing one.
   - Singular is fine (`owesPage.split` "{n} splitsing", `owesPage.deleteSplit` "Splitsing verwijderen") but the plural uses the infinitive verb: `owesPage.splits` "{n} splitsen", `owesPage.outstandingSplits` "Openstaande splitsen", `owesPage.settleAll.confirmTitle`/`confirmDescription` "openstaande splits(en)". The noun plural of "splitsing" is "splitsingen".
   - Fix: "{n} splitsingen" / "Openstaande splitsingen" / "openstaande splitsingen" at the four sites.
 
-- [ ] **nl: `rebalance` renders "cash" as physical "contant" in four keys and keeps English "cash" in two others** 🔽 🔎 verified-present 2026-07-11
+- [ ] **nl: `rebalance` renders "cash" as physical "contant" in four keys and keeps English "cash" in two others** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - `rebalance.availableCash` "Beschikbaar contant", `rebalance.editor.capCash` "…in te zetten contant", `rebalance.subtitle` "Zet besteedbaar contant in…", `rebalance.totalDeployedHint` "Contant verdeeld over…" — standalone "contant" reads as coins/notes, unnatural for investable liquidity — while `rebalance.title` "Cash-bewust herbalanceren" and `rebalance.noSellNote` "Cash-bewust:" keep "cash".
   - Fix: standardize on "cash" ("Beschikbare cash", "besteedbare cash") to match the title's established usage.
 
-- [ ] **nl: "koers" vs "prijs" for security prices, and three different refresh verbs, across the investment surfaces** 🔽 🔎 verified-present 2026-07-11
+- [ ] **nl: "koers" vs "prijs" for security prices, and three different refresh verbs, across the investment surfaces** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - Price: `addInv.label.currentPrice` "Huidige **koers** per eenheid" vs `addInv.label.pricePerUnit` "**Prijs** per eenheid"; `portfolio.refreshPrices` "**Koersen** verversen" vs `portfolio.stalePricesBanner` "**prijs**(en) zijn verouderd" vs `performance.emptyDescription`/`networth.emptyDescription` "Vernieuw **beleggingsprijzen**". Refresh verb: "verversen" (`portfolio.refreshPrices`, `exchangeRates.refresh`) vs "vernieuwen" (`portfolio.refreshPricesFailed`, `exchangeRates.refreshError`) vs "bijwerken" (`portfolio.refreshPricesFailedTitle`) — three verbs for one action, two of them inside the same success/failure toast pair.
   - Fix: "koers(en)" for quoted-security prices throughout; one refresh verb (suggest "vernieuwen") across portfolio/addInv/exchangeRates/performance/networth.
 
-- [ ] **nl: "portfolio" vs "portefeuille" split across portfolio/performance namespaces** 🔽 🔎 verified-present 2026-07-11
+- [ ] **nl: "portfolio" vs "portefeuille" split across portfolio/performance namespaces** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - `portfolio.overviewTitle` "Portefeuille Overzicht" and `research.forecast.title` "Portefeuilleprognose" vs `portfolio.portfolioValue` "Portfoliowaarde", `portfolio.deleteTxnFailedTitle` "portfoliotransactie", and the whole `performance` namespace ("Portfoliorendement", "Portfoliowaarde over tijd", `performance.relativePortfolio` "Portfolio").
   - Fix: pick one — "portefeuille" is the standard Dutch — and apply consistently (note `portfolio.overviewTitle`'s "Portefeuille Overzicht" should then also become the compound "Portefeuilleoverzicht").
 
-- [ ] **nl: English time-phrase calques — "over tijd" ×3 and "all time" translated three different ways** 🔽 🔎 verified-present 2026-07-11
+- [ ] **nl: English time-phrase calques — "over tijd" ×3 and "all time" translated three different ways** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - "over tijd" (anglicism): `networth.overTime` "Nettovermogen over tijd", `performance.valueOverTime` "Portfoliowaarde over tijd", `statsPage.subtitle` "…nettosaldo over tijd" — while the natural "in de loop van de tijd" already appears in `statsPage.chart.monthlyDesc` and `customChart.selectDesc`. "all time": `performance.period.all` + `insights.allTime` "Alle tijd" vs `networth.allTime` "alle tijden" vs `insights.topBySpendDesc` "over alle tijd".
   - Fix: "over tijd" → "in de loop van de tijd" (or restructure: "Verloop van je nettovermogen"); standardize "all time" as "hele periode".
 
-- [ ] **nl: `research` translates "rebase" two ways and mints the undecipherable abbreviation "VKS-rendement"** 🔽 🔎 verified-present 2026-07-11
+- [ ] **nl: `research` translates "rebase" two ways and mints the undecipherable abbreviation "VKS-rendement"** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - Rebase: `research.builder.rebase` "Herbaseren naar 100" + `research.builder.preset.rebased` "Herbaseerde overlay" (anglicism) vs `research.compare.rebased` "Herschaald naar 100" + `research.compare.subtitle`/`research.entry.compare` "herschaald naar 100". FCF: `research.metric.fcfYield` "VKS-rendement" — a homemade abbreviation no user will decode, while neighbours spell out "Vrije kasstroom" (`research.metric.freeCashFlow`).
   - Fix: "herschaald naar 100" everywhere (or "geïndexeerd naar 100"); "VKS-rendement" → "FCF-rendement" (FCF is the recognized term, kept in `market`/`research` peers).
 
-- [ ] **nl: `tax` surcharge term flips ("opcentiemen" vs "toeslag") plus two spelling/agreement slips** 🔽 🔎 verified-present 2026-07-11
+- [ ] **nl: `tax` surcharge term flips ("opcentiemen" vs "toeslag") plus two spelling/agreement slips** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - Surcharge: "gemeentelijke opcentiemen" (correct, used in `tax.pit.row.communalSurcharge`, `tax.card.totalPIT.desc`, `tax.profile.section.region.desc`) vs "Gemeentelijke **toeslag**" (`tax.profile.field.communalSurcharge`, `tax.profile.section.region.title`). Spelling: "belasting**s**vrije som" (`tax.profile.field.personalExemption`, `tax.profile.dependents.children.desc`) vs standard "belastingvrije som" (`tax.profile.field.isolatedParent.desc` has it right). Agreement: `tax.suggestions.multipleResidencesNote` "staat **in de** algemene belastingtotaal" (het-woord → "in het"); `insights.detailsSubtitle` "gemiddelde transactiebedrag" → "gemiddeld transactiebedrag".
   - Fix: "opcentiemen" throughout; "belastingvrije som"; correct the two agreement errors.
 
-- [ ] **nl nits: verbatim-duplicate parenthetical, dropped qualifier, and "belegging"-labels vs "investering"-toasts** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **nl nits: verbatim-duplicate parenthetical, dropped qualifier, and "belegging"-labels vs "investering"-toasts** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - `tax.profile.field.cadastralIncome` — en "Cadastral income (kadastraal inkomen)" → nl "Kadastraal inkomen (kadastraal inkomen)" (the parenthetical duplicates the term verbatim). · `tax.profile.field.disabilityExemption.spouse` "Invaliditeitsvrijstelling (Partner)" drops "Spouse". · `portfolio` labels say "belegging" (`portfolio.addInvestment` "Belegging toevoegen") but every failure toast says "investering" (`portfolio.createInvestmentFailed(Title)`, `deleteInvestmentFailed`, `updateInvestmentFailed`, `refreshedPrices` "investering(en)") — a separate split from the filed belegging/positie one.
   - Fix: drop the nl parenthetical; "(Echtgenoot/partner)"; use "belegging" in the toasts.
@@ -4073,7 +4240,8 @@ look-changing one.
   - `components/dashboard/NetSummaryCard.tsx:106-117` (added post-audit in 5120a7f): each segment gets `aria-label={t('dashboard.stat.income')}` / `…spending` — literally just the word. The information is the segment *width* (`incomePct`/`spendingPct`), never stated, so a screen reader hears "Income, image" with no magnitude (the raw amounts do exist as adjacent text at `:122/:125`, limiting harm).
   - Fix: compose value into the label (`"Income: €3,210 (64%)"`) or mark segments `aria-hidden` and give the whole bar one summarizing `role="img"` label, since the amounts are announced below anyway.
 
-- [ ] **`formatDateWithAppSettings` drops the locale, so its `PPP` fallback renders English month names to Dutch users** 🔽 🔎 verified-present 2026-08-10
+- [ ] **`formatDateWithAppSettings` drops the locale, so its `PPP` fallback renders English month names to Dutch users** 🔽
+  - Tracking: 🔎 verified-present 2026-08-10
   - ↪ _from: Orchestration session 2026-08-10 · forecast timezone implementer noticed it in passing; verified by the orchestrator against the current tree, not probed in a running app_
   - `apps/frontend/src/components/shared/dateUtils.ts:117-119` — `formatDateWithAppSettings(date, appDateFormat)` takes no `locale` parameter at all and calls `formatDate(date, pattern)`, whose `locale` therefore always defaults to `"en-US"` (`:17`). Its sibling `formatMonthYearWithAppSettings` (`:121-135`) *does* accept and thread a locale, so this is drift between two neighbouring helpers, not a deliberate choice.
   - Latent rather than live: `appDateFormatToDateFnsPattern` (`:106-115`) only returns the locale-sensitive `"PPP"` on its `default:` branch, so the bug surfaces only when `appDateFormat` is unset or holds a value outside the five known patterns — the five numeric patterns are locale-free and render identically. Blast radius is every caller of the helper (the forecast chart axis/tooltip at `pages/research/PortfolioForecastPage.tsx:283,285` among them), not one page.
@@ -4089,7 +4257,7 @@ look-changing one.
   - ↪ _from: Orchestration session 2026-07-27 · repo-layer refactor follow-up_
   - `commit.js:156,191,204,206` issue `SAVEPOINT`/`RELEASE`/`ROLLBACK TO` directly with a digits-only regex guard on the interpolated identifier; the purpose-built helper would replace both the ceremony and the guard. Deliberately not switched during 1cb2cc7 (#131) (behavior-preserving round); do it with its own test pass.
 
-- [ ] **Seven `mockTxConnection` consumers still prime the module `query` spy directly, overriding ambient routing** ⏬
+- [x] **Seven `mockTxConnection` consumers still prime the module `query` spy directly, overriding ambient routing** ⏬
   - ↪ _from: Orchestration session 2026-07-27 · repo-layer refactor follow-up_
   - `reconcileService`/`openingBalanceService`/`portfolioImportCommit` tests pass throwaway clients and prime `query` directly — they pass today only because direct priming overrides the (1cb2cc7 (#131)) routing, so they don't actually exercise the ambient path their services use in production. Also: `accountMergeService.test.js`'s `primePreview` uses `query.mockImplementation(...)`, which permanently replaces routing for the rest of the file (safe only by describe-block ordering). Rewire onto `mockTxConnection()`/`poolQuery` when those suites are next touched.
 
@@ -4269,7 +4437,8 @@ look-changing one.
   - evidence: routes/transactions.js:468-492 builds `SET` clauses and runs `UPDATE transactions … RETURNING` inside the handler; :318-360 resolves tag slugs and does `INSERT INTO transaction_tags … unnest/CROSS JOIN` inline in `withTransaction`; :168-205 name→id resolution SQL; :594-597 post-create auto-link orchestration. This is exactly the repository/service work ADR-067 moved out of every other route.
   - fix: extract bulk-update/bulk-tag/name-resolution into `transactionService` (or a `transactionBulkService`) and shrink the route to validate→call→`res.ok`.
 
-- [ ] **controllers/ is a one-file orphan layer that dodges the boundary rule** 🔼 🔎 verified-present 2026-07-11
+- [ ] **controllers/ is a one-file orphan layer that dodges the boundary rule** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: controllers/investmentController.js (524 lines) is the only controller in the codebase; its exports are `(req, res)` Express handlers with 17 `res.ok()` calls (e.g. :180-201, :253-254), i.e. route code by another name — but because it sits outside `src/routes/**` the ESLint files-glob (eslint.config.js:118) never applies, so its direct `investmentRepository`/`portfolioTransactionRepository` imports (:14-15) are unlinted. routes/investments.js is a thin dispatch table over it.
   - fix: consolidate toward the codebase-wide pattern — extract the logic into `services/investmentService.js` (+ existing services/portfolio/*), turn the handlers into routes/investments.js bodies, and delete controllers/; alternatively at minimum add `src/controllers/**` to the ESLint boundary glob.
@@ -4279,28 +4448,33 @@ look-changing one.
   - evidence: routes/transactions.js:168-205 matches recipients on `normalized_name` and **throws ValidationError** on unknown names; routes/plannedTransactions.js:~44-75 reimplements the same pair of helpers matching on `UPPER(name)` and **silently drops** unknown names. Both mutate `fields` via in-place `delete fields.recipient_name` — the documented PATCH pattern mandates immutable destructuring (docs/reference/code-patterns.md "PATCH sanitization", never in-place delete).
   - fix: one shared service-level `resolveNamesToIds(fields, {strict})` used by both routes, returning a new object.
 
-- [ ] **middleware/validation.js is 90% pure helpers, and repositories import from middleware/** 🔼 🔎 verified-present 2026-07-11
+- [ ] **middleware/validation.js is 90% pure helpers, and repositories import from middleware/** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: of its 10 exports (middleware/validation.js:49-154) only `validateIdParam` is Express middleware; the rest (`sanitizeUpdateFields`, `validateId`, `assertYmd`, `validatePagination`, …) are pure validators. repositories/transactionRepository.js:14 and repositories/plannedTransactionRepository.js:8 import `sanitizeUpdateFields` from middleware/ — the data layer depending on the HTTP-middleware layer.
   - fix: move the pure validators to `lib/validation.js` and keep only `validateIdParam` in middleware/.
 
-- [ ] **Repository export/API style split: 19 of 42 files abandon the documented default-export-object pattern** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Repository export/API style split: 19 of 42 files abandon the documented default-export-object pattern** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `docs/reference/code-patterns.md:369+` prescribes a default-exported `entityRepository` object with `getAll/getById/create/update/hardDelete` and `rows[0] || null`. 19 repo files have no default export and use loose named functions with divergent verbs: `importBatchRepository.js:15,52` (`listBatches`/`getBatch`), `providerApiKeyRepository.js:15,27,43` (`listAll`/`upsert`/`remove`), `rawTransactionRepository.js:29-311` (seven per-bank repo objects + free functions). Deletion is named `hardDelete` (6), `delete` (4), `softDelete` (2), `remove` (2), `deleteById` (2) across the layer.
   - fix: document the named-function style as an accepted second form (or converge), and standardize get/list and delete verb naming in a mechanical rename pass.
 
-- [ ] **Business/validation logic living inside repositories** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Business/validation logic living inside repositories** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `repositories/portfolioTxRepo.common.js:271` (`validateSellUnitsAvailability`) plus `normalizeTransactionPayload` per its header — domain validation/normalization in the repo layer; `repositories/splitRepository.js:18` is the only repo importing HTTP-flavored `ValidationError/NotFoundError` from `middleware/errorHandler.js` and also owns audit writing (`splitRepository.js:477`); `repositories/plannedTransactionRepository.js:507` (`updateWithLoanSchedule`) coordinates a multi-entity write that belongs in a service.
   - fix: hoist validation/normalization and audit orchestration into the corresponding services, leaving repos as parameterized SQL only.
   - Verification (2026-07-03, Wave A1 residue): splitRepository throws these HTTP-flavored errors at :86,:105,:127,:151,:333,:347 — sibling repos `portfolioTxRepo.common.js:101`/`aiChatRepository.js:25` instead mint layer-neutral coded errors, which is the cleaner seam to converge on.
 
-- [ ] **YMD date helpers re-implemented locally ~15 times despite canonical lib/timezone.js** 🔼 🔎 verified-present 2026-07-11
+- [ ] **YMD date helpers re-implemented locally ~15 times despite canonical lib/timezone.js** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `lib/timezone.js:96-137` exports `toAppDateString/todayAppDateString/addDaysYmd`, yet local UTC-slice helpers recur: `services/plannedMatchService.js:33,45` (`toYmd`,`ymdDiffDays`), `services/quoteBackfillService.js:348` (`_daysBetween`), `services/aiChat/tools/planned.js:30`, `services/prices/priceCache.js:33`, `services/research/quotaGovernor.js:42`, `services/research/adapters/finnhubAdapter.js:28`, `services/calculations/forecast/_densify.js:24`, `services/calculations/forecast/methods/prophetLite.js:109`, plus inline `toISOString().split('T')[0]` in `deduplication.js:13,44`, `recurringDetectionService.js:251`, `importPipeline/adapters/revolut.js:69`.
   - fix: add `ymdDiffDays`/`msToYmdUtc` to `lib/timezone.js` (or a `lib/ymd.js`) and sweep the local copies.
 
-- [ ] **Two import pipelines are parallel-evolution clones with no shared machinery** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Two import pipelines are parallel-evolution clones with no shared machinery** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `services/importPipeline/{stage,validate,commit,index}.js` and `services/portfolioImportPipeline/{stage,validate,commit,index}.js` mirror each other file-for-file — same `STAGE_INSERT_CHUNK = 500`, same batch-row lifecycle (`importPipeline/stage.js:1-30` vs `portfolioImportPipeline/stage.js:1-30`), duplicated createBatch/chunked-insert/status-transition scaffolding against parallel `import_batches`/`portfolio_import_batches` tables.
   - fix: extract shared staging/batch-lifecycle helpers (chunked insert, batch create/transition) parameterized by table names; keep domain validate/commit logic separate.
@@ -4310,12 +4484,14 @@ look-changing one.
   - evidence: services throw 53 `ValidationError`/14 `NotFoundError`/5 `ConflictError` (from `middleware/errorHandler.js:22-71`) but also 40 generic `Error` — concentrated in `services/attachmentService.js` (5), `services/prices/priceProviderRegistry.js` (5), `services/dataImportService.js` (3), research adapters — plus two parallel hierarchies that do NOT extend `AppError`: `services/aiChatService.js:29` (`AiChatServiceError`) and `services/aiChat/tools/_validate.js:11` (`ToolValidationError`), which need bespoke handling instead of the central error middleware mapping.
   - fix: make the aiChat error classes extend `AppError` and convert user-facing generic `Error` throws to typed errors; reserve bare `Error` for programmer errors.
 
-- [ ] **Server-state queries defined inline in components/pages instead of hooks (146 `useQuery` call sites outside hooks/)** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Server-state queries defined inline in components/pages instead of hooks (146 `useQuery` call sites outside hooks/)** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: `grep -rn 'useQuery' components pages features` (excl. tests) = 146 hits with 93 inline `queryKey:` literals, e.g. `["research-scorecard", symbol]`, `['admin','provider-health']`, `["recipient-insights", …]` — versus the documented pattern (docs/reference/code-patterns.md:667-749) of domain hooks wrapping `useQuery`. Two layering conventions coexist with no rule for which applies; the admin/research surfaces mostly skip the hooks layer entirely. (Import-pattern check only — component internals are Wave A4.)
   - fix: adopt a rule ("every server resource gets a hook in hooks/ or features/*/hooks/") and fold the admin/research inline queries into hooks as they're touched; pairs with the key factory above.
 
-- [ ] **BelgianTaxProfileContext is a 611-line context holding server-persisted domain state, exempt from both the zustand consolidation and React Query** 🔼 🔎 verified-present 2026-07-11
+- [ ] **BelgianTaxProfileContext is a 611-line context holding server-persisted domain state, exempt from both the zustand consolidation and React Query** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: `apps/frontend/src/contexts/BelgianTaxProfileContext.tsx:1-100` — profile + per-year snapshots + audit metas persisted via `apiClient` with hand-rolled debounced saves (same machinery Settings/AppSettings/Theme had before `stores/settingsStore.ts:1-16` consolidated them); it stayed a raw context providing ~15 values (profile, calculation, snapshots, snapshotMetas, viewedYear, …) so any consumer re-renders on all of them. It also acts as a barrel, re-exporting ~25 pure-lib symbols (`BELGIAN_TAX_BRACKETS` etc.) at lines 44-85 behind an eslint-disable for react-refresh.
   - fix: move the persisted blob into the settings store (or React Query on the settings key) with the existing provider-for-side-effects pattern, and point constant importers at `@/lib/belgianTax` directly.
@@ -4326,28 +4502,33 @@ look-changing one.
   - evidence: apps/frontend/src/components/shared/VirtualDataTable.tsx props interface spans ~25 props with two operating modes multiplexed (local-sort vs server-sort via `onSortChange`/`sortKeyProp`/`sortDirProp`; local vs server search) plus 8 row-interaction callbacks. features/transactions/components/TransactionsTable.tsx declares ~29 props, most drilled untouched from pages/TransactionsPage.tsx:425 into VirtualDataTable (search, pagination, sort, suggestions).
   - fix: split into a table core + a `serverMode` config object (or context provider for search/sort/pagination) so intermediate components stop re-declaring the pass-through surface.
 
-- [ ] **ImportReviewPage and TableDataEditorPage orchestrate 4-5 inline mutations each — worst pages/ data-layer offenders** 🔼 🔎 verified-present 2026-07-11
+- [ ] **ImportReviewPage and TableDataEditorPage orchestrate 4-5 inline mutations each — worst pages/ data-layer offenders** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: pages/ImportReviewPage.tsx:96-117 (1 useQuery + 4 useMutations: override, categoryOverride, persistDefault, commit) and pages/admin/TableDataEditorPage.tsx:161-267 (useQuery + preview/commit mutations amid a 544-line page); pages/research/{WatchlistPage,ResearchHomePage,MarketLookupPage}.tsx each hold 5 query/mutation sites. Complements A3's inline-useQuery count — these are the pages where a feature module (`features/imports` already exists next door) would absorb the most.
   - fix: move ImportReviewPage's query+mutations into features/imports hooks; give admin/research thin data hooks per page.
 
-- [ ] **MarketOverviewPage carries ~850 lines of static market-view config inside the page file** 🔼 🔎 verified-present 2026-07-11
+- [x] **MarketOverviewPage carries ~850 lines of static market-view config inside the page file** 🔼 ✅ 2026-08-25 · extracted the region/sector view universe and aligned option tables into an adjacent typed `marketViews.ts` module; added data-integrity tests and updated the research feature map.
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: pages/research/MarketOverviewPage.tsx is 1111 lines but the component starts at line 929; lines 46-916 are constant data (`REGION_VIEWS` at :46, `SECTOR_VIEWS` at :323, option tables at :893-916). Cohesive logic, wrong altitude — config swamps the code.
   - fix: move the view/option constants to a `marketViews.ts` data module beside the page.
 
-- [ ] **FE hand-written DTOs live in three homes; contract-guard covers only one** 🔼 🔎 verified-present 2026-07-11
+- [ ] **FE hand-written DTOs live in three homes; contract-guard covers only one** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: hand types split across `apps/frontend/src/types/api.ts` (594 lines, guarded by `types/contract-guard.ts:25-35` against generated.ts), `types/{portfolio,research,watchlist,splits,aiChat}.ts` (~760 lines, unguarded), and `lib/api/types.ts` (177 lines, unguarded, imported by 9 modules vs 29 for types/api). Structural duplicate found: `MarketNewsArticle` (lib/api/types.ts:170-177) is field-identical to `ResearchNewsArticle` (types/research.ts:128-135).
   - fix: consolidate lib/api/types.ts into types/ (one DTO home) and extend contract-guard assertions to the portfolio/research families; delete the MarketNewsArticle duplicate.
   - Verification (2026-07-03, Wave A3 residue): more twins found in the same family — `lib/api/market.ts:43/51/65` ↔ `types/research.ts:58/66/28`; a `ForecastMethod` name collides across unrelated domains (`types/research.ts:322`'s union `'parametric'|'block_bootstrap'` vs `lib/api/aggregations.ts:255`'s cashflow interface — rename one); and `AssetClass`/`PortfolioTxnType` are separately declared, with drift, in both `types/api.ts:346-347` and `types/portfolio.ts:6,43`.
 
-- [ ] **Root config/ is half-dead: orphaned drifted copies of frontend configs** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Root config/ is half-dead: orphaned drifted copies of frontend configs** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: `config/tailwind.config.ts` (96 lines, last commit 2026-03-10 a63216eb), `config/eslint.config.js` (27 lines), `config/tsconfig{,.app,.node}.json`, `config/postcss.config.cjs`, `config/components.json` are referenced by nothing — the frontend carries its own actively-maintained copies (apps/frontend/tailwind.config.ts 191 lines, last commit 2026-06-24 6785a3eb; eslint 52 lines) that neither extend nor import them. CLAUDE.md documents `config/` as "shared tsconfig/vite/eslint/tailwind", which is false today; the directory also holds genuinely load-bearing files (`config/alembic.ini` via root package.json:37-42, config.py, gitleaks.toml, commitlint.config.mjs), so live and dead configs are interleaved.
   - fix: delete the dead frontend-config copies (or make apps/frontend actually extend them) and correct the CLAUDE.md description of config/.
 
-- [ ] **Recurrence vocabulary forked: 'bi-weekly' vs 'biweekly', plus in-FE duplicate enum** 🔼 🔎 verified-present 2026-07-11 🔎 partial-899a5220 (#158) 2026-08-10 (DONE — the whole non-breaking half. New `@vision/types/recurrence` module holds one canonical tuple per vocabulary (`PORTFOLIO_RECURRENCE_INTERVALS` hyphenated, `PLANNED_RECURRENCE_PATTERNS` not), following the existing assetClasses/portfolioTxnTypes precedent; the duplicate FE `RecurrenceInterval` is collapsed (`types/api.ts` + `types/portfolio.ts` both now re-export, so every existing import path still resolves and no consumer changed), and the four hand-maintained copies are re-pointed: backend `lib/calculations/recurrence.js` `SUPPORTED_PATTERNS`, `portfolioTxRepo.common.js` `VALID_RECURRENCE_INTERVALS`, `lib/plannedPaymentMapper.ts`. **Zero wire values moved — proven at runtime, not asserted:** both tuples and the derived Set print byte-identical to their previous literals. The definition site now carries the *why*, which the finding didn't have: the hyphen is load-bearing because `'bi-weekly'` in `recurrence_pattern` is rejected by migration 0089's `chk_planned_transactions_recurrence_pattern`, and before that CHECK existed such rows rendered as biweekly but never advanced in the calculator — orchestrator confirmed 0001:98 (PG enum), 0089:92 (the CHECK) and 0089:62 (a prior `'bi-weekly'`→`'biweekly'` data rewrite, i.e. there is already precedent for the migration shape). Verified: backend 3368 green, frontend 2423 green, both typechecks + lint exit 0. LEFT: the **breaking** half only — aligning the two spellings on the wire, which needs a compat mapping on every read path, a data migration, an `ALTER TYPE` on the 0001 enum (whose values cannot be dropped), and an openapi.yaml change plus `generate:types` regeneration of generated.ts. That is a user decision, not a sweep)
+- [ ] **Recurrence vocabulary forked: 'bi-weekly' vs 'biweekly', plus in-FE duplicate enum** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-899a5220 (#158) 2026-08-10 (DONE — the whole non-breaking half. New `@vision/types/recurrence` module holds one canonical tuple per vocabulary (`PORTFOLIO_RECURRENCE_INTERVALS` hyphenated, `PLANNED_RECURRENCE_PATTERNS` not), following the existing assetClasses/portfolioTxnTypes precedent; the duplicate FE `RecurrenceInterval` is collapsed (`types/api.ts` + `types/portfolio.ts` both now re-export, so every existing import path still resolves and no consumer changed), and the four hand-maintained copies are re-pointed: backend `lib/calculations/recurrence.js` `SUPPORTED_PATTERNS`, `portfolioTxRepo.common.js` `VALID_RECURRENCE_INTERVALS`, `lib/plannedPaymentMapper.ts`. **Zero wire values moved — proven at runtime, not asserted:** both tuples and the derived Set print byte-identical to their previous literals. The definition site now carries the *why*, which the finding didn't have: the hyphen is load-bearing because `'bi-weekly'` in `recurrence_pattern` is rejected by migration 0089's `chk_planned_transactions_recurrence_pattern`, and before that CHECK existed such rows rendered as biweekly but never advanced in the calculator — orchestrator confirmed 0001:98 (PG enum), 0089:92 (the CHECK) and 0089:62 (a prior `'bi-weekly'`→`'biweekly'` data rewrite, i.e. there is already precedent for the migration shape). Verified: backend 3368 green, frontend 2423 green, both typechecks + lint exit 0. LEFT: the **breaking** half only — aligning the two spellings on the wire, which needs a compat mapping on every read path, a data migration, an `ALTER TYPE` on the 0001 enum (whose values cannot be dropped), and an openapi.yaml change plus `generate:types` regeneration of generated.ts. That is a user decision, not a sweep)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: portfolio recurrence uses `'bi-weekly'` (apps/frontend/src/types/portfolio.ts:63, types/api.ts:348 — identical `RecurrenceInterval` declared twice in FE — and generated.ts:3352), while planned-transaction recurrence uses `'biweekly'` (apps/node-backend/src/services/calculations/recurrence.js:20 `SUPPORTED_PATTERNS`, FE hooks/usePlannedPayments.ts:22). Two hand-maintained vocabularies for the same concept, differing only in a hyphen — a standing trap for anyone unifying planned/portfolio recurrence.
   - fix: define one shared recurrence-token list in `@vision/types` (breaking-change note: aligning the wire value needs a compat mapping) and delete the duplicate FE declaration.
@@ -4369,12 +4550,14 @@ look-changing one.
   - Fix: fix body text to 211, add the missing Cross-Workspace row; consider extending the CI script to validate the table total too.
   - Verification (2026-06-30): found a bonus instance of the same disease while re-checking — the matrix's Aggregations section header says "(15 endpoints)" (15 actual rows counted), but the Summary table row for Aggregations says 14.
 
-- [ ] **utils/ is vestigial: one dead shim + one misfiled calculation module; lib/ vs utils/ has no actual distinction** 🔽 🔎 verified-present 2026-07-11
+- [ ] **utils/ is vestigial: one dead shim + one misfiled calculation module; lib/ vs utils/ has no actual distinction** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: utils/ contains exactly two files. utils/downsample.js is a re-export shim of `@vision/shared-utils/downsample` with **zero consumers** (the only backend LTTB call site was removed — routes/info/_performanceHelpers.js:74-76 comment). utils/portfolioMath.js is a 300+-line portfolio calculation module (computeMetrics, computeHeatmap, toYmd) consumed by services, repositories, and routes/info — functionally a `services/calculations/` module. Everything else helper-shaped lives in lib/ (17 files, all with ≥1 consumer).
   - fix: delete utils/downsample.js, move portfolioMath.js to services/calculations/ (its documented home per code-patterns.md), remove utils/.
 
-- [ ] **One-line re-export "seam" services are aliased back to repository names at import sites** 🔽 🔎 verified-present 2026-07-11
+- [ ] **One-line re-export "seam" services are aliased back to repository names at import sites** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: services/plannedTransactionService.js is solely `export { default } from '../repositories/plannedTransactionRepository.js'`, and routes/plannedTransactions.js:9 imports it as `plannedTransactionRepository` — so the seam adds a hop without changing what the route "sees"; same import-aliasing in routes/info.js:18 (`infoRepository` from infoService). The seam files themselves are intended (ADR-067), but the aliasing erases the boundary in the code readers actually read.
   - fix: rename import bindings to `…Service` at route call sites; consider making seams that stay pure re-exports for >1 release into real service modules or documenting them as permanent.
@@ -4389,7 +4572,8 @@ look-changing one.
   - evidence: routes/savedCharts.js:125,165 declare `/:id` handlers without `validateIdParam` (used by 11 other route files per the documented route pattern); it hand-rolls `parseChartId` at :25 instead.
   - fix: add `validateIdParam` to the three `/:id` routes and drop the bespoke parser.
 
-- [ ] **lib/parserConfigRoutes.js: route-layer helpers living in lib/** 🔽 🔎 verified-present 2026-07-11
+- [ ] **lib/parserConfigRoutes.js: route-layer helpers living in lib/** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: lib/parserConfigRoutes.js exports `parseParserId(req)` (takes an Express `req`) plus ValidationError-throwing normalizers, shared by routes/importRoutes.js and routes/portfolioImportRoutes.js — HTTP-coupled code in the "pure helpers" dir, with "Routes" in a lib filename.
   - fix: move to `services/customParserConfig…` or a shared module under routes/; lib/ should stay HTTP-agnostic.
@@ -4399,12 +4583,14 @@ look-changing one.
   - evidence: docs/reference/code-patterns.md tells agents to import typed errors `from '../lib/errors.js'` (§Typed Error Classes) — that file does not exist; classes live in middleware/errorHandler.js:22-71. Same doc's "Migration Status (Phase 9)" still claims `services/loanRepaymentService.js`/`recurrenceService.js` are the live implementations — they are deleted and routes/plannedTransactions.js:12-13 imports `services/calculations/` directly. Doc's error envelope `{detail, error_code}` also predates the actual `{ok:false, error:{code,message}}` emitted at middleware/errorHandler.js:126-133. *(Overlaps with the 2026-06-30 §Stale docs code-patterns.md item — fix together.)*
   - fix: refresh those three sections of code-patterns.md (or actually create lib/errors.js and re-export, matching the documented layout).
 
-- [ ] **Flat 44-file top-level services/ namespace with domain strays outside their subdirs** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Flat 44-file top-level services/ namespace with domain strays outside their subdirs** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `services/` top level mixes orchestrators, pure calc (`textNormalization.js`, `deduplication.js`, `bulkSelection.js`), infra (`routeManifest.js`, `materializedViewService.js`, `dbEditor.js`) and ADR-067 seams. Domain strays: `priceProviderService.js`, `providerHealthService.js`, `quoteBackfillService.js` sit beside (not in) `prices/`; `portfolioPerformanceSnapshotService.js`, `portfolioImportBatchService.js` outside `portfolio/`; `aiChatService.js` outside `aiChat/`.
   - fix: move domain strays into their subdirectories and relocate pure-calc/infra modules to `lib/` or `calculations/`; keep top level for cross-domain orchestrators and seams only.
 
-- [ ] **Dead exports (spot-check of biggest modules)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Dead exports (spot-check of biggest modules)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `services/currency/currencyConversionService.js:179` `convertToEur` has no callers anywhere in src (only `convertRowsToEur`/`convertToCurrency` are used); `services/calculations/recurrence.js:88` `getSupportedPatterns` has no callers; `services/quoteBackfillService.js:593` `refreshQuotesForInvestment` is reachable only via the orphan `controllers/investmentController.js:16` (orphan itself reported in A1).
   - fix: delete the two unused exports; fold `refreshQuotesForInvestment` removal into the A1 controller cleanup.
@@ -4414,12 +4600,14 @@ look-changing one.
   - evidence: the step function `calculateNextDate` is properly shared, but the guard-bounded expand-to-horizon loop exists twice with different date semantics: `services/aiChat/tools/planned.js:298-320` (UTC `toISOString().slice(0,10)`, guard 500) vs `services/calculations/aggregation/cashflowForecast.js:129` (APP_TIMEZONE-aware per its header comment at lines 22-30).
   - fix: export an `expandOccurrences(row, horizonYmd)` helper from `calculations/recurrence.js` and use it in both.
 
-- [ ] **contexts/ directory is misnamed post-zustand-migration: only 4 of 8 files create a context; one is a plain hook** 🔽 🔎 verified-present 2026-07-11
+- [ ] **contexts/ directory is misnamed post-zustand-migration: only 4 of 8 files create a context; one is a plain hook** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: `grep -l createContext contexts/*.tsx` → only Language, BelgianTaxProfile, PageTitle, SettingsPreload. `contexts/SettingsContext.tsx:34-47`, `contexts/AppSettingsContext.tsx:45-47`, ThemeContext are hydrate/persist shims that read `useSettingsStore` (documented design, settingsStore.ts:9-15 — not overlap, but the files keep context-era names and re-export types "so existing consumers don't change imports", SettingsContext.tsx:21). `contexts/WorkspaceContext.tsx:31` exports `useWorkspace()` — a route+sessionStorage hook with no context at all. `LanguageContext` is a second source for `appSettings.language`, bridged in `App.tsx:115-133`.
   - fix: rename/relocate (WorkspaceContext → hooks/useWorkspace; settings shims → e.g. `stores/hydration/`), and fold LanguageContext into a store selector to remove the bridge.
 
-- [ ] **Currency formatting has three parallel implementations plus module-global mutable defaults; formatDate lives in components/** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Currency formatting has three parallel implementations plus module-global mutable defaults; formatDate lives in components/** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: (1) `utils/currency.ts:127` `formatCurrency` reads process-wide mutable defaults set by `configureCurrencyFormatDefaults` from an `App.tsx:120-126` effect (hidden temporal coupling — wrong output before settings hydrate); (2) `hooks/useCurrencyFormatter.ts:20` re-derives locale/currency from settings with its own Intl cache; (3) `hooks/useChartCurrencyFormatter.ts:19` wraps the same again for charts. Date: `components/shared/dateUtils.ts:5` `formatDate` is a pure util misfiled under components/, and `pages/ImportReviewPage.tsx:81` defines a private `formatDate` besides it.
   - fix: make `useCurrencyFormatter` the single settings-aware entry (chart variant composes it), keep `utils/currency` pure-args-only, move dateUtils into utils/ and delete the page-local copy.
@@ -4429,7 +4617,8 @@ look-changing one.
   - evidence: grep sweep over all src imports found no consumers for components/ui/{aspect-ratio,input-otp,hover-card,navigation-menu,breadcrumb,avatar,menubar}.tsx.
   - fix: delete them; they can be re-scaffolded from shadcn if ever needed.
 
-- [ ] **Confirm-dialog pattern split: 16 files use useConfirmDialog, 6 hand-roll AlertDialogContent** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Confirm-dialog pattern split: 16 files use useConfirmDialog, 6 hand-roll AlertDialogContent** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: `hooks/useConfirmDialog` adopted in 16 files, but features/imports/ImportHistoryCard.tsx, features/ai-chat/ChatConversationList.tsx, pages/portfolio/RebalancePage.tsx, components/statistics/SavedChartsSection.tsx, components/settings/sections/BackupSection.tsx, components/onboarding/RestoreFromBackupCard.tsx each rebuild AlertDialog markup inline.
   - fix: migrate the 6 hand-rolled sites to useConfirmDialog.
@@ -4439,12 +4628,14 @@ look-changing one.
   - evidence: FE joins `` `${general}:${detail}` `` inline in ≥4 components (components/forms/AddTransactionDialog.tsx, shared/CategoryCombobox.tsx, shared/CategoryMultiCombobox.tsx, tax/profile-steps/IncomeSourcesStep.tsx) and splits with raw `categoryName.split(':')` in pages/RecipientsPage.tsx:215 and pages/DashboardPage.tsx:226; no helper exists in `@vision/shared-utils` or FE utils. Backend stores general/detail as separate columns (repositories/categoryRepository.js:10,63) so the composed string is a pure interchange/display format — exactly the kind of tiny pure function shared-utils was built for.
   - fix: add `formatCategoryName/parseCategoryName` to @vision/shared-utils and sweep the inline call sites.
 
-- [ ] **No lint guard against hardcoded user-facing strings** 🔽 🔎 verified-present 2026-07-11
+- [ ] **No lint guard against hardcoded user-facing strings** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: apps/frontend/eslint.config.js:1-52 has no `react/jsx-no-literals` or i18next plugin rule; `scripts/validate-locales.js` (379 lines) validates key parity en↔nl, placeholder-token parity, and source↔generated consistency — but nothing catches a new component shipping raw English text, so drift enters upstream of the validator.
   - fix: enable an i18n literal-string lint rule (warn-level, scoped to src/components + src/pages) so hardcoded strings surface in `bun run lint`.
 
-- [ ] **Electron/compose/backend triplicate stack constants with comment-only sync** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Electron/compose/backend triplicate stack constants with comment-only sync** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: internal port 3002, `ftm_user`, `financial_transactions` are hardcoded independently in packaging/electron/main.js:120,304,411,558-560, docker-compose.yml:7,13,26,59, and apps/node-backend/src/config/env.js:56; main.js:398 relies on a "mirror from this single file" comment (plus `.claude/rules/packaging.md`) rather than any mechanical check.
   - fix: extract the stack constants into one sourced file (or a compose env include) that electron main.js and compose both interpolate from.
@@ -4454,12 +4645,14 @@ look-changing one.
   - `:55` (GET /api/transactions row) still lists only `amount_min/max/exact`. Commit `692fd9b1` added `amount_signed` to `docs/api/transactions.md`/`docs/features/transactions.md` but never touched the matrix.
   - Fix: append `amount_signed` to the matrix row.
 
-- [ ] **sankey.js is the only aggregation module running raw SQL** 🔽 🔎 verified-present 2026-07-11
+- [ ] **sankey.js is the only aggregation module running raw SQL** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: `services/calculations/aggregation/sankey.js:21,62-78` imports `database/connection.js` and inlines a query in the calc layer; all 13 sibling aggregation modules delegate to `infoRepository*` instead. It also hardcodes English node labels server-side.
   - fix: move the query into an infoRepository method and pass localized labels in from the caller.
 
-- [ ] **Preview view-model assembly lives in the route layer for both import pipelines** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Preview view-model assembly lives in the route layer for both import pipelines** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: review grouping/label-formatting/totals are built inline at `routes/importRoutes.js:404-477` (74 lines) and `routes/portfolioImportRoutes.js:334-400` (66 lines) — service-shaped logic sitting in the route handler.
   - fix: extract into a shared preview-assembly service function per pipeline.
@@ -4469,22 +4662,26 @@ look-changing one.
   - evidence: `process.env` is read outside `config/env.js` beyond the documented logger exception: `database/migrate.js:21,24,30`, `services/reports/puppeteerRenderer.js:21` (`PUPPETEER_EXECUTABLE_PATH`), `main.js:397` (`VISION_BOOT_TRACE`) — none of these are declared in the Zod schema (logger's `LOG_LEVEL`/`ENABLE_LOGGING` are also absent from it).
   - fix: add the missing keys to the Zod schema even if the reading site stays outside `config/env.js`, so every env var the app reads is at least documented and validated once.
 
-- [ ] **importRoutes ↔ portfolioImportRoutes copy-paste (~120 lines)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **importRoutes ↔ portfolioImportRoutes copy-paste (~120 lines)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: parser-CRUD blocks are near-identical modulo kind+normalizer (`importRoutes.js:191-235` vs `portfolioImportRoutes.js:260-300`, including a duplicated 23505→Conflict translation) and so are the batch list/get/rollback handlers (`:359-398` vs `:304-330`).
   - fix: a parameterized sub-router factory removes the duplication.
 
-- [ ] **investmentRepository ↔ portfolioTxRepo.common: verbatim duplication of validation/SQL-builder helpers** 🔽 🔎 verified-present 2026-07-11
+- [ ] **investmentRepository ↔ portfolioTxRepo.common: verbatim duplication of validation/SQL-builder helpers** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `makeValidationError` (`investmentRepository.js:122` vs `portfolioTxRepo.common.js:101`), `buildUpdateSql` (:144 vs :316), and the whole inheritance-schema probe/error-classifier suite (:21-70 vs :15-70) are duplicated between the two files.
   - fix: extract a shared inheritance-table helper module.
 
-- [ ] **Report-section scaffolding is repeated ~40× across the 20 PDF renderers** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Report-section scaffolding is repeated ~40× across the 20 PDF renderers** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: every renderer hand-writes the `page`/`section-title`/`section-divider` shell twice (empty + populated path). Related duplication in the same family: two empty-state CSS classes for one concept (`empty-notice` vs `placeholder-notice`, e.g. `sections/bankBalances.js:29` vs `topHoldings.js:32`); `ASSET_CLASS_LABELS` duplicated 3× (`topHoldings.js:9`, `portfolioAllocation.js:9`, `assetClassDetail.js:10`); a near-verbatim snapshot→asset-class bucket builder (`portfolioAllocation.js:42-64` vs `assetClassDetail.js:41-60`); camel/snake dual-reads (`inv.currentValue ?? inv.current_value`) repeated in 4 renderers instead of normalized once in `dataFetcherPortfolio`; a duplicated filtered/all chart-pair + filter-notice block (`categoryBreakdown.js:46-77` vs `topRecipients.js:44-75`).
   - fix: add `sectionShell()`/`emptySection()` helpers to `sectionHelpers.js` (removes ~200 lines) and normalize the camel/snake reads once in the data fetcher.
 
-- [ ] **`quantile()` and zero-fill densify logic each duplicated across forecast method modules** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`quantile()` and zero-fill densify logic each duplicated across forecast method modules** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `forecast/methods/monteCarloParametric.js:18-26` is a verbatim copy of `monteCarloBlockBootstrap.js:19-27`'s `quantile()`; separately, a shared `forecast/_densify.js` exists yet `holtWinters.js:24-43` and `prophetLite.js:105-122` keep private zero-fill densify copies.
   - fix: hoist `quantile()` into a shared forecast helper and switch `holtWinters`/`prophetLite` onto `forecast/_densify.js`.
@@ -4504,37 +4701,44 @@ look-changing one.
   - evidence: `emit()` (`lib/aiChatStreamStore.ts:138-141`) dirties the `getActiveConversationIds` cache (:148-157) on every event including token deltas, so `useActiveStreams` consumers (`ChatConversationList`) re-render per token even when the active set itself hasn't changed. The store is otherwise sound.
   - fix: compare-before-swap in the rebuild so the cache only changes when the active set actually changes.
 
-- [ ] **useStatistics.ts has four near-identical filtered `useQuery` blocks** 🔽 🔎 verified-present 2026-07-11
+- [x] **useStatistics.ts has four near-identical filtered `useQuery` blocks** 🔽 ✅ 2026-08-25 · centralized the shared filtered-query configuration while preserving unconditional hook order, query keys, API arguments, enabled gates, and the 60-second stale policy; added contract tests for all four queries.
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: `hooks/useStatistics.ts:243-307` repeats the same filtered-query shape four times. (No duplication with `lib/api/aggregations` — the server aggregates, the hook only reshapes.)
   - fix: a small query factory halves the boilerplate.
 
-- [ ] **RangeSelector's `RANGES` const + pill row is byte-identical across 4 sites** 🔽 🔎 verified-present 2026-07-11
+- [ ] **RangeSelector's `RANGES` const + pill row is byte-identical across 4 sites** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: ~35 duplicated lines at `pages/research/ResearchComparePage.tsx:31-37,397-409`, `ChartBuilderPage.tsx:25-31,390-396`, `MarketLookupPage.tsx:36-45,424-436`, `components/watchlist/WatchlistChartDialog.tsx:28`.
   - fix: extract a shared `RangeSelector` component/const.
 
-- [ ] **OwesPage.tsx bundles three components and a lib-shaped infinite-scroll implementation in one 478-line file** 🔽 🔎 verified-present 2026-07-11
+- [ ] **OwesPage.tsx bundles three components and a lib-shaped infinite-scroll implementation in one 478-line file** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: `pages/OwesPage.tsx` (478 lines) holds three components in one file; its manual offset/ref infinite-scroll (:350-407) is shaped like a reusable `useInfiniteQuery`-style hook, not page-local logic.
   - fix: move detail+table components to `components/owes/` and extract the infinite-scroll logic into a hook.
 
-- [ ] **PlannedPaymentsPage.tsx mixes 217 lines of inline column defs with lib-shaped date/multiplier math** 🔽 🔎 verified-present 2026-07-11
+- [ ] **PlannedPaymentsPage.tsx mixes 217 lines of inline column defs with lib-shaped date/multiplier math** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: `pages/PlannedPaymentsPage.tsx` (532 lines): 217-line inline column definitions (:154-371); frequency→monthly multiplier math (:119-131) and `dueBadge` date parsing (:41-70) are lib-shaped, not page-local; 4 copy-pasted stat cards (:446-494).
   - fix: extract the multiplier math and date parsing into lib helpers, and share the stat-card markup.
 
-- [ ] **Tax components repeat a currency formatter, a lock/frozen indicator, and a numeric-field pattern across files** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Tax components repeat a currency formatter, a lock/frozen indicator, and a numeric-field pattern across files** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: `fmtCurrency` copy-pasted ×3 (`components/tax/YearComparisonCard.tsx:74-80`, `MultiYearTrendStrip.tsx:46-52`, `SuggestedDeductionsCard.tsx:17`); a filed/frozen Lock/Snowflake indicator repeated ≥6 sites (`YearComparisonCard.tsx:164-169,194-199`, `MultiYearTrendStrip.tsx:113-124`, `TaxYearSwitcher.tsx:82-88`, `YearActionsMenu.tsx:84-100`, `HistoricalYearBanner.tsx:58`); a `ProfileNumberField`-shaped pattern repeated in `IncomeStep.tsx:37-60,104-156,210-233`.
   - fix: extract `fmtCurrency` to the shared currency formatter, a `<YearStatusIcon>` for the lock/frozen indicator, and a `ProfileNumberField` component for profile-steps.
 
-- [ ] **Locale-generation has a dead env flag and a broken electron fallback path** 🔽 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (the broken electron locale-copy fallback path fixed (packaging/i18n -> ../../i18n/source); the dead locale-generation env flag lives in scripts/ (out of electron scope), still open)
+- [ ] **Locale-generation has a dead env flag and a broken electron fallback path** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (the broken electron locale-copy fallback path fixed (packaging/i18n -> ../../i18n/source); the dead locale-generation env flag lives in scripts/ (out of electron scope), still open)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: `GENERATE_LOCALES_AST=1` is set in `packaging/electron/package.json:9-10` + `apps/frontend/package.json:10` but never read by `scripts/generate-locales.js`; the electron fallback resolves to a nonexistent `packaging/i18n` path (`packaging/electron/main.js:342-357` — harmless, the real fallback is at :17-49); the root build runs the generator twice (`package.json:17` + the frontend build step).
   - fix: delete the dead `GENERATE_LOCALES_AST` flag, fix or remove the dead fallback path, and dedupe the double generator run.
 
-- [ ] **main.js carries ~120 lines of inline CORS + gzip middleware beside a middleware/ dir of 8 modules** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **main.js carries ~120 lines of inline CORS + gzip middleware beside a middleware/ dir of 8 modules** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: main.js:90-125 (CORS) and main.js:148-215 (hand-rolled gzip with backpressure) are inline `app.use` closures while every other cross-cutting concern is a middleware/ module; main.js totals 582 lines. Documented as a deliberate Phase 5 dependency slim-down, so this is a consistency nit, not a defect.
   - fix: extract to middleware/cors.js and middleware/compression.js purely for symmetry; keep zero-dependency implementations.
@@ -4544,27 +4748,32 @@ look-changing one.
   - evidence: the whole CSV-adapter subsystem returns `null` for unparseable rows (`services/importPipeline/adapters/wise.js` 6×, `_shared.js` 6×, `revolut.js` 5×, `belfius.js` 5×, `kbc.js` 4×, `sabb.js` 4×) and `services/currency/rateFetcher.js` has 9 `return null`. code-patterns.md documents the null exception only for the *repository* boundary (code-patterns.md:373-376).
   - fix: either extend the documented null-exception to "parse/fetch miss" sentinels or sweep these to `undefined`; don't leave the convention ambiguous.
 
-- [ ] **lib/ vs utils/ split has no discernible rule; stray React hooks and a dead shim in the wrong tree** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **lib/ vs utils/ split has no discernible rule; stray React hooks and a dead shim in the wrong tree** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: pure helpers sit in both (`lib/slugify.ts`, `lib/decimal.ts`, `lib/csv.ts` vs `utils/sanitize.ts`, `utils/rollingAverage.ts`); `@vision/shared-utils` re-export shims split across both (`lib/money.ts:7` vs `utils/downsample.ts:5` — the latter has **zero importers**, dead). Four React hooks live in lib/: `lib/dialogGenie.ts:40` `useGenieOrigin`, `lib/devtools/apiRequestLog.ts:42`, `lib/devtools/devtoolsHotkey.ts:21`, `lib/devtools/queryMetrics.ts:135`. No doc defines the lib/utils boundary (grep of docs/ found none).
   - fix: declare one rule (e.g. utils/ = pure domain helpers, lib/ = infrastructure), delete `utils/downsample.ts`, move `useGenieOrigin` to hooks/ (devtools hooks can stay colocated).
 
-- [ ] **Hooks live in three places with no placement rule; apiClient facade is bypassed by 21 direct domain-module imports** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Hooks live in three places with no placement rule; apiClient facade is bypassed by 21 direct domain-module imports** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: domain hooks split across flat `hooks/` (~45 files), `hooks/portfolio/`, and `features/*/hooks/` (`features/transactions/hooks/useTransactionListData.ts`, `features/imports/useAdapters.ts` — the latter not even in a hooks/ subdir); `useTransactions` (hooks/) and `useTransactionListData` (features/) serve the same resource under different key families, their coupling documented only in a comment (`hooks/useTransactions.ts:93`). Separately, `lib/api.ts:1-38` builds the `apiClient` facade for back-compat, but 21 call sites in components/pages/features/hooks import `@/lib/api/<domain>` modules directly — two sanctioned access paths.
   - fix: pick one convention for hook placement (feature-first or domain-dir) and one API access path (direct domain modules; shrink the facade), then codemod stragglers.
 
-- [ ] **@vision/shared-utils scope creep: 687-line domain module in a "pure utility" package** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **@vision/shared-utils scope creep: 687-line domain module in a "pure utility" package** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: packages/shared-utils/src/portfolio.js is 687 lines of portfolio math (>half the package) inside a package described as "Pure utility helpers (money, slugify, downsample)" (packages/shared-utils/package.json:5); consumers are FE hooks/portfolio/* and BE utils/portfolioMath.js. Sharing is correct; the package identity is now blurred, inviting further dumping.
   - fix: either rename/re-describe the package as shared FE/BE logic or split domain calc into a `@vision/portfolio-calc` sibling; no code change needed otherwise.
 
-- [ ] **FE ymd/date helpers scattered; canonical toYmd lives under components/** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **FE ymd/date helpers scattered; canonical toYmd lives under components/** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: apps/frontend/src/lib/timezone.ts:9 re-exports `parseYmd/toYmd` from `@/components/shared/dateUtils` (a util homed in the components tree) and hand-rolls `todayYmd` at lines 19-25; BE lib/timezone.js is intentionally different (APP_TIMEZONE business math per ADR-009), so this is FE-internal organization, not FE/BE drift. *(Overlaps with A3's dateUtils-misfiled finding — fix together.)*
   - fix: move dateUtils out of components/shared into lib/ and make timezone.ts the single FE date-string module.
 
-- [ ] **Repo pivot helpers use three different positional-argument conventions** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Repo pivot helpers use three different positional-argument conventions** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `getCategoryPivot(exclCat, currency, exclRecip)` vs `getRecipientByYear(currency, exclRecip, exclCat)` vs options-object styles — three positional conventions across sibling repo calls.
   - fix: converge on one calling convention (options object is the safest against future argument-order mistakes).
@@ -4574,7 +4783,8 @@ look-changing one.
   - evidence: 6 aggregation wrappers assert invariants (`monthly`, `cashflow`, `category`, `recipient`, `averageVsCurrent`, `bankBalances`) but `categoryPivot`/`recipientPivot`/`recipientByYear`/`tagPivot`/`sankey`/`cashflowForecast` don't; separately, `_invariants.js:8`'s doc comment says `assertNaN` but the actual export is `assertNoNaN`.
   - fix: add invariant assertions to the 6 uncovered aggregations; fix the doc-comment name.
 
-- [ ] **lib-shaped utilities are parked inside infoRepositoryHelpers.js** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **lib-shaped utilities are parked inside infoRepositoryHelpers.js** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: UTC date helpers (:96-126), `roundToCents` (:86, an alias of `lib/money`'s `roundMoney`), and `sanitizeIsolatedDailyInvestmentSpikes` (:234, a smoothing heuristic — business logic) all sit in a repository-helpers file.
   - fix: move to `lib/` or a calculations service.
@@ -4589,12 +4799,14 @@ look-changing one.
   - evidence: `coverage.js:22` says "Last verified against: 0035" while migrations are at 0064. Comment-only drift — the table list itself is CI-enforced (`tests/backup-coverage.test.js`) so the content is current.
   - fix: update the comment (or make it self-updating from the migration count).
 
-- [ ] **Small report/aggregation hygiene items: themeCss fallback duplication, page-break inconsistency, fetcher logic in renderers, redeclared unit vocab, and a Bucket typedef gap** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Small report/aggregation hygiene items: themeCss fallback duplication, page-break inconsistency, fetcher logic in renderers, redeclared unit vocab, and a Bucket typedef gap** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `themeCss.js:28-66` hand-copies 32 fallback-only tokens from the frontend theme; the page-break CSS convention splits between `page page-break` and bare `page` across section renderers; fetcher-shaped logic sits inside renderers (`performanceTrend.js:29-38`, `portfolioExecutiveSummary.js:28-44`); range vocabulary is redeclared per research adapter across 4 unit systems; `requestMetrics.js:37` adds a `sampled` field missing from the `Bucket` typedef (:22-28).
   - fix: low urgency — fold in opportunistically when each file is next touched.
 
-- [ ] **Several lib-shaped pieces of logic are co-located inside components instead of extracted** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Several lib-shaped pieces of logic are co-located inside components instead of extracted** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: `OnboardingWizard` co-locates its `useOnboarding` hook (the react-refresh lint-disable at `components/onboarding/OnboardingWizard.tsx:26` is the tell); `CommandPalette`'s FX-parser/arithmetic-evaluator/recents-store (`CommandPalette.tsx:119-175`) are lib-shaped; `DashboardPage`'s inline page-scanning `queryFn` (`pages/DashboardPage.tsx:115-159`) and `PortfolioOverviewPage`'s sparkline builder (:147-186) are likewise lib-shaped.
   - fix: extract each into hooks/ or lib/ as appropriate; no urgency.
@@ -4605,17 +4817,20 @@ look-changing one.
   - `docs/adr/085-belgian-tax-point-in-time-fx.md` sanctions an identical fallback for the *tax* path as "a transient approximation that self-corrects" — confirmed via official FOD Financiën guidance that point-in-time FX is indeed the technically correct convention for Belgian capital-gains/TOB valuation. The portfolio P&L hook has the same trade-off with no equivalent comment, and silently blends current-rate legs into an EUR cost pool used for gain math. This is a third surface with this pattern, distinct from the one ADR-085 already explicitly waves off (the portfolio-summary "current value display," which is intentionally out of scope).
   - Fix: add a short comment/doc note acknowledging the fallback and its accuracy trade-off; not urgent enough for a code change or new ADR on its own.
 
-- [ ] **generateReport and the multer-instance export both write HTTP concerns directly from services/** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **generateReport and the multer-instance export both write HTTP concerns directly from services/** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: `services/reports/index.js:568,601-605` takes `res` directly, sets Content-Type/Disposition, and calls `res.end(pdf)`; `services/attachmentService.js:61-71` similarly exports a multer middleware instance (documented rationale — backlog-grade, not urgent).
   - fix: have `generateReport` return `{pdf, filename}` and let the route write the response.
 
-- [ ] **crossWorkspace.js parses/folds target-weights inline in the route** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **crossWorkspace.js parses/folds target-weights inline in the route** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: `routes/crossWorkspace.js:29-53` — small, but belongs beside `allocationAnalytics`.
   - fix: move the parsing/folding logic into the allocation-analytics service.
 
-- [ ] **Domain logic (buy/sell math, sell-validation policy) lives in portfolioTxRepo.common.js** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Domain logic (buy/sell math, sell-validation policy) lives in portfolioTxRepo.common.js** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: `normalizeBuySellMath` (:116), `normalizeTransactionPayload` (:155), `validateSellUnitsAvailability` (:271) implement buy/sell math and sell-validation policy in the repository layer.
   - fix: hoist into a portfolio-transaction service, leaving the repo as parameterized SQL only.
@@ -4625,17 +4840,20 @@ look-changing one.
   - evidence: `docs/adr/067-enforce-route-service-boundary.md:54` lists seam module `portfolioTxService.js` — no git history for it exists, and no route imports `portfolioTxRepo.*` directly, so the boundary holds regardless; this is a documentation errata, not a code gap.
   - fix: correct the ADR text to reference the actual seam files.
 
-- [ ] **Four small copy-paste duplications spread across forecast/, research adapters, dataImportService, and splitRepository** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Four small copy-paste duplications spread across forecast/, research adapters, dataImportService, and splitRepository** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: ewma/weightedAverage month-dedupe scaffolding copy-paste (`ewma.js:14-28` vs `weightedAverage.js:14-27`); `key()` get-or-throw boilerplate repeated ×5 across research adapters (`fred:18`, `alphaVantage:21`, `twelveData:20`, `finnhub:21`, `fmp:21`); `dataImportService` duplicates its own GENERAL:DETAIL parse/validate block (`dataImportService.js:119-135` vs `:193-207`); `splitRepository` duplicates its FOR-UPDATE+totals preamble (`createSplitAtomic:82-105` vs `createSplitsBatchAtomic:123-151`).
   - fix: hoist the adapter key-lookup as `requireProviderKey()` in `providerKeys.js`; extract the other three shared blocks into small helpers.
 
-- [ ] **~24 exports are used only in their own file — un-export candidates** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **~24 exports are used only in their own file — un-export candidates** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `rawTransactionRepository`'s `sabbRawRepo`/`visionRawRepo`/`wiseRawRepo`, `accountService`'s `ACCOUNT_OWNERS`/`LIQUIDITY_CLASSES`, `attachmentService`'s `getAttachmentsRoot`/`getTransactionDir`, `recipientPatternService`'s `compilePattern`/`validatePattern`, `transactionExport`'s `buildCsvFilename`/`buildNdjsonFilename`, `loanSchedule`'s `validateLoanConfig`, `normalization`'s `DEFAULT_MATCH_THRESHOLD`, `adapters/index`'s `REGISTRY`, `allocationAnalytics`'s `REBALANCE_TARGET_ALIASES`, `portfolioTypeNormalizer`'s `BUILTIN_TYPE_ALIASES`, `dataFetcherTax`'s `periodToTaxContext`, `researchCache`'s `TTL_BY_TYPE`, `researchMappingService`'s `AUDIT_PRICE_TOLERANCE`, `aiChat/tools`'s `TOOLS`, `holidays/be`'s `belgianHolidays`, `lib/csvUpload`'s `isLikelyCsvFile`, `infoRepositoryHelpers`'s `getCategoryKey`/`parseCategoryId`, `ewma`'s `DEFAULT_ALPHA`.
   - fix: drop the `export` keyword on all of these; no behavior change.
 
-- [ ] **~70 exports exist only for tests, mostly without the project's own `__`-prefix convention** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **~70 exports exist only for tests, mostly without the project's own `__`-prefix convention** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: a `__`-prefix convention exists (`__resetInvestmentSchemaCache`, `__clearQuoteCacheForTests`, `__resetPriceCache`) but ~90% of test-only exports don't use it, e.g. `ipMatchesRule` (`rateLimiter.js:38`), `resetMetrics` (`requestMetrics.js:155`), `portfolioMath`'s cost-basis re-exports, and 4 each of `quoteBackfillService`/`priceCache` internals.
   - fix: apply the `__`-prefix convention to the unmarked test-only exports (or move the assertions onto the public surface where one exists).
@@ -4660,27 +4878,32 @@ look-changing one.
   - evidence: `recipientPivot.js:16-18` / `tagPivot.js:14-16` default params to `null`, and those nulls flow into repo options.
   - fix: default to `undefined` per convention.
 
-- [ ] **config.js exposes both a `getSettings()` function and a default export for the same data** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **config.js exposes both a `getSettings()` function and a default export for the same data** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `getSettings()` has 5 importers and the default export has 7 — two access paths for the same config object.
   - fix: pick one and migrate the other's call sites.
 
-- [ ] **lib/tax/ is a second tax-logic home beside lib/belgianTax/, and belgianTax's index leaks internals** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **lib/tax/ is a second tax-logic home beside lib/belgianTax/, and belgianTax's index leaks internals** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A3_
   - evidence: `lib/tax/exportTaxYearCsv.ts:13` imports belgianTax types — two tax homes instead of one; `belgianTax/index.ts:2`'s `export * from './constants'` leaks table internals; `socialSecurity.ts`/`propertyTax.ts` have no dedicated test files (covered only indirectly via PIT tests).
   - fix: fold `exportTaxYearCsv.ts` into `lib/belgianTax/`, narrow the constants re-export, and add direct tests for socialSecurity/propertyTax.
 
-- [ ] **Several small duplications in components/pages: currency formatters, fmtLargeNum, admin skeleton rows, and a redundant PageHeader prop** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Several small duplications in components/pages: currency formatters, fmtLargeNum, admin skeleton rows, and a redundant PageHeader prop** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: statistics components hand-roll currency-formatter closures despite `utils/currency.ts:127` (`CustomChart.tsx:78-83`, `CustomChartBuilderModal.tsx:89`, `RecipientInsightsTab.tsx:48,60`); `fmtLargeNum` is duplicated ×3 (`ResearchComparePage.tsx:181`, `MarketLookupPage.tsx:144`, `ResearchFundamentalsTab.tsx:77`); an admin skeleton-row loop is duplicated (`ProviderHealthPage.tsx:183-190` ≈ `EndpointLivenessPage.tsx:105-112`) and `ExchangeRatesPage.tsx:66-98` hand-rolls a `<table>` instead of using `ui/table`; `PageHeader.tsx:7-9` carries both a `subtitle` and a `description` prop alias.
   - fix: route the statistics formatters and `fmtLargeNum` through the shared currency util; share the admin skeleton-row component; switch ExchangeRatesPage to `ui/table`; drop one of PageHeader's two alias props.
 
-- [ ] **No CI backstop for commitlint — enforced only via a skippable local git hook** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **No CI backstop for commitlint — enforced only via a skippable local git hook** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: commitlint runs only via `.githooks/commit-msg` (hooksPath from `scripts/setup-git-hooks.js`'s `prepare`), which `--no-verify` bypasses; gitleaks, by contrast, is wired twice (`.github/workflows/ci.yml:41-47` + `.githooks/pre-commit`).
   - fix: add a commitlint step to CI (e.g. lint the PR's commit range) so `--no-verify` can't skip it entirely.
 
-- [ ] **info-routes count-field naming drifts inside the `data` payload** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **info-routes count-field naming drifts inside the `data` payload** ⬇
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: `total_count` (`routes/info/statistics.js:36`) vs `total_transactions` (:41) vs `total_rates` (`rates.js:69,108,120`) vs netWorth duplicating its paginated total into `data.snapshotsTotal` (`netWorth.js:60`) — four names for the same concept. The outer envelope and the one real pagination (netWorth's `meta.pagination` via shared `parsePagination`) are otherwise consistent.
   - fix: standardize on one count-field name across routes/info/*.
@@ -4719,12 +4942,14 @@ look-changing one.
   - evidence: `/aggregations/cashflow-forecast-methods` defaults it ON (`include_backtest !== 'false' && !== '0'`, `routes/aggregations.js:113`) while `/aggregations/cashflow-forecast-rolling` defaults it OFF (`=== 'true' || === '1'`, `routes/aggregations.js:143-144`). A consumer omitting the param gets backtest data from one endpoint and not the other.
   - fix: pick one default (or require the param) and parse both through a shared default-aware boolean helper.
 
-- [ ] **Boolean query-param parsing: ~31 ad-hoc comparison sites, shared helper used in only one router; accepted spellings differ per param** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Boolean query-param parsing: ~31 ad-hoc comparison sites, shared helper used in only one router; accepted spellings differ per param** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: `isTruthyQueryParam` exists (`routes/info/_queryParams.js:23-30`) but is only used in `routes/info/rates.js:36,98`; `routes/aggregations.js` imports from that very module (line 37) yet hand-rolls `=== 'true' || === '1'` eight times (`:51,112-115,141-144,244`). Within one handler, `amount_signed` accepts `'true'|'1'` but `include_balance`/`normalize_to_eur` accept only `'true'` (`routes/transactions.js:71,98,238,252`) — `include_balance=1` is silently ignored. `active` uses a third pattern (`!== 'false'`, default-true) in ~8 routers, with a tri-state `active=all` supported only by tags and accounts (`routes/tags.js:21`, `routes/accounts.js:23`) and unavailable on recipients/categories/transactions. `controllers/investmentController.js:102-106` adds a fourth variant.
   - fix: promote `isTruthyQueryParam` (plus a default-true twin) from `routes/info/_queryParams.js` to `lib/` next to `parsePagination`, and adopt it route-by-route; decide whether `active=all` is API-wide or remove it.
 
-- [ ] **Date-range query params come in five styles across the surface** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Date-range query params come in five styles across the surface** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: `start_date`/`end_date` (`routes/transactions.js:48`, `routes/plannedTransactions.js:146`); bare `start`/`end` (`routes/aggregations.js:225-226,241-242` recipient-pivot/tag-pivot); `start_month`/`end_month` (`routes/info/rates.js:89-90`); `from`/`to` in the reports body (`routes/reports.js:58-59`); epoch-ms `from_ms`/`to_ms` (`controllers/investmentController.js:343`); plus `year` (`routes/aggregations.js:194`) and `days`/`months` windows (`routes/plannedTransactions.js:227`, `routes/aggregations.js:101`). Validation also differs: transactions/planned run `assertYmd`, aggregations pivots pass `start`/`end` through unvalidated (`routes/aggregations.js:225-226`).
   - fix: standardize new endpoints on `start_date`/`end_date` + `assertYmd`; alias `start`/`end` on the pivots (accept both, document one) rather than breaking existing callers.
@@ -4734,7 +4959,8 @@ look-changing one.
   - evidence: `parsePagination` is adopted in 8 route files + netWorth (grep: transactions, recipients, categories, planned, watchlist, both import batch lists, `routes/info/netWorth.js:46`), but `controllers/investmentController.js:108-139` still hand-rolls three variants (`Math.min(parseInteger(limit) || 200, 1000)` — note `limit=0` falls back to 200, and the bulk parser allows `limit` up to 200000 at `:126`), exactly the drift the helper's own doc-comment says it was built to end (`lib/pagination.js:6-9`). Meanwhile `middleware/validation.js:128-136` exports a second, unused `validatePagination` (zero callers) with different clamping.
   - fix: port investmentController's three parsers to `parsePagination` (keeping per-route `maxLimit`), and delete `validatePagination` from middleware/validation.js so there is one canonical parser.
 
-- [ ] **Unpaginated collection endpoints; AI conversations list is the one that grows without bound** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Unpaginated collection endpoints; AI conversations list is the one that grows without bound** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: `GET /api/ai/conversations` returns every row, repository query has no LIMIT (`routes/ai.js:164-167` → `repositories/aiChatRepository.js:41-46`) — this grows with every chat forever. Also unpaginated: `GET /splits/owed` and `/splits/transaction/:id` (`routes/splits.js:57-65`), `GET /recipients/clusters` (`routes/recipients.js:23-27`, full-table scan of recipients), `GET /recipients/:id/aliases|patterns`, `GET /tags`, `GET /accounts`, `GET /saved-charts`, `GET /attachments/transaction/:id`. Most are naturally small (tags, accounts, charts); conversations and owed-splits are usage-proportional.
   - fix: add `parsePagination` to `/api/ai/conversations` first (bare-array response makes this a breaking change — bundle with the list-key standardization); leave the naturally-bounded ones alone.
@@ -4750,39 +4976,46 @@ look-changing one.
   - Distinct from the (now fixed) render cost: that was mounting rows, this is network round-trips. A user resolving a large group waits on a serial chain with no progress indication and no partial-failure story.
   - Fix: add a bulk resolve endpoint taking the row-id set plus the chosen investment, or at minimum batch with `Promise.all` in bounded chunks. Prefer the endpoint — check `docs/reference/api-endpoint-matrix.md` and the existing portfolio-import routes first, and note whether partial failure needs to be atomic.
 
-- [ ] **`PortfolioImportReviewPage` has no test file at all, and is now virtualized** 🔽 🔎 verified-present 2026-08-10
+- [ ] **`PortfolioImportReviewPage` has no test file at all, and is now virtualized** 🔽
+  - Tracking: 🔎 verified-present 2026-08-10
   - ↪ _from: Orchestration session 2026-08-10 · surfaced when the perf fix for this page landed with no test to protect it_
   - The page carries the brokerage import's whole resolve-and-commit flow and has zero test coverage. `db174bf9` replaced its row rendering with a window virtualizer, so the un-virtualized regression (all rows mounting again) would now pass unnoticed.
   - Note for whoever writes it: a scratch harness attempted during that change did not work — it timed out before the page rendered any row, so the mock shape/route setup needs solving first. Once the page renders, a virtualization assertion needs the module-level virtualizer stand-in used at `components/shared/__tests__/VirtualDataTable.test.tsx:34-47` and `pages/__tests__/PlannedPaymentsPage.integration.test.tsx:13-30` — but note that stand-in materializes every row, so it proves markup, not windowing. Asserting windowing needs the real virtualizer plus a non-zero layout.
 
-- [ ] **Two canonical id validators with disagreeing accept sets — `"12abc"` is a valid id on one half of the API and a 400 on the other** 🔼 🔎 verified-present 2026-08-10
+- [ ] **Two canonical id validators with disagreeing accept sets — `"12abc"` is a valid id on one half of the API and a 400 on the other** 🔼
+  - Tracking: 🔎 verified-present 2026-08-10
   - ↪ _from: Orchestration session 2026-08-10 · surfaced while closing the ":id path-param validation drift" item above; confirmed by reading both implementations, not probed against a running server_
   - `apps/node-backend/src/middleware/validation.js:94-100` (`validateId`, behind `validateIdParam`/`validateIntParam`, used by 15 routers) parses with `parseInt`, so `"12abc"` → `12`, `"12.5"` → `12`, `"1e3"` → `1`; it caps at int32 (`2147483647`).
   - `apps/node-backend/src/lib/importBatchIds.js` (`coercedIdSchema`, used by importRoutes + portfolioImportRoutes) parses with `Number()`, so it *rejects* `"12abc"` and `"12.5"` — but accepts `"0x10"` as 16 and has no int32 cap.
   - So the two halves of the API disagree in both directions, and neither is a superset of the other. The drift item above assumed a single canonical validator and could only unify routers onto the permissive one; its stated goal (`"12abc"` uniformly 400s) is unreachable without settling this first.
   - Fix: pick one accept set and converge both helpers on it. `Number()` + `Number.isInteger` + a positive check + the int32 cap is the strict union and is what a path param should accept. Note this is a **deliberate behaviour change with a test pinning the current state**: `tests/routes/research.test.js:153` asserts `DELETE /mappings/12abc` → 204, and 15 routers ride on `validateId`, so it needs an explicit decision and a sweep of the affected route tests — not a drive-by edit.
 
-- [ ] **Action-endpoint naming: `POST /:id/<verb>` is the norm, but refresh/bulk actions use three patterns and `/categories/assign` exists twice** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Action-endpoint naming: `POST /:id/<verb>` is the norm, but refresh/bulk actions use three patterns and `/categories/assign` exists twice** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: consistent core: `/:id/merge|unmerge|execute|pay|settle|move|commit|set-primary` (`routes/recipients.js:97,147`, `routes/plannedTransactions.js:294`, `routes/splits.js:133,157`, `routes/investments.js:39`, `routes/recipientBankAccounts.js:63`). Drift: refresh is verb-noun on one collection (`POST /investments/refresh-prices`, `routes/investments.js:32`), noun/verb on others (`POST /exchange-rates/refresh`, `/inflation-rates/refresh`, `routes/info/rates.js:79,114`), and verb-noun again at router root (`POST /info/refresh-views`, `routes/info/maintenance.js:12`). Bulk is `bulk-*` on transactions (`routes/transactions.js:289-503`) but `/batch` on splits (`routes/splits.js:104`). Duplicate endpoint: `POST /categories/assign` (`routes/categories.js:49-63`) and `POST /categories/:id/assign` (`:85-93`) do the same assignment two ways.
   - fix: document `POST /<collection>/:id/<verb>` and `POST /<collection>/<verb-noun>` (collection-level) as the two blessed forms; deprecate one of the two `/assign` endpoints and rename future bulk ops consistently (`bulk-create` not `batch`).
 
-- [ ] **Duplicate-create handling: createOrGet returns 200-with-existing on four resources, 409 Conflict on two others** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Duplicate-create handling: createOrGet returns 200-with-existing on four resources, 409 Conflict on two others** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: recipients, categories, recipient bank accounts, and tags return 200 + the existing row when the POSTed entity already exists (`routes/recipients.js:73`, `routes/categories.js:44`, `routes/recipientBankAccounts.js:40`, `routes/tags.js:29`), with no flag other than the status code to tell "created" from "found". Transactions and parser configs instead throw 409 ConflictError (`routes/transactions.js:560-563`, `routes/importRoutes.js:205-208`, `routes/portfolioImportRoutes.js:272-274`). Both are defensible; having both means a consumer must read per-endpoint docs to know if a duplicate POST is safe.
   - fix: keep both behaviors but make them explicit: document createOrGet endpoints as idempotent upserts, and add a `created: boolean` field to their 200 responses so consumers don't have to branch on status code alone.
 
-- [ ] **Non-GET params from query string with inconsistent precedence — even within one file** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Non-GET params from query string with inconsistent precedence — even within one file** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: `routes/importRoutes.js:45` resolves `bank_name` query-first (`req.query.bank_name || req.body.bank_name`), while `:100` in the same file spreads `{...req.query, ...req.body}` so body wins for the custom-import config; `routes/portfolioImportRoutes.js:133,139` uses body-wins spread throughout. `routes/admin.js:135` requires the destructive confirm as a *query* param on a POST (`force=true`). Everything else is body-only.
   - fix: for multipart uploads (the legitimate reason query params exist here), pick one precedence (body wins) and apply it to `bank_name` too; move `force` into the POST body.
 
-- [ ] **SSE terminal event named `complete` on both import streams but `done` on AI chat; payload casing differs across streams** 🔽 🔎 verified-present 2026-07-11
+- [ ] **SSE terminal event named `complete` on both import streams but `done` on AI chat; payload casing differs across streams** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: all three SSE endpoints share `createSseWriter`, identical headers, `progress`-style interim events, and an `error` frame carrying `{detail}` (`routes/importRoutes.js:249-300`, `routes/portfolioImportRoutes.js:183-235`, `routes/ai.js:295-358`) — good. Drift: terminal event is `complete` with snake_case payload (`total_processed`, `routes/importRoutes.js:285`) vs `done` with camelCase payload (`assistantMessage`, `routes/ai.js:340-345`); import errors are `{detail}` only while ai adds `{detail, code?}` (`routes/ai.js:352`).
   - fix: low urgency; when either protocol is next touched, converge on one terminal-event name and add `code` to the import error frames.
 
-- [ ] **Route-edge validation is four different patterns: Zod (reports only), shared middleware validators, per-route assert functions, inline checks** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Route-edge validation is four different patterns: Zod (reports only), shared middleware validators, per-route assert functions, inline checks** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: `routes/reports.js:23-101` is the only Zod-validated router (backend has no Zod requirement, but it proves the dependency is already available); `middleware/validation.js` validators (`validateNumber`, `validateIntArray`, `assertYmd`) are adopted piecemeal (`routes/watchlist.js:19-39`, `routes/savedCharts.js:63-67`, `routes/settings.js:62-71`); settings and savedCharts each carry ~100 lines of bespoke assert-functions (`routes/settings.js:32-136`, `routes/savedCharts.js:30-79`); transactions/planned mix inline checks with name-resolution helpers (`routes/transactions.js:539-550`). Purely a maintainability/consistency map — no missing-validation hole found beyond the id-param finding above.
   - fix: no rewrite warranted; nominate the reports.js Zod pattern as the convention for *new* complex POST bodies in `docs/reference/code-patterns.md`, keep middleware validators for scalars.
@@ -4792,7 +5025,8 @@ look-changing one.
   - evidence: `routes/aggregations.js:135` — `res.status(400).json({ ok:false, error:{ code:'BAD_REQUEST', … } })`, the only route that bypasses the errorHandler for a validation failure; every sibling throws `ValidationError` (which also emits `VALIDATION_ERROR`, not `BAD_REQUEST`, so the error `code` differs from every other 400 in the API).
   - fix: replace with `throw new ValidationError('days_back + days_forward must be <= 730')`.
 
-- [ ] **Singular `transaction` sub-resource segment in attachments and splits, plus a stale route doc-comment** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Singular `transaction` sub-resource segment in attachments and splits, plus a stale route doc-comment** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W1 (REST API design)_
   - evidence: `POST|GET /api/attachments/transaction/:id` (`routes/attachments.js:37,91`) and `GET /api/splits/transaction/:id` (`routes/splits.js:82`) use singular `transaction`; every other segment in the API is plural kebab (`/batches/:id/rows/:rowId`, `/:id/bank-accounts`). The attachments header comment documents `GET /api/transactions/:id/attachments` (`routes/attachments.js:5`), a route that doesn't exist.
   - fix: fix the doc-comment now; treat the singular segments as grandfathered (renaming is a breaking change for two working routes).
@@ -4827,22 +5061,26 @@ look-changing one.
   - evidence: `0025_fix_numeric_precision.py:141` retypes only `transactions.amount`. Still (15,2): `transactions.balance` (0001:191), `planned_transactions.amount` (0001:208), `transaction_splits.amount`/`split_payments.amount`/`agg_split_outstanding.*` (0019:24,40,61-63), loan schedule columns (0001:251-254), `accounts.statement_balance` (0054:29), and all 8 raw tables' amounts (0001). Consequence: a 4-decimal transaction cannot be split exactly (splits round to cents while the 0062 split-guard trigger compares `SUM(splits) > ABS(amount)+0.005`), and a planned→executed copy silently gains precision headroom one way only. `import_staging_rows.amount` is NUMERIC(20,4) (0001:629) — wider than its commit target.
   - fix: **DECIDED 2026-07-10 (D7, ADR-060 addendum): NUMERIC(18,4) is the domain precision** — one alignment revision widens the (15,2) siblings; new money columns (incl. D2's `account_statement_balances`) created at (18,4); rollback = re-narrow with USING round(). Ship in the Accounts rewrite Phase A/C window.
 
-- [ ] **`saved_charts` INTEGER[] id-arrays (`category_ids`, `recipient_ids`, `tag_ids`) have no referential integrity and no delete-cleanup** 🔼 🔎 verified-present 2026-07-11
+- [ ] **`saved_charts` INTEGER[] id-arrays (`category_ids`, `recipient_ids`, `tag_ids`) have no referential integrity and no delete-cleanup** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
   - evidence: `0001:564` (`category_ids INTEGER[]`), `0017:24` (`recipient_ids`), `0063:24-26` (`tag_ids`). Postgres cannot FK array elements; no cleanup exists in `categoryService.js`/`tagService.js` (grep for `saved_charts`/`category_ids` in those services: zero hits), while scalar category refs got explicit ON DELETE SET NULL in 0048 precisely because dangling refs 500'd. A deleted category/recipient/tag id silently persists inside saved chart filters — the chart just shows less data with no signal. The pattern is also spreading (tag_ids added 2026-07).
   - fix: either normalize to join tables (`saved_chart_categories` etc., ON DELETE CASCADE — consistent with `transaction_tags` 0031) via a new revision + backfill, or add app-level cleanup on category/recipient/tag hard-delete + a periodic prune; document the choice.
 
-- [ ] **`updated_at` maintenance is split trigger-vs-app with no rule; a few mutable tables have no timestamps at all** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`updated_at` maintenance is split trigger-vs-app with no rule; a few mutable tables have no timestamps at all** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
   - evidence: trigger-managed ×18+ (0001:818-831 + accounts 0050:106-109, tags 0031, splits 0019, parser configs 0037, provider_quota/instrument_provider_map 0042, provider_api_keys 0043); app-managed with no trigger: `exchange_rates` (column at 0001:454, absent from the 0001 trigger list; `rateFetcher.js:247` sets it manually), `user_settings` (`settingsRepository.js:70`), `ai_conversations` (touch-trigger fires only on message INSERT, 0001:834-841; title renames rely on `aiChatRepository.js:70`), `provider_health` (0010, no trigger). Zero timestamps: `investment_ticker_prefs` (0061:45-48). Mutable-status staging rows (`import_staging_rows`, `portfolio_import_staging_rows`) have only `created_at`, so import-debugging can't see when a row last transitioned.
   - fix: state the rule (suggest: any table with `updated_at` gets the shared trigger) in code-patterns.md; one revision attaches the trigger to the 4 app-managed tables (harmless with existing manual writes) — rollback drops them.
 
-- [ ] **`import_staging_rows.resolved_recipient_id` / `resolved_bank_account_id` lack FKs while their sibling override column has one** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`import_staging_rows.resolved_recipient_id` / `resolved_bank_account_id` lack FKs while their sibling override column has one** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
   - evidence: `0001:638-639` — plain INTEGERs, never constrained by any later migration; yet `user_override_recipient_id` on the same table got `REFERENCES recipients(id) ON DELETE SET NULL` in `0015:87-89`. A recipient merged/deleted mid-import leaves a dangling resolved id that commits will trust. (Distinct from the known 0061 side-table no-FK and from the prior FK-*index* pass.)
   - fix: new revision adding both FKs with ON DELETE SET NULL (matches 0015's choice), after a one-time orphan sweep like 0026 did; rollback drops them.
 
-- [ ] **Cashflow-forecast cache tables store dates as TEXT and carry a vestigial `user_id DEFAULT 'anonymous'` found nowhere else in the schema** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Cashflow-forecast cache tables store dates as TEXT and carry a vestigial `user_id DEFAULT 'anonymous'` found nowhere else in the schema** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
   - evidence: `cashflow_forecast_accuracy.as_of_month TEXT` (0012:27), `cashflow_forecast_mc.month TEXT` (0013:26), `cashflow_forecast_mc_rolling.today_iso TEXT` (0016:26) — every other business date in the schema is DATE; TEXT keys sort correctly only by convention and can't be range-pruned or validated. All three also have `user_id TEXT NOT NULL DEFAULT 'anonymous'` in a single-user app (no other table has user_id), baking a phantom multi-tenancy dimension into PKs/unique constraints.
   - fix: low urgency (cache tables, truncate-safe): if ever touched again, retype the date keys to DATE with `USING`, and either drop `user_id` or document it as a deliberate future-proofing convention; rollback = reverse casts.
@@ -4867,7 +5105,8 @@ look-changing one.
   - evidence: docs/guides/how-to-add-api-endpoint.md snippets import `../database/pool.js` — that file does not exist (only `database/connection.js`; the canonical `query` import is documented correctly in docs/reference/code-patterns.md:377,445). The guide also uses bare `res.json(...)`/`res.status(404).json({detail})` where ADR-026 mandates the `res.ok()` envelope (code-patterns.md:513), registers with `app.use` while main.js uses `mountRouter` (main.js:310-331), shows no Zod validation, and its checklist (:212-221) omits three mandatory touchpoints per CLAUDE.md: openapi.yaml, `bun run generate:types` (ADR-031), and docs/reference/api-endpoint-matrix.md. Real end-to-end cost is ~9-11 files (route, main.js, repository, openapi.yaml, generated.ts regen, lib/api/<resource>.ts, hook/component, docs/api page + matrix, tests) — the guide describes ~6 and gets 3 of them wrong.
   - fix: rewrite the guide's snippets from a real recent resource (e.g. routes/tags.js) and extend the checklist with the openapi/types/matrix steps; the guide should defer to code-patterns.md instead of duplicating stale snippets.
 
-- [ ] **Price-provider seam is the repo's worst shotgun: ~11 hand-maintained touchpoints incl. four copy-paste dispatch blocks** 🔼 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (added the "Adding a Price Provider" doc recipe enumerating the ~11 touchpoints) ✅ 2026-07-21 (the core code-level collapse already landed in `4a671a3` (#92, SIMP-33): the four ~20-line copy-paste `if (stale.X.length)` dispatch blocks are gone from priceProviderService.js, replaced by `idBasedProviders`/`investmentBasedProviders` descriptor tables `{key, resolveId, batchFn, cacheKeyOf}` + one shared `runProviderTask` try/catch+health wrapper — materially the descriptor design this finding asked for; iteration order preserved, priceProviderService 44/44 green. Residuals left as-is by judgment: descriptors live in the service (referencing `PROVIDERS.*`) rather than physically in the registry; the `stale = {...}` bucket is still a literal; and `fetchHistoricalPrices` keeps per-provider branches because they differ substantially (Yahoo chart API vs Binance kline pagination vs Kinesis USD→EUR historical FX vs custom SSRF-guarded redirect walk) — not a mechanical dedup. The remaining non-backend touchpoints (enum migration, openapi, frontend lists) are the documented recipe.) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — docs/integrations/price-providers.md's own 'Adding a Price Provider' recipe (added by the same fab7a77 stamp that closed this item) describes an architecture superseded a day earlier: step 3 tells a future implementer to extend th…)
+- [ ] **Price-provider seam is the repo's worst shotgun: ~11 hand-maintained touchpoints incl. four copy-paste dispatch blocks** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (added the "Adding a Price Provider" doc recipe enumerating the ~11 touchpoints) ✅ 2026-07-21 (the core code-level collapse already landed in `4a671a3` (#92, SIMP-33): the four ~20-line copy-paste `if (stale.X.length)` dispatch blocks are gone from priceProviderService.js, replaced by `idBasedProviders`/`investmentBasedProviders` descriptor tables `{key, resolveId, batchFn, cacheKeyOf}` + one shared `runProviderTask` try/catch+health wrapper — materially the descriptor design this finding asked for; iteration order preserved, priceProviderService 44/44 green. Residuals left as-is by judgment: descriptors live in the service (referencing `PROVIDERS.*`) rather than physically in the registry; the `stale = {...}` bucket is still a literal; and `fetchHistoricalPrices` keeps per-provider branches because they differ substantially (Yahoo chart API vs Binance kline pagination vs Kinesis USD→EUR historical FX vs custom SSRF-guarded redirect walk) — not a mechanical dedup. The remaining non-backend touchpoints (enum migration, openapi, frontend lists) are the documented recipe.) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — docs/integrations/price-providers.md's own 'Adding a Price Provider' recipe (added by the same fab7a77 stamp that closed this item) describes an architecture superseded a day earlier: step 3 tells a future implementer to extend th…)
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W3 (extensibility seams)_
   - evidence: adding provider N requires: (1) strategy fn in `PROVIDERS` (services/prices/priceProviderRegistry.js:347); (2) `SUPPORTED_PROVIDERS` entry (priceProviderService.js:42); (3) the `stale = { binance: [], yahoo: [], custom: [], kinesis: [] }` bucket (priceProviderService.js:61) **plus a fifth near-identical ~20-line `if (stale.X.length)` block** (:87-164 — four existing blocks differ only in key resolution); (4) per-provider branches in `fetchHistoricalPrices` (:293+); (5) probe entry in providerHealthService.js:22-33; (6) PG `price_provider` enum ALTER migration (alembic 0001:106 — a DB migration to add a fetch strategy; extensibility cost of the enum choice, complementing W2's enum-discipline finding); (7) openapi.yaml:835 enum + generated.ts regen; (8-9) two hardcoded frontend lists (AddInvestmentDialog.tsx:27, EditInvestmentDialog.tsx:52-56); (10) three frontend type unions (types/api.ts:349, types/portfolio.ts:87, generated.ts:3374); (11) i18n `addInv.provider.hint.*` en+nl. docs/integrations/price-providers.md has **no "adding a provider" recipe at all** (headings :16-251).
   - fix: collapse the four dispatch blocks into one loop over a provider descriptor (`{key, resolveId, batch(ids|invs), cacheKeyOf}`) so the strategy object in the registry is the *single* backend registration point; document the remaining unavoidable touchpoints (enum migration, openapi, frontend) as a recipe in price-providers.md.
@@ -4892,7 +5131,7 @@ look-changing one.
   - evidence: `tests/routes/transactions.test.js:7-19` — hand-rolled `mockRouter` stores `handlers[handlers.length - 1]`, so any validation/guard middleware registered before the handler is silently dropped from the test path; handlers are invoked with bare `{ query: {} }` req objects (line 69-71), bypassing Express query parsing, error-handler integration, and the ADR-026 envelope middleware path. `grep supertest` = zero hits in tests and package.json. `vi.mock('../../src/middleware/validation.js')` in 4 files stubs validation outright. The pattern is duplicated, not shared: `mockRouter` defined in 20 route files (3-4 hits each) and `mockResponse` re-declared in 22 files; no helper module exists (`tests/` has only `setup/db.js` and `golden/runGolden.js`).
   - fix: switch route suites to supertest against the real router mounted on a throwaway `express()` app (repos/services still mocked) — this restores middleware, status codes, and envelope behavior to the tested path; at minimum extract `mockRouter`/`mockResponse` into `tests/helpers/` and capture the full handler chain instead of `[length - 1]`.
 
-- [ ] **info route tests run a deep unmocked service cascade under a blanket `query → {rows: []}` mock; import route tests carry an inert bankAdapters mock** ⏬
+- [x] **info route tests run a deep unmocked service cascade under a blanket `query → {rows: []}` mock; import route tests carry an inert bankAdapters mock** ⏬
   - ↪ _from: Orchestration session 2026-07-28 · route-harness migration batch 2c (noticed, out of scope)_
   - `tests/routes/info.test.js` — `services/portfolio/portfolioSummaryService.js getPortfolioSummary` (reached transitively from `/api/info/net-worth`, `/portfolio-performance`, and `warmInfoCaches`) is real/unmocked and does non-trivial work (settings lookup, portfolio-transaction aggregation) driven only by the blanket pool mock returning empty rows. Pre-existed the harness migration (only Express was mocked before too), but it is a deep unmocked cascade for a route test — behavior changes in that service surface as confusing info-route failures. And `tests/routes/import.test.js` still mocks `services/bankAdapters.js`, which `importRoutes.js` no longer imports at all (the dead `GET /supported-adapters` route was removed) — the mock is inert.
   - Fix: mock `portfolioSummaryService` at the service boundary in info.test.js (its own tests cover the internals); delete the inert bankAdapters mock from import.test.js.
@@ -4905,34 +5144,38 @@ look-changing one.
 - [x] **Frontend coverage include-list omits `src/features/` and `src/contexts/` — 460K+124K of source (incl. the CSV-import UI) invisible to the ratchet, despite 15 test files living there** 🔼 ✅ 2026-07-27 · 95ed4b8 (#133) (src/features/** (51 files) and src/contexts/** (8 files) added to coverage.include — 20 test files already lived there; ratchet re-set per the config's own protocol to measured 56.86/47.04/49.3/59.04 → 54/45/47/57 (floor−2), baseline comment updated. Verified: figures re-measured exact, suite green under the new thresholds, PR-gate targets auto-track the config)
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
 
-- [ ] **Frontend coverage include-list still omits `src/stores/**` and the root-level entries (`App.tsx`, `main.tsx`, `theme-flash.ts`)** 🔽
+- [x] **Frontend coverage include-list still omits `src/stores/**` and the root-level entries (`App.tsx`, `main.tsx`, `theme-flash.ts`)** 🔽
   - ↪ _from: Orchestration session 2026-07-27 · coverage-gate verification_
   - After the 2026-07-27 include-list fix (95ed4b8 (#133)), `apps/frontend/vite.config.ts` coverage.include covers components/hooks/lib/pages/utils/features/contexts but not `src/stores/` (1 file, settingsStore.ts) or the root-level `src/App.tsx`/`src/main.tsx`/`src/theme-flash.ts`. Pre-existing gap; small but the denominator isn't fully honest until it's closed (main.tsx/theme-flash.ts may warrant principled entrypoint excludes instead — decide, don't just include blindly).
   - Fix: add `src/stores/**` (and root files or documented excludes), re-measure, re-ratchet per the config's protocol.
   - evidence: `apps/frontend/vite.config.ts:121-127` includes only `components/ hooks/ lib/ pages/ utils/`. `src/features/` (460K: imports, transactions, recipients, ai-chat) and `src/contexts/` (124K) are unmeasured — neither their covered nor uncovered lines count. Both dirs have tests (15 test files, e.g. `src/features/imports/PortfolioCsvColumnMapper.test.tsx`, `src/contexts/__tests__/WorkspaceContext.test.tsx`), so this looks like a stale list from before the `features/` reorganization rather than a decision.
   - fix: add `src/features/**` and `src/contexts/**` to `coverage.include`, re-measure, and re-set the ratchet per the config's own protocol (comment at lines 136-140).
 
-- [ ] **Contract Zod schemas duplicated between MSW contract test and live-contract test — header claims they're shared, they aren't** 🔼 🔎 verified-present 2026-07-11
+- [x] **Contract Zod schemas duplicated between MSW contract test and live-contract test — header claims they're shared, they aren't** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: `src/test/live-contracts/live-contracts.test.ts:4-6` says it validates "against the same Zod schemas used in MSW fixture contracts", but it imports only `server` (line 15) and re-declares its own `LinkSchema`/`paginatedOf`/6 item schemas (lines 40-70) — looser than the 19 schemas in `src/test/msw/contracts.test.ts` (e.g. its `TransactionItemSchema` checks 5 fields vs the full stub shape). So the contract now lives in four places: `openapi.yaml` → `generated.ts` (type-guarded via `src/types/contract-guard.ts`), hand-written `api.ts`, the MSW-side Zod set, and the live-side Zod subset — the two Zod copies can drift so MSW fixtures and the live backend are held to different shapes.
   - fix: extract the Zod schemas into `src/test/contracts/schemas.ts` imported by both suites (live suite can `.pick()` a lax subset from the strict schema rather than redefine it); fix the misleading header either way.
 
-- [ ] **`database/connection.js` and `convertRowsToEur` mocks reinvented per file with divergent shapes/semantics — drift risk in the fakes themselves** 🔼 🔎 verified-present 2026-07-11
+- [ ] **`database/connection.js` and `convertRowsToEur` mocks reinvented per file with divergent shapes/semantics — drift risk in the fakes themselves** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: the connection mock's export set varies by file — `{query}` only (`tests/categoryRepository.test.js:3`), `{query, queryPrepared, withTransaction}` (`tests/transactionRepositoryBehavior.test.js`), and a `withTransaction` that actually threads the mock client (`tests/investmentRepository.test.js:1-7`) vs `withTransaction: vi.fn()` that doesn't (`tests/tagRepository.test.js`) — same seam, different transaction semantics per suite. `convertRowsToEur` is faked in 13 places with 5 distinct implementations, two of which re-implement conversion logic inline (identity pass-through ×6-7 vs `amount_eur: Number(r.amount || 0)` mapping in `tests/infoRepository.test.js:7`) — a business-logic re-implementation that will silently diverge if the real converter's row contract changes.
   - fix: one `tests/helpers/mockDb.js` exporting the canonical connection mock (full export surface + client-threading `withTransaction`) and one canonical currency fake; per-file `vi.mock` bodies become one-liners delegating to it.
 
-- [ ] **No factory/builder layer for domain rows — repository/service suites hand-roll row literals per file** 🔽 🔎 verified-present 2026-07-11
+- [ ] **No factory/builder layer for domain rows — repository/service suites hand-roll row literals per file** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: no shared builders exist anywhere under `apps/node-backend/tests/` (only `setup/db.js` + `golden/runGolden.js`); transaction/investment/staging row shapes are inlined per test (e.g. `tests/routes/transactions.test.js:80`, and throughout the 694-line `plannedTransactionRepository.test.js`). With 159 backend files / ~2,405 cases, a column rename means grep-and-fix across dozens of literals. (Inline CSV strings in adapter tests are the known deliberate PII guard — not this finding.) The e2e suite similarly copy-pastes the `pageerror`-collector block into every test (`e2e/critical-flows.spec.ts:14-19` ×10+, `mutations-parity.spec.ts:22-23`).
   - fix: small `tests/builders/` with `makeTransactionRow(overrides)`-style functions for the 5-6 hot shapes; in e2e, a `test.extend` fixture that auto-collects `pageerror` and asserts empty on teardown.
 
-- [ ] **E2e covers zero high-risk user journeys: no CSV-import upload→preview→commit, no transaction create/edit, no backup/restore flow** 🔼 🔎 verified-present 2026-07-11
+- [ ] **E2e covers zero high-risk user journeys: no CSV-import upload→preview→commit, no transaction create/edit, no backup/restore flow** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: full e2e inventory (7 specs, 630 lines, ~51 tests incl. parameterized loops): page-load smoke (`smoke.spec.ts`, `critical-flows.spec.ts`), dialog UX edge cases (`dialogs-edge.spec.ts`), axe scans (`a11y.spec.ts`), screenshot capture-only mode (`visual.spec.ts:5` — compare mode not yet on), 4xx/5xx drift listener (`network-drift.spec.ts`), and 4 CRUD creates limited to category/recipient/planned (`mutations-parity.spec.ts:21-96`). `grep setInputFiles|upload` over `e2e/` = zero — the import journey (the app's riskiest write path, and the one the backend coverage comment leans on) is only "import page loads" + a screenshot. No transaction lifecycle test either.
   - fix: add one journey spec each for (a) CSV import of a small synthetic fixture through preview→commit→rows visible in /transactions, and (b) transaction create→edit→delete; these give the "routes exercised by Playwright" claim real teeth where it matters.
 
-- [ ] **`coverage-clients*.test.ts` — 1,370 lines of tests named for, and shaped by, the coverage gate** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`coverage-clients*.test.ts` — 1,370 lines of tests named for, and shaped by, the coverage gate** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: `src/lib/api/__tests__/coverage-clients.test.ts` (537 lines) + `-2` (494) + `-3` (339) batch-import dozens of thin fetch-wrapper functions and exercise them against MSW. They aren't worthless (they route through the contract-checked handlers), but the naming is candid: these exist to feed the threshold, and they pad the "statements covered" figure with the easiest code in the app while the harder gaps (features/, contexts/ — see the include-list finding) sit unmeasured.
   - fix: no urgent action; when the coverage include-list is fixed and re-ratcheted, consider folding these into per-module client tests so file names describe behavior, not the metric.
@@ -4942,7 +5185,7 @@ look-changing one.
   - evidence: `apps/node-backend/tsconfig.check.json:10-11` (`"strict": false, "noImplicitAny": false`), run in CI at `.github/workflows/ci.yml:200`. Under these settings untyped params are silent `any`, so the check only catches gross misuse. Core data layer is where typing is absent: `src/repositories/transactionRepository.js` has 14 exports and **0** `@param`/`@returns`; all of `src/repositories/` (41 files) totals 71 `@param` vs 411 in `services/`. Only 15 `@typedef` sites repo-wide and **no shared domain-row typedefs** (no `TransactionRow`/`PlannedRow` contracts — `@vision/types` covers only error codes; `packages/shared-utils/src/*.d.ts` covers money/portfolio helpers). The clean `@ts-ignore` count (0 in src/) reflects the loose checker, not clean types. Net: row shapes flow into services as implicit `any`; typing is decorative exactly where SQL-shape drift is likeliest.
   - fix: add a shared `src/types/rows.js` (or `.d.ts` in `@vision/types`) with `@typedef` contracts for the ~10 core row shapes; annotate repository returns against them; then ratchet `noImplicitAny: true` per-directory (start `repositories/`), keeping `strict:false` elsewhere.
 
-- [ ] **Two dead field references in portfolio surfaces: `investments.description` never existed; `amount_per_unit` fallback is unreachable** ⏬
+- [x] **Two dead field references in portfolio surfaces: `investments.description` never existed; `amount_per_unit` fallback is unreachable** ⏬ ✅ 2026-08-25 · removed both impossible backend reads and the phantom frontend summary properties; adversarial tests pin omission of `description` and rejection of a fake `amount_per_unit` fallback.
   - ↪ _from: Orchestration session 2026-07-28 · ratchet portfolio/aiChat slice (typing surfaced, out of scope)_
   - `apps/node-backend/src/services/portfolio/portfolioSummaryService.js:270` — `buildInvestmentSummary` returns `description: inv.description`, but `investments` has no `description` column (checked against migration 0001), so the field has always been `undefined` on the wire. And `apps/node-backend/src/services/aiChat/tools/portfolio.js:437` — `t.price_per_unit ?? t.amount_per_unit ?? 0`: `amount_per_unit` is not a `portfolio_transactions` column anywhere, so the middle fallback is dead and the effective expression is `t.price_per_unit ?? 0`.
   - Fix: drop the dead `description` field (or wire it to a real source if the frontend expects it — check consumers first) and delete the dead `amount_per_unit` fallback; both are one-line cleanups but each changes an emitted shape, so pin the intended output.
@@ -4953,7 +5196,8 @@ look-changing one.
   - Fix: align the section readers with `fetchTaxData`'s actual shape (or vice versa — one shape, decided once), iterate the asset-class array directly using `.assetClass` as the label, and pin each section with a renderer test on a fixture where the expected numbers are non-zero (these bugs survived precisely because zeros look plausible).
   - Also (cosmetic, same origin): four portfolio section renderers (`assetClassDetail.js`, `portfolioAllocation.js`, `portfolioExecutiveSummary.js`, `topHoldings.js`) carry dead `inv.current_value` snake_case fallbacks — `getBreakdownSummary` only emits camelCase; safe to drop when touched.
 
-- [ ] **Tax-PDF residues from the 4843a9f6 (#155) pass (grouped)** 🔽 🔎 partial-6ed842c6 (#156) 2026-08-10 (sub-item (a) DONE — fixed and test-pinned via the duplicate standalone finding above; note (a)'s unit analysis was partly wrong: the PIT site's rates arrive from the client already in percent units, only WHT/TOB are ratios. LEFT: (b) topInvestmentsByCost footing, (c) gross-vs-net dividend semantics, (d) asset-class label cosmetics, (e) dead snake_case fallbacks)
+- [ ] **Tax-PDF residues from the 4843a9f6 (#155) pass (grouped)** 🔽
+  - Tracking: 🔎 partial-6ed842c6 (#156) 2026-08-10 (sub-item (a) DONE — fixed and test-pinned via the duplicate standalone finding above; note (a)'s unit analysis was partly wrong: the PIT site's rates arrive from the client already in percent units, only WHT/TOB are ratios. LEFT: (b) topInvestmentsByCost footing, (c) gross-vs-net dividend semantics, (d) asset-class label cosmetics, (e) dead snake_case fallbacks)
   - ↪ _from: Orchestration session 2026-08-09 · tax-PDF sections fix (implementer + adversarial verifier noticed; pre-existing, outside the finding's six-section scope)_
   - (a) ~~LIVE 100× bug, same class as the one just fixed~~ **DONE f3c7528e (#156):** `sections/belgianRulesSummary.js:42,61,89` did `fmtPct(rate * 100, false)` — see the ticked standalone finding in the UI/UX section for the per-site unit trace and test pin.
   - (b) `topInvestmentsByCost` rows don't foot when `other > 0`: visible columns (TOB/WHT/Sell/Fees) sum to less than the (correct) Total Cost because `other` has no column — add an Other column or a footnote.
@@ -4970,12 +5214,13 @@ look-changing one.
   - `apps/node-backend/src/services/reports/sections/taxExecutiveSummary.js:58` — `${taxProfile.filingStatus ?? ''} · ${taxProfile.region ?? ''}` unescaped; both are client-controlled `z.string().optional()` from `taxProfileSchema` (`routes/reports.js:69-73`) — same class as the fixed b.label finding. Also noted, cosmetic-only: `taxTypeBreakdown.js:43` interpolates `${c.label}` unescaped but those labels are hardcoded server constants — not exploitable, just inconsistent with the file's own escaping.
   - Fix: wrap both fields in `escapeHtml`; extend the reportTaxSections test with an injecting fixture.
 
-- [ ] **`running_balance` wire type diverges between the CSV export stream and the repository window query** ⏬
+- [x] **`running_balance` wire type diverges between the CSV export stream and the repository window query** ⏬ ✅ 2026-08-25 · the CSV stream now carries its Decimal accumulator into formatting as an exact string, matching PostgreSQL NUMERIC convention; a beyond-safe-integer fractional balance test prevents number narrowing.
   - ↪ _from: Orchestration session 2026-07-28 · ratchet top-level services slice (typing surfaced, out of scope)_
   - `apps/node-backend/src/services/transactionExport.js:229` — `streamCsvExport` computes `running_balance` locally as a JS number (`next.toNumber()`), while the same-named field from `transactionRepository`'s `SUM(...) OVER (...)` window (`EnrichedTransactionRow.running_balance`) is a pg NUMERIC string. Not a bug today — CSV formatting handles both — but the two paths disagree on the type of the same conceptual field, and a future programmatic consumer of the export path could assume the repository's string shape.
   - Fix: pick one wire shape for `running_balance` (the repository's NUMERIC-string is the established convention) and convert at the formatting boundary only; pin with a type-level assertion or test.
 
-- [ ] **CodeQL reports 1 high-severity alert attributed to PR #137's changed lines — needs Security-tab triage** 🔼 🔎 needs-GitHub-check 2026-08-04 (**REFUTED AS FILED — the premise is wrong; there was no high-severity alert.** The check-run body was finally read this session via `get_check_run` on #137's CodeQL check (id 90632092098), which reports `conclusion: neutral`, title "2 configurations not found", and the body: *"Code scanning cannot determine the alerts introduced by this pull request, because 2 configurations present on refs/heads/main were not found"* — listing `codeql.yml:analyze/language:javascript-typescript` and `…:python`. It carries NO alert count. #137's `Analyze (javascript-typescript)` and `CI Complete` both succeeded. So "fails with 1 high new alert" was a misreading of a neutral cannot-determine result; the finding's own secondary note about python config drift was in fact the whole story. STILL LIVE, and it is the real defect: the same warning fires today. On PR #145 the CodeQL check says *"1 configuration present on refs/heads/main was not found: codeql.yml:analyze/language:python"* — so code scanning warns it "may not have found all the alerts" on every PR. It did NOT "resolve on merge" as the finding predicted. Repo-side action would be WRONG here: `codeql.yml`'s matrix excludes python **deliberately**, with the rationale in the file ("the only Python here is Alembic migrations (path-ignored) plus two config-glue files, so a Python job would add ~4 min/run for ~no coverage"), and every committed revision of that file has excluded it. The mismatch is a stale python CodeQL configuration registered on GitHub's side, not drift in the repo. LEFT: delete that stale configuration in the Security tab so code scanning stops expecting it — do NOT add python to the matrix. Kept anyway from bca4b38 (#145): the db-editor read path was audited end-to-end and `resolveIdent()` now interpolates the catalog's own copy of each identifier, pinned by 13 cases — a real hardening independent of this alert, and `dbEditor.js` draws no CodeQL alert on a PR that rewrites its query construction. MECHANISM of the original misreading, observed live on #145 2026-08-04: the CodeQL summary check posts BEFORE the `Analyze` job finishes, in a `neutral` "cannot determine … configuration not found" state carrying no alert section at all — its only link is *"View all branch alerts"*, a query returning branch-wide open alerts rather than PR-introduced ones. Reading that link's result as "this PR introduced N alerts" produces exactly the claim this finding made. After the analysis completes the summary is replaced by one that does carry a real "New alerts in code changed by this pull request" count. Also learned: alerts surface as review comments from `github-advanced-security[bot]`, and check bodies are readable with `get_check_run` — that is how to read alert state without Security-tab access. When checking, confirm the `Analyze` job's completion timestamp is EARLIER than the summary check's, or the summary is the pre-analysis one and says nothing about alerts)
+- [ ] **CodeQL reports 1 high-severity alert attributed to PR #137's changed lines — needs Security-tab triage** 🔼
+  - Tracking: 🔎 needs-GitHub-check 2026-08-04 (**REFUTED AS FILED — the premise is wrong; there was no high-severity alert.** The check-run body was finally read this session via `get_check_run` on #137's CodeQL check (id 90632092098), which reports `conclusion: neutral`, title "2 configurations not found", and the body: *"Code scanning cannot determine the alerts introduced by this pull request, because 2 configurations present on refs/heads/main were not found"* — listing `codeql.yml:analyze/language:javascript-typescript` and `…:python`. It carries NO alert count. #137's `Analyze (javascript-typescript)` and `CI Complete` both succeeded. So "fails with 1 high new alert" was a misreading of a neutral cannot-determine result; the finding's own secondary note about python config drift was in fact the whole story. STILL LIVE, and it is the real defect: the same warning fires today. On PR #145 the CodeQL check says *"1 configuration present on refs/heads/main was not found: codeql.yml:analyze/language:python"* — so code scanning warns it "may not have found all the alerts" on every PR. It did NOT "resolve on merge" as the finding predicted. Repo-side action would be WRONG here: `codeql.yml`'s matrix excludes python **deliberately**, with the rationale in the file ("the only Python here is Alembic migrations (path-ignored) plus two config-glue files, so a Python job would add ~4 min/run for ~no coverage"), and every committed revision of that file has excluded it. The mismatch is a stale python CodeQL configuration registered on GitHub's side, not drift in the repo. LEFT: delete that stale configuration in the Security tab so code scanning stops expecting it — do NOT add python to the matrix. Kept anyway from bca4b38 (#145): the db-editor read path was audited end-to-end and `resolveIdent()` now interpolates the catalog's own copy of each identifier, pinned by 13 cases — a real hardening independent of this alert, and `dbEditor.js` draws no CodeQL alert on a PR that rewrites its query construction. MECHANISM of the original misreading, observed live on #145 2026-08-04: the CodeQL summary check posts BEFORE the `Analyze` job finishes, in a `neutral` "cannot determine … configuration not found" state carrying no alert section at all — its only link is *"View all branch alerts"*, a query returning branch-wide open alerts rather than PR-introduced ones. Reading that link's result as "this PR introduced N alerts" produces exactly the claim this finding made. After the analysis completes the summary is replaced by one that does carry a real "New alerts in code changed by this pull request" count. Also learned: alerts surface as review comments from `github-advanced-security[bot]`, and check bodies are readable with `get_check_run` — that is how to read alert state without Security-tab access. When checking, confirm the `Analyze` job's completion timestamp is EARLIER than the summary check's, or the summary is the pre-analysis one and says nothing about alerts)
   - ↪ _from: Orchestration session 2026-07-29 · PR #137 code-scanning check (session had no code-scanning API access to read the alert body)_
   - The PR-level CodeQL check on #137 fails with "1 high" new alert in changed code (first seen at head 5549643, squashed into ce17654 (#137)). The commits under the check are JSDoc-annotation-only, and the check's own summary warns that with a diff this large pre-existing alerts get attributed to the PR — so this is almost certainly a pre-existing issue surfaced by line attribution, but that is unconfirmed until someone reads the alert at https://github.com/EraPartner/Vision/security/code-scanning?query=pr%3A137+tool%3ACodeQL+is%3Aopen. Also noted there: this branch's codeql.yml matrix is [javascript-typescript, actions] while main also analyzes python (config drift from before the branch forked) — resolves on merge.
   - Fix: triage the alert in the Security tab; if real, fix at the flagged site and pin with a test; if pre-existing, dismiss-with-reason or fix in its own change. Status comment with full context is on PR #137.
@@ -5005,7 +5250,8 @@ look-changing one.
   - `apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js:63-73` returns `cashflow_forecast_accuracy` rows snake_case (`method_id`, `sample_days`), but `src/services/calculations/forecast/methods/ensemble.js:44` (`computeWeights`) filters on `r.methodId` — always `undefined` for real DB rows — so the filter drops every persisted row and `forecast/index.js`'s ensemble call falls back to equal-weighting all point methods whenever Postgres is up. The accuracy-based weighting this store exists for only ever runs against the DB-down in-memory fallback in `forecast/accuracyStore.js`, which is camelCase (`methodId`/`sampleDays`). Inverse hazard: `src/routes/aggregations.js:174-175` groups on `row.method_id`, correct for DB rows but an undefined key if ever fed fallback-shaped rows.
   - Fix: pick one shape at the accuracyStore boundary (mapping DB rows to camelCase there matches ensemble's contract and fixes the route by making the store's output uniform — route then reads camelCase too), replace the three getters' justified `Promise<any[]>` with the real typedef once uniform, and pin with a test where `computeWeights` receives repository-shaped rows and produces non-equal weights.
 
-- [ ] **requestId reaches only 3 of ~286 logger call sites — no child-logger/ALS seam, so service/repo logs are uncorrelated** 🔼 🔎 verified-present 2026-07-11
+- [ ] **requestId reaches only 3 of ~286 logger call sites — no child-logger/ALS seam, so service/repo logs are uncorrelated** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W5 (cross-cutting concerns)_
   - evidence: `config/logger.js` is a module-level singleton with no `child()`/context mechanism (lines 37-50). `req.id` appears in log payloads only at `src/main.js:220` (entry debug line), `src/middleware/errorHandler.js:110`, and `src/routes/ai.js:288`. The other ~283 `logger.*` calls across 69 files (e.g. every service/repository warn/error) carry no correlation id, so a mid-request warning can't be tied to the request that the errorHandler later logs. The requestId middleware docstring (`src/middleware/requestId.js:4-8`) only promises envelope propagation, not log propagation — the gap is architectural, not accidental.
   - fix: an `AsyncLocalStorage` store set in the requestId middleware + `logger` reading `store.getStore()?.requestId` into `formatMessage` gives correlation to all 286 sites with zero call-site churn (no need for a full pino child-logger migration).
@@ -5015,12 +5261,14 @@ look-changing one.
   - evidence: the `AppError` set (`src/middleware/errorHandler.js:41-75`) covers 400/401/403/404/409/429 only — no 502/503/504 semantics for provider outage or timeout, so those become generic 500 `INTERNAL_SERVER_ERROR` with the prod-masked message (errorHandler.js:118-119). `services/` has 41 raw `throw new Error(` vs 72 typed, concentrated in exactly the upstream layer: `services/prices/priceProviderRegistry.js` (5), `services/research/adapters/*` (12+ incl. `httpClient.js`), `services/priceProviderService.js` (3), `services/dataImportService.js` (3). The research aggregator swallows per-provider failures in-chain (`researchAggregator.js:101,166,216`), but price/import throws do reach the handler as 500s. Separately, `AiChatServiceError extends Error` (`src/services/aiChatService.js:29`) and `ToolValidationError extends Error` (`src/services/aiChat/tools/_validate.js:11`) sit outside the AppError hierarchy and require hand-written translation at `src/routes/ai.js:78` and `:350` — no written rule says which layer owns HTTP semantics (docs/reference/service-layer.md documents per-service behavior but states no layer rule).
   - fix: add `UpstreamError` (502) / `UpstreamTimeoutError` (504) to errorHandler.js; make `AiChatServiceError` extend `AppError` (it already carries status+code) to delete the ai.js translation shims; state the rule ("services throw typed AppErrors; only middleware maps to HTTP") in service-layer.md.
 
-- [ ] **Feature toggles re-accumulated after ADR-035 ("no flags") in three uncoordinated layers with no placement/precedence rule** 🔼 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (documented the three toggle layers + precedence (user setting > env > coded default); consolidating the layers in code remains)
+- [ ] **Feature toggles re-accumulated after ADR-035 ("no flags") in three uncoordinated layers with no placement/precedence rule** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (documented the three toggle layers + precedence (user setting > env > coded default); consolidating the layers in code remains)
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W5 (cross-cutting concerns)_
   - evidence: ADR-035 (2026-04-24) removed the flag system, declaring "all features are always enabled... enabling condition is now the presence of configuration". Since then toggles returned in three layers: boot-time backend env (`IMPORT_PIPELINE_V2`, `AI_CHAT_ENABLED` — `src/config/env.js:108,94`), build-time frontend env (`VITE_ENABLE_PER_ACCOUNT_HOLDINGS`, `VITE_SKIN_V2` — `apps/frontend/src/lib/env.ts`, per ADR-103/104), and runtime user settings (`colorblindGainLoss` setting **overrides** `VITE_SKIN_V2` after hydration, with a localStorage first-paint cache — a 3-level precedence documented only in code comments in `lib/env.ts:99-106`/`lib/skin.ts`). Provider keys have their own settings-over-env precedence (`src/services/research/providerKeys.js:4-10`). `docs/reference/environment-variables.md:19` documents only `.env`-file layering; nothing states where a new toggle should live or the general env-vs-settings precedence, and ADR-035 is now stale as the governing statement.
   - fix: a short ADR/reference page defining the three toggle layers (build-time VITE / boot env / runtime setting), when each is appropriate, and the standing precedence rule (setting > env > default); note it supersedes ADR-035's "no toggles" posture.
 
-- [ ] **Transaction/locking discipline is real but unwritten — no rule for when `withTransaction` is required, and single-user-ness as the concurrency model exists only as asides** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Transaction/locking discipline is real but unwritten — no rule for when `withTransaction` is required, and single-user-ness as the concurrency model exists only as asides** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W5 (cross-cutting concerns)_
   - evidence: inventory — *wrapped + locked*: import commit (`services/importPipeline/commit.js:73`), account merge (`accountMergeService.js:28-34`, FOR UPDATE), recipient merge (`recipientMergeService.js:50-54`), splits (`splitRepository.js:81,122,327-329`, FOR UPDATE), planned execute (`plannedTransactionRepository.js:647,696` + unique-index idempotency per `plannedExecutionService.js:9-12`), transfer reconciliation (`transferReconciliationService.js:96,152-154`), moveHolding, dbEditor (manual BEGIN/FOR UPDATE, `dbEditor.js:198-216,413-440`). *Unwrapped multi-write*: portfolio import commit is deliberately per-row atomic with a header rationale (`services/portfolioImportPipeline/commit.js:1-13`); `services/importPipeline/match.js:30-144` flips batch status + inserts recipients + chunk-updates staging rows with no tx (resumability relied on implicitly); trade create/delete + cash leg is the in-code-acknowledged non-atomic pair (`controllers/investmentController.js:426-437` NOTE comment, delete-side cascade error swallowed at `:475-478` — same root cause as the already-filed repo-client finding, not re-filed); `quoteBackfillService.js:599` delete-then-reinsert of price history (cache-like, backfillable). The single-user assumption that makes the unwrapped set acceptable appears only as asides (`docs/adr/013:98`, `docs/adr/009:62`) — no architecture page states the concurrency model or the "when must a flow be wrapped" rule.
   - fix: one page in docs/architecture/ stating: concurrency model = single user + optional concurrent background jobs; wrap-required criteria (cross-table invariant, merge, ledger pair); "per-row atomic + resumable" as the sanctioned alternative for pipelines, citing the two commit files as exemplars.
@@ -5045,12 +5293,14 @@ look-changing one.
   - evidence: `event.sender !== mainWindow.webContents` guard exists in exactly 5 handlers: `backup:restore` (main.js:2628), `app:renderer-ready` (2818), `app:set-badge` (3001), `app:get-accent-color` (3022), `theme:persist-splash` (3030). The remaining 15 handlers bind `_event` and skip the check, including state-changing ones: `backup:run` (2691), `backup:set-passphrase` (2742), `backup:save-settings` (2724), `update:install-shell` (2416), `update:pull-image` (2394), `recovery:retry` (2774). Exploitability was separately audited clean (single window, contextIsolation); the design problem is that each new handler must *remember* to add the guard, and the current 5/20 split shows nobody can tell which omissions are deliberate.
   - fix: add a `secureHandle(channel, fn)` wrapper that applies the sender check once and use it for all registrations; opt *out* explicitly (with a comment) for the error-page recovery channels if they legitimately come from a non-main webContents.
 
-- [ ] **AI-chat SSE event contract is hand-synchronized in three places with an internal→wire rename layer; shared `@vision/types` package exists but carries none of it** 🔼 🔎 verified-present 2026-07-11
+- [ ] **AI-chat SSE event contract is hand-synchronized in three places with an internal→wire rename layer; shared `@vision/types` package exists but carries none of it** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: the event vocabulary lives in (1) the route-header comment `apps/node-backend/src/routes/ai.js:16–22`, (2) the docs table `docs/api/ai.md` (~lines 214–218), (3) the frontend discriminated union `apps/frontend/src/types/aiChat.ts:82–86` — all maintained by hand. On top, the service emits internal names that the route renames for the wire: `tool_message` → `tool_result` (ai.js:327–328) and `assistant_message` → swallowed, replaced by terminal `done` (ai.js:330–332, 340–345); unknown event types are silently dropped by the switch default (ai.js:333–334). Adding one service event means touching service, route switch, docs, and frontend types/store. Meanwhile ai.js:44 already imports `ApiErrorCode` from `@vision/types/errors`, so the shared-package seam exists; the `meta.renderAs` vocabulary (`'table'|'line'|'bar'|'pie'`) is likewise duplicated — 31 backend string literals (tools/*.js) vs frontend `ToolRenderAs` (types/aiChat.ts:49).
   - fix: add `@vision/types/aiChat` exporting SSE event-name constants + payload shapes and the tool-result envelope (`{ok, data, meta: {renderAs, …}}`); import it from route, service, and frontend types; drop the internal/wire rename by emitting wire names from the service.
 
-- [ ] **Context-window management is message-count truncation only — full tool-result JSON replayed verbatim, no token budget, no `num_ctx`/options ever passed to Ollama** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Context-window management is message-count truncation only — full tool-result JSON replayed verbatim, no token budget, no `num_ctx`/options ever passed to Ollama** 🔼
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: history trimming is `history.slice(-maxHistoryMessages)` (default 30) at `apps/node-backend/src/integrations/ollama/prompts.js:117`; every persisted `tool` row is replayed with its full stringified result payload (prompts.js:86–93) — a single result can carry up to `settings.aiChat.maxToolRows` rows of table JSON, so 30 messages of tool-heavy history can dwarf a small local model's context while "30 messages" reads as safe. No summarization tier exists. Compounding it, `runChatTurn` never passes `options` (e.g. `num_ctx`) to the client even though both `chat` and `chatStream` accept it (client.js:169, 214; service call sites aiChatService.js:244–260), so the model's default context window silently governs how much of the carefully-built prompt survives Ollama's own front-truncation.
   - fix: budget by size, not count — e.g. cap replayed tool-result payloads (elide `data` beyond N rows, keep `meta`), walk history backwards accumulating an approximate char/token budget, and thread a configurable `options.num_ctx` through the service so prompt size and model window are managed by the same code.
@@ -5060,34 +5310,39 @@ look-changing one.
   - evidence: `parseToolCallArguments` in `apps/node-backend/src/services/aiChatService.js:43–56` (returns the raw string unchanged when `JSON.parse` fails, line 51–53) vs `coerceArguments` in `services/aiChat/tools/index.js:107–123` (throws `ToolValidationError` on the same input). The service normalizes at aiChatService.js:318, then `dispatchTool` re-coerces the already-parsed value at index.js:166. The pipeline works end-to-end only because the silent-fallback string happens to hit the throwing path one layer down — two owners of one responsibility, and the persisted `toolArgs` (aiChatService.js:330) can be the *unparsed* string while the dispatcher rejected it.
   - fix: delete the service-side parser; let `dispatchTool` be the single coercion point and have it return the coerced args alongside the result so persistence stores what the tool actually saw.
 
-- [ ] **Implicit, drifting tool-context contract: dispatcher passes `{conversationId, cache}`, tools destructure `{maxRows, cache}` — `conversationId` is never read, `maxRows` never supplied** 🔽 🔎 verified-present 2026-07-11
+- [x] **Implicit, drifting tool-context contract: dispatcher passes `{conversationId, cache}`, tools destructure `{maxRows, cache}` — `conversationId` is never read, `maxRows` never supplied** 🔽 ✅ 2026-08-25 · revalidated the existing typedef, reduced context to the real per-turn cache and explicit configured maxRows, removed the unused conversationId path and dead updateMessageStatus repository method; 139 focused tests, typecheck, lint, and independent review passed
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: dispatch site passes `{ conversationId: conversation.id, cache: toolCache }` (aiChatService.js:325); no tool references `conversationId` (grep across `services/aiChat/tools/*.js` = zero hits); 26 of 29 tools declare `async run(args, { maxRows = settings.aiChat.maxToolRows } = {})` (e.g. expenses.js:59, portfolio.js:76) — `maxRows` only ever comes from the settings default since the dispatcher never sends it (it's a disguised test-injection seam); two tools take `_context` (insights.js:75, planned.js:257). No typedef documents what context contains. Related dead code: `aiChatRepository.updateMessageStatus` (aiChatRepository.js:143) has no callers — `status` is only ever written at insert ('complete' default / 'error' fallback, aiChatService.js:353).
   - fix: declare a `ToolContext` JSDoc typedef in `tools/index.js` ({cache, maxRows}), drop the unused `conversationId` from dispatch, and either pass `maxRows` from the dispatcher or rename the param to make the test-seam intent explicit; delete `updateMessageStatus` or wire it into streaming-failure marking.
 
-- [ ] **Provider seam is 80% there but the error taxonomy and history-replay shape leak Ollama specifics** 🔽 🔎 verified-present 2026-07-11
+- [x] **Provider seam is 80% there but the error taxonomy and history-replay shape leak Ollama specifics** 🔽 ✅ 2026-08-25 · the injectable chat client now maps structurally coded provider errors without Ollama class identity, preserves abort/other/uncoded semantics, and documents the Ollama-lenient orphan tool-history assumption; integration docs were reconciled to current client/config behavior and independently reviewed
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: the good seam — `runChatTurn` takes an injectable `ollamaClient` (aiChatService.js:139) and depends only on the normalized duck-typed contract `{chat, chatStream} → {content, toolCalls, evalCount, …}` (client.js:192–203, 393–403), so an OpenAI-compatible client is one new factory. The leaks: `instanceof OllamaError` checks in the service (aiChatService.js:277) and routes (ai.js:151); `settings.ollama.defaultModel` referenced from the service (aiChatService.js:102, 203); `/api/ai/status` + `/models` call `getOllamaClient()` directly (ai.js:34); and history replay emits orphan `role:'tool'` messages with no preceding assistant `tool_calls` (prompts.js:78–93, deliberate per the comment) — Ollama tolerates this, strict OpenAI-shape endpoints reject it, so the replay format is provider-lenient by accident.
   - fix: no multi-provider work needed (local-first by design); just decouple on the cheap seams — match on `err.code` instead of `instanceof OllamaError` in the service, and note the orphan-tool-message replay assumption in the prompts.js header so a future provider swap knows it's load-bearing.
 
-- [ ] **Electron shell state = 17 scattered module-scope `let` globals, including a manually re-synced derived trio (`appPort`/`APP_URL`/`HEALTH_URL`)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Electron shell state = 17 scattered module-scope `let` globals, including a manually re-synced derived trio (`appPort`/`APP_URL`/`HEALTH_URL`)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: main.js module-scope mutables: `i18n` (15), `appPort`/`APP_URL`/`HEALTH_URL` (212–214), `healthWatchdogTimer`/`watchdogFailureCount`/`backendReportedLost` (1083–1085), `mainWindow` (1321), `windowBoundsSaveTimer` (1464), `shellUpdateCheckInFlight`/`pendingShellUpdate` (1568–1569), `backupInFlight` (2690), `rendererReady` (2797), `workDir`/`overrideFiles`/`useRepoMode` (3098–3102), `isQuitting` (3428). The URL pair is derived from `appPort` yet stored separately and re-synced by hand inside `launch()` (main.js:3151–3153) — a forgot-to-update bug waiting for the next writer. No lifecycle/state object groups any of this.
   - fix: cheapest wins first — replace the trio with `appUrl()`/`healthUrl()` accessor functions over the single `appPort`; when extracting modules (see monolith finding) let each extracted module own its state (watchdog state → health module, update flags → updater module) instead of introducing a big state object.
 
-- [ ] **Electron IPC contract triplicated by hand: main.js handlers ↔ preload JSDoc ↔ renderer TS types (with `electronRecovery` untyped)** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Electron IPC contract triplicated by hand: main.js handlers ↔ preload JSDoc ↔ renderer TS types (with `electronRecovery` untyped)** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: the same 20-method surface is described in `packaging/electron/main.js` (handler returns), `packaging/electron/preload.js:10–188` (JSDoc), and `apps/frontend/src/lib/api/electron.ts:6–63` (hand-written `ElectronUpdater`/`ElectronBackup`/`ElectronAPI` types, accessed via per-call `window as` casts at electron.ts:71–81 rather than a global `Window` augmentation). Optional members (`checkRelease?`, `isEncrypted?` etc., electron.ts:7,32) are a deliberate old-shell-compat strategy — good — but nothing ties the three copies together, and `electronRecovery` (preload.js:175–188) has no renderer type at all (used only by `error.html`). Return-shape drift between a handler and electron.ts would be caught by nothing.
   - fix: author one `electron-api.d.ts` next to preload.js as the source of truth, reference it from preload JSDoc (`@type` imports) and re-export it into the frontend via the existing `@vision/types` package.
 
-- [ ] **Demo compose file is outside the compose-mirror rule that exists specifically because of the v1.0.2 data-loss bug** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Demo compose file is outside the compose-mirror rule that exists specifically because of the v1.0.2 data-loss bug** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W6 (aiChat + Electron shell design)_
   - evidence: main.js is shared, not forked — demo divergence is a single runtime flag `__IS_DEMO` referenced 4× (main.js:80–83, 84, 92, 116), which is clean. But `packaging/electron/resources-demo/docker-compose.yml` is a hand-maintained sibling of `resources/docker-compose.yml` (same three named volumes today: postgres_data/attachments_data/vision_cache_data, resources compose:54–57 vs resources-demo compose:65–68), and the path-scoped rule `.claude/rules/packaging.md` mandates mirroring only for root ↔ `resources/docker-compose.yml` — the demo copy can silently drift (a new named volume added to root+resources but not resources-demo would re-create the v1.0.2 failure mode inside the demo, low stakes since demo data is synthetic and rebuildable).
   - fix: add `resources-demo/docker-compose.yml` to the mirror checklist in `.claude/rules/packaging.md`, or better, have `install-demo.sh` derive the demo compose from `resources/docker-compose.yml` + a small override instead of a full copy.
 
 ### 🏗️ DevOps / CI-CD / Packaging
 
-- [ ] **`docs/performance/materialized-views.md` still describes a dropped MV and a dropped aggregate table as live, in sections beyond the one line already fixed** 🔽
+- [x] **`docs/performance/materialized-views.md` still describes a dropped MV and a dropped aggregate table as live, in sections beyond the one line already fixed** 🔽 ✅ 2026-08-25 · reconciled every live-sounding reference with migrations 0080/0082: both retired objects are marked historical, only three materialized views and `agg_split_outstanding` remain live, and stale operations/performance advice is removed.
   - ↪ _from: Orchestration session 2026-08-11 · surfaced by the implementer while closing the data-model drift residue; deliberately left out of that change's scope_
   - `docs/performance/materialized-views.md` — a whole `### mv_bank_balances` section (~:84-93) still presents it as a live view with no dropped marker, though `0082_drop_mv_bank_balances.py` dropped it and `materializedViewService.js`'s `MATERIALIZED_VIEWS` no longer lists it. The `##### agg_recipient_totals` section (~:117-134) still describes a live trigger-maintained table, though migration `0080` dropped it — `docs/reference/data-model.md`'s own `agg_recipient_totals` section already marks it dropped, so the two pages now contradict each other. The "Performance Benefits" table also carries a "Bank balances" row implying the MV still exists.
   - Only the strategy table at `:25` was corrected in `c6835c4 (#165)`; that fix was scoped to evidence item (1) of the data-model finding and stopped there on purpose.
@@ -5166,14 +5421,16 @@ look-changing one.
   - `/api/admin/update/check`'s payload omits `update_mode` (`routes/admin.js:81-97`) → `UpdateNotification` defaults to `'source'` (`UpdateNotification.tsx:64`) and shows an Install button to browser users with no `isElectron()` gate (unlike `AboutSection.tsx:216`); clicking it calls `installShellUpdate()`, which no-ops outside Electron (`lib/electron.ts:140-144`) and shows a "Close and reopen the app" toast — wrong instructions for a docker-compose self-host (the correct action is `docker compose pull`). `settings.app.updatesHintWeb` (`en.json:2442`) is equally wrong for pure-web deployments. `source_launcher_available` (produced in three places, `main.js:1793,1875,1904`) is consumed nowhere in the frontend — a dead payload; the `update_mode` gate above is the live half of the same wiring gap.
   - Fix: **DECIDED 2026-07-10: both halves** — gate the Install button on `isElectron()` AND have the backend return `update_mode: 'docker-compose'` with correct pull/up instructions on non-Electron deployments (fix `updatesHintWeb` to match). Docker users keep the update notice, lose the dead button.
 
-- [ ] **Devcontainer writes platform-specific state into the shared host workspace (node_modules, venv, .env)** ⏫ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 55d9364 (#93) (the repo-root .env write is already guarded by [ -f .env ] — no clobber (already satisfied)) 🔎 re-verified-open 2026-08-10 (completed-item audit: tick refuted — The two disruptive sub-issues are unfixed and directly reachable in the current tree: (1) post-create.sh:68-70 still rebuilds ./venv with Linux CPython directly on the bind-mounted workspace on first/broken boot, breaking the host…) 🔎 partial-7399f71 (#166) 2026-08-13 (**the two disruptive sub-issues the 2026-08-10 audit named are DONE; the third bullet of the Fix line is not, so this stays open on purpose.** DONE: seven native named volumes declared in `.devcontainer/bin/claude` shadow `./venv` and *every* `node_modules` in the tree at the same in-repo paths, so the container installs into private Linux trees and the host's copies are never touched. Root `node_modules` alone is insufficient — bun gives each workspace its own, and `apps/frontend/node_modules/@tailwindcss/postcss` exists today; the volume list covers root + the four workspaces (`packages/*` resolves to shared-utils and types) + `packaging/electron`, which is not a workspace but is shadowed defensively so an in-container install cannot clobber the host's Electron deps. Named volumes were chosen over the finding's other option (`/home/dev/venv` + `ALEMBIC_BIN`) deliberately: `package.json` hardcodes `venv/bin/alembic` in **three** scripts (`db:current`/`db:history`/`db:revision`) that `ALEMBIC_BIN` never reaches, so relocating would break them *inside* the container, and it does nothing for `node_modules` at all. Volumes also fail safe — a non-attaching volume degrades to today's shared bind mount, not to a novel broken state — and revert by deleting the `dep_volume` lines. **A trap was found and defused that would have broken first boot:** `rm -rf ./venv` on a mountpoint fails EBUSY, so under `set -e` the old line would have aborted post-create *after* clearing the volume's contents; it now clears contents via `find -mindepth 1` and rebuilds in place. `perms-fix.sh` derives its chown list from `/proc/self/mountinfo` rather than hardcoding it, so it cannot drift from the launcher and — importantly — cannot recursively rewrite host file ownership when an old launcher leaves those paths as plain host directories. `bin/doctor` now fails when `venv`/`node_modules` are not mountpoints (i.e. a container predating this change is still sharing the host's trees) and `post-start.sh` warns when the container's `node_modules` is older than `bun.lock`. Docs: `.devcontainer/README.md` + `docs/guides/devcontainer.md` gained persistence tables, the activation step (`VISION_REBUILD=1` once), reset commands, and the new consequence that a host-side `bun install` no longer reaches the container. Two citation corrections for the next reader: `bin/claude:93` is an env var, not a `bun install` — the launcher's relevant line is the lifecycle replay at `:118-124`; and **there is no `devcontainer.json` and no devcontainer compose file**, since ADR-077 moved this sandbox to `apple/container`, so `bin/claude` is the only config surface. **LEFT — the third Fix bullet, "write the generated env file to a container-local path", is still undone:** on a fresh clone `post-create.sh:78-91` still writes a repo-root `.env` carrying `POSTGRES_PASSWORD=localdev` that host-side `docker compose` (`env_file`) and `loadDotenv` will silently consume. Only the no-clobber guard was ever built; #93's note called that "already satisfied" and the 2026-08-10 audit did not reopen it, so it has never actually been delivered. **ALSO LEFT — the load-bearing runtime assumption is unproven and cannot be proven here:** that `apple/container` accepts a named volume whose destination is *nested inside* a bind-mount destination and orders it after the bind. There is no container daemon in the agent environment. The precedent is strong but not identical — `-v "$DC:/workspaces/Vision/.devcontainer:ro"` is already a nested mount that demonstrably works, and the new mounts sit in the same argument position — and the failure mode is loud and non-destructive (`container run` errors, nothing is lost). What *was* executed, by simulating the volumes with real Linux bind mounts: the EBUSY failure, `bun install` into a mounted empty tree, the fast no-op second run, and the underlying host directory still empty after unmount. **Someone with the real host must run `VISION_REBUILD=1` once and confirm boot before this item is ticked.** Note `doctor` now exits 1 for any container created before this change until that rebuild happens — intentional, but it is a changed exit code.)
+- [ ] **Devcontainer writes platform-specific state into the shared host workspace (node_modules, venv, .env)** ⏫
+  - Tracking: 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 55d9364 (#93) (the repo-root .env write is already guarded by [ -f .env ] — no clobber (already satisfied)) 🔎 re-verified-open 2026-08-10 (completed-item audit: tick refuted — The two disruptive sub-issues are unfixed and directly reachable in the current tree: (1) post-create.sh:68-70 still rebuilds ./venv with Linux CPython directly on the bind-mounted workspace on first/broken boot, breaking the host…) 🔎 partial-7399f71 (#166) 2026-08-13 (**the two disruptive sub-issues the 2026-08-10 audit named are DONE; the third bullet of the Fix line is not, so this stays open on purpose.** DONE: seven native named volumes declared in `.devcontainer/bin/claude` shadow `./venv` and *every* `node_modules` in the tree at the same in-repo paths, so the container installs into private Linux trees and the host's copies are never touched. Root `node_modules` alone is insufficient — bun gives each workspace its own, and `apps/frontend/node_modules/@tailwindcss/postcss` exists today; the volume list covers root + the four workspaces (`packages/*` resolves to shared-utils and types) + `packaging/electron`, which is not a workspace but is shadowed defensively so an in-container install cannot clobber the host's Electron deps. Named volumes were chosen over the finding's other option (`/home/dev/venv` + `ALEMBIC_BIN`) deliberately: `package.json` hardcodes `venv/bin/alembic` in **three** scripts (`db:current`/`db:history`/`db:revision`) that `ALEMBIC_BIN` never reaches, so relocating would break them *inside* the container, and it does nothing for `node_modules` at all. Volumes also fail safe — a non-attaching volume degrades to today's shared bind mount, not to a novel broken state — and revert by deleting the `dep_volume` lines. **A trap was found and defused that would have broken first boot:** `rm -rf ./venv` on a mountpoint fails EBUSY, so under `set -e` the old line would have aborted post-create *after* clearing the volume's contents; it now clears contents via `find -mindepth 1` and rebuilds in place. `perms-fix.sh` derives its chown list from `/proc/self/mountinfo` rather than hardcoding it, so it cannot drift from the launcher and — importantly — cannot recursively rewrite host file ownership when an old launcher leaves those paths as plain host directories. `bin/doctor` now fails when `venv`/`node_modules` are not mountpoints (i.e. a container predating this change is still sharing the host's trees) and `post-start.sh` warns when the container's `node_modules` is older than `bun.lock`. Docs: `.devcontainer/README.md` + `docs/guides/devcontainer.md` gained persistence tables, the activation step (`VISION_REBUILD=1` once), reset commands, and the new consequence that a host-side `bun install` no longer reaches the container. Two citation corrections for the next reader: `bin/claude:93` is an env var, not a `bun install` — the launcher's relevant line is the lifecycle replay at `:118-124`; and **there is no `devcontainer.json` and no devcontainer compose file**, since ADR-077 moved this sandbox to `apple/container`, so `bin/claude` is the only config surface. **LEFT — the third Fix bullet, "write the generated env file to a container-local path", is still undone:** on a fresh clone `post-create.sh:78-91` still writes a repo-root `.env` carrying `POSTGRES_PASSWORD=localdev` that host-side `docker compose` (`env_file`) and `loadDotenv` will silently consume. Only the no-clobber guard was ever built; #93's note called that "already satisfied" and the 2026-08-10 audit did not reopen it, so it has never actually been delivered. **ALSO LEFT — the load-bearing runtime assumption is unproven and cannot be proven here:** that `apple/container` accepts a named volume whose destination is *nested inside* a bind-mount destination and orders it after the bind. There is no container daemon in the agent environment. The precedent is strong but not identical — `-v "$DC:/workspaces/Vision/.devcontainer:ro"` is already a nested mount that demonstrably works, and the new mounts sit in the same argument position — and the failure mode is loud and non-destructive (`container run` errors, nothing is lost). What *was* executed, by simulating the volumes with real Linux bind mounts: the EBUSY failure, `bun install` into a mounted empty tree, the fast no-op second run, and the underlying host directory still empty after unmount. **Someone with the real host must run `VISION_REBUILD=1` once and confirm boot before this item is ticked.** Note `doctor` now exits 1 for any container created before this change until that rebuild happens — intentional, but it is a changed exit code.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `.devcontainer/post-create.sh:67-74` — first container boot detects the host's macOS venv as broken, `rm -rf ./venv` and rebuilds it with Linux CPython **on the bind mount**, so back on the host `bun run db:upgrade` (`package.json:37` → `venv/bin/alembic`) dies with "cannot execute binary file" until you manually rebuild the venv.
   - `.devcontainer/post-create.sh:98` + `.devcontainer/bin/claude:93` — `bun install --frozen-lockfile` runs inside the bind-mounted workspace with no volume over `node_modules/`, replacing macOS platform binaries (esbuild/rollup/lightningcss) with Linux ones; every host↔container switch breaks the other side's dev loop until a reinstall.
   - `.devcontainer/post-create.sh:78-91` — on a fresh clone it also writes a repo-root `.env` with `POSTGRES_PASSWORD=localdev` that host-side `docker compose` (`env_file`) and `loadDotenv` would silently consume.
   - Fix: put the container's venv and node_modules outside the mount (named volumes over `./venv` and `./node_modules`, or `/home/dev/venv` + change `ALEMBIC_BIN` in `bin/claude:82`), and write the generated env file to a container-local path.
 
-- [ ] **No enforced branch protection / required status checks on `main`** ⏫ 🔎 needs-GitHub-check 2026-07-11
+- [ ] **No enforced branch protection / required status checks on `main`** ⏫
+  - Tracking: 🔎 needs-GitHub-check 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - The repo is private on a plan tier without classic branch protection or rulesets (`gh api .../branches/main/protection` and `.../rulesets` both 403 "Upgrade to GitHub Pro"). None of the 13 CI gates can structurally block a merge or direct push — they only report. Mitigated today by solo-dev discipline + the "commit to main" workflow, but no backstop if that lapses or a token is compromised.
   - Fix: upgrade to GitHub Team/Pro (or make public) to enable rulesets; require `CI Complete` + CodeQL before merge.
@@ -5193,7 +5450,8 @@ look-changing one.
   - The app runs `alembic upgrade head` unconditionally on every boot. 0055 originally dropped columns/a trigger/a matview; because it ran before the dependent app code shipped, it crashed startup. The fix was manual (a docstring + convention), not tooling-enforced — there's still no CI check flagging destructive DDL (`DROP TABLE/COLUMN`, narrowing `ALTER COLUMN TYPE`) landing without an explicit marker. Self-hosted users with no DB expertise have nothing protecting them from this recurring beyond developer memory of this one incident.
   - Fix: add a CI check (parallel to `verify-compose-sync`) that flags destructive DDL in new migrations and requires an explicit marker/ADR reference.
 
-- [ ] **E2E/accessibility CI workflow has been failing on every single nightly run for a month with zero alerting** ⏫ 🔎 partial 2026-07-11 (root-cause .env stub now written before compose up per edde229; stale "not yet had a live run" comment at e2e.yml:8-11 and failure alerting still absent) 🔧 *(escalated — confirmed worse than originally reported)* ✅ 2026-07-14 · 55d9364 (#93) (stale e2e.yml "never had a live run" comment removed) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — The workflow is still failing on ~93% of nightly runs through the verification date, for a different (test/app-level, not infra) reason each time it's checked; alerting exists but is not being acted on, so the backlog item's under…)
+- [ ] **E2E/accessibility CI workflow has been failing on every single nightly run for a month with zero alerting** ⏫
+  - Tracking: 🔎 partial 2026-07-11 (root-cause .env stub now written before compose up per edde229; stale "not yet had a live run" comment at e2e.yml:8-11 and failure alerting still absent) 🔧 *(escalated — confirmed worse than originally reported)* ✅ 2026-07-14 · 55d9364 (#93) (stale e2e.yml "never had a live run" comment removed) 🔎 partial-audit 2026-08-10 (completed-item audit: root fix confirmed, sub-case remains — The workflow is still failing on ~93% of nightly runs through the verification date, for a different (test/app-level, not infra) reason each time it's checked; alerting exists but is not being acted on, so the backlog item's under…)
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `.github/workflows/e2e.yml:8-11` claims "has not yet had a live run on GitHub Actions" — that comment is **stale**. Live `gh run list --workflow=e2e.yml` shows it has run on its nightly schedule every day since at least 2026-06-01 (30/30 fetched runs) and **failed every single time**. Root cause confirmed from an actual job log: the workflow never writes a `.env` file before `docker compose -f docker-compose.yml up -d --build`, so the stack never comes up (`env file ... not found`). The only failure handling (`if: failure()` at `:86-88`) dumps logs into the run's own output — no issue creation, no Slack/email — so this has been silently red for ~30 consecutive days.
   - Fix: have the workflow write a minimal `.env` before `docker compose up` (mirror `ci.yml`'s pattern at lines 532/601), re-verify via `workflow_dispatch`, then add failure notification (issue auto-creation or similar). Also fix the stale in-file comment.
@@ -5292,7 +5550,8 @@ look-changing one.
   - (b) **`resources-demo/docker-compose.yml` is a third compose copy with the same three volume names but no guard** — its project name differs by design (`visiondemoapp`), so the full check would fail, but a volumes-only comparison would pass today and catch real drift. Extend `scripts/check-compose-sync.js` with a volumes-only third target.
   - (c) The C1 candidate-digest promotion flow is arguably ADR-worthy (it supersedes the flow ADR-051's guard text assumes); write a short ADR if the flow survives its first real release.
 
-- [ ] **`paths-ignore: "*.md"` only matches root-level markdown, and docs-only PRs strand the required check** 🔽 🔎 verified-present 2026-07-11 🔎 needs-companion 2026-07-14 2026-07-14 (fixing the root-only *.md glob by widening to **/*.md would strand the required CI-Complete check on nested-doc-only PRs; kept root-only deliberately. The safe fix needs a companion no-op success workflow with inverted paths (+ branch-protection review))
+- [ ] **`paths-ignore: "*.md"` only matches root-level markdown, and docs-only PRs strand the required check** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 needs-companion 2026-07-14 2026-07-14 (fixing the root-only *.md glob by widening to **/*.md would strand the required CI-Complete check on nested-doc-only PRs; kept root-only deliberately. The safe fix needs a companion no-op success workflow with inverted paths (+ branch-protection review))
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/ci.yml:6-13`, `.github/workflows/codeql.yml:6-13` — nested markdown (`apps/frontend/README.md`, `.github/*.md`, `packaging/release/README.md`) still triggers the full pipeline; conversely a `docs/**`-only PR skips the workflow entirely, leaving a required "CI Complete" check permanently "Expected" and the PR unmergeable.
   - Fix: change the glob to `"**/*.md"` and add a same-name no-op success workflow with inverted `paths` (GitHub's documented pattern) so docs-only PRs can merge.
@@ -5312,7 +5571,8 @@ look-changing one.
   - `.github/dependabot.yml:42-48` — the `docker` ecosystem at `/` covers only the root `Dockerfile`; `postgres:18-alpine` in `docker-compose.yml:3` and `packaging/electron/resources/docker-compose.yml:5`, and the SHA-pinned `debian:bookworm-slim` in `.devcontainer/Dockerfile:15`, get no update PRs — pinned digests silently age (security patches missed).
   - Fix: add `docker-compose` ecosystem entries for `/` and `/packaging/electron/resources`, plus a `docker` entry for `/.devcontainer`.
 
-- [ ] **Release artifacts ship checksums but no provenance/SBOM attestations** 🔽 🔎 verified-present 2026-07-11 🔎 partial-bca4b38 (#145) 2026-08-04 (docker half done: the release build sets `provenance: mode=max` + `sbom: true`, so the pushed image carries a full SBOM and build provenance in the same image index the release digest addresses. The build was already multi-platform, so the index shape is unchanged apart from the extra attestation manifests, and the Trivy step keeps scanning by index digest. LEFT: the mac dmg/zip attestation, blocked on ONE mechanical thing — a commit SHA for `actions/attest-build-provenance`. Every action in this repo is SHA-pinned with a version comment (verified: zero tag-only `uses:` across all workflows and the composite action), and this session cannot resolve a SHA for a repo outside its GitHub scope — `add_repo` refuses cross-owner adds. A guessed pin either fails the release job or breaks the pinning invariant, so it was deliberately not shipped. RECIPE, so this is a paste-and-uncomment job rather than a design task: resolve with `gh api repos/actions/attest-build-provenance/git/refs/tags/v3 --jq .object.sha` (deref if it is a tag object), then in ci.yml's `release` job add `id-token: write` + `attestations: write` to `permissions:` and, BEFORE the `Create GitHub Release` step, a step `uses: actions/attest-build-provenance@<sha> # v3` with `subject-path:` listing `dist/mac/Vision-*.dmg`, `dist/mac/Vision-*.zip`, `dist/mac/vision-source-launcher-*.zip`. Verify after the next release with `gh attestation verify <file> --repo EraPartner/Vision`)
+- [ ] **Release artifacts ship checksums but no provenance/SBOM attestations** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-bca4b38 (#145) 2026-08-04 (docker half done: the release build sets `provenance: mode=max` + `sbom: true`, so the pushed image carries a full SBOM and build provenance in the same image index the release digest addresses. The build was already multi-platform, so the index shape is unchanged apart from the extra attestation manifests, and the Trivy step keeps scanning by index digest. LEFT: the mac dmg/zip attestation, blocked on ONE mechanical thing — a commit SHA for `actions/attest-build-provenance`. Every action in this repo is SHA-pinned with a version comment (verified: zero tag-only `uses:` across all workflows and the composite action), and this session cannot resolve a SHA for a repo outside its GitHub scope — `add_repo` refuses cross-owner adds. A guessed pin either fails the release job or breaks the pinning invariant, so it was deliberately not shipped. RECIPE, so this is a paste-and-uncomment job rather than a design task: resolve with `gh api repos/actions/attest-build-provenance/git/refs/tags/v3 --jq .object.sha` (deref if it is a tag object), then in ci.yml's `release` job add `id-token: write` + `attestations: write` to `permissions:` and, BEFORE the `Create GitHub Release` step, a step `uses: actions/attest-build-provenance@<sha> # v3` with `subject-path:` listing `dist/mac/Vision-*.dmg`, `dist/mac/Vision-*.zip`, `dist/mac/vision-source-launcher-*.zip`. Verify after the next release with `gh attestation verify <file> --repo EraPartner/Vision`)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/release.yml:176-186,281-296` — `build-push-action` doesn't enable SBOM, and the dmg/zip get only self-hosted `.sha256` files (which an attacker who can replace the asset can also replace); no `actions/attest-build-provenance` for either.
   - Fix: add `provenance: mode=max` + `sbom: true` to the docker build and an `actions/attest-build-provenance` step (with `id-token: write`, `attestations: write`) for the mac artifacts.
@@ -5332,7 +5592,8 @@ look-changing one.
   - `docker-compose.yml:2-73`, `packaging/electron/resources/docker-compose.yml` — neither service sets `logging:` limits; the backend logs structured JSON per request/boot and postgres logs too, so a long-lived packaged install grows daemon logs indefinitely unless the user configured the daemon globally.
   - Fix: add `logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }` to both services in both compose files.
 
-- [ ] **Broken migration = silent eternal crash-loop with repeated Alembic invocations** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Broken migration = silent eternal crash-loop with repeated Alembic invocations** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `docker-compose.yml:23` + `apps/node-backend/src/main.js:440,495-499` — a failing migration exits 1 and `restart: unless-stopped` relaunches forever (Docker backoff caps ~1 min), re-running `alembic upgrade head` each time; nothing distinguishes "migration failed, human needed" from "db not up yet", so the Electron user just sees an endless spinner.
   - Fix: on migration failure, write a distinct marker/log line (or exit after N attempts via a boot-attempt counter in `/app/.vision-cache`) that the Electron orchestrator can surface as an actionable error.
@@ -5350,7 +5611,8 @@ look-changing one.
   - Drift note: the Docker-wait/preflight/copy logic is hand-duplicated from `install.sh` (and waits 60s vs 120s in `vision-setup.command`) — three copies to keep aligned.
   - Fix: make regen failure prompt/abort unless `SKIP_DEMO_DATA_REGEN=1`, drop `|| true` from codesign and verify with `codesign -v` before declaring success.
 
-- [ ] **No Alembic heads guard and no local migration-fidelity check; `db:*` scripts hardwired to a fragile venv path** 🔽 🔎 verified-present 2026-07-11
+- [ ] **No Alembic heads guard and no local migration-fidelity check; `db:*` scripts hardwired to a fragile venv path** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
   - `package.json:37-42` — all `db:*` scripts call `venv/bin/alembic`, which `packaging/electron/demo-db/regenerate.sh:37-41` already documents as broken on the host when the venv was built in the devcontainer (it carries its own fallback; the npm scripts don't). There is no `alembic heads`-count check anywhere (a parallel-branch merge creating two heads only surfaces indirectly when CI's `upgrade head` errors), and downgrade fidelity is checked only in CI and only for the top revision (`ci.yml:559-567`) — nothing local, echoing the multiple-stamped-heads demo-volume incident.
   - Fix: add a `db:check` script (single-head assert + `downgrade -1`/`upgrade head` round-trip) reusing regenerate.sh's alembic-resolution fallback, and wire the head-count assert into pre-push.
@@ -5377,25 +5639,29 @@ look-changing one.
   - `apps/node-backend/scripts/densify-asset-history.js:24-33` — inserts into `asset_price_history` and recomputes snapshots with no `--dry-run` or confirmation prompt. Mitigated by the operation being additive-only and idempotent, but running it against the wrong environment gives no warning first. (`index-stats.js` and `check-precision-drift.js`, the other two scripts in the same directory, are read-only and clean.)
   - Fix: add a `--dry-run` flag or an explicit `--yes` confirmation gate before the writes.
 
-- [ ] **Demo-data generator hardcodes `TODAY` to a fixed past date and stamps a literal Alembic revision — the mechanism behind the known demo multi-head crash-loop** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Demo-data generator hardcodes `TODAY` to a fixed past date and stamps a literal Alembic revision — the mechanism behind the known demo multi-head crash-loop** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D3 (residue, closed 2026-07-03)_
   - `packaging/electron/demo-db/generate.mjs:19` — `TODAY` is hard-anchored to 2026-06-18, so regenerated demo data goes stale/overdue as calendar time passes.
   - `packaging/electron/demo-db/generate.mjs:33` — `alembic_version` is stamped with the literal string `'0060_brokerage_import_routing'`, with nothing checking that this stamp matches the actual repo head at regen time — this is the exact mechanism behind the persisted-demo-volume multi-stamped-heads crash-loop gotcha documented in CLAUDE.md.
   - Fix: derive `TODAY` from the real current date (or document that it must be bumped periodically), and derive the stamped revision from the actual current Alembic head instead of a literal string.
 
-- [ ] **Volume-level disaster recovery for `postgres_data` is manual-only — no scheduled backup cadence** 🔽 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (added a scheduled-backup (cron pg_dump + 14d retention) doc recipe; shipping the backup automation itself remains)
+- [ ] **Volume-level disaster recovery for `postgres_data` is manual-only — no scheduled backup cadence** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11 🔎 partial-fab7a77 (#99) 2026-07-14 (added a scheduled-backup (cron pg_dump + 14d retention) doc recipe; shipping the backup automation itself remains)
   - ↪ _from: DevOps research 2026-07-03 · Wave D2 (residue, closed 2026-07-03)_
   - `docs/guides/deployment.md:179-198` documents only ad-hoc `pg_dump`/`pg_restore`; `docs/guides/deployment.md:450` ("Setup regular database backups") is an unchecked checklist box. The Electron app-level backup keeps only the newest 7 bundles. RPO is whatever the user last ran manually (a dump or an app backup) — a volume loss between those is otherwise unrecoverable.
   - Fix: document (or ship) a scheduled `pg_dump` cadence + retention policy.
 
-- [ ] **`vision-claude-sync` (fish) pull path fails silently, and jq merge is container-wins for existing keys** 🔽 🔎 needs-GitHub-check 2026-07-11
+- [ ] **`vision-claude-sync` (fish) pull path fails silently, and jq merge is container-wins for existing keys** 🔽
+  - Tracking: 🔎 needs-GitHub-check 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D4 (residue, closed 2026-07-03)_
   - `__claude_sandbox_sync.fish:116-121` — the pull path uses `; or true` plus redirects stderr to `/dev/null`, so a failed rsync/jq still prints "[pull] done" with no indication anything went wrong.
   - Pull-side jq merge is container-wins for existing keys — a host-side key update never reaches a container that already has that key (the `history.jsonl`/`todos` merge direction is container→host, which is cosmetic and fine).
   - Push/pull are otherwise additive newer-wins rsync (no `--delete`), with host backups and `.credentials.json` excluded both ways — the overall data-loss verdict is GOOD; this is a diagnostics gap, not a data-loss risk.
   - Fix: check the rsync/jq exit codes on pull and surface a real failure message instead of the fixed "[pull] done".
 
-- [ ] **apple/container `cp` mtime fidelity is load-bearing for the sync tool's newer-wins logic and unverified** 🔽 🔎 needs-GitHub-check 2026-07-11
+- [ ] **apple/container `cp` mtime fidelity is load-bearing for the sync tool's newer-wins logic and unverified** 🔽
+  - Tracking: 🔎 needs-GitHub-check 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D4 (residue, closed 2026-07-03)_
   - The host↔container sync (`vision-claude-sync`) decides push/pull direction by `--update` (mtime comparison). If `apple/container cp` doesn't preserve source mtimes, every push could overwrite newer host edits. Cushioned by host backups (last 5 kept) and the fact that autosync can fire per session exit, but the underlying assumption itself has not been verified against a live container.
   - **Needs live verification** — not yet empirically checked; requires a live sandbox test (copy a file with a known non-current mtime through `apple/container cp` and confirm it survives).
@@ -5419,7 +5685,8 @@ look-changing one.
   - `.devcontainer/README.md:17` (claude "installed via the devcontainer feature" — actually npm-pinned at `Dockerfile:128`), `:79-87` + `:279-282` (allowlist "in squid.conf, Debian/PostgreSQL apt, *.visualstudio.com" — actual list is `allowlist.txt` via sync.sh, and NO apt hosts are allowlisted), `:77,100` (`dmesg | grep vision-deny` — real prefix is `egress-deny:`, `init-firewall.sh:87`), `:168-176` (push-on-exit "runs automatically" — `bin/claude:148` defaults `VISION_AUTOSYNC` to **0**/opt-in, so an operator trusting the README silently loses in-container config), `:106-108` (caps list includes `SETPCAP`; `bin/claude:65-66` doesn't grant it), `:216-217` (token forwarded as `-e KEY=…` — code deliberately forwards name-only).
   - Fix: one re-sync pass of README.md against `bin/claude` + `Dockerfile`; the autosync paragraph is the priority line.
 
-- [ ] **In-container Playwright E2E is advertised but cannot actually install** 🔽 🔎 verified-present 2026-07-11
+- [ ] **In-container Playwright E2E is advertised but cannot actually install** 🔽
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `.devcontainer/allowlist.txt:63-65` allowlists `cdn.playwright.dev` for "E2E in apps/frontend", but `bunx playwright install --with-deps` needs `apt-get` (no Debian mirror is allowlisted, and `squid.conf:31` denies port 80) and the image bakes no browser system libraries — so `bun run test:e2e` inside the sandbox fails at setup, not by policy choice.
   - Fix: bake the Playwright deps into `.devcontainer/Dockerfile` (`npx playwright install-deps` equivalent apt list) or drop the two CDN hosts + document E2E as host-only next to the Electron limitation.
@@ -5454,7 +5721,8 @@ look-changing one.
   - `.githooks/pre-commit:93,95,108` — pipes filenames through `xargs` without `-0`/`--null`, which breaks on filenames containing whitespace.
   - Fix: make the missing-gitleaks case a visible warning that must be acknowledged (or fail closed with install instructions); pair the `printf`s with `-print0`/`xargs -0` (or switch to a NUL-safe read loop).
 
-- [ ] **Host `guard.mjs` has a pipe-chain bypass gap in its command-deny rules** ⬇ 🔎 needs-GitHub-check 2026-07-11
+- [ ] **Host `guard.mjs` has a pipe-chain bypass gap in its command-deny rules** ⬇
+  - Tracking: 🔎 needs-GitHub-check 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D4 (residue, closed 2026-07-03)_
   - `curl x | tee f | sh` bypasses the `curl | sh` deny pattern; `grep`/`node -e` secret-reading commands pass the `SECRET_READ` check. Enforcement is in-container-only by design — the host copy of the same guard is advisory only (acknowledged in its own header) — so this is a defense-in-depth gap, not a bypass of the actual sandbox boundary. All 14 regexes compile correctly and malformed payloads fail open into the normal permission flow (correct behavior).
   - Fix: extend the deny patterns to catch multi-stage pipes ending in a shell, and broaden `SECRET_READ` detection to cover `grep`/`node -e` style reads — low priority given the in-container-only threat model.
@@ -5464,7 +5732,8 @@ look-changing one.
   - `.github/workflows/ci.yml:103`, `release.yml:107` — `pip install pip-audit` pulls latest from PyPI on every run: non-reproducible and a (small) supply-chain surface, inconsistent with the repo's otherwise strict SHA-pinning.
   - Fix: pin it (`pip install pip-audit==X.Y.Z`) or use the pinned `pypa/gh-action-pip-audit` action.
 
-- [ ] **`test:e2e` hardcodes six spec files — new e2e specs are silently never run, and `visual.spec.ts` runs nowhere** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **`test:e2e` hardcodes six spec files — new e2e specs are silently never run, and `visual.spec.ts` runs nowhere** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `apps/frontend/package.json:17-18` — a new `e2e/*.spec.ts` added without updating the script is dead code in the nightly run; visual regression specs aren't executed by any workflow.
   - Fix: run `playwright test` with `testIgnore` for visual specs (so new files are included by default) and decide whether visual specs join the nightly job.
@@ -5480,7 +5749,8 @@ look-changing one.
   - `.github/workflows/release.yml:46,77,266` — `${{ github.event.inputs.tag }}` is expanded directly into `run:` scripts; only write-access users can dispatch, so exposure is low, but a malformed input produces confusing mid-pipeline failures rather than a clean early error.
   - Fix: first step validates `[[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]` (via `env:` mapping, not inline `${{ }}`) and fails fast.
 
-- [ ] **Unhealthy app container is never restarted** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Unhealthy app container is never restarted** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `Dockerfile:114-115` — the HEALTHCHECK is defined, but plain Docker (non-Swarm) takes no action on `unhealthy`; a hung-but-alive backend (event-loop stall, deadlocked pool) stays down until manual intervention since `restart: unless-stopped` only fires on exit.
   - Fix: accept and document, or have the Electron orchestrator poll container health and restart on sustained `unhealthy`.
@@ -5500,7 +5770,8 @@ look-changing one.
   - `docker-compose.yml:5` — the db service only needs `POSTGRES_PASSWORD`, but inherits the full `.env` (API keys, `DATABASE_URL`, etc.), needlessly widening blast radius if the db container is compromised.
   - Fix: drop `env_file` on db and set `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` under `environment:` instead (mirror in packaged compose).
 
-- [ ] **Version bumping is manual across two enforced + three unenforced locations, caught only after tagging** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Version bumping is manual across two enforced + three unenforced locations, caught only after tagging** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
   - Version lives in root `package.json:4` (1.0.2), `packaging/electron/package.json:3` (1.0.2, enforced pair per `.claude/rules/packaging.md`), plus stale/unenforced copies: `apps/frontend/package.json:3` and `apps/node-backend/package.json:3` (both 1.0.0) and `openapi.yaml:5` ("1.0"). The release.yml verify job (lines 75-90) catches a mismatch only after the tag is pushed — failure means delete/re-tag churn; there is no `version:bump` script and no CHANGELOG `[Unreleased]` → section automation.
   - Fix: add a `bun run version:bump <ver>` script that edits both enforced files (and optionally rolls the CHANGELOG heading) in one step.
@@ -5526,12 +5797,14 @@ look-changing one.
   - `packaging/electron/demo-db/regenerate.sh:24` — `PGBIN` hardcoded to `/opt/homebrew/opt/postgresql@18/bin`; fails on any machine without that exact keg (no PATH fallback like the alembic resolution above it has).
   - Fix: remove the `packageManager` field (or set `bun@<version>`); resolve `psql` via `command -v` with the homebrew path as fallback.
 
-- [ ] **Generated locale artifacts are committed in triplicate — growth vector, not yet a problem** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Generated locale artifacts are committed in triplicate — growth vector, not yet a problem** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `i18n/source/*.json` + `apps/frontend/src/locales/*.ts` + `packaging/electron/i18n/*.json` (~1.2 MB total, all rewritten by `scripts/generate-locales.js`) plus the periodically re-dumped `packaging/electron/demo-db/01-demo.sql` (1.1 MB) are the main repo-churn sources; pack is still only 17 MiB so this is informational. Note the committed copies are load-bearing (`package.json:21` skips generation in CI), so don't untrack without changing CI.
   - Fix: none needed now; if pack size ever matters, generate electron/i18n copies at package time instead of committing them.
 
-- [ ] **Postgres image pinned by floating tag, inconsistent with digest-pinning everywhere else** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Postgres image pinned by floating tag, inconsistent with digest-pinning everywhere else** ⏬
+  - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `docker-compose.yml:3`, `packaging/electron/resources/docker-compose.yml:5` — `postgres:18-alpine`
   - The app `Dockerfile` and devcontainer `Dockerfile` are both digest-pinned; Postgres (holding all user financial data) isn't.
@@ -5542,7 +5815,7 @@ look-changing one.
   - `.dockerignore:16-17` — only `.env.local`/`.env.*.local` excluded. Currently harmless (`Dockerfile` uses explicit `COPY <path>`, not `COPY . .`), but no defense-in-depth if that ever changes.
   - Fix: add `.env`/`.env.*` to `.dockerignore`.
 
-## 🔍 PR #84 delivery review — findings in the new additions (2026-07-12)
+### 🔍 PR #84 delivery review — findings in the new additions (2026-07-12)
 
 **Scope & method:** review of everything PR #84 *delivers* (the `main...735a2e5` diff — 241 files, +10 686/−3 011), i.e. the #82 accounts rewrite + ported #83 fixes + new migrations/docs — **not** a re-audit of the pre-existing backlog above. Seven parallel area reviews (DB migrations/infra · import-export/date/CSV · accounts/transactions services · portfolio backend · frontend charts/design · frontend accounts/pages/hooks · docs/OpenAPI/i18n), each finding verified against the actual tree with file:line evidence before filing. Items below are **new findings about the code this PR adds/changes**; none duplicate an existing entry in this file.
 
@@ -5552,7 +5825,7 @@ look-changing one.
 - Migrations 0065–0075: unusually well-authored (idempotent DDL, pre-cleaned CHECKs, symmetric downgrades); only the items filed below.
 - i18n: all six locale copies in exact parity (3 575 keys each), all 47 new nl values genuinely translated. Frontend `tsc --noEmit` passes; scoped backend test files pass under TZ=UTC, Europe/Brussels, Pacific/Kiritimati, America/Santiago.
 
-### 🐛 Correctness — reconciliation & accounts backend
+#### 🐛 Correctness — reconciliation & accounts backend
 
 - [x] **`releaseOrphans` strips the new `'opening'`/`'adjustment'` system rows — aggregates corruption, duplicate anchors, false transfer pairing** 🔺 ✅ 2026-07-14 · 55d9364 (#93) (releaseOrphans now constrained to `transfer_source IN ('auto','manual')` — system rows keep their tag; test added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
@@ -5614,7 +5887,7 @@ look-changing one.
   - Both endpoints create/update ledger rows that feed `mv_bank_balances` and the forecast MC caches, but unlike every transaction mutation route neither calls `scheduleAggregationRefresh()` — dashboards serve stale figures until the next unrelated mutation or cache expiry.
   - Fix: call `scheduleAggregationRefresh()` after a successful write.
 
-### 🐛 Correctness — import/export pipeline
+#### 🐛 Correctness — import/export pipeline
 
 - [x] **New `tx_hash`-inequality dedup guard defeats cross-source re-import — the Vision round-trip this PR fixes now re-inserts everything** ⏫ ✅ 2026-07-14 · 55d9364 (#93) (hash-inequality exemption scoped to `t.import_batch_id = $batchId` — same-batch card-payment split preserved, cross-source idempotency restored)
   - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
@@ -5640,7 +5913,7 @@ look-changing one.
   - Git renders the PR's (otherwise correct) ambiguity-guard change as "Binary files differ", hiding it from diff review and text tooling. Node parses it fine.
   - Fix: replace the raw byte with the `'\x00'` escape sequence.
 
-### 🐛 Correctness — DB migrations / infra / packaging
+#### 🐛 Correctness — DB migrations / infra / packaging
 
 - [x] **Migration 0066's duplicate pre-flight bricks boot while its remediation requires a running app** 🔼 ✅ 2026-07-14 · 55d9364 (#93) (migration now auto-merges case/whitespace-duplicate accounts deterministically (repoint FKs via pg_constraint catalog, delete twins) instead of RAISE-ing)
   - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
@@ -5672,7 +5945,7 @@ look-changing one.
   - Older compose binaries fail schema validation on the unknown property, and `resolveWorkDir()` now overwrites the embedded compose on every launch — an existing Electron install on an older Docker Desktop that previously worked can start failing `docker compose up` after the app update.
   - Fix: gate the field (or the refresh) on a `docker compose version` check, or document/enforce the raised minimum Docker version.
 
-### 🎨 Frontend — new/refactored UI
+#### 🎨 Frontend — new/refactored UI
 
 - [x] **"Top Recipient" name is routed through the digit-odometer — spaces collapse ("AlbertHeijn"), digits animate** 🔼 ✅ 2026-07-14 · 55d9364 (#93) (StatCard gains an odometer opt-out; Top Recipient renders as plain text; test added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · frontend charts/design_
@@ -5728,13 +6001,16 @@ look-changing one.
   - `new Date().toISOString().slice(0, 10)` yields the UTC date; for the app's primary Belgian audience (UTC+1/+2), any use before 01:00/02:00 local prefills *yesterday*. `toYmd` (components/shared/dateUtils) exists for exactly this and is used by the other dialogs.
   - Fix: use `toYmd(new Date())`.
 
-- [ ] **`updatePortfolioTransaction` request types diverge from the payload actually sent — nulls and missing fields hidden by a cast** 🔽 🔎 partial-55d9364 (#93) 2026-07-14 (OpenAPI updatePortfolioTransaction schema now documents the nullable fields the backend accepts and generated.ts was regenerated; LEFT: the frontend `as Partial<PortfolioTransactionCreate>` cast in EditPortfolioTxnDialog/lib not swapped to the Update type — un-owned useInvestments.ts/api.ts type defs would need widening; kept open)
+- [x] **`updatePortfolioTransaction` request types diverge from the payload actually sent — nulls and missing fields hidden by a cast** 🔽
+  - Tracking: 🔎 partial-55d9364 (#93) 2026-07-14 ✅ 2026-08-25 (the frontend now derives the update body from the generated operation type; the cast is gone and nullable clear semantics are explicit)
   - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
   - `apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx:143-161`, `lib/api/portfolio.ts:133-136`, `types/generated.ts:6500-6512`
   - The dialog sends `fx_rate_to_eur: null`, `note: null`, `account_id: null`, and recurrence fields under an `as Partial<PortfolioTransactionCreate>` cast; that type admits none of the nulls, and the generated schema for the operation lists neither `fx_rate_to_eur`, `account_id`, nor recurrence fields, though the backend accepts and null-persists them. Runtime is correct; the contract types are wrong exactly where the PR's null-to-clear semantics matter.
   - Fix: introduce a proper `PortfolioTransactionUpdate` type with nullable fields (and extend the OpenAPI schema) instead of the cast.
+  - Completion: `PortfolioTransactionUpdate` now comes from the generated OpenAPI operation and is used by the API client, mutation hook, and edit dialog. Tests pin null clearing for recurrence and optional fields.
 
-- [ ] **CardSheen is not visually identical at 3 of the 8 replaced sites — flag for design sign-off** 🔽 *(needs author confirmation, not necessarily a bug)*
+- [ ] **CardSheen is not visually identical at 3 of the 8 replaced sites — flag for design sign-off** 🔽
+  - Tracking: 🔎 decision-needed 2026-08-25 (confirm whether the CardSheen normalization is intended; do not change the visual treatment before that decision)
   - ↪ _from: PR #84 delivery review 2026-07-12 · frontend charts/design_
   - `apps/frontend/src/index.css:750-773`, `components/dashboard/StatCard.tsx:123`, `BankBalancesWidget.tsx:168`, `CashFlowForecastChart.tsx:393`
   - On `main`, StatCard's orb was `from-background/40` and BankBalancesWidget/CashFlowForecastChart used `from-primary/10`; all now render `--glass-highlight` — the two primary-tinted orbs lose their brand tint and StatCard's dark-mode orb flips from near-invisible dark to visible light sheen. The CardSheen doc frames this as deliberate normalization, but the PR's "visual is identical" claim only holds for the 5 `white/50` sites.
@@ -5752,7 +6028,7 @@ look-changing one.
   - `parentRectRef` is read once per hover session and only invalidated on close, scroll, or resize; if the chart container moves without those events mid-hover (an async widget above it resolves and expands, an accordion reflows), `applyPosition` keeps the pre-shift rect and the tooltip renders offset from the crosshair until pointer re-entry.
   - Fix: also invalidate from a ResizeObserver/position check on `anchorParent`.
 
-### 🏛️ Docs / API contract
+#### 🏛️ Docs / API contract
 
 - [x] **`types/generated.ts` is stale — missing both new account endpoints; the `verify-generated` CI job will fail** ⏫ ✅ 2026-07-14 · 55d9364 (#93) (regenerated via bun run generate:types; now carries both account endpoints)
   - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
@@ -5792,7 +6068,7 @@ look-changing one.
   - `apps/node-backend/src/services/dbEditor.js:8-9` ("…the raw WHERE escape hatch cannot mutate or hang the DB") vs lines 180-183 of the same file, where any `where` param is now a hard 400.
   - Fix: update the header bullet to match the `readRows` docblock (structured filters only).
 
-### ✅ Checked clean in this review (do NOT re-audit against this PR)
+#### ✅ Checked clean in this review (do NOT re-audit against this PR)
 
 - Migrations 0065, 0067–0072, 0074: idempotent, symmetric, no downgrade-time CHECK violations; 0066's trigger SQL and expression-index targeting correct; `alembic/env.py` `transaction_per_migration` correctly SQLite-gated.
 - `connection.js` ambient-transaction reroute end-to-end (leaked-continuation protection, savepoint nesting, retry suppression); trade+leg atomicity through the repo savepoint path.
@@ -6537,6 +6813,11 @@ Investigated and disproven; kept for transparency.
 **Performance research 2026-07-02**
 
 - **"Manual transaction edits never reach the MV-refresh scheduler; `scheduleAggregationRefresh` has zero transaction-route callers, so MVs go stale until the next import/restart"** — **REFUTED** by direct grep: `routes/transactions.js` calls `scheduleReconcile()` at 9 sites (lines 225-645), and `transferReconciliationService.js:233-235` chains `reconcileTransfers().finally(() => scheduleRefresh())`. The real situation is the *opposite* problem — every edit triggers a full reconcile + 4-view refresh (filed as the ⏫ infra finding above). The narrower, still-true gap (single-transaction mutations never clear the *Monte Carlo* cashflow cache) was already filed in the 2026-06-30 audit and stands unchanged.
+
+**Performance research 2026-07-05**
+
+- **"First navigation should stop waiting for the materialized-view refresh"** — **CLOSED AS WONTFIX 2026-08-01.** Three warm Demo runs measured only 33–38 ms between the first HTTP response and `caches.materializedViews:true`, with backend refresh logs at 31 ms. This is below the Electron poll quantum and buys a guaranteed populated first dashboard. Reopen only if an instrumented real-data boot measures more than about 200 ms.
+- **"The singular bank-account filter should use exact matching"** — **REFUTED 2026-07-14.** The singular `bank_account` parameter is an intentional free-text substring escape hatch. The account dropdown already uses the exact, indexed multi-value `bank_accounts IN (...)` path, so the claimed ordinary-list over-match does not occur.
 
 ## Stale docs — KB updates (not code bugs)
 
