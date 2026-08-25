@@ -454,12 +454,7 @@ export const getUnrealizedGains = {
       for (const t of invTxns) {
         if (t.type !== 'buy') continue;
         const units = toDecimal(t.units ?? 0);
-        // `amount_per_unit` is NOT a portfolio_transactions column (nor computed
-        // anywhere) — this fallback has always evaluated to `undefined`, so the
-        // effective expression is `t.price_per_unit ?? 0`. Typed as such (rather
-        // than dropped) to keep this slice behavior-preserving; flagged in the
-        // ratchet report as a probable dead fallback for the orchestrator to triage.
-        const pricePerUnit = toDecimal(t.price_per_unit ?? /** @type {undefined} */ (/** @type {any} */ (t).amount_per_unit) ?? 0);
+        const pricePerUnit = toDecimal(t.price_per_unit ?? 0);
         costBasis = costBasis.plus(units.times(pricePerUnit));
       }
 

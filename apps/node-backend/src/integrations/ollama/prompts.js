@@ -94,7 +94,10 @@ export function buildSystemPrompt(toolNames) {
  *
  * For persisted assistant rows, we only have the final text (`content`). We
  * don't replay prior tool_calls in history — the tool_result rows carry the
- * ground-truth numbers, which is what the model needs to stay grounded.
+ * ground-truth numbers, which is what the model needs to stay grounded. This
+ * means persisted history can contain a `role: 'tool'` message without the
+ * preceding assistant `tool_calls` frame. Ollama accepts that shape; a stricter
+ * future provider needs a history adapter or persisted assistant tool calls.
  * @param {AiMessageRow|null|undefined} row
  * @returns {OllamaMessage|null}
  */

@@ -190,21 +190,6 @@ const aiChatRepository = {
     }
   },
 
-  /**
-   * @param {string} id UUID.
-   * @param {string} status
-   * @returns {Promise<AiMessageRow|null>}
-   */
-  async updateMessageStatus(id, status) {
-    const result = await query(
-      `UPDATE ai_messages
-          SET status = $2
-        WHERE id = $1
-        RETURNING ${MESSAGE_COLUMNS}`,
-      [id, status],
-    );
-    return result.rows[0] || null;
-  },
 };
 
 export default aiChatRepository;

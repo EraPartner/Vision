@@ -13,12 +13,10 @@ import { validateId } from '../../../middleware/validation.js';
 /**
  * Per-turn context threaded through every tool's `run(args, context)` by
  * `dispatchTool` (see ./index.js). `cache` is the per-turn memoization Map
- * (../toolCache.js); `maxRows` bounds a tool's own row scans; `conversationId`
- * reaches the few tools that reference the conversation.
+ * (../toolCache.js); `maxRows` bounds a tool's own row scans.
  * @typedef {object} ToolContext
  * @property {number} [maxRows]
  * @property {Map<string, Promise<any>>} [cache]
- * @property {string} [conversationId] UUID — `ai_conversations.id`.
  */
 
 export class ToolValidationError extends Error {

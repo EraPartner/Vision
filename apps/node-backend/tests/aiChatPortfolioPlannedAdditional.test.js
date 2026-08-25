@@ -76,6 +76,19 @@ describe('getUnrealizedGains', () => {
     expect(r.data[0].gainPercent).toBeNull();
   });
 
+  it('ignores an impossible amount_per_unit fallback when price_per_unit is absent', async () => {
+    investmentRepository.getAll.mockResolvedValueOnce([
+      { id: 1, name: 'Gift', asset_class: 'stock', current_price: '50' },
+    ]);
+    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
+      { investment_id: 1, type: 'buy', units: '2', price_per_unit: null, amount_per_unit: '999' },
+    ]);
+
+    const r = await getUnrealizedGains.run({});
+
+    expect(r.data[0]).toMatchObject({ costBasis: 0, marketValue: 100, unrealizedGain: 100, gainPercent: null });
+  });
+
   it('passes assetClass filter through to the repository', async () => {
     investmentRepository.getAll.mockResolvedValueOnce([]);
     await getUnrealizedGains.run({ assetClass: 'crypto' });

@@ -84,9 +84,12 @@ export function ChatMessageList({
     // A streaming tool message grows its content in place without changing
     // `combined.length`, so length alone isn't enough to keep the view pinned.
     // Track the total streaming-tool content size as well.
-    const streamingToolContentLength = streamingToolMessages.reduce(
-        (sum, m) => sum + (m.content?.length ?? 0),
-        0,
+    const streamingToolContentLength = useMemo(
+        () => streamingToolMessages.reduce(
+            (sum, message) => sum + (message.content?.length ?? 0),
+            0,
+        ),
+        [streamingToolMessages],
     );
     // React Query briefly keeps the previous conversation as placeholder data
     // during an uncached switch. The conversation id changes first, then the
@@ -158,6 +161,20 @@ export function ChatMessageList({
 
     const { t } = useLanguage();
     const showDraft = isStreaming && assistantDraft.length > 0;
+    const draftLifecycleKey = showDraft ? conversationId : undefined;
+    const draftCreatedAt = useMemo(
+        () => draftLifecycleKey !== undefined ? new Date().toISOString() : null,
+        [draftLifecycleKey],
+    );
+    const draftMessage = useMemo<ChatMessage | null>(
+        () => showDraft && draftCreatedAt ? {
+            id: '__draft__',
+            role: 'assistant',
+            content: assistantDraft,
+            createdAt: draftCreatedAt,
+        } : null,
+        [assistantDraft, draftCreatedAt, showDraft],
+    );
     const showThinking =
         isStreaming
         && assistantDraft.length === 0
@@ -189,14 +206,9 @@ export function ChatMessageList({
                 {combined.map((message) => (
                     <ChatBubble key={message.id} message={message} />
                 ))}
-                {showDraft && (
+                {draftMessage && (
                     <ChatBubble
-                        message={{
-                            id: '__draft__',
-                            role: 'assistant',
-                            content: assistantDraft,
-                            createdAt: new Date().toISOString(),
-                        }}
+                        message={draftMessage}
                         streaming
                     />
                 )}

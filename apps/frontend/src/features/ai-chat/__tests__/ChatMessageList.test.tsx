@@ -5,6 +5,18 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ChatMessageList } from '@/features/ai-chat/ChatMessageList';
 import type { ChatMessage } from '@/types/aiChat';
 
+const chatBubbleRenderSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('@/features/ai-chat/ChatBubble', async () => {
+    const { memo } = await import('react');
+    return {
+        ChatBubble: memo(({ message, streaming }: { message: ChatMessage; streaming?: boolean }) => {
+            chatBubbleRenderSpy({ message, streaming });
+            return <div data-testid={`chat-bubble-${message.id}`}>{message.content}</div>;
+        }),
+    };
+});
+
 const firstConversation: ChatMessage[] = [
     {
         id: 'first-user',
@@ -65,7 +77,96 @@ function scrollUpFromBottom(el: HTMLElement) {
 }
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
+});
+
+describe('ChatMessageList draft rendering', () => {
+    it('keeps one draft timestamp for a draft lifecycle and skips unchanged bubble renders', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-08-25T10:00:00.000Z'));
+        chatBubbleRenderSpy.mockClear();
+
+        const view = renderMessageList([], 'conversation-one', 'Draft');
+        expect(chatBubbleRenderSpy).toHaveBeenCalledTimes(1);
+        expect(chatBubbleRenderSpy.mock.lastCall?.[0].message.createdAt)
+            .toBe('2026-08-25T10:00:00.000Z');
+
+        view.rerender(
+            <LanguageProvider language="en" setLanguage={vi.fn()}>
+                <ChatMessageList
+                    messages={[]}
+                    streamingUserMessage={null}
+                    streamingToolMessages={[]}
+                    assistantDraft="Draft"
+                    isStreaming
+                    conversationId="conversation-one"
+                />
+            </LanguageProvider>,
+        );
+        expect(chatBubbleRenderSpy).toHaveBeenCalledTimes(1);
+
+        vi.setSystemTime(new Date('2026-08-25T10:01:00.000Z'));
+        view.rerender(
+            <LanguageProvider language="en" setLanguage={vi.fn()}>
+                <ChatMessageList
+                    messages={[]}
+                    streamingUserMessage={null}
+                    streamingToolMessages={[]}
+                    assistantDraft="Draft continues"
+                    isStreaming
+                    conversationId="conversation-one"
+                />
+            </LanguageProvider>,
+        );
+        expect(chatBubbleRenderSpy).toHaveBeenCalledTimes(2);
+        expect(chatBubbleRenderSpy.mock.lastCall?.[0].message.createdAt)
+            .toBe('2026-08-25T10:00:00.000Z');
+
+        vi.setSystemTime(new Date('2026-08-25T10:01:30.000Z'));
+        view.rerender(
+            <LanguageProvider language="en" setLanguage={vi.fn()}>
+                <ChatMessageList
+                    messages={[]}
+                    streamingUserMessage={null}
+                    streamingToolMessages={[]}
+                    assistantDraft="Another active stream"
+                    isStreaming
+                    conversationId="conversation-two"
+                />
+            </LanguageProvider>,
+        );
+        expect(chatBubbleRenderSpy.mock.lastCall?.[0].message.createdAt)
+            .toBe('2026-08-25T10:01:30.000Z');
+
+        view.rerender(
+            <LanguageProvider language="en" setLanguage={vi.fn()}>
+                <ChatMessageList
+                    messages={[]}
+                    streamingUserMessage={null}
+                    streamingToolMessages={[]}
+                    assistantDraft=""
+                    isStreaming={false}
+                    conversationId="conversation-two"
+                />
+            </LanguageProvider>,
+        );
+        vi.setSystemTime(new Date('2026-08-25T10:02:00.000Z'));
+        view.rerender(
+            <LanguageProvider language="en" setLanguage={vi.fn()}>
+                <ChatMessageList
+                    messages={[]}
+                    streamingUserMessage={null}
+                    streamingToolMessages={[]}
+                    assistantDraft="New draft"
+                    isStreaming
+                    conversationId="conversation-two"
+                />
+            </LanguageProvider>,
+        );
+        expect(chatBubbleRenderSpy.mock.lastCall?.[0].message.createdAt)
+            .toBe('2026-08-25T10:02:00.000Z');
+    });
 });
 
 describe('ChatMessageList auto-scroll', () => {

@@ -332,8 +332,9 @@ describe('runChatTurn — tool-call loop', () => {
     expect(dispatchTool).toHaveBeenCalledWith(
       'getSpendByCategory',
       { from: '2025-01-01', to: '2025-12-31' },
-      expect.objectContaining({ conversationId: expect.any(String) }),
+      { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
     );
+    expect(dispatchTool.mock.calls[0][2]).not.toHaveProperty('conversationId');
     expect(result.toolMessages).toHaveLength(1);
     expect(result.iterations).toBe(2);
     expect(result.assistantMessage.content).toBe('Rent was €3600.');
@@ -569,8 +570,9 @@ describe('runChatTurn — server-side pre-call (ADR-110 §4)', () => {
     expect(dispatchTool).toHaveBeenCalledWith(
       'insightsDigest',
       {},
-      expect.objectContaining({ conversationId: expect.any(String) }),
+      { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
     );
+    expect(dispatchTool.mock.calls[0][2]).not.toHaveProperty('conversationId');
     expect(dispatchTool.mock.invocationCallOrder[0]).toBeLessThan(
       ollamaClient.chat.mock.invocationCallOrder[0],
     );
@@ -686,6 +688,31 @@ describe('runChatTurn — Ollama error mapping', () => {
     ollamaClient.chat.mockRejectedValueOnce(
       new OllamaError('aborted', { code: 'ABORTED' }),
     );
+
+    await expect(runChatTurn({ message: 'x', ollamaClient })).rejects.toMatchObject({
+      code: 'ABORTED',
+      status: 499,
+    });
+  });
+
+  it('maps a coded error from another injected provider to 502', async () => {
+    const ollamaClient = makeMockOllama();
+    const providerError = Object.assign(new Error('provider failed'), {
+      code: 'PROVIDER_FAILED',
+    });
+    ollamaClient.chat.mockRejectedValueOnce(providerError);
+
+    await expect(runChatTurn({ message: 'x', ollamaClient })).rejects.toMatchObject({
+      name: 'AiChatServiceError',
+      code: 'PROVIDER_FAILED',
+      status: 502,
+    });
+  });
+
+  it('maps a coded abort from another injected provider to 499', async () => {
+    const ollamaClient = makeMockOllama();
+    const providerError = Object.assign(new Error('aborted'), { code: 'ABORTED' });
+    ollamaClient.chat.mockRejectedValueOnce(providerError);
 
     await expect(runChatTurn({ message: 'x', ollamaClient })).rejects.toMatchObject({
       code: 'ABORTED',

@@ -3,7 +3,7 @@ title: Ollama Integration
 type: integration
 status: active
 date: 2026-04-19
-updated: 2026-06-11
+updated: 2026-08-25
 tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
 description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
 aliases: [ollama, ollama-client, local-llm]
@@ -25,24 +25,24 @@ related_code: ["apps/node-backend/src/integrations/ollama/client.js", "apps/node
 
 ## Client API
 
-Singleton factory: `getOllamaClient()` — reads `settings.ollama.baseUrl`. Returns a frozen object.
+Singleton factory: `getOllamaClient()` — creates and caches a client using `settings.ollama.url` on first use.
 
 | Method | Returns | Notes |
 |--------|---------|-------|
-| `healthCheck()` | `{ ok, baseUrl, latencyMs }` | Never throws — returns `ok:false` on network error |
-| `listModels()` | `{ models: [...] }` | Throws `OllamaError` with `code: 'OLLAMA_UNREACHABLE'` when down |
-| `chat({ model, messages, tools, signal })` | `{ message, usage, toolCalls }` | Non-streaming — full response in one shot |
-| `chatStream({ model, messages, tools, signal, onToken, onToolCall })` | `{ message, usage, toolCalls }` | Streams tokens via callbacks; resolves with final assembled response |
+| `healthCheck()` | `{ reachable, baseUrl, modelCount? }` or `{ reachable, baseUrl, error, code }` | Never throws — returns `reachable:false` on failure |
+| `listModels({ signal })` | normalized model array | Throws a coded `OllamaError` on failure |
+| `chat({ model, messages, tools, options, signal })` | normalized content, tool calls, and usage fields | Non-streaming — full response in one shot, with raw response attached |
+| `chatStream({ model, messages, tools, options, signal, onToken })` | normalized content, tool calls, and usage fields | Streams token callbacks; resolves with the assembled response |
 
-All methods accept an `AbortSignal` so the service layer can cancel on client disconnect.
+`listModels`, `chat`, and `chatStream` accept an `AbortSignal` so callers can cancel in-flight work. `healthCheck` uses its fixed health timeout and accepts no options.
 
 ### `healthCheck()`
 
-Hits `GET /` (Ollama's banner endpoint) with a 2s timeout. Returns:
+Hits `GET /api/tags` with `OLLAMA_HEALTH_TIMEOUT_MS` (default 3 seconds). Returns:
 
 ```js
-{ ok: true,  baseUrl: 'http://localhost:11434', latencyMs: 12 }
-{ ok: false, baseUrl: 'http://localhost:11434', error: 'connect ECONNREFUSED' }
+{ reachable: true,  baseUrl: 'http://localhost:11434', modelCount: 2 }
+{ reachable: false, baseUrl: 'http://localhost:11434', error: 'connect ECONNREFUSED', code: 'NETWORK_ERROR' }
 ```
 
 ### `chatStream()`
@@ -51,7 +51,7 @@ Sends `POST /api/chat` with `stream: true`. Parses NDJSON chunks into:
 
 - Text chunks → `onToken(delta)` per line
 - Tool-call chunks → accumulated into a deduped array across all NDJSON chunks (see below)
-- Final chunk → resolves promise with aggregated `{ message, usage, toolCalls }`
+- Final chunk → resolves with flat normalized fields: `{ model, role, content, toolCalls, done, doneReason, evalCount, promptEvalCount, totalDurationMs }`
 
 #### Streaming timeout model (June 2026)
 
@@ -81,11 +81,14 @@ Request and response log lines inside `chatStream` were downgraded from `info` t
 
 | Code | Meaning |
 |------|---------|
-| `OLLAMA_UNREACHABLE` | Connection refused or DNS failure |
-| `OLLAMA_TIMEOUT` | Deadline exceeded |
-| `OLLAMA_MODEL_NOT_FOUND` | Requested model not installed |
-| `OLLAMA_BAD_RESPONSE` | Malformed NDJSON / unexpected schema |
-| `OLLAMA_ABORTED` | AbortSignal fired — normal for client disconnect |
+| `NETWORK_ERROR` | Connection refused, DNS failure, or another fetch error |
+| `TIMEOUT` | Request or stream-idle deadline exceeded |
+| `ABORTED` | AbortSignal fired — normal for client disconnect |
+| `HTTP_ERROR` | Ollama returned a non-success HTTP status |
+| `INVALID_JSON` | Non-JSON response or malformed NDJSON chunk |
+| `INVALID_INPUT` | Chat was called without a message array |
+| `NO_BODY` | Streaming response had no readable body |
+| `STREAM_ERROR` | Stream reading failed for another reason |
 
 The service layer maps these to `AiChatServiceError` with the appropriate HTTP status (see [[docs/api/ai|AI Chat API]] error table).
 
@@ -106,20 +109,22 @@ The service builds a `tools` array in Ollama's native function-calling format:
 
 The model emits `tool_calls: [{ function: { name, arguments } }]`. The dispatcher validates `arguments` against the tool's JSON Schema and invokes the matching repository call. Result is fed back as a `role: "tool"` message in the next iteration.
 
+Persisted history stores final assistant text and tool-result rows, but not the assistant `tool_calls` frame that originally preceded each result. Replayed history can therefore contain an orphan `role: "tool"` message. Ollama accepts this lenient shape. A future stricter provider requires either a history adapter or persistence of the original assistant tool-call frames.
+
 See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and [[apps/node-backend/src/services/aiChat/tools/index.js|tools/index.js]] for the registry.
 
 ## Context Window Management
 
-- Load at most `aiChat.maxHistoryMessages` (default 20) prior messages.
-- Trim tool-result payloads in history — keep the assistant summary, drop the raw JSON rows.
-- If the estimated token count exceeds the model's limit, drop oldest pairs first.
+- Load at most `aiChat.maxHistoryMessages` (default 30) prior message rows.
+- Replay persisted tool-result JSON in full.
+- No token-size budget or Ollama `num_ctx` option is currently applied. The message-count limit is therefore only a coarse bound; size-aware trimming remains tracked follow-up work.
 
 ## Configuration
 
 | Env | Default | Purpose |
 |-----|---------|---------|
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL |
-| `OLLAMA_DEFAULT_MODEL` | `llama3.2:3b` | Fallback model |
+| `OLLAMA_DEFAULT_MODEL` | `llama3.1:8b` | Fallback model |
 | `OLLAMA_REQUEST_TIMEOUT_MS` | `600000` | Time-to-first-chunk budget (connect + prompt-eval phase) |
 | `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000` | Max inactivity between chunks; timer re-arms per chunk; total generation time is unbounded |
 | `OLLAMA_HEALTH_TIMEOUT_MS` | `3000` | `healthCheck()` connection timeout |
@@ -130,10 +135,10 @@ When Ollama is unreachable:
 
 - `GET /api/ai/status` returns `{ ok: false, ... }` — the frontend shows a banner.
 - `GET /api/ai/models` returns 502.
-- `POST /api/ai/chat` returns 502 with `code: OLLAMA_UNREACHABLE`.
+- `POST /api/ai/chat` returns 502 with the coded provider error, normally `NETWORK_ERROR` for an unreachable host.
 - `POST /api/ai/chat/stream` emits an `error` SSE frame then `res.end()`.
 
-The rest of Vision remains fully functional — the AI chat feature is always available when Ollama is configured (no runtime feature flag gates).
+The rest of Vision remains fully functional. AI chat is available when Ollama is configured and `AI_CHAT_ENABLED` is true; disabling that flag makes the AI routes return 503.
 
 ## No External Calls
 

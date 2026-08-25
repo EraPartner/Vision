@@ -27,7 +27,7 @@ import { logger } from '../config/logger.js';
 import settings from '../config/config.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { aiChatRepository } from '../repositories/aiChatRepository.js';
-import { getOllamaClient, OllamaError } from '../integrations/ollama/client.js';
+import { getOllamaClient } from '../integrations/ollama/client.js';
 import { buildChatMessages } from '../integrations/ollama/prompts.js';
 import { dispatchTool, getToolSchemas, getToolNames } from './aiChat/tools/index.js';
 
@@ -82,6 +82,19 @@ function normalizeToolCall(toolCall) {
  */
 function isArgsRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The injectable chat client contract identifies provider failures by code,
+ * not by one provider's concrete Error subclass.
+ * @param {unknown} err
+ * @returns {err is Error & { code: string }}
+ */
+function isCodedProviderError(err) {
+  return err instanceof Error
+    && 'code' in err
+    && typeof err.code === 'string'
+    && err.code.length > 0;
 }
 
 /**
@@ -267,6 +280,10 @@ async function runChatTurnInner({
   // Request-scoped cache shared across every tool call in this chat turn so
   // tools that fetch the same heavy investment/transaction sets reuse one query.
   const toolCache = new Map();
+  const toolContext = {
+    cache: toolCache,
+    maxRows: settings.aiChat.maxToolRows,
+  };
 
   // ADR-110 §4: server-side pre-call. Execute the tool BEFORE the model turn
   // and inject its result into context so the model only narrates the
@@ -277,7 +294,7 @@ async function runChatTurnInner({
   if (preCallTool) {
     try {
       await onEvent?.({ type: 'tool_call', data: { name: preCallTool, args: {} } });
-      const { args: preCallArgs, result } = await dispatchTool(preCallTool, {}, { conversationId: conversation.id, cache: toolCache });
+      const { args: preCallArgs, result } = await dispatchTool(preCallTool, {}, toolContext);
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
         role: 'tool',
@@ -354,8 +371,8 @@ async function runChatTurnInner({
         code: err?.code,
         message: err?.message,
       });
-      if (err instanceof OllamaError) {
-        throw new AiChatServiceError(`Ollama call failed: ${err.message}`, {
+      if (isCodedProviderError(err)) {
+        throw new AiChatServiceError(`AI provider call failed: ${err.message}`, {
           code: err.code || 'OLLAMA_ERROR',
           status: err.code === 'ABORTED' ? 499 : 502,
           cause: err,
@@ -413,7 +430,7 @@ async function runChatTurnInner({
       // actually saw. The persisted row carries that record: the coerced
       // object on success; on a coercion failure `args` is the raw
       // model-emitted value, persisted verbatim next to the error result.
-      const { args, result } = await dispatchTool(name, rawArgs, { conversationId: conversation.id, cache: toolCache });
+      const { args, result } = await dispatchTool(name, rawArgs, toolContext);
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
         role: 'tool',
