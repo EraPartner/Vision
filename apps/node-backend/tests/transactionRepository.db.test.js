@@ -431,6 +431,13 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
       expect(await transactionRepository.getCount({ categoryId: cat.Bills })).toBe(2);
       expect(await transactionRepository.getCount({ categoryId: cat.Food })).toBe(2);
     });
+
+    it('counts category lists, transaction type, and signed or magnitude amount bounds', async () => {
+      expect(await transactionRepository.getCount({ categoryIds: [cat.Food, cat.Salary] })).toBe(3);
+      expect(await transactionRepository.getCount({ transactionType: 'income' })).toBe(1);
+      expect(await transactionRepository.getCount({ amountMin: 50 })).toBe(3);
+      expect(await transactionRepository.getCount({ amountMax: -100, amountSigned: true })).toBe(1);
+    });
   });
 
   describe('getAllWithCount', () => {
@@ -676,6 +683,27 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
         });
         expect(rows.map((r) => r.id)).toEqual([U.big]);
         expect(total).toBe(2); // t3 (−120, 2024-03-01), U.big
+      });
+
+      it('plain and counted uncategorised queries share the same filter semantics', async () => {
+        const filters = {
+          recipientGroupId: bakery,
+          transactionType: 'expense',
+          amountMin: 100,
+          search: 'BAKERY',
+        };
+        const plain = await transactionRepository.getUncategorised(filters);
+        const counted = await transactionRepository.getUncategorisedWithCount(filters);
+        expect(plain.map((row) => row.id)).toEqual([U.big]);
+        expect(plain.map((row) => row.id)).toEqual(counted.rows.map((row) => row.id));
+      });
+
+      it('honours custom sorting and includeBalance on the uncategorised path', async () => {
+        const { rows } = await transactionRepository.getUncategorisedWithCount({
+          sortBy: 'amount', sortDir: 'asc', includeBalance: true,
+        });
+        expect(rows.map((row) => row.id)).toEqual([U.big, T.t1, U.small, U.income]);
+        expect(rows.map((row) => Number(row.running_balance))).toEqual([-357.3, -52.3, -57.3, 542.7]);
       });
     });
 

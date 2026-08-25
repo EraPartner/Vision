@@ -38,6 +38,22 @@ describe('transaction list ORDER BY tiebreaker', () => {
     const sql = query.mock.calls[0][0];
     expect(sql).toContain('ORDER BY t.date DESC, t.id DESC');
   });
+
+  it('getUncategorisedWithCount honours a custom sort in both pagination layers', async () => {
+    await transactionRepository.getUncategorisedWithCount({
+      limit: 50, offset: 0, sortBy: 'amount', sortDir: 'asc',
+    });
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('ROW_NUMBER() OVER (ORDER BY t.amount ASC, t.date DESC, t.id DESC)');
+    expect(sql).toContain('ORDER BY t.amount ASC, t.date DESC, t.id DESC');
+    expect(sql).toContain('ORDER BY u._row_order NULLS LAST');
+  });
+
+  it('getUncategorisedWithCount includes the per-account running balance on request', async () => {
+    await transactionRepository.getUncategorisedWithCount({ includeBalance: true });
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance');
+  });
 });
 
 describe('tags-only PATCH on a missing transaction', () => {

@@ -322,15 +322,20 @@ export const transactionRepository = {
     accountId = null,
     bankAccount = null,
     categoryId = null,
+    categoryIds = null,
     recipientId = null,
     recipientGroupId = null,
     recipientName = null,
     search = null,
     active = true,
+    transactionType = null,
+    amountMin = null,
+    amountMax = null,
+    amountSigned = false,
     tagSlugs = null,
   } = {}) {
     const { sql: where, params } = buildTransactionWhere({
-      transactionId, startDate, endDate, accountId, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
+      transactionId, startDate, endDate, accountId, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
     });
 
     const sql = `
@@ -349,36 +354,43 @@ export const transactionRepository = {
    * @param {TransactionFilters} [filters]
    * @returns {Promise<EnrichedTransactionRow[]>}
    */
-  async getUncategorised({ limit = 50, offset = 0, startDate = null, endDate = null, accountId = null, bankAccount = null, recipientId = null, recipientName = null } = {}) {
+  async getUncategorised({
+    transactionId = null,
+    limit = 50,
+    offset = 0,
+    startDate = null,
+    endDate = null,
+    accountId = null,
+    bankAccount = null,
+    recipientId = null,
+    recipientGroupId = null,
+    recipientName = null,
+    search = null,
+    transactionType = null,
+    amountMin = null,
+    amountMax = null,
+    amountSigned = false,
+    tagSlugs = null,
+  } = {}) {
     // "Uncategorised" means the full 3-level effective category is NULL — own
     // category, the recipient default, AND the primary-recipient default. Joining
     // pr (and using EFFECTIVE_CATEGORY_ID_SQL) stops alias-recipient rows whose
     // primary carries a category from wrongly appearing in the queue.
-    let sql = `
+    const { sql: where, params, nextParamIdx: paramIdx } = buildTransactionWhere({
+      transactionId, startDate, endDate, accountId, bankAccount, recipientId,
+      recipientGroupId, recipientName, search, active: true, transactionType,
+      amountMin, amountMax, amountSigned, tagSlugs,
+    });
+    const sql = `
       SELECT t.*,
              ${ACCOUNT_LABEL_SQL},
              r.name AS recipient_name,
              NULL AS category_name
       FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN accounts acct ON t.account_id = acct.id
-      WHERE t.is_active = true
+      ${TRANSACTION_JOINS}
+      WHERE ${where}
         AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
-    `;
-    const params = [];
-    let paramIdx = 1;
-
-    if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
-    if (endDate) { sql += ` AND t.date <= $${paramIdx++}`; params.push(endDate); }
-    if (accountId != null) { sql += ` AND t.account_id = $${paramIdx++}`; params.push(accountId); }
-    // Bank filter via the FK (ADR-088) — matches the account's canonical name,
-    // never the retired string column.
-    if (bankAccount) { sql += ` AND t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`; params.push(`%${bankAccount}%`); }
-    if (recipientId != null) { sql += ` AND t.recipient_id = $${paramIdx++}`; params.push(recipientId); }
-    if (recipientName) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${recipientName}%`); }
-
-    sql += ` ORDER BY t.date DESC, t.id DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+      ORDER BY t.date DESC, t.id DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -418,6 +430,9 @@ export const transactionRepository = {
     recipientName = null,
     search = null,
     active = true,
+    sortBy = null,
+    sortDir = null,
+    includeBalance = false,
     transactionType = null,
     amountMin = null,
     amountMax = null,
@@ -477,6 +492,15 @@ export const transactionRepository = {
 
     const params = [...totalParams, ...rowsParams];
 
+    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
+    const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
+    const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
+      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+      : 't.date DESC, t.id DESC';
+    const runningBalanceCol = includeBalance
+      ? ', SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance'
+      : '';
+
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
     // the pr join added to the uncategorised_rows CTE below.
     const uncategorisedWhere = `${rowsWhere}
@@ -497,27 +521,28 @@ export const transactionRepository = {
         SELECT t.*,
                ${ACCOUNT_LABEL_SQL},
                r.name AS recipient_name,
-               NULL AS category_name
+               NULL AS category_name${runningBalanceCol},
+               ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS _row_order
         FROM transactions t
         LEFT JOIN recipients r ON t.recipient_id = r.id
         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
         LEFT JOIN accounts acct ON t.account_id = acct.id
         WHERE ${uncategorisedWhere}
-        ORDER BY t.date DESC, t.id DESC
+        ORDER BY ${orderBy}
         LIMIT $${limitParam} OFFSET $${offsetParam}
       )
       SELECT u.*,
              tc.total AS total_count
       FROM total_cte tc
       LEFT JOIN uncategorised_rows u ON true
-      ORDER BY u.date DESC NULLS LAST, u.id DESC NULLS LAST
+      ORDER BY u._row_order NULLS LAST
     `;
 
     const result = await query(sql, params);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     const rows = result.rows
       .filter((/** @type {any} */ row) => row.id != null)
-      .map((/** @type {any} */ { total_count: _total_count, ...row }) => row);
+      .map((/** @type {any} */ { total_count: _total_count, _row_order, ...row }) => row);
 
     return { rows: await attachTagsToRows(rows), total };
   },

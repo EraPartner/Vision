@@ -55,6 +55,21 @@ describe('getCount', () => {
     query.mockResolvedValueOnce({ rows: [{ count: '123' }] });
     expect(await transactionRepository.getCount({})).toBe(123);
   });
+
+  it('forwards every count-compatible route filter to the shared WHERE builder', async () => {
+    query.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+    await transactionRepository.getCount({
+      categoryIds: [2, 3], transactionType: 'expense', amountMin: 10,
+      amountMax: 100, amountSigned: true,
+    });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('t.category_id IN ($1, $2)');
+    expect(sql).toContain('t.amount < 0');
+    expect(sql).toContain('t.amount >= $3');
+    expect(sql).toContain('t.amount <= $4');
+    expect(sql).not.toContain('ABS(t.amount)');
+    expect(params).toEqual([2, 3, 10, 100]);
+  });
 });
 
 describe('getUncategorised', () => {
@@ -79,9 +94,28 @@ describe('getUncategorised', () => {
     // ADR-088 contract phase: the bank filter resolves through account_id.
     expect(sql).toContain('t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $3)');
     expect(sql).not.toContain('t.bank_account');
-    expect(sql).toContain('t.recipient_id = $4');
+    expect(sql).toMatch(/primary_recipient_id = \$4/);
     expect(sql).toContain('r.name ILIKE $5');
     expect(params).toEqual(['2024-01-01', '2024-12-31', '%kbc%', 5, '%aldi%', 25, 5]);
+  });
+
+  it('uses the shared filter builder for tags, amounts, type, search, and recipient groups', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await transactionRepository.getUncategorised({
+      transactionId: 9, recipientGroupId: 7, search: 'coffee',
+      transactionType: 'expense', amountMin: 10, amountMax: 100,
+      tagSlugs: ['groceries'],
+    });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('t.id = $1');
+    expect(sql).toContain('t.id IN (');
+    expect(sql).toContain('t.amount < 0');
+    expect(sql).toContain('ABS(t.amount) >=');
+    expect(sql).toContain('ABS(t.amount) <=');
+    expect(sql).toContain('FROM transaction_tags tt');
+    expect(sql).toMatch(/primary_recipient_id = \$\d+/);
+    expect(params.at(-2)).toBe(50);
+    expect(params.at(-1)).toBe(0);
   });
 
   it('treats an alias recipient whose primary has a category as categorised (excluded from the queue)', async () => {
@@ -195,11 +229,12 @@ describe('getUncategorisedWithCount', () => {
 
   it('parses total and strips total_count from rows', async () => {
     query
-      .mockResolvedValueOnce({ rows: [{ id: 1, total_count: '7' }] }) // main CTE
+      .mockResolvedValueOnce({ rows: [{ id: 1, total_count: '7', _row_order: '1' }] }) // main CTE
       .mockResolvedValueOnce({ rows: [] }); // tag lookup
     const res = await transactionRepository.getUncategorisedWithCount({ startDate: '2024-01-01' });
     expect(res.total).toBe(7);
     expect(res.rows[0]).not.toHaveProperty('total_count');
+    expect(res.rows[0]).not.toHaveProperty('_row_order');
   });
 });
 

@@ -1501,7 +1501,7 @@ look-changing one.
   - Verify first whether the route really passes all six (read the call site, not just the destructure) — this was spotted from the repository side only.
   - Fix: destructure and forward the full filter set to `buildTransactionWhere`, or reject the unsupported params at the route rather than silently ignoring them.
 
-- [ ] **`getCount` drops five of the filters it is handed — the same class of bug as the uncategorised one, on the plain count path** 🔼
+- [x] **`getCount` drops five of the filters it is handed — the same class of bug as the uncategorised one, on the plain count path** 🔼
   - ↪ _from: Orchestration session 2026-08-13 · found by the implementer while fixing the uncategorised drop (not probed end-to-end)_
   - `apps/node-backend/src/repositories/transactionRepository.js:318-331` — the destructure omits `categoryIds`, `transactionType`, `amountMin`, `amountMax` and `amountSigned`.
   - Identical mechanism to the uncategorised finding ticked above: the route parses these, the repository silently ignores them, so any consumer of this count gets a number computed over a wider set than the filters asked for. Not on the `uncategorised` path, which is why it was left out of that fix rather than folded in.
@@ -1515,12 +1515,12 @@ look-changing one.
   - Not reachable from today's UI — `LinkTransactionDialog` filters its search client-side and never sends `search` — so this is an API-surface issue, which is why it is filed rather than folded into the fix.
   - Fix: forward `search` (and `transactionId`) to the rows half too, or take the ticked item's own alternative and reject them at the route instead of silently ignoring them. Whichever is chosen, correct the docstring so its stated rule matches the code.
 
-- [ ] **`sortBy` / `sortDir` / `includeBalance` are parsed by the route and ignored on the uncategorised path** 🔽
+- [x] **`sortBy` / `sortDir` / `includeBalance` are parsed by the route and ignored on the uncategorised path** 🔽
   - ↪ _from: Orchestration session 2026-08-13 · adversarial verification of the uncategorised filter fix_
   - `getUncategorisedWithCount` does not destructure them and the CTE hard-codes `ORDER BY t.date DESC, t.id DESC`, so a user who sorts the uncategorised queue gets date-desc regardless. Same "parsed by the route, ignored by the repo" pattern as the two findings above; deliberately out of scope of the filter fix, which was about *which rows*, not *in what order*.
   - Fix: honour the sort params on this path as `getAllWithCount` does, or reject them at the route.
 
-- [ ] **`getUncategorised` and `getUncategorisedWithCount` have diverged — the shared "see getUncategorised" comments now mislead** 🔽
+- [x] **`getUncategorised` and `getUncategorisedWithCount` have diverged — the shared "see getUncategorised" comments now mislead** 🔽
   - ↪ _from: Orchestration session 2026-08-13 · adversarial verification of the uncategorised filter fix_
   - `transactionRepository.js:352` — the plain `getUncategorised` still hand-rolls a six-filter subset with the narrow literal `t.recipient_id = $n` and knows nothing of tags, amounts or recipient groups, while its `WithCount` twin now goes through `buildTransactionWhere`. Several comments in both cross-refer to each other as if they were interchangeable, which is no longer true.
   - No live impact: the only caller is the AI-chat expenses tool (`services/aiChat/tools/expenses.js:669`), which passes `{limit, offset}` and no filters. Filed so the next reader is not misled by the cross-references.
