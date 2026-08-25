@@ -60,11 +60,13 @@ alone. Use read-only subagents freely for triage and review; delegate writes onl
 isolated worktrees and explicit non-overlapping ownership. Finish the current batch before choosing
 another, and use a fresh cloud task for the next batch.
 
-Before selecting a Cloud batch, verify the latest required `CI Complete` result on `main` is green
-when the connected integration exposes that state. After opening a non-draft pull request, request
-GitHub native squash auto-merge and read the pull request back to confirm it is queued. Keep the
-branch current and repair batch-introduced failures until the ruleset passes. Start the next batch
-only after the merge is present on `main`; a queued merge is a wait state, not completion.
+Before selecting a Cloud batch, attempt to verify the latest required `CI Complete` result on
+`main` when the connected integration exposes that state. A known red result blocks unrelated
+backlog work, but unavailable remote state is unverified and does not block selection or portable
+implementation. After opening a non-draft pull request, request GitHub native squash auto-merge and
+read the pull request back to confirm it is queued. Keep the branch current and repair
+batch-introduced failures until the ruleset passes. Start the next batch only after the merge is
+present on `main`; a queued merge is a wait state, not completion.
 
 ## Provider and host behavior
 
@@ -181,3 +183,8 @@ green local checks or a submitted request. If native auto-merge is unavailable, 
 merge after all required checks and approvals pass and no blocking review, code-quality, or
 code-scanning condition remains. Do not use an admin bypass or directly update a default or
 protected branch outside that approved merge.
+
+The **Open pull request** action is a post-task platform control and does not need to appear as a
+terminal command, MCP resource, or agent-visible `make_pr` tool. A missing shell remote or absent
+in-task publication tool is not an implementation blocker. Finish the reviewed diff and report the
+publication handoff separately from known CI or ruleset failures.

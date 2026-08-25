@@ -17,10 +17,10 @@ that batch. Do not replace it after an interruption or rate limit, and do not be
 Use the current cloud task and its diff as recovery state; do not create a separate checkpoint
 schema or depend on chat prose when files provide stronger evidence.
 
-## Verify the merge path before selection
+## Check the merge path when available
 
-When repository state is available through the connected GitHub integration, verify the delivery
-path before spending implementation work:
+When repository state is available through the connected GitHub integration, attempt to verify the
+delivery path before spending implementation work:
 
 - the latest required `CI Complete` result on the default branch is successful;
 - GitHub native auto-merge is enabled and squash merge is allowed; and
@@ -29,8 +29,13 @@ path before spending implementation work:
 
 If default-branch CI is red, select a TODO finding only when it directly repairs that failure and
 keep it as a one-item batch. Otherwise stop and request a dedicated CI-restoration task. Do not
-build an unrelated batch that cannot merge. If remote settings cannot be read, record that
-auto-merge is unverified rather than promising it will work.
+build an unrelated batch that cannot merge.
+
+If remote CI or settings cannot be read, record each delivery check as unverified and continue with
+selection and implementation. Do not infer a failed gate from a missing shell remote, repository
+MCP resource, connected-integration tool, or agent-visible `make_pr` action. Select only work whose
+acceptance evidence can be produced with portable checks in the current environment. Defer
+publication and auto-merge verification until the reviewed diff is ready.
 
 ## Triage with read-only scouts
 
@@ -144,13 +149,21 @@ If native auto-merge is unavailable, remain in the task and merge through the co
 after all required checks and approvals pass and no blocking review, code-quality, or code-scanning
 condition remains. Never bypass protections or fall back to shell credentials or pushes.
 
-If publication is unavailable, leave the reviewed diff ready and identify the single missing
-platform action. After merge, verify that `main` contains the implementation and checked headings.
-Do not select the next batch.
+The **Open pull request** action may be a post-task platform control rather than an agent-visible
+tool. Do not require a `make_pr` tool or MCP resource before selecting or implementing the batch. If
+publication remains unavailable after the reviewed diff is ready, leave that diff ready and
+identify the single missing platform action. This is a publication handoff, not an implementation
+failure. After merge, verify that `main` contains the implementation and checked headings. Do not
+select the next batch.
 
 Finish with exactly one route:
 
 - verified merged: `NEXT_BATCH_SESSION: START_FRESH_CLOUD_TASK`;
 - native auto-merge verified queued but not yet merged: `NEXT_BATCH_SESSION: WAIT_FOR_AUTO_MERGE`;
-- auto-merge or publication unavailable: `NEXT_BATCH_SESSION: BLOCKED` plus the exact missing
-  platform capability or failing gate.
+- reviewed implementation ready but PR creation unavailable:
+  `NEXT_BATCH_SESSION: WAIT_FOR_PLATFORM_PR` plus the exact missing platform action;
+- pull request open but neither auto-merge nor an authorized integration merge is available:
+  `NEXT_BATCH_SESSION: WAIT_FOR_MERGE_CAPABILITY` plus the missing merge capability; or
+- a concrete CI, ruleset, implementation, selection, environment, setup, or validation blocker:
+  `NEXT_BATCH_SESSION: BLOCKED` plus the exact blocker. Unavailable remote state by itself remains
+  unverified and does not qualify.

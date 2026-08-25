@@ -51,6 +51,9 @@ compressed shorthand, stacked hyphenated phrases, and long clause piles.
   terminal.
 - Do not configure, disable, or work around commit signing in a cloud session.
 - Codex may create a pull request through the platform-managed **Open pull request** action.
+- The **Open pull request** action is a post-task platform control. It does not need to appear as a
+  terminal command, MCP resource, or agent-visible `make_pr` tool. Its absence during the agent run
+  is not an implementation blocker; finish the reviewed diff for the platform handoff.
 - In a pull-request-linked cloud task, inspect the current diff, review comments, and checks. Make
   requested in-scope changes, rerun relevant portable checks, and let the connected GitHub
   integration update the same pull request branch when repository permissions allow it.

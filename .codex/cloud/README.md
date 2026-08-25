@@ -10,6 +10,12 @@ bash .codex/cloud/setup.sh
 bash .codex/cloud/maintenance.sh
 ```
 
+Create or select this environment for the GitHub-connected Vision repository in Codex cloud
+settings when the automatic pull-request lifecycle is required. The repository setup script cannot
+create that platform connection or expose the post-task **Open pull request** control. A task that
+does not receive those capabilities still finishes portable implementation and review, then reports
+the exact platform handoff it is waiting for.
+
 The setup exports `CODEX_SESSION_ENV=cloud` for its own lifecycle and adds the same export to
 `.bashrc` for later shells. It installs the portable global working agreement, the pinned Bun
 runtime, Python dependencies, and Bun workspace dependencies. Python uses the exact, hash-verified
@@ -121,8 +127,9 @@ Demo-app, Apple Container, firewall, and hardware-backed signing checks in a loc
 
 ## Pull request lifecycle
 
-Use the platform-managed **Open pull request** action to create a pull request. A
-pull-request-linked cloud task may inspect comments and checks, make in-scope follow-up changes,
-and let the connected GitHub integration update the same branch. When the user explicitly asks to
+Use the post-task platform-managed **Open pull request** action to create a pull request. It does not
+need to be exposed to the running agent as a terminal command, MCP resource, or `make_pr` tool. A
+pull-request-linked cloud task may inspect comments and checks, make in-scope follow-up changes, and
+let the connected GitHub integration update the same branch. When the user explicitly asks to
 merge, the integration may do so only after required checks and approvals pass and no blocking
 review remains. Never use an admin bypass or directly update a protected branch.

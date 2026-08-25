@@ -3,7 +3,7 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-08-23
+updated: 2026-08-25
 tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, auto-merge, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, verify-destructive-migrations, ci-complete, live-api-contracts, branch-protection]
 description: GitHub Actions CI/CD pipelines including continuous integration checks, native pull-request auto-merge, supply chain security scanning, quality gates, Docker Compose sync verification, destructive-migration marker enforcement, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
@@ -590,11 +590,18 @@ Cloud backlog auto-merge deliberately does not use a branch-prefix or actor-name
 workflow. Those identifiers can be copied by an unrelated pull request. The connected integration
 must instead act on the exact PR authorized by the kickoff prompt.
 
-Before selecting a Cloud batch, the agent checks that the latest required `CI Complete` result on
-`main` is green. After opening the PR, it keeps the branch current, fixes failures introduced by the
-batch, and re-enables auto-merge if an update clears the request. A red baseline is a blocker unless
-the selected one-item batch directly repairs it. A submitted request is not proof: the PR must show
-native auto-merge as queued, and the next batch starts only after the merge reaches `main`.
+Before selecting a Cloud batch, the agent attempts to check that the latest required `CI Complete`
+result on `main` is green. A known red baseline is a blocker unless the selected one-item batch
+directly repairs it. Unavailable remote state remains unverified and does not prevent portable
+selection, implementation, or review. The post-task **Open pull request** control does not need to
+be visible to the running agent as a terminal command, MCP resource, or `make_pr` tool.
+
+After opening the PR, the agent keeps the branch current, fixes failures introduced by the batch,
+and re-enables auto-merge if an update clears the request. A submitted request is not proof: the PR
+must show native auto-merge as queued, and the next batch starts only after the merge reaches
+`main`. A reviewed diff awaiting the platform control reports `WAIT_FOR_PLATFORM_PR`; a known
+failing implementation, validation, or delivery gate reports `BLOCKED`. An open PR that cannot use
+either auto-merge or an authorized integration merge reports `WAIT_FOR_MERGE_CAPABILITY`.
 
 ---
 
