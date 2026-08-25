@@ -9,6 +9,8 @@ import { ContextMenuContent, ContextMenuItem } from "@/components/ui/context-men
 import type { Column } from "@/types/dataTable";
 import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 
+const measureElementMock = vi.hoisted(() => vi.fn());
+
 // Provide synchronous translations so tests don't depend on async locale loading.
 vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/contexts/LanguageContext")>();
@@ -42,7 +44,7 @@ vi.mock("@tanstack/react-virtual", () => ({
                 size: estimateSize(),
             })),
         getTotalSize: () => count * estimateSize(),
-        measureElement: vi.fn(),
+        measureElement: measureElementMock,
         scrollToIndex: vi.fn(),
     }),
 }));
@@ -197,6 +199,27 @@ describe("VirtualDataTable — server-side search", () => {
     it("uses 'Search database...' placeholder when server search provided", () => {
         renderTable({ serverMode: { search: { onChange: vi.fn() } } });
         expect(screen.getByPlaceholderText("Search database...")).toBeInTheDocument();
+    });
+
+    it("does not re-render unchanged virtual rows on each server-search keystroke", () => {
+        const renderName = vi.fn((row: TestRow) => row.name);
+        const columns: Column<TestRow>[] = [
+            { key: "id", header: "ID" },
+            { key: "name", header: "Name", render: renderName },
+            { key: "value", header: "Value" },
+        ];
+        renderTable({
+            columns,
+            serverMode: { search: { onChange: vi.fn() } },
+        });
+        expect(renderName).toHaveBeenCalledTimes(DATA.length);
+
+        fireEvent.change(
+            screen.getByPlaceholderText("Search database..."),
+            { target: { value: "a" } },
+        );
+
+        expect(renderName).toHaveBeenCalledTimes(DATA.length);
     });
 
     it(`calls onSearchChange after ${SEARCH_DEBOUNCE_MS} ms debounce`, async () => {

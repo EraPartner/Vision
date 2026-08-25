@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { parseDecimal } from "@/lib/decimal";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -134,6 +134,183 @@ function getRowKey<T extends Record<string, unknown>>(row: T, fallbackIndex: num
     const candidate = row.id;
     return (typeof candidate === "string" || typeof candidate === "number") ? candidate : fallbackIndex;
 }
+
+interface VirtualizedTableRowProps<T extends Record<string, unknown>> {
+    row: T;
+    sourceIndex: number;
+    virtualIndex: number;
+    virtualStart: number;
+    isFirstVisible: boolean;
+    isEditing: boolean;
+    isCoarsePointer: boolean;
+    columns: Column<T>[];
+    columnWidths: Record<string, number>;
+    editValues?: Record<string, unknown>;
+    hasEditableColumns: boolean;
+    measureElement: React.Ref<HTMLDivElement>;
+    onRowDoubleClick?: (row: T, index: number) => void;
+    onRowOpen?: (row: T, index: number) => void;
+    onRowQuickLook?: (row: T, index: number) => void;
+    rowContextMenu?: VirtualDataTableProps<T>["rowContextMenu"];
+    startEditing: (sourceIndex: number, row: T) => void;
+    saveEditing?: (sourceIndex: number, row: T) => void;
+    cancelEditing: () => void;
+    setEditValues: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+    focusRowByIndex?: (index: number) => void;
+    saveLabel: string;
+    cancelLabel: string;
+    editLabel: string;
+}
+
+function VirtualizedTableRow<T extends Record<string, unknown>>({
+    row,
+    sourceIndex,
+    virtualIndex,
+    virtualStart,
+    isFirstVisible,
+    isEditing,
+    isCoarsePointer,
+    columns,
+    columnWidths,
+    editValues,
+    hasEditableColumns,
+    measureElement,
+    onRowDoubleClick,
+    onRowOpen,
+    onRowQuickLook,
+    rowContextMenu,
+    startEditing,
+    saveEditing,
+    cancelEditing,
+    setEditValues,
+    focusRowByIndex,
+    saveLabel,
+    cancelLabel,
+    editLabel,
+}: VirtualizedTableRowProps<T>) {
+    const rowsInteractive = !!(onRowDoubleClick || onRowOpen || onRowQuickLook);
+    const rowEl = (
+        <div
+            data-index={virtualIndex}
+            ref={measureElement}
+            role="row"
+            aria-rowindex={virtualIndex + 2}
+            tabIndex={rowsInteractive ? (isFirstVisible ? 0 : -1) : undefined}
+            className={cn(
+                "flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset",
+                isEditing && "bg-primary/5",
+                onRowDoubleClick && "cursor-pointer",
+                rowsInteractive && "touch-manipulation active:bg-muted",
+            )}
+            style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualStart}px)`,
+            }}
+            onDoubleClick={() => {
+                if (onRowDoubleClick) {
+                    onRowDoubleClick(row, sourceIndex);
+                } else if (hasEditableColumns && !isEditing) {
+                    startEditing(sourceIndex, row);
+                }
+            }}
+            onClick={isCoarsePointer && rowsInteractive ? (event) => {
+                if (isEditing) return;
+                const openAction = onRowOpen ?? onRowDoubleClick;
+                if (!openAction) return;
+                const target = event.target as HTMLElement;
+                if (target.closest('button, a, input, select, textarea, label, [role="button"], [role="menuitem"], [role="checkbox"], [contenteditable="true"]')) return;
+                openAction(row, sourceIndex);
+            } : undefined}
+            onKeyDown={rowsInteractive ? (event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault();
+                    focusRowByIndex?.(virtualIndex + (event.key === "ArrowDown" ? 1 : -1));
+                } else if (event.key === "Enter") {
+                    event.preventDefault();
+                    (onRowOpen ?? onRowDoubleClick)?.(row, sourceIndex);
+                } else if (event.key === " ") {
+                    event.preventDefault();
+                    (onRowQuickLook ?? onRowDoubleClick)?.(row, sourceIndex);
+                }
+            } : undefined}
+        >
+            {columns.map((col) => {
+                const width = columnWidths[col.key];
+                return (
+                    <div
+                        key={col.key}
+                        role="cell"
+                        className={cn("px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]", col.className || "")}
+                        style={width ? { width: `${width}px`, flex: "none" } : undefined}
+                    >
+                        {isEditing && col.editable ? (
+                            col.type === "date" ? (
+                                <DatePicker
+                                    value={editValues?.[col.key] ? parseLocalDateFromYmd(String(editValues[col.key])) : undefined}
+                                    onChange={(date) => setEditValues((prev) => ({ ...prev, [col.key]: date ? toYmd(date) : "" }))}
+                                    buttonClassName="h-8 text-sm w-full"
+                                />
+                            ) : (
+                                <Input
+                                    type={col.type || "text"}
+                                    value={String(editValues?.[col.key] ?? "")}
+                                    onChange={(event) => setEditValues((prev) => ({ ...prev, [col.key]: event.target.value }))}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter") { event.preventDefault(); saveEditing?.(sourceIndex, row); }
+                                        else if (event.key === "Escape") { event.preventDefault(); cancelEditing(); }
+                                    }}
+                                    className="h-8 text-sm"
+                                />
+                            )
+                        ) : col.render ? (
+                            col.render(row, isEditing, sourceIndex)
+                        ) : (
+                            String(row[col.key] ?? "")
+                        )}
+                    </div>
+                );
+            })}
+            {hasEditableColumns && (
+                <div role="cell" className="px-1 py-2 text-right" style={{ width: isEditing ? "88px" : "40px", flex: "none" }}>
+                    {isEditing ? (
+                        <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" aria-label={saveLabel}
+                                className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
+                                onClick={() => saveEditing?.(sourceIndex, row)}>
+                                <Check className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" aria-label={cancelLabel}
+                                className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={cancelEditing}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    ) : (
+                        <Button variant="ghost" size="icon" aria-label={editLabel}
+                            className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
+                            onClick={() => startEditing(sourceIndex, row)}>
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+
+    if (!rowContextMenu) return rowEl;
+    return (
+        <ContextMenu modal={false}>
+            <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
+            {rowContextMenu(row, sourceIndex, { startEditing: () => startEditing(sourceIndex, row) })}
+        </ContextMenu>
+    );
+}
+
+const MemoizedVirtualizedTableRow = memo(VirtualizedTableRow) as typeof VirtualizedTableRow;
 
 export function VirtualDataTable<T extends Record<string, unknown>>({
     title,
@@ -536,7 +713,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         };
     }, [onLoadMore, maybeLoadMore]);
 
-    const startEditing = (sourceIndex: number, row: T) => {
+    const startEditing = useCallback((sourceIndex: number, row: T) => {
         setEditingRow(sourceIndex);
         const values: Record<string, unknown> = {};
         columns.forEach((col) => {
@@ -547,9 +724,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 : val;
         });
         setEditValues(values);
-    };
+    }, [columns]);
 
-    const saveEditing = (sourceIndex: number, row: T) => {
+    const saveEditing = useCallback((sourceIndex: number, row: T) => {
         if (onRowUpdate) {
             // Number columns keep the raw string while editing (so a decimal
             // separator can be typed) and are parsed here. A cleared number
@@ -569,7 +746,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         }
         setEditingRow(null);
         setEditValues({});
-    };
+    }, [columns, editValues, onRowUpdate]);
 
     const clearAllFilters = () => {
         clearPendingSearch();
@@ -787,7 +964,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         </div>
                     ) : (
                         <div role="presentation" style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
-                            {virtualizer.getVirtualItems().map((virtualRow) => {
+                            {virtualizer.getVirtualItems().map((virtualRow, visibleIndex) => {
                                 const indexedRow = processedRows[virtualRow.index];
                                 if (!indexedRow) return null;
                                 const row = indexedRow.row;
@@ -798,161 +975,34 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                 // key would re-attach in-progress inline edits and
                                 // row transitions to the wrong row.
                                 const rowKey = getRowKey(row, sourceIndex);
-                                const rowsInteractive = !!(onRowDoubleClick || onRowOpen || onRowQuickLook);
-
-                                const rowEl = (
-                                    <div
-                                        data-index={virtualRow.index}
-                                        ref={virtualizer.measureElement}
-                                        role="row"
-                                        aria-rowindex={virtualRow.index + 2}
-                                        // Keyboard equivalent for the mouse-only row actions:
-                                        // focusable rows take ↑/↓ (move), Enter (open) and
-                                        // Space (quick look). Roving tabindex — only the
-                                        // topmost rendered row is a tab stop, so Tab reaches
-                                        // the table once instead of walking every row; ↑/↓
-                                        // (focusRowByIndex) move focus to the -1 rows.
-                                        tabIndex={
-                                            rowsInteractive
-                                                ? virtualRow.index === virtualizer.getVirtualItems()[0]?.index
-                                                    ? 0
-                                                    : -1
-                                                : undefined
-                                        }
-                                        // `active:bg-muted` is this row's press
-                                        // response — the deeper end of the same
-                                        // background its hover already uses, and
-                                        // the idiom SidebarMenuButton established
-                                        // (`active:bg-foreground/[0.08]`). It is
-                                        // deliberately NOT `.press-feedback`: the
-                                        // virtualizer owns this element's inline
-                                        // `transform`, so a class-level scale
-                                        // would either be dead (inline wins) or
-                                        // destroy the row's absolute positioning.
-                                        className={cn("flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset", isEditing && "bg-primary/5", onRowDoubleClick && "cursor-pointer", rowsInteractive && "touch-manipulation active:bg-muted")}
-                                        style={{
-                                            position: "absolute",
-                                            top: 0,
-                                            left: 0,
-                                            width: "100%",
-                                            transform: `translateY(${virtualRow.start}px)`,
-                                        }}
-                                        onDoubleClick={() => {
-                                            if (onRowDoubleClick) {
-                                                onRowDoubleClick(row, sourceIndex);
-                                            } else if (hasEditableColumns && !isEditing) {
-                                                startEditing(sourceIndex, row);
-                                            }
-                                        }}
-                                        // Coarse pointers can't double-click reliably, so a single
-                                        // tap performs the OPEN action only (never inline-edit, never
-                                        // destructive) — matching Enter's `onRowOpen ?? onRowDoubleClick`.
-                                        // Fine pointers keep double-click-only behavior unchanged.
-                                        // Guard against taps on interactive cell content (buttons,
-                                        // links, inputs, menus) so those still do their own thing.
-                                        onClick={isCoarsePointer && rowsInteractive ? (e) => {
-                                            if (isEditing) return;
-                                            const openAction = onRowOpen ?? onRowDoubleClick;
-                                            if (!openAction) return;
-                                            const target = e.target as HTMLElement;
-                                            if (target.closest('button, a, input, select, textarea, label, [role="button"], [role="menuitem"], [role="checkbox"], [contenteditable="true"]')) return;
-                                            openAction(row, sourceIndex);
-                                        } : undefined}
-                                        onKeyDown={rowsInteractive ? (e) => {
-                                            // Don't hijack keys while typing in an inline-edit field.
-                                            if (e.target !== e.currentTarget) return;
-                                            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                                                e.preventDefault();
-                                                focusRowByIndex(virtualRow.index + (e.key === "ArrowDown" ? 1 : -1));
-                                            } else if (e.key === "Enter") {
-                                                e.preventDefault();
-                                                (onRowOpen ?? onRowDoubleClick)?.(row, sourceIndex);
-                                            } else if (e.key === " ") {
-                                                e.preventDefault();
-                                                (onRowQuickLook ?? onRowDoubleClick)?.(row, sourceIndex);
-                                            }
-                                        } : undefined}
-                                    >
-                                        {columns.map((col) => {
-                                            const width = columnWidths[col.key];
-                                            return (
-                                                <div
-                                                    key={col.key}
-                                                    role="cell"
-                                                    className={cn("px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]", col.className || "")}
-                                                    style={width ? { width: `${width}px`, flex: "none" } : undefined}
-                                                >
-                                                    {isEditing && col.editable ? (
-                                                        col.type === "date" ? (
-                                                            <DatePicker
-                                                                value={editValues[col.key] ? parseLocalDateFromYmd(String(editValues[col.key])) : undefined}
-                                                                onChange={(d) => setEditValues((prev) => ({ ...prev, [col.key]: d ? toYmd(d) : "" }))}
-                                                                buttonClassName="h-8 text-sm w-full"
-                                                            />
-                                                        ) : (
-                                                            <Input
-                                                                type={col.type || "text"}
-                                                                value={String(editValues[col.key] ?? "")}
-                                                                onChange={(e) =>
-                                                                    // Raw string for every type; number columns are parsed
-                                                                    // at save time (saveEditing) so clearing the field does
-                                                                    // not silently become a saved 0.00.
-                                                                    setEditValues((prev) => ({
-                                                                        ...prev,
-                                                                        [col.key]: e.target.value,
-                                                                    }))
-                                                                }
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === "Enter") { e.preventDefault(); saveEditing(sourceIndex, row); }
-                                                                    else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
-                                                                }}
-                                                                className="h-8 text-sm"
-                                                            />
-                                                        )
-                                                    ) : col.render ? (
-                                                        col.render(row, isEditing, sourceIndex)
-                                                    ) : (
-                                                        String(row[col.key] ?? "")
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                        {hasEditableColumns && (
-                                            <div role="cell" className="px-1 py-2 text-right" style={{ width: isEditing ? "88px" : "40px", flex: "none" }}>
-                                                {isEditing ? (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <Button variant="ghost" size="icon" aria-label={t('aria.save')}
-                                                            className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
-                                                            onClick={() => saveEditing(sourceIndex, row)}>
-                                                            <Check className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="icon" aria-label={t('aria.cancel')}
-                                                            className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={cancelEditing}>
-                                                            <X className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <Button variant="ghost" size="icon" aria-label={t('aria.edit')}
-                                                        className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                                        onClick={() => startEditing(sourceIndex, row)}>
-                                                        <Pencil className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-
-                                if (!rowContextMenu) return <Fragment key={rowKey}>{rowEl}</Fragment>;
                                 return (
-                                    // modal={false}: menu items open page-level dialogs;
-                                    // a modal menu's body pointer-events lock can race the
-                                    // dialog's own lock and leave the page inert.
-                                    <ContextMenu key={rowKey} modal={false}>
-                                        <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
-                                        {rowContextMenu(row, sourceIndex, { startEditing: () => startEditing(sourceIndex, row) })}
-                                    </ContextMenu>
+                                    <MemoizedVirtualizedTableRow
+                                        key={rowKey}
+                                        row={row}
+                                        sourceIndex={sourceIndex}
+                                        virtualIndex={virtualRow.index}
+                                        virtualStart={virtualRow.start}
+                                        isFirstVisible={visibleIndex === 0}
+                                        isEditing={isEditing}
+                                        isCoarsePointer={isCoarsePointer}
+                                        columns={columns}
+                                        columnWidths={columnWidths}
+                                        editValues={isEditing ? editValues : undefined}
+                                        hasEditableColumns={hasEditableColumns}
+                                        measureElement={virtualizer.measureElement}
+                                        onRowDoubleClick={onRowDoubleClick}
+                                        onRowOpen={onRowOpen}
+                                        onRowQuickLook={onRowQuickLook}
+                                        rowContextMenu={rowContextMenu}
+                                        startEditing={startEditing}
+                                        saveEditing={isEditing ? saveEditing : undefined}
+                                        cancelEditing={cancelEditing}
+                                        setEditValues={setEditValues}
+                                        focusRowByIndex={onRowDoubleClick || onRowOpen || onRowQuickLook ? focusRowByIndex : undefined}
+                                        saveLabel={t('aria.save')}
+                                        cancelLabel={t('aria.cancel')}
+                                        editLabel={t('aria.edit')}
+                                    />
                                 );
                             })}
                         </div>
