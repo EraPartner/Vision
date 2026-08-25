@@ -149,7 +149,7 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
 }
 
 /**
- * @param {ExportTransactionRow & { running_balance?: number }} row
+ * @param {ExportTransactionRow & { running_balance?: string }} row
  * @param {{ includeBalance?: boolean }} [opts]
  * @returns {string}
  */
@@ -291,7 +291,7 @@ export async function streamCsvExport(res, { whereSql, params, nextParamIdx, inc
         const key = row.account_id ?? null;
         const next = (runningBalances.get(key) ?? toDecimal(0)).plus(toDecimal(row.amount ?? 0));
         runningBalances.set(key, next);
-        return `${buildCsvRow({ ...row, running_balance: next.toNumber() }, { includeBalance })}\n`;
+        return `${buildCsvRow({ ...row, running_balance: next.toString() }, { includeBalance })}\n`;
       }
       return `${buildCsvRow(row)}\n`;
     },

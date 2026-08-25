@@ -86,6 +86,19 @@ describe('export date serialization', () => {
     expect(balances).toEqual(['100', '50', '70']);
   });
 
+  it('CSV running balance preserves decimal precision beyond the JS safe integer range', async () => {
+    primeQueries([
+      exportRow({ id: 1, account_id: 1, amount: '9007199254740993.12' }),
+      exportRow({ id: 2, account_id: 1, amount: '0.01' }),
+    ]);
+    const res = mockRes();
+
+    await streamCsvExport(res, { whereSql: '1=1', params: [], nextParamIdx: 1, includeBalance: true });
+
+    const balances = res.chunks.slice(1).map((line) => line.trim().split(',').pop());
+    expect(balances).toEqual(['9007199254740993.12', '9007199254740993.13']);
+  });
+
   it('NDJSON emits the calendar day, not the previous-day ISO timestamp', async () => {
     primeQueries([exportRow()]);
     const res = mockRes();
