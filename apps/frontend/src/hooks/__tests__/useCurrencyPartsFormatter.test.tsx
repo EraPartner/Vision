@@ -42,11 +42,39 @@ describe("useCurrencyPartsFormatter — malformed currency degrades like Money",
         ]);
     });
 
+    it("degrades identically when signed formatting is requested", () => {
+        const { result } = renderHook(() => useCurrencyPartsFormatter());
+        expect(result.current(12, { currency: "US", signed: true })).toEqual([
+            { type: "literal", value: "12" },
+        ]);
+    });
+
     it("still formats a valid currency normally", () => {
         const { result } = renderHook(() => useCurrencyPartsFormatter());
-        const parts = result.current(1234.56, { currency: "EUR" });
-        expect(parts.length).toBeGreaterThan(1);
-        expect(parts.some((p) => p.type === "currency" && p.value === "€")).toBe(true);
+        expect(result.current(1234.56, { currency: "EUR", decimals: 2 })).toEqual([
+            { type: "integer", value: "1" },
+            { type: "group", value: "." },
+            { type: "integer", value: "234" },
+            { type: "decimal", value: "," },
+            { type: "fraction", value: "56" },
+            { type: "literal", value: "\u00a0" },
+            { type: "currency", value: "€" },
+        ]);
+    });
+
+    it("pins signed positive and zero formatting", () => {
+        const { result } = renderHook(() => useCurrencyPartsFormatter());
+        expect(result.current(12, { currency: "EUR", decimals: 0, signed: true })).toEqual([
+            { type: "plusSign", value: "+" },
+            { type: "integer", value: "12" },
+            { type: "literal", value: "\u00a0" },
+            { type: "currency", value: "€" },
+        ]);
+        expect(result.current(0, { currency: "EUR", decimals: 0, signed: true })).toEqual([
+            { type: "integer", value: "0" },
+            { type: "literal", value: "\u00a0" },
+            { type: "currency", value: "€" },
+        ]);
     });
 
     it("does not poison the cache — a valid code still works after a bad one", () => {

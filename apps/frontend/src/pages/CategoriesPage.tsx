@@ -213,12 +213,13 @@ export default function CategoriesPage() {
                                                 >
                                                     <Badge
                                                         variant="outline"
+                                                        title={cat.detail}
                                                         className={cn(
-                                                            "font-medium text-xs",
+                                                            "min-w-0 max-w-full font-medium text-xs",
                                                             cat.is_active === false && "line-through"
                                                         )}
                                                     >
-                                                        {cat.detail}
+                                                        <span className="truncate">{cat.detail}</span>
                                                     </Badge>
 
                                                     {cat.description && (

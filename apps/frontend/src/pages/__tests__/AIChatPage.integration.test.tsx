@@ -177,7 +177,7 @@ describe("AIChatPage (integration)", () => {
         await user.click(newConvBtn);
 
         // After click, header title updates to the new conversation title
-        expect(await screen.findByRole("heading", { name: /new conversation/i })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: /new conversation/i })).toHaveClass("text-lg");
     });
 
     it("clicking insights digest quick action sends the fixed prompt with tools forced on and insightsPreCall", async () => {

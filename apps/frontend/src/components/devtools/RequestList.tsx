@@ -121,7 +121,7 @@ export function RequestList({ events, inFlight, onSelect, selectedId }: Props) {
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                     placeholder="Filter by endpoint or method…"
-                    className="w-full text-xs font-mono bg-muted/40 border border-border rounded px-2 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+                    className="w-full text-xs font-mono bg-muted/40 border border-border rounded px-2 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
                 />
             </div>
             {filtered.length === 0 ? (

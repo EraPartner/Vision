@@ -178,17 +178,18 @@ export default function WatchlistPage() {
                   // cv-auto: skip layout + the backdrop-filter blur composite for
                   // off-screen cards in this uncapped grid (compositor cost scales
                   // with visible count, not total). Appearance unchanged on screen.
-                  "cv-auto glass-regular premium-frame cursor-pointer transition-[box-shadow,border-color] hover:shadow-glass-soft hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                  "cv-auto glass-regular premium-frame cursor-pointer transition-[box-shadow,border-color] hover:shadow-glass-soft hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
                   isBelowTarget && "ring-2 ring-success/50"
                 )}
                 onDoubleClick={() => handleDoubleClick(item)}
                 onKeyDown={onActivateKeyDown(() => handleDoubleClick(item))}
               >
                 <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
                       <CardTitle
-                        className="text-lg cursor-pointer hover:underline"
+                        className="truncate text-lg cursor-pointer hover:underline"
+                        title={item.name}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           handleNameDoubleClick(item);
@@ -202,7 +203,7 @@ export default function WatchlistPage() {
                         </Badge>
                       )}
                     </div>
-                    <Badge className={cn("text-xs", ASSET_CLASS_COLORS[item.asset_class])}>
+                    <Badge className={cn("shrink-0 text-xs", ASSET_CLASS_COLORS[item.asset_class])}>
                       {item.asset_class.toUpperCase()}
                     </Badge>
                   </div>

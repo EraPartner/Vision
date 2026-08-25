@@ -136,7 +136,7 @@ describe("PlannedPaymentsPage (integration)", () => {
         // Wait for full page load (translations lazy-load after settings fetch + locale import)
         await screen.findByRole("button", { name: /new payment/i });
         expect(
-            screen.getByText(/manage your recurring and scheduled payments/i),
+            screen.getByText(/keep recurring bills and future payments visible/i),
         ).toBeInTheDocument();
     });
 

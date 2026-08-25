@@ -58,7 +58,7 @@ Slugs are globally unique (not partial-on-active) so junction rows survive soft-
 | `apps/node-backend/src/repositories/tagRepository.js` | CRUD + `findOrCreateBySlug` (atomic upsert) |
 | `apps/node-backend/src/routes/tags.js` | `GET /api/tags`, `POST /api/tags`, `PATCH /api/tags/:id`, `DELETE /api/tags/:id` |
 | `apps/node-backend/src/repositories/transactionRepository.js` | Batched second query attaches `tags: Tag[]` to list results; `create`/`update` accept `tags: string[]` |
-| `apps/node-backend/src/services/filterBuilder.js` | `tags` param → `EXISTS (SELECT 1 FROM transaction_tags ...)` |
+| `apps/node-backend/src/lib/filterBuilder.js` | `tags` param → `EXISTS (SELECT 1 FROM transaction_tags ...)` |
 | `apps/node-backend/src/routes/transactions.js` | `tags` query param + `POST /api/transactions/bulk-tag` |
 | `apps/node-backend/src/repositories/plannedTransactionRepository.js` | `planned_transaction_tags` read/write; `executeAndAdvance` inherits tags |
 

@@ -119,7 +119,7 @@ describe("InsightsDigestPanel", () => {
         renderWithApp(<InsightsDigestPanel />);
 
         expect(
-            await screen.findByText("No new insights right now — you're all caught up."),
+            await screen.findByText("No new insights right now — you're all caught up"),
         ).toBeInTheDocument();
     });
 });

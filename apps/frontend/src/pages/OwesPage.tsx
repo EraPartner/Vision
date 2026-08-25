@@ -94,7 +94,7 @@ export default function OwesPage() {
                                 tabIndex={0}
                                 aria-label={item.recipient_name}
                                 variant="interactive"
-                                className="cursor-pointer hover:border-primary/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                className="cursor-pointer hover:border-primary/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
                                 onClick={() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name })}
                                 onKeyDown={onActivateKeyDown(() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name }))}
                             >

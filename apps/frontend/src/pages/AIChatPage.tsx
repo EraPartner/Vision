@@ -204,7 +204,7 @@ export default function AIChatPage() {
                             </SheetContent>
                         </Sheet>
                         <div className="min-w-0">
-                        <h1 className="truncate text-base font-semibold tracking-tight">
+                        <h1 className="truncate text-lg font-semibold tracking-tight">
                             {detail?.conversation.title || t('aiChat.title')}
                         </h1>
                         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">

@@ -29,6 +29,7 @@ import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 import { formatPercent } from "@/utils/currency";
+import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 
 interface WatchlistChartDialogProps {
   item: WatchlistItem | null;
@@ -215,23 +216,21 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
 
           {isBelowTarget && (
             <div className="bg-success/10 border border-success/30 text-success rounded-lg p-3 text-center font-medium">
-              ✓ {t('watchlistChart.atTarget')}
+              {t('watchlistChart.atTarget')}
             </div>
           )}
 
           {/* Range selector */}
-            <div className="flex gap-2 justify-center">
-              {RANGES.map((r) => (
-                <Button
-                  key={r.label}
-                  variant={selectedRange.range === r.range ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSelectedRange(r)}
-                >
-                  {r.label}
-                </Button>
-              ))}
-            </div>
+          <SegmentedButtons
+            options={RANGES}
+            getKey={(range) => range.label}
+            getLabel={(range) => range.label}
+            isSelected={(range) => selectedRange.range === range.range}
+            onSelect={setSelectedRange}
+            buttonClassName=""
+            className="flex gap-2 justify-center"
+            unselectedVariant="outline"
+          />
 
           {/* Chart */}
           <div className="h-80 w-full">

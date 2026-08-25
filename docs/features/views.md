@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-06-24
+updated: 2026-08-25
 tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026, portfolio-ticker]
 description: Complete overview of all views and pages in the Vision application. June 2026 Liquid Glass v2 — KPI/chart cards migrated to glass-regular, hero cards to glass-elevated, tables stay opaque, surface-elevated recipe superseded.
 aliases: [views, pages, frontend views, application pages, ui views]
@@ -142,6 +142,7 @@ Manage transaction categorization with hierarchical categories.
 - **Bulk Assignment**: Assign categories to multiple transactions
 - **Usage Statistics**: See transaction count per category
 - **Color Coding**: Visual identification (via category colors)
+- Long category detail names truncate inside their badge and retain the full value in the native title tooltip.
 
 ### Category Structure
 
@@ -188,6 +189,7 @@ Manage payees and payers (merchants, employers, etc.).
 - **Default Categories**: Set default category per recipient (inline editing)
 - **Bank Accounts**: Link bank accounts to recipients
 - **Notes**: Add notes about recipients
+- Long recipient and merge-target names truncate in the virtual table and retain their full value in native title tooltips.
 
 ### Search Behavior
 
@@ -539,6 +541,7 @@ Track symbols without owning them.
 - View current prices
 - Price alerts (future)
 - Performance tracking
+- Long watchlist company names truncate before the asset-class badge and retain the full name in the native title tooltip.
 - Date axis labels in chart dialog follow app date format
 - Target/current price and currency displays follow app number format + decimal settings
 - Net Worth x-axis month labels follow app language locale (`en-US` / `nl-NL`), while Performance month keys use app date format helpers
@@ -615,7 +618,7 @@ Cross-page premium polish follows shared UI primitives and utility classes for c
 
 ### Core code links
 
-[[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/CategoriesPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/package.json]]
+[[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/CategoriesPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/package.json]]
 
 ---
 

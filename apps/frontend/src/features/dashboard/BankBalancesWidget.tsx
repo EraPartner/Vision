@@ -218,7 +218,7 @@ export function BankBalancesWidget() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-3xl font-bold tabular-nums bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
+                    <div className="text-3xl font-bold tabular-nums text-foreground">
                         {(() => { const r = formatCurrencyCompact(total_net_position, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                     </div>
                     <p className={cn("text-xs font-medium mt-2 flex items-center gap-1", isPositive ? "amount-gain" : "amount-loss")}>

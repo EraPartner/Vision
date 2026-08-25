@@ -7,7 +7,7 @@ updated: 2026-08-21
 tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix, amount-filter, search-suggestions, date-search, tag-search, url-state]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags. 2026-06-28: free-text search now also matches the transaction date (ISO text) and active tag slugs; new amount_min/amount_max/amount_exact filter params; TransactionSearchSuggestions dropdown for quick filters; FilterBanner shows amount descriptors. Aug 2026: search and sort (sort_key/sort_dir) are URL-backed; load-more and attachment-delete failures surface a retry-capable toast instead of failing silently.
-related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/features/transactions/components/TransactionSearchSuggestions.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
+related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/features/transactions/components/TransactionSearchSuggestions.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
 # Transactions
@@ -156,7 +156,7 @@ Optional query params control amount filtering. By default they match on magnitu
 
 These params are threaded through the full stack:
 - `parseTransactionListQuery` in [[apps/node-backend/src/routes/transactions.js]] parses all three and forwards `amountMin`/`amountMax` to `buildTransactionWhere`.
-- `buildTransactionWhere` in [[apps/node-backend/src/services/filterBuilder.js]] emits `ABS(t.amount) >= $n` / `ABS(t.amount) <= $n` clauses.
+- `buildTransactionWhere` in [[apps/node-backend/src/lib/filterBuilder.js]] emits `ABS(t.amount) >= $n` / `ABS(t.amount) <= $n` clauses.
 - `getAllWithCount` in [[apps/node-backend/src/repositories/transactionRepository.js]] accepts and forwards `amountMin`/`amountMax`.
 - `buildExportFilters` passes them to both CSV and JSON export endpoints.
 - `normalizeBulkFilter` in [[apps/node-backend/src/services/bulkSelection.js]] maps them so bulk "select all matching" stays in lockstep.
@@ -182,7 +182,7 @@ The free-text `search` parameter (`ILIKE %term%`) now matches across **all** of 
 
 The tag match uses `EXISTS (SELECT 1 FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = t.id AND tg.is_active AND tg.slug ILIKE $n)`, so a search for `rome` will surface rows tagged `rome-2025`.
 
-Code links: [[apps/node-backend/src/services/filterBuilder.js]]
+Code links: [[apps/node-backend/src/lib/filterBuilder.js]]
 
 #### TransactionSearchSuggestions (2026-06-28)
 
@@ -221,7 +221,7 @@ Implementation note:
 - PATCH name-resolution and CSV export DB-access helpers now use module-scoped imports (`dbQuery`, `normalizeForMatching`) instead of per-request dynamic imports, preserving route behavior while removing avoidable import overhead on hot paths ([[apps/node-backend/src/routes/transactions.js]]).
 - PATCH recipient/category name-resolution now runs concurrently and keeps existing recipient-first/category-second validation error precedence, reducing avoidable sequential lookup latency when both fields are provided ([[apps/node-backend/src/routes/transactions.js]]).
 - Repository transaction update now returns the enriched row via one CTE query (update + joins) instead of update followed by `getById`, preserving response shape and not-found behavior while reducing one DB round-trip per update ([[apps/node-backend/src/repositories/transactionRepository.js]]).
-- `recipientGroupId` filter in `buildTransactionWhere` resolves the full primary-recipient group via an indexable semi-join on `recipients` (Phase Q), enabling linked-recipient transaction history discovery ([[apps/node-backend/src/services/filterBuilder.js]]).
+- `recipientGroupId` filter in `buildTransactionWhere` resolves the full primary-recipient group via an indexable semi-join on `recipients` (Phase Q), enabling linked-recipient transaction history discovery ([[apps/node-backend/src/lib/filterBuilder.js]]).
 
 #### Table Search Sync Behavior
 

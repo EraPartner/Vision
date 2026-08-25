@@ -162,20 +162,27 @@ export default function RecipientsPage() {
             header: t('recipientsPage.col.recipient'),
             editable: true,
             render: (row: TableRecipient) => (
-                <div className="flex items-center gap-2">
-                    <span className={cn('font-medium', row.is_active ? 'text-foreground' : 'text-muted-foreground line-through')}>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span
+                        className={cn('min-w-0 truncate font-medium', row.is_active ? 'text-foreground' : 'text-muted-foreground line-through')}
+                        title={row.name}
+                    >
                         {row.name}
                     </span>
                     {(row.alias_count ?? 0) > 0 && (
-                        <Badge variant="secondary" className="text-xs gap-1">
+                        <Badge variant="secondary" className="shrink-0 text-xs gap-1">
                             <Users className="h-3 w-3" />
                             {row.alias_count}
                         </Badge>
                     )}
                     {row.primary_recipient_id && (
-                        <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
-                            <Link2 className="h-3 w-3" />
-                            → {row.primary_recipient_name}
+                        <Badge
+                            variant="outline"
+                            className="min-w-0 gap-1 text-xs text-muted-foreground"
+                            title={row.primary_recipient_name ?? undefined}
+                        >
+                            <Link2 className="h-3 w-3 shrink-0" />
+                            <span className="truncate">→ {row.primary_recipient_name}</span>
                         </Badge>
                     )}
                 </div>

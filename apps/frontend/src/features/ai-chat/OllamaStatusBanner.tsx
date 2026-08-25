@@ -36,7 +36,7 @@ export function OllamaStatusBanner({ status, isLoading }: OllamaStatusBannerProp
                     {t('aiChat.banner.unreachable')}
                 </p>
                 <p className="mt-0.5 text-xs text-foreground/75">
-                    {status?.error || t('aiChat.banner.hint')}
+                    {t('aiChat.banner.hint')}
                     {shownUrl ? ` (${shownUrl})` : ''}
                 </p>
                 {status?.hint ? (

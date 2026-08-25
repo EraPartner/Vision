@@ -324,7 +324,7 @@ Two new query parameters added to `GET /api/transactions`:
 - **`transaction_type` (enum: 'income' | 'expense'):** Filters by transaction sign. Enables income-only or expense-only views in pivot drillthrough.
 
 **Backend Implementation:**
-- `[[apps/node-backend/src/services/filterBuilder.js]]` — `buildTransactionWhere()` now accepts `categoryIds` and `transactionType` params
+- `[[apps/node-backend/src/lib/filterBuilder.js]]` — `buildTransactionWhere()` now accepts `categoryIds` and `transactionType` params
 - `[[apps/node-backend/src/routes/transactions.js]]` — `parseTransactionListQuery()` parses comma-separated `category_ids` and `transaction_type` from query string
 - `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` destructures and forwards filter params to service layer
 

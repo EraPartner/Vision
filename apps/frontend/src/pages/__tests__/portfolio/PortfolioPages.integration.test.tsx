@@ -777,6 +777,24 @@ describe("Portfolio pages (integration)", () => {
 
     // ─── WatchlistPage mutation tests ─────────────────────────────────────────
 
+    it("WatchlistPage truncates long company names while exposing the full title", async () => {
+        const mockItem = {
+            id: 1, name: "A very long watchlist company name", symbol: "LONG",
+            asset_class: "stock" as const, target_price: 150,
+            currency: "EUR", notes: null, price_provider_id: null,
+        };
+
+        server.use(
+            http.get(`${API_BASE}/api/watchlist`, () =>
+                ok({ items: [mockItem], total: 1, limit: 50, offset: 0 }),
+            ),
+        );
+
+        renderWithApp(<WatchlistPage />);
+
+        expect(await screen.findByTitle(mockItem.name)).toHaveClass("truncate");
+    });
+
     it("WatchlistPage remove item shows success toast after DELETE", async () => {
         const toastSpy = vi.spyOn(toast, "success");
         const mockItem = {
@@ -962,7 +980,7 @@ describe("Portfolio pages (integration)", () => {
             // invDetail.tab.transactions = "Transactions ({n})" — n=0
             const txnTab = await screen.findByRole("tab", { name: /transactions/i });
             await user.click(txnTab);
-            // invDetail.noTransactions = "No transactions recorded yet."
+            // invDetail.noTransactions = "No transactions recorded yet"
             expect(await screen.findByText(/no transactions recorded yet/i)).toBeInTheDocument();
         });
 

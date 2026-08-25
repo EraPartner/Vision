@@ -104,7 +104,7 @@ describe("RecipientsPage (integration)", () => {
 
     it("shows empty state when no recipients exist", async () => {
         renderWithApp(<RecipientsPage />);
-        // Default MSW returns { items: [] } → EmptyState title = recipientsPage.empty = "No recipients found."
+        // Default MSW returns { items: [] } → EmptyState title = recipientsPage.empty = "No recipients found"
         expect(
             await screen.findByRole("heading", { name: /no recipients found/i }),
         ).toBeInTheDocument();
@@ -116,6 +116,38 @@ describe("RecipientsPage (integration)", () => {
         expect(
             await screen.findByRole("button", { name: /active only/i }),
         ).toBeInTheDocument();
+    });
+
+    it("truncates recipient and merge-target names while exposing their full titles", async () => {
+        const heightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+        const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 700 });
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 1200 });
+
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () =>
+                ok({
+                    items: [{
+                        id: 2,
+                        name: "A very long recipient name",
+                        primary_recipient_id: 1,
+                        primary_recipient_name: "A very long primary recipient name",
+                        is_active: true,
+                        alias_count: 0,
+                    }],
+                    total: 1,
+                }),
+            ),
+        );
+
+        renderWithApp(<RecipientsPage />);
+
+        expect(await screen.findByTitle("A very long recipient name")).toHaveClass("truncate");
+        const target = await screen.findByTitle("A very long primary recipient name");
+        expect(target.querySelector("span")).toHaveClass("truncate");
+
+        if (heightDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", heightDescriptor);
+        if (widthDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetWidth", widthDescriptor);
     });
 
     it("closes Add Recipient dialog via Escape key", async () => {

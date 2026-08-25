@@ -101,9 +101,9 @@ describe("DashboardPage (integration)", () => {
         await screen.findByRole("heading", {
             name: /good\s+(morning|afternoon|evening)/i,
         });
-        // dashboard.subtitle = "Overview of your finances"
+        // dashboard.subtitle describes the page's decision-support role.
         expect(
-            screen.getByText(/overview of your finances/i),
+            screen.getByText(/see what changed, what needs attention/i),
         ).toBeInTheDocument();
     });
 

@@ -132,9 +132,9 @@ describe("TransactionsPage (integration)", () => {
 
     it("shows page subtitle text", async () => {
         renderTransactionsPage();
-        // txPage.subtitle = "View and manage all your transactions"
+        // txPage.subtitle describes the ledger's role.
         expect(
-            await screen.findByText(/view and manage all your transactions/i),
+            await screen.findByText(/search, review, and refine the ledger/i),
         ).toBeInTheDocument();
     });
 

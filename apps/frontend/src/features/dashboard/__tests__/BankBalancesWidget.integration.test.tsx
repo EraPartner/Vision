@@ -102,6 +102,8 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         // de-DE has no compact suffix at this magnitude, so the full value stays
         // visible and does not get a redundant title tooltip.
         expect(within(totalCard).getByText(/10\.550,95/)).toBeInTheDocument();
+        expect(within(totalCard).getByText(/10\.550,95/).parentElement).toHaveClass("text-foreground");
+        expect(within(totalCard).getByText(/10\.550,95/).parentElement).not.toHaveClass("text-transparent");
         expect(within(totalCard).queryByTitle(/10\.550,95/)).not.toBeInTheDocument();
         // …so the count beside it must be 3, NOT the 2 balance cards rendered
         // below (the zero-balance account is summed but has no card).

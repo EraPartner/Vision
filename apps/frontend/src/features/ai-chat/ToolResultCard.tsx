@@ -17,11 +17,12 @@ import {
 import { getChartColor } from '@/components/charts';
 import { cn } from '@/lib/utils';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { formatPercent, numberFormatToLocale } from "@/utils/currency";
 import type { ToolErrorDetail, ToolRenderAs, ToolResultPayload } from '@/types/aiChat';
 
-function formatToolError(error: ToolResultPayload['error']): string {
-    if (!error) return 'Tool failed.';
+function formatToolError(error: ToolResultPayload['error'], fallback: string): string {
+    if (!error) return fallback;
     if (typeof error === 'string') return error;
     const detail = error as ToolErrorDetail;
     const parts: string[] = [];
@@ -30,7 +31,7 @@ function formatToolError(error: ToolResultPayload['error']): string {
     if (parts.length === 0) {
         if (detail.code) parts.push(detail.code);
         else {
-            try { return JSON.stringify(detail); } catch { return 'Tool failed.'; }
+            try { return JSON.stringify(detail); } catch { return fallback; }
         }
     }
     return parts.join(': ');
@@ -86,6 +87,7 @@ function pickNumericKeys(rows: Row[], exclude: string): string[] {
 }
 
 function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
+    const { t } = useLanguage();
     const rows = useMemo(() => asRows(result.ok ? result.data : null), [result]);
     const meta = result.meta;
     const renderAs: ToolRenderAs | 'json' = meta?.renderAs ?? (rows.length > 0 ? 'table' : 'json');
@@ -95,7 +97,7 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                 <p className="text-xs font-medium text-destructive">
                     {toolName ? `${toolName}: ` : ''}
-                    {formatToolError(result.error)}
+                    {formatToolError(result.error, t('aiChat.toolFailed'))}
                 </p>
             </div>
         );
@@ -195,8 +197,8 @@ function CartesianChartView({ rows, xKey, yKeys, kind }: ChartViewProps & { kind
     }
     const frame = [
         <CartesianGrid key="grid" strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />,
-        <XAxis key="x" dataKey={xk} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />,
-        <YAxis key="y" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />,
+        <XAxis key="x" dataKey={xk} tick={{ className: "tabular-nums", fill: "hsl(var(--muted-foreground))", fontFamily: "inherit", fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />,
+        <YAxis key="y" tick={{ className: "tabular-nums", fill: "hsl(var(--muted-foreground))", fontFamily: "inherit", fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />,
         <Tooltip key="tooltip" contentStyle={tooltipStyle} />,
         ...(yk.length > 1 ? [<Legend key="legend" wrapperStyle={{ fontSize: 11 }} />] : []),
         ...yk.map((key, i) => (

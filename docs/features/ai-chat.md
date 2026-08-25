@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-08-11
-last_modified: 2026-08-11
+updated: 2026-08-25
+last_modified: 2026-08-25
 tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-1, phase-10]
 description: Local AI chat with background streaming via module-level store; conversations persist in URL (`?c=<id>`), sidebar shows live indicator for active streams, streams survive navigation and component unmount
 aliases: [ai-chat, ai chat, ollama-chat, natural-language-queries, financial chat, llm chat]
@@ -78,12 +78,12 @@ Backend /api/ai
 
 | Component | Type | Description |
 |-----------|------|-------------|
-| `AIChatPage` | Frontend Page | Page shell; hosts conversation list, message stream, composer; manages URL state (`?c=<id>`) and auto-selects active stream on mount |
+| `AIChatPage` | Frontend Page | Page shell with a display-scale conversation heading; hosts conversation list, message stream, composer; manages URL state (`?c=<id>`) and auto-selects active stream on mount |
 | `ChatConversationList` | Frontend Component | List conversations; on-hover action menu; shows pulsing indicator for active streams via `useStreamingConversationIds()` |
 | `ChatMessageList` | Frontend Component | Renders ordered messages; shows thinking indicator when streaming w/no content yet; handles autoscroll — the view follows the stream only while it is pinned to the bottom, so scrolling up mid-answer is not overridden; re-pins on conversation switch and on send |
 | `ChatBubble` | Frontend Component | User vs assistant styling |
 | `ChatComposer` | Frontend Component | Textarea, send, model selector, tools toggle (wrench icon) |
-| `ToolResultCard` | Frontend Component | Renders tool payload as table or Recharts (line/bar/pie) |
+| `ToolResultCard` | Frontend Component | Renders tool payload as table or Recharts (line/bar/pie) with semantic, tabular numeric axis labels |
 | `OllamaStatusBanner` | Frontend Component | Unreachable warning + setup guide link |
 | `aiChatStreamStore` | Frontend Store | Module-level singleton holding in-flight streams keyed by conversation ID; survives component unmount |
 | `useAIChat` | Frontend Hooks | `useConversations`, `useConversation`, `useCreateConversation`, `useRenameConversation`, `useDeleteConversation`, `useSendChatMessage`, `useStreamingConversationIds` |
@@ -217,11 +217,12 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 - **Streaming indicator in sidebar** — `ChatConversationList` calls `useStreamingConversationIds()` to get the set of active streams. Pulsing indicator renders on matching conversation rows via `motion-safe:animate-pulse` CSS class.
 - **URL-backed selection** — `AIChatPage` reads `?c=<id>` from URL on mount; if absent and a stream is in-flight, an effect auto-selects that stream (`streamingIds[0]`). This enables deep-linking and restores selection on page reload.
 - **Conversation switch does not abort prior stream** — when user clicks a new conversation in the list, the sidebar updates `selectedId` via `setSelectedId` (which updates URL), but the prior conversation's stream **keeps running in the background**. The new conversation's message list renders clean because `useSendChatMessage(selectedId)` is keyed to the new `selectedId`.
-- **Ollama unreachable** — `GET /api/ai/status` returns `{ok: false}`; frontend shows `OllamaStatusBanner` with setup-guide link; composer disabled.
+- **Ollama unreachable** — `GET /api/ai/status` returns `{ok: false}`; frontend shows `OllamaStatusBanner` with a localized setup hint and guide link, without exposing the raw connection error as primary UI copy; composer disabled.
 - **Model not pulled** — Ollama returns 404 on chat request; surface "Model not installed. Run `ollama pull <model>` or pick another." in the banner.
 - **Context window overflow** — service trims history to last N turns + tool-result summaries; adds a `system` note when truncation happens.
 - **LLM picks an unknown tool name** — dispatcher returns a structured error back to the LLM as a `tool` message; LLM retries or apologizes.
 - **LLM emits invalid args** — `ToolValidationError` returned as a `tool` error `{code: 'VALIDATION_ERROR', field, message}` naming the field and the received value; LLM retries with corrected args (up to 2 retries before giving up).
+- **Tool failure without detail** — `ToolResultCard` uses the localized `aiChat.toolFailed` fallback instead of hardcoded English.
 - **User aborts mid-stream** — clicking "Stop" calls `cancel()` on the store, which aborts the fetch via stored controller; server-side `res.on('close')` handler detects the abort and marks the assistant message as aborted in the DB; client discards partial preview and clears streaming flag.
 - **Rate limit tripped** — 429 with `Retry-After`; composer shows cooldown hint.
 - **Long tool result** — capped to 500 rows; LLM informed in `tool_result.meta.truncated = true` so it can mention the cap.

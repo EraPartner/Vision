@@ -118,9 +118,9 @@ describe("CategoriesPage (integration)", () => {
 
     it("shows empty categories message when category list is empty", async () => {
         renderWithApp(<CategoriesPage />);
-        // Default MSW returns { items: [] } → categoriesPage.empty = "No categories found."
+        // Default MSW returns { items: [] } → categoriesPage.empty = "No categories found"
         expect(
-            await screen.findByText(/no categories found\./i),
+            await screen.findByText(/no categories found/i),
         ).toBeInTheDocument();
     });
 
@@ -146,7 +146,7 @@ describe("CategoriesPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/categories`, () =>
                 ok({
-                    items: [{ id: 1, general: "FOOD", detail: "GROCERIES", is_active: true }],
+                    items: [{ id: 1, general: "FOOD", detail: "A VERY LONG GROCERY CATEGORY", is_active: true }],
                     total: 1,
                 }),
             ),
@@ -159,7 +159,9 @@ describe("CategoriesPage (integration)", () => {
         await user.click(groupBtn);
 
         // Detail row badge becomes visible after expand
-        expect(await screen.findByText("GROCERIES")).toBeInTheDocument();
+        const detail = await screen.findByText("A VERY LONG GROCERY CATEGORY");
+        expect(detail).toHaveClass("truncate");
+        expect(detail.closest("[title]")).toHaveAttribute("title", "A VERY LONG GROCERY CATEGORY");
     });
 
     it("shows category count subtitle when page loads", async () => {

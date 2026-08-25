@@ -15,7 +15,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 
 type RecipientDetailRow = {
   recipientId: number;
