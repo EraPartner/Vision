@@ -8,7 +8,7 @@ import { epochMsToUtcYmd as toIso } from '../../../lib/dateFormat.js';
  * of days that HAD a transaction, biasing every per-day forecast away from zero
  * (a single −300 looked like the typical spend for that DOM, and EWMA never
  * decayed a stale one-off). Zero-filling centrally lets the methods see a dense
- * grid and need no change. Mirrors holtWinters' internal denseDaily.
+ * grid and lets every method share the same gap and duplicate-date handling.
  *
  * @param {Array<{date: string, net: number}>} history  sparse daily history
  * @param {string} [endIso]  fill through this YYYY-MM-DD (defaults to last observed)

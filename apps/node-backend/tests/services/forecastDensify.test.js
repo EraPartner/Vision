@@ -16,6 +16,20 @@ describe('densifyDailyHistory', () => {
     expect(densifyDailyHistory([], '2026-01-03')).toEqual([]);
   });
 
+  it('sums duplicate dates and defaults the end to the last observation', () => {
+    expect(
+      densifyDailyHistory([
+        { date: '2026-01-01', net: 4 },
+        { date: '2026-01-01', net: 6 },
+        { date: '2026-01-03', net: 2 },
+      ]),
+    ).toEqual([
+      { date: '2026-01-01', net: 10 },
+      { date: '2026-01-02', net: 0 },
+      { date: '2026-01-03', net: 2 },
+    ]);
+  });
+
   it('makes simpleAverage divide a one-off by month count, not occurrence count', () => {
     // −300 on the 15th, two months of grid → DOM-15 mean = (−300 + 0)/2 = −150.
     // On the sparse history the method divided by 1 occurrence → −300 (the bias).

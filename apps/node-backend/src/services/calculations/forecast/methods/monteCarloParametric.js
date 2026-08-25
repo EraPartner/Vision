@@ -7,26 +7,13 @@
 
 import { buildSeasonalityBuckets, lookupBucket } from '../seasonality.js';
 import { makeRng, gaussian } from '../prng.js';
+import { quantile } from '../_statistics.js';
 
 export const id = 'monte_carlo_parametric';
 export const label = 'Monte Carlo (parametric)';
 
 const DEFAULT_PATHS = 1000;
 const DEFAULT_PERCENTILES = [10, 50, 90];
-
-/**
- * @param {number[]} sortedAsc
- * @param {number} p
- */
-function quantile(sortedAsc, p) {
-  if (sortedAsc.length === 0) return 0;
-  const idx = (p / 100) * (sortedAsc.length - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sortedAsc[lo];
-  const frac = idx - lo;
-  return sortedAsc[lo] * (1 - frac) + sortedAsc[hi] * frac;
-}
 
 /**
  * @param {{

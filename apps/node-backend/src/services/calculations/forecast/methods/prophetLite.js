@@ -12,7 +12,7 @@
  */
 
 import { isBelgianHoliday } from '../holidays/be.js';
-import { epochMsToUtcYmd as toIso } from '../../../../lib/dateFormat.js';
+import { densifyDailyHistory } from '../_densify.js';
 
 export const id = 'prophet_lite';
 export const label = 'Prophet-lite';
@@ -125,31 +125,11 @@ function gaussianElimination(A, b) {
 }
 
 /**
- * @param {Array<{date: string, net: number}>} history
- * @returns {Array<{date: string, net: number}>}
- */
-function denseDaily(history) {
-  if (history.length === 0) return [];
-  const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
-  const start = parseIso(sorted[0].date);
-  const end = parseIso(sorted[sorted.length - 1].date);
-  /** @type {Map<string, number>} */
-  const map = new Map();
-  for (const r of sorted) map.set(r.date, (map.get(r.date) ?? 0) + r.net);
-  const out = [];
-  for (let t = start; t <= end; t += 86_400_000) {
-    const iso = toIso(t);
-    out.push({ date: iso, net: map.get(iso) ?? 0 });
-  }
-  return out;
-}
-
-/**
  * @param {{history: Array<{date: string, net: number}>, forecastDates: string[]}} ctx
  * @returns {Array<{date: string, value: number}>}
  */
 export function forecast({ history, forecastDates }) {
-  const dense = denseDaily(history);
+  const dense = densifyDailyHistory(history);
   if (dense.length < 60 || forecastDates.length === 0) {
     return forecastDates.map((date) => ({ date, value: 0 }));
   }
