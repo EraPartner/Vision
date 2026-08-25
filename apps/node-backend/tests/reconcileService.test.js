@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockTxConnection } from './helpers/repoMocks.js';
+const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 // Transaction shim: runs the callback directly; a throw propagates (= rollback).
-vi.mock('../src/database/connection.js', () => mockTxConnection({ query: vi.fn() }));
+vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient));
 
 import { query, withTransaction } from '../src/database/connection.js';
 import { normalizeReconcile, reconcileAccount } from '../src/services/reconcileService.js';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockClient.query.mockReset();
+});
 
 describe('normalizeReconcile (ADR-094 Phase C)', () => {
   it("accepts mode 'accept'", () => {
@@ -27,28 +31,28 @@ describe('normalizeReconcile (ADR-094 Phase C)', () => {
 describe('reconcileAccount (ADR-094 Phase C)', () => {
   it('404s when the account does not exist', async () => {
     // The FOR UPDATE lock select returns no row → NotFound before the drift read.
-    query.mockResolvedValueOnce({ rows: [] });
+    mockClient.query.mockResolvedValueOnce({ rows: [] });
     await expect(reconcileAccount(99, { mode: 'accept' })).rejects.toThrow(/not found/i);
     // First (and only) query is the lock, and it must take FOR UPDATE.
     expect(query.mock.calls[0][0]).toMatch(/FOR UPDATE/);
   });
 
   it('rejects when the account has no statement balance', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: null, balance_parts: [{ currency: 'EUR', balance: '100' }] }] });
     await expect(reconcileAccount(5, { mode: 'accept' })).rejects.toThrow(/no statement balance/i);
   });
 
   it('rejects a no-op reconcile when drift is within epsilon', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 100, balance_parts: [{ currency: 'EUR', balance: '100' }] }] });
     await expect(reconcileAccount(5, { mode: 'accept' })).rejects.toThrow(/already reconciled/i);
   });
 
   it('runs the whole reconcile inside a transaction and locks the account row first', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
@@ -64,7 +68,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   });
 
   it("accept mode rewrites the statement balance to the computed figure (drift → 0)", async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ statement_balance: 100 }] });
@@ -83,7 +87,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   });
 
   it("adjustment mode stamps a balance-free 'adjustment' delta row equal to the drift", async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'EUR', statement_balance: 120, balance_parts: [{ currency: 'EUR', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
@@ -112,7 +116,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   });
 
   it('handles a negative drift (statement below computed) with a negative adjustment', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ currency: 'USD', statement_balance: 80, balance_parts: [{ currency: 'USD', balance: '100' }] }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
@@ -131,7 +135,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   // bare amounts (100 + 100 = 200) would size the adjustment by an amount that
   // never clears the badge.
   it('reconciles only the account-currency partition on a multi-currency account', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({
         rows: [{
@@ -157,7 +161,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   // A multi-currency account whose EUR side already matches the statement has
   // nothing to reconcile, even though the cross-currency Σ is 100 away from it.
   it('treats a matching own-currency partition as already reconciled', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({
         rows: [{
@@ -178,7 +182,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   // adjustment in a.currency would open a SECOND partition and leave the USD one
   // — the partition the drift was measured against — exactly where it was.
   it('stamps the adjustment in the base partition currency, not blindly in a.currency', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({
         rows: [{
@@ -200,7 +204,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   // A zero-sum partition (a cancelled/offsetting transfer pair) must not move
   // the base — otherwise reconcile mints an adjustment for the whole balance.
   it('ignores a zero-sum partition when resolving what to reconcile', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({
         rows: [{
@@ -219,7 +223,7 @@ describe('reconcileAccount (ADR-094 Phase C)', () => {
   // D4: the statement names a currency the account holds nothing in. 'accept'
   // adopts the base — 0 — which is exactly the figure the dialog now displays.
   it("'accept' adopts the displayed base when no partition matches the account currency", async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({
         rows: [{

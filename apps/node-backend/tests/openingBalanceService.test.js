@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockTxConnection } from './helpers/repoMocks.js';
+const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 // Transaction shim: runs the callback directly; a throw propagates (= rollback).
-vi.mock('../src/database/connection.js', () => mockTxConnection({ query: vi.fn() }));
+vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient));
 vi.mock('../src/repositories/accountRepository.js', () => ({
   default: { getById: vi.fn() },
 }));
@@ -14,7 +15,10 @@ import {
   setOpeningBalance,
 } from '../src/services/openingBalanceService.js';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockClient.query.mockReset();
+});
 
 describe('normalizeOpeningBalance (ADR-094 D4)', () => {
   const account = { currency: 'EUR' };
@@ -95,7 +99,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
   });
 
   it('stamps a system anchor row (amount 0, transfer_source opening, server balance)', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // account row lock (FOR UPDATE)
       .mockResolvedValueOnce({ rows: [{ earliest: null }] }) // no prior activity
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
@@ -126,7 +130,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
   });
 
   it('warns when the anchor date does not precede existing activity', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: '2023-06-01' }] }) // activity predates the anchor
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
@@ -141,7 +145,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     // String(Date) is "Sat Jun 01 2023 …", which is never lexically <= an ISO
     // "YYYY-MM-DD" — so the pre-fix String(earliest).slice(0,10) compare made
     // the warning dead code in production. toWireDate normalizes it first.
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2023, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
@@ -152,7 +156,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
   });
 
   it('does not warn when a Date-typed earliest is after the anchor', async () => {
-    query
+    mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2024, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)

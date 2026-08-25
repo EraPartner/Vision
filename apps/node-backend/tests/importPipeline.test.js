@@ -37,6 +37,8 @@ vi.mock('../src/services/aggregationRefresh.js', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  poolQuery.mockReset()
+  poolQuery.mockResolvedValue({ rows: [] })
   mockClient.query.mockReset()
   mockClient.query.mockResolvedValue({ rows: [] })
   refreshAggregations.mockResolvedValue(undefined)
@@ -48,7 +50,7 @@ beforeEach(() => {
 
 describe('validateBatch', () => {
   function setupPending(row) {
-    query
+    poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='validating'
       .mockResolvedValueOnce({ rows: [row] }) // SELECT pending
   }
@@ -88,11 +90,11 @@ describe('validateBatch', () => {
 
   it('marks a second identical row in the same batch as a duplicate', async () => {
     const dupRow = { ...baseRow, id: 2, row_index: 1, raw_data: null }
-    query
+    poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='validating'
       .mockResolvedValueOnce({ rows: [baseRow, dupRow] }) // SELECT pending — two identical rows
     // The UPDATE import_batches rows_duplicate write also issues a query.
-    query.mockResolvedValueOnce({ rows: [] })
+    poolQuery.mockResolvedValueOnce({ rows: [] })
     expect(await validateBatch({ batchId: 5 })).toEqual({ validated: 1, duplicates: 1, errors: 0 })
   })
 })
@@ -103,7 +105,7 @@ describe('validateBatch', () => {
 
 describe('stageBatch', () => {
   it('throws for an unknown adapter', async () => {
-    query.mockResolvedValueOnce({ rows: [] }) // UPDATE status='staging'
+    poolQuery.mockResolvedValueOnce({ rows: [] }) // UPDATE status='staging'
     getAdapter.mockReturnValue(null)
     await expect(
       stageBatch({ batchId: 1, filePath: '/tmp/x.csv', adapterName: 'bogus' }),
@@ -117,7 +119,7 @@ describe('stageBatch', () => {
     ]
     parsed.skipped = 3 // adapter reported 3 unparseable rows
     getAdapter.mockReturnValue({ parse: vi.fn().mockResolvedValue(parsed) })
-    query
+    poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='staging'
       .mockResolvedValueOnce({ rows: [] }) // UPDATE rows_total
     expect(await stageBatch({ batchId: 1, filePath: '/tmp/x.csv', adapterName: 'belfius' }))
@@ -131,7 +133,7 @@ describe('stageBatch', () => {
 
 describe('matchBatch', () => {
   it('marks a pattern-matched row as matched with source=pattern', async () => {
-    query
+    poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='matching'
       .mockResolvedValueOnce({ rows: [{ id: 1, recipient_raw: 'COLRUYT' }] })
     loadActivePatterns.mockResolvedValue([])
@@ -145,7 +147,7 @@ describe('matchBatch', () => {
   })
 
   it('marks row as unresolved when recipient_raw is null', async () => {
-    query
+    poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='matching'
       .mockResolvedValueOnce({ rows: [{ id: 2, recipient_raw: null }] })
     loadActivePatterns.mockResolvedValue([])

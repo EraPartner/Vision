@@ -11,7 +11,7 @@ vi.mock('../src/services/currency/currencyConversionService.js', async (importOr
   loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
 }));
 
-import { query } from '../src/database/connection.js';
+import { query, poolQuery } from '../src/database/connection.js';
 import {
   collidingAnchorCurrencies,
   mergeAccounts,
@@ -42,7 +42,11 @@ function happyPath({ stampRanges = [], openingAnchors = [] } = {}) {
 const clearAnchorCall = () =>
   mockClient.query.mock.calls.find(([sql]) => sql.includes('statement_balance = NULL'));
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  poolQuery.mockReset();
+  mockClient.query.mockReset();
+});
 
 describe('mergeAccounts (ADR-088)', () => {
   it('rejects an empty / self-only source set', async () => {
@@ -259,7 +263,7 @@ describe('collidingAnchorCurrencies (opening-anchor merge guard)', () => {
 });
 
 describe('previewMerge (GET /api/accounts/:id/merge-preview)', () => {
-  // Routes the pooled `query` spy (previewMerge is read-only — it never opens a
+  // Routes the dedicated pool sink (previewMerge is read-only — it never opens a
   // transaction). Source #1 merged INTO survivor #2 (EUR).
   function primePreview({
     accounts = [{ id: 1, currency: 'USD' }, { id: 2, currency: 'EUR' }],
@@ -268,7 +272,7 @@ describe('previewMerge (GET /api/accounts/:id/merge-preview)', () => {
     stampRanges = [],
     openingAnchors = [],
   } = {}) {
-    query.mockImplementation(async (sql) => {
+    poolQuery.mockImplementation(async (sql) => {
       if (sql.includes("transfer_source = 'opening'")) return { rows: openingAnchors };
       if (sql.includes('SELECT id, currency FROM accounts')) return { rows: accounts };
       if (sql.includes('balance_parts')) return { rows: [{ balance_parts: parts }] };

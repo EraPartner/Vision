@@ -14,13 +14,9 @@
  *
  * Mount path is /api/info — no app-level per-mount middleware (main.js:322).
  *
- * Several handlers here cascade into real (unmocked) services —
- * getPortfolioSummary, resolveLivePortfolioValue, settingsRepository,
- * portfolioTransactionRepository, the adapter registry — exactly as they did
- * under the old harness (only Express itself was mocked there, never these
- * imports). `database/connection.js`'s `query` is mocked to `{rows: []}` by
- * default so that cascade resolves to an empty-but-valid summary instead of
- * hitting a real DB.
+ * Database-backed handlers are mocked at their service or repository boundary.
+ * In particular, portfolio-summary does not cascade through its valuation and
+ * settings dependencies under a blanket database result.
  *
  * Dropped: "should register /refresh-views and /inflation-rates/refresh
  * routes" — that was a structural check against the mock router's handler
@@ -61,17 +57,13 @@ const mockInflationService = {
 
 vi.mock('../../src/services/belgianInflationService.js', () => mockInflationService);
 
-const mockDbQuery = vi.fn();
 const mockDetectRecurringPatterns = vi.fn();
 const mockRefreshMaterializedViews = vi.fn();
 const mockWarmCache = vi.fn();
 const mockClearMemoryCache = vi.fn();
 const mockListLatestStoredRates = vi.fn();
 const mockGetSnapshots = vi.fn();
-
-vi.mock('../../src/database/connection.js', () => ({
-  query: mockDbQuery,
-}));
+const mockGetPortfolioSummary = vi.fn();
 
 vi.mock('../../src/services/recurringDetectionService.js', () => ({
   detectRecurringPatterns: mockDetectRecurringPatterns,
@@ -98,8 +90,16 @@ vi.mock('../../src/services/portfolioPerformanceSnapshotService.js', () => ({
   getBreakdownSummary: vi.fn(async () => []),
 }));
 
+vi.mock('../../src/services/portfolio/portfolioSummaryService.js', () => ({
+  getPortfolioSummary: mockGetPortfolioSummary,
+}));
+
 import infoRepository from '../../src/repositories/infoRepository.js';
 import { logger } from '../../src/config/logger.js';
+import {
+  invalidatePortfolioCaches,
+  invalidateStatisticsCaches,
+} from '../../src/services/info/cache.js';
 const { default: infoRouter } = await import('../../src/routes/info.js');
 const { warmInfoCaches } = await import('../../src/routes/info.js');
 
@@ -109,12 +109,38 @@ const api = routeAgent(infoRouter, { mountPath: BASE });
 describe('Info Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    invalidatePortfolioCaches();
+    invalidateStatisticsCaches();
     mockWarmCache.mockResolvedValue(undefined);
     mockRefreshMaterializedViews.mockResolvedValue(undefined);
     mockDetectRecurringPatterns.mockResolvedValue({ patterns: [], total: 0 });
-    mockDbQuery.mockResolvedValue({ rows: [] });
     mockListLatestStoredRates.mockResolvedValue({ rows: [] });
     mockGetSnapshots.mockResolvedValue([]);
+    mockGetPortfolioSummary.mockResolvedValue({
+      currency: 'EUR',
+      computed_at: '2026-04-11T10:00:00.000Z',
+      totals: {},
+      summaries: [],
+      byAccount: [],
+    });
+  });
+
+  describe('GET /portfolio-summary', () => {
+    it('delegates to the portfolio summary service boundary', async () => {
+      const summary = {
+        currency: 'USD',
+        computed_at: '2026-04-11T10:00:00.000Z',
+        totals: { totalPortfolioValue: 1250 },
+        summaries: [],
+        byAccount: [],
+      };
+      mockGetPortfolioSummary.mockResolvedValueOnce(summary);
+
+      const res = await api.get(`${BASE}/portfolio-summary`).query({ currency: 'USD' }).expect(200);
+
+      expect(mockGetPortfolioSummary).toHaveBeenCalledWith('USD');
+      expect(res.body).toEqual(okEnvelope(summary));
+    });
   });
 
   describe('GET /supported-adapters', () => {
@@ -570,6 +596,21 @@ describe('Info Routes', () => {
   });
 
   describe('warmInfoCaches', () => {
+    it('prewarms portfolio-summary through the service boundary', async () => {
+      const summary = {
+        currency: 'CHF',
+        computed_at: '2026-04-11T10:00:00.000Z',
+        totals: {},
+        summaries: [],
+        byAccount: [],
+      };
+      mockGetPortfolioSummary.mockResolvedValueOnce(summary);
+
+      await warmInfoCaches('CHF');
+
+      expect(mockGetPortfolioSummary).toHaveBeenCalledWith('CHF');
+    });
+
     it('should prewarm both caches and serve warmed values without extra repository calls', async () => {
       vi.useFakeTimers();
       try {

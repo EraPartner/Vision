@@ -66,10 +66,6 @@ vi.mock('../../src/services/importPipeline/index.js', () => ({
   commitImport: vi.fn(),
 }));
 
-vi.mock('../../src/services/bankAdapters.js', () => ({
-  getSupportedBanks: vi.fn(() => ['belfius', 'kbc', 'revolut']),
-}));
-
 vi.mock('../../src/services/dataImportService.js', () => ({
   importRecipientsCSV: vi.fn(),
   importCategoriesCSV: vi.fn(),

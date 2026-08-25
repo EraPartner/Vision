@@ -11,20 +11,21 @@ vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-import { query, withTransaction } from '../src/database/connection.js';
+import { query, poolQuery, withTransaction } from '../src/database/connection.js';
 import { updatePattern } from '../src/services/recipientPatternService.js';
 import { mergeRecipients } from '../src/services/recipientMergeService.js';
 import { ValidationError, NotFoundError } from '../src/middleware/errorHandler.js';
 
 beforeEach(() => {
-  query.mockReset();
-  withTransaction.mockReset();
+  query.mockClear();
+  withTransaction.mockClear();
+  poolQuery.mockReset();
   mockClient.query.mockReset();
 });
 
 describe('updatePattern — validates the row merged with stored values', () => {
   it('allows a case_sensitive-only toggle on a regex row (keeps the stored pattern)', async () => {
-    query
+    poolQuery
       .mockResolvedValueOnce({ rows: [{ pattern: 'FOO[0-9]+', pattern_kind: 'regex', case_sensitive: false }] })
       .mockResolvedValue({ rows: [] });
     await expect(updatePattern(1, { case_sensitive: true })).resolves.toBeUndefined();
@@ -32,12 +33,12 @@ describe('updatePattern — validates the row merged with stored values', () => 
   });
 
   it('runs the ReDoS guard on a pattern-only edit of a regex row', async () => {
-    query.mockResolvedValueOnce({ rows: [{ pattern: 'FOO[0-9]+', pattern_kind: 'regex', case_sensitive: false }] });
+    poolQuery.mockResolvedValueOnce({ rows: [{ pattern: 'FOO[0-9]+', pattern_kind: 'regex', case_sensitive: false }] });
     await expect(updatePattern(1, { pattern: '(a+)+$' })).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('throws NotFoundError when the pattern row is missing', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
+    poolQuery.mockResolvedValueOnce({ rows: [] });
     await expect(updatePattern(999, { case_sensitive: true })).rejects.toBeInstanceOf(NotFoundError);
   });
 });

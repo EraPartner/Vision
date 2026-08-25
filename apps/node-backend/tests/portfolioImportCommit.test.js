@@ -2,14 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { mockLogger } from './helpers/mockLogger.js';
 import { mockTxConnection } from './helpers/repoMocks.js';
+const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
 // Transaction shim: runs the callback; a throw propagates (= rollback).
-// The repo is module-mocked, so the client goes unused.
-vi.mock('../src/database/connection.js', () =>
-  mockTxConnection({ query: vi.fn().mockResolvedValue({ rows: [] }) }));
+vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient));
 
 vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
   default: { create: vi.fn(), hardDelete: vi.fn() },
@@ -27,7 +26,7 @@ vi.mock('../src/services/portfolio/fxResolve.js', () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
-import { query } from '../src/database/connection.js';
+import { query, poolQuery } from '../src/database/connection.js';
 import portfolioTransactionRepository from '../src/repositories/portfolioTransactionRepository.js';
 import recipientRepository from '../src/repositories/recipientRepository.js';
 import categoryRepository from '../src/repositories/categoryRepository.js';
@@ -88,8 +87,11 @@ beforeEach(() => {
   cashDuplicate = false;
   accountInstitution = 'IBKR';
   accountName = 'IBKR SLEEVE';
-  query.mockReset();
-  query.mockImplementation((sql, params) => Promise.resolve(dispatch(sql, params)));
+  query.mockClear();
+  poolQuery.mockReset();
+  poolQuery.mockImplementation((sql, params) => Promise.resolve(dispatch(sql, params)));
+  mockClient.query.mockReset();
+  mockClient.query.mockImplementation((sql, params) => Promise.resolve(dispatch(sql, params)));
   portfolioTransactionRepository.create.mockReset();
   portfolioTransactionRepository.create.mockResolvedValue({ id: 100 });
   recipientRepository.createOrGet.mockReset();
