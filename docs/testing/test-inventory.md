@@ -3,10 +3,10 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-04-30
-last_modified: 2026-05-29
-updated: 2026-05-29
-last-updated: 2026-05-29
-last_updated_timestamp: 2026-05-29T00:00:00Z
+last_modified: 2026-08-25
+updated: 2026-08-25
+last-updated: 2026-08-25
+last_updated_timestamp: 2026-08-25T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
@@ -689,8 +689,8 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 **What landed:**
 
 - **MSW handlers expanded** (`src/test/msw/handlers.ts`): default handlers for every frontend-used endpoint that was previously unstubbed (admin update-check + vacuum, all aggregations including cashflow forecast methods/rolling/accuracy + sankey + pivot variants, AI chat/conversation/models, attachments, categories sub-routes, imports CRUD, info portfolio-summary + refresh-views + exchange-rates refresh, investments providers/refresh-prices/transactions/transactions-by-id, recipients clusters/aliases/merge/unmerge/patterns/preview, reports financial/portfolio/tax, saved-charts CRUD, splits batch/pay/settle/owed-by-recipient, transactions sub-routes including export endpoints, watchlist CRUD, market chart, planned-transactions execute + due-soon).
-- **Contract tests expanded** (`src/test/msw/contracts.test.ts` — `Phase F1: extended GET endpoint contracts` + `Phase F1: extended mutation contracts`): one Zod schema per frontend-used endpoint. Total contract test count: 40 → **120**.
-- **Live-API contract tests expanded** (`src/test/live-contracts/live-contracts.test.ts`): paired schemas hit the real backend on CI. Total live tests: 13 → **37**. Skipped automatically when `LIVE_API_BASE` not set.
+- **Contract tests expanded** (`src/test/msw/contracts.test.ts` — `Phase F1: extended GET endpoint contracts` + `Phase F1: extended mutation contracts`): one Zod schema per frontend-used endpoint. Strict shared collection, pagination, link, and resource shapes live in `src/test/contracts/schemas.ts`, reject unknown fields, and keep fixtures and live responses from drifting between separate schema copies. Current contract test count: **131**.
+- **Live-API contract tests expanded** (`src/test/live-contracts/live-contracts.test.ts`): reduced live checks derive validators from the strict shared resource schemas with `.pick().passthrough()`, so selected fields stay contract-checked while other valid fields in the full backend resource remain allowed. They hit the real backend on CI. Total live tests: 13 → **37**. Skipped automatically when `LIVE_API_BASE` is not set.
 - **Playwright e2e** for browser-only edges:
   - `e2e/dialogs-edge.spec.ts` — backdrop click, Escape (real browser), focus-trap Tab/Shift-Tab, autofocus on open
   - `e2e/critical-flows.spec.ts` — page-load smoke for every major page (catches `pageerror`s); mutation roundtrip (create category / create recipient → list refetches new item)

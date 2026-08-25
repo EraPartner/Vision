@@ -10,9 +10,17 @@
  * and starts a full Docker Compose stack before running this file.
  */
 // @vitest-environment node
-import { describe, it, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { z } from "zod";
 import { server } from "@/test/msw/server";
+import {
+    CategoryItemSchema as StrictCategoryItemSchema,
+    collectionSchema,
+    InvestmentItemSchema as StrictInvestmentItemSchema,
+    paginatedOf,
+    RecipientItemSchema as StrictRecipientItemSchema,
+    TransactionItemSchema as StrictTransactionItemSchema,
+} from "@/test/contracts/schemas";
 
 const LIVE_BASE = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.LIVE_API_BASE ?? "";
 const enabled = Boolean(LIVE_BASE);
@@ -37,50 +45,48 @@ function validate<T>(schema: z.ZodType<T>, data: unknown, label: string): T {
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
-const LinkSchema = z.object({ rel: z.string(), href: z.string() });
-
-const paginatedOf = <T extends z.ZodTypeAny>(item: T) =>
-    z.object({
-        items: z.array(item),
-        total: z.number().int().nonnegative(),
-        limit: z.number().int().positive(),
-        offset: z.number().int().nonnegative(),
-        links: z.array(LinkSchema),
-    });
-
-/** `{ items, total }` — the canonical body for unpaginated collection GETs. */
-const collectionSchema = (item: z.ZodTypeAny = z.unknown()) =>
-    z.object({ items: z.array(item), total: z.number().int().nonnegative() });
-
-const CategoryItemSchema = z.object({
-    id: z.number().int(),
-    general: z.string().min(1),
-    detail: z.string().min(1),
-    is_active: z.boolean(),
-});
-
-const RecipientItemSchema = z.object({
-    id: z.number().int(),
-    name: z.string().min(1),
-    is_active: z.boolean(),
-});
-
-const TransactionItemSchema = z.object({
-    id: z.number().int(),
-    transaction_date: z.string(),
-    amount: z.number(),
-    currency: z.string(),
-    is_active: z.boolean(),
-});
-
-const InvestmentItemSchema = z.object({
-    id: z.number().int(),
-    name: z.string().min(1),
-    is_active: z.boolean(),
-});
+const CategoryItemSchema = StrictCategoryItemSchema.pick({
+    id: true,
+    general: true,
+    detail: true,
+    is_active: true,
+}).passthrough();
+const RecipientItemSchema = StrictRecipientItemSchema.pick({
+    id: true,
+    name: true,
+    is_active: true,
+}).passthrough();
+const TransactionItemSchema = StrictTransactionItemSchema.pick({
+    id: true,
+    transaction_date: true,
+    amount: true,
+    currency: true,
+    is_active: true,
+}).passthrough();
+const InvestmentItemSchema = StrictInvestmentItemSchema.pick({
+    id: true,
+    name: true,
+    is_active: true,
+}).passthrough();
 
 // meta.source includes "mv" for materialized-view-backed aggregation endpoints
 const MetaSourceSchema = z.enum(["live", "cache", "mv"]);
+
+describe("live contract schema projections", () => {
+    it("validates selected fields without rejecting the rest of a full resource", () => {
+        expect(CategoryItemSchema.safeParse({
+            id: 1,
+            general: "Food",
+            detail: null,
+            is_active: true,
+            description: null,
+            created_at: "2026-08-25T00:00:00.000Z",
+            updated_at: null,
+            category_name: "Food",
+            links: [],
+        }).success).toBe(true);
+    });
+});
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 

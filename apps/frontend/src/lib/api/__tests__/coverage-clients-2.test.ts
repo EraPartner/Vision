@@ -350,10 +350,22 @@ describe("portfolio API client", () => {
   });
 
   it("updatePortfolioTransaction PATCHes by txn id", async () => {
+    let body: unknown;
     server.use(
-      http.patch(`${API_BASE}/api/investments/transactions/50`, () => ok({ id: 50 })),
+      http.patch(`${API_BASE}/api/investments/transactions/50`, async ({ request }) => {
+        body = await request.json();
+        return ok({ id: 50 });
+      }),
     );
-    expect((await updatePortfolioTransaction(50, {})).id).toBe(50);
+    const update = {
+      fx_rate_to_eur: null,
+      account_id: null,
+      note: null,
+      recurrence_interval: null,
+      recurrence_end_date: null,
+    };
+    expect((await updatePortfolioTransaction(50, update)).id).toBe(50);
+    expect(body).toEqual(update);
   });
 });
 

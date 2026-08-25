@@ -3,9 +3,9 @@ title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-06-11
-last-updated: 2026-06-11
-last_updated_timestamp: 2026-06-11T00:00:00Z
+updated: 2026-08-25
+last-updated: 2026-08-25
+last_updated_timestamp: 2026-08-25T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
 added_dialog_integration_tests: 2026-05-01
 added_edge_coverage_sweep_e16: 2026-05-02
@@ -19,7 +19,7 @@ tags:
   - phase-a
   - phase-b
   - phase-c
-description: Render full pages with the real provider stack and HTTP mocked at the network boundary via MSW, drive via userEvent, assert on the DOM.
+description: Render full pages with the real provider stack and HTTP mocked at the network boundary via MSW, validate shared Zod contracts, drive via userEvent, and enforce the frontend coverage ratchet.
 ---
 
 # Frontend Component-Integration Tests
@@ -38,6 +38,7 @@ description: Render full pages with the real provider stack and HTTP mocked at t
 | Provider stack helper | `apps/frontend/src/test/renderWithApp.tsx` |
 | MSW server | `apps/frontend/src/test/msw/server.ts` |
 | Default HTTP handlers + envelope helpers | `apps/frontend/src/test/msw/handlers.ts` |
+| Shared MSW/live Zod resource schemas | `apps/frontend/src/test/contracts/schemas.ts` |
 | Lifecycle wiring (MSW + jsdom polyfills) | `apps/frontend/src/test-setup.ts` |
 | Coverage gate | `apps/frontend/vite.config.ts` (`test.coverage`) |
 
@@ -245,14 +246,14 @@ Add new defaults sparingly — most flows belong in per-test overrides via `serv
 
 `bun run test:coverage` runs all Vitest suites with V8 coverage and fails if any of these drop below the configured threshold:
 
-| Metric | Baseline (April 2026) |
+| Metric | Ratchet (2026-08-25) |
 |---|---|
-| Statements | 8% |
-| Branches | 5% |
-| Functions | 3% |
-| Lines | 8% |
+| Statements | 62% |
+| Branches | 51% |
+| Functions | 54% |
+| Lines | 64% |
 
-Thresholds intentionally sit at current baseline minus a small slack — a regression check, not an aspirational target. Bump them up phase by phase as new tests land.
+The measured scope includes components, hooks, libraries, pages, utilities, features, contexts, stores, and `App.tsx`. `main.tsx` and `theme-flash.ts` are explicitly excluded because importing either immediately performs boot-time document side effects; their dependencies remain measured, while their execution belongs to end-to-end coverage. Thresholds follow the config's `floor(measured) - 2` convention, so they act as a regression ratchet rather than an aspirational target.
 
 ## Dialog Component Integration Tests (2026-05-01 — Phase A)
 
