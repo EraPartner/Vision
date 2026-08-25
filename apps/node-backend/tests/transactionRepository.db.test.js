@@ -525,8 +525,10 @@ describe.skipIf(!hasTestDatabase())('repositories/transactionRepository (real DB
     // `LEFT JOIN recipients r`. Every join dropped is a LEFT JOIN onto a PRIMARY
     // KEY, so none can drop or duplicate a transaction — but that is an argument,
     // not evidence. These cases pin the NUMBER against the independently-built
-    // getCount() over the FULL join set, across every filter the endpoint takes.
-    it('total equals getCount() over the full join set, for every filter shape', async () => {
+    // getCount() query, across every filter the endpoint takes. Both count paths
+    // now use the same proven-safe reduced join set but assemble their SQL
+    // independently.
+    it('total equals getCount() for every filter shape', async () => {
       const shapes = [
         {},
         { active: false },

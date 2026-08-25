@@ -340,7 +340,7 @@ export const transactionRepository = {
 
     const sql = `
       SELECT count(*) FROM transactions t
-      ${TRANSACTION_JOINS}
+      ${COUNT_JOINS}
       WHERE ${where}
     `;
 
@@ -694,7 +694,9 @@ export const transactionRepository = {
     // default with include_balance=false). Splitting it lets the data query
     // pipeline and stop at LIMIT (Nested-Loop + Memoize top-N), while the count
     // runs without the wide projection/sort/window. The `total` returned is
-    // byte-identical to the old window count — same WHERE, same joins.
+    // byte-identical: it uses the same WHERE and retains its sole referenced
+    // join (`r`); the omitted LEFT JOINs target primary keys and therefore
+    // cannot drop or multiply transaction rows.
     const dataSql = `
       SELECT t.*,
              ${ACCOUNT_LABEL_SQL},
@@ -711,7 +713,7 @@ export const transactionRepository = {
       WHERE ${where}
       ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
     `;
-    const countSql = `SELECT COUNT(*)::int AS total FROM transactions t ${TRANSACTION_JOINS} WHERE ${where}`;
+    const countSql = `SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`;
 
     const dataParams = [...params, limit, offset];
     const [result, countResult] = await Promise.all([

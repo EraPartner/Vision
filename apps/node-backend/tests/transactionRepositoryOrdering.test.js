@@ -33,6 +33,16 @@ describe('transaction list ORDER BY tiebreaker', () => {
     expect(sql).toMatch(/ORDER BY .+, t\.date DESC, t\.id DESC/);
   });
 
+  it('getAllWithCount count query uses only the recipient join needed by filters', async () => {
+    await transactionRepository.getAllWithCount({ recipientName: 'shop' });
+
+    const countSql = query.mock.calls[1][0];
+    expect(countSql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
+    expect(countSql).not.toContain('LEFT JOIN recipients pr');
+    expect(countSql).not.toContain('LEFT JOIN categories');
+    expect(countSql).not.toContain('LEFT JOIN accounts');
+  });
+
   it('getUncategorisedWithCount paginates with a t.id DESC tiebreaker', async () => {
     await transactionRepository.getUncategorisedWithCount({ limit: 50, offset: 0 });
     const sql = query.mock.calls[0][0];

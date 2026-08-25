@@ -24,6 +24,16 @@ beforeEach(() => {
 });
 
 describe('tag attachment', () => {
+  it('getAll retains the projection joins required by enriched row aliases', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await transactionRepository.getAll({});
+
+    const [sql] = query.mock.calls[0];
+    expect(sql).toContain('LEFT JOIN recipients pr');
+    expect(sql).toContain('LEFT JOIN categories c');
+    expect(sql).toContain('LEFT JOIN accounts acct');
+  });
+
   it('getAll attaches tags grouped by transaction and empty arrays otherwise', async () => {
     // First call: main SELECT returns two rows. Second call: the tag lookup.
     query
@@ -54,6 +64,17 @@ describe('getCount', () => {
   it('parses the scalar count', async () => {
     query.mockResolvedValueOnce({ rows: [{ count: '123' }] });
     expect(await transactionRepository.getCount({})).toBe(123);
+  });
+
+  it('uses only the recipient join needed by count filters', async () => {
+    query.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+    await transactionRepository.getCount({ recipientName: 'shop' });
+
+    const [sql] = query.mock.calls[0];
+    expect(sql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
+    expect(sql).not.toContain('LEFT JOIN recipients pr');
+    expect(sql).not.toContain('LEFT JOIN categories');
+    expect(sql).not.toContain('LEFT JOIN accounts');
   });
 
   it('forwards every count-compatible route filter to the shared WHERE builder', async () => {
