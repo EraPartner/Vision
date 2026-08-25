@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { createLiveContractSkipBannerReporter } from "./src/test/live-contracts/liveContractSkipBanner";
+import { defaultRoutePreloadPlugin } from "./src/build-support/defaultRoutePreload";
 
 function liveContractSkipBannerPlugin() {
     return {
@@ -41,6 +42,7 @@ export default defineConfig(({ mode }) => ({
     },
     plugins: [
         react(),
+        defaultRoutePreloadPlugin(),
         liveContractSkipBannerPlugin(),
     ],
     resolve: {
@@ -160,6 +162,8 @@ export default defineConfig(({ mode }) => ({
                 'src/utils/**/*.{ts,tsx}',
                 'src/features/**/*.{ts,tsx}',
                 'src/contexts/**/*.{ts,tsx}',
+                'src/stores/**/*.{ts,tsx}',
+                'src/App.tsx',
             ],
             exclude: [
                 '**/*.test.{ts,tsx}',
@@ -167,22 +171,26 @@ export default defineConfig(({ mode }) => ({
                 '**/__tests__/**',
                 '**/test/**',
                 'src/**/*.d.ts',
+                // Boot-only side-effect entrypoints: main mounts the complete
+                // application; theme-flash mutates the pre-paint document as
+                // soon as it is imported. Their dependencies are measured,
+                // but executing these modules is an E2E responsibility.
+                'src/main.tsx',
+                'src/theme-flash.ts',
             ],
             // Ratchet gate — tracks current actual coverage so regressions are
             // caught immediately. Bump after each phase adds meaningful tests;
             // never lower these values. Set a 2-3 pt buffer below the measured
             // figure to absorb v8 line-attribution variance between runs
             // (convention: floor(measured) minus 2).
-            // Last measured (2026-07-27, 2.1k-test suite, after adding
-            // src/features/** and src/contexts/** to the include list above —
-            // both had tests all along but were absent from the list, so
-            // neither their covered nor their uncovered lines were counted):
-            //   statements 56.86 % | branches 47.04 % | functions 49.3 % | lines 59.04 %
+            // Last measured (2026-08-25, 2.5k-test suite, after adding the
+            // tested src/stores/** tree and App.tsx to the include list):
+            //   statements 64.28 % | branches 53.93 % | functions 56.11 % | lines 66.67 %
             thresholds: {
-                statements: 54,
-                branches: 45,
-                functions: 47,
-                lines: 57,
+                statements: 62,
+                branches: 51,
+                functions: 54,
+                lines: 64,
             },
         },
     },

@@ -3,7 +3,7 @@ title: Performance Documentation Index
 type: performance-index
 status: active
 date: 2026-04-25
-last_modified: 2026-05-29
+last_modified: 2026-08-25
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
@@ -24,6 +24,8 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-08-25: default Dashboard route and critical fonts preloaded at build time** — `[[apps/frontend/src/build-support/defaultRoutePreload.ts]]` walks the production chunk graph and injects only the Dashboard's static closure not already covered by the entry graph. The same build-bundle pass resolves the hashed Inter 400 and Fraunces 600 WOFF2 assets and emits font preloads with the deployment base; other weights and WOFF fallbacks remain CSS-discovered. This removes serial route and critical-font discovery round trips on a cold web visit. Dynamic locale, AI chat, and motion-feature chunks stay lazy. Fresh root and `/vision/` production builds measured a 399.76 KiB gzip boot graph and 914.35/914.30 KiB gzip total JavaScript/CSS assets; the 420 KiB preload and 940 KiB total guards both pass. The latency benefit is primarily for remote web deployments; it is smaller on Electron or a local-area network.
 
 **2026-05-29: recharts no longer eagerly preloaded** — Removed the `recharts → 'charts'` `manualChunks` rule from `[[apps/frontend/vite.config.ts]]`. Previously, forcing recharts into a named chunk caused Rollup to drag it (114 kB gzip) into the initial `modulepreload` graph via a shared module imported by `AppSettingsContext`. Recharts is used exclusively by `ToolResultCard.tsx`, which is only reachable through the lazy-loaded `AIChatPage`. Without the manual chunk rule, Rollup keeps recharts inside the `AIChatPage` async bundle and it no longer appears in `dist/index.html` as a `modulepreload`. Verified via production build. Remediates [[docs/reference/codebase-audit-2026-05#performance.5|performance.5]].
 

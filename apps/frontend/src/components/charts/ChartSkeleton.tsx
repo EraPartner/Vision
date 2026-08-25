@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { ShimmerLayer } from '@/components/ui/shimmer-layer';
 
 interface ChartSkeletonProps {
     height?: number;
@@ -37,7 +38,7 @@ export function ChartSkeleton({ height = 280, className }: ChartSkeletonProps) {
                     fillOpacity={0.12}
                 />
             </svg>
-            <div className="absolute inset-0 animate-shimmer bg-[linear-gradient(90deg,transparent_0%,hsl(var(--foreground)/0.05)_50%,transparent_100%)] bg-[length:200%_100%] motion-reduce:animate-none" />
+            <ShimmerLayer className="bg-[linear-gradient(90deg,transparent_0%,hsl(var(--foreground)/0.05)_50%,transparent_100%)]" />
         </div>
     );
 }

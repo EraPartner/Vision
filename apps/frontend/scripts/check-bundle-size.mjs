@@ -16,8 +16,8 @@
  * recharts (a dependency of exactly one component, reachable only through the
  * lazy-loaded AIChatPage) leaked into the initial preload graph via a shared
  * module and added ~114 kB gz to every cold load. See the `manualChunks`
- * comment in vite.config.ts and the flash-prevention comment in index.html
- * ("~282 KB gz boot graph") for the post-mortem. Nothing short of measuring the
+ * comment in vite.config.ts and the flash-prevention comment in index.html for
+ * the post-mortem. Nothing short of measuring the
  * actual preload graph on every build would have caught that before users did.
  *
  * We parse dist/index.html directly rather than the Vite/Rollup manifest
@@ -27,6 +27,7 @@
  *
  * Usage:
  *   bun run build && node scripts/check-bundle-size.mjs
+ *   VISION_DIST_DIR=/tmp/vision-dist node scripts/check-bundle-size.mjs
  *   (wired up as the `size:check` package.json script; CI runs it right
  *   after `bun run build`)
  */
@@ -40,7 +41,9 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_ROOT = path.resolve(SCRIPT_DIR, '..');
 // vite.config.ts sets build.outDir to "../../dist" (relative to apps/frontend).
-const DIST_DIR = path.resolve(FRONTEND_ROOT, '../../dist');
+const DIST_DIR = process.env.VISION_DIST_DIR
+    ? path.resolve(process.env.VISION_DIST_DIR)
+    : path.resolve(FRONTEND_ROOT, '../../dist');
 
 /**
  * Budgets, in gzip KB (1024 bytes). Bump these ONLY as a deliberate,
@@ -52,9 +55,9 @@ const DIST_DIR = path.resolve(FRONTEND_ROOT, '../../dist');
  * absorb routine dependency-lockfile churn without false alarms — tight
  * enough that a single mis-scoped import still trips it.
  *
- * Last measured (2026-08-02, clean build off this branch):
- *   boot-preload graph: 282.14 KB gz (14 files: entry + 13 modulepreloads)
- *   total (all routes): 897.23 KB gz (143 JS/CSS assets)
+ * Last measured (2026-08-25, fresh production build):
+ *   boot-preload graph: 399.72 KB gz (44 files: entry + 43 modulepreloads)
+ *   total (all routes): 914.13 KB gz (146 JS/CSS assets)
  *
  * The 2026-08-02 drop (306.76 -> 282.14 KB gz, -24.62) is the Framer Motion
  * engine leaving the entry chunk: every `motion.*` call site now uses the
@@ -66,12 +69,11 @@ const DIST_DIR = path.resolve(FRONTEND_ROOT, '../../dist');
  * own chunk instead of being inlined; that is the intended trade.
  */
 const BUDGETS_KB = {
-    // 282.14 * 1.05 = 296.25, rounded up. Tightened from 323 on 2026-08-02 to
-    // lock in the LazyMotion split described above.
-    preload: 297,
-    // 897.23 * 1.05 = 942.09 — deliberately left at 940 rather than raised, so
-    // the guard is not loosened by a change that shrank the thing it protects.
-    // Effective headroom 4.77%.
+    // 399.72 * 1.05 = 419.71, rounded up. The deliberate increase covers the
+    // default Dashboard route's static graph, now preloaded to remove its serial hop.
+    preload: 420,
+    // The existing total budget remains tighter than 914.13 * 1.05 = 959.84.
+    // Effective headroom is 2.83%, so route preloading does not loosen total size.
     total: 940,
 };
 
@@ -97,6 +99,17 @@ function getBootPreloadFiles(html) {
     return [...new Set([entryMatch[1], ...preloads])];
 }
 
+/** Map a public asset URL back to its path inside the Vite output directory. */
+export function bundleOutputPathFromHref(href) {
+    const pathname = new URL(href, 'https://vision.invalid/').pathname;
+    const assetsMarker = '/assets/';
+    const markerIndex = pathname.lastIndexOf(assetsMarker);
+    if (markerIndex === -1) {
+        throw new Error(`Bundle URL does not point into the Vite assets directory: ${href}`);
+    }
+    return pathname.slice(markerIndex + 1);
+}
+
 /** Recursively lists every .js/.css file under dist/, relative to dist/. */
 function listAllBundleFiles(dir, base = dir) {
     const out = [];
@@ -112,8 +125,7 @@ function listAllBundleFiles(dir, base = dir) {
 }
 
 function gzipSizeOf(distRelativePath) {
-    const urlPath = distRelativePath.replace(/^\//, '');
-    const absPath = path.join(DIST_DIR, urlPath);
+    const absPath = path.join(DIST_DIR, bundleOutputPathFromHref(distRelativePath));
     const buf = readFileSync(absPath);
     return gzipSync(buf, { level: 9 }).length;
 }
@@ -188,4 +200,6 @@ function main() {
     console.log('size:check passed — bundle within budget.');
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main();
+}

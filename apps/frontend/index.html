@@ -29,7 +29,7 @@
     <!-- Prevent flash-of-light before first paint. This MUST be a plain inline
          script: a `type="module"` script (even /src/theme-flash.ts) is folded into
          the deferred main bundle in a production build, so it runs only after the
-         ~282 KB gz boot graph executes — too late to stop the flash. Keep this in sync
+         ~400 KB gz entry and default-route preload graph executes — too late to stop the flash. Keep this in sync
          with theme-flash.ts's class toggle (localStorage key `vision_theme`). -->
     <script>
       (function () {

@@ -3,10 +3,10 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-08-14
-last_modified: 2026-08-14
+updated: 2026-08-25
+last_modified: 2026-08-25
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-14: CardSheen documented and given a second `hero` tier — the corner-orb motif is now a two-tier system with a stated policy for which card tier gets which sheen.
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-14: CardSheen documented and given a second `hero` tier — the corner-orb motif is now a two-tier system with a stated policy for which card tier gets which sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -34,7 +34,7 @@ related_code:
 
 ## VirtualDataTable
 
-**Path:** `[[apps/frontend/src/components/shared/VirtualDataTable.tsx]]` (701 lines)
+**Path:** `[[apps/frontend/src/components/shared/VirtualDataTable.tsx]]` (1,032 lines)
 
 The most complex shared component — a high-performance virtualized data table used across Transactions, Recipients, Owes, Net Worth, and more.
 
@@ -51,6 +51,7 @@ The most complex shared component — a high-performance virtualized data table 
 - **Column resizing**: Drag column borders to resize
 - **Infinite scroll**: `onLoadMore` callback for pagination
 - **Deferred rendering**: Uses `useDeferredValue` to avoid blocking during search
+- **Memoized visible rows**: Server-search keystrokes leave unchanged row and context-menu subtrees mounted without rerendering
 - **Edit cancellation** — `cancelEditing` wrapped in `useCallback` with proper dependency tracking (Phase C fix) to prevent memory leaks during unmount
 - **ARIA grid semantics** (2026-05-29) — full screen-reader table structure; see section below
 - **Keyboard row activation** (2026-05-29) — rows are focusable and Enter/Space-operable when `onRowDoubleClick` is set
@@ -75,6 +76,15 @@ columnsRef.current = columns; // keep live reference current
 // processedRows and the width-seed effect now depend on columnKeySignature
 // and read columnsRef.current instead of listing `columns` directly.
 ```
+
+### Performance: Server-Search Row Memoization (2026-08-25)
+
+Completes the remaining visible-row scope of the `VirtualDataTable` search-keystroke finding in `TODO.md`.
+
+- In server-search mode, the existing `localSearchDep` guard keeps the full `processedRows` pipeline stable while the user types.
+- `MemoizedVirtualizedTableRow` adds the missing row-level boundary. A search-input state update no longer rebuilds unchanged visible cells, Radix context menus, or tag subtrees.
+- Editing state, edit values, column widths, row data, column render closures, virtual position, and row-action handlers remain explicit props. Changes to any of those still rerender the affected visible rows.
+- The focused component test uses a column render counter to prove that a server-search keystroke does not rerender unchanged rows. Existing editing, keyboard, context-menu, and search tests protect interaction behavior.
 
 ### ARIA Grid Semantics (2026-05-29)
 

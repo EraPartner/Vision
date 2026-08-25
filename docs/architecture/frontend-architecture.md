@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-08-13
+updated: 2026-08-25
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -474,8 +474,9 @@ See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for the full mater
 - **Display**: Fraunces (static weights: 400/600/700, latin subset) — headlines, hero text, stats
 - **Body**: Inter (static weights: 400/500/600, latin subset) — copy, labels, form inputs
 - **Self-hosted**: Fonts loaded via `@fontsource/fraunces` + `@fontsource/inter` (smaller files)
+- **Cold-load preloads**: the build injects hashed WOFF2 preloads for Inter 400 and Fraunces 600, the two weights needed for first body and display text. Other weights and legacy WOFF files remain normal CSS-discovered assets.
 
-Previous variable fonts superseded by static weight selection for performance.
+Previous variable fonts were superseded by static weight selection for performance; both token and Tailwind fallback stacks now start with the installed static family names.
 
 ### Motion System (Liquid Glass v2)
 
@@ -554,6 +555,8 @@ See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v
 
 `lib/routePreload.ts` — route → `import()` loader map shared by `App.tsx` `lazy()` calls and `AppSidebar` hover handlers:
 
+- `src/build-support/defaultRoutePreload.ts` computes the default Dashboard route's complete static chunk closure at build time and removes chunks already reachable from the HTML entry. Its Vite plugin emits the remaining `modulepreload` links plus hashed WOFF2 preloads for critical Inter 400 and Fraunces 600 assets into production HTML, removing serial discovery round trips on a cold web load.
+- The build-time traversal follows only Rollup `imports`. Dynamic locale, AI chat, and motion-feature chunks remain lazy. A missing entry or Dashboard chunk fails the build instead of silently dropping the optimization.
 - Sidebar item `onMouseEnter` triggers `routePreload(path)`, warming the chunk before click.
 - `App.tsx` reuses the same loaders for `React.lazy()` so there is no separate dynamic import per call site.
 - Errors fall through to the normal lazy path (no UI impact on failure).

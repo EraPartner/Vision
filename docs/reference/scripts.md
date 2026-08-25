@@ -3,8 +3,8 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-08-23
-tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps]
+updated: 2026-08-25
+tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill, migrations, destructive-ddl, todo-stamps, todo-hygiene]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
 ---
@@ -62,6 +62,8 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | `typecheck` | `bun run --filter 'vision-frontend' typecheck` | TypeScript type-check of the frontend (runs: `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`). No emit; fails on type errors only. |
 | `check-endpoint-matrix` | `node scripts/check-endpoint-matrix.js` | Guards `docs/reference/api-endpoint-matrix.md` against drift from `openapi.yaml`: counts HTTP operations in the spec and compares to the `api_operation_count` frontmatter value; exits 1 on mismatch (caught in CI). |
 | `check-compose-sync` | `node scripts/check-compose-sync.js` | Guards `packaging/electron/resources/docker-compose.yml` against drifting from the root `docker-compose.yml` on the compose project `name:`, the database image and platform, and the top-level named `volumes:`. These decide which PostgreSQL runtime starts against which user-data volume; mismatched volumes caused the v1.0.2 data-loss bug, while a platform mismatch can select the broken ARM64 PostgreSQL entrypoint. Node stdlib only, so it runs with nothing but a checkout. Add `--self-test` to exercise the parser's own fixtures. Enforced by CI's `verify-compose-sync`, `release.yml`'s `verify` job, and `.githooks/pre-push`. See [[docs/adr/051-docker-compose-sync-named-volumes\|ADR-051]]. |
+| `todo:list` | `python3 scripts/todo-report.py` | Lists only unchecked items in `TODO.md`'s authoritative `## Findings` queue. The concise output includes domain, priority, derived work state, source line, and stable title. Use `--json` for coordinators and `--state` or `--priority` to filter without parsing the full backlog. |
+| `todo:check` | `python3 scripts/todo-report.py --check` | Enforces actionable-queue hygiene: stable checkbox headings, priority and source metadata, unique open titles, and no open findings stranded outside `## Findings`. Python standard library only; included in `bun run check`. |
 | `check-todo-stamps` | `python3 scripts/check-todo-stamps.py` | Optional legacy audit for the inline commit stamps already present in `TODO.md`. New completions use the checked box and merged pull-request history without a stamp, so this command is no longer part of `bun run check`, CI, or `.githooks/pre-push`. Python stdlib only and fully offline unless `--verify-open` is requested. |
 
 #### How the legacy `check-todo-stamps` audit classifies a stamp
@@ -190,6 +192,8 @@ bun run validate-locales
 ```
 
 Run `bun run check-todo-stamps` only when intentionally maintaining legacy inline SHA annotations.
+Use `bun run todo:list -- --json` when selecting or delegating backlog findings, and run
+`bun run todo:check` after editing the actionable queue.
 
 ### Adding a migration
 

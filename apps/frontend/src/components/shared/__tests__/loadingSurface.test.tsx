@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChartSkeleton } from '@/components/charts/ChartSkeleton';
+import { PageLoader } from '@/components/shared/PageLoader';
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ResearchAnalystTab } from "@/features/research/ResearchAnalystTab";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -16,6 +18,26 @@ import { renderWithApp } from "@/test/renderWithApp";
  *     not a hardcoded English literal.
  */
 describe("loading surface a11y", () => {
+    it('moves a clipped child layer instead of repainting each loading surface', () => {
+        const { container, rerender } = render(<Skeleton className="h-4 w-full" />);
+        const skeleton = container.firstElementChild!;
+        expect(skeleton).toHaveClass('overflow-hidden');
+        expect(skeleton).not.toHaveClass('animate-shimmer');
+        const skeletonSweep = skeleton.querySelector('.animate-shimmer');
+        expect(skeletonSweep).toHaveClass('absolute', 'pointer-events-none');
+        expect(skeletonSweep).toHaveAttribute('aria-hidden', 'true');
+
+        rerender(<ChartSkeleton />);
+        const chart = container.firstElementChild!;
+        expect(chart).toHaveClass('overflow-hidden');
+        expect(chart.querySelector('.animate-shimmer')).toHaveClass('absolute', 'pointer-events-none');
+
+        rerender(<PageLoader />);
+        const routeLoader = container.firstElementChild!;
+        expect(routeLoader).toHaveClass('overflow-hidden');
+        expect(routeLoader.querySelector('.animate-shimmer')).toHaveClass('motion-reduce:hidden');
+    });
+
     it("Skeleton is decorative by default", () => {
         // Arrange + Act
         const { container } = render(<Skeleton className="h-4 w-full" />);

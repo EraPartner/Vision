@@ -17,6 +17,7 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { GlobalMutationErrorToaster } from "@/components/shared/GlobalMutationErrorToaster";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { StartupRedirect } from "@/components/shared/StartupRedirect";
+import { PageLoader } from '@/components/shared/PageLoader';
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
 
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -105,16 +106,6 @@ const queryClient = new QueryClient({
         },
     },
 });
-
-// Route-chunk loading indicator: a hairline progress shimmer pinned to the
-// top edge instead of a content-area spinner, so navigation never "flashes".
-function PageLoader() {
-    return (
-        <div aria-busy="true" className="fixed inset-x-0 top-0 z-50 h-[2px] overflow-hidden">
-            <div className="h-full w-full animate-shimmer bg-[linear-gradient(90deg,transparent_0%,hsl(var(--primary))_35%,hsl(var(--accent))_65%,transparent_100%)] bg-[length:200%_100%] motion-reduce:animate-none motion-reduce:bg-primary/60" />
-        </div>
-    );
-}
 
 // Bridge: reads language from AppSettings and provides it to LanguageContext
 function LanguageBridge({ children }: { children: React.ReactNode }) {

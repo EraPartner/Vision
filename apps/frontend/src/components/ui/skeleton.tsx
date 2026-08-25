@@ -1,4 +1,5 @@
 import {cn} from "@/lib/utils";
+import { ShimmerLayer } from '@/components/ui/shimmer-layer';
 
 /**
  * A single shimmer bone.
@@ -13,11 +14,13 @@ function Skeleton({className, ...props}: React.HTMLAttributes<HTMLDivElement>) {
         <div
             aria-hidden="true"
             className={cn(
-                "relative overflow-hidden rounded-md bg-foreground/[0.06] bg-[linear-gradient(90deg,transparent_0%,hsl(var(--foreground)/0.08)_50%,transparent_100%)] bg-[length:200%_100%] animate-shimmer",
+                "relative overflow-hidden rounded-md bg-foreground/[0.06]",
                 className,
             )}
             {...props}
-        />
+        >
+            <ShimmerLayer className="bg-[linear-gradient(90deg,transparent_0%,hsl(var(--foreground)/0.08)_50%,transparent_100%)]" />
+        </div>
     );
 }
 

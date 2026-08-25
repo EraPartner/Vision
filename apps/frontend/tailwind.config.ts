@@ -1,5 +1,6 @@
 import type { Config } from "tailwindcss";
 import * as tailwindcssAnimateModule from "tailwindcss-animate";
+import { shimmerAnimation, shimmerKeyframes } from './src/build-support/shimmerAnimation';
 
 // Handle both CommonJS and ES module exports
 const tailwindcssAnimate = (tailwindcssAnimateModule as { default?: typeof tailwindcssAnimateModule }).default || tailwindcssAnimateModule;
@@ -22,7 +23,6 @@ export default {
         extend: {
             fontFamily: {
                 display: [
-                    "Fraunces Variable",
                     "Fraunces",
                     "Iowan Old Style",
                     "Palatino",
@@ -30,7 +30,6 @@ export default {
                     "serif",
                 ],
                 sans: [
-                    "Inter Variable",
                     "Inter",
                     "-apple-system",
                     "BlinkMacSystemFont",
@@ -159,10 +158,7 @@ export default {
                     from: { opacity: "0", transform: "scale(0.96)" },
                     to: { opacity: "1", transform: "scale(1)" },
                 },
-                shimmer: {
-                    "0%": { backgroundPosition: "-200% 0" },
-                    "100%": { backgroundPosition: "200% 0" },
-                },
+                shimmer: shimmerKeyframes,
                 // Dialog enter/exit. Centering lives on the standalone CSS
                 // `translate` property (Tailwind v4), so `transform` is free
                 // to animate without disturbing position.
@@ -184,7 +180,7 @@ export default {
                 "fade-up": "fade-up 420ms var(--ease-out-expo) both",
                 "fade-in": "fade-in 260ms var(--ease-out-expo) both",
                 "scale-in": "scale-in 260ms var(--ease-out-expo) both",
-                shimmer: "shimmer 2.4s linear infinite",
+                shimmer: shimmerAnimation,
                 // Overshooting bezier gives the spring feel without JS.
                 "dialog-in": "dialog-in 420ms cubic-bezier(0.34, 1.45, 0.64, 1) both",
                 // Dismissal is a settle, not an arrival — glide (Apple's sheet
