@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 
 /**
- * The app's ONE stat tile. Every KPI/summary card composes this — page-specific
+ * The app's shared stat tile. Every KPI/summary card composes this — page-specific
  * content, shared anatomy (title + trend-toned icon chip, odometer value,
  * DeltaPill / hint line). `size="compact"` is the dense 4-6-up summary rows on
  * the portfolio asset pages; the default size is the dashboard/overview tile.

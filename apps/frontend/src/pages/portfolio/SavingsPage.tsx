@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

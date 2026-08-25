@@ -14,7 +14,7 @@ import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank, CreditCard } fro
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { CHART_PERIODS, filterByPeriod, type ChartPeriod } from "@/components/charts";
 import {

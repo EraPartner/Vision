@@ -7,6 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings, weekStartsOnFromSetting } from "@/components/shared/dateUtils";
 import type { FieldErrorAria } from "@/hooks/useFieldErrors";
+import { enUS, nl } from "date-fns/locale";
 
 type DatePickerProps = FieldErrorAria & {
   value?: Date;
@@ -38,7 +39,7 @@ export function DatePicker({
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: DatePickerProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { appSettings } = useAppSettings();
   const formattedDate = value ? formatDateWithAppSettings(value, appSettings.dateFormat) : placeholder;
   const weekStartsOn = weekStartsOnFromSetting(appSettings.startOfWeek);
@@ -69,6 +70,7 @@ export function DatePicker({
           selected={value}
           onSelect={onChange}
           weekStartsOn={weekStartsOn}
+          locale={language === "nl" ? nl : enUS}
           autoFocus
           className="p-3 pointer-events-auto"
         />

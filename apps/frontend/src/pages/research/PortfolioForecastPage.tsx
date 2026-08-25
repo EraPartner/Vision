@@ -16,7 +16,7 @@ import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 import { Money } from "@/components/shared/Money";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
@@ -320,4 +320,3 @@ export default function PortfolioForecastPage() {
     </div>
   );
 }
-

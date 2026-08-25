@@ -26,7 +26,7 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Money } from "@/components/shared/Money";
 import { parseYmd } from "@/lib/timezone";

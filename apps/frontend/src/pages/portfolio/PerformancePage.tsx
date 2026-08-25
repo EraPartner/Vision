@@ -31,7 +31,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { TrendHue } from "@/components/shared/TrendHue";
 import { CardSheen } from "@/components/shared/CardSheen";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 
 const CHART_KEYS = {
     invested: 'invested',

@@ -24,6 +24,7 @@ const tickLabelProps = () =>
         fill: TICK_COLOR,
         fontSize: 11,
         fontFamily: "inherit",
+        className: "tabular-nums",
         textAnchor: "middle" as const,
     }) as const;
 
@@ -32,6 +33,7 @@ const tickLabelPropsSide = (anchor: "start" | "end") =>
         fill: TICK_COLOR,
         fontSize: 11,
         fontFamily: "inherit",
+        className: "tabular-nums",
         textAnchor: anchor,
         dy: "0.33em",
     }) as const;

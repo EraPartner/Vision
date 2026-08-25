@@ -3,7 +3,7 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-10
+updated: 2026-08-25
 tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass, small-viewport-robustness, badge-size-variant]
 description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier. Aug 2026 (small-viewport robustness, PR #156): Badge gains `size` (`default`/`sm`) and `muted` variants; DialogContent caps at `max-h-[90vh] overflow-y-auto`; TabsList scrolls horizontally with a hidden scrollbar; AccordionTrigger gains a `trailing` slot for header-row controls that must not nest inside the trigger button.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
@@ -135,7 +135,7 @@ These tokens resolve to the correct color for both light and dark modes and resp
 
 ### focus-visible Ring Convention (June 2026)
 
-Interactive elements use `focus-visible:ring-*` rather than `focus:ring-*`. Two stragglers (a `Select` trigger and a devtools filter input) were corrected. This matches the existing convention (33 uses of `focus-visible:ring` in the codebase) and avoids showing focus rings on mouse clicks.
+The default treatment, where component geometry permits, is the semantic house ring `focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2` rather than `focus:ring-*` or a raw primary-colour ring. This avoids mouse-click rings and keeps keyboard focus visible across theme variants. Constrained nested controls may use semantic `ring-ring` variants without an offset, sidebar-owned rings, or deliberately suppress an inherited ring.
 
 ### Overscroll Behavior (June 2026)
 
@@ -760,7 +760,7 @@ When any of `onRowDoubleClick`, `onRowOpen`, or `onRowQuickLook` is present, row
 - **Space** — fires `onRowQuickLook ?? onRowDoubleClick`.
 - Keys are suppressed if the event target is a descendant (e.g., an inline-edit input), so typing in edit fields is not hijacked.
 
-Rows display a `focus-visible:ring-2 focus-visible:ring-primary/50` focus ring when keyboard-focused.
+Rows display the shared `focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2` ring when keyboard-focused.
 
 ### Per-Row Context Menu
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 
 interface SegmentedButtonsProps<T> {
     options: T[];
@@ -10,6 +10,8 @@ interface SegmentedButtonsProps<T> {
     /** Per-button sizing classes; sites differ on height/padding. */
     buttonClassName?: string;
     className?: string;
+    selectedVariant?: ButtonProps["variant"];
+    unselectedVariant?: ButtonProps["variant"];
 }
 
 /**
@@ -24,6 +26,8 @@ export function SegmentedButtons<T>({
     onSelect,
     buttonClassName = "h-8 px-2.5 text-xs",
     className = "flex gap-1",
+    selectedVariant = "default",
+    unselectedVariant = "ghost",
 }: SegmentedButtonsProps<T>) {
     return (
         <div className={className}>
@@ -31,7 +35,7 @@ export function SegmentedButtons<T>({
                 <Button
                     key={getKey(option)}
                     size="sm"
-                    variant={isSelected(option) ? "default" : "ghost"}
+                    variant={isSelected(option) ? selectedVariant : unselectedVariant}
                     className={buttonClassName}
                     onClick={() => onSelect(option)}
                 >

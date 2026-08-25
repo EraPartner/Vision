@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-08-23
+updated: 2026-08-25
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss, accessibility, screen-reader]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-08-22: its income/spending proportion bar announces localized full values and percentages as one screen-reader image.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -35,7 +35,7 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 
 | Component | Description | File |
 |-----------|-------------|------|
-| StatCard | Summary stat card with trend and gradient icon tile | [[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]] |
+| StatCard | Shared summary stat card with trend and gradient icon tile | [[apps/frontend/src/components/shared/StatCard.tsx\|StatCard.tsx]] |
 | NetSummaryCard | Hero net-worth summary with sparkline scrub (V9) and a localized accessible income/spending proportion summary | [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx\|NetSummaryCard.tsx]] |
 | MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
 | CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
@@ -109,7 +109,7 @@ function MyCard() {
   - `surface-elevated premium-frame micro-lift`
 - This replaces ad-hoc elevated class chains (`border-none shadow-lg ... hover:-translate-y-*`) for consistent depth/motion behavior.
 
-Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/index.css]]
+Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/index.css]]
 
 ---
 
@@ -579,6 +579,7 @@ The component loads chart history and the net-position total from `GET /api/aggr
 ### Features
 
 - Total net-position hero card
+- The net-position amount uses a solid foreground color so the full financial figure keeps consistent contrast.
 - Per-account balance cards (accounts with a current non-zero balance)
 - **Shared account-detail navigation:** Clicking a per-account card, or activating it with Enter or Space, opens `/accounts/:id`, the same account ledger used by the Accounts page.
 - Balance History chart: stacked area when all balances are non-negative, multi-line when any account carries a negative balance (overdraft)

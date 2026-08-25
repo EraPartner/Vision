@@ -3,7 +3,7 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-08-23
+updated: 2026-08-25
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-09: keyboardNav.ts — shared keyboard access to per-point values (focusable charts, arrow-key stepping, Shift+arrow scrub, Escape/blur clear) on LineChart/AreaChart/BarChart and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
@@ -60,7 +60,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 |-----------|---------|
 | `ChartTooltip` | Shared tooltip renderer with design-token colors |
 | `ChartLegend` | Shared legend component respecting reduced-motion |
-| `ChartAxis` | Shared axis renderer (x, y) with token-based styling |
+| `ChartAxis` | Shared axis renderer (x, y) with token-based color, inherited type, and tabular numeric ticks |
 | `ChartSkeleton` | Ghost waveform + shimmer loading placeholder (Premium v3) |
 | `ChartPeriodSelector` | Segmented native-button control for selecting a chart window; `aria-pressed` exposes the active period |
 

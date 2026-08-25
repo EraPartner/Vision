@@ -197,7 +197,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
             aria-rowindex={virtualIndex + 2}
             tabIndex={rowsInteractive ? (isFirstVisible ? 0 : -1) : undefined}
             className={cn(
-                "flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset",
+                "flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2",
                 isEditing && "bg-primary/5",
                 onRowDoubleClick && "cursor-pointer",
                 rowsInteractive && "touch-manipulation active:bg-muted",
@@ -837,7 +837,14 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                             <span key={key} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2 py-1 rounded-md">
                                 <Filter className="h-3 w-3" />
                                 {col?.header || key}: {val}
-                                <button onClick={() => setColumnFilter(key, "")} className="hover:text-destructive ml-0.5">
+                                <button
+                                    type="button"
+                                    aria-label={t("aria.clearNamedFilter", {
+                                        name: typeof col?.header === "string" ? col.header : key,
+                                    })}
+                                    onClick={() => setColumnFilter(key, "")}
+                                    className="hover:text-destructive ml-0.5"
+                                >
                                     <X className="h-3 w-3" />
                                 </button>
                             </span>

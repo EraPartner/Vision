@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { render } from "@testing-library/react";
 import { StatCard } from "./StatCard";
 
-describe("StatCard odometer opt-out", () => {
+describe("shared StatCard odometer opt-out", () => {
     test("renders a non-numeric value as plain text (spaces preserved, no digit reels)", () => {
         const { container, getByText } = render(
             <StatCard title="Top Recipient" value="Albert Heijn" odometer={false} />,

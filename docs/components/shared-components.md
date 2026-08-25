@@ -6,7 +6,7 @@ date: 2026-04-26
 updated: 2026-08-25
 last_modified: 2026-08-25
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-14: CardSheen documented and given a second `hero` tier — the corner-orb motif is now a two-tier system with a stated policy for which card tier gets which sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees.
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-14: CardSheen documented and given a second `hero` tier — the corner-orb motif is now a two-tier system with a stated policy for which card tier gets which sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees; StatCard moved into shared ownership for its dashboard, portfolio, research, and statistics consumers.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -44,7 +44,8 @@ The most complex shared component — a high-performance virtualized data table 
 - **Client-side search**: Full-text search across all columns with debounced input
 - **Server-side search**: Optional `onSearchChange` callback for database-level search
 - **Column sorting**: Client-side or server-side (via `onSortChange`)
-- **Column filtering**: Per-column popover filters with unique value selection
+- **Column filtering**: Per-column popover filters with unique value selection; each active-filter
+  chip exposes a localized clear-button name that includes the column label
 - **Stable source row mapping**: Filter/sort/search pipelines preserve row identity through `sourceIndex` mapping so row actions/edit handlers target original source rows
 - **Inline editing**: Double-click to edit editable columns (Enter to save, Escape to cancel)
 - **Dynamic edit column width**: Action column expands to 88px when in editing mode (default 40px) to prevent button overlap while editing
@@ -222,6 +223,10 @@ new Date(y, m - 1, d)  // → 2026-05-05 local midnight for all timezones
 ```
 
 **Impact:** Recharts Date x-axis, transaction date displays, and all calendar pickers now show correct dates regardless of user timezone.
+
+## Shared text primitives
+
+`components/ui/label.tsx` and `components/ui/alert.tsx` use `leading-tight` for wrap-capable labels and alert titles. This keeps multi-line Dutch copy legible at enlarged browser zoom while preserving the compact text role.
 
 ## DataTable
 
@@ -551,7 +556,7 @@ The following rule applies across all summary/stat cards:
 
 > [!info] The gain/loss BORDER that previously appeared on `PerformancePage` CompactReturnCard and TotalValueCard (via `liquid-glass-trend-up/down` CSS classes) was removed in this pass. The hue is retained via `<TrendHue>`; the border is gone for cross-app consistency. The `glass-trend-up / glass-trend-down / liquid-glass-trend-up / liquid-glass-trend-down` classes have been deleted from `index.css` as they are now orphaned.
 
-Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/components/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
 
 ---
 

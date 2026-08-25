@@ -87,6 +87,9 @@ interface AppLayoutProps {
 
 Navigation sidebar with workspace-aware navigation.
 
+The sidebar trigger and resize rail use the localized `menu.toggleSidebar` accessible name, so
+screen readers follow the active application language.
+
 ### Navigation Structure
 
 The sidebar adapts based on the active workspace:

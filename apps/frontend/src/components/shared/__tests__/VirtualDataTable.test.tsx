@@ -145,7 +145,7 @@ describe("VirtualDataTable — local search", () => {
     it("search input has correct placeholder in local-search mode", () => {
         renderTable();
         expect(
-            screen.getByPlaceholderText("Search across all columns..."),
+            screen.getByPlaceholderText("Search across all columns…"),
         ).toBeInTheDocument();
     });
 
@@ -153,7 +153,7 @@ describe("VirtualDataTable — local search", () => {
         const user = userEvent.setup();
         renderTable();
         await user.type(
-            screen.getByPlaceholderText("Search across all columns..."),
+            screen.getByPlaceholderText("Search across all columns…"),
             "Alpha",
         );
         await waitFor(() =>
@@ -165,12 +165,12 @@ describe("VirtualDataTable — local search", () => {
         const user = userEvent.setup();
         renderTable();
         await user.type(
-            screen.getByPlaceholderText("Search across all columns..."),
+            screen.getByPlaceholderText("Search across all columns…"),
             "ZZZNOMATCH",
         );
         await waitFor(() =>
             expect(
-                screen.getByText("No results match your filters."),
+                screen.getByText("No results match your filters"),
             ).toBeInTheDocument(),
         );
     });
@@ -178,7 +178,7 @@ describe("VirtualDataTable — local search", () => {
     it("clear search button restores all rows", async () => {
         const user = userEvent.setup();
         renderTable();
-        const input = screen.getByPlaceholderText("Search across all columns...");
+        const input = screen.getByPlaceholderText("Search across all columns…");
         await user.type(input, "Alpha");
         await waitFor(() => expect(screen.getByText(/1 of 3/)).toBeInTheDocument());
 
@@ -189,6 +189,22 @@ describe("VirtualDataTable — local search", () => {
     });
 });
 
+describe("VirtualDataTable — column filters", () => {
+    it("names the active filter clear button and clears the filter", async () => {
+        const user = userEvent.setup();
+        renderTable();
+
+        await user.click(screen.getByRole("button", { name: "Filter Name" }));
+        await user.type(screen.getByPlaceholderText("Filter name…"), "Alpha");
+
+        const clearButton = await screen.findByRole("button", { name: "Clear Name filter" });
+        await user.click(clearButton);
+
+        expect(screen.queryByRole("button", { name: "Clear Name filter" })).not.toBeInTheDocument();
+        expect(screen.getByText(/3 of 3 loaded/)).toBeInTheDocument();
+    });
+});
+
 // ---------------------------------------------------------------------------
 // Server-side search
 // ---------------------------------------------------------------------------
@@ -196,9 +212,9 @@ describe("VirtualDataTable — local search", () => {
 describe("VirtualDataTable — server-side search", () => {
     afterEach(() => vi.useRealTimers());
 
-    it("uses 'Search database...' placeholder when server search provided", () => {
+    it("uses the localized search placeholder in server-search mode", () => {
         renderTable({ serverMode: { search: { onChange: vi.fn() } } });
-        expect(screen.getByPlaceholderText("Search database...")).toBeInTheDocument();
+        expect(screen.getByPlaceholderText("Search database…")).toBeInTheDocument();
     });
 
     it("does not re-render unchanged virtual rows on each server-search keystroke", () => {
@@ -215,7 +231,7 @@ describe("VirtualDataTable — server-side search", () => {
         expect(renderName).toHaveBeenCalledTimes(DATA.length);
 
         fireEvent.change(
-            screen.getByPlaceholderText("Search database..."),
+            screen.getByPlaceholderText("Search database…"),
             { target: { value: "a" } },
         );
 
@@ -228,7 +244,7 @@ describe("VirtualDataTable — server-side search", () => {
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
         fireEvent.change(
-            screen.getByPlaceholderText("Search database..."),
+            screen.getByPlaceholderText("Search database…"),
             { target: { value: "test query" } },
         );
         expect(onSearchChange).not.toHaveBeenCalled();
@@ -243,7 +259,7 @@ describe("VirtualDataTable — server-side search", () => {
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
         fireEvent.change(
-            screen.getByPlaceholderText("Search database..."),
+            screen.getByPlaceholderText("Search database…"),
             { target: { value: "partial" } },
         );
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
@@ -255,7 +271,7 @@ describe("VirtualDataTable — server-side search", () => {
         const onSearchChange = vi.fn();
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
-        const input = screen.getByPlaceholderText("Search database...");
+        const input = screen.getByPlaceholderText("Search database…");
         fireEvent.change(input, { target: { value: "ab" } });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
 
@@ -271,7 +287,7 @@ describe("VirtualDataTable — server-side search", () => {
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
         fireEvent.change(
-            screen.getByPlaceholderText("Search database..."),
+            screen.getByPlaceholderText("Search database…"),
             { target: { value: "  ab  " } },
         );
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
@@ -286,7 +302,7 @@ describe("VirtualDataTable — server-side search", () => {
         renderTable({ serverMode: { search: { onChange: onSearchChange } } });
 
         fireEvent.change(
-            screen.getByPlaceholderText("Search database..."),
+            screen.getByPlaceholderText("Search database…"),
             { target: { value: "  abc " } },
         );
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
@@ -317,7 +333,7 @@ describe("VirtualDataTable — server-side search", () => {
         }
         renderWithApp(<Harness />);
 
-        const input = screen.getByPlaceholderText("Search database...");
+        const input = screen.getByPlaceholderText("Search database…");
         fireEvent.change(input, { target: { value: "abcd" } });
         await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
         expect(onSearchChange).toHaveBeenLastCalledWith("abcd");
@@ -569,7 +585,7 @@ describe("VirtualDataTable — clear all", () => {
         const user = userEvent.setup();
         renderTable();
         await user.type(
-            screen.getByPlaceholderText("Search across all columns..."),
+            screen.getByPlaceholderText("Search across all columns…"),
             "X",
         );
         const clearAll = await screen.findByRole("button", { name: /Clear all/i });

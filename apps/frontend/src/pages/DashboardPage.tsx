@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { parseISO } from "@/components/shared/dateUtils";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { NetSummaryCard } from "@/features/dashboard/NetSummaryCard";
 import { MonthlyTrendsChart } from "@/features/dashboard/MonthlyTrendsChart";

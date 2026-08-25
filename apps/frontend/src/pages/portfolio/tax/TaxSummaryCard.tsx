@@ -1,6 +1,6 @@
 import React from "react";
 import { LucideIcon } from "lucide-react";
-import { StatCard } from "@/features/dashboard/StatCard";
+import { StatCard } from "@/components/shared/StatCard";
 
 export interface SummaryCardItem {
   title: string;
