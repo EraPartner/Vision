@@ -25,15 +25,15 @@ function readJSONStrict(p) {
   }
 }
 
-// Normalize typographic characters to ASCII-friendly equivalents to avoid
-// smart-quote induced parsing errors downstream. Operates on a single string.
+// Normalize smart quotes and dash variants that can create inconsistent source
+// text. Preserve intentional UI typography such as ellipses and em dashes;
+// TypeScript and JSON carry those characters without parsing ambiguity.
 function normalizeString(s) {
   if (s === null || s === undefined) return s;
   if (typeof s !== 'string') return s;
   return s
     .replace(/\u2018|\u2019|\u201B|\u2032/g, "'")
     .replace(/\u201C|\u201D|\u201F|\u2033/g, '"')
-    .replace(/\u2026/g, '...')
     .replace(/\u2013/g, '-')
     // U+2014 (em dash) is intentionally preserved: it is real UI typography,
     // not a smart-quote parse hazard, and downstream (TS/JSON) carry it fine.

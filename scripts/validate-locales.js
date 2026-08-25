@@ -185,12 +185,12 @@ for (const [lang, dict] of Object.entries(masters)) {
     const srcKeys = Object.keys(dict).sort();
     const outKeys = Object.keys(pkg).sort();
     if (srcKeys.length !== outKeys.length || srcKeys.some((k, i) => k !== outKeys[i])) {
-      console.error(`Electron locale drift detected for ${lang}: key set mismatch with i18n/source/${lang}.json`);
+      console.error(`Generated Electron locale packaging/electron/i18n/${lang}.json is stale: key set mismatch with i18n/source/${lang}.json. Run \`bun run generate-locales\` to regenerate it.`);
       failed = true;
     } else {
       const diffValue = srcKeys.find((k) => dict[k] !== pkg[k]);
       if (diffValue) {
-        console.error(`Electron locale drift detected for ${lang}: value mismatch at key ${diffValue}`);
+        console.error(`Generated Electron locale packaging/electron/i18n/${lang}.json is stale: value mismatch at key ${diffValue}. Run \`bun run generate-locales\` to regenerate it.`);
         failed = true;
       }
     }

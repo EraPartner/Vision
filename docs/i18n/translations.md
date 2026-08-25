@@ -3,7 +3,7 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-27
-updated: 2026-08-10
+updated: 2026-08-25
 tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, colorblind, gain-loss, june-2026, combobox-tags, tag-filter-combobox, validate-locales, source-key-usage, placeholder-bug-fix, url-state, destructive-confirm]
 description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). 2026-06-24 adds 5 Accessibility group keys (settings.group.accessibility, settings.appearance.gainLossColors, settings.appearance.gainLossColorsHint, settings.appearance.gainLossColors.colorblind, settings.appearance.gainLossColors.classic). 2026-06-26 adds 3 combobox.tags.* keys (combobox.tags.empty, combobox.tags.nSelected, combobox.tags.search) for TagFilterCombobox i18n (bulk-tag and filter-toolbar combobox). 2026-06-26 — validate-locales gains source key-usage checks (key-existence, dropped-vars, value-shape); closes 10 missing keys and fixes placeholder mismatches. 2026-08-10 (PR #156) adds 11 keys: txPage.loadMoreFailed/loadMoreFailedDesc/deleteAttachmentError (3), watchlist.removeTitle/removeDesc/removeConfirm (3), research.mapping.removeDesc, importReview.recipientPickerLabel, dbEditor.discardNewRow/nextPage/prevPage (3). Total key count last verified 2026-06-26 (3495); not re-verified since — run `bun run validate-locales` (see [[docs/reference/scripts|Scripts Reference]]) for a current count.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
@@ -204,6 +204,15 @@ bun run generate-locales
 ```
 
 ### Recent keys added
+
+#### Placeholder and empty-state copy convention (2026-08-25)
+
+No keys were added. Four generic input placeholders now show a concrete example or action, and
+short standalone empty-state labels omit terminal periods in both English and Dutch. Longer empty
+state explanations keep sentence punctuation.
+
+The Dashboard, Transactions, and Planned Payments subtitles now describe the page's purpose instead
+of repeating its navigation label. The Dutch copy was rewritten alongside the English source.
 
 #### URL-state / feedback / accessibility batch (2026-08-10, PR #156)
 
@@ -577,6 +586,7 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - `export.period.custom` — "Custom Range"
 - `export.period.from` — "From"
 - `export.period.to` — "To"
+- `export.period.invalidRange` — "The start date must be on or before the end date." (added 2026-08-25)
 - `export.sections` — "Sections"
 - `export.sections.all` — "All"
 - `export.section.executiveSummary` — "Executive Summary"
@@ -661,6 +671,14 @@ Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (c
 - `settings.restore.passphraseSubmit` — "Restore" (submit button text)
 - `settings.restore.passphraseInvalid` — "Incorrect passphrase. Try again." (error message shown on wrong passphrase with retry prompt)
 - `settings.restore.passphraseRequired` — "This backup is encrypted. Enter the passphrase to continue." (error when no passphrase provided)
+
+**Dutch terminology consistency (2026-08-25):**
+- Standardized investment surfaces on `portefeuille` and its compounds, including navigation, performance, import, and transaction labels.
+- Replaced the English calques `over tijd` and inconsistent all-time labels with `in de loop van de tijd` and `hele periode`.
+- Aligned portfolio failure and refresh messages with the existing noun `belegging`, and clarified the spouse/partner disability-exemption label.
+- Standardized recipient copy on `ontvanger`, watchlist targets on `doelkoers`, and shortcut actions on infinitive verb forms.
+- Added `aiChat.toolFailed` as the localized fallback for tool results without structured error detail, and kept raw Ollama connection errors out of the primary setup hint.
+- Preserved the single ellipsis glyph (`…`) through locale generation and replaced ASCII three-dot sequences in user-facing source strings.
 
 **Dutch i18n Bug Fixes (2026-04-28):**
 - Fixed corrupted `watchlist.empty` Dutch translation: contained ~80 escaped backslashes instead of newline character
@@ -877,7 +895,7 @@ The script runs all checks sequentially; any failure sets exit code 1 and blocks
 | **Key-existence** (source scan) | Every `t('a.b.c')` / `tc('a.b.c')` call in `apps/frontend/src/**/*.{ts,tsx}` whose first argument is a static, key-shaped string literal (`/^[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9_]+)+$/`) must exist in `en.json`. Comments are stripped before scanning so JSDoc usage examples do not false-positive. Dynamic/computed keys are skipped. |
 | **Dropped-vars** (source scan) | For `t('k', { x })` / `tc('k', n, { x })` calls with a static object-literal vars argument, every passed variable must have a matching `{x}` placeholder in the en string. (`count` is always allowed for `tc()`.) Catches values that are silently discarded at runtime. |
 | **Value-shape** (source scan) | No locale value may itself be a dotted key-shaped string — e.g., `"foo.bar"` as a value is a sign of an untranslated key pasted in place of the real translation. |
-| **Generated-output drift** | Compares a freshly generated locale bundle against the committed `apps/frontend/src/locales/*.ts` files; fails if they differ (requires `bun run generate-locales` to be re-run). |
+| **Generated-output drift** | Compares generated frontend locales and any present, gitignored `packaging/electron/i18n/*.json` output against `i18n/source`. A stale Electron output names the generated file and tells the operator to run `bun run generate-locales`. |
 
 On a clean run the script prints:
 
@@ -892,7 +910,7 @@ All parity, placeholders, types, source key-usage, and generated-output drift ch
 | Key-existence error | Add the missing key to both `en.json` and `nl.json`, then `bun run generate-locales`. |
 | Dropped-vars error | Either add the `{var}` placeholder to the en/nl string, or remove the unused var from the call site. |
 | Value-shape error | Replace the dotted key string with the actual translated text. |
-| Drift error | Run `bun run generate-locales` and commit the regenerated `.ts` files. |
+| Drift error | Run `bun run generate-locales`; commit the regenerated frontend `.ts` files. Electron JSON is build output and remains untracked. |
 | Parity/placeholder error | Sync the missing key or placeholder to the other locale file. |
 
 > [!info] Dynamic keys are not checked
