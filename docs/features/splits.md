@@ -36,7 +36,7 @@ The **owed summary** aggregates all unsettled splits to show who owes whom and h
 
 The **split_audit** table (migration 0021) records all lifecycle events: split creation, payment, settlement, and deletion. Each audit row captures:
 - `action`: one of `create`, `payment`, `settle`, `settle_all`, or `delete`
-- `actor`: resolved from `x-actor` header → `req.user?.id` → `null`
+- `actor`: caller-supplied `x-actor` header, or `null` when absent
 - `payload`: context-specific data (e.g., split snapshot on delete, payment amount on payment)
 
 Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON DELETE SET NULL` on the `split_id` FK.
@@ -155,7 +155,7 @@ Overpayment protection operates at three layers:
 | POST | `/api/splits/owed/:id/settle-all` | Settle all unsettled splits for recipient; writes single audit row with action='settle_all' + settled_count |
 
 Implementation notes:
-- All routes resolve actor via `x-actor` header → `req.user?.id` → `null` using `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
+- All routes resolve actor from the caller-supplied `x-actor` header, falling back to `null`, using `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]). This is audit context, not an authenticated user identity.
 - Route-level ID parsing is standardized through `parseRouteId(req)` and reused across `:id` handlers ([[apps/node-backend/src/routes/splits.js]]).
 - Owed CSV export uses shared helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) for centralized CSV formatting with full escape support ([[apps/node-backend/src/routes/splits.js]]).
 - Split creation routes validate allocation against transaction total using `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/lib/calculations/splits.js]]).

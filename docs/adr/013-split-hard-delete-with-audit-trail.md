@@ -98,6 +98,8 @@ The guard ensures invariant `sum(split_payments.amount) ≤ transaction_splits.a
 - **Storage grows monotonically.** `split_audit` is append-only. For the dataset sizes Vision targets (self-hosted, single-user) this is negligible, but in the multi-tenant future it would need periodic archival — logged as a follow-up, not scoped here.
 - **Actor fidelity depends on callers.** Without an authenticated session layer, the `x-actor` header is advisory; production deployments that want accountability must enforce header presence at the reverse proxy.
 
+Implementation note (2026-08-25): the unused `req.user?.id` fallback was removed because no middleware assigns `req.user`. Routes now read the caller-supplied `x-actor` header and otherwise store `null`; the trust model above is unchanged.
+
 ### Neutral
 
 - **Splits and split_payments remain separate tables** — no union, no discriminator column. Keeps the calc layer thin.

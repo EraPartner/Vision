@@ -419,6 +419,21 @@ describe('Splits Routes', () => {
       expect(res.body).toEqual(okEnvelope({ id: 5, split_id: 7, amount: 12 }));
     });
 
+    it('propagates the caller-supplied actor header to the audit row', async () => {
+      splitRepository.getSplitById.mockResolvedValue({ id: 7, amount: 100 });
+      splitRepository.getAlreadyPaid.mockResolvedValue(0);
+      splitRepository.addPayment.mockResolvedValue({ id: 5, split_id: 7, amount: 12 });
+
+      await api.post(`${BASE}/7/pay`)
+        .set('x-actor', 'import-review')
+        .send({ amount: 12 })
+        .expect(201);
+
+      expect(splitRepository.addPayment).toHaveBeenCalledWith(expect.objectContaining({
+        actor: 'import-review',
+      }));
+    });
+
     // Pins for the zod swap (ZOD-08): positive-finite check, raw forwarding.
     it('throws ValidationError for non-numeric or negative payment amounts', async () => {
       for (const amount of ['abc', -5, undefined]) {

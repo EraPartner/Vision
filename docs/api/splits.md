@@ -68,7 +68,7 @@ All split lifecycle events are recorded in `split_audit` table via `splitReposit
 - **settle_all**: triggered by POST `/api/splits/owed/:id/settle-all` (only written if settled_count > 0)
 - **delete**: triggered by DELETE `/api/splits/:id`, captures pre-delete snapshot
 
-Actor is resolved via: `x-actor` header → `req.user?.id` → `null`.
+Actor is read from the caller-supplied `x-actor` header and otherwise stored as `null`. The header is audit context, not authenticated identity.
 
 ## List Pagination (opt-in)
 

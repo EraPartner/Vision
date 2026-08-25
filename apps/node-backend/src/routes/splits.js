@@ -10,7 +10,7 @@
 /// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
-import splitRepository from '../services/splitService.js';
+import splitService from '../services/splitService.js';
 import { validateIdParam, validateId } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { escapeCsvValue } from '../lib/csv.js';
@@ -22,7 +22,7 @@ import { listBody, parseOptionalPagination } from '../lib/pagination.js';
  */
 
 /**
- * The row shape yielded by splitRepository.getOwedExportRowsByRecipient.
+ * The row shape yielded by splitService.getOwedExportRowsByRecipient.
  * @typedef {object} OwedExportRow
  * @property {Date} date
  * @property {string|null} bank_account
@@ -188,11 +188,7 @@ function normalizeBatchSplitInputs(splits) {
 
 /** @param {ExpressRequest} req */
 function resolveActor(req) {
-  // `req.user` is never assigned anywhere in this codebase (grep confirms: no
-  // auth middleware sets it) — this `?? req.user?.id` branch is dead code,
-  // always falling through to the `x-actor` header or null. Left as-is (zero
-  // behavior change); flagged as a backlog finding rather than fixed here.
-  return req.get('x-actor') || /** @type {any} */ (req).user?.id || null;
+  return req.get('x-actor') || null;
 }
 
 // Pagination is opt-in on every list below: without limit/offset the whole
@@ -203,7 +199,7 @@ function resolveActor(req) {
 // the full group count.
 router.get('/owed', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
-  const summary = await splitRepository.getOwedSummary();
+  const summary = await splitService.getOwedSummary();
   const items = page ? summary.slice(page.offset, page.offset + page.limit) : summary;
   res.ok(listBody(items, summary.length, page));
 });
@@ -211,16 +207,16 @@ router.get('/owed', /** @param {ExpressRequest} req @param {ExpressResponse} res
 router.get('/owed/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseRouteId(req);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
-  const splits = await splitRepository.getOwedByRecipient(recipientId, page ?? {});
+  const splits = await splitService.getOwedByRecipient(recipientId, page ?? {});
   const total = page
-    ? await splitRepository.countOwedByRecipient(recipientId)
+    ? await splitService.countOwedByRecipient(recipientId)
     : splits.length;
   res.ok(listBody(splits, total, page));
 });
 
 router.get('/owed/:id/export/csv', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseRouteId(req);
-  const rows = await splitRepository.getOwedExportRowsByRecipient(recipientId);
+  const rows = await splitService.getOwedExportRowsByRecipient(recipientId);
   if (rows.length === 0) throw new NotFoundError('No unsettled owed transactions found for recipient');
 
   const csv = buildOwedExportCsv(rows);
@@ -236,9 +232,9 @@ router.get('/owed/:id/export/csv', validateIdParam, /** @param {ExpressRequest} 
 router.get('/transaction/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const transactionId = parseRouteId(req);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
-  const splits = await splitRepository.getSplitsByTransaction(transactionId, page ?? {});
+  const splits = await splitService.getSplitsByTransaction(transactionId, page ?? {});
   const total = page
-    ? await splitRepository.countSplitsByTransaction(transactionId)
+    ? await splitService.countSplitsByTransaction(transactionId)
     : splits.length;
   res.ok(listBody(splits, total, page));
 });
@@ -250,11 +246,11 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
   // (see module doc); superRefine validates shape/presence but zod's inferred
   // type is still `unknown` per field. The cast documents what's actually
   // been checked by the time this line runs.
-  const split = await splitRepository.createSplitAtomic(
+  const split = await splitService.createSplitAtomic(
     /** @type {{ transaction_id: number, recipient_id: number, amount: number|string, note?: string|null }} */
     ({ transaction_id, recipient_id, amount, note }),
   );
-  await splitRepository.writeAudit({
+  await splitService.writeAudit({
     split_id: split.id,
     action: 'create',
     actor: resolveActor(req),
@@ -277,13 +273,13 @@ router.post('/batch', /** @param {ExpressRequest} req @param {ExpressResponse} r
   // per-row shape traces back through a zod .transform() chain whose output
   // type doesn't narrow past `any`/`unknown` here either. Both are cast to
   // what's actually been validated by the time this line runs.
-  const created = await splitRepository.createSplitsBatchAtomic(
+  const created = await splitService.createSplitsBatchAtomic(
     /** @type {{ transaction_id: number, splits: Array<{ recipient_id: number, amount: number, note?: string }> }} */
     ({ transaction_id, splits: preparedSplits }),
   );
   const actor = resolveActor(req);
   // Independent rows — write audits in parallel.
-  await Promise.all(created.map((split) => splitRepository.writeAudit({
+  await Promise.all(created.map((split) => splitService.writeAudit({
     split_id: split.id,
     action: 'create',
     actor,
@@ -307,7 +303,7 @@ router.post('/:id/pay', validateIdParam, /** @param {ExpressRequest} req @param 
   // unchanged, see module doc). Cast documents what's actually been checked.
   // Repo serializes existence + overpayment check + insert under
   // SELECT … FOR UPDATE; routes no longer precheck (race window).
-  const payment = await splitRepository.addPayment(
+  const payment = await splitService.addPayment(
     /** @type {{ split_id: number, amount: number, note?: string|null, paid_at?: string|null, actor?: string|null }} */
     ({
       split_id: splitId,
@@ -324,17 +320,17 @@ router.post('/:id/pay', validateIdParam, /** @param {ExpressRequest} req @param 
 router.get('/:id/payments', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const splitId = parseRouteId(req);
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
-  const payments = await splitRepository.getPayments(splitId, page ?? {});
-  const total = page ? await splitRepository.countPayments(splitId) : payments.length;
+  const payments = await splitService.getPayments(splitId, page ?? {});
+  const total = page ? await splitService.countPayments(splitId) : payments.length;
   res.ok(listBody(payments, total, page));
 });
 
 router.post('/:id/settle', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const splitId = parseRouteId(req);
-  const split = await splitRepository.settleSplit(splitId);
+  const split = await splitService.settleSplit(splitId);
   if (!split) throw new NotFoundError('Split not found');
 
-  await splitRepository.writeAudit({
+  await splitService.writeAudit({
     split_id: splitId,
     action: 'settle',
     actor: resolveActor(req),
@@ -345,9 +341,9 @@ router.post('/:id/settle', validateIdParam, /** @param {ExpressRequest} req @par
 
 router.post('/owed/:id/settle-all', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseRouteId(req);
-  const result = await splitRepository.settleAllByRecipient(recipientId);
+  const result = await splitService.settleAllByRecipient(recipientId);
   if (result.settled_count > 0) {
-    await splitRepository.writeAudit({
+    await splitService.writeAudit({
       split_id: null,
       action: 'settle_all',
       actor: resolveActor(req),
@@ -359,13 +355,13 @@ router.post('/owed/:id/settle-all', validateIdParam, /** @param {ExpressRequest}
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const splitId = parseRouteId(req);
-  const splitBefore = await splitRepository.getSplitById(splitId);
+  const splitBefore = await splitService.getSplitById(splitId);
   if (!splitBefore) throw new NotFoundError('Split not found');
 
-  const deleted = await splitRepository.deleteSplit(splitId);
+  const deleted = await splitService.deleteSplit(splitId);
   if (!deleted) throw new NotFoundError('Split not found');
 
-  await splitRepository.writeAudit({
+  await splitService.writeAudit({
     split_id: null,
     action: 'delete',
     actor: resolveActor(req),
