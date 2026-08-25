@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryKey } from '@tanstack/react-query';
 import { useMemo, useState, useCallback } from 'react';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useExcludedIds } from '@/hooks/useExcludedIds';
@@ -73,6 +73,21 @@ type MonthlySummaryPayload = Awaited<ReturnType<typeof getAggregationMonthlySumm
 type CategoryPivotPayload = Awaited<ReturnType<typeof getAggregationCategoryPivot>>['data'];
 type RecipientInsightsPayload = Awaited<ReturnType<typeof getAggregationRecipientInsights>>['data'];
 type RecipientByYearPayload = Awaited<ReturnType<typeof getAggregationRecipientByYear>>['data'];
+
+const STATISTICS_STALE_TIME_MS = 60_000;
+
+function useFilteredStatisticsQuery<TData>(
+  queryKey: QueryKey,
+  queryFn: () => Promise<TData>,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey,
+    queryFn,
+    enabled,
+    staleTime: STATISTICS_STALE_TIME_MS,
+  });
+}
 
 // ── Pure mapping function ─────────────────────────────────────────────────────
 
@@ -241,34 +256,32 @@ export function useStatistics() {
 
   // ── Filtered queries (only when exclusions are active) ────────────────────
 
-  const monthlySummaryFilteredQuery = useQuery({
-    queryKey: aggregationKeys.monthlySummaryFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
-    queryFn: () =>
+  const monthlySummaryFilteredQuery = useFilteredStatisticsQuery(
+    aggregationKeys.monthlySummaryFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
+    () =>
       getAggregationMonthlySummary({
         currency: targetCurrency,
         all_time: true,
         excluded_category_ids: effectiveExcludedCategoryIds,
         excluded_recipient_ids: settingsExcludedRecIds,
       }),
-    enabled: filteredEnabled,
-    staleTime: 60_000,
-  });
+    filteredEnabled,
+  );
 
-  const categoryPivotFilteredQuery = useQuery({
-    queryKey: aggregationKeys.categoryPivotFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
-    queryFn: () =>
+  const categoryPivotFilteredQuery = useFilteredStatisticsQuery(
+    aggregationKeys.categoryPivotFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
+    () =>
       getAggregationCategoryPivot({
         currency: targetCurrency,
         excluded_category_ids: effectiveExcludedCategoryIds,
         excluded_recipient_ids: settingsExcludedRecIds,
       }),
-    enabled: filteredEnabled,
-    staleTime: 60_000,
-  });
+    filteredEnabled,
+  );
 
-  const recipientByYearFilteredQuery = useQuery({
-    queryKey: aggregationKeys.recipientByYearFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
-    queryFn: () =>
+  const recipientByYearFilteredQuery = useFilteredStatisticsQuery(
+    aggregationKeys.recipientByYearFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
+    () =>
       getAggregationRecipientByYear({
         currency: targetCurrency,
         excluded_recipient_ids: settingsExcludedRecIds,
@@ -277,23 +290,21 @@ export function useStatistics() {
     // Gate on filteredEnabled (not recipient-only) so a category-only exclusion
     // set — the common "hide transfers/rent" case — still fires the filtered
     // query instead of silently falling back to the unfiltered payload.
-    enabled: filteredEnabled,
-    staleTime: 60_000,
-  });
+    filteredEnabled,
+  );
 
   // Recipient insights (the "all years" Top Recipients chart) must honour the
   // same exclusions as the other charts — both category and recipient.
-  const recipientInsightsFilteredQuery = useQuery({
-    queryKey: aggregationKeys.recipientInsightsFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
-    queryFn: () =>
+  const recipientInsightsFilteredQuery = useFilteredStatisticsQuery(
+    aggregationKeys.recipientInsightsFiltered(targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds),
+    () =>
       getAggregationRecipientInsights({
         currency: targetCurrency,
         excluded_category_ids: effectiveExcludedCategoryIds,
         excluded_recipient_ids: settingsExcludedRecIds,
       }),
-    enabled: filteredEnabled,
-    staleTime: 60_000,
-  });
+    filteredEnabled,
+  );
 
   // ── Map to StatisticsData ─────────────────────────────────────────────────
 
