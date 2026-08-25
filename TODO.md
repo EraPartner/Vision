@@ -1156,7 +1156,7 @@ look-changing one.
   - The non-streaming route's 202 body is narrowed in `TransactionImportCard.tsx` and now in `OnboardingWizard.tsx`, while the streaming path (`importCSVWithProgress`) has its own `review_required` event with a *different* payload shape handled in a third place. Same concept, three shapes, three narrowings.
   - Related to the already-filed finding that the streaming path's `reviewRequiredSchema` and its handler disagree about `total`. Consider one shared narrowing helper once that one is resolved, rather than before.
 
-- [ ] **Onboarding residues from the 8be788be (#154) pass (grouped)** ⏬
+- [x] **Onboarding residues from the 8be788be (#154) pass (grouped)** ⏬
   - ↪ _from: Orchestration session 2026-08-09 · onboarding step-reorder pass (implementer noticed; single-pass, not adversarially verified)_
   - `docs/features/onboarding.md` remains stale beyond the corrected step list: its "Settings Configured" table (language/currency/date-format keys) and "restart from Settings → App → Setup Wizard" describe a wizard that no longer exists — restart actually lives in Settings → About (`AboutSection.tsx:51`).
   - `OnboardingWizard.handleCreateCategories` has an unreachable `catch`: `Promise.allSettled` never rejects, so partial category-creation failures silently report success counts. Pre-existing; count the rejected results instead.
@@ -2892,7 +2892,7 @@ look-changing one.
   - `Money.tsx:54` is `fractionDigits ?? appSettings.showDecimalPlaces ?? 2`; `useCurrencyFormatter.ts:66` is `opts.decimals ?? decimalsSetting` with no `?? 2` tail. If `showDecimalPlaces` arrives `undefined` — possible via the unvalidated blob in the finding above — Money renders 2 digits while the hook falls through to `Intl`'s currency default: 2 for EUR, but **0 for JPY/KRW**. Two surfaces, same amount, different precision.
   - Fix: give the hook the same `?? 2` tail, or route both through one resolver.
 
-- [ ] **The money-formatter test asserts too little on the valid path to catch a locale or digit regression** ⏬
+- [x] **The money-formatter test asserts too little on the valid path to catch a locale or digit regression** ⏬
   - ↪ _from: Orchestration session 2026-08-05 · money-formatter guard (verifier; flagged against this repo's history of green suites masking bug classes)_
   - `hooks/__tests__/useCurrencyPartsFormatter.test.tsx` covers the guard well but its valid-currency case asserts only `parts.length > 1` plus the presence of a `€` part — it would pass through a changed locale or digit count. Nothing covers the `PortfolioForecastPage` change, and nothing covers the `signed: true` fallback.
   - For c3938c0 (#149) specifically this gap was closed out-of-band by the verifier's 4,500-combination HEAD-vs-new diff, but that evidence lives in the backlog, not in the suite, so the next change to this hook is unprotected.
@@ -3075,7 +3075,7 @@ look-changing one.
   - Transaction type/amount/units/FX validation fires detached toasts instead of inline field errors + focus. These are money-entry dialogs.
   - Fix: adopt 1cb2cc7 (#131)'s inline required-error + focus-first-invalid pattern.
 
-- [ ] **ChartBuilderPage uses a shimmer Skeleton as a permanent empty state** ⏬
+- [x] **ChartBuilderPage uses a shimmer Skeleton as a permanent empty state** ⏬
   - ↪ _from: Orchestration session 2026-07-27 · loading-a11y implementation follow-up_
   - `pages/research/ChartBuilderPage.tsx:549` renders a Skeleton gated on `oscRows.length > 0` — i.e. as an empty state, not a loading state — which is why it was left silent in 1cb2cc7 (#131) (a permanent role=status would announce loading forever). Replace with the EmptyState component.
 
@@ -3536,25 +3536,25 @@ look-changing one.
   - `i18n/source/en.json:1153` `market.noNews` / `:1302` `newsFeed.noNews` "No news available" (dead-end shrug; could say what would populate it), `:751` `dbMaintenance.noTables` "No tables found", and a duplicate pair on one page family: `categories.noCategories`:411 "No categories yet." vs `categoriesPage.empty`:425 "No categories found." The app's crafted counterexamples show the bar: `accounts.emptyDescription`:26, `portfolio.noInvestmentsDesc`:1819, `statsPage.noDataDesc`:2767 ("Import your bank transactions to see statistics."). (Wave U4 filed CTA *mechanics*; this is the copy itself.)
   - Fix: news: "No recent news for your holdings — headlines appear once your portfolio has tickers with coverage."; unify the two categories strings to one voice ("No categories yet — add one or import a bank CSV to start.").
 
-- [ ] **Cheerleader glyphs: the app's only emoji ("All settled! 🎉") and ✓-prefixed advice-bot toasts on watchlist** 🔽
+- [x] **Cheerleader glyphs: the app's only emoji ("All settled! 🎉") and ✓-prefixed advice-bot toasts on watchlist** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/en.json:1459` `owesPage.allSettled` "All settled! 🎉" (sole emoji in UI copy, `pages/OwesPage.tsx`); `:3499` `watchlist.atTarget` "✓ Price is at or below your target!" and `:3513` `watchlistChart.atTarget` "…your target! Consider buying." — glyph-in-string (the ✓ should be the badge's icon, not text), exclamation enthusiasm, and "Consider buying" is chatbot advice voice inside a price chip.
   - Fix: "All settled." / "At or below your target price" (badge tone, ✓ as an icon element if wanted); drop "Consider buying." — the target-hit state already says it.
 
-- [ ] **Three filler subtitles ("View and manage…", "Manage your…", "Overview of…") on the app's most-visited pages, next to genuinely crafted ones** 🔽
+- [x] **Three filler subtitles ("View and manage…", "Manage your…", "Overview of…") on the app's most-visited pages, next to genuinely crafted ones** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/en.json:3446` `txPage.subtitle` "View and manage all your transactions", `:1729` `plannedPage.subtitle` "Manage your recurring and scheduled payments", `:694` `dashboard.subtitle` "Overview of your finances" — textbook filler that restates the nav item. The same file proves the house can write: `rebalance.subtitle`:1981 "Deploy spendable cash into underweight sleeves toward a target allocation -- without selling.", `research.compare.subtitle`:2151, `insights.subtitle`:1074.
   - Fix: say something the title doesn't — e.g. txPage: "Search, filter, and categorize every imported transaction"; plannedPage: "Upcoming bills and the recurring payments Vision watches for you"; dashboard: drop the subtitle (the cards are the overview).
 
-- [ ] **A few "Enter X" placeholders against the app's established "e.g. <real value>" exemplar pattern** 🔽
+- [x] **A few "Enter X" placeholders against the app's established "e.g. <real value>" exemplar pattern** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/en.json:219` `addWatchlist.targetPlaceholder` "Enter target price" (a price field should show a price), `:939` `importPage.customBankName` "Enter your bank name...", `:2581` `settings.research.placeholder` "Enter API key", `:721` `dbEditor.filterPlaceholder` "filter..." (lone lowercase). The dominant pattern is exemplary and specific: "e.g. Rent, Netflix":1634, "e.g. KBC Checking or an IBAN":37, "e.g. Groceries vs Transport":635, "0.00":867.
   - Fix: "e.g. 85.00", "e.g. Argenta", "sk-... (from your provider dashboard)", "Filter rows...".
 
-- [ ] **The app's only gradient text is a financial figure — the headline number fades into `muted-foreground`** 🔽
+- [x] **The app's only gradient text is a financial figure — the headline number fades into `muted-foreground`** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2_
   - `apps/frontend/src/components/dashboard/BankBalancesWidget.tsx:165` — `text-3xl font-bold tabular-nums bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent` on the net-position amount. `bg-clip-text` gradient headings are the canonical generated-UI signature; here it's also anti-hierarchical (the most important digits render *lower-contrast* at the end) and a one-off — no other number or heading in the app gets this treatment (repo-wide grep: this is the sole `bg-clip-text`).
@@ -3657,7 +3657,7 @@ look-changing one.
   - `pages/research/ChartBuilderPage.tsx:521-526` — `<input type="number" className="… outline-none">` overrides the global `:focus-visible` ring (`index.css:79-83`); the input is also unlabeled. (This is the only remaining `outline-none`-without-replacement on a form control found outside the already-filed TagInput case.)
   - Fix: remove `outline-none` (or add a `focus-visible:ring-2` replacement) and give it an `aria-label`.
 
-- [ ] **VirtualDataTable filter-chip clear button has no accessible name** 🔽
+- [x] **VirtualDataTable filter-chip clear button has no accessible name** 🔽
   - Tracking: 🔎 verified-present 2026-07-11 *(additional instance of the already-filed icon-only-name class)*
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1_
   - `components/shared/VirtualDataTable.tsx:562-564` — the chip's `<button>` contains only an `X` icon; the chip text lives outside the button, so SRs announce "button" with no name.
@@ -3670,7 +3670,7 @@ look-changing one.
   - Click-to-focus doesn't work and SRs announce unnamed fields; placeholders vanish on input.
   - Fix: plumb `id` through DatePicker/comboboxes (trigger button), add `htmlFor` everywhere, real labels (or `aria-label`) on the split entry fields.
 
-- [ ] **PlannedPaymentForm validates with native `alert()` — the only three call sites in the app** 🔽
+- [x] **PlannedPaymentForm validates with native `alert()` — the only three call sites in the app** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2_
   - `components/planned/PlannedPaymentForm.tsx:59,65,70` — blocking OS alert box (in Electron a native modal) for required-fields and loan-term errors, while the rest of the app uses toasts; the submit button is *also* disabled for the same base conditions (`:323`), so the alert paths mostly fire for the loan sub-fields.
@@ -3697,7 +3697,7 @@ look-changing one.
   - Users click the "Last month spending" card expecting last month's expenses and nothing happens — inconsistent affordance on the app's landing page, and the equivalent filtered views already exist (`/transactions?start_date=…&end_date=…&transaction_type=expense`).
   - Fix: link StatCards to the matching pre-filtered /transactions URL and pie slices to the category drill (reuse `CategoryPivotTable`'s `buildDrillUrl` param shape).
 
-- [ ] **ResearchMappingDialog: a failed auto-resolve masquerades as "No proposals found"** 🔽
+- [x] **ResearchMappingDialog: a failed auto-resolve masquerades as "No proposals found"** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U4_
   - `apps/frontend/src/components/research/ResearchMappingDialog.tsx:67-72` — `resolveMutation` has no `onError`, and the render at `:166-169` is `isPending ? skeleton : proposals.length === 0 ? noProposals` — a provider outage/rate-limit during the auto-resolve on open (`:79-84`) renders exactly the same "No proposals" line as a genuine no-match, steering users to conclude the instrument is unmappable.
@@ -3769,7 +3769,7 @@ look-changing one.
   - Grep: 105 occurrences across portfolio/research/tax/AI-chat surfaces (e.g. `pages/portfolio/PerformancePage.tsx:388,490,533,546`, `features/ai-chat/ToolResultCard.tsx:134,291`, `pages/TaxOverviewPage.tsx:498,723`). Tailwind's `text-xs` is rem-based and honors the user's browser font-size preference; `text-[10px]` is frozen — users who raise their default font size get a UI where body text grows but these micro-labels (often the data-bearing ones: table cells in ToolResultCard, chart annotations) stay at 10px.
   - Fix: define a rem-based `text-2xs` (0.6875rem) token in `config/tailwind` and sweep the arbitrary px values onto it / `text-xs`.
 
-- [ ] **Hardcoded English `aria-label`s in shared UI primitives override already-correctly-localized visible text — Dutch screen-reader users hear English, not just "alongside" it** 🔽
+- [x] **Hardcoded English `aria-label`s in shared UI primitives override already-correctly-localized visible text — Dutch screen-reader users hear English, not just "alongside" it** 🔽
   - Tracking: 🔧 🔎 verified-present 2026-07-11 *(severity nuance: this is worse than "tooltip stays English")*
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `components/ui/pagination.tsx:56,72` (`aria-label="Go to previous/next page"`), `components/shared/SectionLoader.tsx:11` (`aria-label="Loading"`), `components/ui/sidebar.tsx:246,249` (`aria-label`/`title="Toggle Sidebar"`)
@@ -3833,7 +3833,7 @@ look-changing one.
   - Mechanism: CSS font-matching maps requested 700 → nearest loaded face (600) and uses it as-is (engines don't synthesize when a ≥600 face exists) — so this is **not** faux-bold ugliness, it's a weight-hierarchy collapse: `font-bold` and `font-semibold` are pixel-identical, and the intended emphasis tier on money/stat surfaces doesn't exist at render time. GPU-irrelevant; design-integrity only. Related micro-issue, same family: **true faux-italic** at 3 sites — `components/shared/RecipientCombobox.tsx:67`, `CategoryCombobox.tsx:55`, `pages/admin/TableDataEditorPage.tsx:122` (`italic` on Inter; no italic face loaded → synthesized oblique — visible but tiny, all three are muted empty/null placeholders).
   - Fix, two options: (a) add `import "@fontsource/inter/latin-700.css"` to main.tsx (+~24 kB woff2, +1 request) — **LOOK-CHANGING — needs user approval** (every one of the 108 sites gets visibly heavier; arguably this *restores* the designed look, but it changes what renders today); or (b) sweep `font-bold`→`font-semibold` on non-heading/non-mono text — **visually free** (formalizes what already renders) but bakes in a flatter weight scale. The italics: either load the italic faces or drop `italic` for the 3 placeholders (visually free-ish either way; too small to matter).
 
-- [ ] **nl terminology drift on core domain nouns: "begunstigde" vs "ontvanger", and target price translated three different ways** 🔽
+- [x] **nl terminology drift on core domain nouns: "begunstigde" vs "ontvanger", and target price translated three different ways** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1 (residue, closed 2026-07-03)_
   - `i18n/source/nl.json` — "begunstigde" ×7 (exactly the `recipients.*FailedTitle` create/delete/merge/unmerge/update family + `plannedPage.link.includesLinked` + `importPage.recipientColPlaceholder`) vs "ontvanger" ×114; "target price" is translated three ways: "doelkoers" ×9 vs "streefprijs" (`watchlist.updateFailed` — same page!) vs "richtprijzen" (`research.entry.watchlist`). Plus machine-translation tells: `onboarding.desc.welcome` "Laten we u instellen" (calqued) + "financiebeheerder" (malformed compound); `tax.markFiled.description` "Je kan" vs the standard "je kunt" used elsewhere.
@@ -3850,7 +3850,7 @@ look-changing one.
   - `packaging/electron/main.js:2647-2656` — the restore-backup confirm hardcodes English ('Restore Backup', 'This will permanently replace all current data and cannot be undone.', 'Restore'/'Cancel') while every other Electron dialog (Docker prompts `:3251/:3264`, updates `:1946/:1963`, slow-boot `:1139`, embedded-prep `:383`) correctly uses the main-process `t()` loader (`:12-56`). Nearby IPC error strings ('Backup file not found' etc.) also return English to the renderer.
   - Fix: route the restore-confirm strings through the existing `t()` loader like every sibling dialog; for the backend toast-English addendum (already filed in Correctness), `errorHandler.js` ships stable `ApiErrorCode` codes, so a client-side code→i18n mapping is feasible without touching message strings.
 
-- [ ] **Calendar/DatePicker never pass a locale to react-day-picker — English month captions and weekday abbreviations render in the Dutch app** 🔽
+- [x] **Calendar/DatePicker never pass a locale to react-day-picker — English month captions and weekday abbreviations render in the Dutch app** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1 (residue, closed 2026-07-03)_
   - `components/ui/calendar.tsx` (crafted: Fraunces caption, Monday week start) and `shared/DatePicker.tsx` never forward a `locale` prop to react-day-picker, so month names and weekday headers stay English regardless of the active app language — an i18n-adoption gap on an otherwise crafted component.
@@ -3862,7 +3862,7 @@ look-changing one.
   - Tax cluster worst: `TaxOverviewPage.tsx:90`, `components/tax/MultiYearTrendStrip.tsx:47`, `YearComparisonCard.tsx:75`, `SuggestedDeductionsCard.tsx:17` (also DashboardPage, RebalancePage, NetWorthPage…). Alignment itself is clean (all tax tables are right-aligned + tabular); ⬇ `SuggestedDeductionsCard.tsx:144` is the only tax amount missing `tabular-nums`.
   - Fix: adopt `formatCurrency`/`Money` at these sites (the copy-paste angle on the same three tax files is tracked separately as an Architecture-domain dedup finding — this entry is the UI-typography angle only).
 
-- [ ] **Chart tick typography: the shared axis spec exists but misses numerics, and ai-chat charts drift off it entirely** 🔽
+- [x] **Chart tick typography: the shared axis spec exists but misses numerics, and ai-chat charts drift off it entirely** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3 (residue, closed 2026-07-03)_
   - `charts/ChartAxis.tsx:22-37` is a real one-spec axis (fontSize 11, Inter, token colors) used by Area/Bar/Line/StackedBar/Composed, but lacks `fontVariantNumeric: 'tabular-nums'` on numeric ticks (one-line fix). `ToolResultCard.tsx:201-202,232-233` (recharts) sets fontSize 10 with no `fill` → recharts falls back to its hardcoded `#666`, off-token and weak in dark mode.
@@ -3880,7 +3880,7 @@ look-changing one.
   - `SettingsPrimitives.tsx` (SettingsSection→SettingsGroup→SettingRow) is adopted by all 7 `sections/`, but `AIChatSettingsSection.tsx:35-40` and `ResearchKeysSection.tsx:48-53` hand-roll icon-in-h3 headers + bare `rounded-lg border` cards (zero primitives), nested inside a proper SettingsSection by `AiSection.tsx` → doubled heading hierarchy. ⏬ `AppearanceSection.tsx:93-96`'s variant-picker heading also sits outside any group.
   - Fix: refit both sections onto `SettingsPrimitives` like their 7 siblings. (The code-duplication angle on the same two files is tracked separately as an Architecture-domain finding — this entry is the UX-anatomy-consistency angle.)
 
-- [ ] **`AIChatPage.tsx:178` conversation title is an `h1` rendered at `text-base`** 🔽
+- [x] **`AIChatPage.tsx:178` conversation title is an `h1` rendered at `text-base`** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S3 (residue, closed 2026-07-03)_
   - Renders the Fraunces display serif at 16px, off the type-role ladder (h1-h3 are meant to be display sizes only — the house rule is Fraunces never below `text-lg`).
@@ -3892,7 +3892,7 @@ look-changing one.
   - Bento heroes toggle atomically (good), but `DashboardPage.tsx:426-458` (`lg:grid-cols-5`, span-3 + span-2 independently hideable) leaves a permanent 2/5 or 3/5 hole when only one is hidden; same class at `StatisticsPage.tsx:196-216` and `PortfolioOverviewPage.tsx:327+`.
   - Fix: a full-span fallback keyed off the sibling's `isVisible`, so hiding one widget lets the other take the full row.
 
-- [ ] **4 stray `focus-visible:ring-primary/50` sites break from the house `ring-2 ring-ring/70 ring-offset-2` pattern** 🔽
+- [x] **4 stray `focus-visible:ring-primary/50` sites break from the house `ring-2 ring-ring/70 ring-offset-2` pattern** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2 (residue, closed 2026-07-03)_
   - `WatchlistPage.tsx:166`, `OwesPage.tsx:91`, `VirtualDataTable.tsx:703`, `devtools/RequestList.tsx:124` (devtools exemption was DECLINED 2026-07-10 — tokenize decision below — so this site gets swept with the rest).
@@ -3916,7 +3916,7 @@ look-changing one.
   - `ui/sonner.tsx`'s skin is fully house (glass-thick, font-display title, token action-button shadow) and shares the global success-icon bounce (`index.css:859`), but its enter/exit/swipe physics are sonner library defaults, ungoverned by `--duration-*`/`--ease-*`. Whether the default feel actually clashes is an eyes-on call (see Still-to-research).
   - Fix, if the eyes-on pass confirms a clash: override sonner's transition props with the token durations/easings.
 
-- [ ] **AI-chat tool sub-states are the smallest remaining gap in the three-tier loading system, plus five small copy nits** ⏬
+- [x] **AI-chat tool sub-states are the smallest remaining gap in the three-tier loading system, plus five small copy nits** ⏬
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6 (residue, closed 2026-07-03)_
   - The error card is on-token (`border-destructive/30 bg-destructive/5`, `ToolResultCard.tsx:95-105`) but its fallback string 'Tool failed.' (`:21`) is hardcoded English; there's no designed tool-running intermediate state (the crafted thinking dots already carry this — acceptable as-is). Copy nits found alongside: ⬇ `OllamaStatusBanner.tsx:38` prefers the raw English `status?.error` over its own localized hint; ⏬ `aria.toggleSidebar` nl "Zijbalk wisselen" means "swap sidebar", not toggle — should be in-/uitklappen; ⏬ nl `shortcuts.*` mixes imperative and infinitive verb forms; ⬇ `cashflow.window30` nl reads "30 d" vs en "30d".
@@ -3945,7 +3945,7 @@ look-changing one.
   - `ui/sonner.tsx` sets no `hotkey` (sonner's default is Alt+T, absent from ShortcutsOverlay); the recipients "Create Rule" toast action (`useRecipients.ts:88-97`) has no keyboard path beyond that and a 4s window. Separately, Duplicate/show-all-from-recipient/mark-active/delete live only in the row context menu (`TransactionsTable.tsx:319-370`) — Shift+F10 does work (`VirtualDataTable.tsx:808-810`) but nothing documents it.
   - Fix: document Alt+T (or set an explicit hotkey) in ShortcutsOverlay; add a one-line hint for Shift+F10 context-menu access.
 
-- [ ] **DashboardSettingsDialog nav is plain buttons, not real tabs; TableDataEditorPage icon buttons lack accessible names** ⬇
+- [x] **DashboardSettingsDialog nav is plain buttons, not real tabs; TableDataEditorPage icon buttons lack accessible names** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1 (residue, closed 2026-07-03)_
   - `DashboardSettingsDialog.tsx:92-111` is Tab-reachable with `aria-current` but has no `role="tab"`/tablist/arrow-roving semantics. Separately, `TableDataEditorPage.tsx:419` (delete new row) and `:490,:495` (pager) are icon-only with no accessible name — `:446` alone has a `title`.
@@ -3973,19 +3973,19 @@ look-changing one.
   - `value={x || ''}` at `IncomeStep.tsx:46,62,110,128,219,262,278` and `ExemptionsStep.tsx:128-202` (9 sites total): a typed `0` renders as empty, and a trailing decimal like "12." can't survive the `parseDecimal` round-trip. Mostly cosmetic since 0≡empty for these optional fields.
   - Fix: use `value={x ?? ''}` (not `||`) and preserve the raw typed string until blur/submit.
 
-- [ ] **LinkTransactionDialog search input has no label, and its tolerance field yields 0/NaN on clear** ⬇
+- [x] **LinkTransactionDialog search input has no label, and its tolerance field yields 0/NaN on clear** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - `LinkTransactionDialog.tsx:175` search input has no label/id; `:227-232` the tolerance field's `Number(e.target.value)` produces 0/NaN when cleared, and `min={0}` isn't enforced while typing.
   - Fix: add a label/id to the search input; clamp and NaN-guard the tolerance field's `onChange`.
 
-- [ ] **ExportDialog's custom date range has no from≤to validation** ⬇
+- [x] **ExportDialog's custom date range has no from≤to validation** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - `ExportDialog.tsx:307-332` — an inverted range only surfaces as a server-error toast; there's no client-side check.
   - Fix: validate `from ≤ to` client-side before submit and disable the export action otherwise.
 
-- [ ] **Onboarding bank-picker cards lack `aria-pressed` — selection is visual-only** ⬇
+- [x] **Onboarding bank-picker cards lack `aria-pressed` — selection is visual-only** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U2 (residue, closed 2026-07-03)_
   - `OnboardingWizard.tsx:319-334` — the selected bank card has no `aria-pressed` (or equivalent), so screen-reader users can't tell which bank is currently selected.
@@ -4061,7 +4061,7 @@ look-changing one.
   - nl.json counts: belegging(en) ~57 · positie(s) ~27 · effecten ~10 (correct Belgian usage for securities) · "holding" untranslated ×1. The split mirrors EN's own holding-vs-investment inconsistency (`portfolio.holdings` vs `portfolio.investments`) — standardize EN first. Same-surface mix to fix regardless: `invDetail.breakdown` "Beleggingsoverzicht" vs `invDetail.byAccount` "Posities per rekening".
   - Fix: standardize EN terminology (see the separate EN Investment-vs-Holding finding), then let nl keep `belegging` as the primary line-item term (matches `nav.investments`) with `positie` reserved for open/closed-position contexts.
 
-- [ ] **Truncation gaps on long entity names in Recipients, Watchlist, and Categories** 🔽
+- [x] **Truncation gaps on long entity names in Recipients, Watchlist, and Categories** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - `RecipientsPage.tsx:159-171` — name + merge-target render unbounded in a flex row (no `truncate`/`min-w-0`); `WatchlistPage.tsx:174-182` — CardTitle company name competes with the right-hand percentage with no truncation; `CategoriesPage.tsx:213-219` — the detail Badge is unclamped (though the description below it correctly uses `truncate max-w-[200px]`).
@@ -4079,7 +4079,7 @@ look-changing one.
   - Cancel is `variant="ghost"` in the bulk dialogs plus `MarkAsFiledDialog.tsx:77`, against an `outline` majority elsewhere; `ExportDialog.tsx:390-391`'s primary action is the only non-default dialog primary (`outline`+`sm`); "Save" (`EditPortfolioTxnDialog:357`) vs verb-labels like `addPortTxn.record` "Record" mix within the same dialog family.
   - Fix: standardize cancel on `outline`, standardize submit-button verb per flow (edit = "Save", create = the domain verb).
 
-- [ ] **Empty-state punctuation drift: some end in a period, others don't, for the identical sentence pattern** ⬇
+- [x] **Empty-state punctuation drift: some end in a period, others don't, for the identical sentence pattern** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U5 (residue, closed 2026-07-03)_
   - "No categories yet." / "No recipients yet." (period) vs "No investments yet" / "No conversations yet" (no period) — same sentence shape, inconsistent punctuation.
@@ -4091,7 +4091,7 @@ look-changing one.
   - `pt-6` ×19, `px-4` ×23, `pb-3 px-4` ×21, `p-3` ×7, `py-4` ×8, … — no single value dominates. Related nit: `onboarding.categories.selectAll`/`deselectAll` render in Title Case amid an otherwise sentence-case UI.
   - Fix: low priority — fold into any future CardContent-variant pass rather than a standalone sweep; fix the two Title Case strings alongside any other copy sweep.
 
-- [ ] **`leading-none` sits on wrap-capable text in AlertTitle and Label — long Dutch strings risk colliding line boxes at high zoom** ⬇
+- [x] **`leading-none` sits on wrap-capable text in AlertTitle and Label — long Dutch strings risk colliding line boxes at high zoom** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX research 2026-07-03 · Wave U6 (residue, closed 2026-07-03)_
   - `ui/alert.tsx:39` (AlertTitle) and `ui/label.tsx:8` (Label) both use `leading-none`; wrapped Dutch strings at 125-150% browser zoom will collide line boxes since `leading-none` leaves no room between wrapped lines.
@@ -4140,7 +4140,7 @@ look-changing one.
   - `TableDataEditorPage.tsx`: new rows have a per-row remove (`:419-420`) and delete-marks toggle off (`toggleDelete` `:227-233`, undo affordance `:447-449`), but an edited cell has no revert-to-original path — `EditableCell` (`:67-136`) offers Set-NULL (`:124-131`) but re-opening a dirty cell re-seeds the editor with the *edited* value (`:97`). The only undo for one edit among many is `discardAll()` (`:239-243`), which also nukes every other pending insert/delete/edit; the commit preview (`:504-529`) is likewise all-or-nothing.
   - Fix: when a cell is dirty, render a small revert affordance (e.g. `Undo2`) that deletes just that column from the staged edits; optionally let the preview dialog exclude individual statements before commit.
 
-- [ ] **Native menu items use ASCII "..." instead of the "…" ellipsis glyph — the HIG-governed surface of the already-filed double-hyphen habit** 🔽
+- [x] **Native menu items use ASCII "..." instead of the "…" ellipsis glyph — the HIG-governed surface of the already-filed double-hyphen habit** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R2_
   - `i18n/source/en.json:1186` `"menu.importCsv": "Import CSV..."` and `:1189` `"menu.settings": "Settings..."` (mirrored in nl.json) ship three periods where the macOS HIG specifies the single `…` glyph for menu items opening further UI — exactly the "Apple-polished" convention the app targets. The same `...` habit appears in-app (`dbEditor.committing`, `contextMenu.delete`, `importReview.committing`).
@@ -4188,43 +4188,43 @@ look-changing one.
   - Singular is fine (`owesPage.split` "{n} splitsing", `owesPage.deleteSplit` "Splitsing verwijderen") but the plural uses the infinitive verb: `owesPage.splits` "{n} splitsen", `owesPage.outstandingSplits` "Openstaande splitsen", `owesPage.settleAll.confirmTitle`/`confirmDescription` "openstaande splits(en)". The noun plural of "splitsing" is "splitsingen".
   - Fix: "{n} splitsingen" / "Openstaande splitsingen" / "openstaande splitsingen" at the four sites.
 
-- [ ] **nl: `rebalance` renders "cash" as physical "contant" in four keys and keeps English "cash" in two others** 🔽
+- [x] **nl: `rebalance` renders "cash" as physical "contant" in four keys and keeps English "cash" in two others** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - `rebalance.availableCash` "Beschikbaar contant", `rebalance.editor.capCash` "…in te zetten contant", `rebalance.subtitle` "Zet besteedbaar contant in…", `rebalance.totalDeployedHint` "Contant verdeeld over…" — standalone "contant" reads as coins/notes, unnatural for investable liquidity — while `rebalance.title` "Cash-bewust herbalanceren" and `rebalance.noSellNote` "Cash-bewust:" keep "cash".
   - Fix: standardize on "cash" ("Beschikbare cash", "besteedbare cash") to match the title's established usage.
 
-- [ ] **nl: "koers" vs "prijs" for security prices, and three different refresh verbs, across the investment surfaces** 🔽
+- [x] **nl: "koers" vs "prijs" for security prices, and three different refresh verbs, across the investment surfaces** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - Price: `addInv.label.currentPrice` "Huidige **koers** per eenheid" vs `addInv.label.pricePerUnit` "**Prijs** per eenheid"; `portfolio.refreshPrices` "**Koersen** verversen" vs `portfolio.stalePricesBanner` "**prijs**(en) zijn verouderd" vs `performance.emptyDescription`/`networth.emptyDescription` "Vernieuw **beleggingsprijzen**". Refresh verb: "verversen" (`portfolio.refreshPrices`, `exchangeRates.refresh`) vs "vernieuwen" (`portfolio.refreshPricesFailed`, `exchangeRates.refreshError`) vs "bijwerken" (`portfolio.refreshPricesFailedTitle`) — three verbs for one action, two of them inside the same success/failure toast pair.
   - Fix: "koers(en)" for quoted-security prices throughout; one refresh verb (suggest "vernieuwen") across portfolio/addInv/exchangeRates/performance/networth.
 
-- [ ] **nl: "portfolio" vs "portefeuille" split across portfolio/performance namespaces** 🔽
+- [x] **nl: "portfolio" vs "portefeuille" split across portfolio/performance namespaces** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - `portfolio.overviewTitle` "Portefeuille Overzicht" and `research.forecast.title` "Portefeuilleprognose" vs `portfolio.portfolioValue` "Portfoliowaarde", `portfolio.deleteTxnFailedTitle` "portfoliotransactie", and the whole `performance` namespace ("Portfoliorendement", "Portfoliowaarde over tijd", `performance.relativePortfolio` "Portfolio").
   - Fix: pick one — "portefeuille" is the standard Dutch — and apply consistently (note `portfolio.overviewTitle`'s "Portefeuille Overzicht" should then also become the compound "Portefeuilleoverzicht").
 
-- [ ] **nl: English time-phrase calques — "over tijd" ×3 and "all time" translated three different ways** 🔽
+- [x] **nl: English time-phrase calques — "over tijd" ×3 and "all time" translated three different ways** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - "over tijd" (anglicism): `networth.overTime` "Nettovermogen over tijd", `performance.valueOverTime` "Portfoliowaarde over tijd", `statsPage.subtitle` "…nettosaldo over tijd" — while the natural "in de loop van de tijd" already appears in `statsPage.chart.monthlyDesc` and `customChart.selectDesc`. "all time": `performance.period.all` + `insights.allTime` "Alle tijd" vs `networth.allTime` "alle tijden" vs `insights.topBySpendDesc` "over alle tijd".
   - Fix: "over tijd" → "in de loop van de tijd" (or restructure: "Verloop van je nettovermogen"); standardize "all time" as "hele periode".
 
-- [ ] **nl: `research` translates "rebase" two ways and mints the undecipherable abbreviation "VKS-rendement"** 🔽
+- [x] **nl: `research` translates "rebase" two ways and mints the undecipherable abbreviation "VKS-rendement"** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - Rebase: `research.builder.rebase` "Herbaseren naar 100" + `research.builder.preset.rebased` "Herbaseerde overlay" (anglicism) vs `research.compare.rebased` "Herschaald naar 100" + `research.compare.subtitle`/`research.entry.compare` "herschaald naar 100". FCF: `research.metric.fcfYield` "VKS-rendement" — a homemade abbreviation no user will decode, while neighbours spell out "Vrije kasstroom" (`research.metric.freeCashFlow`).
   - Fix: "herschaald naar 100" everywhere (or "geïndexeerd naar 100"); "VKS-rendement" → "FCF-rendement" (FCF is the recognized term, kept in `market`/`research` peers).
 
-- [ ] **nl: `tax` surcharge term flips ("opcentiemen" vs "toeslag") plus two spelling/agreement slips** 🔽
+- [x] **nl: `tax` surcharge term flips ("opcentiemen" vs "toeslag") plus two spelling/agreement slips** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - Surcharge: "gemeentelijke opcentiemen" (correct, used in `tax.pit.row.communalSurcharge`, `tax.card.totalPIT.desc`, `tax.profile.section.region.desc`) vs "Gemeentelijke **toeslag**" (`tax.profile.field.communalSurcharge`, `tax.profile.section.region.title`). Spelling: "belasting**s**vrije som" (`tax.profile.field.personalExemption`, `tax.profile.dependents.children.desc`) vs standard "belastingvrije som" (`tax.profile.field.isolatedParent.desc` has it right). Agreement: `tax.suggestions.multipleResidencesNote` "staat **in de** algemene belastingtotaal" (het-woord → "in het"); `insights.detailsSubtitle` "gemiddelde transactiebedrag" → "gemiddeld transactiebedrag".
   - Fix: "opcentiemen" throughout; "belastingvrije som"; correct the two agreement errors.
 
-- [ ] **nl nits: verbatim-duplicate parenthetical, dropped qualifier, and "belegging"-labels vs "investering"-toasts** ⏬
+- [x] **nl nits: verbatim-duplicate parenthetical, dropped qualifier, and "belegging"-labels vs "investering"-toasts** ⏬
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: UI/UX review 2026-07-10 · Wave R3_
   - `tax.profile.field.cadastralIncome` — en "Cadastral income (kadastraal inkomen)" → nl "Kadastraal inkomen (kadastraal inkomen)" (the parenthetical duplicates the term verbatim). · `tax.profile.field.disabilityExemption.spouse` "Invaliditeitsvrijstelling (Partner)" drops "Spouse". · `portfolio` labels say "belegging" (`portfolio.addInvestment` "Belegging toevoegen") but every failure toast says "investering" (`portfolio.createInvestmentFailed(Title)`, `deleteInvestmentFailed`, `updateInvestmentFailed`, `refreshedPrices` "investering(en)") — a separate split from the filed belegging/positie one.
@@ -4277,7 +4277,7 @@ look-changing one.
   - Purely mechanical, but it needs `updated:` frontmatter bumps on every touched page, which is why it was not folded into the migration commit.
   - Fix: `vision-kb-updater` sweep — rewrite `components/{portfolio,tax,statistics,settings,dashboard,planned,research,splits,reports,onboarding}/` → `features/…`, plus `components/forms/` → `features/transactions/`, and bump the dates. Verify no page is left describing `components/forms/` as a live location.
 
-- [ ] **`features/dashboard/StatCard.tsx` is shared UI living inside a feature — 8 consumers outside its own feature** 🔽
+- [x] **`features/dashboard/StatCard.tsx` is shared UI living inside a feature — 8 consumers outside its own feature** 🔽
   - ↪ _from: Orchestration session 2026-08-13 · noticed while completing the components/→features/ migration_
   - Consumed by `features/statistics/{RecipientInsightsTab,SummaryCards}.tsx` and six pages under `pages/portfolio/`, `pages/research/` and `pages/DbMaintenancePage.tsx`. Breaks no rule — features→features and pages→features are both legal, and the new `no-feature-import-from-component` rule does not fire — but it is the same misplacement one level down: a component every page reaches for should sit in `components/shared/`.
   - Note there is already a related open item about StatCard adoption elsewhere in this file; resolve the two together so the file does not move twice.
@@ -4556,7 +4556,7 @@ look-changing one.
   - evidence: utils/ contains exactly two files. utils/downsample.js is a re-export shim of `@vision/shared-utils/downsample` with **zero consumers** (the only backend LTTB call site was removed — routes/info/_performanceHelpers.js:74-76 comment). utils/portfolioMath.js is a 300+-line portfolio calculation module (computeMetrics, computeHeatmap, toYmd) consumed by services, repositories, and routes/info — functionally a `services/calculations/` module. Everything else helper-shaped lives in lib/ (17 files, all with ≥1 consumer).
   - fix: delete utils/downsample.js, move portfolioMath.js to services/calculations/ (its documented home per code-patterns.md), remove utils/.
 
-- [ ] **One-line re-export "seam" services are aliased back to repository names at import sites** 🔽
+- [x] **One-line re-export "seam" services are aliased back to repository names at import sites** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: services/plannedTransactionService.js is solely `export { default } from '../repositories/plannedTransactionRepository.js'`, and routes/plannedTransactions.js:9 imports it as `plannedTransactionRepository` — so the seam adds a hop without changing what the route "sees"; same import-aliasing in routes/info.js:18 (`infoRepository` from infoService). The seam files themselves are intended (ADR-067), but the aliasing erases the boundary in the code readers actually read.
@@ -4572,7 +4572,7 @@ look-changing one.
   - evidence: routes/savedCharts.js:125,165 declare `/:id` handlers without `validateIdParam` (used by 11 other route files per the documented route pattern); it hand-rolls `parseChartId` at :25 instead.
   - fix: add `validateIdParam` to the three `/:id` routes and drop the bespoke parser.
 
-- [ ] **lib/parserConfigRoutes.js: route-layer helpers living in lib/** 🔽
+- [x] **lib/parserConfigRoutes.js: route-layer helpers living in lib/** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: lib/parserConfigRoutes.js exports `parseParserId(req)` (takes an Express `req`) plus ValidationError-throwing normalizers, shared by routes/importRoutes.js and routes/portfolioImportRoutes.js — HTTP-coupled code in the "pure helpers" dir, with "Routes" in a lib filename.
@@ -4680,7 +4680,7 @@ look-changing one.
   - evidence: every renderer hand-writes the `page`/`section-title`/`section-divider` shell twice (empty + populated path). Related duplication in the same family: two empty-state CSS classes for one concept (`empty-notice` vs `placeholder-notice`, e.g. `sections/bankBalances.js:29` vs `topHoldings.js:32`); `ASSET_CLASS_LABELS` duplicated 3× (`topHoldings.js:9`, `portfolioAllocation.js:9`, `assetClassDetail.js:10`); a near-verbatim snapshot→asset-class bucket builder (`portfolioAllocation.js:42-64` vs `assetClassDetail.js:41-60`); camel/snake dual-reads (`inv.currentValue ?? inv.current_value`) repeated in 4 renderers instead of normalized once in `dataFetcherPortfolio`; a duplicated filtered/all chart-pair + filter-notice block (`categoryBreakdown.js:46-77` vs `topRecipients.js:44-75`).
   - fix: add `sectionShell()`/`emptySection()` helpers to `sectionHelpers.js` (removes ~200 lines) and normalize the camel/snake reads once in the data fetcher.
 
-- [ ] **`quantile()` and zero-fill densify logic each duplicated across forecast method modules** 🔽
+- [x] **`quantile()` and zero-fill densify logic each duplicated across forecast method modules** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `forecast/methods/monteCarloParametric.js:18-26` is a verbatim copy of `monteCarloBlockBootstrap.js:19-27`'s `quantile()`; separately, a shared `forecast/_densify.js` exists yet `holtWinters.js:24-43` and `prophetLite.js:105-122` keep private zero-fill densify copies.
@@ -4707,7 +4707,7 @@ look-changing one.
   - evidence: `hooks/useStatistics.ts:243-307` repeats the same filtered-query shape four times. (No duplication with `lib/api/aggregations` — the server aggregates, the hook only reshapes.)
   - fix: a small query factory halves the boilerplate.
 
-- [ ] **RangeSelector's `RANGES` const + pill row is byte-identical across 4 sites** 🔽
+- [x] **RangeSelector's `RANGES` const + pill row is byte-identical across 4 sites** 🔽
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: ~35 duplicated lines at `pages/research/ResearchComparePage.tsx:31-37,397-409`, `ChartBuilderPage.tsx:25-31,390-396`, `MarketLookupPage.tsx:36-45,424-436`, `components/watchlist/WatchlistChartDialog.tsx:28`.
@@ -4878,7 +4878,7 @@ look-changing one.
   - evidence: `recipientPivot.js:16-18` / `tagPivot.js:14-16` default params to `null`, and those nulls flow into repo options.
   - fix: default to `undefined` per convention.
 
-- [ ] **config.js exposes both a `getSettings()` function and a default export for the same data** ⬇
+- [x] **config.js exposes both a `getSettings()` function and a default export for the same data** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `getSettings()` has 5 importers and the default export has 7 — two access paths for the same config object.
@@ -4896,7 +4896,7 @@ look-changing one.
   - evidence: statistics components hand-roll currency-formatter closures despite `utils/currency.ts:127` (`CustomChart.tsx:78-83`, `CustomChartBuilderModal.tsx:89`, `RecipientInsightsTab.tsx:48,60`); `fmtLargeNum` is duplicated ×3 (`ResearchComparePage.tsx:181`, `MarketLookupPage.tsx:144`, `ResearchFundamentalsTab.tsx:77`); an admin skeleton-row loop is duplicated (`ProviderHealthPage.tsx:183-190` ≈ `EndpointLivenessPage.tsx:105-112`) and `ExchangeRatesPage.tsx:66-98` hand-rolls a `<table>` instead of using `ui/table`; `PageHeader.tsx:7-9` carries both a `subtitle` and a `description` prop alias.
   - fix: route the statistics formatters and `fmtLargeNum` through the shared currency util; share the admin skeleton-row component; switch ExchangeRatesPage to `ui/table`; drop one of PageHeader's two alias props.
 
-- [ ] **No CI backstop for commitlint — enforced only via a skippable local git hook** ⬇
+- [x] **No CI backstop for commitlint — enforced only via a skippable local git hook** ⬇
   - Tracking: 🔎 verified-present 2026-07-11
   - ↪ _from: Code/architecture 2026-07-03 · Wave A5_
   - evidence: commitlint runs only via `.githooks/commit-msg` (hooksPath from `scripts/setup-git-hooks.js`'s `prepare`), which `--no-verify` bypasses; gitleaks, by contrast, is wired twice (`.github/workflows/ci.yml:41-47` + `.githooks/pre-commit`).
@@ -5230,7 +5230,7 @@ look-changing one.
   - `apps/node-backend/src/main.js:95` checks `settings.api.corsOrigins === '*'` for a wildcard dev bypass, but `CORS_ORIGINS` is parsed by csvEnv (`src/config/env.js`) and always yields `string[]` — the comparison can never be true, so the documented wildcard mode is dead. And `src/integrations/ollama/prompts.js` (`toOllamaMessage`) reads `row.tool_result`/`row.tool_name` snake_case fallbacks that can never fire: `aiChatRepository` always aliases to camelCase and the only caller passes `AiMessageRow[]`.
   - Fix: either delete the wildcard branch (and its doc) or make csvEnv/config actually support `'*'` — decide which behavior is intended first; drop the dead ollama fallback. All are small but the CORS one changes documented (if inert) behavior, so pin with a config test.
 
-- [ ] **`resolveActor` in splits.js reads `req.user?.id`, but nothing in the codebase ever sets `req.user` — the branch is dead** ⏬
+- [x] **`resolveActor` in splits.js reads `req.user?.id`, but nothing in the codebase ever sets `req.user` — the branch is dead** ⏬
   - ↪ _from: Orchestration session 2026-07-29 · ratchet routes slice A (typing surfaced, out of scope; documented at the site)_
   - `apps/node-backend/src/routes/splits.js:~191` — `resolveActor()` tries `req.user?.id` before falling back to the `x-actor` header or `null`. Grep-confirmed: no auth middleware anywhere assigns `req.user`, so the branch never fires and actor attribution always comes from the spoofable header or is null.
   - Fix: either wire a real auth identity into `req.user` (bigger design question — ties into any future auth work) or delete the dead branch so the actual trust model (header-supplied actor) is explicit; pin whichever with a route test.
@@ -5240,7 +5240,7 @@ look-changing one.
   - `packages/types/src/api.js` documents `ResponseMeta` as `{ requestId, extra }` with arbitrary facts under `extra`, but e.g. `apps/node-backend/src/routes/research.js` passes `{ provider, source }` as top-level meta keys — which only works because `src/middleware/envelope.js`'s `wrapResponse` spreads `meta` verbatim onto the body instead of enforcing the documented shape. The backend typedef `ResponseMetaLoose` (src/types/express.js) now models the loose reality.
   - Fix: decide the contract once — either bless top-level meta keys (update `ResponseMeta`'s doc and the frontend consumers' expectations) or enforce nesting under `extra` in `wrapResponse` (a wire-shape change — check frontend readers first); pin with an envelope test either way.
 
-- [ ] **`validateIdParam` re-stamps `req.params.id` with a parsed number, breaking Express's params-are-strings contract** ⏬
+- [x] **`validateIdParam` re-stamps `req.params.id` with a parsed number, breaking Express's params-are-strings contract** ⏬
   - ↪ _from: Orchestration session 2026-07-29 · ratchet backend-tail slice (typing surfaced, out of scope; documented at the site)_
   - `apps/node-backend/src/middleware/validation.js:190` — after validating, the middleware assigns the parsed **number** back into `req.params.id`. Every downstream handler happens to tolerate it (they pass it to parseInt-tolerant repo calls), but any future consumer assuming the platform convention (string) — string methods, strict equality against route params, logging — meets a number. It also makes the harness-tested contract diverge from what express-native code expects.
   - Fix: keep `req.params.id` a string and expose the parsed value elsewhere (e.g. `res.locals.id` or a typed accessor), or explicitly document the numeric re-stamp as the project convention; either way pin with a middleware unit test asserting the chosen type.
@@ -5348,7 +5348,7 @@ look-changing one.
   - Only the strategy table at `:25` was corrected in `c6835c4 (#165)`; that fix was scoped to evidence item (1) of the data-model finding and stopped there on purpose.
   - Fix: docs-only. Mark both sections dropped in the same style `data-model.md` already uses (heading marker + migration number), and drop or re-label the Bank-balances benefit row. Same rule as the parent finding: derive status from the migrations, not from the other doc.
 
-- [ ] **Reverting i18n work leaves the gitignored Electron locale output stale, and the next push fails the locale gate with a message that names the wrong file** 🔽
+- [x] **Reverting i18n work leaves the gitignored Electron locale output stale, and the next push fails the locale gate with a message that names the wrong file** 🔽
   - ↪ _from: Orchestration session 2026-08-11 · hit live — a `git checkout -- .` revert of an abandoned feature left the tree clean but the very next push red_
   - `scripts/validate-locales.js:179-196` (the drift check), `packaging/electron/.gitignore:3` (`i18n/*.json`), `scripts/generate-locales.js`
   - `packaging/electron/i18n/{en,nl}.json` is a build-time output of `generate-locales.js` and is deliberately untracked (SIMP-25). The validator only enforces drift on it *when a copy is present on disk*, which is the right call — but the consequence is that `git checkout -- .` (or any revert, stash-drop, or branch switch) restores `i18n/source/*.json` while leaving the generated copy carrying the abandoned keys. `git status` reports **clean**, and the next `git push` then fails with `Electron locale drift detected for en: key set mismatch with i18n/source/en.json` — a message that points at the tracked source file, which is the one thing that is *not* wrong. The fix is `bun run generate-locales`, but nothing says so.
@@ -5385,7 +5385,7 @@ look-changing one.
   - `apps/node-backend/package.json` declares `yauzl ^3.4.0` + `archiver ^8.0.0` as devDeps; `packaging/electron/package.json` pins `yauzl ^3.3.0`. In `backup-roundtrip.test.js` the *test* loads `archiver` from the backend's copy while the *module under test* (`packaging/electron/backup/bundle.js`) loads its own — so two versions can be live in a single run, and the round-trip would still pass while silently proving nothing about the shipped pair.
   - Fix: decide which copy is authoritative for the test and make the other follow, or assert the resolved versions match.
 
-- [ ] **`apps/node-backend/bun.lock` is committed for a workspace member that resolves from the root lock** ⏬
+- [x] **`apps/node-backend/bun.lock` is committed for a workspace member that resolves from the root lock** ⏬
   - ↪ _from: Orchestration session 2026-08-05 · pre-push gate fix (noticed while enumerating the repo's three lockfiles)_
   - `git ls-files` shows three lockfiles: root, `apps/node-backend`, `packaging/electron`. The `packaging/electron` one is load-bearing (it is not a workspace, and `release.yml` installs against it). The `apps/node-backend` one is likely dead — bun workspaces resolve from the root lock — so it is a stale file that can drift and mislead. Confirm before deleting.
 
@@ -6821,19 +6821,19 @@ Investigated and disproven; kept for transparency.
 
 ## Stale docs — KB updates (not code bugs)
 
-- [ ] Three KB pages link `apps/node-backend/src/services/filterBuilder.js`; the file actually lives at `apps/node-backend/src/lib/filterBuilder.js`, so the wikilinks are dead. ⏬ (↪ _from: Orchestration session 2026-08-11 · noticed while closing the recipientGroupId residue_) — note this finding's own evidence lines carry the same wrong path, so fix them in step.
-- [ ] `docs/reference/repository-layer.md`'s transactionRepository section describes a `hidden` boolean soft-delete column; the actual column is `is_active`. ⏬ (↪ _from: Orchestration session 2026-08-11_)
+- [x] Three KB pages link `apps/node-backend/src/services/filterBuilder.js`; the file actually lives at `apps/node-backend/src/lib/filterBuilder.js`, so the wikilinks are dead. ⏬ (↪ _from: Orchestration session 2026-08-11 · noticed while closing the recipientGroupId residue_) — note this finding's own evidence lines carry the same wrong path, so fix them in step.
+- [x] `docs/reference/repository-layer.md`'s transactionRepository section describes a `hidden` boolean soft-delete column; the actual column is `is_active`. ⏬ (↪ _from: Orchestration session 2026-08-11_)
 
 **Orchestration session 2026-08-10 (noticed during the id-validator docs sync)**
 
-- [ ] `docs/api/recipients.md` documents the pattern sub-routes' success responses swapped: the `PATCH /api/recipients/:id/patterns/:patternId` section says `204 No Content` while the `DELETE` section says `200 OK` with `{ "patternId": 1 }`. The code is the other way round — `routes/recipients.js` PATCH calls `res.ok({ patternId })` (200) and DELETE sends `res.status(204)`. Swap the two.
-- [ ] `docs/api/recipients.md:109,308` still show `"code": "APP_ERROR"` for `Recipient not found` and `Missing required field: pattern`. Neither is what the error handler emits — `NotFoundError` and `ValidationError` set `NOT_FOUND` and `VALIDATION_ERROR` respectively (`middleware/errorHandler.js`). The two `patternId` snippets in the same file were corrected on 2026-08-10; these were left because they were outside that task's scope.
+- [x] `docs/api/recipients.md` documents the pattern sub-routes' success responses swapped: the `PATCH /api/recipients/:id/patterns/:patternId` section says `204 No Content` while the `DELETE` section says `200 OK` with `{ "patternId": 1 }`. The code is the other way round — `routes/recipients.js` PATCH calls `res.ok({ patternId })` (200) and DELETE sends `res.status(204)`. Swap the two.
+- [x] `docs/api/recipients.md:109,308` still show `"code": "APP_ERROR"` for `Recipient not found` and `Missing required field: pattern`. Neither is what the error handler emits — `NotFoundError` and `ValidationError` set `NOT_FOUND` and `VALIDATION_ERROR` respectively (`middleware/errorHandler.js`). The two `patternId` snippets in the same file were corrected on 2026-08-10; these were left because they were outside that task's scope.
 
 **Orchestration session 2026-07-27 (noticed during migration-guard work)**
 
-- [ ] `alembic/versions/0011_drop_feature_flags.py` docstring cites ADR-034 (admin-environment) but the feature-flag removal is ADR-035 — apparent off-by-one; correct the reference.
-- [ ] `docs/guides/cicd-pipelines.md` "Trigger" snippet still shows a top-level `paths-ignore: [docs/**, *.md]` that ci.yml explicitly removed (its header says never to reintroduce it — it strands the required "CI Complete" check). Update the snippet.
-- [ ] `docs/guides/migrations.md` "Migration Inventory" table stops at 0024 while the chain is at 0082 — either extend it or replace with a pointer to `alembic/versions/`.
+- [x] `alembic/versions/0011_drop_feature_flags.py` docstring cites ADR-034 (admin-environment) but the feature-flag removal is ADR-035 — apparent off-by-one; correct the reference.
+- [x] `docs/guides/cicd-pipelines.md` "Trigger" snippet still shows a top-level `paths-ignore: [docs/**, *.md]` that ci.yml explicitly removed (its header says never to reintroduce it — it strands the required "CI Complete" check). Update the snippet.
+- [x] `docs/guides/migrations.md` "Migration Inventory" table stops at 0024 while the chain is at 0082 — either extend it or replace with a pointer to `alembic/versions/`.
 
 **Codebase audit 2026-06-30**
 
