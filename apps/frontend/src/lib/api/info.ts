@@ -275,7 +275,6 @@ export interface PortfolioSummaryItem {
     is_active: boolean;
     created_at: string;
     updated_at: string;
-    description?: string;
     notes?: string;
     location?: string;
     municipality?: string;

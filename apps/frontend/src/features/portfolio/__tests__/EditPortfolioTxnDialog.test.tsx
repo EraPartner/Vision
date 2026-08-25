@@ -413,6 +413,35 @@ describe("EditPortfolioTxnDialog", () => {
         expect(capturedBody?.account_id).toBe(5);
     });
 
+    it("sends null when a recurring transaction end date is cleared", async () => {
+        const recurringTxn: PortfolioTransaction = {
+            ...TRANSACTION,
+            is_recurring: true,
+            recurrence_interval: "monthly",
+            recurrence_end_date: "2026-12-31",
+        };
+        let capturedBody: Record<string, unknown> | undefined;
+        server.use(
+            http.patch(`${API_BASE}/api/investments/transactions/101`, async ({ request }) => {
+                capturedBody = (await request.json()) as Record<string, unknown>;
+                return ok({ ...PORTFOLIO_TXN_STUB, recurrence_end_date: null });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={recurringTxn} />,
+        );
+
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        await user.click(screen.getByRole("button", { name: "31/12/2026" }));
+        await user.click(screen.getByRole("button", { name: /clear/i }));
+        await user.click(screen.getByRole("button", { name: /save/i }));
+
+        await waitFor(() => expect(capturedBody).toBeDefined());
+        expect(capturedBody?.recurrence_end_date).toBeNull();
+    });
+
     // ─── Unsaved edits survive dismissal ───────────────────────────────────
 
     /** The Radix overlay — clicking it is the "stray click next to the dialog". */

@@ -11,7 +11,7 @@ import { usePortfolio } from '@/hooks/usePortfolio';
 import { isUnitBased } from '@/utils/assetClass';
 import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
-import type { PortfolioTransaction, PortfolioTransactionCreate } from '@/types/api';
+import type { PortfolioTransaction } from '@/types/api';
 import { getTxnTypeLabel } from '@/types/portfolio';
 import {
   useDialogFormState,
@@ -169,8 +169,10 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger, open:
         account_id: form.accountId ? Number(form.accountId) : null,
         is_recurring: form.isRecurring,
         recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,
-        recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
-      } as Partial<PortfolioTransactionCreate>);
+        recurrence_end_date: form.isRecurring
+          ? form.recurrenceEndDate || null
+          : null,
+      });
       toast.success(t('txnEdit.toast.updated', { type: getTxnTypeLabel(t, transaction.type as PortfolioTxnType) }));
       resetForm();
       setOpen(false);

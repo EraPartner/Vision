@@ -138,8 +138,6 @@ export interface InvestmentSummary {
   totalSellProceeds: number;   // Total received from sells
   
   transactions: PortfolioTransaction[];
-  description?: string;
-
   // ── Belgian tax classification (optional overrides used by the PortfolioTaxPage) ──
   /**
    * ETF accumulation/distribution flag — drives the TOB rate on `buy` legs.

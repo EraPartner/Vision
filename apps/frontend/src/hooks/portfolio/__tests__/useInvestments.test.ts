@@ -328,9 +328,23 @@ describe("useInvestmentMutations — updateTransaction", () => {
         );
         const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
         await act(async () => {
-            await result.current.updateTransaction(5, { amount: 2000 });
+            await result.current.updateTransaction(5, {
+                amount: 2000,
+                fx_rate_to_eur: null,
+                account_id: null,
+                note: null,
+                recurrence_interval: null,
+                recurrence_end_date: null,
+            });
         });
-        expect(spy).toHaveBeenCalledWith(5, { amount: 2000 });
+        expect(spy).toHaveBeenCalledWith(5, {
+            amount: 2000,
+            fx_rate_to_eur: null,
+            account_id: null,
+            note: null,
+            recurrence_interval: null,
+            recurrence_end_date: null,
+        });
     });
 });
 

@@ -39,14 +39,8 @@ const COST_BASIS_METHODS = new Set(['weighted_avg', 'fifo', 'lifo']);
  * @typedef {Omit<import('../../types/rows.js').InvestmentRow, 'current_price'|'interest_rate'> & {
  *   current_price: string,
  *   interest_rate: string,
- *   description?: undefined,
  * }} RawInvestmentRow
  */
-// `description` is NOT an `investments` column (see 0001_initial_database_schema.py)
-// — buildInvestmentSummary's `description: inv.description` below has always
-// evaluated to `undefined`. Typed as such (rather than dropped) to keep this
-// slice behavior-preserving; flagged in the ratchet report as a probable dead
-// field for the orchestrator to triage.
 
 /**
  * A {@link import('../../types/rows.js').PortfolioMathTxRow} after
@@ -360,7 +354,6 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
     is_active: inv.is_active,
     created_at: inv.created_at,
     updated_at: inv.updated_at,
-    description: inv.description,
     notes: inv.notes,
     location: inv.location,
     municipality: inv.municipality,

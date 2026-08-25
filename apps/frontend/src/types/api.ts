@@ -14,6 +14,7 @@
 import type { AssetClass } from '@vision/types/assetClasses';
 import type { PortfolioTxnType } from '@vision/types/portfolioTxnTypes';
 import type { RecurrenceInterval } from '@vision/types/recurrence';
+import type { operations } from './generated';
 
 export interface Link {
     rel: string;
@@ -544,6 +545,9 @@ export interface PortfolioTransactionCreate {
     recurrence_interval?: RecurrenceInterval;
     recurrence_end_date?: string;
 }
+
+export type PortfolioTransactionUpdate =
+    operations['updatePortfolioTransaction']['requestBody']['content']['application/json'];
 
 // ==================== Tag Types ====================
 

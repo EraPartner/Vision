@@ -11,6 +11,7 @@ import type {
   InvestmentCreate,
   InvestmentUpdate,
   PortfolioTransactionCreate,
+  PortfolioTransactionUpdate,
 } from '@/types/api';
 import { toast } from 'sonner';
 import { apiErrorToMessage } from '@/lib/api/errorMessage';
@@ -105,7 +106,7 @@ export function useInvestmentMutations() {
       data,
     }: {
       id: number;
-      data: Partial<PortfolioTransactionCreate>;
+      data: PortfolioTransactionUpdate;
     }) => apiClient.updatePortfolioTransaction(id, data),
     onSuccess: invalidateAll,
     onError: (err: Error) =>
@@ -174,7 +175,7 @@ export function useInvestmentMutations() {
   );
 
   const updateTransaction = useCallback(
-    (id: number, data: Partial<PortfolioTransactionCreate>) =>
+    (id: number, data: PortfolioTransactionUpdate) =>
       updateTxnMutation.mutateAsync({ id, data }),
     [updateTxnMutation]
   );

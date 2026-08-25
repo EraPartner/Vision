@@ -5,6 +5,7 @@ import type {
     InvestmentsListResponse,
     PortfolioTransaction,
     PortfolioTransactionCreate,
+    PortfolioTransactionUpdate,
     PortfolioTransactionsListResponse,
 } from '@/types/api';
 import { apiRequest } from '@/lib/api/client';
@@ -111,7 +112,7 @@ export function createPortfolioTransaction(
 
 export function updatePortfolioTransaction(
     txnId: number,
-    data: Partial<PortfolioTransactionCreate>,
+    data: PortfolioTransactionUpdate,
 ): Promise<PortfolioTransaction> {
     return apiRequest<PortfolioTransaction>(`/api/investments/transactions/${txnId}`, {
         method: 'PATCH',

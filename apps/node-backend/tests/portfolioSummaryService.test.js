@@ -39,7 +39,6 @@ const investmentRow = (overrides = {}) => ({
   is_active: true,
   created_at: '2026-01-01',
   updated_at: '2026-01-01',
-  description: null,
   notes: null,
   location: null,
   municipality: null,
@@ -124,6 +123,7 @@ describe('getPortfolioSummary', () => {
     expect(s.currentValue).toBe(400); // 2 units * 200
     expect(s.unrealizedGain).toBe(190); // (200 - 105) * 2
     expect(s.realizedGain).toBe(0);
+    expect(s).not.toHaveProperty('description');
 
     expect(result.totals.totalPortfolioValue).toBe(400);
     expect(result.totals.totalInvested).toBe(210);

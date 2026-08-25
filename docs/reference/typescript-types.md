@@ -3,9 +3,9 @@ title: TypeScript Types Reference
 type: reference
 status: active
 date: 2026-04-02
-updated: 2026-06-18
+updated: 2026-08-25
 tags: [reference, typescript, types, interfaces, frontend, contract-guard, openapi, generated-types, type-safety]
-description: Complete reference of all TypeScript types and interfaces used in the Vision frontend. June 2026 — generated.ts is now load-bearing via contract-guard.ts; api.ts header corrected to point at the Node backend contract.
+description: Complete reference of Vision frontend TypeScript types. generated.ts is load-bearing through contract-guard.ts, including nullable portfolio transaction PATCH payloads.
 aliases: [typescript types, type definitions, interfaces, type reference]
 related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/generated.ts", "apps/frontend/src/types/contract-guard.ts", "apps/frontend/src/types/portfolio.ts", "apps/frontend/src/types/watchlist.ts", "apps/frontend/src/lib/api/splits.ts"]
 ---
@@ -27,6 +27,7 @@ related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/genera
 - Imports `components['schemas']` from `generated.ts` and the hand-written types from `api.ts` (plus the per-feature type modules for splits, watchlist, attachments and AI chat)
 - **Key coverage check:** every field the app consumes (`Transaction`, `Category`, `Account`, `Recipient`, `Tag`, `PlannedTransaction`, `Investment`, `PortfolioTransaction`, `SplitItem`, `SplitPayment`, `OwedSummaryItem`, `WatchlistItem`, `Attachment`, `ConversationSummary`, `ChatMessage`, `TokenUsage`, `OllamaModel`) must exist as a key in the corresponding generated schema — `bun run typecheck` fails if a field is renamed or removed in the contract
 - **Money/quantity check:** money fields (`amount`, `balance`, `amount_eur`, `loan_principal`, `current_price`, `units`, `price_per_unit`, `fees`, `taxes`, `amount_paid`, `total_owed`, `total_paid`, `remaining`, `target_price`, `added_price`) must remain `number` (or `number | null`) in the contract — fails if the OpenAPI spec re-types an amount as a string
+- **Portfolio PATCH type:** `PortfolioTransactionUpdate` is derived directly from the generated `updatePortfolioTransaction` request body, so generated optional fields and nullable clear semantics cannot drift from a handwritten copy
 - **One-directional and optionality-tolerant:** additive contract changes (new fields) and `required`/`| null` nuances do not cause failures — only consumed-field removals/renames and money-type regressions are caught
 
 > [!note] Money coercion is a separate concern
@@ -198,6 +199,8 @@ interface PortfolioTransaction {
   updated_at: string;
 }
 ```
+
+`PortfolioTransactionUpdate` is the PATCH payload type. It excludes the create-only `cash_account_id` field and permits explicit `null` for `fx_rate_to_eur`, `account_id`, `note`, `recurrence_interval`, and `recurrence_end_date`. The edit dialog sends those nulls when a user clears a stored value; `undefined` would omit the key and leave the old backend value unchanged.
 
 ### PortfolioTxnType
 
