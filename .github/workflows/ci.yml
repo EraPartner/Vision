@@ -116,6 +116,51 @@ jobs:
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Commit messages — enforce the same conventional-commit contract as the
+  # local commit-msg hook. This cannot be bypassed with `git commit --no-verify`.
+  # ─────────────────────────────────────────────────────────────────────────────
+  commitlint:
+    name: Commitlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
+
+      - name: Lint commit range
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            from="$PR_BASE_SHA"; to="$PR_HEAD_SHA"
+          else
+            from="$PUSH_BEFORE"; to="$PUSH_SHA"
+          fi
+
+          if [ -z "$to" ] || ! git cat-file -e "$to^{commit}" 2>/dev/null; then
+            echo "Commit range head is not resolvable; refusing to skip commit-message validation."
+            exit 1
+          elif [ -z "$from" ] || [ "$from" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$from^{commit}" 2>/dev/null; then
+            echo "Commit range base is not resolvable; linting the event head commit without ignore rules."
+            git log -1 --format=%B "$to" | bun x commitlint --config config/commitlint.config.mjs
+          else
+            bun x commitlint --from "$from" --to "$to" --config config/commitlint.config.mjs
+          fi
+
   secrets-scan:
     name: Secrets Scan
     runs-on: ubuntu-24.04
@@ -607,6 +652,7 @@ jobs:
     timeout-minutes: 5
     needs:
       - changes
+      - commitlint
       - secrets-scan
       - deps-audit
       - pip-audit

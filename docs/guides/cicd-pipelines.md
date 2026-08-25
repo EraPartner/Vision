@@ -30,21 +30,29 @@ The CI workflow runs on every push to `main` and PR. It validates code quality, 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
 ```
+
+The workflow intentionally has no top-level path filter. Documentation-only changes must still
+produce the required `CI Complete` check; an internal changes job skips only work that is genuinely
+unnecessary.
 
 **Permissions:** Minimal per-job basis; most jobs run with `contents: read` only.
 
 ### Jobs
 
-#### 0. **secrets-scan** — Prevent Credential Leaks
+#### 0. **commitlint** — Enforce Commit Messages
+
+Checks every commit in the pull-request or push range with the repository's
+Conventional Commits configuration. The local `commit-msg` hook gives immediate
+feedback, while this CI job prevents `--no-verify` from bypassing the contract.
+If the range base is unavailable, the job validates the event head explicitly.
+The shared configuration disables Commitlint's default ignored-message patterns,
+so a synthetic merge-style message cannot become a silent pass. An unavailable
+head fails closed.
+
+#### 1. **secrets-scan** — Prevent Credential Leaks
 
 Scans git history for hardcoded secrets, API keys, passphrases before they reach CI.
 
@@ -77,7 +85,7 @@ secrets-scan:
 
 ---
 
-#### 1. **deps-audit** — Dependency Vulnerability Check
+#### 2. **deps-audit** — Dependency Vulnerability Check
 
 Audits npm/bun packages for HIGH and CRITICAL severity vulnerabilities.
 
@@ -117,7 +125,7 @@ deps-audit:
 
 ---
 
-#### 2. **pip-audit** — Python Dependency Vulnerability Check
+#### 3. **pip-audit** — Python Dependency Vulnerability Check
 
 Audits the Python dependencies used by the Alembic migration tooling
 (`config/requirements.txt`) for known CVEs. (Container-image scanning is a
@@ -141,7 +149,7 @@ pip-audit:
 
 ---
 
-#### 3. **verify-compose-sync** — Docker Compose Sync Check
+#### 4. **verify-compose-sync** — Docker Compose Sync Check
 
 Verifies that the named volumes **and** the compose project `name:` in `docker-compose.yml` match those in `packaging/electron/resources/docker-compose.yml` (the embedded Electron compose file).
 
@@ -201,7 +209,7 @@ Flags `DROP TABLE` / `DROP COLUMN` (always), unreplaced `DROP` of a view/matview
 
 ---
 
-#### 4. **lint** — Code Quality
+#### 5. **lint** — Code Quality
 
 Runs ESLint on frontend and backend source code.
 
@@ -222,7 +230,7 @@ lint:
 
 **Failure:** Blocks further checks; must be fixed before merging.
 
-#### 5. **typecheck** — Frontend TypeScript Validation
+#### 6. **typecheck** — Frontend TypeScript Validation
 
 Checks frontend TypeScript types without emitting code (`bun run typecheck`,
 which runs `tsc` over `tsconfig.app.json` + `tsconfig.node.json`).
@@ -237,7 +245,7 @@ typecheck:
 
 **Failure:** Blocks the quality gate; must be resolved before merging.
 
-#### 6. **typecheck-backend** — Backend Type Validation
+#### 7. **typecheck-backend** — Backend Type Validation
 
 Type-checks the backend (`apps/node-backend`), which is JS-with-JSDoc checked by
 `tsc` in `checkJs` mode. Separate job so a backend type regression is reported
@@ -245,7 +253,7 @@ independently from the frontend.
 
 **Failure:** Blocks the quality gate.
 
-#### 7. **verify-generated** — Generated-Artifact Drift Guard
+#### 8. **verify-generated** — Generated-Artifact Drift Guard
 
 Guards the two classes of generated files that can silently drift from their
 source of truth:
@@ -273,14 +281,14 @@ in [[docs/reference/api-endpoint-matrix]].)
 **Failure:** Blocks the quality gate — run `bun run generate:types` and
 `bun run validate-locales` locally and commit the result.
 
-#### 8. **build-frontend** — Production Bundle Compile
+#### 9. **build-frontend** — Production Bundle Compile
 
 Verifies the frontend production bundle actually compiles (`CI=1 bun run build`)
 — a green typecheck does not guarantee Vite/Rollup will bundle cleanly.
 
 **Failure:** Blocks the quality gate.
 
-#### 9. **test-frontend** — Frontend Unit Tests
+#### 10. **test-frontend** — Frontend Unit Tests
 
 Runs Vitest (with coverage) on frontend components, hooks, and utilities, then
 posts a coverage report comment on the PR.
@@ -303,7 +311,7 @@ even though absolute coverage is below 80%. See [[docs/guides/testing|Testing Gu
 
 **Failure:** Coverage fell below the ratchet, or a test failed — fix before merging.
 
-#### 10. **test-backend** — Backend Unit & Integration Tests
+#### 11. **test-backend** — Backend Unit & Integration Tests
 
 Runs Vitest on backend services, repositories, and routes against a Postgres
 service container.
@@ -358,7 +366,7 @@ does a real rebuild — correct, just slow (the Docker-tier job timeouts carry
 headroom for exactly this), and no worse than the uncached rebuild
 `docker-verify` used to do on every run anyway.
 
-#### 11. **build-image** — Warm the Image Build Cache (once)
+#### 12. **build-image** — Warm the Image Build Cache (once)
 
 ```yaml
 build-image:
@@ -376,7 +384,7 @@ build-image:
 `cache-to` is set **only** here: the consumers read the cache and must not
 write back over the entries they just read.
 
-#### 12. **trivy-scan** — Container Image CVE Scan
+#### 13. **trivy-scan** — Container Image CVE Scan
 
 Restores `vision:ci` from the build cache and scans it for OS/system-library
 vulnerabilities (HIGH/CRITICAL), uploading SARIF to the GitHub Security tab.
@@ -400,7 +408,7 @@ found. **Mitigation:** upgrade the `FROM` base image or patch the package.
 
 **Related:** [[docs/adr/039-docker-container-hardening|ADR-039 Container Hardening]], [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050 CI Security Tooling]]
 
-#### 13. **docker-verify** — Container Health Check
+#### 14. **docker-verify** — Container Health Check
 
 Restores `vision:ci` from the build cache, brings the compose stack up on it,
 and verifies the backend starts and migrates cleanly.
@@ -450,7 +458,7 @@ neither.
 
 **Failure:** Indicates a runtime issue; must be resolved before merging.
 
-#### 14. **test-live-api-contracts** — Live API Contract Tests
+#### 15. **test-live-api-contracts** — Live API Contract Tests
 
 Validates that MSW (Mock Service Worker) fixture schemas match actual backend responses. Catches divergence between frontend test stubs and production API contracts.
 
@@ -492,13 +500,15 @@ test-live-api-contracts:
 
 ---
 
-#### 15. **quality-gate** — Pre-Docker Quality Checkpoint
+#### 16. **quality-gate** — Pre-Docker Quality Checkpoint
 
 Aggregates all pre-Docker quality checks to prevent wasting expensive Docker build cycles on broken commits.
 
 ```yaml
 quality-gate:
   needs:
+    - changes
+    - commitlint
     - secrets-scan
     - deps-audit
     - pip-audit
@@ -523,7 +533,7 @@ quality-gate:
 ```
 
 **Checks:**
-- All twelve prerequisite jobs must pass: `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `typecheck-backend`, `verify-generated`, `build-frontend`, `test-frontend`, `test-backend`, `verify-compose-sync`, `verify-destructive-migrations`
+- All fourteen prerequisite jobs must avoid failure or cancellation: `changes`, `commitlint`, `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `typecheck-backend`, `verify-generated`, `build-frontend`, `test-frontend`, `test-backend`, `verify-compose-sync`, `verify-destructive-migrations`
 - Runs regardless of individual failures (`if: always()`) but fails if any needed job failed
 - Blocks expensive Docker image build until quality gates are green
 
@@ -531,7 +541,7 @@ quality-gate:
 
 **Design:** Gating expensive Docker build after cheap linting/testing prevents CI resource waste on broken code.
 
-#### 16. **ci-complete** — Docker-Tier Aggregation
+#### 17. **ci-complete** — Docker-Tier Aggregation
 
 Final aggregation gate that combines all Docker-intensive CI stages (image scanning, container health, live API contracts). This job should be set as the **single required status check** in GitHub branch protection settings.
 

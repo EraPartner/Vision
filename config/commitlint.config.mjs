@@ -5,4 +5,8 @@
 // Harmonised with Watchman's commitlint config.
 export default {
   extends: ["@commitlint/config-conventional"],
+  // CI must never treat a synthetic merge-style fallback message as an
+  // automatic pass. The repository requires conventional messages for every
+  // commit, so the local hook and CI share the same fail-closed policy.
+  defaultIgnores: false,
 };

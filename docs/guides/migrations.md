@@ -279,33 +279,10 @@ The `0001_initial_database_schema` baseline includes the complete foundational s
 
 ## Migration Inventory
 
-| # | Migration | Description |
-|---|-----------|-------------|
-| 0001 | `initial_database_schema` | Foundation: 27 tables, 5 enums, 73 indexes, 13 triggers — see [[#baseline-0001-schema-scope|Baseline Scope]] above |
-| 0002 | `add_url_to_planned_transactions` | Adds `url` field to planned transactions |
-| 0003 | `make_recipient_nullable` | Makes recipient_id nullable on transactions |
-| 0004 | `portfolio_tables` | Introduces portfolio/investment tracking tables |
-| 0005 | `manual_raw_transactions` | Adds manual_raw_transactions for manual entry deduplication |
-| 0006 | `price_providers` | Introduces price_provider enum for investment price feeds |
-| 0007 | `recipient_merge` | Adds recipient merge capability (primary_recipient_id) |
-| 0008 | `drop_custom_raw_transactions` | Drops custom_raw_transactions table |
-| 0009 | `transaction_splits` | Adds transaction_splits and split_payments tables |
-| 0010 | `investments_municipality_tax_fields` | Adds Belgian tax fields to real estate investments |
-| 0011 | `planned_loans` | Adds loan support to planned transactions |
-| 0012 | `add_indexes` | Performance indexes on frequently queried columns |
-| 0013 | `investment_inheritance` | PostgreSQL table inheritance for investment types |
-| 0014 | `investments_view_update_trigger` | UPDATE trigger for investments compatibility view |
-| 0015 | `add_gift_portfolio_txn_type` | Adds 'gift' to portfolio_txn_type enum |
-| 0016 | `add_fx_rate_to_portfolio_transactions` | Adds fx_rate_to_eur for cross-currency portfolio transactions |
-| 0017 | `investment_custom_provider_history` | Custom provider latest/history URL fields, metals view/trigger |
-| 0018 | `metals_transactions_inheritance_split` | Splits metals_transactions from stock_transactions inheritance |
-| 0019 | `asset_price_history_cache` | Adds asset_price_history table for persisted historical quotes |
-| 0020 | `drop_asset_price_history_fk` | Drops FK constraint on asset_price_history |
-| 0021 | `update_price_provider_enum` | Swaps coingecko/kraken -> binance in price_provider enum |
-| 0022 | `add_kinesis_price_provider_enum` | Adds 'kinesis' to price_provider enum |
-| 0023 | `portfolio_performance_snapshots` | Adds portfolio_performance_snapshots table for daily performance data |
-| 0024 | `per_class_invested_columns` | Adds per-class invested columns to performance snapshots |
-| — | `fix_alembic_version_col` | Infrastructure fix: expands alembic_version.version_num column size |
+The ordered migration chain changes whenever a schema revision lands. Treat
+[`alembic/versions/`](../../alembic/versions/) and `alembic history` as the current inventory rather
+than copying a partial list into this guide. Migration `0001_initial_database_schema.py` remains the
+baseline described above; every later revision declares its predecessor through `down_revision`.
 
 ## Troubleshooting
 
