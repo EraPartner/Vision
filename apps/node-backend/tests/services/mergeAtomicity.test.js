@@ -40,9 +40,9 @@ async function loadRealTransactionStack() {
   });
   vi.doMock('pg', () => ({ default: { Pool: poolCtor } }));
   vi.doMock('../../src/config/config.js', () => ({
-    getSettings: () => ({
+    default: {
       database: { url: 'postgresql://test', poolSize: 5, maxOverflow: 10, echo: false },
-    }),
+    },
   }));
   vi.doMock('../../src/config/logger.js', () => ({
     logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },

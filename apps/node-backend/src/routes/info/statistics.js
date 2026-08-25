@@ -12,7 +12,7 @@
  */
 
 import { Router } from 'express';
-import infoRepository from '../../services/infoService.js';
+import infoService from '../../services/infoService.js';
 import { detectRecurringPatterns } from '../../services/recurringDetectionService.js';
 import { getInsightsDigest } from '../../services/insightsDigestService.js';
 import { computeDeductionCandidates } from '../../services/tax/deductionCandidatesService.js';
@@ -37,7 +37,7 @@ const router = Router();
 // (unpaginated — `total` is the row count, present so pagination could land
 // without breaking the shape).
 router.get('/banks', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const banks = await infoRepository.getBanks();
+  const banks = await infoService.getBanks();
   res.ok({ items: banks, total: banks.length });
 });
 
@@ -52,13 +52,13 @@ router.get('/supported-adapters', /** @param {ExpressRequest} req @param {Expres
 
 router.get('/transaction-count', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const accountId = assertOptionalId(req.query.account_id, 'account_id');
-  const count = await infoRepository.getTransactionCount({ accountId });
+  const count = await infoService.getTransactionCount({ accountId });
   res.ok({ total_transactions: count });
 });
 
 router.get('/planned-expenses-next-month', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const targetCurrency = getTargetCurrency(req);
-  const data = await infoRepository.getPlannedExpensesNextMonth(targetCurrency);
+  const data = await infoService.getPlannedExpensesNextMonth(targetCurrency);
   res.ok({ ...data, links: [] });
 });
 

@@ -115,7 +115,7 @@ Retrieve a single recipient by ID.
 
 **Error Response (404):**
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Recipient not found" } }
+{ "ok": false, "error": { "code": "NOT_FOUND", "message": "Recipient not found" } }
 ```
 
 ### PATCH /api/recipients/:id
@@ -314,7 +314,7 @@ Create a new matching pattern for a recipient.
 
 **Error Response (400):**
 ```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required field: pattern" } }
+{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "Missing required field: pattern" } }
 ```
 
 ### POST /api/recipients/:id/patterns/preview
@@ -363,7 +363,10 @@ Update an existing pattern.
 
 **Request Body:** Any subset of `pattern`, `pattern_kind`, `case_sensitive`, `priority`, `notes`.
 
-**Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
+**Response:** `200 OK`
+```json
+{ "patternId": 1 }
+```
 
 **Error Response (400):**
 ```json
@@ -381,10 +384,7 @@ Delete a pattern.
 | `id` | Recipient ID |
 | `patternId` | Pattern ID |
 
-**Response:** `200 OK`
-```json
-{ "patternId": 1 }
-```
+**Response:** `204 No Content` — empty body, no envelope (see [[docs/reference/code-patterns#DELETE Response Pattern|DELETE Response Pattern]]).
 
 **Error Response (400):**
 ```json

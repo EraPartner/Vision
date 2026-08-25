@@ -125,8 +125,4 @@ const settings = deepFreeze({
   },
 });
 
-export function getSettings() {
-  return settings;
-}
-
 export default settings;

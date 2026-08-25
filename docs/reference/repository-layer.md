@@ -75,10 +75,10 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ### Key Query Patterns
 
-- **Dynamic WHERE Building:** Constructs filter clauses from `opts.filters` object (date range, category, recipient, amount, bank account, currency, hidden status)
+- **Dynamic WHERE Building:** Constructs filter clauses from `opts.filters` object (date range, category, recipient, amount, bank account, currency, active status)
 - **Pagination:** `LIMIT/OFFSET`, with the total as a **separate count query** issued in parallel with the row query (`getAllWithCount`). `COUNT(*) OVER ()` was removed: the window function forced the planner to materialize and sort the whole filtered join before `LIMIT` on every page. Same `WHERE`, so the total is unchanged.
 - **Count join sets:** `getUncategorisedWithCount`'s total CTE counts over a **reduced** join set (`LEFT JOIN recipients r` only) rather than the full 6-way `TRANSACTION_JOINS` the row query uses for its labels. `r` is the one alias `buildTransactionWhere` can reference (`recipientName`'s `r.name ILIKE`); the other five are projection-only and a count selects no labels. All six are `LEFT JOIN`s onto a **primary key**, so dropping the unreferenced ones can neither drop nor duplicate a row — the count is identical.
-- **Soft Delete:** Uses `hidden` boolean flag, not `DELETE`
+- **Soft Delete:** Sets `is_active = false`, rather than deleting the row
 - **Recipient Group Filtering (Phase Q):** Supports `recipientGroupId` via `filterBuilder` to resolve full primary-recipient groups with an indexable semi-join on `recipients`; enables linked-recipient transaction discovery in OwesPage
 
 ### Dependencies
@@ -525,10 +525,10 @@ RETURNING id
 
 ### Soft Delete Pattern
 
-Uses `hidden` boolean flag instead of `DELETE`:
+Uses the `is_active` flag instead of `DELETE`:
 
 ```sql
-UPDATE transactions SET hidden = true WHERE id = $1
+UPDATE transactions SET is_active = false WHERE id = $1
 ```
 
 ## 14. tagRepository.js

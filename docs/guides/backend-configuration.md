@@ -57,7 +57,7 @@ On import, the module:
 ### Usage
 
 ```javascript
-import settings, { getSettings } from './config/config.js';
+import settings from './config/config.js';
 
 const port = settings.server.port;
 const isProd = settings.isProduction();

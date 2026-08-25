@@ -10,7 +10,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import settingsRepository from '../services/settingsService.js';
+import settingsService from '../services/settingsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
@@ -202,7 +202,7 @@ function assertSettingKeyLength(key, includeKeyInMessage = false) {
 }
 
 router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const settings = await settingsRepository.getAll();
+  const settings = await settingsService.getAll();
   res.ok(settings);
 });
 
@@ -285,7 +285,7 @@ function assertKnownSettingKey(key) {
 
 router.get('/:key', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { key } = req.params;
-  const value = await settingsRepository.get(key);
+  const value = await settingsService.get(key);
   if (value === null) {
     if (key in SETTING_DEFAULTS) {
       res.ok({ key, value: SETTING_DEFAULTS[key] });
@@ -326,7 +326,7 @@ router.put('/:key', /** @param {ExpressRequest} req @param {ExpressResponse} res
   assertKnownSettingKey(key);
   if (value === undefined) throw new ValidationError('Missing "value" in request body');
 
-  const result = await settingsRepository.set(key, validateSettingValue(key, value));
+  const result = await settingsService.set(key, validateSettingValue(key, value));
   res.ok(result);
 });
 
@@ -347,13 +347,13 @@ router.put('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
   }
   const validated = Object.fromEntries(validatedEntries);
 
-  await settingsRepository.setMany(validated);
+  await settingsService.setMany(validated);
   res.ok({ saved: Object.keys(validated).length });
 });
 
 router.delete('/:key', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const { key } = req.params;
-  const deleted = await settingsRepository.delete(key);
+  const deleted = await settingsService.delete(key);
   if (!deleted) throw new NotFoundError(`Setting '${key}' not found`);
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();

@@ -10,7 +10,7 @@
  * `-1`/`0` cleared the NaN check and reached the repository as-is.
  *
  * All four handlers come from the one shared `registerParserRoutes` in
- * lib/parserConfigRoutes.js, so the matrix is driven against a router built the
+ * routes/parserConfigRoutes.js, so the matrix is driven against a router built the
  * way both real routers build theirs (same `kind`/`normalizeConfig`/`label`
  * parameterisation). The two real routers are pinned to *use* it in
  * import.test.js and portfolioImportValidationPins.test.js — this file owns the
@@ -36,7 +36,7 @@ vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
 }));
 
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
-const { registerParserRoutes } = await import('../../src/lib/parserConfigRoutes.js');
+const { registerParserRoutes } = await import('../../src/routes/parserConfigRoutes.js');
 
 // Mirrors main.js's two mounts and each router's registerParserRoutes call.
 const MOUNTS = [

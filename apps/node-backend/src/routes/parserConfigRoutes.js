@@ -1,5 +1,5 @@
 /**
- * Shared helpers for the saved-parser-config CRUD routes (transaction + portfolio
+ * Shared saved-parser-config CRUD routes (transaction + portfolio
  * import). Both routers persist into the same custom_parser_configs table, so the
  * id parsing, name normalisation, and the (name, kind)-unique constraint name are
  * identical — kept here so the two routers cannot drift.
@@ -7,7 +7,7 @@
 
 import { ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 import { validateId, validateIdParam } from '../middleware/validation.js';
-import customParserConfigRepository from '../services/customParserConfigService.js';
+import customParserConfigService from '../services/customParserConfigService.js';
 
 /**
  * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
@@ -70,7 +70,7 @@ export function registerParserRoutes(router, { kind, normalizeConfig, label = ''
   // just the row count — it exists so pagination can be added without a
   // breaking response-shape change.
   router.get('/parsers', async (/** @type {ExpressRequest} */ req, /** @type {ExpressResponse} */ res) => {
-    const items = await customParserConfigRepository.getAll(kind);
+    const items = await customParserConfigService.getAll(kind);
     res.ok({ items, total: items.length });
   });
 
@@ -78,7 +78,7 @@ export function registerParserRoutes(router, { kind, normalizeConfig, label = ''
     const name = normalizeParserName(req.body.name);
     const config = normalizeConfig(req.body.config);
     try {
-      const created = await customParserConfigRepository.create({ name, config, kind });
+      const created = await customParserConfigService.create({ name, config, kind });
       res.status(201);
       res.ok(created);
     } catch (err) {
@@ -97,7 +97,7 @@ export function registerParserRoutes(router, { kind, normalizeConfig, label = ''
     const name = req.body.name !== undefined ? normalizeParserName(req.body.name) : undefined;
     const config = req.body.config !== undefined ? normalizeConfig(req.body.config) : undefined;
     try {
-      const updated = await customParserConfigRepository.update(id, { name, config });
+      const updated = await customParserConfigService.update(id, { name, config });
       if (!updated) throw new NotFoundError('Parser config not found');
       res.ok(updated);
     } catch (err) {
@@ -110,7 +110,7 @@ export function registerParserRoutes(router, { kind, normalizeConfig, label = ''
 
   router.delete('/parsers/:id', validateIdParam, async (/** @type {ExpressRequest} */ req, /** @type {ExpressResponse} */ res) => {
     const id = parseParserId(req);
-    const deleted = await customParserConfigRepository.delete(id);
+    const deleted = await customParserConfigService.delete(id);
     if (!deleted) throw new NotFoundError('Parser config not found');
     res.status(204).send();
   });

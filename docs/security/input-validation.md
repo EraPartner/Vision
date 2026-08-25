@@ -3,11 +3,11 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-08-23
+updated: 2026-08-25
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/lib/parserConfigRoutes.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/repositories/portfolioTxRepo.reads.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/importBatchIds.js", "apps/node-backend/src/routes/parserConfigRoutes.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/routes/portfolioImportRoutes.js", "apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/accountService.js", "apps/node-backend/src/lib/filterBuilder.js", "apps/node-backend/src/routes/aggregations.js", "apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/services/aiChat/tools/_validate.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/repositories/portfolioTxRepo.reads.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -477,7 +477,7 @@ router.get('/:id', validateIdParam, async (req, res) => {
 });
 ```
 
-Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`lib/parserConfigRoutes.js`, which registers the four saved-parser-config PATCH/DELETE operations on both).
+Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`routes/parserConfigRoutes.js`, which registers the four saved-parser-config PATCH/DELETE operations on both).
 
 ### validateIntParam
 

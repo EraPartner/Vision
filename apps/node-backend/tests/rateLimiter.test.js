@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/config/config.js', () => ({
-  getSettings: () => ({ isDevelopment: () => false }),
+  default: { isDevelopment: () => false },
 }));
 
 import {

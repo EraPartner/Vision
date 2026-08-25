@@ -28,7 +28,7 @@ import {
   categoryExists,
 } from '../services/importBatchService.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
-import { registerParserRoutes } from '../lib/parserConfigRoutes.js';
+import { registerParserRoutes } from './parserConfigRoutes.js';
 import { parsePagination } from '../lib/pagination.js';
 
 /**

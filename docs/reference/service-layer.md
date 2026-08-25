@@ -890,7 +890,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## filterBuilder.js
 
-**File:** [[apps/node-backend/src/services/filterBuilder.js]]
+**File:** [[apps/node-backend/src/lib/filterBuilder.js]]
 **Purpose:** Builds parameterised `WHERE` clauses for transaction queries from a normalised filter object. Single source of truth shared by list, export, bulk and aggregation paths to keep filter semantics consistent.
 
 | Function | Returns |

@@ -684,7 +684,7 @@ The `ExportCard` component now provides multi-select pickers for bank accounts a
 - **Validation:** `category_ids` throws `ValidationError` if any value is not an integer
 
 #### filterBuilder.buildTransactionWhere
-**File:** `[[apps/node-backend/src/services/filterBuilder.js]]`
+**File:** `[[apps/node-backend/src/lib/filterBuilder.js]]`
 
 - **Purpose:** Build WHERE clause for transaction queries
 - **Support:** Now accepts `bankAccounts` (plural, exact IN clause) and `categoryIds` (plural, IN clause)

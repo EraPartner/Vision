@@ -14,7 +14,7 @@
  */
 
 import { Router } from 'express';
-import infoRepository from '../services/infoService.js';
+import infoService from '../services/infoService.js';
 import { logger } from '../config/logger.js';
 import { getSnapshots } from '../services/portfolioPerformanceSnapshotService.js';
 import { getPortfolioSummary } from '../services/portfolio/portfolioSummaryService.js';
@@ -51,7 +51,7 @@ router.use('/', maintenanceRouter);
 async function warmNetWorthCache(targetCurrency) {
   try {
     const liveInvestments = await resolveLivePortfolioValue(targetCurrency);
-    const nwData = await infoRepository.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
+    const nwData = await infoService.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
     setCachedData(netWorthResponseCache, targetCurrency, nwData, NET_WORTH_CACHE_TTL_MS);
     logger.info('Net-worth cache warmed', { targetCurrency, snapshots: nwData?.snapshots?.length });
   } catch (err) {

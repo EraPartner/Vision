@@ -17,7 +17,7 @@ import { Router } from 'express';
 import https from 'https';
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- admin table stats/VACUUM are legitimately DB-level (ADR-067 documented exemption)
 import { checkConnection, getClient, getTableCount, query } from '../database/connection.js';
-import { getSettings } from '../config/config.js';
+import settings from '../config/config.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { sanitizePersistedKinesisHistory } from '../services/priceProviderService.js';
@@ -160,7 +160,6 @@ router.post('/database/init', /** @param {ExpressRequest} req @param {ExpressRes
 });
 
 router.post('/database/reset', adminMutateLimiter, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const settings = getSettings();
   if (!settings.admin.enableResetDb) {
     throw new NotFoundError('Database reset endpoint disabled');
   }

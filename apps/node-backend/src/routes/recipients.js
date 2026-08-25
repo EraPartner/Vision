@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import recipientRepository from '../services/recipientService.js';
+import recipientService from '../services/recipientService.js';
 import { mergeRecipients as mergeRecipientsAtomic } from '../services/recipientMergeService.js';
 import {
   listPatternsForRecipient,
@@ -61,8 +61,8 @@ router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
   };
 
   const [items, total] = await Promise.all([
-    recipientRepository.getAll(opts),
-    recipientRepository.getCount(opts),
+    recipientService.getAll(opts),
+    recipientService.getCount(opts),
   ]);
 
   res.ok({
@@ -82,11 +82,11 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
   const { name, default_category_id, notes } = req.body;
   if (!name) throw new ValidationError('Missing required field: name');
 
-  const { recipient, created } = await recipientRepository.createOrGet({ name });
+  const { recipient, created } = await recipientService.createOrGet({ name });
 
   let finalRecipient = recipient;
   if (default_category_id != null || notes != null) {
-    finalRecipient = await recipientRepository.update(recipient.id, { default_category_id, notes });
+    finalRecipient = await recipientService.update(recipient.id, { default_category_id, notes });
   }
 
   res.status(created ? 201 : 200);
@@ -94,14 +94,14 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
 });
 
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const recipient = await recipientRepository.getById(parseInt(req.params.id, 10));
+  const recipient = await recipientService.getById(parseInt(req.params.id, 10));
   if (!recipient) throw new NotFoundError('Recipient not found');
   res.ok({ ...recipient, links: [] });
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const updated = await recipientRepository.update(id, req.body);
+  const updated = await recipientService.update(id, req.body);
   if (!updated) throw new NotFoundError('Recipient not found');
   scheduleRefresh();
   res.ok({ ...updated, links: [] });
@@ -109,7 +109,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const deleted = await recipientRepository.hardDelete(id);
+  const deleted = await recipientService.hardDelete(id);
   if (!deleted) throw new NotFoundError('Recipient not found');
   scheduleRefresh();
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
@@ -123,7 +123,7 @@ router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @para
     throw new ValidationError('Missing required field: alias_ids (array of recipient IDs)');
   }
 
-  const primary = await recipientRepository.getById(primaryId);
+  const primary = await recipientService.getById(primaryId);
   if (!primary) throw new NotFoundError('Primary recipient not found');
   if (primary.primary_recipient_id) {
     throw new ValidationError('Cannot merge into a recipient that is itself an alias. Use its primary instead.');
@@ -133,8 +133,8 @@ router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @para
     primaryId,
     alias_ids.map(Number),
   );
-  const updatedPrimary = await recipientRepository.getById(primaryId);
-  const aliases = await recipientRepository.getAliases(primaryId);
+  const updatedPrimary = await recipientService.getById(primaryId);
+  const aliases = await recipientService.getAliases(primaryId);
 
   // Build pattern suggestion from merged alias names + primary name
   const mergedNames = aliases
@@ -169,16 +169,16 @@ router.post('/:id/merge', validateIdParam, /** @param {ExpressRequest} req @para
 
 router.post('/:id/unmerge', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const success = await recipientRepository.unmergeRecipient(id);
+  const success = await recipientService.unmergeRecipient(id);
   if (!success) throw new NotFoundError('Recipient not found');
-  const recipient = await recipientRepository.getById(id);
+  const recipient = await recipientService.getById(id);
   scheduleRefresh();
   res.ok({ ...recipient, links: [] });
 });
 
 router.get('/:id/aliases', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const aliases = await recipientRepository.getAliases(id);
+  const aliases = await recipientService.getAliases(id);
   res.ok({
     items: aliases.map((a) => ({
       ...a,

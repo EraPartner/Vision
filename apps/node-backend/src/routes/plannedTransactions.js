@@ -12,7 +12,7 @@
 /// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from 'express';
 import { z } from 'zod';
-import plannedTransactionRepository from '../services/plannedTransactionService.js';
+import plannedTransactionService from '../services/plannedTransactionService.js';
 import { resolveRecipientIdByName } from '../services/recipientService.js';
 import { resolveCategoryIdByName } from '../services/categoryService.js';
 import { validateIdParam, assertYmd, assertOptionalId, validateId, assertCurrency } from '../middleware/validation.js';
@@ -401,7 +401,7 @@ router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
     active: active !== 'false',
   };
 
-  const { items, total } = await plannedTransactionRepository.getAll(opts);
+  const { items, total } = await plannedTransactionService.getAll(opts);
   res.ok({
     items: items.map(formatPlannedTransaction),
     total,
@@ -427,7 +427,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
     data.planned_date = generated.first_due_date;
 
     data.is_recurring = true;
-    // Loans advance monthly (see plannedTransactionRepository.create). Set it
+    // Loans advance monthly (see plannedTransactionService.create). Set it
     // explicitly so the created row + /execute advance are consistent and the
     // recurrence_pattern validation below sees a valid pattern.
     data.recurrence_pattern = 'monthly';
@@ -443,7 +443,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
   // above: the superRefine checks above this block (and, for the non-loan
   // path, the schema's own superRefine at its definition) already enforce
   // planned_date/amount are present by the time this line runs.
-  const created = await plannedTransactionRepository.create(
+  const created = await plannedTransactionService.create(
     /** @type {Record<string, any> & { planned_date: string, amount: number|string, is_loan?: boolean, loan_schedule?: Array<Record<string, any>>, tags?: string[]|null }} */ (data),
   );
   res.status(201);
@@ -459,7 +459,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
 router.get('/due-soon', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const raw = parseInt(req.query.days, 10);
   const days = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 365) : 7;
-  const rows = await plannedTransactionRepository.getDueSoon(days);
+  const rows = await plannedTransactionService.getDueSoon(days);
   const items = rows.map(formatPlannedTransaction);
   // Canonical collection shape `{items, total}` in the data body (never counts
   // in meta); `days` echoes the effective window alongside.
@@ -483,7 +483,7 @@ router.get('/match-suggestions', /** @param {ExpressRequest} req @param {Express
 
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseRouteId(req);
-  const pt = await plannedTransactionRepository.getById(id);
+  const pt = await plannedTransactionService.getById(id);
   if (!pt) throw new NotFoundError(`Planned transaction ${req.params.id} not found`);
   res.ok(formatPlannedTransaction(pt));
 });
@@ -494,7 +494,7 @@ router.patch(
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'planned-transactions-patch' }),
   /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
     const id = parseRouteId(req);
-    const existing = await plannedTransactionRepository.getById(id);
+    const existing = await plannedTransactionService.getById(id);
     if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
     // Validate/coerce the typed leaf fields before any lookups run; loose
@@ -537,8 +537,8 @@ router.patch(
     // "loose zod passthrough vs. typed repository param" gap as transactions.js.
     const typedFields = /** @type {Record<string, any> & { tags?: string[] }} */ (fields);
     const updated = loanScheduleDirective !== undefined
-      ? await plannedTransactionRepository.updateWithLoanSchedule(id, typedFields, loanScheduleDirective)
-      : await plannedTransactionRepository.update(id, typedFields);
+      ? await plannedTransactionService.updateWithLoanSchedule(id, typedFields, loanScheduleDirective)
+      : await plannedTransactionService.update(id, typedFields);
 
     if (!updated) throw new NotFoundError(`Planned transaction ${id} not found`);
 
@@ -567,14 +567,14 @@ router.post('/:id/execute', validateIdParam, /** @param {ExpressRequest} req @pa
 
   if (duplicate) res.set('Idempotent-Replay', 'true');
   // executePlanned's own @returns widens `current` to `object` at the service
-  // seam, but it's a pass-through of plannedTransactionRepository.getById()'s
+  // seam, but it is a pass-through of plannedTransactionService.getById()'s
   // HydratedPlannedTransactionRow|null.
   res.ok(formatPlannedTransaction(/** @type {HydratedPlannedTransactionRow|null} */ (current)));
 });
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseRouteId(req);
-  const deleted = await plannedTransactionRepository.hardDelete(id);
+  const deleted = await plannedTransactionService.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Planned transaction ${id} not found`);
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();

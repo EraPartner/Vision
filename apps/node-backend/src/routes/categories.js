@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import categoryRepository from '../services/categoryService.js';
+import categoryService from '../services/categoryService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
@@ -36,8 +36,8 @@ router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ 
     active: active !== 'false',
   };
 
-  const items = await categoryRepository.getAll(opts);
-  const total = page ? await categoryRepository.getCount(opts) : items.length;
+  const items = await categoryService.getAll(opts);
+  const total = page ? await categoryService.getCount(opts) : items.length;
 
   const enriched = items.map((c) => ({
     ...c,
@@ -51,7 +51,7 @@ router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */
   const { general, detail, description } = req.body;
   if (!general || !detail) throw new ValidationError('Missing required fields: general, detail');
 
-  const { category, created } = await categoryRepository.createOrGet({ general, detail, description });
+  const { category, created } = await categoryService.createOrGet({ general, detail, description });
   res.status(created ? 201 : 200);
   res.ok({ ...category, links: [] });
 });
@@ -65,24 +65,24 @@ router.post('/assign', /** @param {ExpressRequest} req @param {ExpressResponse} 
   if (!recipient_ids) throw new ValidationError('Missing recipient_ids');
 
   const ids = Array.isArray(recipient_ids) ? recipient_ids : [recipient_ids];
-  const { category } = await categoryRepository.createOrGet({
+  const { category } = await categoryService.createOrGet({
     general: category_general,
     detail: category_detail,
   });
-  const updated = await categoryRepository.assignToRecipients(category.id, ids);
+  const updated = await categoryService.assignToRecipients(category.id, ids);
   scheduleRefresh();
   res.ok({ updated_recipients: updated, links: [] });
 });
 
 router.get('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
-  const category = await categoryRepository.getById(parseInt(req.params.id, 10));
+  const category = await categoryService.getById(parseInt(req.params.id, 10));
   if (!category) throw new NotFoundError(`Category ${req.params.id} not found`);
   res.ok({ ...category, links: [] });
 });
 
 router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const updated = await categoryRepository.update(id, req.body);
+  const updated = await categoryService.update(id, req.body);
   if (!updated) throw new NotFoundError(`Category ${id} not found`);
   scheduleRefresh();
   res.ok({ ...updated, links: [] });
@@ -90,7 +90,7 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const deleted = await categoryRepository.hardDelete(id);
+  const deleted = await categoryService.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Category ${id} not found`);
   scheduleRefresh();
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
@@ -103,7 +103,7 @@ router.post('/:id/assign', validateIdParam, /** @param {ExpressRequest} req @par
   if (!recipient_ids) throw new ValidationError('Missing recipient_ids');
   if (!Array.isArray(recipient_ids)) recipient_ids = [recipient_ids];
 
-  const updated = await categoryRepository.assignToRecipients(categoryId, recipient_ids);
+  const updated = await categoryService.assignToRecipients(categoryId, recipient_ids);
   scheduleRefresh();
   res.ok({ updated_recipients: updated, links: [] });
 });

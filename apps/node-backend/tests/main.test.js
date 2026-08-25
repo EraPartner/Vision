@@ -35,7 +35,7 @@ vi.mock('../src/middleware/rateLimiter.js', () => ({
   importRateLimiter: (req, res, next) => next(),
 }));
 
-import { getSettings } from '../src/config/config.js';
+import settings from '../src/config/config.js';
 import { checkConnection } from '../src/database/connection.js';
 import { logger } from '../src/config/logger.js';
 
@@ -45,24 +45,20 @@ describe('Main Application', () => {
   // ── Configuration ──────────────────────────────────────────
   describe('Configuration', () => {
     it('should have valid API settings', () => {
-      const settings = getSettings();
       expect(settings.api.title).toBeTruthy();
       expect(settings.api.version).toBeTruthy();
     });
 
     it('should have server settings', () => {
-      const settings = getSettings();
       expect(settings.server.port).toBeDefined();
       expect(settings.server.host).toBeDefined();
     });
 
     it('should have database settings', () => {
-      const settings = getSettings();
       expect(settings.database.url).toBeDefined();
     });
 
     it('should have CORS origins configured', () => {
-      const settings = getSettings();
       expect(settings.api.corsOrigins).toBeDefined();
     });
   });
@@ -112,8 +108,6 @@ describe('Main Application', () => {
   // ── Error Handling ─────────────────────────────────────────
   describe('Error Handling', () => {
     it('should return 500 JSON for unhandled errors', () => {
-      const settings = getSettings();
-
       // Simulate the global error handler logic from main.js
       const err = new Error('Test error');
       const detail = settings.isProduction()
@@ -132,7 +126,6 @@ describe('Main Application', () => {
   // ── Health Check ───────────────────────────────────────────
   describe('Health Check', () => {
     it('should return healthy status structure', () => {
-      const settings = getSettings();
       const health = {
         status: 'healthy',
         service: 'financial-transaction-manager-node',
@@ -150,7 +143,6 @@ describe('Main Application', () => {
   // ── API Root ───────────────────────────────────────────────
   describe('API Root', () => {
     it('should return API info structure', () => {
-      const settings = getSettings();
       const root = {
         version: settings.api.version,
         title: settings.api.title,

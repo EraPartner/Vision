@@ -3,7 +3,7 @@ title: AI Agent Codebase Navigation Map
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-08-13
+updated: 2026-08-25
 tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1, phase-c, phase-e, bulk-actions]
 description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task. Updated for Phase C import pipeline consolidation, Phase E component decomposition, and bulk transaction actions.
 aliases: [agent navigation, codebase map, file map, navigation guide]
@@ -154,7 +154,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Layer | Files |
 |-------|-------|
 | Frontend Page | [[apps/frontend/src/pages/DashboardPage.tsx]] |
-| Components | [[apps/frontend/src/features/dashboard/StatCard.tsx]], [[apps/frontend/src/features/dashboard/MonthlySpendingChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]] |
+| Components | [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/MonthlySpendingChart.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]] |
 | Settings Dialog | [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]] |
 | Hook | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]] |
 | Backend Service | [[apps/node-backend/src/services/materializedViewService.js]] |

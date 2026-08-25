@@ -6,7 +6,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
-import { getSettings } from '../config/config.js';
+import settings from '../config/config.js';
 import { logger } from '../config/logger.js';
 
 /// <reference path="../types/thirdPartyModules.d.ts" />
@@ -57,8 +57,6 @@ const txStorage = new AsyncLocalStorage();
 export function getAmbientTransactionClient() {
   return txStorage.getStore()?.client ?? null;
 }
-
-const settings = getSettings();
 
 // pool.max should be the true ceiling for concurrent DB connections.
 // settings.database.poolSize is the sustained pool size;

@@ -7,7 +7,7 @@
  * (main.js:324 — `mountRouter(app, '/api/admin', adminRateLimiter,
  * adminCsrfGuard, adminAuthMiddleware, adminRouter)`) is reproduced via the
  * harness's `before` slot with the REAL `createAdminAuthMiddleware`, driven by
- * the same `getSettings().admin.authToken` getter main.js uses — so a
+ * the same `settings.admin.authToken` value main.js uses — so a
  * configured token is now actually enforced in tests, previously impossible
  * under the mock-router harness. `adminRateLimiter` (app-level, module-scoped
  * counters) and `adminCsrfGuard` (redundant with the harness's own global CSRF
@@ -33,12 +33,12 @@ vi.mock('../../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
-vi.mock('../../src/config/config.js', () => ({
-  getSettings: vi.fn(() => ({
-    admin: { enableResetDb: false, authToken: undefined },
-    isDevelopment: () => true,
-  })),
+const settings = vi.hoisted(() => ({
+  admin: { enableResetDb: false, authToken: undefined },
+  isDevelopment: () => true,
 }));
+
+vi.mock('../../src/config/config.js', () => ({ default: settings }));
 
 vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
@@ -58,7 +58,6 @@ vi.mock('../../src/services/routeManifest.js', () => ({
 }));
 
 import { checkConnection, getTableCount } from '../../src/database/connection.js';
-import { getSettings } from '../../src/config/config.js';
 import { sanitizePersistedKinesisHistory } from '../../src/services/priceProviderService.js';
 import { listProviderHealth } from '../../src/services/providerHealthService.js';
 import { getRouteManifest } from '../../src/services/routeManifest.js';
@@ -68,7 +67,7 @@ const { default: adminRouter } = await import('../../src/routes/admin.js');
 
 // Mirrors main.js:31 exactly — a per-request getter so a test can flip
 // settings.admin.authToken between calls and see the guard react.
-const adminAuthMiddleware = createAdminAuthMiddleware(() => getSettings().admin.authToken);
+const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
 
 const api = routeAgent(adminRouter, {
   mountPath: '/api/admin',
@@ -82,10 +81,8 @@ describe('Admin Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    getSettings.mockReturnValue({
-      admin: { enableResetDb: false, authToken: undefined },
-      isDevelopment: () => true,
-    });
+    settings.admin.enableResetDb = false;
+    settings.admin.authToken = undefined;
     delete process.env.APP_VERSION;
     delete process.env.APP_IMAGE_TAG;
   });
@@ -116,10 +113,7 @@ describe('Admin Routes', () => {
     });
 
     it('rejects a request with no Authorization header once a token is configured', async () => {
-      getSettings.mockReturnValue({
-        admin: { enableResetDb: false, authToken: 'secret-token' },
-        isDevelopment: () => true,
-      });
+      settings.admin.authToken = 'secret-token';
 
       const res = await api.get(`${BASE}/`).expect(401);
       expect(res.body).toEqual(errEnvelope({ code: 'UNAUTHORIZED' }));
@@ -127,20 +121,14 @@ describe('Admin Routes', () => {
     });
 
     it('rejects a request bearing the wrong token', async () => {
-      getSettings.mockReturnValue({
-        admin: { enableResetDb: false, authToken: 'secret-token' },
-        isDevelopment: () => true,
-      });
+      settings.admin.authToken = 'secret-token';
 
       const res = await api.get(`${BASE}/`).set('Authorization', 'Bearer wrong').expect(401);
       expect(res.body).toEqual(errEnvelope({ code: 'UNAUTHORIZED' }));
     });
 
     it('passes through with the correct bearer token', async () => {
-      getSettings.mockReturnValue({
-        admin: { enableResetDb: false, authToken: 'secret-token' },
-        isDevelopment: () => true,
-      });
+      settings.admin.authToken = 'secret-token';
       checkConnection.mockResolvedValue(true);
       getTableCount.mockResolvedValue(5);
 
@@ -213,14 +201,14 @@ describe('Admin Routes', () => {
 
   describe('POST /database/reset', () => {
     it('should throw NotFoundError when reset disabled', async () => {
-      getSettings.mockReturnValue({ admin: { enableResetDb: false }, isDevelopment: () => true });
+      settings.admin.enableResetDb = false;
 
       const res = await api.post(`${BASE}/database/reset`).expect(404);
       expect(res.body).toEqual(errEnvelope({ code: 'NOT_FOUND' }));
     });
 
     it('should throw ValidationError without force parameter', async () => {
-      getSettings.mockReturnValue({ admin: { enableResetDb: true }, isDevelopment: () => true });
+      settings.admin.enableResetDb = true;
 
       const res = await api.post(`${BASE}/database/reset`).expect(400);
       expect(res.body).toEqual(errEnvelope({
@@ -231,7 +219,7 @@ describe('Admin Routes', () => {
     });
 
     it('should accept force=true', async () => {
-      getSettings.mockReturnValue({ admin: { enableResetDb: true }, isDevelopment: () => true });
+      settings.admin.enableResetDb = true;
 
       const res = await api.post(`${BASE}/database/reset?force=true`).expect(200);
       expect(res.body).toEqual(expect.objectContaining({ ok: true }));

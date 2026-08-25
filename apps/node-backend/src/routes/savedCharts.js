@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { z } from 'zod';
-import savedChartsRepository from '../services/savedChartsService.js';
+import savedChartsService from '../services/savedChartsService.js';
 import { validateIntArray, validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { listBody, parseOptionalPagination } from '../lib/pagination.js';
@@ -77,7 +77,7 @@ const dateField = (field) => z.unknown().transform((value, ctx) => {
     ctx.addIssue({ code: 'custom', message: `Invalid date for "${field}"` });
     return z.NEVER;
   }
-  // savedChartsRepository's SavedChartInput declares dateRangeStart/End as
+  // savedChartsService's SavedChartInput declares dateRangeStart/End as
   // `string|null` ('YYYY-MM-DD'); the Date parse above only validates the
   // input, it does not reshape it — the raw value (whatever shape the caller
   // sent) is what the repository has always received.
@@ -159,14 +159,14 @@ function parseChartBody(schema, body) {
 // all), and `total` is the row count — no COUNT round-trip needed.
 router.get('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
-  const charts = await savedChartsRepository.getAll(page ?? {});
-  const total = page ? await savedChartsRepository.getCount() : charts.length;
+  const charts = await savedChartsService.getAll(page ?? {});
+  const total = page ? await savedChartsService.getCount() : charts.length;
   res.ok(listBody(charts, total, page));
 });
 
 router.post('/', /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const data = parseChartBody(createChartSchema, req.body);
-  const chart = await savedChartsRepository.create(data);
+  const chart = await savedChartsService.create(data);
   res.status(201);
   res.ok(chart);
 });
@@ -176,14 +176,14 @@ router.patch('/:id', validateIdParam, /** @param {ExpressRequest} req @param {Ex
   // Only fields present in the body reach the repository — buildSetClauses
   // skips absent/undefined fields, so partial updates stay partial.
   const data = parseChartBody(updateChartSchema, req.body);
-  const updated = await savedChartsRepository.update(id, data);
+  const updated = await savedChartsService.update(id, data);
   if (!updated) throw new NotFoundError('Saved chart not found');
   res.ok(updated);
 });
 
 router.delete('/:id', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const deleted = await savedChartsRepository.delete(id);
+  const deleted = await savedChartsService.delete(id);
   if (!deleted) throw new NotFoundError('Saved chart not found');
   res.status(204).send();
 });

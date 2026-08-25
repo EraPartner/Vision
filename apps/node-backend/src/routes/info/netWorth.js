@@ -13,7 +13,7 @@
  */
 
 import { Router } from 'express';
-import infoRepository from '../../services/infoService.js';
+import infoService from '../../services/infoService.js';
 import { rateLimiter } from '../../middleware/rateLimiter.js';
 import { getTargetCurrency } from './_queryParams.js';
 import {
@@ -45,7 +45,7 @@ router.get(
       keepPreviousData: true,
       loader: async () => {
         const liveInvestments = await resolveLivePortfolioValue(targetCurrency);
-        return infoRepository.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
+        return infoService.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
       },
     });
 

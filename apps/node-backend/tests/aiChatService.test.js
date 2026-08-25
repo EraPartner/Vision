@@ -15,7 +15,7 @@ vi.mock('../src/config/config.js', () => {
       healthTimeoutMs: 3000,
     },
   };
-  return { default: settings, getSettings: () => settings };
+  return { default: settings };
 });
 
 vi.mock('../src/repositories/aiChatRepository.js', () => ({

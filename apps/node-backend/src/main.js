@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import { createGzip } from 'node:zlib';
 import { dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
-import { getSettings } from './config/config.js';
+import settings from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool, getPoolStats, query } from './database/connection.js';
 import { ensureAppRole } from './database/roleBootstrap.js';
@@ -76,7 +76,6 @@ import {
 } from './middleware/rateLimiter.js';
 import { buildRouteManifest, mountRouter } from './services/routeManifest.js';
 
-const settings = getSettings();
 const app = express();
 
 // ==================== Middleware ====================
@@ -683,4 +682,3 @@ start().catch((err) => {
   logger.error('Failed to start application', { error: err.message });
   process.exit(1);
 });
-

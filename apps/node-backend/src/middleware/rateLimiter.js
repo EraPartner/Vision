@@ -4,9 +4,7 @@
  */
 
 import { RateLimitedError } from './errorHandler.js';
-import { getSettings } from '../config/config.js';
-
-const settings = getSettings();
+import settings from '../config/config.js';
 
 const requestCounts = new Map();
 

@@ -40,7 +40,7 @@ async function loadConnectionModule({
   }));
 
   vi.doMock('../src/config/config.js', () => ({
-    getSettings: vi.fn(() => settings),
+    default: settings,
   }));
 
   vi.doMock('../src/config/logger.js', () => ({

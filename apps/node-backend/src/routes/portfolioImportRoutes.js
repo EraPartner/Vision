@@ -36,7 +36,7 @@ import {
 } from '../services/portfolioImportBatchService.js';
 import accountService from '../services/accountService.js';
 import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
-import { registerParserRoutes } from '../lib/parserConfigRoutes.js';
+import { registerParserRoutes } from './parserConfigRoutes.js';
 import { parsePagination } from '../lib/pagination.js';
 
 /**

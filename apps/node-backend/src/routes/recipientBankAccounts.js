@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import recipientBankAccountRepository from '../services/recipientBankAccountService.js';
+import recipientBankAccountService from '../services/recipientBankAccountService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam, validateIntParam, assertMaxLength } from '../middleware/validation.js';
 
@@ -19,7 +19,7 @@ const validateAccountIdParam = validateIntParam('accountId');
 router.get('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseInt(req.params.id, 10);
   const activeOnly = req.query.active !== 'false';
-  const accounts = await recipientBankAccountRepository.getByRecipientId(recipientId, activeOnly);
+  const accounts = await recipientBankAccountService.getByRecipientId(recipientId, activeOnly);
   res.ok({ items: accounts, total: accounts.length });
 });
 
@@ -32,7 +32,7 @@ router.post('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} r
   // over-length value otherwise reached the column as a raw 22001 500.
   assertMaxLength(account_number, 34, 'account_number');
 
-  const { bankAccount, created } = await recipientBankAccountRepository.createOrGet({
+  const { bankAccount, created } = await recipientBankAccountService.createOrGet({
     recipientId,
     accountNumber: account_number,
     bankName: bank_name || null,
@@ -48,7 +48,7 @@ router.post('/:id/bank-accounts', validateIdParam, /** @param {ExpressRequest} r
 router.patch('/:id/bank-accounts/:accountId', validateIdParam, validateAccountIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const accountId = parseInt(req.params.accountId, 10);
   const { bank_name, address, account_label } = req.body;
-  const updated = await recipientBankAccountRepository.update(accountId, {
+  const updated = await recipientBankAccountService.update(accountId, {
     bankName: bank_name,
     address,
     accountLabel: account_label,
@@ -62,18 +62,18 @@ router.patch('/:id/bank-accounts/:accountId', validateIdParam, validateAccountId
 // "DELETE responses") — same shape as set-primary below.
 router.delete('/:id/bank-accounts/:accountId', validateIdParam, validateAccountIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const accountId = parseInt(req.params.accountId, 10);
-  const deactivated = await recipientBankAccountRepository.softDelete(accountId);
+  const deactivated = await recipientBankAccountService.softDelete(accountId);
   if (!deactivated) throw new NotFoundError('Bank account not found');
-  const account = await recipientBankAccountRepository.getById(accountId);
+  const account = await recipientBankAccountService.getById(accountId);
   res.ok({ ...account, links: [] });
 });
 
 router.post('/:id/bank-accounts/:accountId/set-primary', validateIdParam, validateAccountIdParam, /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (req, res) => {
   const recipientId = parseInt(req.params.id, 10);
   const accountId = parseInt(req.params.accountId, 10);
-  const success = await recipientBankAccountRepository.setPrimary(accountId, recipientId);
+  const success = await recipientBankAccountService.setPrimary(accountId, recipientId);
   if (!success) throw new NotFoundError('Bank account not found or does not belong to this recipient');
-  const account = await recipientBankAccountRepository.getById(accountId);
+  const account = await recipientBankAccountService.getById(accountId);
   res.ok({ ...account, links: [] });
 });
 
