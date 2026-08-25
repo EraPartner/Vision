@@ -329,7 +329,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
     });
 
     // The transaction-flow fallback fires whenever the balance walk returns no
-    // rows — which is not only the un-migrated ledger it was written for, but
+    // rows — which is not only the unattributed ledger it was written for, but
     // ALSO a ledger where every account with activity is in_net_worth=false.
     // It used to sum ALL active transactions with no account / in_net_worth
     // predicate, so that ledger reported the tracking-only accounts' running
@@ -457,7 +457,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
     //
     // The exclusion has to be CONDITIONAL, which is what makes this different
     // from the tracking-only case: the transaction-flow fallback deliberately
-    // counts these rows (they are the un-migrated ledger it exists for), so the
+    // counts these rows (they are the unattributed ledger it exists for), so the
     // date probe drops them only when it can tell the walk will answer — see
     // WALK_ANSWERS_CTE in infoRepositoryNetWorth.js. The two tests after this
     // one pin both sides of that condition.
@@ -470,8 +470,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
         await seedBase();
         if (withUnattributed) {
           // account_id NULL behind a bank_account string with no accounts row —
-          // the un-migrated shape (the trigger only resolves an UPDATE against
-          // an existing account).
+          // a synthetic legacy shape (the trigger only resolves an UPDATE
+          // against an existing account).
           await insertTxn({ date: addDaysYmd(monthStart, -400), amount: '7.00', bank: null });
           await getTestPool().query(`UPDATE transactions SET bank_account = 'LEGACY BANK'`);
           expect(
@@ -502,7 +502,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
     // unconditional exclusion: when the FALLBACK is what answers, the
     // unattributed rows ARE the ledger, and dropping them from the probe would
     // blank the chart of exactly the install the fallback exists for. (The
-    // plain un-migrated ledger is covered further down; this pins the awkward
+    // plain unattributed ledger is covered further down; this pins the awkward
     // shape — an in-net-worth account exists, but every one of its rows is
     // future-dated, so the walk's grid ends before it and the walk still cannot
     // answer.)
@@ -604,8 +604,8 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
     // The other half of the same predicate: the fallback must keep counting
     // rows that are NOT positively attributed to a tracking-only account. A
     // bare inner join to `accounts` would have dropped exactly these — the
-    // un-migrated ledger the fallback exists to serve.
-    it('still sums un-migrated rows whose bank_account has no accounts row', async () => {
+    // unattributed ledger the fallback exists to serve.
+    it('still sums unattributed rows whose bank_account has no accounts row', async () => {
       await seedBase();
       const today = TODAY();
       const d1 = addDaysYmd(today, -1);
@@ -626,7 +626,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
       expect(r.current.liquid).toBe(1500);
     });
 
-    it('drops only the tracking-attributed rows when un-migrated rows sit alongside them', async () => {
+    it('drops only the tracking-attributed rows when unattributed rows sit alongside them', async () => {
       await seedBase();
       const today = TODAY();
       await addAccount('TRACKING', { inNetWorth: false });
@@ -646,7 +646,7 @@ describe.skipIf(!hasTestDatabase())('repositories/infoRepository barrel (real DB
     it('leaves un-attributable fallback rows in liquid, not liabilities', async () => {
       await seedBase();
       const today = TODAY();
-      // The un-migrated shape: a big negative running balance behind a
+      // The synthetic legacy shape: a big negative running balance behind a
       // bank_account string with no accounts row. There is no `accounts.type` to
       // read, so there is nothing to split on — the documented resolution is
       // `false` (liquid), which is also what keeps this ledger's reported

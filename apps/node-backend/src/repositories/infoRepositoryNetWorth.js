@@ -32,11 +32,15 @@ import {
  * account, mirroring the walk's `account_list` resolution. Requires the
  * transactions alias to be `t`; splices onto an existing WHERE.
  *
- * It deliberately cannot inner-join `accounts`: the un-migrated ledger the
- * fallback exists for has rows carrying a `bank_account` string (or nothing) and
- * NO accounts row behind them, and an inner join would drop exactly the rows the
- * fallback is here to count. Rows with a NULL account_id therefore stay counted —
- * they are unattributed, and nothing says they belong to a tracking-only account.
+ * It deliberately cannot inner-join `accounts`: rows with a NULL account_id are
+ * still tolerated and an inner join would drop them. Migration 0050 backfilled
+ * every non-empty bank_account label, and the sync trigger resolves or creates an
+ * account for such labels on INSERT. Blank-label INSERTs can still be
+ * unattributed. Current labelled unattributed rows are narrower legacy or
+ * explicit-update cases: a pre-0050 row without a label later relabelled to an
+ * unknown account (UPDATE is lookup-only), or an UPDATE that blanks a label and
+ * detaches account_id. They stay counted because nothing attributes them to a
+ * tracking-only account.
  */
 const NOT_TRACKING_ONLY = `
             AND NOT EXISTS (
@@ -54,7 +58,7 @@ const NOT_TRACKING_ONLY = `
  * because resolving liability by name while {@link NOT_TRACKING_ONLY} resolves
  * tracking by id would make the two predicates disagree about which account a
  * row belongs to. `false` is also the choice that changes nothing: the
- * un-migrated ledger this path serves is a plain bank ledger, and
+ * unattributed-ledger fallback this path serves is a plain bank ledger, and
  * `netWorth = liquid + liabilities + investments` is identical either way — only
  * the presentational split between the two buckets moves.
  */
@@ -109,8 +113,8 @@ const WALK_ANSWERS_CTE = `
  * contribute to net worth by either path, so it is excluded from the span
  * unconditionally. An unattributed row is different: it contributes nothing to
  * the WALK (there is no account to join it to), yet it is precisely what the
- * FALLBACK sums — it is the un-migrated ledger that path exists for. Excluding
- * it unconditionally would blank the un-migrated ledger's own chart; including
+ * FALLBACK sums — it is the unattributed ledger that path exists for. Excluding
+ * it unconditionally would blank that ledger's own chart; including
  * it unconditionally lets it set the START BOUND of a series it never appears
  * in, which is the tracking-only pathology on a different input (measured on a
  * ledger of one unattributed +7.00 at d−20 plus one real in-net-worth account at
@@ -335,7 +339,7 @@ export const netWorthRepository = {
     let bankHistoryConverted = bankHistoryConvertedInitial;
 
     // Reached whenever the walk produced no rows at all: no in-net-worth
-    // account owns an active row. That covers the un-migrated ledger this was
+    // account owns an active row. That covers the unattributed ledger this was
     // written for (transactions still carrying a NULL account_id) but ALSO the
     // case where every account with activity is in_net_worth=false. The walk
     // itself no longer needs rescuing when nothing is stamped, since an
@@ -490,7 +494,7 @@ export const netWorthRepository = {
     // counts here first) and because the population is every in-net-worth
     // account, including ones with no active rows at all. Skipped when the
     // accounts query returned nothing (no in-net-worth accounts, e.g. an
-    // un-migrated ledger running on the transaction-flow fallback), keeping the
+    // unattributed ledger running on the transaction-flow fallback), keeping the
     // walk/fallback-derived point instead.
     if (currentBalancesConverted.length > 0 && sanitizedSnapshots.length > 0) {
       let liquidNow = toDecimal(0);

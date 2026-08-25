@@ -2,12 +2,12 @@
 title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
-date: 2026-04-25
-updated: 2026-06-01
-tags: [performance, database, materialized-views, aggregations, optimization, phase-1, migration-0035, migration-0038, mv-recipient-monthly-drop, adr-068]
-description: PostgreSQL materialized views and trigger-maintained tables for pre-computing dashboard aggregations. Phase 1 aggregation refactor consolidated in migration 0035. June 2026 (ADR-068): mv_recipient_monthly dropped via migration 0038 — recipient-insights aggregation served entirely from agg_recipient_totals trigger table.
+date: 2026-08-25
+updated: 2026-08-25
+tags: [performance, database, materialized-views, aggregations, optimization, phase-1, migration-0035, migration-0038, migration-0080, migration-0082, adr-068]
+description: Current PostgreSQL materialized views and trigger-maintained tables for dashboard aggregation, including the retired recipient and bank-balance caches.
 aliases: [materialized views, pre-computed queries, dashboard optimization, aggregation tables, trigger-maintained tables]
-related_code: ["apps/node-backend/src/services/aggregationRefresh.js", "apps/node-backend/src/services/materializedViewService.js", "alembic/versions/0035_add_recipient_aggregations.py", "alembic/versions/0038_drop_mv_recipient_monthly.py"]
+related_code: ["apps/node-backend/src/services/aggregationRefresh.js", "apps/node-backend/src/services/materializedViewService.js", "alembic/versions/0035_add_recipient_aggregations.py", "alembic/versions/0038_drop_mv_recipient_monthly.py", "alembic/versions/0080_drop_agg_recipient_totals.py", "alembic/versions/0082_drop_mv_bank_balances.py"]
 ---
 
 # Materialized Views & Aggregation Strategy
@@ -81,15 +81,14 @@ Daily cashflow for the last 7 months (6 complete + current).
 
 ---
 
-### mv_bank_balances
+### mv_bank_balances — DROPPED (July 2026, migration 0082)
 
-Running totals per bank account.
+> [!warning] Removed
+> `mv_bank_balances` was dropped by migration `0082_drop_mv_bank_balances.py`. **Do not reference this view in new code.**
 
-**Metrics:**
-- First transaction date
-- Last transaction date
-- Total balance
-- Transaction count
+The view held all-time totals per account and currency, but application code had no readers while every transaction mutation paid to refresh it. Its simple `SUM(amount)` also omitted opening-balance anchors and could not represent the live account-balance contract. Current account balances are computed from the ledger and anchors through `accountBalanceSql.js`.
+
+The migration downgrade recreates the historical `(account_id, currency)` view with no data for rollback only; it does not make the view part of the current runtime.
 
 ---
 
@@ -104,7 +103,7 @@ Running totals per bank account.
 
 **Downgrade path:** The `downgrade()` function in `0038` recreates the 24-month version of the view for safe rollback.
 
-**What replaced it:** Recipient-insights aggregation is served entirely from `agg_recipient_totals` (trigger-maintained, real-time). The aggregation envelope `source` field was corrected from `'mv'` to `'live'` to reflect this.
+**What replaced it:** Recipient-insights endpoints already used live aggregation queries; the removed view had no reader. The separate `agg_recipient_totals` table only served a recipient-activity existence probe until migration `0080` replaced that probe with a direct `transactions` query and dropped the table. The recipient-insights envelope correctly reports `source: 'live'`.
 
 See [[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] for the full decision record.
 
@@ -112,26 +111,16 @@ See [[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] for the full decision rec
 
 #### Trigger-Maintained Tables (Real-Time Aggregates)
 
-Two new tables are kept in sync by row-level triggers on source tables. **Application code never refreshes these** — they update automatically on `INSERT`, `UPDATE`, `DELETE`.
+`agg_split_outstanding` is the only live trigger-maintained aggregate table. **Application code never refreshes it** — its source-table triggers update it automatically on `INSERT`, `UPDATE`, `DELETE`.
 
-##### agg_recipient_totals
+##### agg_recipient_totals — DROPPED (July 2026, migration 0080)
 
-Running all-time totals per recipient per currency.
+> [!warning] Removed
+> `agg_recipient_totals` was dropped by migration `0080_drop_agg_recipient_totals.py`. **Do not reference this table or its triggers in new code.**
 
-**PK:** `(recipient_id, currency)`
+The table maintained all-time totals per recipient and currency through a row-level transaction trigger. Its only remaining reader was an activity-existence check. That check now probes active, non-transfer transactions directly, so the table, trigger, and helper functions were pure write overhead and were removed together.
 
-**Maintained by:** `fn_agg_recipient_totals_sync()` trigger on `transactions`
-
-**Respects:** `is_active` flag (inactive transactions excluded)
-
-**Use case:** Phase 6 fuzzy recipient auto-link, recipient stats queries
-
-**Example trigger call:**
-```javascript
-// App code does nothing special — trigger handles it:
-await query('INSERT INTO transactions (...) VALUES (...)');
-// Automatically: agg_recipient_totals updated in <1ms
-```
+The migration downgrade can recreate and backfill the historical table, but it is not part of the current schema.
 
 ##### agg_split_outstanding
 
@@ -252,7 +241,6 @@ if (phase1Queued) {
 | Monthly summary | ~500ms | ~5ms |
 | Category totals | ~800ms | ~3ms |
 | Daily cashflow | ~400ms | ~4ms |
-| Bank balances | ~200ms | ~2ms |
 
 ## Indexes
 
@@ -310,17 +298,17 @@ setInterval(async () => {
 2. **Balance freshness vs. performance** — Don't refresh too frequently; use debounce for single-row edits
 3. **Use unique indexes** — Required for concurrent refresh; prevents duplicate rows
 4. **Monitor refresh times** — Long refreshes may indicate need for indexing on source tables
-5. **Set scope appropriately** — e.g., `mv_recipient_monthly` covers 24 months to keep refreshes fast
+5. **Set scope appropriately** — e.g., `mv_monthly_summary` retains recent months, while all-time requests use live SQL
 6. **Understand scope limitations** — MVs retain recent months only, not all-time history. Queries requesting `allTime=true` (full transaction history) must always use live SQL, not MVs. Fast-path optimizations check this condition and fall back to live SQL when needed (see `mv_monthly_summary` fast path in [[#mv-monthly-summary]])
 
 ### For Trigger-Maintained Tables
 1. **Never call refresh from app code** — Triggers maintain these automatically
-2. **Document in code** — Mark aggregates with a comment: `// Maintained by agg_recipient_totals trigger`
+2. **Document in code** — Mark aggregates with a comment such as `// Maintained by agg_split_outstanding triggers`
 3. **Verify trigger firing** — If aggregates look stale, check that triggers are enabled: `SELECT * FROM pg_trigger WHERE NOT tgisinternal`
 4. **Plan for trigger latency** — Row-level triggers add ~1ms per mutation; acceptable for single-row edits, noticeable during bulk operations (mitigate with CONCURRENTLY refreshes post-import)
 
 > [!warning] Do Not Manually Update Aggregates
-> Never UPDATE or INSERT directly into `agg_recipient_totals` or `agg_split_outstanding`. Triggers are the source of truth. Direct updates will be overwritten on the next mutation.
+> Never UPDATE or INSERT directly into `agg_split_outstanding`. Its triggers are the source of truth, and direct updates will be overwritten on the next mutation.
 
 ## Timezone Awareness
 
@@ -344,4 +332,6 @@ date_trunc('month', t.date)
 - [[apps/node-backend/src/services/aggregationRefresh.js|aggregationRefresh.js]] — Orchestrator source
 - **Migrations:**
   - [[alembic/legacy_versions/0026_finance_aggregations.py|0026_finance_aggregations.py]] (legacy, archived)
-  - [[alembic/versions/0035_add_recipient_aggregations.py|0035_add_recipient_aggregations.py]] (current baseline)
+  - [[alembic/versions/0035_add_recipient_aggregations.py|0035_add_recipient_aggregations.py]] (historical Phase 1 baseline)
+  - [[alembic/versions/0080_drop_agg_recipient_totals.py|0080_drop_agg_recipient_totals.py]]
+  - [[alembic/versions/0082_drop_mv_bank_balances.py|0082_drop_mv_bank_balances.py]]
