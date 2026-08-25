@@ -57,9 +57,9 @@ cat > "$fake_bin/timeout" <<'FAKE_TIMEOUT'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$TIMEOUT_LOG"
-if [[ "${1:-}" == --kill-after=* ]]; then
+while [[ "${1:-}" == --foreground || "${1:-}" == --kill-after=* ]]; do
   shift
-fi
+done
 (( $# >= 2 ))
 shift
 exec "$@"
@@ -105,7 +105,8 @@ dependency_line="$(grep -n 'install-dependencies.sh' "$repo_root/.codex/cloud/se
 grep -Fq 'Dpkg::Use-Pty=0 update' "$CALL_LOG"
 grep -Fq 'Dpkg::Use-Pty=0 install -y --no-install-recommends postgresql-common' "$CALL_LOG"
 grep -Fq 'Dpkg::Use-Pty=0 install -y --no-install-recommends postgresql-18' "$CALL_LOG"
-grep -Eq '^--kill-after=10s 300s .*postgresql-common$' "$TIMEOUT_LOG"
+[[ "$(grep -Ec '^--foreground --kill-after=10s .*apt-get ' "$TIMEOUT_LOG")" == 3 ]]
+grep -Eq '^--foreground --kill-after=10s 300s .*postgresql-common$' "$TIMEOUT_LOG"
 grep -Fxq 'create_main_cluster = false' \
   "$VISION_CLOUD_POSTGRES_COMMON_DIR/createcluster.conf"
 [[ -x "$VISION_CLOUD_POSTGRES_BIN" ]]

@@ -65,6 +65,24 @@ cloud_run_with_timeout() {
   "$@"
 }
 
+cloud_run_with_foreground_timeout() {
+  local duration="$1"
+  shift
+
+  if [[ "${VISION_CLOUD_DISABLE_TIMEOUT:-0}" == 1 ]]; then
+    "$@"
+    return
+  fi
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --foreground --kill-after=10s "$duration" "$@"
+    return
+  fi
+
+  cloud_log "WARNING: timeout(1) is unavailable; running foreground command without an external deadline: $1" >&2
+  "$@"
+}
+
 cloud_run_with_heartbeat() {
   local duration="$1"
   local interval="$2"
@@ -80,6 +98,26 @@ cloud_run_with_heartbeat() {
 
   local status=0
   cloud_run_with_timeout "$duration" "$@" || status=$?
+  kill "$heartbeat_pid" >/dev/null 2>&1 || true
+  wait "$heartbeat_pid" >/dev/null 2>&1 || true
+  return "$status"
+}
+
+cloud_run_with_foreground_heartbeat() {
+  local duration="$1"
+  local interval="$2"
+  local label="$3"
+  shift 3
+
+  (
+    while sleep "$interval"; do
+      cloud_log "WAIT: $label is still running."
+    done
+  ) &
+  local heartbeat_pid=$!
+
+  local status=0
+  cloud_run_with_foreground_timeout "$duration" "$@" || status=$?
   kill "$heartbeat_pid" >/dev/null 2>&1 || true
   wait "$heartbeat_pid" >/dev/null 2>&1 || true
   return "$status"

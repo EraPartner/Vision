@@ -58,10 +58,10 @@ apt_get=(
 if [[ ! -x "$postgres_bin" ]]; then
   command -v curl >/dev/null || {
     cloud_run_step 'Refresh package indexes for curl' \
-      cloud_run_with_heartbeat 120s 30s 'curl package index refresh' \
+      cloud_run_with_foreground_heartbeat 120s 30s 'curl package index refresh' \
         "${apt_get[@]}" update
     cloud_run_step 'Install curl and certificate authorities' \
-      cloud_run_with_heartbeat 120s 30s 'curl and certificate installation' \
+      cloud_run_with_foreground_heartbeat 120s 30s 'curl and certificate installation' \
         "${apt_get[@]}" install -y --no-install-recommends \
         ca-certificates curl
   }
@@ -99,10 +99,10 @@ if [[ ! -x "$postgres_bin" ]]; then
   "${root[@]}" install -D -m 0644 "$pg_source" \
     "$pgdg_source_path"
   cloud_run_step 'Refresh PostgreSQL package indexes' \
-    cloud_run_with_heartbeat 120s 30s 'PostgreSQL package index refresh' \
+    cloud_run_with_foreground_heartbeat 120s 30s 'PostgreSQL package index refresh' \
       "${apt_get[@]}" update
   cloud_run_step 'Install PostgreSQL package support' \
-    cloud_run_with_heartbeat 300s 30s 'PostgreSQL package support installation' \
+    cloud_run_with_foreground_heartbeat 300s 30s 'PostgreSQL package support installation' \
       "${apt_get[@]}" install -y --no-install-recommends \
       postgresql-common
 
@@ -125,7 +125,7 @@ if [[ ! -x "$postgres_bin" ]]; then
   configured_createcluster_conf=''
 
   cloud_run_step 'Install PostgreSQL 18' \
-    cloud_run_with_heartbeat 300s 30s 'PostgreSQL 18 installation' \
+    cloud_run_with_foreground_heartbeat 300s 30s 'PostgreSQL 18 installation' \
       "${apt_get[@]}" install -y --no-install-recommends \
       postgresql-18
 

@@ -64,8 +64,9 @@ persistent head cache under
 `~/.codex/vision-cloud-state/`. Installation and database lifecycle phases print timestamped
 `START`, `WAIT`, `DONE`, or `FAILED` messages. Setup merges standard error into standard output
 before the first marker so package-manager output and lifecycle markers retain execution order.
-Long-running package commands remain in the foreground; only their heartbeat timer runs in the
-background.
+System-package commands use `timeout --foreground` so `apt-get` and `dpkg` retain normal access to
+the setup terminal instead of being suspended in a separate process group. Long-running commands
+still execute synchronously; only their heartbeat timer runs in the background.
 Dependency-fingerprint writes are explicit lifecycle steps. Docker probes, downloads, package
 operations, PostgreSQL startup, SQL bootstrap, and migrations have explicit deadlines; package
 installation is non-interactive and network calls have bounded retries. The package-index step
