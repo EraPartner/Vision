@@ -3,6 +3,7 @@ title: Form Dialogs
 type: component
 status: active
 date: 2026-04-23
+updated: 2026-08-25
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
 aliases: [form-dialogs, modal-dialogs, add-dialogs, edit-dialogs, create-dialog, settings-dialog]
@@ -230,7 +231,7 @@ Form dialogs use these shared components:
 |-----------|-------|
 | `RecipientCombobox` | Searchable recipient selector |
 | `CategoryCombobox` | Searchable category selector |
-| `DatePicker` | Popover calendar date selector with optional clear action |
+| `DatePicker` | Popover calendar date selector with optional clear action; month and weekday labels follow the active app language |
 
 For dialog-bound forms, comboboxes and date pickers can use a dialog-owned portal container to avoid overlay stacking issues:
 
@@ -343,7 +344,7 @@ import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
 
 Multi-step onboarding wizard shown to first-time users.
 
-**File:** [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]]
+**File:** [[apps/frontend/src/features/onboarding/OnboardingWizard.tsx]]
 
 ### Hook
 
@@ -372,7 +373,7 @@ interface OnboardingWizardProps {
 |------|-------------|---------|
 | **Welcome** | Greeting and feature badges | Next |
 | **Overview** | Feature categories (Budgeting, Portfolio) | Next |
-| **Bank Setup** | Select bank adapter from available parsers | Next |
+| **Bank Setup** | Select a bank adapter from toggle buttons that expose the active choice with `aria-pressed` | Next |
 | **Import** | Upload CSV for selected bank | Import or skip |
 | **Categories** | Create suggested categories (15 pre-defined) | Create selected or skip |
 | **Feature Tour** | Navigate to any feature page | Navigate or next |

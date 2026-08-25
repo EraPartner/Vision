@@ -542,8 +542,11 @@ Dialog form for creating and editing planned transactions. Supports both one-tim
 - Amount required for non-loan payments
 - Loan requires principal, rate, and term (1-600 months)
 - When loan is enabled, recurrence inputs are cleared before submission
+- A blocked submit shows an inline error beside each invalid field, links the message through
+  `aria-describedby`, and focuses the first invalid field. The form does not use native `alert()`
+  dialogs for validation.
 
-**Code**: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]]
+**Code**: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]]
 
 ### LinkTransactionDialog (2026-04-26)
 

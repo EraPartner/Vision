@@ -21,6 +21,25 @@ vi.mock("@/lib/api/reports", () => ({
     downloadTaxReport: vi.fn(),
 }));
 
+vi.mock("@/components/shared/DatePicker", () => ({
+    DatePicker: ({ id, onChange, placeholder, ...props }: {
+        id?: string;
+        onChange: (date?: Date) => void;
+        placeholder?: string;
+        [key: string]: unknown;
+    }) => (
+        <button
+            type="button"
+            id={id}
+            aria-invalid={props["aria-invalid"] as boolean | undefined}
+            aria-describedby={props["aria-describedby"] as string | undefined}
+            onClick={() => onChange(id === "export-from" ? new Date(2026, 11, 31) : new Date(2026, 0, 1))}
+        >
+            {placeholder}
+        </button>
+    ),
+}));
+
 function stubFinancialSuccess() {
     vi.mocked(reportsApi.downloadFinancialReport).mockResolvedValue(undefined);
 }
@@ -41,6 +60,17 @@ async function openDialog() {
 }
 
 describe("ExportDialog", () => {
+    it("blocks an inverted custom range before submission", async () => {
+        const user = await openDialog();
+        await user.click(screen.getByRole("radio", { name: /custom range/i }));
+        await user.click(screen.getByRole("button", { name: "From" }));
+        await user.click(screen.getByRole("button", { name: "To" }));
+
+        expect(screen.getByRole("alert")).toHaveTextContent(/start date must be on or before/i);
+        expect(screen.getByRole("button", { name: /download pdf/i })).toBeDisabled();
+        expect(reportsApi.downloadFinancialReport).not.toHaveBeenCalled();
+    });
+
     it("renders trigger button", async () => {
         renderWithApp(<ExportDialog />);
         expect(

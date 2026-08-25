@@ -533,7 +533,9 @@ export default function ChartBuilderPage() {
           </CardHeader>
           {oscillator !== "none" && (
             <CardContent>
-              {oscRows.length > 0 ? (
+              {isLoading ? (
+                <Skeleton className="h-[160px] w-full rounded-lg" />
+              ) : oscRows.length > 0 ? (
                 <LineChart<Row>
                   data={oscRows}
                   xAccessor={(d) => new Date(d.time)}
@@ -547,7 +549,9 @@ export default function ChartBuilderPage() {
                   tooltipValueFormat={(v) => v.toFixed(2)}
                 />
               ) : (
-                <Skeleton className="h-[160px] w-full rounded-lg" />
+                <div className="flex h-[160px] items-center justify-center text-sm text-muted-foreground">
+                  {t("market.noChartData")}
+                </div>
               )}
             </CardContent>
           )}

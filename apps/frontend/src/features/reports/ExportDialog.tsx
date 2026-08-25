@@ -78,6 +78,10 @@ function defaultSectionSet(defs: SectionDef[]): Set<string> {
   return new Set(defs.map((d) => d.id));
 }
 
+function isCustomRangeValid(from: string, to: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 interface ExportDialogProps {
@@ -109,6 +113,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sectionDefs = SECTIONS_BY_TYPE[reportType];
+  const customRangeInvalid = periodPreset === 'custom' && !isCustomRangeValid(customFrom, customTo);
 
   // Reset sections when report type changes
   function handleReportTypeChange(type: ReportType) {
@@ -134,6 +139,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
 
   async function handleDownload(e: React.FormEvent) {
     e.preventDefault();
+    if (customRangeInvalid) return;
     const period = buildPeriod(periodPreset, customYear, customFrom, customTo);
 
     // If all sections selected (or none deselected), send empty to use backend defaults.
@@ -284,27 +290,38 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
             {periodPreset === 'custom' && (
               <div className="grid grid-cols-2 gap-3 pl-1 pt-1">
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
+                  <Label htmlFor="export-from" className="text-xs text-muted-foreground">
                     {t('export.period.from')}
                   </Label>
                   <DatePicker
+                    id="export-from"
                     value={customFrom ? parseLocalDateFromYmd(customFrom) : undefined}
                     onChange={(d) => setCustomFrom(d ? toYmd(d) : '')}
                     placeholder={t('export.period.from')}
                     buttonClassName="h-8 text-sm"
+                    aria-invalid={customRangeInvalid || undefined}
+                    aria-describedby={customRangeInvalid ? 'export-range-error' : undefined}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
+                  <Label htmlFor="export-to" className="text-xs text-muted-foreground">
                     {t('export.period.to')}
                   </Label>
                   <DatePicker
+                    id="export-to"
                     value={customTo ? parseLocalDateFromYmd(customTo) : undefined}
                     onChange={(d) => setCustomTo(d ? toYmd(d) : '')}
                     placeholder={t('export.period.to')}
                     buttonClassName="h-8 text-sm"
+                    aria-invalid={customRangeInvalid || undefined}
+                    aria-describedby={customRangeInvalid ? 'export-range-error' : undefined}
                   />
                 </div>
+                {customRangeInvalid && (
+                  <p id="export-range-error" role="alert" className="col-span-2 text-xs text-destructive">
+                    {t('export.period.invalidRange')}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -375,7 +392,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
           <Button
             type="submit"
             size="sm"
-            disabled={isSubmitting || sections.size === 0}
+            disabled={isSubmitting || sections.size === 0 || customRangeInvalid}
             className="gap-1.5"
           >
             {isSubmitting ? (

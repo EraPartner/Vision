@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type KeyboardEvent } from 'react';
 import {
     SlidersHorizontal, Palette, BarChart3, Workflow, Bot, DatabaseBackup, Info,
     type LucideIcon,
@@ -66,6 +66,27 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
         if (open) setActiveSection(resolveSection(defaultTab));
     }, [open, defaultTab]);
 
+    const handleSectionKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+        let nextIndex: number | undefined;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            nextIndex = (index + 1) % SECTIONS.length;
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            nextIndex = (index - 1 + SECTIONS.length) % SECTIONS.length;
+        } else if (event.key === 'Home') {
+            nextIndex = 0;
+        } else if (event.key === 'End') {
+            nextIndex = SECTIONS.length - 1;
+        }
+
+        if (nextIndex === undefined) return;
+        event.preventDefault();
+        const nextSection = SECTIONS[nextIndex];
+        setActiveSection(nextSection.id);
+        event.currentTarget.parentElement
+            ?.querySelector<HTMLButtonElement>(`#settings-tab-${nextSection.id}`)
+            ?.focus();
+    };
+
     const renderSection = () => {
         switch (activeSection) {
             case 'general': return <GeneralSection />;
@@ -91,15 +112,24 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                         scrolling chip bar below it — a fixed sidebar would leave
                         ~120px for every control at phone widths. md+ layout is
                         unchanged. */}
-                    <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 p-2 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:w-52 md:flex-col md:gap-0.5 md:overflow-y-auto md:border-b-0 md:border-r">
-                        {SECTIONS.map(({ id, labelKey, icon: Icon }) => {
+                    <nav
+                        role="tablist"
+                        aria-label={t('settings.title')}
+                        className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 p-2 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:w-52 md:flex-col md:gap-0.5 md:overflow-y-auto md:border-b-0 md:border-r"
+                    >
+                        {SECTIONS.map(({ id, labelKey, icon: Icon }, index) => {
                             const active = activeSection === id;
                             return (
                                 <button
                                     key={id}
                                     type="button"
+                                    id={`settings-tab-${id}`}
+                                    role="tab"
+                                    aria-selected={active}
+                                    aria-controls={`settings-panel-${id}`}
+                                    tabIndex={active ? 0 : -1}
                                     onClick={() => setActiveSection(id)}
-                                    aria-current={active ? 'page' : undefined}
+                                    onKeyDown={(event) => handleSectionKeyDown(event, index)}
                                     className={cn(
                                         'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
                                         active
@@ -115,7 +145,13 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                     </nav>
 
                     {/* Content */}
-                    <ScrollArea className="min-h-0 flex-1">
+                    <ScrollArea
+                        id={`settings-panel-${activeSection}`}
+                        role="tabpanel"
+                        aria-labelledby={`settings-tab-${activeSection}`}
+                        tabIndex={0}
+                        className="min-h-0 flex-1"
+                    >
                         <div className="px-6 py-6">
                             {renderSection()}
                         </div>

@@ -2,7 +2,7 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-04-27
+date: 2026-08-25
 tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, phase-8, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions, dual-chart, comparison, white-bar-fix, table-overflow-fix, page-continuation, portfolio, tax]
 description: Comprehensive PDF report export for financial, portfolio, and tax data. Cover page, theme-aware styling, modular section renderers. Phase 4 adds ExportDialog UI. Phase 5 adds pagination/footer/print-break polish. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers, belgianRulesSummary, and taxProfile/precomputedPIT pass-through.
 aliases: [pdf export, financial report, portfolio report, tax report, report download, PDF generation, export dialog, report dialog, pagination, footer]
@@ -10,7 +10,7 @@ related_code:
   - apps/node-backend/src/services/reports/
   - apps/node-backend/src/routes/reports.js
   - apps/frontend/src/lib/api/reports.ts
-  - apps/frontend/src/components/reports/ExportDialog.tsx
+  - apps/frontend/src/features/reports/ExportDialog.tsx
   - apps/frontend/src/pages/StatisticsPage.tsx
   - apps/frontend/src/pages/TaxOverviewPage.tsx
   - apps/frontend/src/pages/portfolio/StocksPage.tsx
@@ -262,7 +262,7 @@ The `ExportDialog` component provides a unified, reusable interface for configur
 
 ### Component Location
 
-**File:** `apps/frontend/src/components/reports/ExportDialog.tsx`
+**File:** `apps/frontend/src/features/reports/ExportDialog.tsx`
 
 ### Props
 
@@ -394,6 +394,7 @@ export.period.year.label              → "Year"
 export.period.custom                  → "Custom Range"
 export.period.from                    → "From"
 export.period.to                      → "To"
+export.period.invalidRange            → "The start date must be on or before the end date."
 export.sections                       → "Sections"
 export.sections.all                   → "All"
 export.section.executiveSummary       → "Executive Summary"

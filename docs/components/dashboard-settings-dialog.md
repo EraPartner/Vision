@@ -8,7 +8,7 @@ tags: [components, forms, dialogs, settings, refactor, sidebar, instant-apply, p
 description: Sidebar-navigated instant-apply settings dialog. Left rail of seven sections; each section is a self-contained component reading from hooks and writing directly to the store/API. Single "Done" close button replaces the old Save/Cancel footer. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) enforce a uniform visual language. (ADR-084)
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
-  - apps/frontend/src/components/settings/DashboardSettingsDialog.tsx
+  - apps/frontend/src/features/settings/DashboardSettingsDialog.tsx
   - apps/frontend/src/components/settings/SettingsPrimitives.tsx
   - apps/frontend/src/components/settings/sections/GeneralSection.tsx
   - apps/frontend/src/components/settings/sections/AppearanceSection.tsx
@@ -84,7 +84,7 @@ The Electron menu bridge and onboarding flows pass tab key strings. `DashboardSe
 
 ### File
 
-`[[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]`
+`[[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]`
 
 ### Props
 
@@ -99,7 +99,7 @@ interface DashboardSettingsDialogProps {
 
 ### Features
 
-- **Sidebar nav**: Left rail with icon + label for each of the seven sections; highlights active section. **Responsive (Aug 2026)**: below the `md` breakpoint the nav collapses into a horizontally-scrolling chip bar under the dialog header instead of a fixed 208px sidebar — a fixed sidebar left ~120px for every control at phone widths. `md+` layout is pixel-identical to before.
+- **Sidebar nav**: Left rail with icon + label for each of the seven sections; highlights active section. The rail exposes `tablist`/`tab`/`tabpanel` semantics, keeps only the selected tab in the tab order, and supports Arrow keys plus Home/End. **Responsive (Aug 2026)**: below the `md` breakpoint the nav collapses into a horizontally-scrolling chip bar under the dialog header instead of a fixed 208px sidebar — a fixed sidebar left ~120px for every control at phone widths. `md+` layout is pixel-identical to before.
 - **Scrollable content pane**: Right area renders the active section component.
 - **Done button**: Single close action; no Save/Cancel.
 - **Section lazy-init**: React Query cache persists across section switches; transient UI state (search inputs) resets on unmount.

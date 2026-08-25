@@ -2,11 +2,11 @@
 title: ExportDialog Component
 type: component
 status: active
-date: 2026-04-27
+date: 2026-08-25
 tags: [component, export, dialog, reports, pdf, phase-4, phase-8, ui, configuration, portfolio, tax]
 description: Unified PDF report export configuration dialog. Selects report type (financial/portfolio/tax with Phase 8 completion of portfolio and tax reports), period (YTD/rolling/year/custom), sections (6 portfolio + 7 tax sections fully implemented), and currency before triggering backend PDF generation.
 related_code:
-  - apps/frontend/src/components/reports/ExportDialog.tsx
+  - apps/frontend/src/features/reports/ExportDialog.tsx
   - apps/frontend/src/lib/api/reports.ts
   - apps/frontend/src/pages/StatisticsPage.tsx
   - apps/frontend/src/pages/TaxOverviewPage.tsx
@@ -20,7 +20,7 @@ related_code:
 
 ## Location
 
-**File:** `apps/frontend/src/components/reports/ExportDialog.tsx`
+**File:** `apps/frontend/src/features/reports/ExportDialog.tsx`
 
 ## Purpose
 
@@ -182,7 +182,7 @@ Internal state (all `useState`):
 
 When the user clicks "Download PDF":
 
-1. Validate sections (disabled if empty)
+1. Validate sections and custom date order (disabled if empty or `from > to`)
 2. Build period object from `periodPreset` + custom values
 3. Determine sections array:
    - If all enabled: send `[]` (use backend defaults)
@@ -217,6 +217,7 @@ isSubmitting ? (
 
 - `isSubmitting === true` — while PDF is rendering
 - `sections.size === 0` — when no sections selected
+- Custom period has a missing date or `from > to` — an inline localized error identifies both date controls
 
 ### Success Toast
 
@@ -244,7 +245,7 @@ Dialog remains open; user can adjust settings and retry.
 
 All labels, descriptions, and button text are i18n-enabled via `useLanguage()` hook.
 
-### i18n Keys (33 total)
+### Export keys (42 total; plus `common.cancel`)
 
 **Dialog Header:**
 - `export.title` → "Export PDF Report"
@@ -266,6 +267,7 @@ All labels, descriptions, and button text are i18n-enabled via `useLanguage()` h
 - `export.period.custom` → "Custom Range"
 - `export.period.from` → "From"
 - `export.period.to` → "To"
+- `export.period.invalidRange` → "The start date must be on or before the end date."
 
 **Sections:**
 - `export.sections` → "Sections"

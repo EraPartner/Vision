@@ -268,6 +268,9 @@ This automatic recovery prevents startup failure while preserving the corrupted 
 
 The primary UI is `[[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx|DashboardSettingsDialog]]`, which acts as a **sidebar shell orchestrator**: a left rail of seven section icons/labels, and a scrollable content pane on the right. Each section component is self-contained — it reads from hooks and writes directly to the store or API, so the orchestrator no longer threads staged props.
 
+The section rail implements the tabs accessibility pattern: one selected tab is in the tab order,
+each tab controls the active tab panel, and Arrow keys plus Home/End move focus and selection.
+
 **Shared layout primitives** live in `[[apps/frontend/src/components/settings/SettingsPrimitives.tsx|SettingsPrimitives.tsx]]`:
 - `SettingsSection` — title + description header
 - `SettingsGroup` — bordered, hairline-divided card with optional label

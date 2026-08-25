@@ -182,6 +182,11 @@ export function ResearchMappingDialog({
 
           {resolveMutation.isPending ? (
             <div {...loadingSurfaceProps} className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+          ) : resolveMutation.isError ? (
+            <p role="alert" className="flex items-center gap-2 py-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {t('research.mapping.resolveError')}
+            </p>
           ) : proposals.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2">{t('research.mapping.noProposals')}</p>
           ) : (

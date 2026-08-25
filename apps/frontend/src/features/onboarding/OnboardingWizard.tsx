@@ -317,7 +317,14 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                     return apiClient.createCategory({ general: cat.general, detail: cat.detail });
                 })
             );
-            const created = results.filter((r) => r.status === "fulfilled").length;
+            const rejected = results.find((result) => result.status === "rejected");
+            if (rejected) {
+                toast.error(t('onboarding.toast.categoriesFailed', {
+                    msg: apiErrorToMessage(rejected.reason, t),
+                }));
+                return;
+            }
+            const created = results.length;
             setCategoriesCreated(true);
             toast.success(t('onboarding.toast.categoriesCreated', { n: String(created) }));
         } catch (err: unknown) {
@@ -479,6 +486,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                         <button
                                             key={adapter.key}
                                             onClick={() => setSelectedBank(adapter.key)}
+                                            aria-pressed={selectedBank === adapter.key}
                                             className={cn(
                                                 // Transition list composed via --press-compose (press-feedback
                                                 // owns the `transition` shorthand — see index.css).

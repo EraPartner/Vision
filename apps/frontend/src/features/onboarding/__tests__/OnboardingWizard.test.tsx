@@ -83,9 +83,14 @@ describe("OnboardingWizard", () => {
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
         await user.click(await screen.findByRole("button", { name: /^next$/i }));
         const kbcBtn = await screen.findByRole("button", { name: /^kbc$/i });
+        const ingBtn = screen.getByRole("button", { name: /^ing$/i });
+        expect(kbcBtn).toHaveAttribute("aria-pressed", "false");
+        expect(ingBtn).toHaveAttribute("aria-pressed", "false");
         await user.click(kbcBtn);
-        // Selected tile gets the primary border class
+        // Selection is exposed both visually and through toggle-button semantics.
         expect(kbcBtn.className).toMatch(/border-primary/);
+        expect(kbcBtn).toHaveAttribute("aria-pressed", "true");
+        expect(ingBtn).toHaveAttribute("aria-pressed", "false");
     });
 
     it("renders suggested categories on the categories step with select-all toggle", async () => {

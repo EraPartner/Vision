@@ -31,6 +31,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
   const { appSettings } = useAppSettings();
 
   const [txSearchQuery, setTxSearchQuery] = useState("");
+  const [amountToleranceInput, setAmountToleranceInput] = useState("5");
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
   const [txFilters, setTxFilters] = useState({
@@ -180,7 +181,15 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
         </DialogHeader>
 
         <div className="grid gap-3 py-2">
-          <Input placeholder={t('plannedPage.link.searchPlaceholder')} value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
+              <Label htmlFor="link-transaction-search" className="sr-only">
+                {t('plannedPage.link.searchPlaceholder')}
+              </Label>
+              <Input
+                id="link-transaction-search"
+                placeholder={t('plannedPage.link.searchPlaceholder')}
+                value={txSearchQuery}
+                onChange={(e) => setTxSearchQuery(e.target.value)}
+              />
 
           <div className="space-y-3 p-3 border rounded-lg bg-muted/30 mt-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -236,8 +245,21 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
                   id="tx-amount-tolerance"
                   type="number"
                   className="w-16"
-                  value={txFilters.amountTolerancePct}
-                  onChange={(e) => setTxFilters({ ...txFilters, amountTolerancePct: Number(e.target.value) })}
+                  value={amountToleranceInput}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setAmountToleranceInput(raw);
+                    const parsed = Number(raw);
+                    if (raw !== "" && Number.isFinite(parsed) && parsed >= 0) {
+                      setTxFilters({ ...txFilters, amountTolerancePct: parsed });
+                    }
+                  }}
+                  onBlur={() => {
+                    const parsed = Number(amountToleranceInput);
+                    if (amountToleranceInput === "" || !Number.isFinite(parsed) || parsed < 0) {
+                      setAmountToleranceInput(String(txFilters.amountTolerancePct));
+                    }
+                  }}
                   min={0}
                   step={1}
                   disabled={!txFilters.matchAmount}

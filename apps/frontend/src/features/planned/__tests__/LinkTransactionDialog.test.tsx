@@ -157,7 +157,7 @@ describe("LinkTransactionDialog", () => {
         );
 
         // Assert
-        expect(await screen.findByText("No recent transactions found.")).toBeInTheDocument();
+        expect(await screen.findByText("No recent transactions found")).toBeInTheDocument();
     });
 
     it("'Link & Execute' disabled when no transaction selected", async () => {
@@ -280,12 +280,35 @@ describe("LinkTransactionDialog", () => {
         await screen.findByText("Rent payment");
 
         // Act — type into search to filter
-        const searchInput = screen.getByPlaceholderText("Search memo, recipient, amount...");
+        const searchInput = screen.getByPlaceholderText("Search memo, recipient, amount…");
         await user.type(searchInput, "Rent");
 
         // Assert — only rent tx visible, gym tx filtered out
         expect(screen.queryByText("Gym membership")).not.toBeInTheDocument();
         expect(screen.getByText("Rent payment")).toBeInTheDocument();
+    });
+
+    it("labels search and supports clear-then-type tolerance edits", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <LinkTransactionDialog
+                open={true}
+                onOpenChange={vi.fn()}
+                payment={PAYMENT}
+                onExecute={vi.fn()}
+            />,
+        );
+
+        expect(await screen.findByRole("textbox", { name: "Search memo, recipient, amount…" })).toBeInTheDocument();
+        const tolerance = screen.getByRole("spinbutton", { name: /tolerance/i });
+        await user.clear(tolerance);
+        expect(tolerance).toHaveValue(null);
+        await user.type(tolerance, "10");
+        expect(tolerance).toHaveValue(10);
+        await user.clear(tolerance);
+        await user.type(tolerance, "-1");
+        await user.tab();
+        expect(tolerance).toHaveValue(10);
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
